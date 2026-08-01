@@ -59,9 +59,8 @@ cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_chart_re
 - Prototype resolution requires a persisted safe artefact and refuses an empty, unavailable, or unsafe reference. Attachment alone never records human reaction, resolves the D-ID, or turns prototype code into implementation.
 - Focused commands pass: `cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_chart_graph_claims test_chart_resolution -q`.
 ## Done summary
-TBD
-
+Completed the local decision state machine on the WAL layer: idempotent attach-asset with structured safe references (kind/reference/display/revision; rejects abs/escaping/ignored paths, credentialed or non-https URLs); resolve writes the answer once to the record, closes it, appends exactly one gist line to the ledger (map never restates answers), idempotent identical retry vs invalid_state conflict; supersession flips targets to superseded with struck-through ledger lines (never removed) and walks the direct+transitive depends_on closure - open dependents keep status but lose claims with premise-invalidated notes, resolved dependents stay immutable and gain replacement D-IDs wired as superseding; --keep-dependents suppresses and records the judgment; --sharpen-file commits answer + new decisions + wiring + parked-question removals all-or-nothing; out-of-scope writes one Boundaries line and no ledger entry; abandon is terminal with history intact; prototype resolution requires a persisted asset; unsafe-evidence scanner refuses secrets/destructive-command embedding by reference-only policy. grok-4.5 impl (14 new tests incl. failpoint kills); host review (Fable) added claim-ownership conflict guards on resolve/out-of-scope and a B023 lint fix.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5623039c
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_chart_graph_claims test_chart_resolution -q
 - PRs:

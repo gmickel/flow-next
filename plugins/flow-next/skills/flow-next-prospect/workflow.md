@@ -852,7 +852,7 @@ Each survivor block:
 **Next step:** /flow-next:interview
 ```
 
-`**Next step:**` is a hard-coded template line — not a candidate field. It always points at `/flow-next:interview` because the user's first move on a survivor is almost always to refine it before promoting.
+`**Next step:**` is a hard-coded template line - not a candidate field (flowctl's `write_prospect_artifact` emits it verbatim). It always points at `/flow-next:interview` because the user's first move on a survivor is almost always to refine it before promoting. Chart routing is a handoff-time judgment (Phase 6 + the fn-135 boundary in SKILL.md), never a per-candidate artifact field.
 
 Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
@@ -860,21 +860,22 @@ Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
 ## Phase 6: Handoff prompt (R9, R19)
 
-**Goal:** offer the user a one-keystroke path from "artifact saved" to either a spec (via `flowctl prospect promote`), an interview (via `/flow-next:interview`), or a clean exit. The artifact already exists on disk by the time this phase fires — Ctrl-C here loses nothing.
+**Goal:** offer the user a one-keystroke path from "artifact saved" to a spec (via `flowctl prospect promote`), chart (only when the selected candidate is still singular + oversized + unclear), interview, or a clean exit. The artifact already exists on disk by the time this phase fires - Ctrl-C here loses nothing.
 
 ### 6.1 — Use the blocking-question tool
 
 Use `AskUserQuestion` (deferred — load via `ToolSearch select:AskUserQuestion` if its schema isn't yet in scope). If the tool is unreachable, print the frozen-string format below and read the user's reply from chat. (sync-codex.sh rewrites this to a plain-text numbered prompt in the Codex mirror.)
 
-If the tool is available, use it with these labelled choices (one per survivor + skip + interview):
+If the tool is available, use it with these labelled choices (one per survivor + chart when warranted + skip + interview):
 
 - `Promote #1: <title>`
 - `Promote #2: <title>`
 - ... (one per survivor across all buckets)
+- `Chart #N: <title>` (offer **only** when that survivor is still singular, oversized, and unclear - never for clear candidates)
 - `Skip`
 - `Interview instead`
 
-The tool's free-text `description` field gets the artifact path so the user has it visible while choosing.
+The tool's free-text `description` field gets the artifact path so the user has it visible while choosing. Chart is optional discovery after selection, not a mandatory hop and not a fixed prospect -> chart -> capture conveyor.
 
 ### 6.2 — Frozen numbered-options fallback (R19)
 
@@ -893,7 +894,7 @@ Promote a survivor to a spec?
 Enter choice [1-N|i|skip]:
 ```
 
-Number the survivors 1-N in the same order they appear in the artifact (high_leverage first, then worth_considering, then if_you_have_the_time). `Skip` is the last numeric option (`N`); `i` is the alphabetic interview shortcut.
+Number the survivors 1-N in the same order they appear in the artifact (high_leverage first, then worth_considering, then if_you_have_the_time). `Skip` is the last numeric option (`N`); `i` is the alphabetic interview shortcut. (The frozen menu does not advertise chart; a typed `c`/`chart` reply still routes via 6.3.)
 
 ### 6.3 — Reply parsing
 
@@ -903,7 +904,8 @@ Normalize the reply (strip whitespace, lowercase). Route by exact match:
 |-------|--------|
 | `1`, `2`, ..., `N-1` (where `N` is the Skip slot) | Run `flowctl prospect promote <artifact-id> --idea <reply>`. Echo the new spec id and exit. |
 | `N`, `skip`, empty string | Print `Skipped. Artifact saved at .flow/prospects/<artifact-id>.md` and exit. |
-| `i`, `interview` | Print suggestion: `Run /flow-next:interview <spec-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** — the user picks the target id. |
+| `c`, `chart` | Print suggestion: `Run /flow-next:chart on the selected survivor only if it is still singular, oversized, and unclear; otherwise capture/promote. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke.** |
+| `i`, `interview` | Print suggestion: `Run /flow-next:interview <spec-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** - the user picks the target id. |
 | anything else | Reprint the menu once with `Unrecognized choice: <reply>`. On second invalid reply, print `Skipped (no valid choice). Artifact saved at .flow/prospects/<artifact-id>.md` and exit cleanly. |
 
 ### 6.4 — Exit cleanly regardless

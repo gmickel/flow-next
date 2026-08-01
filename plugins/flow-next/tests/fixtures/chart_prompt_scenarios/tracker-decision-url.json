@@ -1,0 +1,63 @@
+{
+  "id": "tracker-decision-url-reentry",
+  "family": "tracker_decision_url",
+  "description": "Open decision tracker URL pins that D-ID only after local locate and identity read-back; never silently chooses another D-ID.",
+  "user_prompt": "Continue this chart from this decision link: https://linear.app/acme/issue/ACME-99",
+  "context": {
+    "mode_hint": "re-enter",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "selector": "https://linear.app/acme/issue/ACME-99",
+    "locate_result": {
+      "kind": "decision_open",
+      "chart_id": "fn-140",
+      "decision_id": "fn-140.D3",
+      "title": "Prototype tenancy UX",
+      "record_link": ".flow/charts/fn-140.D3.md"
+    },
+    "repo_evidence": [],
+    "prior_state": {}
+  },
+  "expected": {
+    "mode": "re-enter",
+    "inferred_operations": [
+      "chart locate",
+      "readback_canonical_identity",
+      "pin_decision",
+      "work_mode_on_pin"
+    ],
+    "read_backs": [
+      "canonical D-ID",
+      "title",
+      "record link",
+      "re-anchor before claim"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart locate",
+        "chart show",
+        "chart frontier",
+        "chart claim"
+      ],
+      "forbidden": [
+        "chart create",
+        "silent_reassign_other_did",
+        "remote_search"
+      ]
+    },
+    "verdict": null,
+    "notes": [
+      "Open decision URL selects that D-ID only",
+      "Never silently choose different work",
+      "Historical resolved/superseded URLs show history not new work"
+    ]
+  },
+  "skill_contract_tokens": [
+    "chart locate",
+    "silently choose different work",
+    "Open decision",
+    "canonical",
+    "local ledger"
+  ]
+}

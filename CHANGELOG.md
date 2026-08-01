@@ -4,6 +4,16 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+An oversized idea that is still wrapped in unknowns no longer has to become a
+spec full of guesses or a series of meetings whose output evaporates.
+`/flow-next:chart` turns discovery into a durable decision map: resolve one
+decision at a time with real evidence (research, probe, eval, prototype,
+interview, or unblocking task), keep reversals as struck-through history, and
+hand capture a briefing package when nothing material remains to decide.
+Chart is optional - skip it when intent is already stateable - and never
+writes a spec or sets ready. `/flow-next:guide` routes the smallest
+sufficient path so chart does not become a new mandatory stage.
+
 An interrupted review can no longer leave your spec telling two different
 stories. Previously, if a plan review died between its internal writes (a
 crash, a Ctrl-C, an OOM), the attempt ledger could carry the new verdict
@@ -11,6 +21,26 @@ while `plan_review_status` still showed the old one - and the next pipeline
 stage would trust the stale status. Now the in-process plan-review path
 commits the attempt row, the status field, and the SHIP round-counter reset
 as one atomic write, so the sidecar is always internally consistent.
+
+### Added
+
+- **`/flow-next:chart` - decision-map discovery for oversized ideas (fn-135).**
+  One unshaped idea, one decision per invocation, adaptive re-chart after
+  every answer. Bounded Grounding Snapshot before persistence; prototype
+  decisions attach a throwaway artefact, record the human reaction, and
+  never promote prototype code into implementation. Unattended types may
+  advance under host `/loop` on the chart skill and park with
+  `CHART_VERDICT=NEEDS_HUMAN` at attended ones; chart is never a pilot
+  stage. Full `flowctl chart` store (create through briefing/link-spec),
+  optional tracker lifecycle projection (`tracker.charts`), local-ledger
+  URL re-entry via `chart locate`, and capture handoff that preserves
+  D-ID/evidence links while applying criterion source tags only to newly
+  authored acceptance criteria. Docs inventory test keeps pipeline,
+  optionality, counts, CLI, and usage parity honest.
+- **`/flow-next:guide` - prompt-first smallest-sufficient router.** Recommends
+  one next workflow from the starting state (including when to chart,
+  skip chart because the signal is absent, or take a smaller path despite
+  residual risk). Stateless - no flowctl mutations.
 
 ### Fixed
 

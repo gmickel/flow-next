@@ -133,6 +133,12 @@ DESCRIPTIONS: dict[str, str] = {
         "legitimately projects terminal Done); this leaf only tunes the "
         "optional verdict comment, never the merge-gated status write."
     ),
+    "tracker.charts": (
+        "Optional chart lifecycle projection (fn-135). String-enum off|on, "
+        "NOT a bool: only the literal on projects charts as parent issues "
+        "with decision children through the tracker facade. Local chart "
+        "operations always succeed when off or when the bridge is inactive."
+    ),
     "tracker.perTracker": (
         "Per-tracker linkage written by the discovery ceremony on "
         "confirmation. Open: tracker types add their own keys here."
@@ -357,6 +363,20 @@ DESCRIPTIONS: dict[str, str] = {
         "OFF. With it on, pilot inserts one live /flow-next:qa pass at the "
         "all-tasks-done juncture before make-pr."
     ),
+    "chart": (
+        "Chart discovery settings (fn-135): size ceiling at charting time "
+        "and stale-claim recovery threshold."
+    ),
+    "chart.maxDecisions": (
+        "Charting-time decision ceiling (default 12). chart create with an "
+        "initial-map refuses past this count without --force-size --reason. "
+        "Later sharpening may grow past it."
+    ),
+    "chart.claimStaleAfter": (
+        "Stale-claim age threshold in hours (default 24). "
+        "release-claim --break-stale --reason is allowed only after a claim "
+        "is at least this old; always audited (actor, prior owner, age, reason)."
+    ),
     "pilot": "/flow-next:pilot settings.",
     "pilot.autonomy": (
         "Pilot backlog mode (fn-68). Scalar string-enum (ready | backlog), "
@@ -572,6 +592,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("tracker.perEvent.qa", {"enum": list(_QA_EVENT)}),
         ("tracker.perEvent.land", {"kind": "object", "open": False}),
         ("tracker.perEvent.land.merged", {"enum": list(_PER_EVENT)}),
+        ("tracker.charts", {"enum": ["off", "on"]}),
         ("tracker.perTracker", {"kind": "object", "open": True}),
         ("tracker.perTracker.teamId", {"type": ["string", "null"]}),
         ("tracker.perTracker.projectId", {"type": ["string", "null"]}),
@@ -688,6 +709,9 @@ def _build_table() -> list[tuple[str, dict]]:
         ("artifacts.html.enabled", {"type": "boolean"}),
         ("pipeline", {"kind": "object", "open": False}),
         ("pipeline.qa", {"enum": ["off", "on"]}),
+        ("chart", {"kind": "object", "open": False}),
+        ("chart.maxDecisions", {"type": "integer"}),
+        ("chart.claimStaleAfter", {"type": "number"}),
         ("pilot", {"kind": "object", "open": False}),
         ("pilot.autonomy", {"enum": ["ready", "backlog"]}),
         (

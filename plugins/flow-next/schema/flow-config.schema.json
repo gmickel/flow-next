@@ -255,6 +255,14 @@
             }
           }
         },
+        "charts": {
+          "description": "Optional chart lifecycle projection (fn-135). String-enum off|on, NOT a bool: only the literal on projects charts as parent issues with decision children through the tracker facade. Local chart operations always succeed when off or when the bridge is inactive.",
+          "enum": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        },
         "perTracker": {
           "description": "Per-tracker linkage written by the discovery ceremony on confirmation. Open: tracker types add their own keys here.",
           "type": "object",
@@ -696,6 +704,23 @@
             "on"
           ],
           "default": "off"
+        }
+      }
+    },
+    "chart": {
+      "description": "Chart discovery settings (fn-135): size ceiling at charting time and stale-claim recovery threshold.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxDecisions": {
+          "description": "Charting-time decision ceiling (default 12). chart create with an initial-map refuses past this count without --force-size --reason. Later sharpening may grow past it.",
+          "type": "integer",
+          "default": 12
+        },
+        "claimStaleAfter": {
+          "description": "Stale-claim age threshold in hours (default 24). release-claim --break-stale --reason is allowed only after a claim is at least this old; always audited (actor, prior owner, age, reason).",
+          "type": "number",
+          "default": 24
         }
       }
     },

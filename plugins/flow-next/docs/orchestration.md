@@ -249,6 +249,29 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
 
 Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the hardened harness.
 
+## Unattended chart driving (not a pilot stage)
+
+`/flow-next:chart` is **optional pre-capture discovery**, never a stage in the pilot pipeline (`plan → plan-review → work → [qa] → make-pr`). Pilot does not select charts, advance D-IDs, or emit chart briefings.
+
+Drive unattended evidence the same way you drive pilot ticks - host `/loop` or `/goal` on the chart skill itself:
+
+```text
+/loop 15m - one tick: run /flow-next:chart <chart-id>.
+  If it prints CHART_VERDICT=RESOLVED, continue.
+  If CHART_VERDICT=NEEDS_HUMAN, stop (attended decision reached; do not self-answer).
+  If CHART_VERDICT=COMPLETE or NO_WORK, stop.
+  If CHART_VERDICT=BLOCKED, stop and surface the reason.
+```
+
+Contract:
+
+- **One decision per invocation.** Each tick claims at most one D-ID and emits exactly one greppable line: `CHART_VERDICT=<RESOLVED|BLOCKED|NEEDS_HUMAN|COMPLETE|NO_WORK> chart=<id> decision=<D> reason="..."`.
+- **Unattended frontier only.** Independent `research` / `probe` / `eval` (and unattended `task`) may fan out as **separate parallel invocations**, each with its own claim, recovery path, and verdict. Never a batch tick that aggregates mixed outcomes.
+- **`NEEDS_HUMAN` is terminal for the driver.** Attended types (`prototype`, `interview`) reached under autonomous signals write no answer - the loop parks for a human session.
+- **Chart mode creates; work mode resolves.** Charting an idea must not start answering its own decisions. Status mode (`--status`) mutates nothing.
+
+Plain-language steering still works for humans; the exact flags and `flowctl chart` surface are for automation. Full skill contract: [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md); CLI: [`flowctl.md`](flowctl.md#chart).
+
 ## In your repo
 
 This page lives in the plugin's doc tree — *outside* the repo you're working in. At use time the host agent reads two files that ship into your project, so the steering recipes are put where agents already look:

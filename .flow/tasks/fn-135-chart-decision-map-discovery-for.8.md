@@ -104,9 +104,8 @@ npx hyperframes lint && npx hyperframes render
 
 
 ## Done summary
-TBD
-
+Published the full flow-next.dev chart surface in a clean worktree (~/work/flow-next.dev-fn135, branch feat/fn-135-chart off origin/main): new skills/chart.mdx (327 lines: when to use/skip, adaptive loop, decision types, grounding, cost read-back, attended gate, prototype lifecycle, briefing handoff, verdict grammar, flags, tracker projection + URL re-entry) and skills/guide.mdx (smallest-sufficient matrix); Chart between Prospect and Capture + Guide before Prospect in BOTH nav sources (site.ts navGroups + astro.config.mjs sidebar); pipeline/when-to-use/menu-not-a-rail/prototype-driven-specs updated; cookbook +5 journeys (skip-chart, research-led fan-out, prototype reversal with supersession, multi-spec briefing, tracker URL re-entry incl. failure) labeled as possible traces; flowctl command/CLI/config references complete; adjacent skill pages carry the guide-matrix boundaries; teams/orchestration/autonomous/tracker-sync/glossary updated; changelog entry appended under existing Unreleased in the customer register; no version bump. Homepage: pipeline video RE-CUT successfully - chart as a dashed optional pre-capture beat mirroring the QA-branch treatment, em-dash entities replaced, runtime held at 30.0s, mp4+poster replaced, design.md obeyed (host-eyeballed poster). Host review kept the crafted motion caption (the live caption is abstract post-fn-151 and makes no false route claim - the task's caption quote was stale) and fixed the poster fallback alt to describe the new loops frame. pnpm check + build green (80 pages). Commits in the docs-site repo: e549aea + 056d444 (not pushed).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: flow-next.dev:e549aea, flow-next.dev:056d444
+- Tests: cd ~/work/flow-next.dev-fn135 && pnpm check && pnpm build
 - PRs:

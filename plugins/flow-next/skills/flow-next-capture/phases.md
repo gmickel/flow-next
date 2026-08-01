@@ -134,6 +134,16 @@ The breakdown is informational at read-back. Phase 4's `[inferred]` tally counts
 
 A spec with 0 `[inferred]` items is rare and probably means the conversation was unusually thorough. A spec with 30 `[inferred]` items is suspicious — the conversation was probably too thin for capture, and the user should pursue `/flow-next:interview` instead.
 
+### Chart briefing provenance (fn-135) — do not collapse lanes
+
+Three provenance lanes must not collapse:
+
+1. **Chart decision provenance** — D-ID, type, answer/gist, assets, supersession, briefing membership. Briefings preserve links; capture copies them into evidence sections as references.
+2. **Acceptance-criterion author tags** — `[user]` | `[paraphrase]` | `[inferred]` | `[strategy:<track>]` only on criteria **this capture pass newly authors**. Never retag existing criteria. Never tag D-ID evidence or chart facts. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
+3. **Verified-versus-inferred technical facts** — fn-148 closed 2026-07-30 as STOPPED with **no verdict**. Capture adds **no** `[verified]` / verified-vs-inferred decision grammar. Do not invent one.
+
+Draft/stale briefings fail closed for ordinary capture; explicit risk override must name unresolved/invalidated D-IDs and read back the risk without promoting a forced draft to final. `link-spec` runs only after `spec create` + `spec set-plan`; retry discovers B-ID+cluster identity first.
+
 ---
 
 ## Confidence tiers
@@ -175,6 +185,10 @@ The full list lives in [SKILL.md](SKILL.md). Quick reference:
 | Auto-splitting an 8+ acceptance spec | Phase 4 surfaces the option; the user decides. Capture never auto-actions a split. |
 | Setting `context: fork` | Blocking-question tools must stay reachable. |
 | Calling `flowctl spec create` before Phase 4 approval | Phase 5 is the only write phase. |
+| Treating a forced draft briefing as final, or silent draft/stale admission | Fail closed; override requires named D-IDs + risk read-back; never promotes draft to final. |
+| Source-tagging D-ID / chart evidence as `[user]` | Chart provenance is structural links; four-tag grammar is for newly authored criteria only. |
+| `chart link-spec` before `spec create` / `spec set-plan`, or minting a duplicate after interruption | Order: create → set-plan → link-spec; retry discovers B-ID+cluster identity first. |
+| Chart facts get no verified/inferred grammar | fn-148 stopped - no verdict. |
 | Glossary term-adds without read-back consent, or in autofix | Consent lives in Phase 4.2's `Glossary?` question; autofix prints suggestions only. Husk-aware gate (`total_terms > 0`) — seeding an empty glossary is `/flow-next:prime`'s job. |
 | Marking a spec ready without consent, in autofix, or outside the target-aware predicate | Consent lives in Phase 4.2's `Mark ready?` question (new capture: adopted local readiness; rewrite: target itself was ready; both: no `tracker.readyState`); the write is Phase 5.9, interactive-only. An unrelated ready spec never prompts on a draft rewrite. Readiness is the human's gate — capture never infers it. Autofix prints the footer suggestion only. |
 | `git add -A` from this skill | Stage only the JSON sidecar (`.flow/specs/<id>.json`) + `.flow/specs/<id>.md` (and `.flow/meta.json` if mutated). Capture does NOT commit by default — user owns staging. |

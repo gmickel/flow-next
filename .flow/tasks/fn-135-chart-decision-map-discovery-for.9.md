@@ -54,9 +54,8 @@ cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_chart_gr
 - Human output pairs title/full D-ID/link, and compact list/show/frontier tests prove full answers/assets are not loaded.
 - Focused commands pass: `cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_chart_graph_claims test_config_snapshot -q`.
 ## Done summary
-TBD
-
+Layered graph/frontier/claims onto the task-1 store: decision records (.flow/charts/<id>/<n>.md+.json) with title + derived attendance (task type explicit); atomic graph validation rejecting missing/self/duplicate/cyclic edges pre-write; blocked_by-vs-depends_on separation; dependency-ordered frontier; park/remove-question with stable sha keys; wire-decision atomic edge replacement; atomic claims (status untouched) with owner release and age-gated audited break-stale (conflict vs stale_claim distinguishable); completion predicate with stuck reasons; initial-map create enforcing chart.maxDecisions pre-allocation with audited --force-size; chart.maxDecisions/chart.claimStaleAfter in config defaults + published schema (fn-138 drift suite green). grok-4.5 impl + separate grok test round (28 new tests; caught the provisional-id canonicalization bug); host review (Fable) fixed a re.sub backref corruption and an unused-var lint.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3ab5950b
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_chart_graph_claims test_config_snapshot -q, cd plugins/flow-next/tests && python3 -m unittest test_flow_config_schema_drift test_spec_id_allocation -q
 - PRs:

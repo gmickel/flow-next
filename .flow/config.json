@@ -1,4 +1,5 @@
 {
+  "$schema": "https://flow-next.dev/schema/flow-config.schema.json",
   "artifacts": {
     "html": {
       "enabled": false

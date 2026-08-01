@@ -351,6 +351,28 @@
       },
       "stdout": {"inactive": "", "active_success": ""},
       "stderr": {"inactive": "", "active_success": ""}
+    },
+    {
+      "id": "chart",
+      "file": "plugins/flow-next/skills/flow-next-chart/workflow.md",
+      "event": "chart",
+      "config_key": "tracker.charts",
+      "legal_config_values": ["off", "on"],
+      "resolved_facade_op": "push",
+      "unconditional_behavior": "fixed push when tracker.charts is on and bridge active; local chart always commits first",
+      "content_input": "chart revision + owned parent/child body blocks",
+      "expected_receipt": "sync receipt tagged chart.* lifecycle event",
+      "config_reads": {
+        "inactive": [["config", "get", "tracker.charts", "--json"], ["sync", "active", "--json"]],
+        "active": [["config", "get", "tracker.charts", "--json"], ["sync", "active", "--json"]]
+      },
+      "argv": {
+        "inactive": [],
+        "active": ["tracker", "sync", "chart:<chart-id>", "--op", "push", "--event", "chart"]
+      },
+      "imports": {"inactive": [], "active": []},
+      "stdout": {"inactive": "", "active_success": ""},
+      "stderr": {"inactive": "", "active_success": ""}
     }
   ],
   "teardown_sweep": {

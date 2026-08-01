@@ -50,9 +50,8 @@ Do not run distribution propagation here; task 7 owns the final generated-copy c
 - Every implemented chart JSON path matches exact v1 success/failure fixtures using the existing `success` convention.
 - Focused commands pass: `cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_spec_id_allocation -q`.
 ## Done summary
-TBD
-
+Built the fn-135 storage foundation: one cross-kind native fn-N allocation domain for specs+charts (working tree + linked worktrees + refs) under a single allocation lock with no-clobber publication; chart/D-ID canonicalizers; chart create/show/list with exact v1 JSON envelopes (success/error classes per spec); write-ahead journal under .flow/charts/.transactions/ with pre-state fingerprints and deterministic roll-forward/restore recovery on every chart command; spec create refactored onto the shared lock without output/schema changes. Implemented by grok-4.5 worker, host-reviewed (Fable) + live-smoked (spec fn-1 / chart fn-2 / spec fn-3 in temp repo).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2e4a5b53
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_store test_spec_id_allocation -q, cd plugins/flow-next/tests && python3 -m unittest test_task_create_files test_config_snapshot -q
 - PRs:

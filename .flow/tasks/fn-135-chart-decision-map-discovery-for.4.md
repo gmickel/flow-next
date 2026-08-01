@@ -75,9 +75,8 @@ cd plugins/flow-next/tests && python3 -m unittest test_chart_skill_contract test
 - Over-ceiling prompt scenarios prove refusal by default, narrowing/split recommendation, explicit read-back, and audited `--force-size --reason` only after consent.
 - Parent and decision tracker URL scenarios resolve through the local ledger, read back canonical identity, and never use remote search/title inference. Unknown/ambiguous/stale/unsafe URLs fail without mutation; historical decisions remain history unless the human selects new frontier work.
 ## Done summary
-TBD
-
+Shipped the canonical prompt-first /flow-next:chart skill: SKILL.md routing contract (5 modes incl. locator re-entry), workflow.md adaptive loop (ordered bounded Grounding Snapshot; no-consequential-unknowns stop; breadth-first initial map with ceiling refusal + consented audited force-size; frontier as sole selection input; claim before work; per-type evidence routes; attended hard gate terminating NEEDS_HUMAN with no answer write; prototype attach-present-react lifecycle with interruption resumability; resolve-with-sharpening; supersession steering; briefing handoff with default N=1 clustering read-back), references/examples.md with all 8 required native examples + 4 illustrative adaptive traces, thin command shim, registry count updates (24 commands / 29 skills). Portable-host fallbacks on every AskUserQuestion/Task-Explore reference; exact CHART_VERDICT grammar; no destructive literals, secrets, em dashes, or verified/inferred grammar. Tests: contract suite + 16 structured prompt-scenario fixtures (prime-eval style) + chart shim in the flatten inventory; 131 chart-family tests green. grok-4.5 impl via corrected headless invocation (acceptEdits does not cover Bash; --always-approve + CMUX_GROK_HOOKS_DISABLED=1 required); host-reviewed (Fable).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4ec757b1
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_skill_contract test_chart_prompt_scenarios test_command_shim_flatten -q
 - PRs:

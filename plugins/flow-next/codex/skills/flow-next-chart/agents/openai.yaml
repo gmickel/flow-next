@@ -1,0 +1,7 @@
+interface:
+  display_name: "Flow Chart"
+  short_description: "Decision-map discovery for one oversized unclear idea before capture"
+  brand_color: "#3B82F6"
+  default_prompt: "Chart out: "
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,63 @@
+{
+  "id": "prototype-attach-present-react",
+  "family": "prototype_lifecycle",
+  "description": "Work mode on an open prototype D-ID: claim, create/import throwaway artefact, attach-asset while open, present exact ref, record human reaction, then resolve.",
+  "user_prompt": "Continue from the tenancy prototype decision on fn-140.",
+  "context": {
+    "mode_hint": "work",
+    "driver": "attended",
+    "chart_id": "fn-140",
+    "decision_pin": "fn-140.D3",
+    "repo_evidence": [],
+    "prior_state": {
+      "decision": {
+        "id": "fn-140.D3",
+        "type": "prototype",
+        "attendance": "attended",
+        "status": "open"
+      }
+    }
+  },
+  "expected": {
+    "mode": "work",
+    "inferred_operations": [
+      "work_mode",
+      "chart frontier",
+      "chart claim",
+      "create_or_import_artefact",
+      "chart attach-asset --asset-file",
+      "present_exact_reference",
+      "record_human_reaction",
+      "chart resolve --answer-file"
+    ],
+    "read_backs": [
+      "exact safe artefact reference/revision before reaction",
+      "reaction capture before resolve"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart claim",
+        "chart attach-asset --asset-file",
+        "chart resolve --answer-file",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "chart create",
+        "silent prototype promotion to implementation"
+      ]
+    },
+    "verdict": "CHART_VERDICT=RESOLVED chart=fn-140 decision=fn-140.D3 reason=\"prototype reaction recorded; decision closed; frontier redrawn\"",
+    "notes": [
+      "Attach while open and idempotent",
+      "Never infer approval",
+      "Prototype code is evidence not implementation"
+    ]
+  },
+  "skill_contract_tokens": [
+    "attach-asset",
+    "while open",
+    "reaction",
+    "never infer approval",
+    "Prototype"
+  ]
+}

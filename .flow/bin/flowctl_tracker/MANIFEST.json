@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "663cb56876ff0f00bf2c042fec2cabf5bacd6716c87413dde8ec776ab5c0f580"
+      "sha256": "21328f36598710b707e6a1b5ca7da03b6047a4ba3d35b60ca71aecd40c118bc6"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -41,6 +41,10 @@
       "sha256": "028051f400cadf38ac3204316d14a1229c686923c344fe5811a2aa29bb06114a"
     },
     {
+      "path": "flowctl_tracker/facade/chart_projection.py",
+      "sha256": "8744a30f9d51ed30abf0e2c493030d147baf0435debd8e1134345cd74c20dae2"
+    },
+    {
       "path": "flowctl_tracker/facade/helpers.py",
       "sha256": "de4e6735462b5b28eea2d176d18c183cab3db2d1ff8d11d10716928ccb512cb1"
     },
@@ -62,7 +66,7 @@
     },
     {
       "path": "flowctl_tracker/lifecycle/helpers.py",
-      "sha256": "77faaccb2bd12f4efa9561bbc825b5872b48f350c3eeab162556fa79c5326cd9"
+      "sha256": "873019a26841498f37422904108775af346e4e9542a81b54c498ce383eea32a0"
     },
     {
       "path": "flowctl_tracker/lifecycle/linkstate.py",
@@ -106,7 +110,7 @@
     },
     {
       "path": "flowctl_tracker/relate/ledger.py",
-      "sha256": "5d9fb5a5b2853282a078207c2ca57f44a0ffa48f4270482d0af93b3ed58b62b3"
+      "sha256": "0c29aa39e7655a6dd186c965eff2300c1fd79624a983a2e10d2b6667f3859072"
     },
     {
       "path": "flowctl_tracker/relate/listing.py",
@@ -114,7 +118,7 @@
     },
     {
       "path": "flowctl_tracker/relate/providers.py",
-      "sha256": "525a2ca2bef115a411bf430b6d9c7a7175d16027def228c2ba1508df7c4ba526"
+      "sha256": "d69ecf8e1c7fab41f7956c42c641cda0f1c2d42e6dc7c69c55ea0e0548a9cfa1"
     },
     {
       "path": "flowctl_tracker/resolve_verb.py",
@@ -143,6 +147,10 @@
     {
       "path": "flowctl_tracker/status/verb.py",
       "sha256": "09ae76a3dc2233549a37e1785b48c190030a8dcd65cfb29fbb78e549bac18f7c"
+    },
+    {
+      "path": "flowctl_tracker/subjects.py",
+      "sha256": "8005754930019097167137ab01fc12ffcdee4bebf150270d12f33c268500fcc9"
     },
     {
       "path": "flowctl_tracker/syncbody/__init__.py",

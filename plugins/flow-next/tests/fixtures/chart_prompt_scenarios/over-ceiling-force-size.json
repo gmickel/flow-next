@@ -1,0 +1,63 @@
+{
+  "id": "over-ceiling-refuse-then-force-size",
+  "family": "over_ceiling",
+  "description": "Initial map exceeds chart.maxDecisions: refuse by default, offer narrow/split; only after explicit consent pass --force-size --reason on create.",
+  "user_prompt": "Keep this as one chart despite the size warning. Chart out the full platform rewrite with every subsystem decision visible up front.",
+  "context": {
+    "mode_hint": "chart",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [],
+    "prior_state": {
+      "proposed_decision_count": 18,
+      "ceiling": 12,
+      "user_insists_one_chart": true,
+      "consent_reason": "single delivery train; split would fragment shared tenancy decisions"
+    }
+  },
+  "expected": {
+    "mode": "chart",
+    "inferred_operations": [
+      "chart_mode",
+      "grounding_snapshot",
+      "size_ceiling_check",
+      "refuse_by_default",
+      "offer_narrow_or_split",
+      "warning_readback_count_ceiling_consequence",
+      "chart create --initial-map-file --force-size --reason"
+    ],
+    "read_backs": [
+      "exact decision count",
+      "configured ceiling chart.maxDecisions",
+      "consequence of override",
+      "consent reason",
+      "later sharpening may grow further"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart create --initial-map-file --force-size --reason"
+      ],
+      "forbidden": [
+        "chart create --force-size without consent",
+        "chart resolve"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NO_WORK chart=<id> decision=- reason=\"over-ceiling create after consent; force-size audited\"",
+    "verdict_without_consent": "CHART_VERDICT=NO_WORK chart=- decision=- reason=\"size ceiling held; narrow or split offered\"",
+    "notes": [
+      "Refuse by default",
+      "Narrow Outcome or split first",
+      "Force only after warning + consent",
+      "Charting still resolves nothing"
+    ]
+  },
+  "skill_contract_tokens": [
+    "--force-size",
+    "--reason",
+    "chart.maxDecisions",
+    "narrow",
+    "split",
+    "consent"
+  ]
+}

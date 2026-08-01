@@ -74,9 +74,8 @@ If intentional embedded prompt text changed, update the pinned SHA-256 in the sa
 
 
 ## Done summary
-TBD
-
+Completed in-repo integration: GLOSSARY terms (Chart, Decision record, D-ID, chart Frontier vs task frontier, Briefing package, Supersession); README + full docs tree (doc index, skills, architecture with .flow/charts/ layout + WAL, complete flowctl chart CLI reference with v1 envelope classes and all three config keys, teams, tracker-sync projection + local-ledger URL re-entry, orchestration/ralph unattended-driving guidance) presenting chart as optional smallest-sufficient routing throughout; CHANGELOG entry appended under existing Unreleased (user-outcome-first; fn-147/#279 entries preserved; no version bump); usage template chart section with byte-identical dual copy. New test_chart_docs_inventory (22 assertions: routes, optionality, registry-count parity, CLI --help cross-check, mirror presence, grounding/prototype/projection invariants, usage parity). Host-owned propagation: flowctl + flowctl.py + flowctl_tracker dual copies to .flow/bin, tracker manifest regen, sync-codex x2 byte-idempotent after adding chart/guide generate_openai_yaml + diet entries. Deliberate frozen-contract updates, each documented in-code: 18 chart leaves added to the CLI surface inventory; _git_check_ignored added to the subprocess-invocation freeze (deterministic git read, not an LLM bridge); pilot reached-path ledger re-measured for the .6 boundary section; usage token budget raised 2800->2950 once to admit the chart subsystem. Final gate green: python3 scripts/run_tests_parallel.py = 3778 tests 0 failures, uvx ruff@0.16.0 check . clean. grok-4.5 docs authoring; host (Fable) owned propagation, gate, and all frozen-contract decisions.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6e588f58
+- Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:

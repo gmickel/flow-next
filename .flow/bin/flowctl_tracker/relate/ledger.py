@@ -112,6 +112,22 @@ def ledger_finalize(tracker: dict, *, key: str) -> dict:
     return tracker
 
 
+def ledger_drop(tracker: dict, *, key: str) -> dict:
+    """DROP an APPLIED entry after its native relation has been removed (or
+    proven absent) remotely - the reconcile counterpart of append+finalize.
+    Pending entries are ownership claims and stay untouched (ledger_release
+    owns those). Idempotent on missing keys."""
+    ledger = [
+        entry
+        for entry in tracker.get("depRelations") or []
+        if not (isinstance(entry, dict) and entry.get("key") == key
+                and entry.get("status") != "pending")
+    ]
+    tracker = dict(tracker)
+    tracker["depRelations"] = ledger
+    return tracker
+
+
 def ledger_release(tracker: dict, *, key: str, force: bool = False) -> dict:
     """DROP a pending entry owned by THIS process (call under the shared
     writer lock, after an OBSERVED provider create failure that definitely

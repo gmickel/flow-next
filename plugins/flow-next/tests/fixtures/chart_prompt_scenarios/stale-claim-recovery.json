@@ -1,0 +1,65 @@
+{
+  "id": "crash-stale-claim-break-stale-recovery",
+  "family": "stale_claim_recovery",
+  "description": "Prior crash left a visible claim; recovery uses audited release-claim --break-stale --reason after age gate, never silent expiry.",
+  "user_prompt": "Work the next decision on fn-140 - D1 still looks claimed from a crashed run.",
+  "context": {
+    "mode_hint": "work",
+    "driver": "attended",
+    "chart_id": "fn-140",
+    "decision_pin": "fn-140.D1",
+    "repo_evidence": [],
+    "prior_state": {
+      "decision": {
+        "id": "fn-140.D1",
+        "type": "research",
+        "attendance": "unattended",
+        "status": "open",
+        "claim": {
+          "owner": "crashed-session",
+          "age": "stale_past_gate"
+        }
+      }
+    }
+  },
+  "expected": {
+    "mode": "work",
+    "inferred_operations": [
+      "work_mode",
+      "chart frontier",
+      "chart claim_conflict_observed",
+      "readback_break_stale",
+      "chart release-claim --break-stale --reason",
+      "optional_reclaim_same_or_stop"
+    ],
+    "read_backs": [
+      "claim owner and age",
+      "break-stale reason and consequence",
+      "no silent expiry"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart release-claim --break-stale --reason",
+        "chart claim",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "silent_claim_expiry",
+        "overwrite_claim_without_audit"
+      ]
+    },
+    "verdict": "CHART_VERDICT=BLOCKED chart=fn-140 decision=fn-140.D1 reason=\"stale claim recovered via break-stale; re-claim or human repair next\"",
+    "notes": [
+      "Stale claims never silently expired",
+      "break-stale is audited with reason",
+      "Crash leaves claim visible"
+    ]
+  },
+  "skill_contract_tokens": [
+    "break-stale",
+    "release-claim",
+    "silent",
+    "claim",
+    "Crash"
+  ]
+}

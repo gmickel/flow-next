@@ -1,0 +1,52 @@
+{
+  "id": "guide-ambiguous-blocking-question",
+  "family": "guide_routing",
+  "description": "Guide: starting state could be clear-capture or oversized-chart; two routes materially differ so guide asks exactly one blocking question before recommending.",
+  "user_prompt": "We want multi-tenant billing. I have some notes but I'm not sure if we know enough to write a spec yet.",
+  "context": {
+    "mode_hint": "guide",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [],
+    "prior_state": {
+      "has_spec": false,
+      "has_briefing": false
+    }
+  },
+  "expected": {
+    "mode": "guide",
+    "inferred_operations": [
+      "match_matrix",
+      "disambiguate_capture_vs_chart",
+      "blocking_question_once",
+      "recommend_natural_language_next"
+    ],
+    "read_backs": [
+      "Ask whether intent and boundaries are already stateable (capture) or still oversized with consequential unknowns (chart)",
+      "at most one blocking question"
+    ],
+    "guarded_mutations": {
+      "allowed": [],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim",
+        "chart create --initial-map-file"
+      ]
+    },
+    "verdict": null,
+    "notes": [
+      "Guide is pure routing - no flowctl mutation",
+      "Ask a blocking question only when two routes would materially differ",
+      "Lead with a natural-language next prompt after the answer"
+    ]
+  },
+  "skill_contract_tokens": [
+    "blocking question",
+    "materially",
+    "natural-language next prompt",
+    "signal absent",
+    "despite unresolved risk"
+  ]
+}

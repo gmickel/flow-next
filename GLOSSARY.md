@@ -18,7 +18,44 @@ How concrete an artefact must be before a question can actually be answered, and
 
 ## Briefing package
 
-A half-formed markdown artefact produced by a cross-functional session (product, BA, engineering, quality) carrying domain knowledge, product intent, and early technical thinking without being fully worked out. A valid capture input, and the pattern that preserves human cross-functional refinement in front of the pipeline: the group builds the briefing together, then the interview stage challenges it for missing edge cases and unstated decisions instead of the group trying to be exhaustive in a meeting.
+A half-formed markdown artefact carrying domain knowledge, product intent, and early technical thinking without being fully worked out - a valid capture input. Two production paths share the same handoff shape:
+
+1. **Cross-functional session** (product, BA, engineering, quality): the group builds the briefing together; interview then challenges it for missing edge cases and unstated decisions instead of the group trying to be exhaustive in a meeting.
+2. **Chart exit** (`/flow-next:chart` -> `flowctl chart briefing`): an immutable, versioned package (`B1`, `B2`, ...) under `.flow/charts/` that preserves Outcome, the full decision ledger (including superseded), boundaries, and approved evidence references. Capture ingests it as attributable evidence (chart id, B-ID, cluster, D-ID links, assets), applies normal read-back and source tags only to acceptance criteria it newly authors, then records the link via `chart link-spec`. Draft or forced briefings are never silently capture-ready.
+
+Capture is the chart handoff into `.flow/specs/`; chart never writes a spec itself.
+
+_Relates to_: Chart, Decision record, D-ID, Supersession
+
+## Chart
+
+A git-native pre-capture decision map for **one oversized or unclear idea** that is too large for a single capture session. Lives at `.flow/charts/<chart-id>.md` + `.json` with child decision records under `.flow/charts/<chart-id>/`. Chart ids share the native `fn-N` allocation domain with specs (one cross-kind counter; a chart and a spec never share an id). Status is `open | done | abandoned`. The unit of work is a **decision** (D-ID), not a build task: plan decomposes work that is already understood; chart makes an effort understandable enough to be worth planning. Optional - skip when intent and boundaries are already stateable and go straight to capture. Never writes under `.flow/specs/` and never sets `ready`; output is a [briefing package](#briefing-package) for `/flow-next:capture`. Prompt-first adaptive loop (ground -> choose one frontier decision -> evidence route -> record -> re-chart); no fixed discovery phase order. Distinct from prospect (plural ranked ideas) and from plan (task decomposition of a ready spec).
+
+_Relates to_: Decision record, D-ID, Frontier (chart), Briefing package, Supersession
+
+## Decision record
+
+One child of a chart: a question whose resolution settles something before build. Body is deliberately minimal (`## Question` only) at `.flow/charts/<chart-id>/<n>.md` with a JSON sidecar holding type, attendance, status, graph edges, claim, answer, assets, and transition notes. Types are the evidence-first routes: `research | probe | eval | prototype | interview | task`. Attendance is derived for five types (`research|probe|eval` -> unattended; `prototype|interview` -> attended); `task` states it explicitly. Status: `open | resolved | superseded | out-of-scope`. Sized to one worker context (~100k tokens), same budget as a task. D-ID/evidence provenance is structural and distinct from acceptance-criterion author tags (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`).
+
+_Relates to_: Chart, D-ID, Supersession, Briefing package
+
+## D-ID
+
+A numbered decision identity under a chart, format `D1`, `D2`, ... locally and canonical external form `<chart-id>.D<n>` (e.g. `fn-140.D2`). Follows the R-ID discipline exactly: allocated sequentially from D1, append-only, never renumbered, never reused; removal or supersession leaves a gap. Load-bearing identity across the ledger, dependent records, the briefing, and the eventual spec that cites it. Human-facing surfaces always pair a D-ID with the decision title and record link.
+
+_Relates to_: Decision record, Chart, R-ID
+
+## Frontier (chart)
+
+Open, unblocked, unclaimed decisions on a chart - the ready set for `/flow-next:chart` work mode. Returned by `flowctl chart frontier <chart-id>`, dependency-ordered; sole selection input for work mode. Same word and shape as the **task frontier** that `/flow-next:work` uses for ready tasks under a planned spec, but a different unit: chart frontier is decisions (D-IDs) that still need judgment or evidence before capture; task frontier is implementation units (`fn-N.M`) that still need a worker. An empty chart frontier is not completion by itself - a chart is briefable only when no open decisions remain (blocked, unblocked, or claimed) and `## Open Questions` is empty.
+
+_Relates to_: Chart, Decision record, D-ID, Task
+
+## Supersession
+
+How a later chart decision invalidates an earlier resolved one without editing history. Resolved decisions are immutable (change history, not a wiki). `flowctl chart resolve <id>.D<n> --supersedes D3` closes the new answer, flips D3 to `superseded`, rewrites D3's ledger line as struck-through with a pointer to the superseding D-ID (line never removed), and walks the `depends_on` closure: open dependents lose claims and receive a premise-invalidated note; resolved dependents keep their records and gain replacement D-IDs for re-evaluation. `--keep-dependents` suppresses the cascade when the dependency was incidental and records that judgment. Superseded decisions appear in the briefing under their own section - the reversals discovery actually paid for.
+
+_Relates to_: Chart, Decision record, D-ID, Briefing package
 
 ## Ready
 

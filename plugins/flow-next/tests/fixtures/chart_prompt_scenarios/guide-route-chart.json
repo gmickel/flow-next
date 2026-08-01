@@ -1,0 +1,46 @@
+{
+  "id": "guide-route-chart-oversized-unclear",
+  "family": "guide_routing",
+  "description": "Guide: one large idea with unclear boundaries and several consequential unknowns - recommend chart then briefing then capture.",
+  "user_prompt": "Chart multi-tenant billing: pricing model unknown, migration path unknown, and we do not know whether tenants share a database.",
+  "context": {
+    "mode_hint": "guide",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [],
+    "prior_state": {}
+  },
+  "expected": {
+    "mode": "guide",
+    "inferred_operations": [
+      "match_matrix",
+      "route_chart",
+      "recommend_natural_language_next"
+    ],
+    "read_backs": [
+      "singular oversized unclear idea",
+      "chart is optional not mandatory"
+    ],
+    "guarded_mutations": {
+      "allowed": [],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim"
+      ]
+    },
+    "verdict": null,
+    "notes": [
+      "Next: chart this effort - resolve one decision at a time",
+      "Guide itself never creates a chart"
+    ]
+  },
+  "skill_contract_tokens": [
+    "/flow-next:chart",
+    "never mandatory",
+    "oversized",
+    "unclear",
+    "natural-language next prompt"
+  ]
+}

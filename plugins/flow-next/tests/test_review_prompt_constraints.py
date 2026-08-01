@@ -184,6 +184,9 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 # rows - a deterministic git read, not an execution bridge.
                 ("subprocess.run", "_review_head_sha"): 1,
                 ("subprocess.run", "_spec_alloc_git"): 1,
+                # fn-135.2: chart attach-asset path validation - a deterministic
+                # `git check-ignore` read, not an execution bridge.
+                ("subprocess.run", "_git_check_ignored"): 1,
                 ("subprocess.run", "_export_run_git"): 1,
                 ("subprocess.run", "_export_read_base_blobs"): 1,
                 ("subprocess.run", "_psp_run_git"): 1,

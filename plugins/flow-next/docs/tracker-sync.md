@@ -334,9 +334,49 @@ The skill owns discovery choices, semantic body/comment composition, conflict ad
 
 > Sync-engine shape (discovery ceremony, per-item `lastSyncedAt`, surface-diffs-never-overwrite) adapted from Ray Fernando's `running-bug-review-board` `issue-trackers.md` (Apache-2.0) — see CHANGELOG.
 
+## Chart lifecycle projection
+
+Optional operational view of a local chart (fn-135). **Local chart state is always canonical.** Enable with:
+
+```bash
+flowctl config set tracker.charts on   # string-enum off|on; only literal "on" activates
+```
+
+Requires the bridge active (`tracker.enabled` / typed tracker). When off or inactive, all `flowctl chart` operations succeed **local-only** - no remote calls, no failure.
+
+### What projects
+
+| Surface | Content |
+|---|---|
+| **Parent (chart)** | Outcome, chart status (`open\|done\|abandoned`), compact counts (actionable / blocked / claimed / resolved / superseded / out-of-scope / parked), latest resolved D-ID + title + gist, current frontier summary |
+| **Children (decisions)** | D-ID + title, type, attendance, local status, blocking relation (`blocked_by[]` only - `depends_on[]` stays local unless an adapter has a lossless distinct relation), safe resolution gist, approved evidence references |
+
+Full answers, unsafe assets, and secrets stay local. Claim changes do not masquerade as provider workflow status.
+
+### Local-first lifecycle + receipts
+
+Every local lifecycle transition (create/wire, claim/release, resolve, supersede, out-of-scope, briefing/done, abandon, reopen) **commits locally first**, then passes through the post-fn-141 facade with a **chart revision** and **idempotency marker**. A partial, failed, unsupported, or reordered remote update leaves a durable projection receipt and converges on **retry/reconcile** - it never rolls back the local transition. Provider-specific gaps in hierarchy, type, attendance, status, evidence, or rollup return as **explicit capability degradation** across Linear / GitHub / GitLab / Jira - never as a hard block on local discovery.
+
+Tracker rollups are **visibility only** - never a control plane, roadmap, task board substitute, or PR status substitute.
+
+### Pasted parent / decision URL re-entry
+
+Pasting a projected chart or decision URL is a **re-entry convenience**, not identity. `flowctl chart locate <selector>`:
+
+1. Normalizes only supported provider URL forms; validates configured host/project.
+2. Resolves **strictly through the local provenance ledger** - no network search, no redirect following, no title inference.
+3. On success, always reads back the **canonical local chart/D-ID, title, and record link** before work continues.
+4. Parent URL re-anchors the chart; open decision URL selects that D-ID; **resolved or superseded** decision URL renders **history** and replacement/frontier options - never silently chooses different work.
+5. Unrecorded, ambiguous, credential-bearing, wrong-host, stale-parent, or conflicting selectors fail with **structured detail and no mutation**. Fallback: use the local chart-id / D-ID directly.
+
+Unsupported or stale URLs produce a local recovery path; they never create, relink, or guess a chart.
+
+Skill surfaces and automation: [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md), [`flowctl.md`](flowctl.md#chart).
+
 ## See also
 
 - [`flowctl tracker`](flowctl.md#flowctl-tracker) for deterministic provider verbs and [`flowctl sync`](flowctl.md#flowctl-sync) for local bridge state.
-- [`teams.md`](teams.md) — projection-not-coordination positioning, Symphony contrast, adoption ladder.
-- [`architecture.md`](architecture.md) — spec-JSON `tracker` fields, widened id resolver.
-- [`ralph.md`](ralph.md) — conflicts queue to deferred-decisions, never block.
+- [`flowctl.md`](flowctl.md#chart) - full chart CLI + locate contract.
+- [`teams.md`](teams.md) - projection-not-coordination positioning, Symphony contrast, adoption ladder, chart handover.
+- [`architecture.md`](architecture.md) - spec-JSON `tracker` fields, widened id resolver, charts layout.
+- [`ralph.md`](ralph.md) - conflicts queue to deferred-decisions, never block.

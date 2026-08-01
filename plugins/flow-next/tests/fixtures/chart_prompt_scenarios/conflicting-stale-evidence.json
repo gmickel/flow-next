@@ -1,0 +1,62 @@
+{
+  "id": "conflicting-stale-evidence-stays-uncertainty",
+  "family": "conflicting_stale_evidence",
+  "description": "Grounding encounters conflicting docs and a stale design note; those stay under conflicts_or_staleness as uncertainty, never promoted to known_facts or fabricated D-IDs.",
+  "user_prompt": "Chart the billing migration. Strategy says provider A; an old design note still recommends provider B. docs/billing.md is marked draft 2024.",
+  "context": {
+    "mode_hint": "chart",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      "STRATEGY.md: provider A for billing",
+      "docs/design/billing-v1.md (stale, 2024): provider B",
+      "docs/billing.md marked draft"
+    ],
+    "prior_state": {
+      "conflicts": [
+        "provider A vs provider B across strategy and stale design note"
+      ],
+      "stale_sources": [
+        "docs/design/billing-v1.md"
+      ]
+    }
+  },
+  "expected": {
+    "mode": "chart",
+    "inferred_operations": [
+      "chart_mode",
+      "grounding_snapshot",
+      "surface_conflicts_as_uncertainty",
+      "propose_frontier",
+      "readback_before_create"
+    ],
+    "read_backs": [
+      "conflicts_or_staleness as uncertainty",
+      "candidate Outcome",
+      "smallest_visible_frontier",
+      "attended/unattended cost"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart create --initial-map-file"
+      ],
+      "forbidden": [
+        "chart resolve"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NO_WORK chart=<id> decision=- reason=\"chart created; frontier offered; chart mode resolves nothing\"",
+    "notes": [
+      "Conflicting/stale evidence remains uncertainty",
+      "Never becomes a fact by inference",
+      "No fabricated D-IDs from imports"
+    ]
+  },
+  "skill_contract_tokens": [
+    "conflicts_or_staleness",
+    "uncertainty",
+    "stale",
+    "never becomes a fact",
+    "No imported fact becomes a D-ID"
+  ]
+}

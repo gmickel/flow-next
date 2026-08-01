@@ -8,7 +8,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 
 ```
 init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds,
-memory, prospect, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
+memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
@@ -46,6 +46,11 @@ Works out of the box for parallel branches. No setup required.
 ├── specs/fn-N-slug.md         # Spec markdown
 ├── tasks/fn-N-slug.M.json     # Task state
 ├── tasks/fn-N-slug.M.md       # Task spec (markdown)
+├── charts/                    # Optional pre-capture decision maps (fn-135)
+│   ├── fn-N.md / .json        # Chart map + metadata (shared fn-N domain with specs)
+│   ├── fn-N/<n>.md / .json    # Decision records (D-IDs)
+│   ├── fn-N-briefing*.md      # Immutable briefing packages for capture
+│   └── .transactions/         # (gitignored) multi-file mutation WAL
 ├── memory/                    # Opt-in categorized learnings (bug/ + knowledge/)
 ├── artifacts/                 # Opt-in HTML render lenses
 ├── review-receipts/           # Review receipt copies under .flow/
@@ -71,6 +76,7 @@ New fields:
 
 - **Spec**: `fn-N-slug` where `slug` is derived from the title (e.g., `fn-1-add-oauth`, `fn-2-fix-login-bug`)
 - **Task**: `fn-N-slug.M` (e.g., `fn-1-add-oauth.1`, `fn-2-fix-login-bug.2`)
+- **Chart**: same native `fn-N` domain as specs (cross-kind allocator; chart and spec never share an id). **Decision**: `<chart-id>.D<n>` (e.g., `fn-140.D2`)
 
 **Backwards compatibility**: Legacy formats `fn-N` (no suffix) and `fn-N-xxx` (random 3-char suffix) are still supported.
 
@@ -799,6 +805,9 @@ flowctl config set memory.enabled false [--json]
 | `land.ciFixBudget` | int | `3` | CI-fix attempts per PR before land durably labels it `flow-next:needs-human` and skips it on later ticks. |
 | `artifacts.html.enabled` | bool | `false` | **Optional HTML artifact mode (fn-62, 2.0.0+).** Enable with `flowctl config set artifacts.html.enabled true`: participating skills (capture, plan, make-pr) load the shared render-lens reference and emit self-contained HTML artifacts at the fixed paths `.flow/artifacts/<spec-id>/spec.html` / `pr.html` (regenerable lenses, never timestamped — markdown stays the sole source of truth and artifacts are never parsed back as state). **OFF by default** — with it off, no reference file loads, no artifacts are written, no Lavish session opens; behavior is byte-identical to markdown-only. flowctl only stores the knob; generation is skill-side. |
 | `pipeline.qa` | `off \| on` | `off` | **Optional QA pipeline stage (fn-72, 2.2.0+).** Enable with `flowctl config set pipeline.qa on` — this is a **string-enum** knob (`off \| on`), **NOT a bool**; the activating value is the literal string `on` and **any other value, including bool `true`, is OFF** (the `/flow-next:pilot` gate read is the canonical 3-clause guard `value != "off" && value != "null"`). With it `on`, pilot inserts a `qa` stage at the **all-tasks-done** juncture (before make-pr): one live `/flow-next:qa` pass over the complete build, surfacing its `qa_outcome` into the draft PR. **OFF by default** — with it off, pilot's stage set and behavior are byte-for-byte unchanged. Augments (never replaces) CI/staging/manual QA; `BLOCKED` (no local app) / `NA` (no UI) advance, `NEEDS_WORK` still advances to the draft PR + surfaces findings (it never hard-blocks the loop). flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
+| `chart.maxDecisions` | int | `12` | **Chart size ceiling (fn-135).** Charting-time only: `chart create --initial-map-file` refuses past this count without `--force-size --reason` (audited: actor, ceiling, proposed count, timestamp, reason). Later sharpening from Open Questions may grow past it. |
+| `chart.claimStaleAfter` | number (hours) | `24` | **Stale-claim recovery threshold (fn-135).** `chart release-claim --break-stale --reason` is allowed only after a claim is at least this old; always audited (actor, prior owner, age, reason). No silent expiry. |
+| `tracker.charts` | `off \| on` | `off` | **Optional chart lifecycle projection (fn-135).** String-enum, **NOT a bool**: only the literal `on` projects charts as parent issues with decision children through the tracker facade. Local chart operations always succeed when off or when the bridge is inactive. Rollups are visibility only - never a control plane. |
 | `pilot.autonomy` | `ready \| backlog` | `ready` | **Pilot backlog mode (fn-68).** A **scalar string-enum** (`ready \| backlog`), **NOT a bool**. `ready` (default) = current behavior: pilot selects only already-ready specs. Set to the literal `backlog` (`flowctl config set pilot.autonomy backlog`, or per-run `--backlog` / `--auto`) to enable **backlog mode** — pilot widens selection to the whole open backlog (flow specs via `ready --all` + tracker issues unioned by the skill), triages the top dep-ordered item, and either advances it or surfaces an async question (`ASKED`). **Only the literal `backlog` activates** — any other value (bool `true`, a typo, `null`) leaves pilot byte-for-byte in `ready` mode, and `references/backlog-mode.md` is never read. Backlog mode **never authors a spec, never sets `ready`, never merges**; readiness stays the human's explicit signal. flowctl only stores the knob; the SELECT/TRIAGE/ASK workflow is host-agent skill wiring. |
 | `pilot.gateClasses` | string[] | `[]` | **Backlog-mode force-gate (fn-68).** An optional list of class names (e.g. `["risky", "prod-config"]`) that, in backlog mode, force **surfacing before action** — a matching item is parked with a question (`ASKED`) instead of advanced full-auto, even when otherwise workable. A **sibling** key, deliberately NOT `pilot.autonomy.gate` (a scalar and an object cannot share the `pilot.autonomy` dot-path). Empty `[]` (default) = full-auto for every workable item. |
 
@@ -1073,6 +1082,114 @@ flowctl prospect archive <artifact-id> [--json]
 `promote` allocates a spec via the same scan-based logic as `spec create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea - pass `--force` to override.
 
 Exit codes: corrupt artifact on `promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+
+## chart
+
+Deterministic store for optional pre-capture decision maps (fn-135). The `/flow-next:chart` skill is **prompt-first** (natural language is the primary control surface); the subcommands below are the exact automation/scripting contract. Onboarding and guide lead with plain language; flags are complete here for drivers.
+
+**Not a pilot stage.** Chart is never advanced by `/flow-next:pilot`. Unattended discovery is driven by host `/loop` on `/flow-next:chart` itself (one D-ID per invocation).
+
+**Files:** `.flow/charts/<id>.md` + `.json` (map), `.flow/charts/<id>/<n>.md` + `.json` (decisions), `.flow/charts/<id>-briefing*.md` (immutable handoffs), `.flow/charts/.transactions/` (WAL). Chart ids share the native `fn-N` domain with specs.
+
+**IDs:** chart `fn-N` / `fn-N-slug`; decision canonical form `<chart-id>.D<n>` (e.g. `fn-140.D2`). D-IDs allocate from D1, append-only, never renumbered or reused.
+
+**States:** chart `open | done | abandoned`; decision `open | resolved | superseded | out-of-scope`. Claims write `claimed_by` / `claimed_at` without changing status. Allowed transitions: `open -> resolved | superseded | out-of-scope`; `resolved -> superseded`; premise-invalidated open decisions stay open, lose claims, and get a transition note.
+
+**Config:** `chart.maxDecisions` (default 12), `chart.claimStaleAfter` (default 24 hours), `tracker.charts` (`off|on`, default `off`). See settings table above.
+
+### v1 JSON envelope
+
+Every `flowctl chart … --json` response uses a versioned envelope:
+
+```json
+{"success": true, "schema_version": 1, "command": "chart.<subcommand>", "result": { }}
+{"success": false, "schema_version": 1, "command": "chart.<subcommand>",
+ "error": {"class": "<class>", "code": "<code>", "message": "...", "details": { }}}
+```
+
+`error.class` is one of: `not_found | conflict | invalid_state | invalid_graph | stale_claim | validation | io`. Human diagnostics go to stderr; stdout stays machine-parseable under `--json`.
+
+### Subcommands
+
+Exact automation surface (all take `--json`):
+
+```bash
+# Create - validates initial titled decisions + parked questions before allocation
+flowctl chart create --title "<t>" --outcome "<o>" \
+  [--initial-map-file <json>] [--force-size --reason "<r>"] [--json]
+
+# Read
+flowctl chart show <chart-id> [--json]
+flowctl chart list [--json]
+flowctl chart frontier <chart-id> [--json]   # open, unblocked, unclaimed; sole work-mode selection input
+
+# Graph + parked questions (skill never edits markdown/sidecars by hand)
+flowctl chart add-decision <chart-id> --title "<t>" --type <research|probe|eval|prototype|interview|task> \
+  [--attendance attended|unattended] [--body-file <f>] \
+  [--blocked-by D1,D2] [--depends-on D3] [--json]
+flowctl chart park-question <chart-id> --body-file <f> [--json]
+flowctl chart remove-question <chart-id> --question <stable-key> [--json]
+flowctl chart wire-decision <chart-id>.D<n> [--blocked-by D,...] [--depends-on D,...] [--json]
+
+# Claims (do not change status)
+flowctl chart claim <chart-id>.D<n> [--json]
+flowctl chart release-claim <chart-id>.D<n> [--break-stale --reason "<r>"] [--json]
+
+# Evidence while open (prototype resumption)
+flowctl chart attach-asset <chart-id>.D<n> --asset-file <json> [--json]
+# asset-file: {"kind":"...","reference":"<safe ref>","display":"<summary>","revision":"<optional>"}
+
+# Close a decision
+flowctl chart resolve <chart-id>.D<n> --answer-file <f> \
+  [--assets <json>] [--sharpen-file <json>] \
+  [--supersedes D3,D5] [--keep-dependents] [--json]
+flowctl chart out-of-scope <chart-id>.D<n> --reason "<r>" [--json]
+
+# Chart lifecycle
+flowctl chart abandon <chart-id> --reason "<r>" [--json]
+flowctl chart reopen <chart-id> --reason "<r>" [--json]
+flowctl chart briefing <chart-id> --proposal-file <json> [--force] [--json]
+# proposal-file: {clusters:[{key,rationale,decisions}], shared_context:[]}
+# --force emits draft-only while open/parked remain; never capture-ready; chart stays open
+flowctl chart link-spec <chart-id> --briefing B1 --spec <spec-id> \
+  --decisions D1,D2 [--cluster <key>] [--json]
+
+# Local provenance re-entry (no network, no title inference)
+flowctl chart locate <selector> [--json]
+# selector: chart/D-ID, stored tracker identifier, or canonical stored tracker URL
+```
+
+| Subcommand | Contract |
+|---|---|
+| `create` | Validates initial-map size against `chart.maxDecisions` before allocation; `--force-size --reason` audited |
+| `show` / `list` | Compact metadata + remaining attended-session cost; bodies not flooded |
+| `frontier` | Open + unblocked + unclaimed, dependency-ordered |
+| `add-decision` | Next D-ID; attendance required only for `type=task` (derived otherwise) |
+| `park-question` / `remove-question` | Normalized parked Open Questions with stable keys; identical park retries are no-ops |
+| `wire-decision` | Atomic replace of `blocked_by[]` / `depends_on[]`; rejects missing/self/duplicate/cyclic edges |
+| `claim` / `release-claim` | Atomic claim; owner release or age-gated `--break-stale --reason` (`stale_claim` class) |
+| `attach-asset` | Idempotent safe evidence/prototype attach while decision remains open |
+| `resolve` | Answer once, ledger gist, optional sharpen transaction + supersession cascade |
+| `out-of-scope` | Close without ledger answer; writes `## Boundaries` reason |
+| `abandon` | Terminal (except audited `reopen`); decisions preserved |
+| `briefing` | Confirmed split proposal only; first non-draft sets chart `done`; `--force` is draft-only |
+| `reopen` | `done|abandoned -> open`; stales prior briefings and spec links |
+| `locate` | Local ledger only - no remote search, redirect following, or title match |
+| `link-spec` | Idempotent capture handoff into `produced_specs[]` (B-ID + cluster + D-ID set) |
+
+**Graph semantics:** `blocked_by[]` controls readiness (frontier); `depends_on[]` is premise provenance for supersession cascades. Not aliases; same D-ID may appear in both. Tracker projection maps only `blocked_by[]` to native blocking relations.
+
+**Supersession:** `resolve --supersedes D3` flips D3 to `superseded`, strikes the ledger line (never deletes), walks transitive `depends_on` (open dependents lose claims + note; resolved dependents get replacement D-IDs). `--keep-dependents` suppresses cascade and records the judgment.
+
+**Locate / URL re-entry:** resolves through the **local provenance ledger** only. Parent URL re-anchors the chart; open decision URL selects that D-ID; resolved/superseded decision URL renders history + replacement/frontier options - never silently chooses different work. Unrecorded, ambiguous, credential-bearing, wrong-host, stale-parent, or conflicting selectors fail with structured detail and no mutation. Fallback: local chart-id / D-ID. Always read back canonical local ID + title + record link before proceeding.
+
+**Tracker projection:** when `tracker.charts` is the literal `on` and the bridge is active, lifecycle transitions commit **local-first**, then project with a chart revision + idempotency marker. Children show type/attendance/status/blocking/safe evidence; parent shows compact counts, latest resolution, frontier, chart status. Partial/failed/unsupported remote updates leave durable receipts and converge on retry/reconcile - never roll back the local transition. Explicit capability degradation per provider. Rollups are **visibility**, never a control plane, roadmap, or task/PR status substitute. See [`tracker-sync.md`](tracker-sync.md#chart-lifecycle-projection).
+
+**Skill verdict grammar** (host skill emits this; not a flowctl stdout field):
+
+```
+CHART_VERDICT=<RESOLVED|BLOCKED|NEEDS_HUMAN|COMPLETE|NO_WORK> chart=<id> decision=<D> reason="<one line>"
+```
 
 ## flowctl tracker
 

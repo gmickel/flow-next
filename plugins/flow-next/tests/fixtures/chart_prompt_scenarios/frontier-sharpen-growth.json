@@ -1,0 +1,68 @@
+{
+  "id": "adaptive-frontier-growth-after-sharpen",
+  "family": "adaptive_frontier_growth",
+  "description": "After resolving a research D-ID, sharpen-file promotes a parked unknown into a newly visible interview decision; this invocation ends after one verdict and only proposes next work.",
+  "user_prompt": "Work the next decision on fn-140 - use the cheapest real-world check for viability first if available, otherwise research.",
+  "context": {
+    "mode_hint": "work",
+    "driver": "attended",
+    "chart_id": "fn-140",
+    "decision_pin": "fn-140.D1",
+    "repo_evidence": [
+      "provider public rate-limit docs"
+    ],
+    "prior_state": {
+      "frontier_top": {
+        "id": "fn-140.D1",
+        "type": "research",
+        "attendance": "unattended",
+        "status": "open"
+      },
+      "parked": [
+        "Whether billing splits per tenant or per workspace"
+      ]
+    }
+  },
+  "expected": {
+    "mode": "work",
+    "inferred_operations": [
+      "work_mode",
+      "chart frontier",
+      "chart claim",
+      "research_route",
+      "chart resolve --answer-file --sharpen-file",
+      "recompute_frontier",
+      "propose_next_only"
+    ],
+    "read_backs": [
+      "measured or cited research result before resolve",
+      "newly visible decisions from sharpen",
+      "next smallest uncertainty proposed not executed"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart claim",
+        "chart resolve --answer-file",
+        "chart resolve --sharpen-file",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "batch_claim_multiple",
+        "second_decision_resolve_same_invocation"
+      ]
+    },
+    "verdict": "CHART_VERDICT=RESOLVED chart=fn-140 decision=fn-140.D1 reason=\"provider limits cited; parked billing sharpened\"",
+    "notes": [
+      "One invocation one D-ID one verdict",
+      "Re-chart after every transition",
+      "Never follow a frozen initial route"
+    ]
+  },
+  "skill_contract_tokens": [
+    "sharpen-file",
+    "Re-chart",
+    "one D-ID",
+    "sole selection input",
+    "frontier"
+  ]
+}

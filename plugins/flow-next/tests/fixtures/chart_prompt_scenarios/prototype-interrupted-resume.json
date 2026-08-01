@@ -1,0 +1,73 @@
+{
+  "id": "prototype-interrupted-session-resumption",
+  "family": "prototype_lifecycle",
+  "description": "Prior session attached a prototype asset but human never reacted; this invocation resumes from the existing artefact rather than rebuilding or inferring approval.",
+  "user_prompt": "Pick up the tenancy prototype on fn-140 - I got interrupted last time.",
+  "context": {
+    "mode_hint": "work",
+    "driver": "attended",
+    "chart_id": "fn-140",
+    "decision_pin": "fn-140.D3",
+    "repo_evidence": [],
+    "prior_state": {
+      "decision": {
+        "id": "fn-140.D3",
+        "type": "prototype",
+        "attendance": "attended",
+        "status": "open",
+        "assets": [
+          {
+            "kind": "path",
+            "reference": ".flow/charts/assets/fn-140-d3-mock.html",
+            "revision": "abc123"
+          }
+        ],
+        "claim": null,
+        "note": "awaiting reaction"
+      }
+    }
+  },
+  "expected": {
+    "mode": "work",
+    "inferred_operations": [
+      "work_mode",
+      "chart frontier",
+      "chart claim",
+      "resume_existing_artefact",
+      "present_exact_reference",
+      "record_human_reaction",
+      "chart resolve --answer-file"
+    ],
+    "read_backs": [
+      "existing attached asset reference/revision",
+      "no rebuild",
+      "human reaction required"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart claim",
+        "chart attach-asset --asset-file",
+        "chart resolve --answer-file",
+        "chart release-claim",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "rebuild_artefact_from_scratch",
+        "infer_approval_without_reaction"
+      ]
+    },
+    "verdict": "CHART_VERDICT=RESOLVED chart=fn-140 decision=fn-140.D3 reason=\"resumed prototype from existing asset; reaction recorded\"",
+    "notes": [
+      "Resume from existing asset",
+      "Never rebuild",
+      "Never infer approval"
+    ]
+  },
+  "skill_contract_tokens": [
+    "Resume later from the existing asset",
+    "never rebuild",
+    "never infer approval",
+    "awaiting reaction",
+    "attach-asset"
+  ]
+}

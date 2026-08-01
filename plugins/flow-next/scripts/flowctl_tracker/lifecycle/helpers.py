@@ -280,4 +280,8 @@ def write_sync_receipt(flow_dir: Path, *, spec_id: str, status: str,
         receipt["details"] = details
     runs = Path(flow_dir) / "sync-runs"
     ts_slug = receipt["timestamp"].replace(":", "").replace("-", "").replace(".", "")
-    return atomic_write_json(runs / f"sync-{spec_id}-{ts_slug}.json", receipt)
+    # Typed subject tokens (fn-135: "chart:fn-10") carry a colon, which is
+    # illegal in NTFS filenames (WinError 123). Sanitize the filename only;
+    # the receipt body keeps the exact subject id.
+    fname_id = str(spec_id).replace(":", "-")
+    return atomic_write_json(runs / f"sync-{fname_id}-{ts_slug}.json", receipt)

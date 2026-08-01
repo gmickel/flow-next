@@ -157,7 +157,7 @@ droid plugin marketplace add \
 /flow-next:resolve-pr <PR#>          # 5. Fetch review threads → triage → resolve
 ```
 
-That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:interview` for structured discovery), branch out (`/flow-next:pilot` + `/flow-next:land` for the autonomous assembly line, `/flow-next:ralph-init` for hardened overnight runs, `/flow-next:audit` for memory garbage collection).
+That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:chart` when one oversized idea is still unclear - optional pre-capture discovery, never mandatory - `/flow-next:guide` when you're unsure which path is smallest, `/flow-next:interview` for structured discovery on an existing spec), branch out (`/flow-next:pilot` + `/flow-next:land` for the autonomous assembly line, `/flow-next:ralph-init` for hardened overnight runs, `/flow-next:audit` for memory garbage collection).
 
 ### After every update
 
@@ -196,8 +196,11 @@ Skills are prompts executed by the host agent. If the variation you want is not 
 ```mermaid
 flowchart LR
     Idea([Idea]) --> P[/flow-next:prospect/]
+    Idea --> Ch[/flow-next:chart/]
     Idea --> C[/flow-next:capture/]
+    P --> Ch
     P --> C
+    Ch -->|briefing| C
     P -.->|direct via promote| L[/flow-next:plan/]
     C --> L
     C --> I[/flow-next:interview/]
@@ -213,18 +216,22 @@ flowchart LR
     A -.-> M[(.flow/memory/)]
 ```
 
+> `/flow-next:chart` is an **optional** pre-capture discovery route for one oversized or unclear idea - not a mandatory stage and never a pilot stage. Skip it when intent and boundaries are already stateable (`signal absent`); if you skip despite residual risk, the evidence/consent/review contracts still apply later. Unsure which path fits? `/flow-next:guide` recommends the smallest sufficient route.
+>
 > `/flow-next:qa` is an **opt-in** live-app QA stage (after work, before make-pr): it drives the deployed app like a real user and only runs when there's a live deploy + a driver; with neither it surfaces the limitation rather than blocking. It **augments, never replaces** CI/staging/manual QA: the cheap first live pass that catches obvious runtime breakage before a human opens the PR. Run it by hand, or wire it into the autonomous loop as the optional `pipeline.qa` pilot stage (`flowctl config set pipeline.qa on`, default off): `plan → plan-review → work → qa → make-pr`.
 
 The loop is spec-driven. Each step below maps to one skill; click through to flow-next.dev for the full page.
 
 <details>
-<summary><strong>1. Capture or prospect a spec</strong></summary>
+<summary><strong>1. Capture, prospect, or chart (optional discovery)</strong></summary>
 
-Either synthesize an existing conversation into a structured spec, or, when starting from scratch, generate ranked candidate ideas grounded in the repo. Both land in `.flow/specs/<id>.md`. Capture **source-tags every acceptance criterion** as `[user]` / `[paraphrase]` / `[inferred]` and runs a mandatory read-back, so you see exactly how much of the spec the agent invented before anything is written.
+Either synthesize an existing conversation into a structured spec, generate ranked candidate ideas grounded in the repo, or - when **one** idea is too big and still unclear - run optional `/flow-next:chart` decision-map discovery and hand the briefing to capture. Specs land in `.flow/specs/<id>.md`. Capture **source-tags every acceptance criterion** as `[user]` / `[paraphrase]` / `[inferred]` and runs a mandatory read-back, so you see exactly how much of the spec the agent invented before anything is written. Chart D-ID/evidence provenance is structural and distinct from those criterion author tags.
 
 ```bash
-/flow-next:capture                    # from a conversation
-/flow-next:prospect <focus-hint>      # from a focus hint (concept, path, constraint, volume)
+/flow-next:capture                    # from a conversation or chart briefing
+/flow-next:prospect <focus-hint>      # ranked candidates (concept, path, constraint, volume)
+/flow-next:chart "multi-tenant migration"  # optional: one oversized idea, one decision at a time
+/flow-next:guide "we have a half-formed platform idea"  # smallest-sufficient router
 ```
 
 → [flow-next.dev/skills/capture](https://flow-next.dev/skills/capture) · [flow-next.dev/skills/prospect](https://flow-next.dev/skills/prospect)
@@ -381,11 +388,11 @@ Scope honesty, because the architecture depends on it:
 
 ## Commands
 
-Every skill is invocable as `/flow-next:<name>` or in plain language. The inner loop is `capture` → `plan` → `work` → `make-pr` → `resolve-pr`. Upstream of it sit `strategy`, `prospect`, and `interview`; around it, the review gates (`plan-review`, `impl-review`, `spec-completion-review`, `qa`); after it, the loops (`pilot`, `land`, `ralph-init`) and the maintenance skills (`audit`, `sync`, `memory-migrate`). `setup`, `prime`, `tracker-sync`, and `map` handle the project itself.
+Every skill is invocable as `/flow-next:<name>` or in plain language. The inner loop is `capture` → `plan` → `work` → `make-pr` → `resolve-pr`. Upstream of it sit `strategy`, `prospect`, optional `chart` (pre-capture decision map for oversized unclear ideas), `guide` (smallest-sufficient router), and `interview`; around it, the review gates (`plan-review`, `impl-review`, `spec-completion-review`, `qa`); after it, the loops (`pilot`, `land`, `ralph-init`) and the maintenance skills (`audit`, `sync`, `memory-migrate`). `setup`, `prime`, `tracker-sync`, and `map` handle the project itself.
 
 **Phrase-triggered skills** (no slash command, just ask): `flow-next-deps` ("what's blocking what?", dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-rp-explorer` (token-efficient codebase exploration via RepoPrompt), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?").
 
-Full catalog of all 28 skills, with triggers, one-liners, and every flag: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every command, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it, from model routing to review backends, delegation, and loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
+Full catalog of all 30 skills (24 slash-command, 6 phrase-triggered), with triggers, one-liners, and every flag: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every command, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it, from model routing to review backends, delegation, and loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
 
 ---
 
@@ -406,7 +413,7 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Looking for… | Repo file | Website |
 |---|---|---|
 | 5-minute pitch + install | `README.md` (this page) | [flow-next.dev](https://flow-next.dev) |
-| Skills catalog: all 28 skills, triggers, one-liners | [`docs/skills.md`](plugins/flow-next/docs/skills.md) | n/a |
+| Skills catalog: all 30 skills, triggers, one-liners | [`docs/skills.md`](plugins/flow-next/docs/skills.md) | n/a |
 | Adopting in a team, handover objects, Spec-as-PR, adoption ladder | [`docs/teams.md`](plugins/flow-next/docs/teams.md) | [Teams guide](https://flow-next.dev) |
 | Full `flowctl` CLI reference: every command, every flag | [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) | n/a |
 | Ralph autonomous mode internals: hooks, receipts, DCG | [`docs/ralph.md`](plugins/flow-next/docs/ralph.md) | n/a |

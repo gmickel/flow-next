@@ -1,0 +1,62 @@
+{
+  "id": "tracker-parent-url-reentry",
+  "family": "tracker_parent_url",
+  "description": "Stored parent tracker URL resolves via local chart locate only; read back canonical chart id/title/link then re-anchor status/frontier.",
+  "user_prompt": "Continue this chart from this decision link: https://linear.app/acme/issue/ACME-42",
+  "context": {
+    "mode_hint": "re-enter",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "selector": "https://linear.app/acme/issue/ACME-42",
+    "locate_result": {
+      "kind": "chart_parent",
+      "chart_id": "fn-140",
+      "title": "Multi-tenant rate isolation",
+      "record_link": ".flow/charts/fn-140.md"
+    },
+    "repo_evidence": [],
+    "prior_state": {}
+  },
+  "expected": {
+    "mode": "re-enter",
+    "inferred_operations": [
+      "chart locate",
+      "readback_canonical_identity",
+      "status_or_work_reanchor",
+      "chart show",
+      "chart frontier"
+    ],
+    "read_backs": [
+      "canonical local chart id",
+      "title",
+      "record link"
+    ],
+    "guarded_mutations": {
+      "allowed": [
+        "chart locate",
+        "chart show",
+        "chart frontier"
+      ],
+      "forbidden": [
+        "chart create",
+        "remote_search",
+        "title_inference"
+      ]
+    },
+    "verdict": "CHART_VERDICT=NO_WORK chart=fn-140 decision=- reason=\"status only; no mutations\"",
+    "notes": [
+      "Local ledger only",
+      "No remote search",
+      "No title inference",
+      "Parent URL -> chart status/frontier"
+    ]
+  },
+  "skill_contract_tokens": [
+    "chart locate",
+    "local ledger",
+    "No remote search",
+    "title inference",
+    "Read back"
+  ]
+}

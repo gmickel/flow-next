@@ -26,7 +26,11 @@ TEMPLATES = PLUGIN_DIR / "skills" / "flow-next-setup" / "templates"
 PLUGIN_TEMPLATES = PLUGIN_DIR / "templates"
 
 BLOCK_BUDGET_TOKENS = 300
-USAGE_BUDGET_TOKENS = 2800
+# fn-99 set 2800 for the then-current surface. fn-135 adds the chart
+# subsystem (one compact section + one id line); the ceiling moves once,
+# deliberately, to admit it - not headroom for drift. Next growth pays or
+# re-litigates here.
+USAGE_BUDGET_TOKENS = 2950
 CHARS_PER_TOKEN = 4
 
 
