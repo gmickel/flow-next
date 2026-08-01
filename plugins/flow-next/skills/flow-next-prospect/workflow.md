@@ -889,13 +889,12 @@ Promote a survivor to a spec?
   2) Promote #2: <title>
   ...
   N) Skip
-  c) Chart a survivor that is still singular, oversized, and unclear
   i) Interview (ask /flow-next:interview what to refine)
 
-Enter choice [1-N|c|i|skip]:
+Enter choice [1-N|i|skip]:
 ```
 
-Number the survivors 1-N in the same order they appear in the artifact (high_leverage first, then worth_considering, then if_you_have_the_time). `Skip` is the last numeric option (`N`); `c` is chart (only when still unclear/oversized); `i` is the alphabetic interview shortcut.
+Number the survivors 1-N in the same order they appear in the artifact (high_leverage first, then worth_considering, then if_you_have_the_time). `Skip` is the last numeric option (`N`); `i` is the alphabetic interview shortcut. (The frozen menu does not advertise chart; a typed `c`/`chart` reply still routes via 6.3.)
 
 ### 6.3 — Reply parsing
 
