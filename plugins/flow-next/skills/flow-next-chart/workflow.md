@@ -238,7 +238,8 @@ Write an initial-map JSON file (never hand-edit `.flow/charts/`):
   ],
   "parked_questions": [
     "Whether billing splits per tenant or per workspace"
-  ]
+  ],
+  "notes": "- Tenancy today is a single shared schema [ref: src/db/schema.sql rev:9f2c1ab]\n- Provider rate limits are per-account, not per-key [ref: https://example.invalid/docs/limits]"
 }
 ```
 
@@ -264,7 +265,7 @@ CHART_VERDICT=NO_WORK chart=<id> decision=- reason="chart created; frontier offe
 
 ### 1.6 - Notes seeding
 
-Known facts with citations go into the chart's `## Notes` via the create path / follow-up notes the store supports. If create only takes title/outcome/map, put durable known-fact lines into decision-adjacent parked/Notes content the map body receives from flowctl after create - prefer documenting known facts in the read-back and ensuring the chart body Notes section carries them when the CLI returns the map. Do **not** fabricate resolved ledger lines for background.
+Known facts with citations go into the chart's `## Notes` through the initial-map file's optional `notes` string - `chart create --initial-map-file` seeds the `## Notes` section from it (R52). Keep each line a cited fact with its safe reference/revision. Do **not** fabricate resolved ledger lines for background: a fact under Notes is never a D-ID.
 
 ---
 

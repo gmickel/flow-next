@@ -10466,8 +10466,15 @@ def _chart_relpath(flow_dir: Path, path: Path) -> str:
         return path.name
 
 
-def chart_body_text(chart_id: str, title: str, outcome: str) -> str:
-    """Canonical empty-ledger chart map body."""
+def chart_body_text(
+    chart_id: str, title: str, outcome: str, notes: str = ""
+) -> str:
+    """Canonical empty-ledger chart map body.
+
+    `notes` seeds `## Notes` with grounding facts and their citations (R52);
+    it is never a resolved ledger line.
+    """
+    notes_block = f"{notes.strip()}\n" if notes and notes.strip() else ""
     return (
         f"# {chart_id} {title}\n"
         f"\n"
@@ -10475,6 +10482,7 @@ def chart_body_text(chart_id: str, title: str, outcome: str) -> str:
         f"{outcome}\n"
         f"\n"
         f"## Notes\n"
+        f"{notes_block}"
         f"\n"
         f"## Decisions\n"
         f"<!-- the ledger: one line per resolved decision, append-only, "
@@ -11665,8 +11673,10 @@ def _sidecar_json(data: dict) -> str:
     return json.dumps(data, indent=2, sort_keys=True) + "\n"
 
 
-def _chart_md_with_parked(chart_id: str, title: str, outcome: str, parked: list) -> str:
-    body = chart_body_text(chart_id, title, outcome)
+def _chart_md_with_parked(
+    chart_id: str, title: str, outcome: str, parked: list, notes: str = ""
+) -> str:
+    body = chart_body_text(chart_id, title, outcome, notes)
     return _replace_chart_section(
         body, "Open Questions", _render_open_questions_section(parked)
     )
@@ -11745,7 +11755,20 @@ def parse_initial_map_file(path: Path) -> dict:
             "initial_map_invalid_parked",
             "initial-map 'parked_questions' must be a list",
         )
-    return {"decisions": decisions, "parked_questions": parked}
+    notes = data.get("notes")
+    if notes is None:
+        notes = ""
+    if not isinstance(notes, str):
+        raise ChartError(
+            "validation",
+            "initial_map_invalid_notes",
+            "initial-map 'notes' must be a string",
+        )
+    return {
+        "decisions": decisions,
+        "parked_questions": parked,
+        "notes": notes,
+    }
 
 
 def validate_and_build_initial_map(
@@ -11785,6 +11808,8 @@ def validate_and_build_initial_map(
                 "--force-size requires --reason",
                 details={"count": count, "ceiling": ceiling},
             )
+        # The audit reason is git-tracked chart prose like any other entry point.
+        refuse_if_unsafe_prose(str(force_reason), field="--force-size reason")
 
     # First pass: allocate provisional D-IDs in file order and derive attendance.
     local_map: dict[str, str] = {}
@@ -11907,9 +11932,15 @@ def validate_and_build_initial_map(
             "timestamp": now_iso(),
             "reason": str(force_reason).strip(),
         }
+    notes = str(map_data.get("notes") or "").strip()
+    if notes:
+        # Grounding facts land under `## Notes` with their citations (R52); the
+        # same unsafe-prose refusal as every other chart prose entry point.
+        refuse_if_unsafe_prose(notes, field="chart Notes")
     return {
         "decisions": decisions_for_graph,
         "parked_questions": parked_out,
+        "notes": notes,
         "cost": cost,
         "force_size_audit": force_audit,
         "ceiling": ceiling,
@@ -11972,7 +12003,9 @@ def create_chart_pair(
         data["decisions"] = compact_decs
         if initial.get("force_size_audit"):
             data["force_size_audit"] = initial["force_size_audit"]
-    md_content = _chart_md_with_parked(chart_id, title, outcome, parked)
+    md_content = _chart_md_with_parked(
+        chart_id, title, outcome, parked, str((initial or {}).get("notes") or "")
+    )
     mutations = [
         (f"{chart_id}.json", "create", _sidecar_json(data)),
         (f"{chart_id}.md", "create", md_content),

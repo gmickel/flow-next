@@ -1494,6 +1494,108 @@ class TestUnsafeProse(unittest.TestCase):
     persistence - not only the resolution answer path. Fixtures are obviously
     fake shapes; destructive commands are described, never executed."""
 
+    def test_force_size_reason_refuses_unsafe_prose(self) -> None:
+        """The --force-size audit reason is git-tracked chart prose too: an
+        over-ceiling override carrying a secret shape refuses before the audit
+        record (and the chart) is written."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            decisions = [{"title": f"D{i}", "type": "research"} for i in range(13)]
+            map_path = repo / "map.json"
+            map_path.write_text(
+                json.dumps({"decisions": decisions}), encoding="utf-8"
+            )
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "create",
+                "--title",
+                "Big effort",
+                "--outcome",
+                "Out",
+                "--initial-map-file",
+                str(map_path),
+                "--force-size",
+                "--reason",
+                "lead approved; password=hunter2-FAKE",
+                "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["class"], "validation")
+            self.assertEqual(err["code"], "unsafe_prose_content")
+            self.assertIn("force-size", err["details"]["field"])
+            self.assertEqual(list((flow / "charts").glob("fn-*.json")), [])
+
+    def test_initial_map_notes_seed_chart_notes_section(self) -> None:
+        """R52: grounding facts land under `## Notes` through the initial-map
+        `notes` string, with citations preserved and no fabricated ledger
+        line; unsafe notes prose refuses like every other entry point."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            note_line = "- Shared schema today [ref: src/db/schema.sql rev:9f2c1ab]"
+            map_path = repo / "map.json"
+            map_path.write_text(
+                json.dumps(
+                    {
+                        "decisions": [{"title": "Choose key", "type": "research"}],
+                        "notes": note_line,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "create",
+                "--title",
+                "Tenant isolation",
+                "--outcome",
+                "Ready",
+                "--initial-map-file",
+                str(map_path),
+                "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            chart_id = json.loads(r.stdout)["result"]["id"]
+            body = (flow / "charts" / f"{chart_id}.md").read_text(encoding="utf-8")
+            notes_section = body.split("## Notes", 1)[1].split("## Decisions", 1)[0]
+            self.assertIn(note_line, notes_section)
+            # Background never becomes ledger history.
+            ledger = body.split("## Decisions", 1)[1].split("## Open Questions", 1)[0]
+            self.assertNotIn(note_line, ledger)
+
+            unsafe_map = repo / "unsafe.json"
+            unsafe_map.write_text(
+                json.dumps(
+                    {
+                        "decisions": [{"title": "Choose key", "type": "research"}],
+                        "notes": "- token sk-FAKESECRETVALUE0000000000",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            r2 = _run_flowctl(
+                repo,
+                "chart",
+                "create",
+                "--title",
+                "Second",
+                "--outcome",
+                "Ready",
+                "--initial-map-file",
+                str(unsafe_map),
+                "--json",
+            )
+            self.assertNotEqual(r2.returncode, 0)
+            err2 = json.loads(r2.stdout)["error"]
+            self.assertEqual(err2["code"], "unsafe_prose_content")
+            self.assertIn("Notes", err2["details"]["field"])
+
     def test_chart_create_refuses_unsafe_title_and_outcome(self) -> None:
         """--title/--outcome land in git-tracked chart md/json (and the
         tracker parent rollup); both refuse unsafe shapes before any
