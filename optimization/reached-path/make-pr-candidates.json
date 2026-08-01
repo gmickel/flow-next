@@ -10,7 +10,7 @@
   },
   "candidate_prompt_hashes": {
     "plugins/flow-next/references/html-artifacts.md": "0e4a4e7b48ad592ac3e6f4f5029548233e8403f167efcebaae8a733066aeb185",
-    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "07b89eb95514d99c288f2a123d4e6b548843e8cdd644f72d1844dc00e6b3caa1",
+    "plugins/flow-next/skills/flow-next-make-pr/SKILL.md": "9b3d6e5c17c2862748fbf974dc3b2344955663ab5720569a3953625113c46fe3",
     "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md": "b32c32a362202428da0c4dd7e69460fb15e007d2cc5a92738abaf11cf44e5162",
     "plugins/flow-next/skills/flow-next-make-pr/html-lens.md": "af599ae9b45560ed2a3a94a8d3c0f06867c042802c529be97445601e7883f913",
     "plugins/flow-next/skills/flow-next-make-pr/mermaid-rules.md": "bf7c72d18be2764733a1d211145ff996a711b3c72994e9cd18897dbfa8acb2f0",
@@ -43,39 +43,39 @@
       "algorithm": "lf-full-file-on-activation-once-per-path-hash",
       "dry-run": {
         "b1_chars": 145723,
-        "candidate_chars": 148315,
-        "delta_chars": 2592
+        "candidate_chars": 148855,
+        "delta_chars": 3132
       },
       "html-off": {
         "b1_chars": 191058,
-        "candidate_chars": 195966,
-        "delta_chars": 4908
+        "candidate_chars": 196506,
+        "delta_chars": 5448
       },
       "html-on": {
         "b1_chars": 210653,
-        "candidate_chars": 226311,
-        "delta_chars": 15658,
+        "candidate_chars": 226851,
+        "delta_chars": 16198,
         "note": "Selected HTML path pays the direct-reference router plus the shared structured cognitive-aid and cross-render parity contract; no wall-time claim."
       },
       "create": {
         "b1_chars": 191058,
-        "candidate_chars": 195966,
-        "delta_chars": 4908
+        "candidate_chars": 196506,
+        "delta_chars": 5448
       },
       "finalize": {
         "b1_chars": 179412,
-        "candidate_chars": 184320,
-        "delta_chars": 4908
+        "candidate_chars": 184860,
+        "delta_chars": 5448
       },
       "existing-pr": {
         "b1_chars": 179412,
-        "candidate_chars": 184320,
-        "delta_chars": 4908
+        "candidate_chars": 184860,
+        "delta_chars": 5448
       },
       "push-retry": {
         "b1_chars": 179412,
-        "candidate_chars": 184320,
-        "delta_chars": 4908
+        "candidate_chars": 184860,
+        "delta_chars": 5448
       }
     },
     "required_reads": {
