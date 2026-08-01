@@ -10,7 +10,7 @@
   "id": "fn-154-chart-reopened-charts-regain-a-capture",
   "impl_review_rounds": {
     "fn-154-chart-reopened-charts-regain-a-capture.1": 0,
-    "fn-154-chart-reopened-charts-regain-a-capture.2": 1
+    "fn-154-chart-reopened-charts-regain-a-capture.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -115,6 +115,20 @@
       "task": "fn-154-chart-reopened-charts-regain-a-capture.2",
       "timestamp": "2026-08-01T17:08:13.553885Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "ff0076aaf47f8a3ceb0e21ee99e2782020dec412",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "2fa603fe3180abbd20109187a52bdd5b41d23ce977fe659ed56494bcf6f5b276",
+      "round_consumed": true,
+      "scope": "impl:fn-154-chart-reopened-charts-regain-a-capture.2",
+      "task": "fn-154-chart-reopened-charts-regain-a-capture.2",
+      "timestamp": "2026-08-01T17:14:13.664394Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
@@ -137,5 +151,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T17:08:13.598421Z"
+  "updated_at": "2026-08-01T17:14:24.099489Z"
 }
