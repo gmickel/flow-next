@@ -78,6 +78,13 @@ which is operationally negligible within the end-to-end workflow. Consumers
 should treat `performanceBudget.p95MillisecondsExclusive` as an exclusive
 upper bound, not round or reinterpret it as `<=`.
 
+`performanceBudget.clock` names the clock the budget is measured on:
+`time.process_time`, process CPU time. Wall clock is wrong for this budget -
+the operation is pure in-memory work, so under a parallel test suite a
+wall-clock p95 measures scheduler contention between sibling interpreters
+rather than the operation itself. Consumers should measure on their runtime's
+equivalent process-CPU clock, not on wall time.
+
 Flow Swarm vendors byte-identical copies of both files under its own test
 fixtures. Its CI:
 
