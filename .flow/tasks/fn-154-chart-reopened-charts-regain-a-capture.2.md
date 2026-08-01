@@ -61,9 +61,8 @@ Then the transition tests. These pass by construction if task .1's mechanism is 
 - [ ] R8 second-round-trip test passes (final B3 after a second reopen)
 - [ ] Propagation chain run and the three focused suites green
 ## Done summary
-TBD
-
+Made the briefing emission self-describing: a fresh emission that supersedes stale predecessors now carries `supersedes_stale` (array of B-IDs in sidecar order, present only on that path, so retry/first-emission/error envelopes stay byte-identical), and the non-JSON branch names the minted B-ID plus the superseded ones instead of the misleading `status=stale (noop)` line from the bug report. Added real-CLI transition tests pinning per-invocation draft/final recompute (R7), the abandoned-source and second-round-trip reopen sequences (R8), and the discriminator's presence/absence rules (R9/R4); the six behavioural ones were verified to fail against the pre-fix binary.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8c7a10a4eaeda4c6e0b4f73514912e26dbe1ee04, ff0076aaf47f8a3ceb0e21ee99e2782020dec412, 35e74c235540cda55006c7fc92b2ca36e701d3b6
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_briefing test_capture_chart_handoff test_chart_tracker_projection -q (90 tests, OK), cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution test_startup_bootstrap test_chart_docs_inventory test_prompt_text_pinned -q (64 tests, OK), uvx ruff@0.16.0 check . (All checks passed), bite check: the 6 new transition/discriminator tests fail against the pre-fix binary (worktree at 00504e00); only the byte-unchanged regression passes on both sides, baseline: green (focused suites green pre-edit)
 - PRs:
