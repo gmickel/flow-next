@@ -43,7 +43,8 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 │   │   ├── 1.md                 # ## Question body for D1
 │   │   ├── 1.json               # Decision sidecar (type, attendance, status, graph, claim, answer, assets)
 │   │   └── ...
-│   ├── fn-140-briefing.md       # Briefing index (immutable versioned handoff for capture)
+│   ├── fn-140-briefing-B1.md    # Immutable per-version briefing package for capture (B1, B2, ...)
+│   ├── fn-140-briefing.md       # Always-latest briefing index (convenience copy, rewritten each emission)
 │   ├── fn-140-briefing-1.md     # Per-cluster briefing when a multi-spec split is confirmed
 │   └── .transactions/           # (auto-gitignored) write-ahead journal for multi-file chart mutations
 ├── memory/                # Persistent learnings (opt-in, categorized)

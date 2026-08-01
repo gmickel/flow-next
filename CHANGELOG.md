@@ -46,10 +46,11 @@ package and names what it supersedes.
   sidecar order) in the `--json` result, and `(supersedes stale B1)` on the
   human line, in place of the misleading `status=stale (noop)` the defect
   produced. Presence is the discriminator, so the key is absent from first
-  emissions, idempotent retries, and error envelopes and every envelope that
-  exists today is byte-unchanged. It reports the invocation only: per-briefing
-  `status` in the chart sidecar's `briefings[]` stays the single source of
-  truth for capture-readiness.
+  emissions, idempotent retries, and error envelopes: every non-superseding
+  response is byte-unchanged, and the only result whose shape changes is one
+  that genuinely supersedes staled briefings. It reports the invocation only:
+  per-briefing `status` in the chart sidecar's `briefings[]` stays the single
+  source of truth for capture-readiness.
 
 ## [flow-next 3.13.1] - 2026-08-01
 
