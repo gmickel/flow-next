@@ -10,7 +10,7 @@
   "id": "fn-155-ci-wall-clock-run-the-unit-suite-at-the",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 4,
+  "plan_review_rounds": 0,
   "plan_review_status": "needs_work",
   "plan_reviewed_at": "2026-08-01T18:40:22.780185Z",
   "ready": true,
@@ -90,5 +90,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T18:40:22.780296Z"
+  "updated_at": "2026-08-01T20:32:19.829986Z"
 }
