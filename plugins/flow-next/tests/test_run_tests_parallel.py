@@ -188,9 +188,20 @@ class CorpusContractTest(unittest.TestCase):
             (self.corpus / name).write_text(PASSING_FILE, encoding="utf-8")
         self.addCleanup(self._tmp.cleanup)
 
-    def _run(self, extra_args):
+    def _run(self, extra_args, auto_jobs=None):
+        """Run main() over the temp corpus.
+
+        `auto_jobs` omits both overrides so the auto default path is the one
+        under test, with `_default_jobs` pinned so the comparison is
+        deterministic on any machine.
+        """
         buf = io.StringIO()
-        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        ctx = (
+            mock.patch.object(self.mod, "_default_jobs", return_value=auto_jobs)
+            if auto_jobs is not None
+            else contextlib.nullcontext()
+        )
+        with ctx, contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
             rc = self.mod.main(["--tests-dir", str(self.corpus)] + extra_args)
         return rc, buf.getvalue()
 
@@ -201,10 +212,13 @@ class CorpusContractTest(unittest.TestCase):
                 return line
         return None
 
-    def test_list_only_file_set_identical_across_job_counts(self):
+    def test_list_only_file_set_identical_at_jobs_two_and_auto(self):
         rc_a, out_a = self._run(["--jobs", "2", "--list-only"])
-        rc_b, out_b = self._run(["--jobs", "3", "--list-only"])
+        # No --jobs and no --serial: the auto default is the path under test.
+        rc_b, out_b = self._run(["--list-only"], auto_jobs=3)
         self.assertEqual((rc_a, rc_b), (0, 0))
+        self.assertIn("jobs=2", self._line_starting(out_a, "parallel-runner:"))
+        self.assertIn("jobs=3", self._line_starting(out_b, "parallel-runner:"))
         names_a = sorted(ln for ln in out_a.splitlines() if ln.endswith(".py"))
         names_b = sorted(ln for ln in out_b.splitlines() if ln.endswith(".py"))
         self.assertEqual(names_a, ["test_alpha.py", "test_beta.py", "test_gamma.py"])
@@ -213,9 +227,11 @@ class CorpusContractTest(unittest.TestCase):
         self.assertIn("3 file(s)", self._line_starting(out_a, "parallel-runner:"))
         self.assertIn("3 file(s)", self._line_starting(out_b, "parallel-runner:"))
 
-    def test_summary_counts_identical_across_job_counts(self):
+    def test_summary_counts_identical_at_jobs_two_and_auto(self):
         rc_a, out_a = self._run(["--jobs", "2"])
-        rc_b, out_b = self._run(["--serial"])
+        # Auto default (no overrides), pinned to a different job count so the
+        # comparison is between two genuinely different schedules.
+        rc_b, out_b = self._run([], auto_jobs=3)
         self.assertEqual((rc_a, rc_b), (0, 0))
         summary_a = self._line_starting(out_a, "SUMMARY")
         summary_b = self._line_starting(out_b, "SUMMARY")
@@ -224,6 +240,10 @@ class CorpusContractTest(unittest.TestCase):
         counts_b = summary_b.split("  wall=")[0]
         self.assertEqual(counts_a, counts_b)
         self.assertIn("files=3 ran=6 failures=0 errors=0 skipped=0", counts_a)
+        # ... and the serial fallback agrees with both.
+        rc_c, out_c = self._run(["--serial"])
+        self.assertEqual(rc_c, 0)
+        self.assertEqual(self._line_starting(out_c, "SUMMARY").split("  wall=")[0], counts_a)
 
     def test_exclude_drops_exactly_the_named_file_and_prints_it(self):
         rc, out = self._run(["--jobs", "2", "--exclude", "test_beta.py", "--list-only"])
