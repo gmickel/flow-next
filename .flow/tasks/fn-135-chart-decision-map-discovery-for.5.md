@@ -72,9 +72,8 @@ Use the exact fn-141 caller-matrix test name once that task lands; do not invent
 
 
 ## Done summary
-TBD
-
+Added optional full-lifecycle chart tracker projection through the post-fn-141 deterministic facade: new typed-subject layer (spec/chart/decision) so charts ride the same facade rather than a chart-only transport; tracker.charts string-enum off|on (default off; schema TABLE extended + artifact regenerated, drift suite green); every local transition (create/wire, claim/release, resolve, supersede, out-of-scope, briefing/done, abandon, reopen) commits locally first, then projects best-effort with per-revision event markers + aggregate receipts so partial/reordered remote outcomes converge on retry without duplicates and never roll back local state; parent/child hierarchy where supported else flat-linked with explicit degraded capability; decision children carry D-ID/type/attendance/status/safe gist/approved evidence refs; blocked_by projects to native blocking only where supported, depends_on never masquerades as blocking; compact parent rollup (counts, latest resolution, frontier). flowctl chart locate resolves chart/D-ID selectors, stored identifiers, and stored provider URLs strictly through the local provenance ledger - credential/wrong-host/ambiguous/unrecorded/stale selectors fail structured with zero mutation; resolved/superseded decision URLs return history + frontier options. Chart added to the fn-141 authoritative caller inventory (post-baseline exclusion from the commit-pinned teardown sweep documented in-test). grok-4.5 impl (22 new tests; 178 chart+tracker family green); host review (Fable) reduced a 701-line oracle-fixture reformat to a 22-line semantic insertion.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8ec206fa
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_tracker_projection test_tracker_sync_mirror_parity -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_caller_oracle test_tracker_caller_execution test_flow_config_schema_drift -q
 - PRs:
