@@ -473,6 +473,66 @@ class TestEvidenceFingerprint(unittest.TestCase):
             self.assertIn("docs/evidence.md", index)
 
 
+class TestAssetRevisionInBriefing(unittest.TestCase):
+    def test_asset_revision_rendered_in_index_and_cluster(self) -> None:
+        """A mutable reference (path/branch/url) with a stored revision must
+        carry that revision into the immutable briefing artifacts, or the
+        briefing cannot identify which evidence version backed the decision
+        after the referenced content changes."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Storage choice", "research")
+            d2 = _add_decision(repo, chart_id, "Auth model", "research")
+            _resolve(repo, d2["id"], "OIDC with per-tenant issuers")
+            (repo / "docs").mkdir()
+            (repo / "docs" / "evidence.md").write_text("mock", encoding="utf-8")
+            _git(repo, "add", "docs/evidence.md")
+            _git(repo, "commit", "-q", "-m", "evidence")
+            af = repo / f"ans-{d1['id'].replace('.', '-')}.txt"
+            af.write_text("Use Postgres", encoding="utf-8")
+            r = _run_flowctl(
+                repo,
+                "chart",
+                "resolve",
+                d1["id"],
+                "--answer-file",
+                str(af),
+                "--assets",
+                json.dumps([
+                    {
+                        "kind": "path",
+                        "reference": "docs/evidence.md",
+                        "display": "evidence doc",
+                        "revision": "rev-abc123",
+                    }
+                ]),
+                "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            prop = _proposal(
+                repo,
+                "rev.json",
+                [
+                    {"key": "core", "rationale": "storage surface", "decisions": [d1["id"]]},
+                    {"key": "auth", "rationale": "auth surface", "decisions": [d2["id"]]},
+                ],
+            )
+            rb = _brief(repo, chart_id, prop)
+            self.assertEqual(rb.returncode, 0, rb.stderr + rb.stdout)
+            index_txt = (
+                flow / "charts" / f"{chart_id}-briefing.md"
+            ).read_text(encoding="utf-8")
+            cluster_txt = (
+                flow / "charts" / f"{chart_id}-briefing-core.md"
+            ).read_text(encoding="utf-8")
+            for txt in (index_txt, cluster_txt):
+                self.assertIn("docs/evidence.md", txt)
+                self.assertIn("@ rev-abc123", txt)
+
+
 class TestVersionedBriefingPaths(unittest.TestCase):
     def test_b1_recorded_paths_survive_b2_emission(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -551,6 +611,31 @@ class TestProposalDuplicateClusterKey(unittest.TestCase):
             self.assertEqual(err["code"], "proposal_duplicate_cluster_key")
             self.assertEqual(err["details"]["key"], "core")
 
+    def test_case_folded_cluster_key_collision_rejected(self) -> None:
+        """'api' and 'API' pass an exact-string check but stage the same
+        artifact path on case-insensitive filesystems (default macOS and
+        Windows) - the second body would overwrite the first."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id, _prop, d1, d2 = _ready_single_cluster(repo)
+            prop = _proposal(
+                repo,
+                "case.json",
+                [
+                    {"key": "api", "rationale": "first", "decisions": [d1["id"]]},
+                    {"key": "API", "rationale": "second", "decisions": [d2["id"]]},
+                ],
+            )
+            r = _brief(repo, chart_id, prop)
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["code"], "proposal_duplicate_cluster_key")
+            self.assertEqual(err["details"]["key"], "API")
+            self.assertEqual(err["details"]["collides_with"], "api")
+            self.assertIn("case folding", err["message"])
+
 
 class TestClusterKeyNamespace(unittest.TestCase):
     def test_reserved_and_invalid_cluster_keys_rejected(self) -> None:
@@ -621,6 +706,31 @@ class TestClusterKeyNamespace(unittest.TestCase):
             self.assertFalse(
                 (flow / "charts" / f"{chart_id}-briefing-B1.md").is_file()
             )
+            self.assertFalse(
+                (flow / "charts" / f"{chart_id}-briefing.md").is_file()
+            )
+
+    def test_emission_relpath_collision_guard_is_case_folded(self) -> None:
+        """A forged proposal whose generated paths differ only by case still
+        collides on case-insensitive filesystems and is refused."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, d1, d2 = _ready_single_cluster(repo)
+            forged = {
+                "clusters": [
+                    {"key": "core", "rationale": "one", "decisions": [d1["id"]]},
+                    {"key": "CORE", "rationale": "two", "decisions": [d2["id"]]},
+                ],
+                "shared_context": [],
+            }
+            with mock.patch.object(
+                flowctl, "_parse_briefing_proposal_file", return_value=forged
+            ):
+                with self.assertRaises(flowctl.ChartError) as ctx:
+                    flowctl.emit_chart_briefing(flow, chart_id, prop)
+            self.assertEqual(ctx.exception.code, "briefing_path_collision")
             self.assertFalse(
                 (flow / "charts" / f"{chart_id}-briefing.md").is_file()
             )

@@ -87,6 +87,29 @@ def _parked_keys(chart: dict) -> list[str]:
     )
 
 
+def _chart_lifecycle_entry(chart: dict) -> dict:
+    """Chart-only transition identity (status, briefings, abandon/reopen).
+
+    abandon/reopen/final-briefing mutate ONLY the chart sidecar - no
+    decision sidecar and no parked key changes - so neither a supplied
+    chart_decision_revision nor the decision digest distinguishes the
+    state before and after such a commit. Without these fields the drain
+    pass recomputes the first pass's marker key and dedupes, leaving the
+    parent status stale. The success-marker write never touches any of
+    these fields, so identical-retry dedupe holds.
+    """
+    return {
+        "status": chart.get("status"),
+        "abandoned_at": chart.get("abandoned_at"),
+        "reopened_at": chart.get("reopened_at"),
+        "briefings": sorted(
+            (str(b.get("id") or ""), str(b.get("status") or ""))
+            for b in (chart.get("briefings") or [])
+            if isinstance(b, dict)
+        ),
+    }
+
+
 def _mutation_state_digest(chart: dict, decisions: list) -> str:
     """Projection-side marker digest: claim/asset state + mutation identity.
 
@@ -105,10 +128,14 @@ def _mutation_state_digest(chart: dict, decisions: list) -> str:
     remove-question mutate ONLY the chart sidecar (no decision status or
     digest changes), yet the parent rollup's parked count depends on them.
     The marker write never touches parked state, so retry dedupe holds.
+
+    Chart-only lifecycle transitions (abandon/reopen/final-briefing) fold
+    in via _chart_lifecycle_entry for the same reason again.
     """
     return _sha(json.dumps({
         "decisions": _digest_entries(decisions),
         "parked": _parked_keys(chart),
+        "chart": _chart_lifecycle_entry(chart),
     }, sort_keys=True, default=str))
 
 
@@ -143,6 +170,10 @@ def _chart_base_revision(chart: dict, decisions: list) -> str:
         # foreign-change predicate never fires and the parent rollup keeps a
         # stale parked count until an unrelated event.
         "parked": _parked_keys(chart),
+        # Same for chart-only lifecycle transitions (abandon/reopen/
+        # final-briefing): they must trip the foreign-change predicate so
+        # the holder drains them before releasing the lock.
+        "lifecycle": _chart_lifecycle_entry(chart),
     }, sort_keys=True, default=str))
 
 
@@ -159,9 +190,41 @@ def _projection_state(tracker: dict) -> dict:
     }
 
 
-def _has_event_marker(tracker: dict, key: str) -> bool:
+def _find_event_marker(tracker: dict, key: str) -> Optional[dict]:
     for entry in _projection_state(tracker).get("event_markers") or []:
         if isinstance(entry, dict) and entry.get("key") == key:
+            return entry
+    return None
+
+
+def _has_event_marker(tracker: dict, key: str) -> bool:
+    return _find_event_marker(tracker, key) is not None
+
+
+def _has_event_receipt(flow_dir: Path, chart_id: str, event: str,
+                       revision: str) -> bool:
+    """True when a sync receipt already records this event+revision.
+
+    Success receipts (and the repair receipt written on the marker-dedupe
+    path) carry details.revision, so repair itself is idempotent. Fails
+    open (False) on unreadable state: an extra repair receipt is harmless;
+    a permanently missing one is not.
+    """
+    token_fname = subject_marker_token("chart", chart_id).replace(":", "-")
+    runs = Path(flow_dir) / "sync-runs"
+    try:
+        paths = list(runs.glob(f"sync-{token_fname}-*.json"))
+    except OSError:
+        return False
+    for p in paths:
+        try:
+            obj = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(obj, dict) or obj.get("event") != event:
+            continue
+        details = obj.get("details")
+        if isinstance(details, dict) and details.get("revision") == revision:
             return True
     return False
 
@@ -1002,8 +1065,9 @@ def _project_chart_locked(
     evidence = evidence or revision[:16]
     marker_key = _event_marker_key(event, revision, evidence)
 
-    if _has_event_marker(chart_tracker, marker_key):
-        return {
+    marker = _find_event_marker(chart_tracker, marker_key)
+    if marker is not None:
+        deduped: dict[str, Any] = {
             "projected": True,
             "deduped": True,
             "chart_id": chart_id,
@@ -1014,6 +1078,31 @@ def _project_chart_locked(
             ),
             "tracker_id": chart_tracker.get("id"),
         }
+        # Receipt repair: the success marker persists BEFORE the aggregate
+        # receipt, so a receipt write that failed after the marker landed
+        # would otherwise never be retried - every retry exits here. Write
+        # the missing receipt from the marker's recorded outcome; idempotent
+        # because the repair receipt carries details.revision, which the
+        # next dedupe finds. A failed repair write leaves the state as-is
+        # for the next retry to converge.
+        if not _has_event_receipt(flow_dir, chart_id, event, revision):
+            rerr = write_aggregate_receipt(
+                flow_dir,
+                spec_id=subject_marker_token("chart", chart_id),
+                event=event,
+                status=str(marker.get("status") or "pushed"),
+                tracker_id=chart_tracker.get("id"),
+                transport=gate["provider"],
+                note="chart projection receipt repaired on marker dedupe",
+                details={
+                    "revision": revision,
+                    "evidence": marker.get("evidence") or evidence,
+                    "repaired": True,
+                },
+            )
+            if rerr is None:
+                deduped["receipt_repaired"] = True
+        return deduped
 
     provider = gate["provider"]
     caps = caps_of(config)

@@ -13583,6 +13583,14 @@ def resolve_chart_decision(
                 affected.append(dep)
     else:
         next_n = _next_decision_number({"decisions": list(by_id.values())})
+        # Replacement premises must follow the supersession: a replacement
+        # copying depends_on=[D1] after D4 superseded D1 would be invisible
+        # to _depends_on_closure when D4 is itself later superseded, leaving
+        # its resolved conclusion standing on an invalidated premise. Map
+        # every superseded id to its superseding decision (named targets ->
+        # the resolving decision; cascade-superseded dependents -> their own
+        # replacement, added as replacements are minted below).
+        premise_rewrite: dict[str, str] = {s: did for s in supersede_ids}
         for dep in dependent_ids:
             dep_entry = by_id[dep]
             dep_full = dict(full_by_id[dep])
@@ -13631,6 +13639,14 @@ def resolve_chart_decision(
                     or dep_entry.get("title")
                     or ""
                 )
+                rebound: dict[str, str] = {}
+                rep_deps: list[str] = []
+                for p in dep_full.get("depends_on") or []:
+                    target = premise_rewrite.get(p, p)
+                    if target != p:
+                        rebound[p] = target
+                    if target not in rep_deps:
+                        rep_deps.append(target)
                 rep_full = decision_sidecar_data(
                     chart_id,
                     rep_n,
@@ -13641,20 +13657,30 @@ def resolve_chart_decision(
                     or "unattended",
                     question,
                     blocked_by=list(dep_full.get("blocked_by") or []),
-                    depends_on=list(dep_full.get("depends_on") or []),
+                    depends_on=rep_deps,
                     created=ts,
                 )
                 rep_full["supersedes"] = [dep]
                 rep_full["transition_notes"] = [
                     _transition_note(
                         "replacement_after_supersession",
-                        reason,
+                        reason
+                        + (
+                            "; premises rebound: "
+                            + ", ".join(
+                                f"{o}->{n}" for o, n in rebound.items()
+                            )
+                            if rebound
+                            else ""
+                        ),
                         actor=actor,
                         replaces=dep,
                         via=did,
                         superseded_premises=list(supersede_ids),
+                        rebound_premises=rebound or None,
                     )
                 ]
+                premise_rewrite[dep] = rep_id
                 # Supersede the old resolved dependent.
                 old_gist = dep_full.get("answer_gist") or answer_gist(
                     dep_full.get("answer")
@@ -14295,7 +14321,10 @@ def _parse_briefing_proposal_file(
             shared.append(did)
 
     clusters: list[dict] = []
-    keys_seen: set[str] = set()
+    # Keyed by casefolded key: keys become briefing file names, and on
+    # case-insensitive filesystems (default macOS/Windows) 'api' and 'API'
+    # stage the same artifact path - one body silently overwriting the other.
+    keys_seen: dict[str, str] = {}
     for i, raw_c in enumerate(raw_clusters, start=1):
         if not isinstance(raw_c, dict):
             raise ChartError(
@@ -14329,15 +14358,29 @@ def _parse_briefing_proposal_file(
                 f"({chart_id}-briefing-B<n>.md)",
                 details={"key": key, "index": i, "path": str(path)},
             )
-        if key in keys_seen:
+        folded = key.casefold()
+        if folded in keys_seen:
+            prior = keys_seen[folded]
+            suffix = (
+                f" (collides with '{prior}' after case folding - "
+                "case-insensitive filesystems map both keys to the same "
+                "briefing file)"
+                if prior != key
+                else ""
+            )
             raise ChartError(
                 "validation",
                 "proposal_duplicate_cluster_key",
                 f"Duplicate cluster key '{key}' in proposal - every cluster "
-                "needs a distinct key",
-                details={"key": key, "index": i, "path": str(path)},
+                "needs a distinct key" + suffix,
+                details={
+                    "key": key,
+                    "collides_with": prior,
+                    "index": i,
+                    "path": str(path),
+                },
             )
-        keys_seen.add(key)
+        keys_seen[folded] = key
         rationale = (raw_c.get("rationale") or raw_c.get("reason") or "").strip()
         if not rationale:
             raise ChartError(
@@ -14567,6 +14610,17 @@ def _load_decision_briefs(
     return out
 
 
+def _asset_revision_suffix(asset: dict) -> str:
+    """Pin a mutable reference (path/branch/url) to its evidence version.
+
+    Briefings are immutable; without the stored revision/fingerprint they
+    could not identify which version of the referenced content supported
+    the decision once the reference moves.
+    """
+    rev = asset.get("revision") or asset.get("fingerprint")
+    return f" @ {rev}" if rev else ""
+
+
 def _render_briefing_index_md(
     chart: dict,
     *,
@@ -14631,7 +14685,8 @@ def _render_briefing_index_md(
                 continue
             any_asset = True
             lines.append(
-                f"- **{d['id']}:** {a.get('kind')} `{a.get('reference')}` "
+                f"- **{d['id']}:** {a.get('kind')} `{a.get('reference')}`"
+                f"{_asset_revision_suffix(a)} "
                 f"- {a.get('display') or ''}"
             )
     if not any_asset:
@@ -14718,7 +14773,8 @@ def _render_cluster_briefing_md(
         for a in d.get("assets") or []:
             if isinstance(a, dict):
                 lines.append(
-                    f"  - asset: {a.get('kind')} `{a.get('reference')}` "
+                    f"  - asset: {a.get('kind')} `{a.get('reference')}`"
+                    f"{_asset_revision_suffix(a)} "
                     f"- {a.get('display') or ''}"
                 )
     lines.extend(["", "## Shared context", ""])
@@ -14952,10 +15008,15 @@ def emit_chart_briefing(
 
     # Belt-and-braces after reserved-key validation: generated relpaths must
     # be pairwise distinct - a collision would stage one path twice and let a
-    # cluster body overwrite the immutable versioned index.
+    # cluster body overwrite the immutable versioned index. Compared after
+    # case folding: case-insensitive filesystems (default macOS/Windows)
+    # treat 'api' and 'API' as the same path.
     rels = [m[0] for m in mutations]
-    if len(set(rels)) != len(rels):
-        dupes = sorted({r for r in rels if rels.count(r) > 1})
+    folded_rels = [r.casefold() for r in rels]
+    if len(set(folded_rels)) != len(folded_rels):
+        dupes = sorted(
+            {r for r in rels if folded_rels.count(r.casefold()) > 1}
+        )
         raise ChartError(
             "validation",
             "briefing_path_collision",

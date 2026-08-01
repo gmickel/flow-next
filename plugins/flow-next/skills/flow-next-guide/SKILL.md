@@ -13,7 +13,14 @@ Stateless prompt-first router. Recommends **one** next workflow from the startin
 
 ## Preamble
 
-No flowctl mutation. Optional read-only probes (`flowctl list`, `flowctl show`, file reads) may ground the recommendation when a handle or path is named. Never run create/write/claim/resolve.
+**CRITICAL: flowctl is BUNDLED - NOT installed globally.** `which flowctl` will fail (expected). Define once; probe blocks use `$FLOWCTL`:
+
+```bash
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+```
+
+No flowctl mutation. Optional read-only probes (`$FLOWCTL list`, `$FLOWCTL show`, file reads) may ground the recommendation when a handle or path is named. Never run create/write/claim/resolve.
 
 ## Output contract (every recommendation)
 

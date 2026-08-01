@@ -688,6 +688,87 @@ class TestSupersession(unittest.TestCase):
             # D1 line never removed
             self.assertIn("Postgres", body)
 
+    def test_replacement_rebinds_premises_to_superseding_decision(self) -> None:
+        """A replacement created for a resolved dependent must depend on the
+        SUPERSEDING decision, not the superseded premise: otherwise a later
+        supersession of the superseding decision misses the replacement in
+        _depends_on_closure and its stale conclusion survives the second
+        reversal."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Storage choice", "research")
+            a1 = _write_answer(repo, "a1.txt", "Pick Postgres")
+            r1 = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(a1), "--json",
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr)
+            # D2 resolved, depends on D1.
+            d2 = _add_decision(
+                repo, chart_id, "Migration path", "research", depends_on="D1",
+            )
+            a2 = _write_answer(repo, "a2.txt", "Big-bang migration")
+            r2 = _run_flowctl(
+                repo, "chart", "resolve", d2["id"],
+                "--answer-file", str(a2), "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr)
+
+            # First reversal: D3 supersedes D1 -> replacement for D2.
+            d3 = _add_decision(repo, chart_id, "Revisit storage", "research")
+            a3 = _write_answer(repo, "a3.txt", "Pick SQLite")
+            r3 = _run_flowctl(
+                repo, "chart", "resolve", d3["id"],
+                "--answer-file", str(a3), "--supersedes", "D1", "--json",
+            )
+            self.assertEqual(r3.returncode, 0, r3.stderr + r3.stdout)
+            res3 = json.loads(r3.stdout)["result"]
+            self.assertEqual(len(res3["replacements"]), 1)
+            rep_id = res3["replacements"][0]["id"]
+            rep_n = int(rep_id.rsplit("D", 1)[1])
+            rep_side = _decision_json(flow, chart_id, rep_n)
+            # Premise rebound: superseded D1 -> superseding D3.
+            self.assertEqual(rep_side["depends_on"], [d3["id"]])
+            note = rep_side["transition_notes"][0]
+            self.assertEqual(
+                note.get("rebound_premises"), {d1["id"]: d3["id"]},
+            )
+            self.assertIn("premises rebound", note["text"])
+
+            # Resolve the replacement so it becomes a resolved dependent
+            # of D3.
+            ar = _write_answer(repo, "ar.txt", "Streamed migration")
+            rr = _run_flowctl(
+                repo, "chart", "resolve", rep_id,
+                "--answer-file", str(ar), "--json",
+            )
+            self.assertEqual(rr.returncode, 0, rr.stderr + rr.stdout)
+
+            # Second reversal: D5 supersedes D3. The closure must now find
+            # the replacement (its premise was rebound to D3) and mint its
+            # own replacement instead of leaving the stale conclusion.
+            d5 = _add_decision(repo, chart_id, "Re-revisit storage", "research")
+            a5 = _write_answer(repo, "a5.txt", "Back to Postgres")
+            r5 = _run_flowctl(
+                repo, "chart", "resolve", d5["id"],
+                "--answer-file", str(a5), "--supersedes", d3["id"], "--json",
+            )
+            self.assertEqual(r5.returncode, 0, r5.stderr + r5.stdout)
+            res5 = json.loads(r5.stdout)["result"]
+            self.assertIn(rep_id, res5["cascade_resolved"])
+            self.assertEqual(len(res5["replacements"]), 1)
+            rep2_id = res5["replacements"][0]["id"]
+            rep_after = _decision_json(flow, chart_id, rep_n)
+            self.assertEqual(rep_after["status"], "superseded")
+            self.assertEqual(rep_after["superseded_by"], rep2_id)
+            rep2_side = _decision_json(
+                flow, chart_id, int(rep2_id.rsplit("D", 1)[1])
+            )
+            self.assertEqual(rep2_side["depends_on"], [d5["id"]])
+
     def test_keep_dependents_suppresses_cascade(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

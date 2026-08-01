@@ -644,6 +644,55 @@ class LifecycleProjectionTests(unittest.TestCase):
             # Local chart status not rolled back
             self.assertEqual(chart["status"], "open")
 
+    def test_marker_dedupe_repairs_missing_receipt(self) -> None:
+        """The success marker persists BEFORE the aggregate receipt. If the
+        receipt write fails after the marker landed, every retry exits via
+        marker dedupe - so the dedupe path must repair the missing receipt,
+        idempotently, or the event stays receipt-less forever."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            _seed_chart(flow)
+            ex1 = fake_execute(self._gh_create_responses())
+            out1 = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev1", evidence="ev1", execute=ex1,
+            )
+            self.assertTrue(out1.get("projected"))
+            runs = flow / "sync-runs"
+            # Simulate remote-ok / receipt-fail: marker persisted, receipt
+            # never landed.
+            for p in runs.glob("sync-*.json"):
+                p.unlink()
+            ex2 = fake_execute({})  # no responses - any remote call fails
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev1", evidence="ev1", execute=ex2,
+            )
+            self.assertTrue(out2.get("deduped"))
+            self.assertTrue(out2.get("receipt_repaired"))
+            self.assertEqual(ex2.calls, [])
+            repaired = [
+                json.loads(p.read_text(encoding="utf-8"))
+                for p in runs.glob("sync-*.json")
+            ]
+            self.assertEqual(len(repaired), 1)
+            self.assertEqual(repaired[0]["event"], "chart.create")
+            self.assertTrue(repaired[0]["details"]["repaired"])
+            self.assertEqual(
+                repaired[0]["details"]["revision"], out2["revision"],
+            )
+            # Idempotent: a further retry finds the repair receipt and
+            # writes nothing new.
+            ex3 = fake_execute({})
+            out3 = CP.project_chart(
+                flow, "fn-10", event="chart.create",
+                revision="rev1", evidence="ev1", execute=ex3,
+            )
+            self.assertTrue(out3.get("deduped"))
+            self.assertNotIn("receipt_repaired", out3)
+            self.assertEqual(len(list(runs.glob("sync-*.json"))), 1)
+
     def test_claim_refresh_does_not_require_status_verb(self) -> None:
         """Claim/release may refresh body; never provider workflow status."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -1173,6 +1222,107 @@ class ProjectionSerializationTests(unittest.TestCase):
                 b"parked=1" in (c.body or b"") for c in updates
             ))
             # Convergence: a fresh projection of the parked state dedupes.
+            ex2 = fake_execute({})
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("deduped"))
+            self.assertEqual(ex2.calls, [])
+
+    def test_holder_drains_chart_only_status_mutation_mid_span(self) -> None:
+        """abandon/reopen/final-briefing mutate ONLY chart-level status/
+        briefings - no decision sidecar, no parked keys. Both the drain's
+        foreign-change predicate and the second pass's marker identity must
+        see them, or the drain recomputes the first pass's marker key,
+        dedupes, and the parent rollup keeps the old status forever."""
+        from flowctl_tracker.relate.ledger import dep_relation_key
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, gh_cfg())
+            hier_key = "hier:" + dep_relation_key("I_child_101", "I_parent_100")
+            _seed_chart(
+                flow,
+                tracker={
+                    "id": "I_parent_100",
+                    "identifier": "#100",
+                    "url": "https://github.com/acme/demo/issues/100",
+                    "linkState": "linked",
+                    "depRelations": [],
+                    "projection": {"event_markers": []},
+                },
+                decisions=[{
+                    "id": "fn-10.D1",
+                    "title": "Pick storage",
+                    "type": "research",
+                    "attendance": "unattended",
+                    "status": "open",
+                    "n": 1,
+                    "tracker": {
+                        "id": "I_child_101",
+                        "identifier": "#101",
+                        "url": "https://github.com/acme/demo/issues/101",
+                        "linkState": "linked",
+                        "depRelations": [{
+                            "key": hier_key,
+                            "dep_spec": "fn-10",
+                            "from_tracker_id": "I_child_101",
+                            "to_tracker_id": "I_parent_100",
+                            "type": "hierarchy",
+                            "source": "flow",
+                        }],
+                    },
+                }],
+            )
+            child = {
+                "node_id": "I_child_101", "number": 101, "body": "c",
+                "title": "t", "id": 9101,
+            }
+            parent = {
+                "node_id": "I_parent_100", "number": 100, "body": "p",
+                "title": "t", "id": 9100,
+            }
+            cpath = flow / "charts" / "fn-10.json"
+            mutated = {"done": False}
+
+            def abandon_then_child(_request):
+                # An abandon commits during the holder's remote span (chart
+                # commands take only the WAL lock, never the projection
+                # lock). It touches nothing but chart-level fields.
+                if not mutated["done"]:
+                    mutated["done"] = True
+                    chart = json.loads(cpath.read_text(encoding="utf-8"))
+                    chart["status"] = "abandoned"
+                    chart["abandoned_at"] = "2026-01-03T00:00:00Z"
+                    chart["abandoned_by"] = "other-actor"
+                    cpath.write_text(
+                        json.dumps(chart, indent=2) + "\n", encoding="utf-8"
+                    )
+                return ok(dict(child))
+
+            responses = {
+                "wire-read": [
+                    abandon_then_child, ok(dict(parent)),
+                    ok(dict(child)), ok(dict(parent)),
+                ],
+                "wire-parent-read": [ok(dict(child)), ok(dict(parent))] * 4,
+                "wire-update": [ok(dict(child)), ok(dict(parent))] * 4,
+            }
+            ex = fake_execute(responses)
+            out = CP.project_chart(
+                flow, "fn-10", event="chart.wire", execute=ex,
+            )
+            self.assertIsInstance(out, dict)
+            self.assertTrue(out.get("projected"))
+            self.assertNotIn("drain_exhausted", out)
+            self.assertNotIn("stale_revision", out)
+            # The drain pass pushed the NEW chart status to the rollup.
+            updates = [c for c in ex.calls if c.op == "wire-update"]
+            self.assertTrue(any(
+                b"Status:** abandoned" in (c.body or b"") for c in updates
+            ))
+            # Convergence: a fresh projection of the abandoned state dedupes.
             ex2 = fake_execute({})
             out2 = CP.project_chart(
                 flow, "fn-10", event="chart.wire", execute=ex2,

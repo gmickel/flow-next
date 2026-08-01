@@ -125,6 +125,22 @@ class GuideSkillSurface(unittest.TestCase):
         self.assertIn("flow-next-guide", text)
         self.assertNotIn("request_user_input", text)
 
+    def test_probes_resolve_bundled_flowctl(self) -> None:
+        """Probe prose must resolve the bundled flowctl (plugin root with the
+        .flow/bin fallback) - bare `flowctl` breaks on Cursor/copy-mode hosts
+        with no bin-PATH injection."""
+        text = _read(GUIDE_SKILL)
+        self.assertIn(
+            'FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}'
+            '/scripts/flowctl"',
+            text,
+        )
+        self.assertIn('[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"', text)
+        # Probe examples reference the resolved path, never bare flowctl.
+        self.assertNotRegex(text, re.compile(r"`flowctl\s+(list|show)"))
+        self.assertIn("$FLOWCTL list", text)
+        self.assertIn("$FLOWCTL show", text)
+
     def test_no_em_dashes(self) -> None:
         for path in (GUIDE_SKILL, GUIDE_SHIM):
             text = _read(path)
