@@ -69,9 +69,8 @@ Do NOT skip the test on Windows or under CI. That trades a flaky signal for no s
 
 
 ## Done summary
-TBD
-
+Both 30-sample p95 budget tests (test_pr_cognitive_aid, test_review_findings_receipts) now sample time.process_time() instead of time.perf_counter(), with a rationale comment at each site: under parallel test execution a wall-clock p95 measures scheduler contention between sibling interpreters, not the pure in-memory operation. The 100ms budget, warm-up loop, and sample count are unchanged, nothing is skipped or platform-conditional, and test_spec_id_allocation's min(samples) timing is untouched. golden.meta.json's performanceBudget now names the clock ("clock": "time.process_time") and both exact-dict assertions on that block (test_pr_cognitive_aid and test_pr_cognitive_aid_fixture_contract) were updated in the same commit; the golden.json sha256 assertion still passes. pr-cognitive-aid.md documents the clock for downstream vendoring consumers.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f8ebdf0ee7c5399fe866d8670917120bcfd9bd4c
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_pr_cognitive_aid test_review_findings_receipts test_pr_cognitive_aid_fixture_contract -q, python3 scripts/run_tests_parallel.py (files=179 ran=3863 failures=0 errors=0 wall=149.40s jobs=14), uvx ruff@0.16.0 check .
 - PRs:
