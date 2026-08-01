@@ -9,9 +9,13 @@ allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 
 **Read [workflow.md](workflow.md) for full phase-by-phase execution.**
 
-Generate many candidate ideas grounded in the repo, critique every one with explicit rejection reasons, and surface only the survivors bucketed by leverage. Output is a ranked artifact under `.flow/prospects/<slug>-<date>.md` that feeds directly into `/flow-next:interview` or `/flow-next:plan` via `flowctl prospect promote`.
+Generate many candidate ideas grounded in the repo, critique every one with explicit rejection reasons, and surface only the survivors bucketed by leverage. Output is a ranked artifact under `.flow/prospects/<slug>-<date>.md` that feeds promote / capture / chart / interview - never a fixed conveyor.
 
-**Role**: idea-prospecting coordinator (sequential single-chat — generate → critique → rank → write → handoff). Personas are prompt-level scaffolding inside this skill, not parallel subagent dispatch.
+### Chart boundary (fn-135)
+
+Prospect is plural ("what should we do?"). Chart is singular ("how do we get this one idea to something specifiable?"). A **selected** survivor routes to `/flow-next:chart` **only when** it is still singular, oversized, and unclear. Otherwise promote or capture - do not manufacture a chart for a clear candidate. Unsure of the next hop: `/flow-next:guide`.
+
+**Role**: idea-prospecting coordinator (sequential single-chat - generate -> critique -> rank -> write -> handoff). Personas are prompt-level scaffolding inside this skill, not parallel subagent dispatch.
 
 ## Preamble
 
@@ -60,7 +64,7 @@ Execute the phases in [workflow.md](workflow.md) in order:
 3. **Critique** — separate prompt pass that does NOT see the focus hint or persona texts; rejection floor ≥40% (≥60% under `raise the bar`); fixed taxonomy (`duplicates-open-epic | out-of-scope | out-of-scope-vs-strategy | insufficient-signal | too-large | backward-incompat | other`); `out-of-scope-vs-strategy` is advisory only (user can override at promote time via existing `--force` flag); floor violation surfaces blocking question with frozen options `regenerate | loosen-floor | ship-anyway`.
 4. **Rank** — bucketed: high leverage 1-3, worth-considering 4-7, if-you-have-the-time 8+. Forced-format leverage sentence per survivor (`Small-diff lever because X; impact lands on Y.`); no numeric scores.
 5. **Write artifact** — atomic write-then-rename to `.flow/prospects/<slug>-<date>.md` via `flowctl.write_prospect_artifact`. Same-day collisions suffix with `-2`, `-3`. Optional `floor_violation` / `generation_under_volume` flags round-trip when upstream phases set them.
-6. **Handoff** — blocking prompt for promote / interview / skip via the platform's question tool; frozen numbered-options fallback when no blocking tool is available.
+6. **Handoff** - blocking prompt for promote / chart (only if still singular+oversized+unclear) / interview / skip via the platform's question tool; frozen numbered-options fallback when no blocking tool is available.
 
 Phases 0-6 are implemented. Promote command + list/read/archive land in tasks 4-5.
 

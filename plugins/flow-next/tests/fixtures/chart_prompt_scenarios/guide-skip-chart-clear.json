@@ -1,0 +1,49 @@
+{
+  "id": "guide-skip-chart-clear-idea",
+  "family": "guide_routing",
+  "description": "Guide: one meaningful idea with intent and boundaries already stateable - recommend capture, skip chart (signal absent).",
+  "user_prompt": "Capture this: add a --json flag to the list command. Intent is clear, boundaries are the existing CLI surface.",
+  "context": {
+    "mode_hint": "guide",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      "plugins/flow-next/scripts/flowctl.py already has other --json emitters"
+    ],
+    "prior_state": {}
+  },
+  "expected": {
+    "mode": "guide",
+    "inferred_operations": [
+      "match_matrix",
+      "route_capture",
+      "skip_chart_signal_absent",
+      "recommend_natural_language_next"
+    ],
+    "read_backs": [
+      "clear meaningful idea",
+      "skip chart because signal absent"
+    ],
+    "guarded_mutations": {
+      "allowed": [],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim"
+      ]
+    },
+    "verdict": null,
+    "notes": [
+      "Next: run capture or author the spec directly",
+      "Do not manufacture a chart for clear work"
+    ]
+  },
+  "skill_contract_tokens": [
+    "Skip chart",
+    "signal absent",
+    "meaningful idea",
+    "manufacture a chart",
+    "/flow-next:capture"
+  ]
+}

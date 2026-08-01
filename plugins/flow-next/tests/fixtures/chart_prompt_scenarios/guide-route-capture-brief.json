@@ -1,0 +1,52 @@
+{
+  "id": "guide-route-capture-structured-brief",
+  "family": "guide_routing",
+  "description": "Guide: existing structured brief with resolved choices - capture the brief; narrow interview only after read-back.",
+  "user_prompt": "We finished the chart briefing at .flow/charts/fn-140-briefing.md - capture it into a spec.",
+  "context": {
+    "mode_hint": "guide",
+    "driver": "attended",
+    "chart_id": "fn-140",
+    "decision_pin": null,
+    "repo_evidence": [
+      ".flow/charts/fn-140-briefing.md"
+    ],
+    "prior_state": {
+      "briefing_status": "final"
+    }
+  },
+  "expected": {
+    "mode": "guide",
+    "inferred_operations": [
+      "match_matrix",
+      "route_capture",
+      "skip_chart",
+      "defer_interview_until_readback",
+      "recommend_natural_language_next"
+    ],
+    "read_backs": [
+      "structured brief routes to capture",
+      "narrow or skip interview only after read-back"
+    ],
+    "guarded_mutations": {
+      "allowed": [],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim"
+      ]
+    },
+    "verdict": null,
+    "notes": [
+      "Next: capture the briefing as attributable evidence",
+      "Do not pre-skip interview before capture read-back"
+    ]
+  },
+  "skill_contract_tokens": [
+    "structured brief",
+    "/flow-next:capture",
+    "read-back",
+    "Skip chart",
+    "interview"
+  ]
+}

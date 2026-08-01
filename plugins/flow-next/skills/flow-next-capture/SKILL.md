@@ -13,6 +13,10 @@ This skill IS the synthesis. The host agent (Claude Code / Codex / Droid) extrac
 
 flowctl provides thin spec plumbing (`spec create`, `spec set-plan`, optional `spec set-branch`, `memory search` for duplicate detection) plus the chart handoff callback (`chart link-spec`) after a successful chart-briefing capture. Capture never writes chart files and never mutates a chart's `ready` flag; chart never writes `.flow/specs`.
 
+### Routing boundary (fn-135 / guide matrix)
+
+Clear meaningful ideas and finished chart briefings route **here** - to capture (or direct spec authoring). Capture does **not** manufacture a chart for clear work. When intent and boundaries are already stateable, skip chart (`signal absent`). After a structured brief lands, narrow or skip interview only once read-back proves no material gaps - never pre-skip interview on hope. Unsure: `/flow-next:guide`.
+
 ### Chart briefing ingestion (fn-135)
 
 When the conversation (or `$ARGUMENTS`) references a chart briefing — a path under `.flow/charts/*-briefing*.md`, an explicit B-ID (`B1`, `B2`, …), or a chart id with a published briefing — capture treats that briefing as **attributable evidence**, not as pre-tagged acceptance criteria:

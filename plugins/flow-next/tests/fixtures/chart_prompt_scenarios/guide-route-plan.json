@@ -1,0 +1,52 @@
+{
+  "id": "guide-route-plan-ready-spec",
+  "family": "guide_routing",
+  "description": "Guide: ready spec whose work is understood - plan; chart is too late.",
+  "user_prompt": "fn-12 is ready and the approach is clear - break it into tasks.",
+  "context": {
+    "mode_hint": "guide",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      ".flow/specs/fn-12-slug.md"
+    ],
+    "prior_state": {
+      "has_spec": true,
+      "ready": true
+    }
+  },
+  "expected": {
+    "mode": "guide",
+    "inferred_operations": [
+      "match_matrix",
+      "route_plan",
+      "chart_too_late",
+      "recommend_natural_language_next"
+    ],
+    "read_backs": [
+      "ready spec whose work is understood",
+      "chart is too late"
+    ],
+    "guarded_mutations": {
+      "allowed": [],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim"
+      ]
+    },
+    "verdict": null,
+    "notes": [
+      "Next: plan the ready spec",
+      "Unshaped oversized ideas would have routed to chart first - not this case"
+    ]
+  },
+  "skill_contract_tokens": [
+    "/flow-next:plan",
+    "ready spec",
+    "too late",
+    "natural-language next prompt",
+    "chart"
+  ]
+}

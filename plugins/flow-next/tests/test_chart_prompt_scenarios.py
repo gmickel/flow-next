@@ -29,6 +29,7 @@ PLUGIN = HERE.parent
 REPO_ROOT = PLUGIN.parent.parent
 FIXTURES_DIR = HERE / "fixtures" / "chart_prompt_scenarios"
 SKILL_DIR = PLUGIN / "skills" / "flow-next-chart"
+GUIDE_SKILL_MD = PLUGIN / "skills" / "flow-next-guide" / "SKILL.md"
 
 SKILL_MD = SKILL_DIR / "SKILL.md"
 WORKFLOW_MD = SKILL_DIR / "workflow.md"
@@ -128,6 +129,7 @@ VALID_MODES = frozenset(
         "re-enter",
         "status_or_work_disambiguate",
         "ambiguous",
+        "guide",
     }
 )
 
@@ -150,6 +152,12 @@ def _skill_prose() -> str:
             EXAMPLES_MD.read_text(encoding="utf-8"),
         )
     )
+
+
+def _guide_prose() -> str:
+    if not GUIDE_SKILL_MD.is_file():
+        return ""
+    return GUIDE_SKILL_MD.read_text(encoding="utf-8")
 
 
 def _is_flowctl_like(token: str) -> bool:
@@ -385,6 +393,8 @@ class ChartPromptSkillContractCrossCheck(unittest.TestCase):
 
     Mirrors test_prime_eval's oracle style: fixture rows are data; the test
     asserts the contracts those rows depend on still exist in the skill.
+    Guide-routing fixtures (family guide_routing) check the guide skill;
+    all other families check the chart skill.
     """
 
     @classmethod
@@ -393,22 +403,32 @@ class ChartPromptSkillContractCrossCheck(unittest.TestCase):
         cls.prose = _skill_prose()
         cls.prose_cf = cls.prose  # case-sensitive primary
         cls.prose_lower = cls.prose.lower()
+        cls.guide_prose = _guide_prose()
+        cls.guide_lower = cls.guide_prose.lower()
 
     def test_contract_tokens_present_in_skill_prose(self) -> None:
         for path, data in self.fixtures:
             with self.subTest(fixture=path.name):
+                if data.get("family") == "guide_routing":
+                    prose_cf = self.guide_prose
+                    prose_lower = self.guide_lower
+                    label = "guide skill"
+                else:
+                    prose_cf = self.prose_cf
+                    prose_lower = self.prose_lower
+                    label = "chart skill"
                 missing: list[str] = []
                 for tok in data["skill_contract_tokens"]:
-                    if tok in self.prose_cf:
+                    if tok in prose_cf:
                         continue
                     # Case-insensitive fallback for short prose tokens
-                    if tok.lower() in self.prose_lower:
+                    if tok.lower() in prose_lower:
                         continue
                     missing.append(tok)
                 self.assertEqual(
                     missing,
                     [],
-                    f"{path.name}: skill_contract_tokens missing from prose: "
+                    f"{path.name}: skill_contract_tokens missing from {label}: "
                     f"{missing}",
                 )
 

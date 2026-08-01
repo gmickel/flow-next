@@ -1,0 +1,52 @@
+{
+  "id": "guide-route-interview-valid-spec",
+  "family": "guide_routing",
+  "description": "Guide: valid spec with unresolved judgment questions - interview; do not reopen chart unless effort is not specifiable.",
+  "user_prompt": "Spec fn-12 exists but the product tradeoffs in Decision Context are still open - help me nail them down.",
+  "context": {
+    "mode_hint": "guide",
+    "driver": "attended",
+    "chart_id": null,
+    "decision_pin": null,
+    "repo_evidence": [
+      ".flow/specs/fn-12-slug.md"
+    ],
+    "prior_state": {
+      "has_spec": true,
+      "ready": false
+    }
+  },
+  "expected": {
+    "mode": "guide",
+    "inferred_operations": [
+      "match_matrix",
+      "route_interview",
+      "no_reopen_chart",
+      "recommend_natural_language_next"
+    ],
+    "read_backs": [
+      "valid spec with judgment questions",
+      "do not reopen chart unless not yet specifiable"
+    ],
+    "guarded_mutations": {
+      "allowed": [],
+      "forbidden": [
+        "chart create",
+        "chart resolve",
+        "chart claim"
+      ]
+    },
+    "verdict": null,
+    "notes": [
+      "Next: interview the spec on the open judgment questions",
+      "Existing-spec clarification stays primary"
+    ]
+  },
+  "skill_contract_tokens": [
+    "/flow-next:interview",
+    "not yet specifiable",
+    "judgment",
+    "valid spec",
+    "reopen"
+  ]
+}
