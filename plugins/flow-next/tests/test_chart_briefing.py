@@ -590,6 +590,66 @@ class TestVersionedBriefingPaths(unittest.TestCase):
             self.assertIn("-briefing-B2.md", side["briefings"][1]["paths"]["index"])
 
 
+class TestBriefingCarriesChartNotes(unittest.TestCase):
+    """R52: grounding facts must survive the handoff - capture reads the
+    briefing artifacts, not the original chart body."""
+
+    def test_notes_section_appears_in_briefing_index(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            note = "- Shared schema today [ref: src/db/schema.sql rev:9f2c1ab]"
+            map_path = repo / "map.json"
+            map_path.write_text(
+                json.dumps(
+                    {
+                        "decisions": [{"title": "Choose key", "type": "research"}],
+                        "notes": note,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            r = _run_flowctl(
+                repo, "chart", "create", "--title", "Tenants", "--outcome",
+                "Ready", "--initial-map-file", str(map_path), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            chart_id = json.loads(r.stdout)["result"]["id"]
+            answer = repo / "a.md"
+            answer.write_text("Use a tenant column.", encoding="utf-8")
+            r2 = _run_flowctl(
+                repo, "chart", "resolve", f"{chart_id}.D1",
+                "--answer-file", str(answer), "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+            proposal = repo / "p.json"
+            proposal.write_text(
+                json.dumps(
+                    {
+                        "clusters": [
+                            {
+                                "key": "1",
+                                "rationale": "one spec",
+                                "decisions": [f"{chart_id}.D1"],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            r3 = _run_flowctl(
+                repo, "chart", "briefing", chart_id,
+                "--proposal-file", str(proposal), "--json",
+            )
+            self.assertEqual(r3.returncode, 0, r3.stdout + r3.stderr)
+            index = (flow / "charts" / f"{chart_id}-briefing.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("## Notes", index)
+            self.assertIn(note, index)
+
+
 class TestProposalDuplicateClusterKey(unittest.TestCase):
     def test_duplicate_cluster_key_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

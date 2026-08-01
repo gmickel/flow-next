@@ -12376,6 +12376,8 @@ def release_chart_claim(
                 "--break-stale requires --reason",
                 details={"id": did},
             )
+        # The audit reason lands in claim_events and transition notes.
+        refuse_if_unsafe_prose(str(reason), field="--break-stale reason")
         threshold = get_chart_claim_stale_after_hours()
         if age is None or age < threshold:
             raise ChartError(
@@ -12695,7 +12697,13 @@ def _normalize_asset_dict(raw: Any, *, repo_root: Optional[Path] = None) -> dict
     elif kind in ("git_ref", "branch", "commit"):
         _validate_git_ref_shape(reference, kind=kind)
 
-    refuse_if_unsafe_answer(f"{display}\n{reference}")
+    # revision/fingerprint are persisted and rendered into immutable
+    # briefings, so they are scanned like every other asset field.
+    refuse_if_unsafe_answer(
+        "\n".join(
+            part for part in (display, reference, revision, fingerprint) if part
+        )
+    )
 
     out: dict[str, Any] = {
         "kind": kind,
@@ -14680,9 +14688,13 @@ def _render_briefing_index_md(
         "",
         outcome.strip() or "(none)",
         "",
-        "## Decisions",
-        "",
     ]
+    # Grounding facts (R52) travel with the briefing: capture reads the
+    # briefing artifacts, not the original chart body.
+    chart_notes = _extract_chart_section_body(md_text, "Notes")
+    if chart_notes:
+        lines.extend(["## Notes", "", chart_notes, ""])
+    lines.extend(["## Decisions", ""])
     resolved = [d for d in all_decision_briefs if d.get("status") == "resolved"]
     superseded = [
         d for d in all_decision_briefs if d.get("status") == "superseded"
