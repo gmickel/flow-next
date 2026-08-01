@@ -129,6 +129,8 @@ The revised condition is: ship when **no** gating row regresses on either metric
 
 **The measurement also found a regression the plan did not anticipate, which is why R7 exists.** The `after` leg of wave 2 failed on Windows: `test_validation_plus_render_p95_under_100_ms_for_30_warm_runs`, p95=167.893ms against a 100ms budget. It passed at `jobs=2` in both baseline runs and at `jobs=4` in wave 1, so the higher job count makes it *intermittently* flaky. The budget was measured with `time.perf_counter()`, so under four sibling interpreters on four cores it was measuring scheduler contention rather than the operation. R7 moves both 30-sample p95 budgets onto process CPU time. Shipping the speedup while leaving CI intermittently red would have traded a real gain for a corroded signal.
 
+**Declined completion-review finding: "task JSON records contradict completed work" (P1, confidence 100).** The reviewer read `.flow/tasks/fn-155-*.{1,2}.json`, saw `status: "todo"`, and concluded Flow state was inconsistent. It is not - that file is the wrong surface to read status from. `load_task_definition` (`flowctl.py:1023`) loads "task definition from tracked file (**no runtime state**)"; authoritative runtime status lives in a separate untracked store under the git common dir (`get_state_dir`, `flowctl.py:875`), and `save_task_runtime` (`flowctl.py:1057`) is documented "Write runtime state only... **Never touch definition file**." `merge_task_runtime` lets runtime overwrite the definition, and `status` is in `RUNTIME_FIELDS`. Verified: `.git/flow-state/tasks/fn-155-*.{1,2}.state.json` both carry `status: "done"` with evidence attached, and `flowctl tasks/show/ready` all report done. Hand-editing the tracked JSON to "fix" this would write fabricated state into a file flowctl contractually never updates, and commit it to git as misleading data. No change made.
+
 **Open question for implementation:** whether the suite is CPU-saturated at full core count or still spawn-dominated. R2's before/after is the cheapest way to find out, and the answer decides whether CI-job sharding is worth a follow-up.
 
 ## Measured result (R2)
@@ -137,39 +139,54 @@ Four `workflow_dispatch` runs on branch head `68b847f9`, two per configuration, 
 
 ### Raw (16 rows)
 
-| run | configuration | matrix | jobs | runner `wall=` | whole job |
-|---|---|---|---|---|---|
-| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | baseline | ubuntu-latest 3.11 | 2 | 364.19s | 734s |
-| 30718829508 | baseline | ubuntu-latest 3.x | 2 | 432.10s | 861s |
-| 30718829508 | baseline | macos-latest 3.11 | 1 | 567.38s | 895s |
-| 30718829508 | baseline | windows-latest 3.11 | 2 | 687.59s | 1086s |
-| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | baseline | ubuntu-latest 3.11 | 2 | 396.53s | 808s |
-| 30719506525 | baseline | ubuntu-latest 3.x | 2 | 491.92s | 994s |
-| 30719506525 | baseline | macos-latest 3.11 | 1 | 548.59s | 848s |
-| 30719506525 | baseline | windows-latest 3.11 | 2 | 647.27s | 1038s |
-| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | after | ubuntu-latest 3.11 | 4 | 313.28s | 727s |
-| 30718834791 | after | ubuntu-latest 3.x | 4 | 400.62s | 918s |
-| 30718834791 | after | macos-latest 3.11 | 3 | 367.33s | 793s |
-| 30718834791 | after | windows-latest 3.11 | 4 | 470.91s | 754s |
-| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | after | ubuntu-latest 3.11 | 4 | 288.09s | 674s |
-| 30719512156 | after | ubuntu-latest 3.x | 4 | 349.67s | 798s |
-| 30719512156 | after | macos-latest 3.11 | 3 | 263.23s | 649s |
-| 30719512156 | after | windows-latest 3.11 | 4 | 425.10s (job **failed** - see below) | 803s |
+Every row carries its run link and the head SHA it ran against, so each median below is traceable to its inputs.
+
+| run | head | configuration | matrix | jobs | runner `wall=` | whole job |
+|---|---|---|---|---|---|---|
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | ubuntu-latest 3.11 | 2 | 364.19s | 734s |
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | ubuntu-latest 3.x | 2 | 432.10s | 861s |
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | macos-latest 3.11 | 1 | 567.38s | 895s |
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | windows-latest 3.11 | 2 | 687.59s | 1086s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | ubuntu-latest 3.11 | 2 | 396.53s | 808s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | ubuntu-latest 3.x | 2 | 491.92s | 994s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | macos-latest 3.11 | 1 | 548.59s | 848s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | windows-latest 3.11 | 2 | 647.27s | 1038s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | ubuntu-latest 3.11 | 4 | 313.28s | 727s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | ubuntu-latest 3.x | 4 | 400.62s | 918s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | macos-latest 3.11 | 3 | 367.33s | 793s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | windows-latest 3.11 | 4 | 470.91s | 754s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | ubuntu-latest 3.11 | 4 | 288.09s | 674s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | ubuntu-latest 3.x | 4 | 349.67s | 798s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | macos-latest 3.11 | 3 | 263.23s | 649s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | windows-latest 3.11 | 4 | 425.10s (job failed - see R7) | 803s |
 
 ### Aggregate (median of two, 8 rows)
 
-| configuration | matrix | median `wall=` | median whole job | `wall=` delta | whole-job delta |
-|---|---|---|---|---|---|
-| baseline | ubuntu-latest 3.11 | 380.36s | 771.0s | - | - |
-| after | ubuntu-latest 3.11 | 300.69s | 700.5s | **-20.9%** | -9.1% |
-| baseline | ubuntu-latest 3.x | 462.01s | 927.5s | - | - |
-| after | ubuntu-latest 3.x | 375.15s | 858.0s | **-18.8%** | -7.5% |
-| baseline | macos-latest 3.11 | 557.99s | 871.5s | - | - |
-| after | macos-latest 3.11 | 315.28s | 721.0s | **-43.5%** | -17.3% |
-| baseline | windows-latest 3.11 | 667.43s | 1062.0s | - | - |
-| after | windows-latest 3.11 | 448.01s | 778.5s | -32.9% (non-gating) | -26.7% |
+| configuration | matrix | median `wall=` | median whole job | `wall=` delta | whole-job delta | source runs |
+|---|---|---|---|---|---|---|
+| baseline | ubuntu-latest 3.11 | 380.36s | 771.0s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | ubuntu-latest 3.11 | 300.69s | 700.5s | **-20.9%** | -9.1% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+| baseline | ubuntu-latest 3.x | 462.01s | 927.5s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | ubuntu-latest 3.x | 375.15s | 858.0s | **-18.8%** | -7.5% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+| baseline | macos-latest 3.11 | 557.99s | 871.5s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | macos-latest 3.11 | 315.28s | 721.0s | **-43.5%** | -17.3% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+| baseline | windows-latest 3.11 | 667.43s | 1062.0s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | windows-latest 3.11 | 448.01s | 778.5s | -32.9% (non-gating) | -26.7% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
 
-No whole-job regression on any row; every row improved, so the "no more than 5% whole-job regression" condition passes everywhere with room to spare.
+### R3 coverage parity, full corpus at two job counts (from these same runs)
+
+The local run could not produce a full-corpus `SUMMARY` at `jobs=2` inside the foreground cap, so CI supplies it. All eight Ubuntu legs above ran the whole corpus and reported **byte-identical** counts at both job counts:
+
+```
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=364.19s  jobs=2   # baseline 30718829508
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=396.53s  jobs=2   # baseline 30719506525
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=313.28s  jobs=4   # after    30718834791
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=288.09s  jobs=4   # after    30719512156
+```
+
+(ubuntu-latest 3.11 shown; ubuntu-latest 3.x reports the same `files=179 ran=3863 failures=0 errors=0 skipped=4` across all four of its legs.) Same corpus, same test count, same outcome - only `wall=` moves. Combined with the byte-identical sorted `--list-only` comparison recorded in the task evidence, that is R3's three-signal proof.
+
+The measurement head is `68b847f9`. The two commits after it change how a p95 budget is *measured* (R7) and the spec text - neither alters the runner's job count or the corpus, so the parity and timing evidence stands for the branch.
 
 ## Early proof point
 
