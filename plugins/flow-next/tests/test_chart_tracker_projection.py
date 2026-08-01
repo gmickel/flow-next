@@ -1445,6 +1445,420 @@ class StaleRelationRemovalTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Cyclic wire mutations mint distinct markers; identical retries still dedupe
+# ---------------------------------------------------------------------------
+
+def _ln_decision(n: int, iid: str, ident: str, *, blocked_by=None) -> dict:
+    return {
+        "id": f"fn-10.D{n}", "title": f"D{n}", "type": "research",
+        "attendance": "unattended", "status": "open",
+        "blocked_by": list(blocked_by or []), "n": n,
+        "tracker": {
+            "id": iid, "identifier": ident,
+            "url": f"https://linear.app/acme/issue/{ident}",
+            "linkState": "linked", "depRelations": [],
+        },
+    }
+
+
+def _seed_linear_linked_triple(flow: Path) -> None:
+    """Chart + D1..D3 all linked; D1 blocked_by D2 (initial wire state)."""
+    _seed_chart(
+        flow,
+        tracker={
+            "id": "lin-parent", "identifier": "WOR-1",
+            "url": "https://linear.app/acme/issue/WOR-1",
+            "linkState": "linked", "depRelations": [],
+            "projection": {"event_markers": []},
+        },
+        decisions=[
+            _ln_decision(1, "lin-d1", "WOR-2", blocked_by=["fn-10.D2"]),
+            _ln_decision(2, "lin-d2", "WOR-3"),
+            _ln_decision(3, "lin-d3", "WOR-4"),
+        ],
+    )
+
+
+def _rewire_d1(flow: Path, blocked_by: list[str], ts: str) -> None:
+    """Simulate a committed wire-decision: blocked_by + updated_at stamp."""
+    dpath = flow / "charts" / "fn-10" / "1.json"
+    data = json.loads(dpath.read_text(encoding="utf-8"))
+    data["blocked_by"] = list(blocked_by)
+    data["updated_at"] = ts
+    dpath.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _ln_triple_refresh() -> dict:
+    parent = _ln_issue("lin-parent", "WOR-1")
+    d1 = _ln_issue("lin-d1", "WOR-2")
+    d2 = _ln_issue("lin-d2", "WOR-3")
+    d3 = _ln_issue("lin-d3", "WOR-4")
+    seq = [d1, d2, d3, parent]
+    return {
+        "wire-read": [_ln_read(i) for i in seq],
+        "wire-parent-read": [_ln_read(i) for i in seq],
+        "wire-update": [_ln_update(i) for i in seq],
+    }
+
+
+def _ln_rel_create():
+    return ok({"data": {"issueRelationCreate": {
+        "success": True, "issueRelation": {"id": "rel-new"},
+    }}})
+
+
+def _ln_inverse(iid: str, rel_id: str, blocker_id: str):
+    """linear_remove drain response: one flow-owned blocks edge."""
+    return ok({"data": {"issue": {"id": iid, "inverseRelations": {
+        "nodes": [{"id": rel_id, "type": "blocks",
+                   "issue": {"id": blocker_id}}],
+        "pageInfo": {"hasNextPage": False},
+    }}}})
+
+
+def _ln_rel_delete():
+    return ok({"data": {"issueRelationDelete": {"success": True}}})
+
+
+class WireCycleMarkerTests(unittest.TestCase):
+    def test_wire_cycle_mints_three_markers_and_retry_dedupes(self) -> None:
+        """D1 blocked_by D2 -> D3 -> back to D2 under the same event: the
+        third wire returns to the FIRST base revision (chart_decision_revision
+        is content-based), so without per-decision mutation identity it would
+        reuse the first marker and skip the edge refresh. An identical retry
+        (same sidecar bytes) must still dedupe with zero remote calls."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, ln_cfg())
+            _seed_linear_linked_triple(flow)
+
+            # Wire 1: D1 blocked_by D2 (edge created + ledgered).
+            r1 = _ln_triple_refresh()
+            r1["relate-list"] = [_ln_no_edges("lin-d1")]
+            r1["relate-create"] = _ln_rel_create()
+            ex1 = fake_execute(r1)
+            out1 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", revision="rev-A",
+                execute=ex1,
+            )
+            self.assertTrue(out1.get("projected"))
+            self.assertIn(
+                "blocks:fn-10.D1->fn-10.D2", out1.get("completed_steps") or [],
+            )
+
+            # Wire 2: repoint to D3 (create d1->d3, remove stale d1->d2).
+            _rewire_d1(flow, ["fn-10.D3"], "2026-01-02T00:00:00Z")
+            r2 = _ln_triple_refresh()
+            r2["relate-list"] = [
+                _ln_no_edges("lin-d1"),               # d1-d3 pair probe
+                _ln_inverse("lin-d1", "rel-12", "lin-d2"),  # removal drain
+            ]
+            r2["relate-create"] = _ln_rel_create()
+            r2["relate-delete"] = _ln_rel_delete()
+            ex2 = fake_execute(r2)
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", revision="rev-B",
+                execute=ex2,
+            )
+            self.assertTrue(out2.get("projected"))
+            self.assertIn(
+                "unblock:fn-10.D1-x>fn-10.D2", out2.get("completed_steps") or [],
+            )
+
+            # Wire 3: back to D2 - SAME base revision as wire 1. Must not
+            # dedupe; edges must refresh (create d1->d2, remove d1->d3).
+            _rewire_d1(flow, ["fn-10.D2"], "2026-01-03T00:00:00Z")
+            r3 = _ln_triple_refresh()
+            r3["relate-list"] = [
+                _ln_no_edges("lin-d1"),
+                _ln_inverse("lin-d1", "rel-13", "lin-d3"),
+            ]
+            r3["relate-create"] = _ln_rel_create()
+            r3["relate-delete"] = _ln_rel_delete()
+            ex3 = fake_execute(r3)
+            out3 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", revision="rev-A",
+                execute=ex3,
+            )
+            self.assertIsInstance(out3, dict)
+            self.assertFalse(out3.get("deduped"))
+            self.assertTrue(out3.get("projected"))
+            self.assertIn(
+                "blocks:fn-10.D1->fn-10.D2", out3.get("completed_steps") or [],
+            )
+            self.assertIn(
+                "unblock:fn-10.D1-x>fn-10.D3", out3.get("completed_steps") or [],
+            )
+
+            # Three distinct markers for the three wire events.
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            markers = chart["tracker"]["projection"]["event_markers"]
+            wire_keys = {m["key"] for m in markers if m["event"] == "chart.wire"}
+            self.assertEqual(len(wire_keys), 3)
+
+            # Pure retry of the committed wire (same sidecar bytes): dedupes.
+            ex4 = fake_execute({})
+            out4 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", revision="rev-A",
+                execute=ex4,
+            )
+            self.assertTrue(out4.get("deduped"))
+            self.assertEqual(ex4.calls, [])
+
+
+# ---------------------------------------------------------------------------
+# Blocking-ledger persistence is part of the projection contract
+# ---------------------------------------------------------------------------
+
+class BlockingLedgerWriteTests(unittest.TestCase):
+    def test_native_ok_ledger_fail_is_partial_and_retry_converges(self) -> None:
+        """Native relation created but the ledger sidecar write fails: the
+        event marker must NOT record success (a later rewire could never
+        attribute the remote edge to flow). Retry re-asserts idempotently
+        (probe reports the edge present) and lands the ledger entry."""
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            _write_config(flow, ln_cfg())
+            _seed_chart(
+                flow,
+                tracker={
+                    "id": "lin-parent", "identifier": "WOR-1",
+                    "url": "https://linear.app/acme/issue/WOR-1",
+                    "linkState": "linked", "depRelations": [],
+                    "projection": {"event_markers": []},
+                },
+                decisions=[
+                    _ln_decision(1, "lin-d1", "WOR-2",
+                                 blocked_by=["fn-10.D2"]),
+                    _ln_decision(2, "lin-d2", "WOR-3"),
+                ],
+            )
+            real_write = CP.locked_subject_write
+
+            def decision_writes_fail(flow_dir, kind, subject_id, mutate, **kw):
+                if kind == "decision":
+                    return TrackerError(
+                        ErrorClass.CONFLICT,
+                        "timed out acquiring chart resource lock",
+                        subtype="lock_timeout",
+                    )
+                return real_write(flow_dir, kind, subject_id, mutate, **kw)
+
+            parent = _ln_issue("lin-parent", "WOR-1")
+            d1 = _ln_issue("lin-d1", "WOR-2")
+            d2 = _ln_issue("lin-d2", "WOR-3")
+            r1 = {
+                "wire-read": [_ln_read(d1), _ln_read(d2), _ln_read(parent)],
+                "wire-parent-read": [
+                    _ln_read(d1), _ln_read(d2), _ln_read(parent),
+                ],
+                "wire-update": [
+                    _ln_update(d1), _ln_update(d2), _ln_update(parent),
+                ],
+                "relate-list": [_ln_no_edges("lin-d1")],
+                "relate-create": _ln_rel_create(),
+            }
+            ex1 = fake_execute(r1)
+            with mock.patch.object(
+                CP, "locked_subject_write", decision_writes_fail,
+            ):
+                out1 = CP.project_chart(
+                    flow, "fn-10", event="chart.wire", revision="rev-lw",
+                    evidence="evlw", execute=ex1,
+                )
+            self.assertIsInstance(out1, TrackerError)
+            self.assertIn(
+                "blocks:fn-10.D1->fn-10.D2",
+                (out1.details or {}).get("completed_steps") or [],
+            )
+            # No success marker persisted - the event stays retryable.
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                chart["tracker"]["projection"]["event_markers"], [],
+            )
+            d1_json = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(
+                    encoding="utf-8")
+            )
+            self.assertEqual(d1_json["tracker"].get("depRelations") or [], [])
+
+            # Retry: probe finds the edge already present - no second create,
+            # ledger entry lands, marker persists.
+            present = ok({"data": {"issue": {
+                "id": "lin-d1",
+                "relations": {
+                    "nodes": [],
+                    "pageInfo": {"hasNextPage": False},
+                },
+                "inverseRelations": {
+                    "nodes": [{"type": "blocks", "issue": {"id": "lin-d2"}}],
+                    "pageInfo": {"hasNextPage": False},
+                },
+            }}})
+            r2 = {
+                "wire-read": [_ln_read(d1), _ln_read(d2), _ln_read(parent)],
+                "wire-parent-read": [
+                    _ln_read(d1), _ln_read(d2), _ln_read(parent),
+                ],
+                "wire-update": [
+                    _ln_update(d1), _ln_update(d2), _ln_update(parent),
+                ],
+                "relate-list": [present],
+            }
+            ex2 = fake_execute(r2)
+            out2 = CP.project_chart(
+                flow, "fn-10", event="chart.wire", revision="rev-lw",
+                evidence="evlw", execute=ex2,
+            )
+            self.assertIsInstance(out2, dict)
+            self.assertTrue(out2.get("projected"))
+            self.assertNotIn("relate-create", [c.op for c in ex2.calls])
+            d1_json = json.loads(
+                (flow / "charts" / "fn-10" / "1.json").read_text(
+                    encoding="utf-8")
+            )
+            entries = d1_json["tracker"].get("depRelations") or []
+            self.assertTrue(any(
+                e.get("from_tracker_id") == "lin-d1"
+                and e.get("to_tracker_id") == "lin-d2"
+                and e.get("source") == "flow"
+                for e in entries
+            ))
+            chart = json.loads(
+                (flow / "charts" / "fn-10.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                chart["tracker"]["projection"]["event_markers"],
+            )
+
+
+# ---------------------------------------------------------------------------
+# GitLab: an already-landed delete still reconciles the flow:deps body twin
+# ---------------------------------------------------------------------------
+
+def _gl_int_cfg() -> dict:
+    cfg = gl_cfg()
+    cfg["tracker"]["resolved"]["destination"]["projectId"] = 99
+    return cfg
+
+
+class GitlabRemoveBodyTwinTests(unittest.TestCase):
+    def test_delete_ok_body_fail_retry_scrubs_twin(self) -> None:
+        """Native DELETE lands, body-twin write fails, retry reaches the
+        already_absent path: the flow:deps block must still be scrubbed
+        before absence reports success."""
+        from flowctl_tracker.relate import providers as RP
+
+        cfg = _gl_int_cfg()
+        deps_body = (
+            "intro\n\n<!-- flow:deps -->\n"
+            "**Blocked by:** #4\n"
+            "<!-- /flow:deps -->"
+        )
+        # Attempt 1: link found + deleted; body read fails -> retryable.
+        r1 = {
+            "relate-parent-read": ok({"id": 501, "iid": 3}),
+            "relate-list": ok([{
+                "id": 777, "iid": 4, "link_type": "is_blocked_by",
+                "issue_link_id": 9001, "references": {"short": "#4"},
+            }]),
+            "relate-delete": empty(),
+            "relate-body-read": TrackerError(
+                ErrorClass.TRANSPORT, "body read timed out",
+                subtype="timeout"),
+        }
+        ex1 = fake_execute(r1)
+        out1 = RP.gitlab_remove(
+            cfg, ex1, from_id="501", from_display="g/p#3", to_id="777",
+        )
+        self.assertIsInstance(out1, TrackerError)
+        self.assertTrue((out1.details or {}).get("recoverable"))
+        self.assertIn("relate-delete", [c.op for c in ex1.calls])
+
+        # Attempt 2: link already absent - the twin must still be scrubbed.
+        r2 = {
+            "relate-parent-read": ok({"id": 501, "iid": 3}),
+            "relate-list": ok([]),
+            "relate-body-read": ok({
+                "id": 501, "iid": 3, "description": deps_body,
+            }),
+            "relate-body-target-read": ok({"id": 777, "iid": 4}),
+            "relate-body-write": ok({"id": 501, "iid": 3}),
+        }
+        ex2 = fake_execute(r2)
+        out2 = RP.gitlab_remove(
+            cfg, ex2, from_id="501", from_display="g/p#3", to_id="777",
+        )
+        self.assertEqual(
+            out2, {"removed": False, "already_absent": True, "form": "blocks"},
+        )
+        writes = [c for c in ex2.calls if c.op == "relate-body-write"]
+        self.assertEqual(len(writes), 1)
+        written = json.loads(writes[0].body.decode("utf-8"))
+        self.assertNotIn("#4", written["description"])
+        self.assertNotIn("Blocked by", written["description"])
+
+        # Attempt 3: twin already clean - absence is a pure no-op success.
+        r3 = {
+            "relate-parent-read": ok({"id": 501, "iid": 3}),
+            "relate-list": ok([]),
+            "relate-body-read": ok({
+                "id": 501, "iid": 3,
+                "description": json.loads(writes[0].body.decode("utf-8"))[
+                    "description"],
+            }),
+        }
+        ex3 = fake_execute(r3)
+        out3 = RP.gitlab_remove(
+            cfg, ex3, from_id="501", from_display="g/p#3", to_id="777",
+        )
+        self.assertEqual(
+            out3, {"removed": False, "already_absent": True, "form": "blocks"},
+        )
+        self.assertNotIn("relate-body-write", [c.op for c in ex3.calls])
+
+    def test_absent_path_keeps_foreign_refs(self) -> None:
+        """Only refs proven to be the removed blocker are dropped; refs to
+        other issues (or unreadable ones) stay."""
+        from flowctl_tracker.relate import providers as RP
+
+        cfg = _gl_int_cfg()
+        deps_body = (
+            "<!-- flow:deps -->\n"
+            "**Blocked by:** #4, #5\n"
+            "<!-- /flow:deps -->"
+        )
+        responses = {
+            "relate-parent-read": ok({"id": 501, "iid": 3}),
+            "relate-list": ok([]),
+            "relate-body-read": ok({
+                "id": 501, "iid": 3, "description": deps_body,
+            }),
+            "relate-body-target-read": [
+                ok({"id": 777, "iid": 4}),   # the removed blocker
+                ok({"id": 888, "iid": 5}),   # unrelated ref - kept
+            ],
+            "relate-body-write": ok({"id": 501, "iid": 3}),
+        }
+        ex = fake_execute(responses)
+        out = RP.gitlab_remove(
+            cfg, ex, from_id="501", from_display="g/p#3", to_id="777",
+        )
+        self.assertEqual(
+            out, {"removed": False, "already_absent": True, "form": "blocks"},
+        )
+        writes = [c for c in ex.calls if c.op == "relate-body-write"]
+        self.assertEqual(len(writes), 1)
+        written = json.loads(writes[0].body.decode("utf-8"))
+        self.assertNotIn("#4", written["description"])
+        self.assertIn("**Blocked by:** #5", written["description"])
+
+
+# ---------------------------------------------------------------------------
 # Caller inventory presence
 # ---------------------------------------------------------------------------
 

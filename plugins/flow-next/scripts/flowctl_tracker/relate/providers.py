@@ -693,6 +693,64 @@ def _gitlab_deps_body_remove(description: object, drop_refs: set
     return text[:match.start()] + updated_region + text[match.end():]
 
 
+def _gitlab_absent_body_reconcile(config: dict, execute: Execute, *, pid,
+                                  from_iid: int, to_id: str
+                                  ) -> Optional[TrackerError]:
+    """Scrub body refs to `to_id` when the native link is already absent.
+
+    An earlier attempt may have landed the native DELETE and then failed the
+    flow:deps body-twin write; the retry reaches absence here, so absence
+    alone must not report success while the body still claims the removed
+    blocker. Each blocked-by ref in flow's owned block resolves through the
+    destination project (the only project gitlab_set links against); a ref
+    whose issue read proves durable id == to_id is dropped. Returns None when
+    the twin no longer references the removed edge, else the retryable error.
+    """
+    parent = _cli(execute, "gitlab", config, "relate-body-read", "GET",
+                  f"projects/{pid}/issues/{from_iid}", idempotent=True)
+    if isinstance(parent, TrackerError):
+        return parent
+    if not isinstance(parent, dict):
+        return TrackerError(
+            ErrorClass.TRANSPORT,
+            "gitlab dependency body read returned no object",
+            subtype="malformed_body")
+    current = parent.get("description")
+    if not isinstance(current, str):
+        return None
+    match = _FLOW_DEPS_RE.search(current)
+    if match is None:
+        return None
+    blocked = _BLOCKED_BY_RE.search(match.group(0))
+    if blocked is None:
+        return None
+    drop_refs = set()
+    for ref in [r.strip() for r in blocked.group(1).split(",") if r.strip()]:
+        iid = _gitlab_iid(ref)
+        if isinstance(iid, TrackerError):
+            continue  # not an issue ref the set path writes; leave it
+        issue = _cli(execute, "gitlab", config, "relate-body-target-read",
+                     "GET", f"projects/{pid}/issues/{iid}", idempotent=True)
+        if isinstance(issue, TrackerError):
+            if issue.cls is ErrorClass.NOT_FOUND:
+                continue  # issue gone; unprovable as to_id, leave the ref
+            return issue
+        if isinstance(issue, dict) and str(issue.get("id")) == str(to_id):
+            drop_refs.add(ref)
+    if not drop_refs:
+        return None
+    body = _gitlab_deps_body_remove(current, drop_refs)
+    if isinstance(body, TrackerError):
+        return body
+    if body != current:
+        data = _cli(
+            execute, "gitlab", config, "relate-body-write", "PUT",
+            f"projects/{pid}/issues/{from_iid}", body={"description": body})
+        if isinstance(data, TrackerError):
+            return data
+    return None
+
+
 def gitlab_remove(config: dict, execute: Execute, *, from_id: str,
                   from_display: str, to_id: str) -> Result:
     """Delete the native issue link AND the flow:deps body ref twin."""
@@ -730,6 +788,13 @@ def gitlab_remove(config: dict, execute: Execute, *, from_id: str,
                 "gitlab issue link pages truncated at drain cap; edge absence "
                 "unproven",
                 subtype="truncated")
+        # A prior attempt may have deleted the link and failed only the body
+        # twin - never report absence as success while the flow:deps block
+        # still claims the removed blocker.
+        err = _gitlab_absent_body_reconcile(
+            config, execute, pid=pid, from_iid=from_iid, to_id=to_id)
+        if err is not None:
+            return _removal_body_failure(err)
         return {"removed": False, "already_absent": True, "form": "blocks"}
     data = _cli(execute, "gitlab", config, "relate-delete", "DELETE",
                 f"projects/{pid}/issues/{from_iid}/links/"

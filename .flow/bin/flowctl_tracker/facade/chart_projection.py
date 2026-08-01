@@ -72,6 +72,38 @@ def _event_marker_key(event: str, revision: str, evidence: str) -> str:
     return _sha(f"{event}\x00{revision}\x00{evidence}")[:16]
 
 
+def _mutation_state_digest(decisions: list) -> str:
+    """Projection-side marker digest: claim/asset state + mutation identity.
+
+    The supplied chart revision (chart_decision_revision, the briefing-
+    fingerprint base - never change that hash) is content-based: a chart
+    wired back to a prior graph state (D1 blocked_by D2 -> D3 -> D2) reuses
+    the first event's revision, and claims/assets/timestamps are omitted
+    entirely. Fold in each decision sidecar's updated_at (every committed
+    chart mutation stamps it) so a returned-to-prior state still mints a
+    distinct marker, while a pure retry of the same committed mutation
+    (same sidecar bytes) still dedupes. The chart's own updated_at is
+    deliberately excluded: the success-marker write bumps it, which would
+    break retry dedupe.
+    """
+    return _sha(json.dumps(
+        sorted(
+            (
+                {
+                    "id": d.get("id"),
+                    "updated_at": d.get("updated_at"),
+                    "claimed_by": d.get("claimed_by"),
+                    "claimed_at": d.get("claimed_at"),
+                    "assets": _safe_assets(d.get("assets")),
+                }
+                for d in decisions if isinstance(d, dict)
+            ),
+            key=lambda x: str(x.get("id") or ""),
+        ),
+        sort_keys=True, default=str,
+    ))
+
+
 def _projection_state(tracker: dict) -> dict:
     raw = dict_(tracker.get("projection"))
     markers = raw.get("event_markers")
@@ -616,6 +648,17 @@ def _project_blocking(
             from_display=from_display, to_display=to_display,
         )
     if provider == "gitlab":
+        # Probe first (linear/jira parity): a ledger-write-failure retry
+        # re-asserts an edge the previous run already created, and GitLab's
+        # link create is not idempotent (409 on duplicates).
+        present = RP.gitlab_probe_pair(
+            config, execute,
+            from_display=from_display, to_display=to_display,
+        )
+        if isinstance(present, TrackerError):
+            return present
+        if present is True:
+            return {"projected": True, "already": True, "form": "blocks"}
         return RP.gitlab_set(
             config, execute,
             from_id=from_id, to_id=to_id,
@@ -728,7 +771,7 @@ def project_chart(
     if isinstance(bundle, TrackerError):
         return bundle
     chart_path, chart, chart_tracker, decisions = bundle
-    revision = revision or _sha(json.dumps({
+    base_revision = revision or _sha(json.dumps({
         "id": chart.get("id"),
         "status": chart.get("status"),
         "decisions": [
@@ -736,28 +779,11 @@ def project_chart(
             for d in decisions if isinstance(d, dict)
         ],
     }, sort_keys=True, default=str))
-    # Extend the marker revision with a claim+asset state digest: the supplied
-    # chart revision (briefing-fingerprint base) omits claimed_by/claimed_at
-    # and sidecar-only assets, so a claim -> release -> claim sequence or
-    # back-to-back attach-asset calls would otherwise dedupe the second event
-    # and skip the owned-block refresh. Assets hash their safe rendering -
-    # only changes that can alter the projected body force a re-project.
-    state_digest = _sha(json.dumps(
-        sorted(
-            (
-                {
-                    "id": d.get("id"),
-                    "claimed_by": d.get("claimed_by"),
-                    "claimed_at": d.get("claimed_at"),
-                    "assets": _safe_assets(d.get("assets")),
-                }
-                for d in decisions if isinstance(d, dict)
-            ),
-            key=lambda x: str(x.get("id") or ""),
-        ),
-        sort_keys=True, default=str,
-    ))
-    revision = _sha(f"{revision}\x00{state_digest}")
+    # Extend the marker revision with the projection-side state digest
+    # (claims, assets, per-decision mutation identity - see
+    # _mutation_state_digest for why the base revision alone dedupes wrongly).
+    revision = _sha(f"{base_revision}\x00{_mutation_state_digest(decisions)}")
+    evidence_supplied = evidence is not None
     evidence = evidence or revision[:16]
     marker_key = _event_marker_key(event, revision, evidence)
 
@@ -1105,7 +1131,26 @@ def project_chart(
                     )
                     return ledger_finalize(t, key=_key)
 
-                locked_subject_write(flow_dir, "decision", did, _ledger)
+                ledgered = locked_subject_write(
+                    flow_dir, "decision", did, _ledger,
+                )
+                if isinstance(ledgered, TrackerError):
+                    # The native edge landed but flow ownership did not
+                    # persist. Without the ledger entry a later rewire cannot
+                    # attribute (and remove) the remote edge - swallowing the
+                    # failure while the event marker records success would
+                    # orphan it permanently. Partial failure instead: no
+                    # marker, so the retry re-asserts the relation (the
+                    # provider probe reports it already present) and lands
+                    # the ledger entry.
+                    return fail_result(
+                        ledgered, completed=completed, statuses=statuses,
+                        flow_dir=flow_dir,
+                        spec_id=subject_marker_token("chart", chart_id),
+                        event=event, tracker_id=chart_tracker.get("id"),
+                        transport=provider,
+                        degraded=collect_degraded(*degraded_parts),
+                    )
 
         # Reconcile stale flow-owned native blocking (wire-decision repoint
         # or clear): entries the ledger attributes to flow whose edge is no
@@ -1204,6 +1249,20 @@ def project_chart(
     from .helpers import worst_status  # noqa: PLC0415
 
     receipt_status = worst_status(statuses) if statuses else "noop"
+
+    # Projection-side sidecar writes (link adoption, ledger entries) bump the
+    # decision sidecars' updated_at AFTER the entry digest was computed. Key
+    # the success marker on the post-projection state instead: an identical
+    # retry (same sidecar bytes) recomputes the same key and dedupes, while
+    # any committed mutation since - including one returning the graph to a
+    # prior state - mints a fresh marker.
+    end_bundle = _load_chart_bundle(flow_dir, chart_id)
+    if not isinstance(end_bundle, TrackerError):
+        revision = _sha(
+            f"{base_revision}\x00{_mutation_state_digest(end_bundle[3])}"
+        )
+        if not evidence_supplied:
+            evidence = revision[:16]
 
     def _mark(t: dict):
         t = _append_event_marker(
