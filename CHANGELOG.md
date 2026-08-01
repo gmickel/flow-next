@@ -4,24 +4,30 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
-Reopening a chart no longer costs you the way back to capture. A chart you
-reopened, finished the extra work on, and briefed again used to hand back the
-briefing the reopen had just staled and call it a no-op: a chart reporting
-itself ready to brief, with no capture-ready package, no path to one, and
-nothing on screen saying why. A reopen now counts as a new epoch, so the same
-proposal mints the next briefing package and names what it supersedes.
+Reopening a chart no longer costs you the way back to capture. `chart reopen`
+does not re-open the decisions, so a finished chart is ready to brief again the
+moment it reopens - and asking for that briefing, same proposal over an
+unchanged ledger, used to hand back the briefing the reopen had just staled and
+call it a no-op. You were left with a chart reporting itself ready to brief, no
+capture-ready package, no path to one, and nothing on screen saying why. A
+reopen now counts as a new epoch, so the same proposal mints the next briefing
+package and names what it supersedes.
 
 ### Fixed
 
 - **A reopened chart can always be briefed again.** `chart reopen` stales the
-  existing briefing, which is right - it was built before the extra work. But
-  `chart briefing` was idempotent on proposal content alone, and a reopen
-  changes nothing that content hashes, so re-running it over an untouched
-  decision ledger matched the staled package and echoed it back with
-  `noop: true`. Nothing hinted that a changed proposal was the only way out,
-  and downstream surfaces that correctly gate capture on a `final` briefing
-  rendered a door that could not open. The chart's reopen timestamp is now part
-  of briefing identity, so a post-reopen re-brief takes the ordinary emission
+  existing briefing, which is right - it was written before the reopen. But
+  briefing identity was computed from the chart revision, the proposal, and the
+  rendered decision evidence, and from none of what a reopen changes, so
+  re-running the same proposal over an unchanged ledger matched the staled
+  package and echoed it back with `noop: true`. (Change a decision or its
+  evidence first and the hash moved, so that route always minted normally; the
+  stranded case is the one where nothing else changed - and a reopen alone is
+  enough to make a finished chart briefable again.) Nothing hinted that a
+  changed proposal was the only way out, and downstream surfaces that correctly
+  gate capture on a `final` briefing rendered a door that could not open. The
+  chart's reopen timestamp is now part of briefing identity, so a post-reopen
+  re-brief takes the ordinary emission
   path: it mints `B(n+1)`, recomputes draft-versus-final from the live chart
   (a stale draft can never silently become `final`), rewrites the convenience
   copies in step with the sidecar, runs in the existing transaction and lock,

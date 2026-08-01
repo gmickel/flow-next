@@ -334,26 +334,48 @@ class ChartFlowctlDocsParity(unittest.TestCase):
     def test_supersedes_stale_discriminator_documented(self) -> None:
         """The briefing discriminator must stay documented where consumers look.
 
-        Modelled on test_envelope_error_classes_documented above: docs/flowctl.md
-        is the envelope contract, so the field is only usable from there if its
-        name, its type, AND its presence rule are all present. The presence rule
-        is the load-bearing half - a consumer keys on the field EXISTING, so a
-        doc that named the field but not "present only when superseding, absent
-        everywhere else" would describe a different contract than the code ships.
+        Modelled on test_envelope_error_classes_documented above, and scoped the
+        same way it is: the contract must live IN the `### v1 JSON envelope`
+        section, because that is the section a driver reads to learn the shape
+        of a `chart … --json` response. A mention buried elsewhere in the file
+        would satisfy a whole-file grep while leaving the envelope contract
+        silent, so the section slice is part of the assertion, not a shortcut.
+
+        Each clause below is a distinct half of the shipped contract (flowctl.py
+        emit_chart_briefing): the type, the fresh-emission precondition, the
+        non-empty rule, the three envelopes it must be ABSENT from, and where
+        per-briefing status actually lives. Dropping any one of them describes a
+        different contract than the code ships, so each is pinned by name.
         """
         docs = _read(DOCS / "flowctl.md")
-        paragraphs = [p for p in docs.split("\n\n") if "supersedes_stale" in p]
-        self.assertTrue(
-            paragraphs,
-            "flowctl.md must document the chart.briefing supersedes_stale field",
+        start = docs.find("### v1 JSON envelope")
+        self.assertGreater(start, 0, "flowctl.md must have a v1 JSON envelope section")
+        end = docs.find("### Subcommands", start)
+        self.assertGreater(end, start, "v1 JSON envelope section must be bounded")
+        section = docs[start:end]
+        self.assertIn(
+            "supersedes_stale",
+            section,
+            "the supersedes_stale contract must live in the v1 JSON envelope "
+            "section of flowctl.md, not merely somewhere in the file",
         )
-        blob = "\n\n".join(paragraphs).lower()
+        # Normalize hyphens/whitespace so a reflow or an "idempotent-retry" ->
+        # "idempotent retry" rewording does not fail; the CLAUSES are pinned,
+        # not their exact typography.
+        normalized = re.sub(r"[\s\-]+", " ", section).lower()
         for phrase, why in (
-            ("array", "type: an array, not a scalar"),
-            ("b-id", "type: the array holds B-ID strings"),
-            ("stale", "precondition: it supersedes stale briefings"),
-            ("noop", "presence: fresh emission only, never an idempotent retry"),
-            ("absent", "absence rule: other envelopes stay byte-identical"),
+            ("array of b id strings", "type: an array of B-ID strings"),
+            ("noop: false", "presence: a fresh emission, never an idempotent retry"),
+            ("non empty", "presence: only when the array is non-empty"),
+            (
+                "idempotent retry",
+                "absence: idempotent-retry envelopes stay byte-identical",
+            ),
+            (
+                "first emission",
+                "absence: first-emission envelopes stay byte-identical",
+            ),
+            ("error envelope", "absence: error envelopes stay byte-identical"),
             (
                 "briefings[]",
                 "per-briefing status lives in the sidecar, not in this field",
@@ -361,8 +383,8 @@ class ChartFlowctlDocsParity(unittest.TestCase):
         ):
             self.assertIn(
                 phrase,
-                blob,
-                f"flowctl.md supersedes_stale docs must state {why} ({phrase!r})",
+                normalized,
+                f"flowctl.md v1 envelope section must state {why} ({phrase!r})",
             )
 
     def test_config_keys_documented(self) -> None:
