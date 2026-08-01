@@ -766,6 +766,7 @@ class MarkdownAndBudgetTests(unittest.TestCase):
         self.assertEqual(
             metadata["performanceBudget"],
             {
+                "clock": "time.process_time",
                 "operation": "validation-plus-markdown-render",
                 "p95MillisecondsExclusive": 100,
                 "warmRuns": 30,
@@ -775,9 +776,14 @@ class MarkdownAndBudgetTests(unittest.TestCase):
             flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
         durations_ms = []
         for _ in range(30):
-            started = time.perf_counter()
+            # Process CPU time, not wall clock: this render is pure in-memory work
+            # with no I/O, so under parallel test execution a wall-clock p95 measures
+            # scheduler contention between sibling interpreters, not the operation.
+            # time.process_time() does not tick while descheduled, so the budget
+            # stays honest no matter how many test jobs share the cores.
+            started = time.process_time()
             flowctl.render_pr_cognitive_aid_markdown(maximum_normal)
-            durations_ms.append((time.perf_counter() - started) * 1000)
+            durations_ms.append((time.process_time() - started) * 1000)
         assert_strict_30_sample_p95_under_budget(
             self,
             durations_ms,

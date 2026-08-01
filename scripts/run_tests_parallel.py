@@ -2,8 +2,9 @@
 """File-level parallel unittest runner for plugins/flow-next/tests (fn-119).
 
 Discovers top-level test_*.py files and runs each as its own unittest discover
-subprocess. Default concurrency is max(1, cpu_count - 2). Shards by FILE only
-(never splits within a file). Stdlib only - no pytest.
+subprocess. Default concurrency is the full cpu_count on CI (`CI` set to
+1/true/yes) and max(1, cpu_count - 2) locally. Shards by FILE only (never
+splits within a file). Stdlib only - no pytest.
 
 Exit codes:
   0  all matched files passed (or --list-only)
@@ -63,7 +64,42 @@ class FileResult:
 
 
 def _default_jobs() -> int:
+    """Concurrent file shards to use when neither --jobs nor --serial is given.
+
+    Two cases, CI and local. The two-core reservation exists for machines with a
+    human on them: locally this runner competes with an editor, a language
+    server and whatever agent is driving the session, so leaving headroom keeps
+    the box usable. A build machine has none of that - reserving there just
+    leaves cores idle for the whole run.
+
+    The signal is the vendor-neutral `CI` variable rather than
+    `GITHUB_ACTIONS`, because the scope is "any build machine" and every
+    mainstream CI sets it. Truthy is exactly {1, true, yes} after strip+lower;
+    absent, empty, "false", "0" and anything unrecognized all mean local. TTY
+    state is deliberately NOT part of this - a redirected local run is still a
+    local run.
+
+    New precedent, on purpose: nothing else in this repo branches on "am I on
+    CI". The one live convention is `RUNNER_OS`, which only ever branches on
+    operating system (.github/workflows/test-flow-next.yml, the smoke scripts).
+
+    `CI` alone is not sufficient: Cursor's agent shell sets `CI=1` on a
+    developer machine (documented in
+    plugins/flow-next/skills/flow-next-setup/workflow.md), which is precisely
+    the case the reservation protects - the editor and the agent driving the
+    session are both competing for those cores. `CURSOR_AGENT` is Cursor's own
+    canonical signal, so its presence forces the local branch. Hosted runners
+    never set it, so this cannot mis-detect real CI. Note `CURSOR_AGENT` is
+    inherited by child processes; that is the desired behavior here, because a
+    process spawned from a Cursor agent shell is still running on the
+    developer's machine.
+    """
     cpus = os.cpu_count() or 2
+    ci = os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+    if os.environ.get("CURSOR_AGENT", "").strip():
+        ci = False
+    if ci:
+        return max(1, cpus)
     return max(1, cpus - 2)
 
 
@@ -301,7 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-j",
         type=int,
         default=None,
-        help="Concurrent file shards (default: max(1, cpu_count-2))",
+        help="Concurrent file shards (default: cpu_count on CI, else max(1, cpu_count-2))",
     )
     p.add_argument(
         "--serial",

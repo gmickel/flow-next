@@ -1256,9 +1256,14 @@ class ReviewFindingsLocalBudgetTest(unittest.TestCase):
             run_once()
         timings_ms = []
         for _ in range(30):
-            started = time.perf_counter()
+            # Process CPU time, not wall clock: parsing plus validation is pure
+            # in-memory work, so under parallel test execution a wall-clock p95
+            # measures scheduler contention between sibling interpreters, not the
+            # operation. time.process_time() does not tick while descheduled, so
+            # the budget stays honest no matter how many test jobs share the cores.
+            started = time.process_time()
             run_once()
-            timings_ms.append((time.perf_counter() - started) * 1000)
+            timings_ms.append((time.process_time() - started) * 1000)
         p95_ms = sorted(timings_ms)[28]
         self.assertLess(
             p95_ms,

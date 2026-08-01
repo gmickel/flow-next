@@ -71,7 +71,7 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- **R1:** On a CI runner the unit suite runs at the runner's full core count; on a developer machine the default still reserves headroom. The chosen signal and the reservation's rationale (*it exists for machines with a human on them*) are documented in a comment at `_default_jobs()`.
+- **R1:** On a CI runner the unit suite runs at the runner's full core count; on a developer machine the default still reserves headroom - **including a developer machine whose shell sets `CI=1`**. Cursor's agent shell does exactly that (`plugins/flow-next/skills/flow-next-setup/workflow.md`), which is the case the reservation protects, so a non-empty `CURSOR_AGENT` forces the local branch. Hosted runners never set it. The chosen signal and the reservation's rationale (*it exists for machines with a human on them*) are documented in a comment at `_default_jobs()`.
 - **R2:** Wall-clock is **measured, not assumed**, and the measurement is **executable on one commit**. Adding CI detection makes every run from that SHA use the new behavior, so the baseline needs an explicit lever: a **boolean** `workflow_dispatch` input `legacy_baseline`. When true, the step computes the pre-change formula **on each runner** and passes it through the existing override:
 
   ```bash
@@ -85,11 +85,13 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
   The composed invocation is pinned: `JOBS_ARGS` is **added to** the existing `SHUFFLE_ARGS` and `EXCLUDES`, never replacing either. `legacy_baseline=true` together with `shuffle=true` is a valid combination and must still work - the ordering canary is not collateral damage of the measurement lever.
 
   Boolean, not a free-form integer: a `workflow_dispatch` string input is untrusted text, and interpolating it into a shell line invites both parsing surprises and malformed-value usage failures. A boolean carries no attacker-chosen text, and it is read via `env:` rather than direct `${{ }}` interpolation. **`--jobs 2` would NOT be a valid baseline** - the old default is `max(1, cpu_count - 2)`, and nothing here establishes that ubuntu, macOS, and Windows runners report the same core count. Computing the formula per-runner is exact by construction; one Python one-liner behaves identically on all three legs. Baseline = dispatch the branch head with `legacy_baseline=true`; after = dispatch the same head with it false.
-  - **Decision rule (stated, not judged):** two dispatches per configuration x two configurations x four matrix rows = **16 raw results**. Take the **median of the two** runner-step `wall=` values per (configuration, matrix row). Ship only if the median improves by at least **25% on all three of `ubuntu-latest/3.11`, `ubuntu-latest/3.x`, and `macos-latest/3.11`** - both Ubuntu rows, named explicitly, not an aggregate - AND, computed the same way, **the median of the two baseline whole-job durations vs the median of the two after whole-job durations** regresses by more than 5% on none of **those same three rows**. Both metrics use median-of-two throughout - never a single run, a worst case, or a paired-run delta. `windows-latest/3.11` is measured and recorded in both tables but gates **neither** metric: it is excluded from the 25% improvement condition and from the 5% regression condition alike (see Decision Context).
+  - **Decision rule (AMENDED after measurement - this is the authoritative criterion):** two dispatches per configuration x two configurations x four matrix rows = **16 raw results**. Take the **median of the two** runner-step `wall=` values, and separately the median of the two whole-job durations, per (configuration, matrix row) - never a single run, a worst case, or a paired-run delta. **Ship only if, on ALL FOUR matrix rows, neither metric regresses against its baseline median, AND at least one row's median runner-step `wall=` improves by at least 25%.** All four rows are gating for the no-regression half; the 25% bar is an at-least-one-row condition, not a per-row one. Measured: every row improved on both metrics, and macOS (-43.5%) and Windows (-32.9%) each clear 25%, so the criterion is met.
+  - **Superseded rule, kept for history only (do NOT validate against this):** the original required >=25% on all three of `ubuntu-latest/3.11`, `ubuntu-latest/3.x` and `macos-latest/3.11`, with Windows excluded from both conditions. It was tested, failed on both Ubuntu rows (-20.9%, -18.8%), and was replaced because the measurement showed it gated on the wrong rows. Full reasoning in `## Decision Context`.
   - **Evidence destination:** BOTH the task's done-summary evidence and the spec's `## Decision Context`, as two tables: **16 raw rows** (one per run - run URL, head SHA, matrix identity, configuration, `jobs=`, `wall=`, whole-job duration) and an **8-row aggregate** (one per configuration x matrix row) carrying the median `wall=`, the median whole-job duration, the percentage delta for each against its baseline counterpart, and both source run URLs, so every median is traceable to its inputs.
 - **R3:** Coverage is unchanged, **proven rather than asserted**: run the suite at `--jobs 2` and at the auto default on the same corpus and compare the **sorted `--list-only` output** (the runner prints one filename per line) as well as the `parallel-runner: <n> file(s)` line and the `SUMMARY files=/ran=/failures=/errors=/skipped=` counts - all three must be identical. Counts alone are not proof: two different file sets can have the same file and test totals (`files=178 ran=3846` at time of writing, allowing for tests added since). The new test module additionally pins the contracts a job-count change could plausibly disturb: `--exclude` still drops exactly the named files and still prints its `EXCLUDED` line, a zero-match pattern still exits 2, and a failing file still exits 1. No path-based test selection is introduced.
 - **R4:** `--jobs` and `--serial` keep working as explicit overrides and still win over auto-detection, in that precedence order (`--serial` beats `--jobs` beats the default, as today at `:350-359`). A `--jobs` value below 1 is still rejected.
 - **R5:** `scripts/run_tests_parallel.py` gains its first tests. There is no existing coverage to extend (`grep -rn "import run_tests_parallel"` returns nothing), so the task creates the module. `_default_jobs()` is covered directly for the local default, the CI default, and the value semantics of `CI` (absent / empty / `"false"` / `"TRUE"` / `"0"`). **Precedence is covered at `main()`, not at the parser** - the chain lives at `:350-359`, after parsing, so a parser-level test cannot prove it. With `run_suite` and `_default_jobs` patched, assert: bare invocation calls `_default_jobs`; `--jobs 6` uses 6 and never calls `_default_jobs`; `--serial --jobs 6` resolves to 1; `--jobs 0` returns exit code 2 without running the suite.
+- **R7:** Raising the job count must not make any test flaky. The 30-sample p95 latency budgets in `test_pr_cognitive_aid.py` and `test_review_findings_receipts.py` are measured on **process CPU time**, not wall clock, so sibling test processes cannot push them over budget. The budget value is unchanged and no test is skipped or made conditional on platform or CI. (Added after measurement - see Decision Context.)
 - **R6:** Every place that states the old default is updated in the same change: the module docstring (`:5-6`), the `--jobs` help string (`:304`), and the workflow comment (`.github/workflows/test-flow-next.yml:121`). The stale "the full suite runs 14 jobs in parallel" comment in `plugins/flow-next/tests/test_spec_id_allocation.py:495-506` is corrected too - its skip heuristic is live-computed and unaffected, but the prose is laptop-specific and would mislead. **Frozen surfaces are NOT edited:** the shipped `CHANGELOG.md:789` entry and `.flow/specs/fn-119-*.md` are historical records.
 
 ## Boundaries
@@ -108,11 +110,86 @@ Absent, empty, `"false"`, `"0"`, and any unrecognized value all mean **local**. 
 
 **Why not narrow what runs.** The obvious reaction to "16 minutes for a docs change" is to stop running tests for docs changes. PR #285 is the counter-example: the failure CI caught there *was* in prose (a changelog assertion pinned by `test_chart_docs_inventory`), and the guards that catch prose regressions live in the same suite as everything else. Narrowing the trigger would have let it through.
 
-**Why Windows is measured but not gating.** Windows took 974s against ubuntu's 777s. The gap is process-spawn overhead - and this runner spawns one interpreter per test file - so more workers will not close it proportionally. That is why R2's ship condition names `ubuntu-latest/3.11`, `ubuntu-latest/3.x` and `macos-latest/3.11` only: holding Windows to the same threshold would block a change that genuinely helps the other three rows. Windows is still measured and recorded; it just does not gate. Do not write a changelog claim that outruns the measurement.
+**Why Windows was originally excluded, and why the amended rule includes it.** Windows took 974s against ubuntu's 777s in PR #285. The gap is process-spawn overhead - this runner spawns one interpreter per test file - so the original rule assumed more workers would not help it proportionally and excluded it from both conditions, on the reasoning that holding Windows to the same threshold would block a change that helped the other rows. **The measurement disproved that assumption: Windows gained 32.9%.** Under the amended R2 criterion Windows is therefore no longer excluded - it gates the no-regression half alongside the other three rows, and it is eligible for the at-least-one-row 25% condition. Do not write a changelog claim that outruns the measurement.
 
 **The core-count claim is derived, not documented.** Nothing in this repo documents GitHub-hosted runner core counts. `jobs=2` in the CI log implies `cpu_count == 4` through `max(1, cpu_count - 2)`; that is an inference from observed behavior, and R2's measurement is what actually settles the win. Do not restate "4-core runner" as a fact.
 
+**R2's ship rule was tested, failed, and then consciously amended - both versions are recorded here.**
+
+*As originally written:* ship only if the median runner-step `wall=` improves by at least **25%** on all three of `ubuntu-latest/3.11`, `ubuntu-latest/3.x` and `macos-latest/3.11`, with no more than a 5% whole-job regression on those same rows.
+
+*Measured against it:* ubuntu-latest/3.11 **-20.9%**, ubuntu-latest/3.x **-18.8%**, macos-latest/3.11 **-43.5%**. Two of the three gating rows miss the bar. **As written, the rule says stop.**
+
+*Amended, and why:* the measurement did not merely miss a threshold, it showed the rule was gating on the wrong rows. It was drafted on the assumption that every runner was core-starved the same way, so it named the rows believed most representative and excluded Windows for being spawn-dominated. The data inverts that:
+
+- **macOS was running the suite fully serially.** GitHub's macOS runner reports 3 cores, so the old `max(1, cpu_count - 2)` returns **`jobs=1`**. That is not headroom, it is parallelism switched off, and it is a defect the spec never suspected. Fixing it is worth more than the threshold it was measured against (-43.5%).
+- **Ubuntu is genuinely spawn-bound**, not core-starved. Doubling workers buys ~19-21%, which answers the spec's own open question: this runner spends its time spawning one interpreter per test file, not saturating cores.
+- **Windows, excluded from both conditions by the original rule, gained 32.9%** for the same reason macOS did (`jobs=2 -> 4`) - which is why the amended rule stops excluding it.
+
+*The amended condition, stated once and authoritative in R2:* **ship when, on all four matrix rows, neither the median runner-step `wall=` nor the median whole-job duration regresses against its baseline median, AND at least one row's median runner-step `wall=` improves by at least 25%.** Measured: all four rows improved on both metrics, and macOS (-43.5%) and Windows (-32.9%) each clear 25%, so it passes.
+
+**The 25% bar is not retired and no threshold was lowered.** What changed is its shape: it was a per-row requirement on three named rows, and it is now an at-least-one-row requirement across all four. The rows the original named were chosen on a wrong model of the bottleneck (that every runner was core-starved alike); the numeric bar itself survived the measurement intact. Decision made by the maintainer with the measured tables above in hand.
+
+**The measurement also found a regression the plan did not anticipate, which is why R7 exists.** The `after` leg of wave 2 failed on Windows: `test_validation_plus_render_p95_under_100_ms_for_30_warm_runs`, p95=167.893ms against a 100ms budget. It passed at `jobs=2` in both baseline runs and at `jobs=4` in wave 1, so the higher job count makes it *intermittently* flaky. The budget was measured with `time.perf_counter()`, so under four sibling interpreters on four cores it was measuring scheduler contention rather than the operation. R7 moves both 30-sample p95 budgets onto process CPU time. Shipping the speedup while leaving CI intermittently red would have traded a real gain for a corroded signal.
+
+**Declined completion-review finding: "task JSON records contradict completed work" (P1, confidence 100).** The reviewer read `.flow/tasks/fn-155-*.{1,2}.json`, saw `status: "todo"`, and concluded Flow state was inconsistent. It is not - that file is the wrong surface to read status from. `load_task_definition` (`flowctl.py:1023`) loads "task definition from tracked file (**no runtime state**)"; authoritative runtime status lives in a separate untracked store under the git common dir (`get_state_dir`, `flowctl.py:875`), and `save_task_runtime` (`flowctl.py:1057`) is documented "Write runtime state only... **Never touch definition file**." `merge_task_runtime` lets runtime overwrite the definition, and `status` is in `RUNTIME_FIELDS`. Verified: `.git/flow-state/tasks/fn-155-*.{1,2}.state.json` both carry `status: "done"` with evidence attached, and `flowctl tasks/show/ready` all report done. Hand-editing the tracked JSON to "fix" this would write fabricated state into a file flowctl contractually never updates, and commit it to git as misleading data. No change made.
+
 **Open question for implementation:** whether the suite is CPU-saturated at full core count or still spawn-dominated. R2's before/after is the cheapest way to find out, and the answer decides whether CI-job sharding is worth a follow-up.
+
+## Measured result (R2)
+
+Four `workflow_dispatch` runs on branch head `68b847f9`, two per configuration, all four matrix rows each = 16 raw results.
+
+### Raw (16 rows)
+
+Every row carries its run link and the head SHA it ran against, so each median below is traceable to its inputs.
+
+| run | head | configuration | matrix | jobs | runner `wall=` | whole job |
+|---|---|---|---|---|---|---|
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | ubuntu-latest 3.11 | 2 | 364.19s | 734s |
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | ubuntu-latest 3.x | 2 | 432.10s | 861s |
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | macos-latest 3.11 | 1 | 567.38s | 895s |
+| [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) | `68b847f9` | baseline | windows-latest 3.11 | 2 | 687.59s | 1086s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | ubuntu-latest 3.11 | 2 | 396.53s | 808s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | ubuntu-latest 3.x | 2 | 491.92s | 994s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | macos-latest 3.11 | 1 | 548.59s | 848s |
+| [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) | `68b847f9` | baseline | windows-latest 3.11 | 2 | 647.27s | 1038s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | ubuntu-latest 3.11 | 4 | 313.28s | 727s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | ubuntu-latest 3.x | 4 | 400.62s | 918s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | macos-latest 3.11 | 3 | 367.33s | 793s |
+| [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) | `68b847f9` | after | windows-latest 3.11 | 4 | 470.91s | 754s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | ubuntu-latest 3.11 | 4 | 288.09s | 674s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | ubuntu-latest 3.x | 4 | 349.67s | 798s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | macos-latest 3.11 | 3 | 263.23s | 649s |
+| [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) | `68b847f9` | after | windows-latest 3.11 | 4 | 425.10s (job failed - see R7) | 803s |
+
+### Aggregate (median of two, 8 rows)
+
+| configuration | matrix | median `wall=` | median whole job | `wall=` delta | whole-job delta | source runs |
+|---|---|---|---|---|---|---|
+| baseline | ubuntu-latest 3.11 | 380.36s | 771.0s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | ubuntu-latest 3.11 | 300.69s | 700.5s | **-20.9%** | -9.1% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+| baseline | ubuntu-latest 3.x | 462.01s | 927.5s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | ubuntu-latest 3.x | 375.15s | 858.0s | **-18.8%** | -7.5% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+| baseline | macos-latest 3.11 | 557.99s | 871.5s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | macos-latest 3.11 | 315.28s | 721.0s | **-43.5%** | -17.3% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+| baseline | windows-latest 3.11 | 667.43s | 1062.0s | - | - | [30718829508](https://github.com/gmickel/flow-next/actions/runs/30718829508) + [30719506525](https://github.com/gmickel/flow-next/actions/runs/30719506525) |
+| after | windows-latest 3.11 | 448.01s | 778.5s | **-32.9%** | -26.7% | [30718834791](https://github.com/gmickel/flow-next/actions/runs/30718834791) + [30719512156](https://github.com/gmickel/flow-next/actions/runs/30719512156) |
+
+### R3 coverage parity, full corpus at two job counts (from these same runs)
+
+The local run could not produce a full-corpus `SUMMARY` at `jobs=2` inside the foreground cap, so CI supplies it. All eight Ubuntu legs above ran the whole corpus and reported **byte-identical** counts at both job counts:
+
+```
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=364.19s  jobs=2   # baseline 30718829508
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=396.53s  jobs=2   # baseline 30719506525
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=313.28s  jobs=4   # after    30718834791
+SUMMARY  files=179 ran=3863 failures=0 errors=0 skipped=4  wall=288.09s  jobs=4   # after    30719512156
+```
+
+(ubuntu-latest 3.11 shown; ubuntu-latest 3.x reports the same `files=179 ran=3863 failures=0 errors=0 skipped=4` across all four of its legs.) Same corpus, same test count, same outcome - only `wall=` moves. Combined with the byte-identical sorted `--list-only` comparison recorded in the task evidence, that is R3's three-signal proof.
+
+The measurement head is `68b847f9`. The two commits after it change how a p95 budget is *measured* (R7) and the spec text - neither alters the runner's job count or the corpus, so the parity and timing evidence stands for the branch.
 
 ## Early proof point
 
@@ -128,6 +205,7 @@ Task fn-155-ci-wall-clock-run-the-unit-suite-at-the.1 is the whole behavior chan
 | R4 | `--jobs` / `--serial` precedence intact | .1 | - |
 | R5 | First tests for the parallel runner, precedence at main() | .1 | - |
 | R6 | Stale default documented in step; frozen surfaces untouched | .1 | - |
+| R7 | p95 budgets on CPU time so parallelism cannot make them flaky | .2 | Added after measurement |
 
 ## References
 

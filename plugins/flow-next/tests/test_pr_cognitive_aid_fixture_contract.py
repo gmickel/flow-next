@@ -159,6 +159,7 @@ class FixtureMetadataTests(unittest.TestCase):
         self.assertEqual(
             metadata["performanceBudget"],
             {
+                "clock": "time.process_time",
                 "operation": "validation-plus-markdown-render",
                 "p95MillisecondsExclusive": 100,
                 "warmRuns": 30,
