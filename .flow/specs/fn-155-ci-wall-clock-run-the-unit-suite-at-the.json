@@ -10,10 +10,72 @@
   "id": "fn-155-ci-wall-clock-run-the-unit-suite-at-the",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 0,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 4,
+  "plan_review_status": "needs_work",
+  "plan_reviewed_at": "2026-08-01T18:40:22.780185Z",
   "ready": true,
+  "review_attempts": [
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "9b13b1e2d3420e5f3fa52fcbb03bd9729f041dc3",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "de9b95a7dc999306fc36aeec1e16f5b72568ced18d9a57073feb42020c0bee4d",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T18:26:12.503101Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "9b13b1e2d3420e5f3fa52fcbb03bd9729f041dc3",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "e0463234bf87222a34bad66a9910938681ee254abe17f453163eb20bb348fe68",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T18:30:58.639481Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "9b13b1e2d3420e5f3fa52fcbb03bd9729f041dc3",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "8022612e29272f82a5f241cfa14f5b162f0122e81833e930b8eef8f27c4f5e6a",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T18:35:38.368541Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "9b13b1e2d3420e5f3fa52fcbb03bd9729f041dc3",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "581aab15e038a6b2ee9df9c80bedbb24875d12330bf932eb574b9972d704107d",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T18:39:23.181184Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_pending_rounds": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-155-ci-wall-clock-run-the-unit-suite-at-the.md",
   "status": "open",
   "title": "CI wall-clock: run the unit suite at the parallelism the runner actually has",
@@ -28,5 +90,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T18:19:43.637226Z"
+  "updated_at": "2026-08-01T18:40:22.780296Z"
 }
