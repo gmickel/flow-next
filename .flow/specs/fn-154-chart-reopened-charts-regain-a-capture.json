@@ -11,9 +11,71 @@
   "impl_review_rounds": {},
   "next_task": 1,
   "plan_review_rounds": 0,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-01T16:18:56.405235Z",
   "ready": true,
+  "review_attempts": [
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "699b761e175170656773705527e7cd2a1468af8e",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "c742f0f9092f6a1147eb630378518d3238ee6e55becb7f8be7804bf81228272b",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T16:06:23.253923Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "699b761e175170656773705527e7cd2a1468af8e",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "acbdff2945baa2e1c28c2301d27f62312e5f2229047ea9b96850684f59d1634d",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T16:12:09.347642Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "699b761e175170656773705527e7cd2a1468af8e",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "670142ff85128f135a4f4e067424c3cd3bddb62e07cb8eb6c838c6a018126fb7",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T16:16:02.466341Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "699b761e175170656773705527e7cd2a1468af8e",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "e3a8696bfdbc46c2d0fe0d80857ca566c156cf5a5e53dc83ca6280532109f68e",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T16:18:51.313248Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_pending_rounds": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-154-chart-reopened-charts-regain-a-capture.md",
   "status": "open",
   "title": "chart: reopened charts regain a capture door (briefing re-finalize after reopen)",
@@ -28,5 +90,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T15:56:18.778584Z"
+  "updated_at": "2026-08-01T16:18:56.797708Z"
 }
