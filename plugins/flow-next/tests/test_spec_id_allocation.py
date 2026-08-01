@@ -491,9 +491,10 @@ class TestSpecIdAllocation(unittest.TestCase):
             self.skipTest("not running inside the flow-next checkout")
 
         # This is a BENCHMARK, not a correctness assertion, and wall-clock is
-        # meaningless on a saturated machine: the full suite runs 14 jobs in
-        # parallel, which reliably pushes a ~155ms measurement past any fixed
-        # bound. Skip when the box is clearly contended; the correctness
+        # meaningless on a saturated machine: the full suite runs at
+        # cpu_count-2 jobs locally and cpu_count on CI (fn-155), which reliably
+        # pushes a ~155ms measurement past any fixed bound on either. Skip when
+        # the box is clearly contended; the correctness
         # properties (union, fail-open, monotonic, two-worktree collision) are
         # covered by the other tests in this file and do not depend on timing.
         try:

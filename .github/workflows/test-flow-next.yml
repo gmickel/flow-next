@@ -51,6 +51,11 @@ on:
         required: false
         type: boolean
         default: false
+      legacy_baseline:
+        description: "Measurement lever (fn-155) - run the unit suite at the pre-CI-detection job count, computed per runner"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -118,12 +123,25 @@ jobs:
 
       # ──────────── Python unit tests (file-level parallel, fn-119) ────────────
       # Canonical full-suite entrypoint: scripts/run_tests_parallel.py
-      # Shards by FILE only (never within a file). Default jobs = cores-2.
-      # --serial is the equivalence fallback. workflow_dispatch.inputs.shuffle
-      # is the ordering canary (manual / weekly; do not schedule a new workflow).
+      # Shards by FILE only (never within a file). Default jobs = the runner's
+      # full core count on CI and cores-2 locally (fn-155; the job-count policy
+      # lives in the runner, not here). --serial is the equivalence fallback.
+      # workflow_dispatch.inputs.shuffle is the ordering canary (manual /
+      # weekly; do not schedule a new workflow).
+      # workflow_dispatch.inputs.legacy_baseline is the fn-155 measurement
+      # lever: it reproduces the pre-change job count from this same commit,
+      # computed per runner because nothing establishes that all three OS legs
+      # report the same core count. Inert on push and pull_request.
 
       - name: Python unit tests - parallel suite (fn-119)
+        env:
+          LEGACY_BASELINE: ${{ github.event.inputs.legacy_baseline }}
         run: |
+          JOBS_ARGS=()
+          if [ "$LEGACY_BASELINE" = "true" ]; then
+            JOBS_ARGS=(--jobs "$(python -c 'import os; print(max(1, (os.cpu_count() or 2) - 2))')")
+            echo "Legacy baseline (fn-155): ${JOBS_ARGS[*]}"
+          fi
           SHUFFLE_ARGS=()
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] \
             && [ "${{ github.event.inputs.shuffle }}" = "true" ]; then
@@ -148,7 +166,7 @@ jobs:
             EXCLUDES+=(--exclude test_reveval_parse_guard.py)
             EXCLUDES+=(--exclude test_task_create_files.py)
           fi
-          python scripts/run_tests_parallel.py "${SHUFFLE_ARGS[@]}" "${EXCLUDES[@]}"
+          python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${SHUFFLE_ARGS[@]}" "${EXCLUDES[@]}"
 
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})

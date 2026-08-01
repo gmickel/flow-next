@@ -71,6 +71,17 @@ map that can never close.
   when the actual question is which effort to pick. `/flow-next:guide` gains
   the matching matrix row, and the skill carries a worked example of the
   refusal plus the narrowing that makes the same idea chartable.
+- **The repo's own parallel test runner stops leaving CI cores idle.**
+  `scripts/run_tests_parallel.py` reserved two cores unconditionally. That
+  reservation exists for machines with a human on them - an editor, a language
+  server, an agent - and a build machine has none of that. The default is now
+  the full core count when `CI` is set (`1`/`true`/`yes`, case-insensitive) and
+  unchanged (`cpu_count - 2`) everywhere else; absent, empty, `false`, `0` and
+  anything unrecognized all mean local, and TTY state is deliberately not part
+  of the signal. `--jobs` and `--serial` still override, in that order, and the
+  file set is unchanged - no test selection, no path filters, nothing skipped.
+  The runner also gains its first tests. Maintainer-only CI tooling: nothing
+  changes for anyone installing or running flow-next.
 
 ## [flow-next 3.13.0] - 2026-08-01
 
