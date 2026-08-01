@@ -133,6 +133,12 @@ DESCRIPTIONS: dict[str, str] = {
         "legitimately projects terminal Done); this leaf only tunes the "
         "optional verdict comment, never the merge-gated status write."
     ),
+    "tracker.charts": (
+        "Optional chart lifecycle projection (fn-135). String-enum off|on, "
+        "NOT a bool: only the literal on projects charts as parent issues "
+        "with decision children through the tracker facade. Local chart "
+        "operations always succeed when off or when the bridge is inactive."
+    ),
     "tracker.perTracker": (
         "Per-tracker linkage written by the discovery ceremony on "
         "confirmation. Open: tracker types add their own keys here."
@@ -586,6 +592,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("tracker.perEvent.qa", {"enum": list(_QA_EVENT)}),
         ("tracker.perEvent.land", {"kind": "object", "open": False}),
         ("tracker.perEvent.land.merged", {"enum": list(_PER_EVENT)}),
+        ("tracker.charts", {"enum": ["off", "on"]}),
         ("tracker.perTracker", {"kind": "object", "open": True}),
         ("tracker.perTracker.teamId", {"type": ["string", "null"]}),
         ("tracker.perTracker.projectId", {"type": ["string", "null"]}),

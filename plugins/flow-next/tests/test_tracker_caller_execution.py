@@ -27,6 +27,7 @@ WORK_EVENTS = {"work.firstClaim", "work.done", "completionReview"}
 DIRECT_EVENTS = {"capture", "interview", "plan"}
 COMMENT_EVENTS = {"resolvePr", "qa"}
 UNCONDITIONAL_EVENTS = {"makePr", "land.merged"}
+CHART_EVENTS = {"chart"}
 FAKE_FLOWCTL = ORACLE_PATH.parent / "fake_flowctl.py"
 
 
@@ -192,6 +193,11 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         self.import_log.unlink(missing_ok=True)
 
     def _expected_op(self, caller_id: str, value: str, merged: bool) -> str | None:
+        if caller_id in CHART_EVENTS:
+            # Chart uses tracker.charts off|on, not the perEvent enum. The
+            # shared matrix still walks off|pull|push|reconcile|comment;
+            # none of those literals are "on", so the chart gate stays silent.
+            return None
         if caller_id in UNCONDITIONAL_EVENTS:
             if caller_id == "makePr":
                 return "reconcile"
@@ -511,6 +517,18 @@ class TrackerCallerExecutionTests(unittest.TestCase):
     def test_current_active_argv_is_a_declared_delta_from_the_oracle(self) -> None:
         for caller_id, row in self.callers.items():
             with self.subTest(caller=caller_id):
+                if caller_id in CHART_EVENTS:
+                    # Chart is post-baseline: argv is facade-native
+                    # tracker sync with chart subject, not the pre-teardown
+                    # skill-dispatch grammar.
+                    self.assertEqual(row["resolved_facade_op"], "push")
+                    self.assertEqual(
+                        row["argv"]["active"][:2],
+                        ["tracker", "sync"],
+                    )
+                    self.assertIn("--event", row["argv"]["active"])
+                    self.assertIn("chart", row["argv"]["active"])
+                    continue
                 expected_op = self._expected_op(caller_id, "push", merged=True)
                 self.assertIsNotNone(expected_op)
                 old_argv = row["argv"]["active"]

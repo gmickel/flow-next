@@ -28,6 +28,7 @@ EVENTS = {
     "resolvePr",
     "qa",
     "land.merged",
+    "chart",  # fn-135.5 optional chart lifecycle projection
 }
 REQUIRED_CALLER_FIELDS = {
     "id",
@@ -158,6 +159,12 @@ class TrackerCallerOracleTests(unittest.TestCase):
         for value in ("pull", "push", "reconcile", "comment"):
             self.assertIn(value, qa["unconditional_behavior"])
 
+        chart = self.callers["chart"]
+        self.assertEqual(chart["config_key"], "tracker.charts")
+        self.assertEqual(chart["legal_config_values"], ["off", "on"])
+        self.assertEqual(chart["resolved_facade_op"], "push")
+        self.assertIn("local chart always commits first", chart["unconditional_behavior"])
+
         make_pr = self.callers["makePr"]
         self.assertEqual(
             make_pr["config_reads"],
@@ -212,10 +219,21 @@ class TrackerCallerOracleTests(unittest.TestCase):
 
     def test_caller_inventory_and_event_tokens_match_real_files(self) -> None:
         sweep = self.oracle["teardown_sweep"]
+        # Pre-fn-141-C baseline paths are pinned; post-baseline callers (chart)
+        # are inventoried in callers[] but not backfilled into the commit-
+        # addressed teardown sweep.
+        post_baseline = {
+            caller["file"]
+            for caller in self.callers.values()
+            if caller["id"] == "chart"
+        }
         self.assertEqual(
             set(sweep["canonical_caller_paths"]),
-            {caller["file"] for caller in self.callers.values()}
-            | {"plugins/flow-next/skills/flow-next-work/phases.md"},
+            (
+                {caller["file"] for caller in self.callers.values()}
+                | {"plugins/flow-next/skills/flow-next-work/phases.md"}
+            )
+            - post_baseline,
         )
         for caller in self.callers.values():
             text = (REPO_ROOT / caller["file"]).read_text(encoding="utf-8")

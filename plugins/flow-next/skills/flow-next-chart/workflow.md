@@ -76,6 +76,45 @@ When locate fails or is unavailable:
 - Offer the local chart-id path via blocking question.
 - Create nothing; mutate nothing; do not treat the URL text as a new Outcome.
 
+### 0.2b - Tracker projection gate (optional; best-effort)
+
+Chart projection rides the post-fn-141 lifecycle facade. Local chart
+mutations always commit first; remote projection never blocks them.
+
+Gate (both required): bridge active AND `tracker.charts` is the literal `on`.
+The perEvent vocabulary (`off | pull | push | reconcile | comment`) does not
+select chart ops - chart is always a local-first **push** of the committed
+revision when the gate is open. When the gate is closed, flowctl still
+succeeds and `tracker_projection.skipped` names the reason
+(`tracker.charts_off` / `bridge_inactive`).
+
+```bash
+CHARTS_LEAF="$("$FLOWCTL" config get tracker.charts --json 2>/dev/null | jq -r '.value // "off"')"
+case "$CHARTS_LEAF" in
+  on)      CHARTS_ON=1 ;;
+  off|null) CHARTS_ON=0 ;;
+  pull|push|reconcile|comment) CHARTS_ON=0 ;; # perEvent verbs are not chart gates
+  *)       CHARTS_ON=0 ;;
+esac
+if [ "$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // false')" = "true" ] \
+   && [ "$CHARTS_ON" = "1" ]; then
+  # flowctl chart mutations already call the facade once per committed revision
+  # (event: chart.create|chart.wire|chart.claim|chart.release|chart.resolve|
+  #  chart.supersede|chart.outOfScope|chart.briefing|chart.abandon|chart.reopen).
+  # Host recovery handoff on partial remote success: re-invoke the same chart
+  # command or rely on the next mutation - event markers + aggregate receipt
+  # dedupe so retry converges without duplicate issues/comments/relations.
+  # Equivalent one-shot surface (automation): 
+  #   "$FLOWCTL" tracker sync "chart:<chart-id>" --op push --event chart \
+  #     <legal file flags>
+  # Evidence for any synthesized comment: evidence=<chart-revision-sha>.
+  # Chart synthesizes owned parent rollup / decision body blocks only - never
+  # free-form status masquerading as provider workflow.
+  # Best-effort - a tracker failure never rolls back local chart state.
+  :
+fi
+```
+
 ### 0.3 - Human pairings
 
 Every human-facing list of decisions pairs **title + D-ID + record link**. Never dump bare identifiers alone (R36).

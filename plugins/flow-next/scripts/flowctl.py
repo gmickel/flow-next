@@ -1146,6 +1146,11 @@ def get_default_tracker_config() -> dict:
             # optional verdict comment, never the (MERGED-gated) status write.
             "land": {"merged": "off"},
         },
+        # fn-135.5 — optional chart lifecycle projection. String-enum off|on
+        # (NOT a bool): only the literal "on" activates parent/child chart
+        # projection through the post-fn-141 facade. Default off keeps every
+        # existing repo silent; local chart ops always succeed either way.
+        "charts": "off",
         "perTracker": {
             "teamId": None,
             "projectId": None,
@@ -10161,6 +10166,87 @@ def chart_fail(
     sys.exit(exit_code)
 
 
+def _maybe_project_chart(
+    flow_dir: Path,
+    chart_id: str,
+    *,
+    event: str,
+    revision: Optional[str] = None,
+) -> dict:
+    """Best-effort post-commit chart tracker projection (fn-135.5).
+
+    Local chart mutation has already committed. Projection failures never
+    roll back local state; the result describes skip/degradation/partial.
+    """
+    try:
+        from flowctl_tracker.facade.chart_projection import (  # noqa: PLC0415
+            project_chart,
+        )
+        from flowctl_tracker.types import TrackerError  # noqa: PLC0415
+    except ImportError:
+        return {
+            "projected": False,
+            "skipped": "facade_unavailable",
+            "reason": "flowctl_tracker package not available",
+        }
+    out = project_chart(
+        flow_dir, chart_id, event=event, revision=revision,
+    )
+    if isinstance(out, TrackerError):
+        return {
+            "projected": False,
+            "error": {
+                "class": out.cls.value if hasattr(out.cls, "value") else str(out.cls),
+                "code": out.subtype or (
+                    out.cls.value if hasattr(out.cls, "value") else "error"
+                ),
+                "message": out.message,
+                "details": out.details,
+            },
+            "completed_steps": list((out.details or {}).get("completed_steps") or []),
+        }
+    if isinstance(out, dict):
+        return out
+    return {"projected": False, "skipped": "unknown_result"}
+
+
+def _attach_tracker_projection(
+    result: dict,
+    flow_dir: Path,
+    chart_id: Optional[str],
+    event: str,
+) -> dict:
+    """Merge tracker_projection into a chart command result dict."""
+    if not chart_id:
+        result = dict(result)
+        result["tracker_projection"] = {
+            "projected": False,
+            "skipped": "no_chart_id",
+        }
+        return result
+    try:
+        chart = load_chart_sidecar(flow_dir, chart_id)
+        revision = chart_decision_revision(chart)
+    except Exception:  # noqa: BLE001 - projection is best-effort
+        revision = None
+    proj = _maybe_project_chart(
+        flow_dir, chart_id, event=event, revision=revision,
+    )
+    result = dict(result)
+    result["tracker_projection"] = proj
+    return result
+
+
+def _chart_id_from_decision_result(out: dict) -> Optional[str]:
+    cid = out.get("chart") or out.get("chart_id")
+    if cid:
+        return str(cid)
+    did = out.get("id") or out.get("decision_id")
+    if isinstance(did, str) and ".D" in did:
+        return did.split(".D", 1)[0]
+    return None
+
+
 def canonicalize_chart_id(raw: str) -> str:
     """Return canonical chart id `fn-N` or raise ChartError(validation).
 
@@ -10423,6 +10509,13 @@ def chart_sidecar_data(
             "id": None,
             "identifier": None,
             "url": None,
+            "linkState": "unlinked",
+            "depRelations": [],
+            "projection": {
+                "revision": None,
+                "event_markers": [],
+                "completed_steps": [],
+            },
         },
         "produced_specs": [],
         "claim_events": [],
@@ -11007,6 +11100,14 @@ def decision_sidecar_data(
         "created": ts,
         "updated_at": ts,
         "record_path": decision_record_link(chart_id, d_num),
+        # fn-135.5 — optional tracker locator for decision children (not identity).
+        "tracker": {
+            "id": None,
+            "identifier": None,
+            "url": None,
+            "linkState": "unlinked",
+            "depRelations": [],
+        },
     }
 
 
@@ -22824,6 +22925,10 @@ def cmd_chart_create(args: argparse.Namespace) -> None:
         )
 
     meta = compact_chart_metadata(data)
+    projection = _maybe_project_chart(
+        flow_dir, data["id"], event="chart.create",
+        revision=chart_decision_revision(data),
+    )
     result = {
         "id": data["id"],
         "title": data["title"],
@@ -22837,6 +22942,7 @@ def cmd_chart_create(args: argparse.Namespace) -> None:
         "attended_count": meta["attended_count"],
         "estimated_sessions": meta["estimated_sessions"],
         "cost_line": meta["cost_line"],
+        "tracker_projection": projection,
         "decisions": [
             {
                 "id": d.get("id"),
@@ -23074,6 +23180,9 @@ def cmd_chart_add_decision(args: argparse.Namespace) -> None:
         "record_path": full.get("record_path"),
         "chart": full.get("chart"),
     }
+    result = _attach_tracker_projection(
+        result, flow_dir, full.get("chart"), "chart.wire",
+    )
     if use_json:
         chart_json_success(command, result)
     else:
@@ -23244,6 +23353,9 @@ def cmd_chart_wire_decision(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.wire",
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23335,6 +23447,9 @@ def cmd_chart_claim(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.claim",
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23376,6 +23491,9 @@ def cmd_chart_release_claim(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.release",
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23521,6 +23639,14 @@ def cmd_chart_resolve(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    proj_event = (
+        "chart.supersede"
+        if supersedes
+        else "chart.resolve"
+    )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), proj_event,
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23563,6 +23689,9 @@ def cmd_chart_out_of_scope(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    out = _attach_tracker_projection(
+        out, flow_dir, _chart_id_from_decision_result(out), "chart.outOfScope",
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23598,6 +23727,9 @@ def cmd_chart_abandon(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    out = _attach_tracker_projection(
+        out, flow_dir, out.get("id") or raw_id, "chart.abandon",
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23646,6 +23778,9 @@ def cmd_chart_briefing(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    out = _attach_tracker_projection(
+        out, flow_dir, out.get("id") or raw_id, "chart.briefing",
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23688,6 +23823,9 @@ def cmd_chart_reopen(args: argparse.Namespace) -> None:
             details=e.details,
             exit_code=e.exit_code,
         )
+    out = _attach_tracker_projection(
+        out, flow_dir, out.get("id") or raw_id, "chart.reopen",
+    )
     if use_json:
         chart_json_success(command, out)
     else:
@@ -23697,6 +23835,93 @@ def cmd_chart_reopen(args: argparse.Namespace) -> None:
         )
         if out.get("staled_briefings"):
             print(f"staled briefings: {', '.join(out['staled_briefings'])}")
+
+
+def cmd_chart_locate(args: argparse.Namespace) -> None:
+    """Resolve chart/D-ID, stored tracker id, or stored URL via local ledger.
+
+    Zero mutation. No network. Strict host/credential/ambiguity rejection.
+    """
+    command = "chart.locate"
+    use_json = bool(getattr(args, "json", False))
+    flow_dir = _chart_ensure_flow(use_json, command)
+    selector = getattr(args, "selector", None) or ""
+    try:
+        from flowctl_tracker.facade.chart_projection import (  # noqa: PLC0415
+            locate_selector,
+        )
+        from flowctl_tracker.types import TrackerError  # noqa: PLC0415
+    except ImportError:
+        chart_fail(
+            command,
+            use_json,
+            "io",
+            "facade_unavailable",
+            "flowctl_tracker package is not available",
+        )
+        return
+    # Locate is read-only against the ledger; recover journals so sidecars are
+    # consistent, then never write.
+    try:
+        with cross_process_lock(charts_resource_lock_path(flow_dir)):
+            recover_chart_transactions(flow_dir)
+    except CrossProcessLockError:
+        pass
+    out = locate_selector(flow_dir, selector)
+    if isinstance(out, TrackerError):
+        code = (out.details or {}).get("code") or out.subtype or "unresolved_locator"
+        # Map tracker ErrorClass onto the chart v1 envelope classes.
+        cls_val = out.cls.value if hasattr(out.cls, "value") else str(out.cls)
+        chart_class = {
+            "not_found": "not_found",
+            "unresolved": "not_found",
+            "conflict": "conflict",
+            "stale_id": "conflict",
+            "invalid_input": "validation",
+            "capability": "validation",
+            "inactive": "invalid_state",
+        }.get(cls_val, "validation")
+        chart_fail(
+            command,
+            use_json,
+            chart_class,
+            str(code),
+            out.message,
+            details=out.details,
+            exit_code=out.exit_code if hasattr(out, "exit_code") else 1,
+        )
+    if use_json:
+        chart_json_success(command, out)
+    else:
+        kind = out.get("kind")
+        if kind == "chart":
+            print(
+                f"chart {out.get('chart_id')} - {out.get('title')} "
+                f"[{out.get('status')}] {out.get('record_path')}"
+            )
+        else:
+            print(
+                f"decision {out.get('decision_id')} - {out.get('title')} "
+                f"[{out.get('status')}] {out.get('record_path')}"
+            )
+            if out.get("history"):
+                hist = out["history"]
+                print(
+                    f"history status={hist.get('status')} "
+                    f"superseded_by={hist.get('superseded_by') or '-'}"
+                )
+                if out.get("frontier") is not None:
+                    fr = out.get("frontier") or []
+                    print(
+                        "frontier: "
+                        + (
+                            ", ".join(
+                                f"{f.get('id')}({f.get('title')})" for f in fr
+                            )
+                            if fr
+                            else "(empty)"
+                        )
+                    )
 
 
 def cmd_chart_link_spec(args: argparse.Namespace) -> None:
@@ -42704,6 +42929,20 @@ def main() -> None:
     )
     p_chart_reopen.add_argument("--json", action="store_true", help="JSON output")
     p_chart_reopen.set_defaults(func=cmd_chart_reopen)
+
+    p_chart_locate = chart_sub.add_parser(
+        "locate",
+        help=(
+            "Resolve a chart/D-ID, stored tracker identifier, or stored "
+            "tracker URL through the local provenance ledger (no network)"
+        ),
+    )
+    p_chart_locate.add_argument(
+        "selector",
+        help="Canonical chart/D-ID, stored tracker identifier, or stored URL",
+    )
+    p_chart_locate.add_argument("--json", action="store_true", help="JSON output")
+    p_chart_locate.set_defaults(func=cmd_chart_locate)
 
     p_chart_link = chart_sub.add_parser(
         "link-spec",
