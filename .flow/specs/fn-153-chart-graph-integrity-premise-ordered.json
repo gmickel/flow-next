@@ -8,7 +8,9 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-153-chart-graph-integrity-premise-ordered",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-153-chart-graph-integrity-premise-ordered.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
@@ -112,10 +114,25 @@
       "task": null,
       "timestamp": "2026-08-02T11:15:14.250388Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "0cb8d8ab5701984dbdb9a88a4778cd92a2e559e7",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "1f80fa7332337dea4038a19187ec84c247263aaca4f08e588124511d74d1d878",
+      "round_consumed": true,
+      "scope": "impl:fn-153-chart-graph-integrity-premise-ordered.1",
+      "task": "fn-153-chart-graph-integrity-premise-ordered.1",
+      "timestamp": "2026-08-02T11:33:23.916961Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "impl:fn-153-chart-graph-integrity-premise-ordered.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-153-chart-graph-integrity-premise-ordered.md",
@@ -132,5 +149,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T11:15:24.329811Z"
+  "updated_at": "2026-08-02T11:33:24.381836Z"
 }

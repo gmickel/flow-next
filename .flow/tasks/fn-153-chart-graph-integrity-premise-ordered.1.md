@@ -52,9 +52,8 @@ If premise-first ordering cannot be introduced without breaking the existing `Te
 
 
 ## Done summary
-TBD
-
+Supersession cascades now process dependents premise-first via Kahn's algorithm with a min-heap on the local D-number (`_depends_on_topological_order`), so a replacement is wired to the replacement of a premise the same cascade superseded rather than to the superseded premise. Call-site separation keeps `--keep-dependents` on the unchanged local-number closure; new real-CLI regression tests cover the non-topological graph, chain reachability, tie determinism, and the pinned keep-dependents arrays.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0cb8d8ab5701984dbdb9a88a4778cd92a2e559e7
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution test_chart_graph_claims test_chart_store -q (baseline: green), python3 scripts/run_tests_parallel.py (3869 tests, 0 failures), uvx ruff@0.16.0 check . (All checks passed)
 - PRs:
