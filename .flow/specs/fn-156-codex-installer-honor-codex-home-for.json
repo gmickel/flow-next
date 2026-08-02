@@ -140,7 +140,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-156-codex-installer-honor-codex-home-for.md",
-  "status": "open",
+  "status": "done",
   "title": "Codex installer: honor CODEX_HOME for alternate homes",
   "tracker": {
     "baseHashFlow": null,
@@ -153,5 +153,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T20:29:05.566475Z"
+  "updated_at": "2026-08-02T22:38:45.514165Z"
 }

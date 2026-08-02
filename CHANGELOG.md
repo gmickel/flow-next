@@ -2,7 +2,11 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.13.3] - 2026-08-03
+
+Run Codex from more than one home and flow-next can now live in all of them.
+Plus review loops get twice the room before they stop and ask you to look.
+
 
 ### Changed
 
