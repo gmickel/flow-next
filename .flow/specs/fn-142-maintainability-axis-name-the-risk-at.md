@@ -1,5 +1,8 @@
 # fn-142 Maintainability axis: name the risk at plan review, scope the claim honestly
 
+**Depends on fn-159 (convergence-aware review terminals).** This spec adds a NEW class of finding to plan review, which is the exact stage that capped three times in one session (2026-08-02) on residue findings. fn-159 repairs how plan-review findings terminate; shipping this first would add fuel to the loop fn-159 exists to fix. The ordering is deliberate, not incidental - the non-blocking contract in R6 is prose asking a reviewer to restrain itself, and it should land on top of a terminal that can already tell convergence from churn.
+
+
 ## Goal & Context
 <!-- scope: business -->
 

@@ -1,4 +1,14 @@
-# fn-143 Structural delta in the receipt: per-module erosion and verbosity trend
+# fn-143 DEFERRED: Structural delta in the receipt: per-module erosion and verbosity trend
+
+**Status: deferred 2026-08-03.** Not a rejection - the reasoning holds and the design is sound. Deferred on cost, risk, and an unclosed decision:
+
+- **It is a project, not a quick win.** 18 R-IDs across five components: an analyzer, a new append-only per-module store, three new `flowctl quality` subcommands, receipt integration, and `export-cognitive-aid` integration. It was originally paired with [[fn-142]] because they share a source and a theme; they are not comparable in cost, and pairing them was an error.
+- **One open architectural decision blocks implementation, and it is a decision, not a task.** `flowctl` is pure-stdlib by promise; per-function cyclomatic complexity across TypeScript, Go, Rust, C# and Java is not a stdlib problem. All three routes carry a real cost - optional external analyzers are absent exactly on the enterprise repos where the signal matters most; a stdlib proxy ships a weak measure as a quality signal, which is the Goodhart failure this project warns portcos about; out-of-core guarantees nobody enables it. Close that decision before scheduling any work.
+- **It adds per-task runtime work** (an analyzer pass over the touched surface plus a store write), unlike fn-142, which is prompt-only in a single stage.
+
+**What must be true to un-defer:** the analyzer dependency route is decided and recorded in Decision Context, and the uneven-across-languages result is judged acceptable. Nothing else changed - the measures, the slope-over-level design, and the advisory-never-a-gate boundary all stand.
+
+**Related:** fn-142 ships the same insight at plan-review altitude for a fraction of the cost and is the cheaper first move. fn-144 (canary / weak-model extension) was already deferred.
 
 ## Goal & Context
 <!-- scope: business -->

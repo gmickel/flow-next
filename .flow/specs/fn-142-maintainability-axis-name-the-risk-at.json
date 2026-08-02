@@ -1,7 +1,9 @@
 {
   "branch_name": "fn-142-maintainability-axis-name-the-risk-at",
   "created_at": "2026-07-27T20:01:43.354577Z",
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-159-convergence-aware-review-terminals-and"
+  ],
   "id": "fn-142-maintainability-axis-name-the-risk-at",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -20,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-27T20:03:09.440787Z"
+  "updated_at": "2026-08-02T23:03:37.921848Z"
 }
