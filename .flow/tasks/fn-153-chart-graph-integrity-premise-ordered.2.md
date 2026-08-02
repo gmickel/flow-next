@@ -21,7 +21,7 @@ Scope was cut at plan-review round 3. The resolve-sharpen path is no longer part
 Also: the `## Unreleased` CHANGELOG entry for both tasks, and the full gate.
 
 **Size:** M
-**Files:** `plugins/flow-next/scripts/flowctl.py`, `plugins/flow-next/tests/test_chart_graph_claims.py`, `plugins/flow-next/tests/test_chart_docs_inventory.py`, `plugins/flow-next/docs/flowctl.md`, `CHANGELOG.md`, plus the propagation targets
+**Files:** `plugins/flow-next/scripts/flowctl.py` (an owner-aware alias registrar used ONLY by `validate_and_build_initial_map`), `plugins/flow-next/tests/test_chart_graph_claims.py`, `plugins/flow-next/tests/test_chart_docs_inventory.py`, `plugins/flow-next/docs/flowctl.md`, `CHANGELOG.md`, plus the propagation targets
 
 ### Approach
 
@@ -54,7 +54,8 @@ Rejection must happen **before any D-ID allocation or file write**, and R10 requ
 - [ ] Real-CLI test: two decisions with the same caller-supplied `id` are rejected (R2)
 - [ ] Real-CLI test: a caller `id` of `d<n>` colliding with a **later** decision's generated alias is rejected - the reverse direction (R4)
 - [ ] Real-CLI test: legal same-owner repetition still succeeds - a caller `id` equal to that decision's own generated alias is not rejected (R2)
-- [ ] Real-CLI test: the provisional-pass sentinel chart id cannot manufacture a false collision on a full-D-ID alias (R2)
+- [ ] Real-CLI test: a GENUINE full-D-ID collision is rejected - decision 1 claims `id: "fn-1.D2"` while decision 2 owns generated `fn-1.D2`; assert `validation`/`alias_collision`, the exact claimant details, no files written, and that the next valid creation still receives `fn-1` (R4, R10)
+- [ ] Real-CLI test: the provisional-pass sentinel chart id cannot manufacture a FALSE collision on a full-D-ID alias (R2)
 - [ ] Error is `validation` / `alias_collision`, `details` = `alias`, `first`, `second` (each `index` + `title`), `first` = incumbent; documented in `docs/flowctl.md` and pinned in `test_chart_docs_inventory.py` (R8)
 - [ ] Atomicity demonstrated: a rejected initial map leaves no chart files and the next valid chart still receives the expected `fn-N` (R10)
 - [ ] The resolve-sharpen aliasing block is untouched (Boundaries)

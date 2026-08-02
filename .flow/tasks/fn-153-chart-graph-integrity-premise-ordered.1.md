@@ -20,7 +20,7 @@ Return the closure premise-first instead. **The algorithm is specified: Kahn's a
 
 - Follow the existing helper style in the same region; `_depends_on_reverse_index` (`13027-13037`) already gives you the adjacency you need.
 - Tests go in `test_chart_resolution.py` and drive the REAL CLI through its existing `_run_flowctl` subprocess helper (`:60-76`).
-- **Fixture recipe (confirmed buildable through the public CLI):** the file's `_add_decision` helper (`:94`) allocates D-numbers strictly in creation order and cannot produce the non-topological graph R1 needs. `chart wire-decision` can - it is public, accepts `--depends-on`, and validates atomically. Recipe: create D1-D3, `wire-decision D2 --depends-on D3`, `wire-decision D3 --depends-on D1`, resolve D2 and D3, then `resolve D4 --supersedes D1`.
+- **Fixture recipe (confirmed buildable through the public CLI):** the file's `_add_decision` helper (`:94`) allocates D-numbers strictly in creation order and cannot produce the non-topological graph R1 needs. `chart wire-decision` can - it is public, accepts `--depends-on`, and validates atomically. Recipe: create D1-**D4**, `wire-decision D2 --depends-on D3`, `wire-decision D3 --depends-on D1`, resolve D2 and D3, then `resolve D4 --supersedes D1`. R1 also requires proving the replacement chain stays reachable, so add a fifth decision and resolve it with `--supersedes` against D3's replacement, pinning the expected closure and replacement chain.
 
 ### Investigation targets
 
