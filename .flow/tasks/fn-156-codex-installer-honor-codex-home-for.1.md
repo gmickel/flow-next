@@ -1,5 +1,5 @@
 ---
-satisfies: [R1, R2, R3, R4, R5]
+satisfies: [R1, R2, R3, R4, R5, R6, R7]
 ---
 # fn-156-codex-installer-honor-codex-home-for.1 Honor CODEX_HOME in install-codex.sh + sync-codex.sh rewrites
 
@@ -21,9 +21,15 @@ Make one existing command reusable per Codex home by replacing a hardcoded path 
 | `$HOME/.codex/agents` | 1 |
 | bare `$HOME/.codex` | 1 |
 
+**The inventory above is INCOMPLETE - plan review caught it.** It greps `$HOME/.codex` only. `sync-codex.sh:310-313` also emits the **tilde** form (`~/.codex/templates/flow-next-ralph-init`, `~/.codex/scripts`) for ralph-init and worktree-kit, reaching 7 more mirror files. Those are executable paths bound to the primary home, so Ralph init and worktree-kit break under an alternate `CODEX_HOME`. Build the real inventory over **both spellings**, and classify each occurrence **executable vs narrative** - a `${VAR:-default}` displayed as literal text is worse than the hardcoded path. Note `~` does not expand inside double quotes, so a quoted `cp "~/.codex/..."` is a latent bug of its own.
+
 **The form already has in-repo precedent.** The mirror's `templates/spec.md` chain emits `${CLAUDE_PLUGIN_ROOT:-${DROID_PLUGIN_ROOT:-${CODEX_HOME:-$HOME/.codex}}}` today. Follow that shape rather than inventing a new one.
 
 **Retarget the guards, do not delete them.** `sync-codex.sh` asserts the baked shape at `:1848`, `:1860-1864`, `:1984`. They exist to catch a plugin-root reference that escaped the rewrite - which would expand to a broken `/skills/...` path inside Codex where neither variable is set. Move the assertions to the new form. A guard that stops matching is a guard that stops guarding, and this change is exactly the kind that could introduce what it guards against.
+
+**The installer's own tests can escape into a real Codex home - fix that in the same change.** `plugins/flow-next/tests/test_install_codex_legacy_cleanup.py:70` builds its env as `dict(os.environ, HOME=str(home))`: it redirects `HOME` but inherits `CODEX_HOME`. Harmless today because the installer ignores it; once it honors it, anyone with `CODEX_HOME` exported runs the installer - and its cleanup logic - against their real home. Scrub inherited `CODEX_HOME` for baseline tests, support an explicit temporary value, and add a regression proving the custom target receives the surface while the temporary primary home stays byte-identical.
+
+**Operator output must name the real destination.** `install-codex.sh:67`, `:437`, `:439`, `:441` and the hook-cleanup messages hardcode `~/.codex`, so an alternate-home install reports the wrong path - which defeats the operational check this feature exists for. Use `$CODEX_DIR` in target-specific messages; generic doc comments may keep the default.
 
 Then regenerate the mirror, update the one test that pins the literal, and add the README line.
 
@@ -62,12 +68,15 @@ If any rewrite site turns out to be narrative prose or a JSON/manifest string ra
 ## Acceptance
 - [ ] `install-codex.sh` uses `CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"` and `$CODEX_DIR/hooks.json` at both former literal sites (R1)
 - [ ] `sync-codex.sh` emits `${CODEX_HOME:-$HOME/.codex}` at every skills and agents rewrite site (R2)
-- [ ] `grep -r '\$HOME/\.codex' plugins/flow-next/codex/` returns nothing that is not already inside a `${CODEX_HOME:-...}` default (R2)
+- [ ] BOTH spellings are clean: no executable `$HOME/.codex` and no executable `~/.codex` survives in `plugins/flow-next/codex/` outside a `${CODEX_HOME:-...}` default; `sync-codex.sh:310-313` (ralph-init templates, worktree-kit scripts) is rewritten (R2)
+- [ ] Occurrences are classified executable vs narrative, and a new guard rejects executable primary-home references outside an explicit narrative allowlist (R2)
+- [ ] `test_install_codex_legacy_cleanup.py` scrubs inherited `CODEX_HOME` for baseline tests, supports an explicit temporary value, and gains a regression proving the custom target gets the surface while the temporary primary home stays byte-identical (R6)
+- [ ] Installer error/progress/completion messages use `$CODEX_DIR` so an alternate-home install reports the real destination (`:67`, `:437`, `:439`, `:441`, hook-cleanup) (R7)
 - [ ] The `:1848` / `:1860-1864` / `:1984` guards are retargeted to the new form and still FAIL on an unrewritten plugin-root reference - demonstrate with a deliberate temporary break, then revert it (R2)
 - [ ] Real-install proof: capture a recursive listing of `~/.codex` with mtimes, run `CODEX_HOME=<tmpdir> ./scripts/install-codex.sh`, and assert the listing is byte-identical afterwards while `<tmpdir>` received the full surface (R1)
 - [ ] With `CODEX_HOME` unset the installer targets `~/.codex` exactly as before (R1)
 - [ ] `test_precheck_mode_contract.py` updated to the new form, not relaxed (R4)
-- [ ] `./scripts/sync-codex.sh` twice is byte-idempotent: `git diff --stat plugins/flow-next/codex/` empty after the second run (R4)
+- [ ] `./scripts/sync-codex.sh` is byte-idempotent across the SECOND run, proven by hashing the mirror after run 1 and after run 2 and requiring equality (`find plugins/flow-next/codex -type f -exec shasum {} + | shasum`). `git diff --stat` cannot serve - the first run legitimately rewrites ~46 tracked files, so it can never be empty during this task (R4)
 - [ ] `README.md` documents `CODEX_HOME=<home> ./scripts/install-codex.sh`, run once per home (R3)
 - [ ] No new flag, no `config.toml` change, no other installer touched (R5)
 - [ ] `## Unreleased` CHANGELOG entry; no version bump
