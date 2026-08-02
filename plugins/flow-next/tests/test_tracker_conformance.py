@@ -1381,7 +1381,15 @@ class LockRaceViaResolveVerb(unittest.TestCase):
 
             t1 = threading.Thread(target=run_dest)
             t2 = threading.Thread(target=run_caps)
-            t1.start(); t2.start(); t1.join(10); t2.join(10)
+            t1.start(); t2.start()
+            # The join bound must not be tighter than the barrier above: in the
+            # slow-scheduling case the 120s rendezvous exists to tolerate, a 10s
+            # join let the main thread read `results` while the workers were
+            # still running - KeyError, plus a race with tempdir cleanup. Assert
+            # the threads actually finished rather than trusting the timeout.
+            t1.join(120); t2.join(120)
+            self.assertFalse(t1.is_alive(), "destination worker did not finish")
+            self.assertFalse(t2.is_alive(), "capabilities worker did not finish")
             self.assertEqual(results["destination"][1], 0, results["destination"][0])
             self.assertEqual(results["capabilities"][1], 0, results["capabilities"][0])
             on_disk = json.loads((flow / "config.json").read_text(encoding="utf-8"))
