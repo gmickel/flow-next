@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-153-chart-graph-integrity-premise-ordered",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-02T12:16:16.743422Z",
   "created_at": "2026-08-01T13:04:42.288892Z",
   "default_impl": null,
   "default_review": null,
@@ -157,10 +157,25 @@
       "task": "fn-153-chart-graph-integrity-premise-ordered.2",
       "timestamp": "2026-08-02T12:08:02.312673Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "5ec147af3efa15f8743935e16e0c01bc6e54342f",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "b6a1e7f91f92d9c89fa1db6b1585bf923ebd01195c9751d58066939e91e1ae41",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-08-02T12:16:04.480659Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-153-chart-graph-integrity-premise-ordered.1": 0,
     "impl:fn-153-chart-graph-integrity-premise-ordered.2": 0,
     "plan": 0
@@ -179,5 +194,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T12:08:11.209540Z"
+  "updated_at": "2026-08-02T12:16:16.743636Z"
 }
