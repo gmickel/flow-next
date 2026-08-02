@@ -1445,6 +1445,38 @@ class TestInitialMapAliasCollisions(unittest.TestCase):
             by_id = {d["id"]: d for d in side["decisions"]}
             self.assertEqual(by_id[f"{cid}.D2"]["depends_on"], [f"{cid}.D1"])
 
+            # Suppressing the sentinel's false collision must not make a
+            # GENUINE caller/caller collision on a sentinel-shaped alias
+            # degrade into a graph error: decision 1 explicitly claims the
+            # alias its own provisional full D-ID also holds, so that claim
+            # must harden and decision 2's identical claim must still be
+            # refused as a named alias collision, not resolve to itself.
+            r = self._create(
+                repo,
+                {
+                    "decisions": [
+                        {
+                            "title": "Claimant",
+                            "type": "research",
+                            "id": "fn-999999999.D1",
+                        },
+                        {
+                            "title": "Rival",
+                            "type": "research",
+                            "id": "fn-999999999.D1",
+                            "depends_on": ["fn-999999999.D1"],
+                        },
+                    ]
+                },
+                "sentinel-shaped-genuine",
+            )
+            self._assert_collision(
+                r,
+                alias="fn-999999999.d1",
+                first=(1, "Claimant"),
+                second=(2, "Rival"),
+            )
+
     def test_same_owner_repetition_and_blank_ids_stay_legal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

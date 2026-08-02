@@ -11820,7 +11820,12 @@ class _InitialMapAliasRegistrar:
             self._claim(key, index=index, title=title, did=did, weak=weak)
             return
         if incumbent["index"] == index:
-            # Same owner: idempotent re-registration, legal.
+            # Same owner: idempotent re-registration, legal. A strong claim
+            # still hardens a weak incumbent - an explicit `id` is chart-id
+            # independent, so it must not stay displaceable just because this
+            # decision's own provisional full D-ID happened to claim it first.
+            if incumbent["weak"] and not weak:
+                incumbent["weak"] = False
             return
         if weak:
             # A provisional chart-id-dependent alias never displaces and never
