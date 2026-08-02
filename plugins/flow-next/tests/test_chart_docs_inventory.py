@@ -387,6 +387,61 @@ class ChartFlowctlDocsParity(unittest.TestCase):
                 f"flowctl.md v1 envelope section must state {why} ({phrase!r})",
             )
 
+    def test_alias_collision_contract_documented(self) -> None:
+        """The initial-map alias contract must stay documented (fn-153 R8).
+
+        Scoped to the `### v1 JSON envelope` section for the same reason as
+        test_supersedes_stale_discriminator_documented: that is the section a
+        driver reads to learn what a failed `chart … --json` looks like. Each
+        pinned clause is a distinct half of the shipped contract in flowctl.py
+        (_InitialMapAliasRegistrar): the code, the details keys, which side is
+        the incumbent, the owner-based definition that keeps same-decision
+        re-registration legal, and the atomicity guarantee. Dropping any one of
+        them describes a different contract than the code ships.
+        """
+        docs = _read(DOCS / "flowctl.md")
+        start = docs.find("### v1 JSON envelope")
+        self.assertGreater(start, 0, "flowctl.md must have a v1 JSON envelope section")
+        end = docs.find("### Subcommands", start)
+        self.assertGreater(end, start, "v1 JSON envelope section must be bounded")
+        section = docs[start:end]
+        self.assertIn(
+            "alias_collision",
+            section,
+            "the alias_collision contract must live in the v1 JSON envelope "
+            "section of flowctl.md, not merely somewhere in the file",
+        )
+        normalized = re.sub(r"[\s\-]+", " ", section).lower()
+        for phrase, why in (
+            ("class `validation`", "the error class is validation"),
+            ("`alias`", "details carries the normalized alias"),
+            ("`first`", "details carries the incumbent registration"),
+            ("`second`", "details carries the rejected registration"),
+            ("`index`", "each side carries its 1-based batch index"),
+            ("`title`", "each side carries its title"),
+            (
+                "is the incumbent registration and `second` the rejected one",
+                "first is the incumbent, second the rejected one",
+            ),
+            (
+                "two **different** decisions",
+                "collision is defined by different owners, not duplicate keys",
+            ),
+            (
+                "same** decision is legal and idempotent",
+                "same-owner re-registration stays legal",
+            ),
+            (
+                "no chart files are written",
+                "atomicity: a rejection makes no durable reservation",
+            ),
+        ):
+            self.assertIn(
+                re.sub(r"[\s\-]+", " ", phrase).lower(),
+                normalized,
+                f"flowctl.md v1 envelope section must state {why} ({phrase!r})",
+            )
+
     def test_config_keys_documented(self) -> None:
         docs = _read(DOCS / "flowctl.md")
         for key in (

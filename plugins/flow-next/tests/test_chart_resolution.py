@@ -827,6 +827,188 @@ class TestSupersession(unittest.TestCase):
             self.assertIn("keep_dependents", kinds3)
 
 
+class TestPremiseFirstCascade(unittest.TestCase):
+    """fn-153.1: the supersession cascade must process dependents
+    premise-first, so a replacement is wired to the replacement of a premise
+    this same cascade superseded - never to the superseded premise itself."""
+
+    def _wire(self, repo: Path, did: str, depends_on: str) -> None:
+        r = _run_flowctl(
+            repo, "chart", "wire-decision", did, "--depends-on", depends_on, "--json"
+        )
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+    def _resolve(self, repo: Path, did: str, text: str, *extra: str) -> dict:
+        answer = _write_answer(repo, f"ans-{did.replace('.', '-')}.txt", text)
+        r = _run_flowctl(
+            repo,
+            "chart",
+            "resolve",
+            did,
+            "--answer-file",
+            str(answer),
+            *extra,
+            "--json",
+        )
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        return json.loads(r.stdout)["result"]
+
+    def _non_topological_chart(self, repo: Path) -> tuple[str, list[dict]]:
+        """D2 depends on D3, D3 depends on D1 - local number order is NOT
+        premise order. `_add_decision` allocates strictly in creation order
+        and cannot build this shape; `wire-decision` can."""
+        chart_id = _create_chart(repo)
+        decisions = [
+            _add_decision(repo, chart_id, "Storage choice", "research"),
+            _add_decision(repo, chart_id, "Migration path", "research"),
+            _add_decision(repo, chart_id, "Cache layer", "research"),
+            _add_decision(repo, chart_id, "Revisit storage", "research"),
+        ]
+        self._wire(repo, decisions[1]["id"], "D3")
+        self._wire(repo, decisions[2]["id"], "D1")
+        self._resolve(repo, decisions[2]["id"], "Redis in front of Postgres")
+        self._resolve(repo, decisions[1]["id"], "Big-bang migration weekend")
+        return chart_id, decisions
+
+    def test_replacement_wired_to_replacement_not_superseded_premise(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, decisions = self._non_topological_chart(repo)
+            d1, d2, d3, d4 = (d["id"] for d in decisions)
+
+            res = self._resolve(
+                repo, d4, "Pick SQLite for the embedded edge case", "--supersedes", "D1"
+            )
+            rep_d3 = f"{chart_id}.D5"
+            rep_d2 = f"{chart_id}.D6"
+
+            # Premise-first: D3 (whose premise D1 is superseded here) is
+            # cascaded before its own dependent D2.
+            self.assertEqual(res["cascade_resolved"], [d3, d2])
+            self.assertEqual(res["cascade_open"], [])
+            self.assertEqual(
+                [(r["id"], r["replaces"]) for r in res["replacements"]],
+                [(rep_d3, d3), (rep_d2, d2)],
+            )
+            self.assertEqual(res["affected"], [d4, d1, d3, rep_d3, d2, rep_d2])
+
+            # D3's replacement rebinds the superseded premise D1 -> D4.
+            rep_d3_side = _decision_json(flow, chart_id, 5)
+            self.assertEqual(rep_d3_side["depends_on"], [d4])
+            # The core fix: D2's replacement points at D3's REPLACEMENT, not
+            # at the superseded D3.
+            rep_d2_side = _decision_json(flow, chart_id, 6)
+            self.assertEqual(rep_d2_side["depends_on"], [rep_d3])
+            self.assertEqual(
+                rep_d2_side["transition_notes"][0].get("rebound_premises"),
+                {d3: rep_d3},
+            )
+
+            # The whole chain stays reachable: resolve both replacements, then
+            # supersede D3's replacement and the cascade must still find D2's.
+            self._resolve(repo, rep_d3, "Streamed migration")
+            self._resolve(repo, rep_d2, "Cache after migration")
+            d7 = _add_decision(repo, chart_id, "Re-revisit migration", "research")["id"]
+            res7 = self._resolve(
+                repo, d7, "Back to a big-bang weekend", "--supersedes", rep_d3
+            )
+            self.assertEqual(res7["cascade_resolved"], [rep_d2])
+            self.assertEqual(len(res7["replacements"]), 1)
+            rep2_d2 = res7["replacements"][0]["id"]
+            self.assertEqual(rep2_d2, f"{chart_id}.D8")
+            self.assertEqual(
+                _decision_json(flow, chart_id, 8)["depends_on"], [d7]
+            )
+            self.assertEqual(
+                _decision_json(flow, chart_id, 6)["superseded_by"], rep2_d2
+            )
+
+    def _tie_run(self, repo: Path) -> dict:
+        """D2 and D3 both depend only on D1: a genuine tie at the Kahn
+        frontier, broken by ascending local D-number."""
+        _init_repo(repo)
+        _init_flow(repo)
+        chart_id = _create_chart(repo)
+        d1 = _add_decision(repo, chart_id, "Storage choice", "research")["id"]
+        d2 = _add_decision(
+            repo, chart_id, "Migration path", "research", depends_on="D1"
+        )["id"]
+        d3 = _add_decision(
+            repo, chart_id, "Cache layer", "research", depends_on="D1"
+        )["id"]
+        d4 = _add_decision(repo, chart_id, "Revisit storage", "research")["id"]
+        self._resolve(repo, d1, "Pick Postgres")
+        self._resolve(repo, d2, "Big-bang migration weekend")
+        self._resolve(repo, d3, "Redis in front of Postgres")
+        res = self._resolve(repo, d4, "Pick SQLite", "--supersedes", "D1")
+        return {
+            "chart_id": chart_id,
+            "ids": [d1, d2, d3, d4],
+            "affected": res["affected"],
+            "cascade_open": res["cascade_open"],
+            "cascade_resolved": res["cascade_resolved"],
+            "replacements": [
+                (r["id"], r["replaces"]) for r in res["replacements"]
+            ],
+        }
+
+    def test_tie_order_is_deterministic_and_ascending(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            first = self._tie_run(Path(tmp) / "repo-a")
+            chart_id = first["chart_id"]
+            d1, d2, d3, d4 = first["ids"]
+            rep_d2 = f"{chart_id}.D5"
+            rep_d3 = f"{chart_id}.D6"
+            # Exact arrays, not membership: `affected` opens with the primary
+            # decision and the named --supersedes target in caller order; the
+            # closure-derived tail is what Kahn determines.
+            self.assertEqual(first["affected"], [d4, d1, d2, rep_d2, d3, rep_d3])
+            self.assertEqual(first["cascade_resolved"], [d2, d3])
+            self.assertEqual(first["cascade_open"], [])
+            self.assertEqual(
+                first["replacements"], [(rep_d2, d2), (rep_d3, d3)]
+            )
+
+            # Same ordered inputs on an equivalent fixture reproduce them.
+            second = self._tie_run(Path(tmp) / "repo-b")
+            self.assertEqual(second, first)
+
+    def test_keep_dependents_order_is_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, decisions = self._non_topological_chart(repo)
+            d1, d2, d3, d4 = (d["id"] for d in decisions)
+
+            res = self._resolve(
+                repo,
+                d4,
+                "Pick SQLite for the embedded edge case",
+                "--supersedes",
+                "D1",
+                "--keep-dependents",
+            )
+            # Full arrays pinned: the keep branch keeps emitting dependents in
+            # local-number order even on a non-topological graph.
+            self.assertTrue(res["keep_dependents"])
+            self.assertEqual(res["affected"], [d4, d1, d2, d3])
+            self.assertEqual(res["cascade_open"], [])
+            self.assertEqual(res["cascade_resolved"], [])
+            self.assertEqual(res["replacements"], [])
+            for n in (2, 3):
+                kinds = [
+                    note.get("kind")
+                    for note in _decision_json(flow, chart_id, n).get(
+                        "transition_notes"
+                    )
+                    or []
+                ]
+                self.assertIn("keep_dependents", kinds)
+
+
 class TestSharpenAndCrash(unittest.TestCase):
     def test_resolve_with_sharpen_atomic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

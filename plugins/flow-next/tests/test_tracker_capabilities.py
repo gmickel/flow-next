@@ -1141,7 +1141,13 @@ class Round2HostFixes(unittest.TestCase):
 
                 def execute(request):
                     if request.op == "relate-list":
-                        barrier.wait(timeout=10)  # both probe pre-write state
+                        # Same best-effort rendezvous as the sibling test below:
+                        # a worker that backs off early never arrives, so a hard
+                        # barrier would strand the other one.
+                        try:
+                            barrier.wait(timeout=10)  # both probe pre-write state
+                        except threading.BrokenBarrierError:
+                            pass
                         return empty
                     return create
                 results[dep] = R.relate(flow, "fn-1-demo", blocked_by=dep,
@@ -1797,9 +1803,19 @@ class RelatePendingClaim(unittest.TestCase):
 
                 def execute(request):
                     if request.op == "relate-list":
-                        # BOTH workers probe the edge as absent before either
-                        # reaches the claim - the exact reviewed race.
-                        barrier.wait(timeout=10)
+                        # Best-effort attempt to force BOTH workers past the
+                        # absent-probe before either claims - the reviewed race.
+                        # It is deliberately NOT a hard rendezvous: when the
+                        # claim lands first, the loser backs off WITHOUT issuing
+                        # relate-list, so it never arrives here and a blocking
+                        # barrier would strand the winner until timeout and
+                        # produce zero creates. Both interleavings must yield
+                        # exactly one create, so tolerate the broken barrier and
+                        # carry on.
+                        try:
+                            barrier.wait(timeout=10)
+                        except threading.BrokenBarrierError:
+                            pass
                         return empty
                     if request.op == "relate-create":
                         with creates_lock:

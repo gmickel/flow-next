@@ -103,7 +103,11 @@ class PrimeGitBatchTest(unittest.TestCase):
 
         def fake_git(root, args, collector, timeout=30):
             collector.op()
-            barrier.wait(timeout=5)
+            # Rendezvous, not a performance assertion: the timeout only stops a
+            # genuinely broken test from hanging. CI runs this suite at the runner's
+            # full core count (fn-155), so sibling interpreters compete for the same
+            # cores and a tight bound flakes.
+            barrier.wait(timeout=120)
             if args[0] == "bad":
                 collector.fail("bad probe")
                 return (1, "", "bad probe")

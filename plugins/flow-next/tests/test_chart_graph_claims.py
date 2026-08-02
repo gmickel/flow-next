@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -1284,6 +1285,239 @@ class TestInitialMapMaxDecisions(unittest.TestCase):
             fr = _run_flowctl(repo, "chart", "frontier", cid, "--json")
             ids = [d["id"] for d in json.loads(fr.stdout)["result"]["frontier"]]
             self.assertEqual(ids, [f"{cid}.D1"])  # only unblocked
+
+
+class TestInitialMapAliasCollisions(unittest.TestCase):
+    """fn-153 R2/R4/R8/R10: the initial-map alias namespace is flat and unique.
+
+    Every case drives the real CLI. The initial map has one namespace shared by
+    the ordinal `<n>`, the `d<n>` form, the full decision id and an optional
+    explicit `id`, so two DIFFERENT decisions claiming one alias is ambiguous
+    and refused; the same decision claiming an alias twice is legal.
+    """
+
+    def _create(self, repo: Path, map_data: dict, title: str = "Mapped"):
+        map_path = repo / f"map-{re.sub(r'[^a-z0-9]+', '-', title.lower())}.json"
+        map_path.write_text(json.dumps(map_data), encoding="utf-8")
+        return _run_flowctl(
+            repo,
+            "chart",
+            "create",
+            "--title",
+            title,
+            "--outcome",
+            "Capture-ready",
+            "--initial-map-file",
+            str(map_path),
+            "--json",
+        )
+
+    def _assert_collision(self, r, *, alias: str, first: tuple, second: tuple):
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        err = json.loads(r.stdout)
+        self.assertEqual(err["success"], False)
+        self.assertEqual(err["schema_version"], 1)
+        self.assertEqual(err["command"], "chart.create")
+        self.assertEqual(err["error"]["class"], "validation")
+        self.assertEqual(err["error"]["code"], "alias_collision")
+        details = err["error"]["details"]
+        self.assertEqual(details["alias"], alias)
+        self.assertEqual(details["first"], {"index": first[0], "title": first[1]})
+        self.assertEqual(details["second"], {"index": second[0], "title": second[1]})
+
+    def test_rejects_colliding_aliases_in_both_directions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+
+            def decisions(n: int) -> list[dict]:
+                return [
+                    {"title": f"Decision {i}", "type": "research"}
+                    for i in range(1, n + 1)
+                ]
+
+            # Two decisions supplying the same explicit id.
+            decs = decisions(2)
+            decs[0]["id"] = "Alpha"
+            decs[1]["id"] = "alpha"
+            self._assert_collision(
+                self._create(repo, {"decisions": decs}, "dup-caller"),
+                alias="alpha",
+                first=(1, "Decision 1"),
+                second=(2, "Decision 2"),
+            )
+
+            # Caller id claims a LATER decision's generated d<n> alias.
+            decs = decisions(7)
+            decs[2]["id"] = "d7"
+            self._assert_collision(
+                self._create(repo, {"decisions": decs}, "caller-first-dform"),
+                alias="d7",
+                first=(3, "Decision 3"),
+                second=(7, "Decision 7"),
+            )
+
+            # Same, for the NUMERIC <n> site - without registering str(i) an
+            # implementation would pass every other case here.
+            decs = decisions(7)
+            decs[2]["id"] = "7"
+            self._assert_collision(
+                self._create(repo, {"decisions": decs}, "caller-first-numeric"),
+                alias="7",
+                first=(3, "Decision 3"),
+                second=(7, "Decision 7"),
+            )
+
+            # Opposite direction: the generated alias is the incumbent and a
+            # LATER caller id is the rejected claimant.
+            decs = decisions(4)
+            decs[3]["id"] = "D2"
+            self._assert_collision(
+                self._create(repo, {"decisions": decs}, "generated-first"),
+                alias="d2",
+                first=(2, "Decision 2"),
+                second=(4, "Decision 4"),
+            )
+
+            # R10: no rejection reserved anything - no chart files, and the
+            # next valid creation still receives fn-1.
+            self.assertEqual(list((flow / "charts").glob("fn-*.json")), [])
+            ok = self._create(repo, {"decisions": decisions(2)}, "clean")
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+            self.assertEqual(json.loads(ok.stdout)["result"]["id"], "fn-1")
+
+    def test_rejects_genuine_full_did_collision_without_reservation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+
+            # Decision 1 claims the full D-ID that decision 2 will own once the
+            # chart id is allocated. Only detectable on the real-id pass.
+            decs = [
+                {"title": "Claimant", "type": "research", "id": "fn-1.D2"},
+                {"title": "Owner", "type": "research"},
+            ]
+            self._assert_collision(
+                self._create(repo, {"decisions": decs}, "full-did"),
+                alias="fn-1.d2",
+                first=(1, "Claimant"),
+                second=(2, "Owner"),
+            )
+            self.assertEqual(list((flow / "charts").glob("fn-*.json")), [])
+            self.assertEqual(list((flow / "charts").glob("fn-*")), [])
+
+            ok = self._create(
+                repo,
+                {"decisions": [{"title": "Fine", "type": "research"}]},
+                "clean-after-full-did",
+            )
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+            self.assertEqual(json.loads(ok.stdout)["result"]["id"], "fn-1")
+
+    def test_provisional_sentinel_makes_no_false_collision_and_resolves(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+
+            # "fn-999999999.D2" is decision 2's generated full id during the
+            # provisional pass only. It must neither raise there nor steal the
+            # alias from decision 1 - the edge below must point at decision 1
+            # rather than collapsing into a self-edge.
+            map_data = {
+                "decisions": [
+                    {"title": "Claimant", "type": "research", "id": "fn-999999999.D2"},
+                    {
+                        "title": "Referrer",
+                        "type": "research",
+                        "depends_on": ["fn-999999999.D2"],
+                    },
+                ]
+            }
+            ok = self._create(repo, map_data, "sentinel")
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+            cid = json.loads(ok.stdout)["result"]["id"]
+            side = json.loads(
+                (flow / "charts" / f"{cid}.json").read_text(encoding="utf-8")
+            )
+            by_id = {d["id"]: d for d in side["decisions"]}
+            self.assertEqual(by_id[f"{cid}.D2"]["depends_on"], [f"{cid}.D1"])
+
+            # Suppressing the sentinel's false collision must not make a
+            # GENUINE caller/caller collision on a sentinel-shaped alias
+            # degrade into a graph error: decision 1 explicitly claims the
+            # alias its own provisional full D-ID also holds, so that claim
+            # must harden and decision 2's identical claim must still be
+            # refused as a named alias collision, not resolve to itself.
+            r = self._create(
+                repo,
+                {
+                    "decisions": [
+                        {
+                            "title": "Claimant",
+                            "type": "research",
+                            "id": "fn-999999999.D1",
+                        },
+                        {
+                            "title": "Rival",
+                            "type": "research",
+                            "id": "fn-999999999.D1",
+                            "depends_on": ["fn-999999999.D1"],
+                        },
+                    ]
+                },
+                "sentinel-shaped-genuine",
+            )
+            self._assert_collision(
+                r,
+                alias="fn-999999999.d1",
+                first=(1, "Claimant"),
+                second=(2, "Rival"),
+            )
+
+    def test_same_owner_repetition_and_blank_ids_stay_legal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+
+            # A caller id equal to that decision's OWN generated alias is
+            # idempotent, not a collision.
+            ok = self._create(
+                repo,
+                {
+                    "decisions": [
+                        {"title": "First", "type": "research", "id": "D1"},
+                        {"title": "Second", "type": "research", "id": "2"},
+                        {"title": "Third", "type": "research", "depends_on": ["D1"]},
+                    ]
+                },
+                "same-owner",
+            )
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+            cid = json.loads(ok.stdout)["result"]["id"]
+            side = json.loads(
+                (flow / "charts" / f"{cid}.json").read_text(encoding="utf-8")
+            )
+            by_id = {d["id"]: d for d in side["decisions"]}
+            self.assertEqual(by_id[f"{cid}.D3"]["depends_on"], [f"{cid}.D1"])
+
+            # Whitespace-only ids normalize to the empty string, which
+            # _normalize_edge_refs discards - unreachable, so still accepted.
+            ok = self._create(
+                repo,
+                {
+                    "decisions": [
+                        {"title": "Blank one", "type": "research", "id": "   "},
+                        {"title": "Blank two", "type": "research", "id": " \t "},
+                    ]
+                },
+                "blank-ids",
+            )
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+            self.assertEqual(json.loads(ok.stdout)["result"]["decision_count"], 2)
 
 
 class TestConfigDefaults(unittest.TestCase):

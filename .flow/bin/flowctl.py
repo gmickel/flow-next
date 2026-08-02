@@ -9,6 +9,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 import argparse
 import errno
 import hashlib
+import heapq
 import html
 import io
 import json
@@ -11771,10 +11772,95 @@ def parse_initial_map_file(path: Path) -> dict:
     }
 
 
+class _InitialMapAliasRegistrar:
+    """Owner-aware alias namespace for the initial-map path (fn-153 R2/R4/R8).
+
+    The initial-map namespace is flat: every decision is new, so the ordinal
+    `<n>`, the `d<n>` form, the full D-ID and a caller-supplied `id` all live in
+    one space. Two DIFFERENT decisions claiming one normalized alias is a real
+    ambiguity with no correct interpretation, so it is refused. Registering the
+    same alias twice for the SAME decision is legal and idempotent (a caller may
+    supply an `id` equal to that decision's own generated alias).
+
+    Owner identity is the batch index. Aliases normalizing to the empty string
+    are excluded: `_normalize_edge_refs` discards empty references, so such an
+    entry is unreachable and cannot create ambiguity - guarding it would reject
+    input that works today.
+
+    `weak=True` marks a registration whose alias depends on the chart id while
+    the chart id is still the provisional sentinel. A weak claim never displaces
+    an incumbent and never raises; a strong claim silently displaces a weak
+    incumbent. That keeps the provisional pass from manufacturing a collision
+    that the real-id pass would not see, while resolving edges the way the
+    real-id pass will.
+
+    Deliberately used ONLY by validate_and_build_initial_map. The resolve-sharpen
+    namespace is out of scope (spec fn-158).
+    """
+
+    def __init__(self) -> None:
+        self.local_map: dict[str, str] = {}
+        # alias -> {"index": int, "title": str, "weak": bool}
+        self._owners: dict[str, dict] = {}
+
+    def register(
+        self,
+        alias: Any,
+        *,
+        index: int,
+        title: str,
+        did: str,
+        weak: bool = False,
+    ) -> None:
+        key = str(alias).strip().lower()
+        if not key:
+            return
+        incumbent = self._owners.get(key)
+        if incumbent is None:
+            self._claim(key, index=index, title=title, did=did, weak=weak)
+            return
+        if incumbent["index"] == index:
+            # Same owner: idempotent re-registration, legal. A strong claim
+            # still hardens a weak incumbent - an explicit `id` is chart-id
+            # independent, so it must not stay displaceable just because this
+            # decision's own provisional full D-ID happened to claim it first.
+            if incumbent["weak"] and not weak:
+                incumbent["weak"] = False
+            return
+        if weak:
+            # A provisional chart-id-dependent alias never displaces and never
+            # collides; the real-id pass owns that decision.
+            return
+        if incumbent["weak"]:
+            self._claim(key, index=index, title=title, did=did, weak=False)
+            return
+        raise ChartError(
+            "validation",
+            "alias_collision",
+            f"Initial decision #{index} claims alias '{key}', which already "
+            f"refers to decision #{incumbent['index']} "
+            f"({incumbent['title']!r}). Every decision alias - the ordinal, the "
+            "d<n> form, the full decision id and any explicit 'id' - must "
+            "refer to exactly one decision. Rename the explicit 'id' or drop it.",
+            details={
+                "alias": key,
+                "first": {"index": incumbent["index"], "title": incumbent["title"]},
+                "second": {"index": index, "title": title},
+            },
+        )
+
+    def _claim(
+        self, key: str, *, index: int, title: str, did: str, weak: bool
+    ) -> None:
+        self._owners[key] = {"index": index, "title": title, "weak": weak}
+        self.local_map[key] = did
+
+
 def validate_and_build_initial_map(
     chart_id: str,
     map_data: dict,
     *,
+    provisional: bool = False,
     force_size: bool = False,
     force_reason: Optional[str] = None,
 ) -> dict:
@@ -11812,7 +11898,8 @@ def validate_and_build_initial_map(
         refuse_if_unsafe_prose(str(force_reason), field="--force-size reason")
 
     # First pass: allocate provisional D-IDs in file order and derive attendance.
-    local_map: dict[str, str] = {}
+    aliases = _InitialMapAliasRegistrar()
+    local_map = aliases.local_map
     built: list[dict] = []
     for i, raw in enumerate(raw_decs, start=1):
         if not isinstance(raw, dict):
@@ -11843,12 +11930,18 @@ def validate_and_build_initial_map(
             f"{title}\n{question}", field=f"Initial decision #{i}"
         )
         did = f"{chart_id}.D{i}"
-        local_map[str(i)] = did
-        local_map[f"d{i}"] = did
-        local_map[did.lower()] = did
+        # Registration order is batch order, so on a collision `first` is always
+        # the incumbent registration and `second` the rejected one.
+        aliases.register(str(i), index=i, title=title, did=did)
+        aliases.register(f"d{i}", index=i, title=title, did=did)
+        # The full D-ID embeds the chart id, which is still a sentinel on the
+        # provisional pass - claim it weakly there so no false collision fires.
+        aliases.register(
+            did, index=i, title=title, did=did, weak=provisional
+        )
         # Optional explicit local id in the map file.
         if raw.get("id"):
-            local_map[str(raw["id"]).strip().lower()] = did
+            aliases.register(raw["id"], index=i, title=title, did=did)
         built.append(
             {
                 "n": i,
@@ -13040,7 +13133,14 @@ def _depends_on_reverse_index(decisions: list[dict]) -> dict[str, list[str]]:
 def _depends_on_closure(
     seeds: list[str], decisions: list[dict]
 ) -> list[str]:
-    """Direct + transitive dependents via depends_on (excludes seeds)."""
+    """Direct + transitive dependents via depends_on (excludes seeds).
+
+    Reachability only, emitted in local-number order. This is what
+    `--keep-dependents` consumes: that branch has no cross-iteration data
+    dependency, so its published order stays exactly as shipped. The
+    cascading branch re-orders the same set premise-first via
+    `_depends_on_topological_order`.
+    """
     rev = _depends_on_reverse_index(decisions)
     seen: set[str] = set()
     order: list[str] = []
@@ -13056,6 +13156,70 @@ def _depends_on_closure(
             stack.append(dep)
     # Stable by local number.
     order.sort(key=lambda did: decision_local_number(did))
+    return order
+
+
+def _depends_on_topological_order(
+    dependent_ids: list[str], decisions: list[dict]
+) -> list[str]:
+    """Re-order a dependent closure premise-first (Kahn, ties by D-number).
+
+    The supersession cascade rewires each dependent's premises from the
+    `premise_rewrite` map it fills in as it goes, so a dependent processed
+    before a premise this same cascade supersedes would be wired to the
+    SUPERSEDED premise instead of that premise's replacement. Local D-number
+    order does not imply premise order (D2 may depend on D3), hence a real
+    topological sort.
+
+    Kahn's algorithm with a min-heap keyed on the local D-number: a premise
+    always precedes its dependents, and nodes of equal eligibility emerge in
+    ascending D-number, so the derived `--json` arrays are fully determined.
+    Only edges INSIDE the closure constrain the order; premises outside it
+    (the superseded seeds, untouched decisions) are already settled.
+    """
+    members = set(dependent_ids)
+    entry_by_id = {
+        d["id"]: d
+        for d in decisions
+        if isinstance(d, dict) and d.get("id") in members
+    }
+    indegree = {did: 0 for did in dependent_ids}
+    dependents: dict[str, list[str]] = {did: [] for did in dependent_ids}
+    for did in dependent_ids:
+        seen_deps: set[str] = set()
+        for premise in (entry_by_id.get(did) or {}).get("depends_on") or []:
+            if not isinstance(premise, str):
+                continue
+            if premise == did or premise not in members or premise in seen_deps:
+                continue
+            seen_deps.add(premise)
+            indegree[did] += 1
+            dependents[premise].append(did)
+    heap = [
+        (decision_local_number(did), did)
+        for did in dependent_ids
+        if indegree[did] == 0
+    ]
+    heapq.heapify(heap)
+    order: list[str] = []
+    while heap:
+        _, node = heapq.heappop(heap)
+        order.append(node)
+        for nxt in dependents[node]:
+            indegree[nxt] -= 1
+            if indegree[nxt] == 0:
+                heapq.heappush(heap, (decision_local_number(nxt), nxt))
+    if len(order) < len(dependent_ids):
+        # Unreachable in practice: validate_chart_graph cycle-checks the same
+        # depends_on edge set before every persisted write. Never drop a
+        # dependent if it ever happens.
+        emitted = set(order)
+        order.extend(
+            sorted(
+                (did for did in dependent_ids if did not in emitted),
+                key=decision_local_number,
+            )
+        )
     return order
 
 
@@ -13623,6 +13787,13 @@ def resolve_chart_decision(
             if dep not in affected:
                 affected.append(dep)
     else:
+        # Premise-first: the wiring below reads premise_rewrite incrementally,
+        # so every premise inside this closure must be replaced before any of
+        # its dependents is rewired. --keep-dependents above keeps the
+        # local-number order it has always published.
+        dependent_ids = _depends_on_topological_order(
+            dependent_ids, list(by_id.values())
+        )
         next_n = _next_decision_number({"decisions": list(by_id.values())})
         # Replacement premises must follow the supersession: a replacement
         # copying depends_on=[D1] after D4 superseded D1 would be invisible
@@ -23411,6 +23582,7 @@ def cmd_chart_create(args: argparse.Namespace) -> None:
             provisional = validate_and_build_initial_map(
                 _PROVISIONAL_CHART_ID,
                 map_data,
+                provisional=True,
                 force_size=force_size,
                 force_reason=force_reason,
             )
