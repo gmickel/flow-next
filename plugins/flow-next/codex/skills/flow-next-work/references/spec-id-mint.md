@@ -9,7 +9,7 @@ Network cost is conditional: when the matching `tracker.perEvent.*` touchpoint i
 Explicit user override in the invocation always wins. No runtime nag here - setup owns the one-time question (withdrawn R10).
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 # REUSE the Phase 0 root snapshot - do NOT take another config read here (R7).
 # Literal path; re-type it because variables die across prompt turns.

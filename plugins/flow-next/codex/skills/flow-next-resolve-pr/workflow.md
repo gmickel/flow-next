@@ -6,9 +6,9 @@ Execute these phases in order. Each phase gates on the prior one. Stop on error 
 
 ```bash
 set -e
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-SCRIPTS="$HOME/.codex/skills/flow-next-resolve-pr/scripts"
+SCRIPTS="${CODEX_HOME:-$HOME/.codex}/skills/flow-next-resolve-pr/scripts"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 

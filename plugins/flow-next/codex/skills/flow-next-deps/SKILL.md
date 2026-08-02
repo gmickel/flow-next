@@ -12,7 +12,7 @@ Visualize spec dependencies, blocking chains, and execution phases.
 flowctl is bundled with the plugin (not on PATH). Define once; subsequent blocks use `$FLOWCTL`:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 

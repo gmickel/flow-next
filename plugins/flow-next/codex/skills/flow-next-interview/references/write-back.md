@@ -64,7 +64,7 @@ The canonical section layout for the spec body is in [`plugins/flow-next/templat
 **Spec-id scheme.** When minting a brand-new spec here, route on `tracker.specIds` from the interview run's **single** root config snapshot (fn-110). Interview holds no earlier snapshot, so this write-back is where it is taken - one root read for the run, never a per-leaf `config get tracker.specIds` and never a second snapshot. Tracker-first is the team default when the bridge is active (`tracker.specIds=tracker`): create-first then mint. Explicit user override always wins; bridge inactive / no transport degrades **silently** to flow-first. No runtime nag (withdrawn R10). Network cost is conditional: when `tracker.perEvent.interview` is already active, tracker-first reorders that write; when the leaf is off (default), it adds an earlier remote write.
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 # ONE root snapshot for this mint (fn-110). Literal path.
 INTERVIEW_CFG="${TMPDIR:-/tmp}/flow-interview-config-<suffix>.json"

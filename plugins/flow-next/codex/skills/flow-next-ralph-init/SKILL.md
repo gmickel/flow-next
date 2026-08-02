@@ -13,7 +13,7 @@ Scaffold or update repo-local Ralph harness. Opt-in only.
 The plugin root resolves once via the cross-platform env-var fallback (Droid uses `DROID_PLUGIN_ROOT`; Claude Code documents `CLAUDE_PLUGIN_ROOT` as its compat alias). Subsequent blocks use `$PLUGIN_ROOT`:
 
 ```bash
-PLUGIN_ROOT="$HOME/.codex"
+PLUGIN_ROOT="${CODEX_HOME:-$HOME/.codex}"
 ```
 
 ## Rules
@@ -73,13 +73,13 @@ PLUGIN_ROOT="$HOME/.codex"
  cp scripts/ralph/config.env /tmp/ralph-config-backup.env
 
  # Update templates (preserves runs/)
- cp "~/.codex/templates/flow-next-ralph-init/ralph.sh" scripts/ralph/
- cp "~/.codex/templates/flow-next-ralph-init/ralph_once.sh" scripts/ralph/
- cp "~/.codex/templates/flow-next-ralph-init/prompt_plan.md" scripts/ralph/
- cp "~/.codex/templates/flow-next-ralph-init/prompt_work.md" scripts/ralph/
- cp "~/.codex/templates/flow-next-ralph-init/prompt_completion.md" scripts/ralph/
- cp "~/.codex/templates/flow-next-ralph-init/watch-filter.py" scripts/ralph/
- cp "~/.codex/templates/flow-next-ralph-init/ralphctl.py" scripts/ralph/
+ cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralph.sh" scripts/ralph/
+ cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralph_once.sh" scripts/ralph/
+ cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_plan.md" scripts/ralph/
+ cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_work.md" scripts/ralph/
+ cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_completion.md" scripts/ralph/
+ cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/watch-filter.py" scripts/ralph/
+ cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralphctl.py" scripts/ralph/
  cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
  rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
  # fn-139.5: verify the tracker package post-copy - fail loudly here, never
@@ -96,7 +96,7 @@ PLUGIN_ROOT="$HOME/.codex"
  **If UPDATE_MODE=0 (fresh install):**
  ```bash
  mkdir -p scripts/ralph/runs scripts/ralph/hooks
- cp -R "~/.codex/templates/flow-next-ralph-init/." scripts/ralph/
+ cp -R "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/." scripts/ralph/
  cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
  rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
  # fn-139.5: verify the tracker package post-copy - fail loudly here, never

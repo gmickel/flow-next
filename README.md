@@ -127,6 +127,8 @@ The open-source record is linkable, so it speaks in its own words: an outside co
 git clone https://github.com/gmickel/flow-next.git
 cd flow-next
 ./scripts/install-codex.sh flow-next
+# For another Codex home: CODEX_HOME=<home> ./scripts/install-codex.sh
+# Run once per home.
 # then: /flow-next:setup
 ```
 
@@ -143,7 +145,7 @@ droid plugin marketplace add \
 </tr>
 </table>
 
-**Why a script for Codex?** Codex's plugin protocol only registers `skills` from `plugin.json`, not custom `.toml` agents or hooks. `install-codex.sh` merges the bundled agents and hooks into `~/.codex/config.toml`. It is idempotent, so re-running it is safe. Full platform matrix + community ports in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
+**Why a script for Codex?** Codex's plugin protocol only registers `skills` from `plugin.json`, not custom `.toml` agents or hooks. `install-codex.sh` merges the bundled agents and hooks into `~/.codex/config.toml`. It is idempotent, so re-running it is safe. To install into another Codex home, run `CODEX_HOME=<home> ./scripts/install-codex.sh` once for that home. Full platform matrix + community ports in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md).
 
 **Grok Build (xAI)?** It picks up the Claude Code install automatically - skills, commands, and multi-agent flows verified. Details + caveats in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md#grok-build-claude-code-compatibility).
 

@@ -79,7 +79,7 @@ over a diff you actually saw. An empty diff from a broken base is not "no issues
 ### 7. Vocabulary (only when the repo has a glossary)
 ```bash
 # Gate: skip this section entirely when the project has no glossary.
-FLOWCTL="$HOME/.codex/scripts/flowctl"; [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"; [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 $FLOWCTL glossary list --json 2>/dev/null | jq -r '.total_terms // 0'
 ```
 When `total_terms > 0`: flag code that redefines, contradicts, or shadows a canonical

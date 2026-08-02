@@ -8,7 +8,7 @@ description: Manage git worktrees (create/list/switch/cleanup) and copy .env fil
 Use the manager script for all worktree actions.
 
 ```bash
-bash ~/.codex/scripts/worktree.sh <command> [args]
+bash ${CODEX_HOME:-$HOME/.codex}/scripts/worktree.sh <command> [args]
 ```
 
 Commands:

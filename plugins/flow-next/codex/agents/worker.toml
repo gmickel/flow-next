@@ -174,7 +174,7 @@ artifacts (the codex mirror, `.flow/bin` dual-copies), do NOT delegate -
 implement in-session as a standard task (emit no `DELEGATION_*` lines; the
 host's counter stays untouched - not a failure, not a strike).
 
-1. Read `$HOME/.codex/skills/flow-next-work/references/codex-delegation.md`
+1. Read `${CODEX_HOME:-$HOME/.codex}/skills/flow-next-work/references/codex-delegation.md`
    — the "Invocation / result schema / background-launch+poll / per-run effort"
    section is the mechanics; the classification / safety / rollback sections (and
    the `flowctl codex classify-result` / `rollback-plan` helpers) govern what you
@@ -376,7 +376,7 @@ Only runs when **all** are true:
 Otherwise, synthesize a bug-track entry from the NEEDS_WORK findings + the fix you applied:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 
 cat > /tmp/memory-body.md <<'EOF'

@@ -34,7 +34,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-CODEX_DIR="$HOME/.codex"
+CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
 
 # Colors
 RED='\033[0;31m'
@@ -64,7 +64,7 @@ if [ ! -d "$CODEX_SRC" ]; then
 fi
 
 if [ ! -d "$CODEX_DIR" ]; then
-    echo -e "${RED}Error: ~/.codex not found. Is Codex CLI installed?${NC}"
+    echo -e "${RED}Error: $CODEX_DIR not found. Is Codex CLI installed?${NC}"
     exit 1
 fi
 
@@ -182,17 +182,17 @@ echo -e "${GREEN}✓${NC} $AGENT_COUNT agents"
 # from an OLDER flow-next install would keep the outdated guard firing globally
 # with [features] hooks=true set - remove it, but ONLY when it is verifiably
 # ours (flow-next/ralph-guard fingerprint); user-customized files are kept.
-if [ -f "$HOME/.codex/hooks.json" ] && grep -qE "ralph-guard|flow-next" "$HOME/.codex/hooks.json" 2>/dev/null; then
+if [ -f "$CODEX_DIR/hooks.json" ] && grep -qE "ralph-guard|flow-next" "$CODEX_DIR/hooks.json" 2>/dev/null; then
     # Strip ONLY the fingerprinted flow-next entries; user-defined hooks in the
     # same file survive. Delete the file only when nothing else remains.
-    python3 - "$HOME/.codex/hooks.json" <<'PYEOF'
+    python3 - "$CODEX_DIR/hooks.json" <<'PYEOF'
 import json, sys
 from pathlib import Path
 path = Path(sys.argv[1])
 try:
     data = json.loads(path.read_text())
 except Exception:
-    print("!  could not parse ~/.codex/hooks.json; leaving it untouched", file=sys.stderr)
+    print(f"!  could not parse {path}; leaving it untouched", file=sys.stderr)
     sys.exit(0)
 def is_ours(entry):
     return "ralph-guard" in json.dumps(entry) or "flow-next" in json.dumps(entry)
@@ -227,10 +227,10 @@ if isinstance(data, dict):
     remaining = _has_entries(data)
     if changed and not remaining:
         path.unlink()
-        print("removed stale flow-next ~/.codex/hooks.json (no other hooks remained)")
+        print(f"removed stale flow-next {path} (no other hooks remained)")
     elif changed:
         path.write_text(json.dumps(data, indent=2) + "\n")
-        print("stripped stale flow-next entries from ~/.codex/hooks.json (your other hooks kept)")
+        print(f"stripped stale flow-next entries from {path} (your other hooks kept)")
 PYEOF
     echo -e "${YELLOW}!${NC} pre-opt-in flow-next hook entries cleaned (re-run /flow-next:ralph-init in projects that use Ralph)"
 fi
@@ -268,13 +268,13 @@ if ! python3 "$PLUGIN_DIR/scripts/lib/verify_tracker_manifest.py" "$CODEX_DIR/sc
     echo -e "${RED}✗${NC} flowctl_tracker manifest verification FAILED — install is corrupt; re-clone and re-run" >&2
     exit 1
 fi
-echo -e "${GREEN}✓${NC} flowctl_tracker package verified → ~/.codex/scripts/"
-[ "$HAS_FLOWCTL" = true ] && echo -e "${GREEN}✓${NC} flowctl → ~/.codex/scripts/"
+echo -e "${GREEN}✓${NC} flowctl_tracker package verified → $CODEX_DIR/scripts/"
+[ "$HAS_FLOWCTL" = true ] && echo -e "${GREEN}✓${NC} flowctl → $CODEX_DIR/scripts/"
 
 # Clean up old bin/ location
 if [ -f "$CODEX_DIR/bin/flowctl" ]; then
     rm -f "$CODEX_DIR/bin/flowctl" "$CODEX_DIR/bin/flowctl.py"
-    echo -e "${YELLOW}→${NC} removed old ~/.codex/bin/flowctl (moved to scripts/)"
+    echo -e "${YELLOW}→${NC} removed old $CODEX_DIR/bin/flowctl (moved to scripts/)"
 fi
 
 # ====================
@@ -434,11 +434,11 @@ echo -e "  ${GREEN}✓${NC} [features] hooks = true (feature flag only; no defau
 # Summary
 # ====================
 echo
-echo -e "${GREEN}Done!${NC} $PLUGIN installed to ~/.codex"
+echo -e "${GREEN}Done!${NC} $PLUGIN installed to $CODEX_DIR"
 echo "  $SKILL_COUNT skills, $AGENT_COUNT agents, $PROMPT_COUNT prompts"
-[ "$HAS_FLOWCTL" = true ] && echo "  flowctl: ~/.codex/scripts/flowctl"
+[ "$HAS_FLOWCTL" = true ] && echo "  flowctl: $CODEX_DIR/scripts/flowctl"
 echo "  hooks: none by default (ralph-init writes project .codex/hooks.json when opted in)"
-echo "  config: ~/.codex/config.toml (merged, max_threads=$CODEX_MAX_THREADS)"
+echo "  config: $CODEX_DIR/config.toml (merged, max_threads=$CODEX_MAX_THREADS)"
 echo
 echo -e "${YELLOW}Requires Codex CLI 0.102.0+${NC}"
 echo "  /$PLUGIN:plan  — create a plan"

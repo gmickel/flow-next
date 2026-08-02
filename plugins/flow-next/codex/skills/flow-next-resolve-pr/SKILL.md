@@ -15,9 +15,9 @@ Coordinate resolution of unresolved GitHub PR review threads, top-level PR comme
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). The resolver scripts are bundled alongside the skill:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-SCRIPTS="$HOME/.codex/skills/flow-next-resolve-pr/scripts"
+SCRIPTS="${CODEX_HOME:-$HOME/.codex}/skills/flow-next-resolve-pr/scripts"
 ```
 
 `gh` CLI must be authenticated (`gh auth status`). `jq` must be on PATH.

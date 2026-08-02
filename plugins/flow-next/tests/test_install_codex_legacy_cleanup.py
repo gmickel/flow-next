@@ -41,6 +41,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
@@ -64,10 +65,18 @@ PROMPT_BODY = (
 )
 
 
-def _run_installer(home: Path) -> subprocess.CompletedProcess:
+def _run_installer(
+    home: Path,
+    *,
+    codex_home: Path | None = None,
+) -> subprocess.CompletedProcess:
     # Preserve the runner environment (Git Bash on Windows needs SystemRoot
-    # etc.); only HOME is redirected to the temp dir.
+    # etc.); HOME is redirected to the temp dir and inherited CODEX_HOME is
+    # removed so baseline tests cannot install into a developer's real home.
     env = dict(os.environ, HOME=str(home))
+    env.pop("CODEX_HOME", None)
+    if codex_home is not None:
+        env["CODEX_HOME"] = str(codex_home)
     return subprocess.run(
         ["bash", str(INSTALLER)],
         cwd=str(REPO_ROOT),
@@ -78,12 +87,84 @@ def _run_installer(home: Path) -> subprocess.CompletedProcess:
     )
 
 
+def _tree_listing(root: Path) -> list[tuple[str, int, int]]:
+    """Recursive paths plus mtimes: enough to prove an untouched primary home."""
+    return sorted(
+        (
+            str(path.relative_to(root)),
+            path.stat().st_mtime_ns,
+            path.stat().st_mode,
+        )
+        for path in root.rglob("*")
+    )
+
+
 @unittest.skipIf(
     sys.platform == "win32",
     "POSIX shell installer test; plain `bash` on Windows resolves to the WSL stub",
 )
 @unittest.skipIf(shutil.which("bash") is None, "bash not available")
 class TestInstallCodexLegacyCleanup(unittest.TestCase):
+    def test_baseline_install_scrubs_inherited_codex_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "primary-home"
+            codex = home / ".codex"
+            codex.mkdir(parents=True)
+            inherited_target = root / "inherited-codex-home"
+
+            with mock.patch.dict(
+                os.environ,
+                {"CODEX_HOME": str(inherited_target)},
+                clear=False,
+            ):
+                result = _run_installer(home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((codex / "scripts" / "flowctl").is_file())
+            self.assertFalse(
+                inherited_target.exists(),
+                "baseline installer test honored inherited CODEX_HOME",
+            )
+
+    def test_explicit_codex_home_receives_surface_without_writing_primary_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "primary-home"
+            primary_codex = home / ".codex"
+            primary_codex.mkdir(parents=True)
+            sentinel = primary_codex / "untouched.txt"
+            sentinel.write_text("primary home must stay untouched\n")
+            before = _tree_listing(primary_codex)
+
+            custom_codex = root / "custom-codex-home"
+            custom_codex.mkdir()
+            result = _run_installer(home, codex_home=custom_codex)
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"install-codex.sh failed:\n{result.stdout}\n{result.stderr}",
+            )
+            self.assertEqual(_tree_listing(primary_codex), before)
+            self.assertEqual(sentinel.read_text(), "primary home must stay untouched\n")
+            for relative_path in (
+                "skills",
+                "agents",
+                "scripts/flowctl",
+                "scripts/flowctl.py",
+                "scripts/flowctl_tracker",
+                "prompts",
+                "templates",
+                "references",
+                "plugin.json",
+                "config.toml",
+            ):
+                self.assertTrue(
+                    (custom_codex / relative_path).exists(),
+                    f"custom CODEX_HOME missing install surface: {relative_path}",
+                )
+
     def test_flow_next_stale_alias_retired_and_recoverable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
