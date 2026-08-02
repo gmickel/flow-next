@@ -12,10 +12,13 @@ The fix is one substitution applied consistently: emit `${CODEX_HOME:-$HOME/.cod
 cd plugins/flow-next/tests && python3 -m unittest test_precheck_mode_contract test_install_codex_legacy_cleanup test_codex_hooks_normalize -q
 ```
 
-Idempotency (second run must produce no diff):
+Idempotency across the SECOND run (the first legitimately rewrites ~46 tracked files, so a diff against HEAD can never be empty during this task):
 
 ```bash
-./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git diff --stat plugins/flow-next/codex/
+./scripts/sync-codex.sh
+find plugins/flow-next/codex -type f -exec shasum {} + | shasum
+./scripts/sync-codex.sh
+find plugins/flow-next/codex -type f -exec shasum {} + | shasum   # must match
 ```
 
 Final gate, once:
