@@ -10,7 +10,7 @@
   "id": "fn-153-chart-graph-integrity-premise-ordered",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 2,
   "plan_review_status": "needs_work",
   "plan_reviewed_at": "2026-08-02T07:11:12.001049Z",
   "ready": true,
@@ -84,6 +84,20 @@
       "task": null,
       "timestamp": "2026-08-02T11:10:13.158136Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "d28ef95cec712dcb317ecef4d5d4ec3808fb96da",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "f0241f94b488a87c5e35c5ce2a5033962a72dc95a2d65c429868cd4995ae708f",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-02T11:13:28.317979Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_pending_rounds": {},
@@ -104,5 +118,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T11:10:13.204575Z"
+  "updated_at": "2026-08-02T11:13:28.369269Z"
 }
