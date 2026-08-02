@@ -2000,11 +2000,10 @@ fi
 is_narrative_primary_home_ref() {
   case "$1" in
     *'sync-codex.sh rewrites it to `$HOME/.codex/scripts/flowctl` for the Codex mirror'* | \
-    *'- **Codex** — add to `~/.codex/config.toml`:'* | \
+    *'`config.toml` (`$CODEX_HOME`, default `~/.codex`)'* | \
+    *'`agents/` (`$CODEX_HOME`, default `~/.codex`)'* | \
     *'**There is NO "defer to `~/.codex/config.toml`"'* | \
     *'> `[mcp_servers]` configured in `~/.codex/config.toml`, a `codex exec'* | \
-    *'`pr-comment-resolver.toml` installs into `~/.codex/agents/`'* | \
-    *'or `~/.codex/agents/pr-comment-resolver.toml` (Codex)'* | \
     *'a pure `~/.codex` install'* | \
     *'under `$CODEX_HOME` (default `~/.codex`)'* | \
     *'under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT`'*)

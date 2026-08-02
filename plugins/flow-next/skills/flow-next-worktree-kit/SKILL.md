@@ -8,7 +8,7 @@ description: Manage git worktrees (create/list/switch/cleanup) and copy .env fil
 Use the manager script for all worktree actions.
 
 ```bash
-bash ${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-worktree-kit/scripts/worktree.sh <command> [args]
+bash "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-worktree-kit/scripts/worktree.sh" <command> [args]
 ```
 
 Commands:

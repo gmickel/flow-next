@@ -165,6 +165,33 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                     f"custom CODEX_HOME missing install surface: {relative_path}",
                 )
 
+    def test_explicit_codex_home_with_spaces_receives_surface(self) -> None:
+        # A Codex home whose path contains spaces must survive every quoted
+        # expansion in the installer AND in the mirror it copies: an unquoted
+        # `$CODEX_DIR` / `${CODEX_HOME:-$HOME/.codex}` would word-split here.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "primary home"
+            (home / ".codex").mkdir(parents=True)
+            custom_codex = root / "alt codex home"
+            custom_codex.mkdir()
+
+            result = _run_installer(home, codex_home=custom_codex)
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"install-codex.sh failed:\n{result.stdout}\n{result.stderr}",
+            )
+            self.assertTrue((custom_codex / "scripts" / "flowctl").is_file())
+            self.assertTrue((custom_codex / "plugin.json").is_file())
+            worktree_skill = custom_codex / "skills" / "flow-next-worktree-kit" / "SKILL.md"
+            self.assertIn(
+                'bash "${CODEX_HOME:-$HOME/.codex}/scripts/worktree.sh"',
+                worktree_skill.read_text(encoding="utf-8"),
+                "worktree-kit command must quote the Codex-home expansion",
+            )
+
     def test_flow_next_stale_alias_retired_and_recoverable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

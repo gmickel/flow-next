@@ -292,7 +292,7 @@ This is the only backend-divergent phase in the workflow. All other phases are p
 ### Platform detection
 
 - **Claude Code** exposes the `Task` tool with `subagent_type` parameter → parallel dispatch.
-- **Codex** (0.102.0+) ships native multi-agent role support. `pr-comment-resolver.toml` installs into `~/.codex/agents/` via `scripts/install-codex.sh`; spawn in parallel using Codex's multi-agent orchestration (same pattern as planning scouts).
+- **Codex** (0.102.0+) ships native multi-agent role support. `pr-comment-resolver.toml` installs into the active Codex home's `agents/` (`$CODEX_HOME`, default `~/.codex`) via `scripts/install-codex.sh`; spawn in parallel using Codex's multi-agent orchestration (same pattern as planning scouts).
 - **Copilot / Droid** → serial loop (execute resolver steps inline, one unit at a time).
 
 Default to serial when in doubt — output is identical, only throughput differs.
