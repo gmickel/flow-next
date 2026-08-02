@@ -2,7 +2,16 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.13.2] - 2026-08-02
+
+Three chart defects that all failed the same way - silently. A reopened chart
+could not get back to capture, a supersession could wire a replacement to the
+premise it had just superseded, and an ambiguous initial map resolved edges to
+the wrong decision. None of them raised, none logged; each persisted a chart
+that looked correct and answered every later question from the wrong state.
+Plus a CI change that is invisible to anyone running flow-next: the repo's own
+test runner now uses the whole build machine.
+
 
 Reopening a chart no longer costs you the way back to capture. `chart reopen`
 does not re-open the decisions, so a finished chart is ready to brief again the

@@ -181,7 +181,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-153-chart-graph-integrity-premise-ordered.md",
-  "status": "open",
+  "status": "done",
   "title": "chart graph integrity: premise-ordered cascades and unambiguous map aliases",
   "tracker": {
     "baseHashFlow": null,
@@ -194,5 +194,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T12:16:16.743636Z"
+  "updated_at": "2026-08-02T13:45:37.479957Z"
 }
