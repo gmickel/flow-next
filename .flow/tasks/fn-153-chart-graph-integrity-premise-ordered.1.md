@@ -10,7 +10,7 @@ Make supersession cascades wire replacements to replacements, not to the premise
 
 Return the closure premise-first instead. **The algorithm is specified: Kahn's algorithm with a min-heap keyed on local D-number.** Not DFS post-order - both are topologically valid, but only the heap variant makes "local-number order to break genuine ties" true as written, and only a fully determined order keeps the public `--json` arrays (`affected`, `cascade_open`, `cascade_resolved`, `replacements`) reproducible for autonomous drivers. A topological order always exists: `validate_chart_graph` cycle-checks the same `depends_on` edge set before every persisted write.
 
-**`--keep-dependents` is exempt.** Its branch (`13606-13624`) has no cross-iteration data dependency and no correctness defect. Reordering it would churn a documented output array for callers who cannot hit either bug. Keep it emitting in local-number order and pin that with a test.
+**`--keep-dependents` is exempt, and the exemption needs a real call-site separation.** Its branch (`13606-13624`) has no cross-iteration data dependency and no correctness defect, so reordering it would churn a documented `--json` output array for callers who cannot hit either bug. **Both branches consume the single list `_depends_on_closure` returns**, so changing that helper alone silently reorders the keep branch too. Specify the split explicitly: the non-keep cascade consumes Kahn order while the keep branch re-sorts the closure by local D-number before emitting its notes and `affected` - or split reachability and ordering into two helpers. Pin the keep branch's **full arrays**, not just membership.
 
 **Size:** M
 **Files:** `plugins/flow-next/scripts/flowctl.py`, `plugins/flow-next/tests/test_chart_resolution.py`, plus the propagation targets
@@ -19,7 +19,7 @@ Return the closure premise-first instead. **The algorithm is specified: Kahn's a
 
 - Follow the existing helper style in the same region; `_depends_on_reverse_index` (`13027-13037`) already gives you the adjacency you need.
 - Tests go in `test_chart_resolution.py` and drive the REAL CLI through its existing `_run_flowctl` subprocess helper (`:60-76`).
-- **Fixture warning:** the file's `_add_decision` helper (`:94`) allocates D-numbers strictly in creation order, so it CANNOT produce the non-topological graph R1 needs. Build it with `chart wire-decision` or a batch `chart create --initial-map-file` payload.
+- **Fixture recipe (confirmed buildable through the public CLI):** the file's `_add_decision` helper (`:94`) allocates D-numbers strictly in creation order and cannot produce the non-topological graph R1 needs. `chart wire-decision` can - it is public, accepts `--depends-on`, and validates atomically. Recipe: create D1-D3, `wire-decision D2 --depends-on D3`, `wire-decision D3 --depends-on D1`, resolve D2 and D3, then `resolve D4 --supersedes D1`.
 
 ### Investigation targets
 
@@ -36,15 +36,15 @@ Return the closure premise-first instead. **The algorithm is specified: Kahn's a
 
 Do NOT try to fix an *open* dependent's stale `depends_on`. Only resolved dependents flow through `premise_rewrite`; an open one gets a `premise_invalidated` note and keeps its edge pointing at the superseded id. That is a separate structural decision and the spec puts it explicitly out of scope - premise-first ordering cannot address it.
 
-If the non-topological fixture turns out to be unbuildable through the public CLI, the defect is unreachable by any caller: STOP and report rather than shipping an unprovable fix.
+If premise-first ordering cannot be introduced without breaking the existing `TestSupersession` pins, STOP and report rather than loosening those tests - they encode the cascade contract this spec is strengthening.
 
 `flowctl.py` edits require the propagation chain or `test_tracker_distribution` fails: `cp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py` (never overwrite the bash launcher `.flow/bin/flowctl`), `rsync -a --delete --exclude __pycache__ plugins/flow-next/scripts/flowctl_tracker/ .flow/bin/flowctl_tracker/`, `python3 scripts/gen_tracker_manifest.py`, then `./scripts/sync-codex.sh` twice.
 
 ### Acceptance
 - [ ] `_depends_on_closure` returns premise-first order via Kahn + min-heap on local D-number; the tie-break is ascending D-number (R1, R6)
 - [ ] Real-CLI test on a non-topological chart (D2 depends on D3, D3 depends on D1, both resolved; D4 supersedes D1): both replacements exist, the replacement of D2 depends on the **replacement** of D3, and a subsequent supersession reaches the whole chain (R1)
-- [ ] Test asserts the exact emitted order on a graph with a genuine tie, proving determinism (R6)
-- [ ] Test pins that `--keep-dependents` still emits dependents in local-number order (R7)
+- [ ] Test asserts the exact `affected` / `cascade_open` / `cascade_resolved` / `replacements` arrays (not just membership) on a graph with a genuine tie, proving determinism (R6)
+- [ ] The keep/non-keep call-site separation is explicit in the code, and a test pins the keep branch's FULL `affected` / `cascade_*` arrays unchanged in local-number order (R7)
 - [ ] `TestSupersession`'s existing tests pass unmodified (R3)
 - [ ] Propagation chain run; `cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution test_chart_graph_claims test_chart_store -q` green
 

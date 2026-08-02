@@ -10,10 +10,30 @@
   "id": "fn-153-chart-graph-integrity-premise-ordered",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 0,
+  "plan_review_rounds": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "1cce172a99aa03d4312fe5d379fb8a2c5fe45ec8",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "ca82578de065efe0f8e211ea6b793f79cd5b5491f9a2565235c664670d954b17",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-01T23:57:51.076087Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_pending_rounds": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-153-chart-graph-integrity-premise-ordered.md",
   "status": "open",
   "title": "chart graph integrity: premise-ordered cascades and unambiguous map aliases",
@@ -28,5 +48,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T19:23:01.826860Z"
+  "updated_at": "2026-08-01T23:57:51.123302Z"
 }

@@ -50,6 +50,8 @@ The fix is ordering, not a new mechanism: return the closure premise-first over 
 
 Guarding only the caller-supplied write leaves the collision reachable in reverse: decision #3 supplies `id: "d7"` while D7 does not exist yet, then decision #7's own **generated** write to `local_map["d7"]` silently clobbers #3's mapping. All write sites need the same guard.
 
+**The two paths do not share a namespace, and that is the part the original write-up got wrong.** In sharpen the new-decision loop runs first (`13847-13852`) and the existing-decision fold runs after it (`13866-13871`), so a persisted decision **overwrites** a batch ordinal. On a chart that already has D1, batch index `1` resolves to persisted D1. But the shadowing is **index-dependent**: sharpen five decisions onto a chart holding two, and indices `3`, `4`, `5` have no persisted counterpart and *do* resolve to the new decisions. So `<n>` means "persisted decision n" or "the nth incoming decision" depending on how many decisions already exist - which is not a namespace that can be validated, only guessed at. Requiring new aliases to be unique against persisted ones (the naive reading) would reject **every** sharpen batch, since incoming #1 and persisted D1 always both claim `1`.
+
 The sharpen path carries a third surface the initial-map path does not: after the new-decision loop, `13865-13871` folds **existing** chart decisions' aliases into the same map unconditionally, so a sharpened decision whose `id` is `"d3"` when D3 already exists resolves edges to the pre-existing decision. The namespace under validation is therefore generated-new + caller-supplied-new + existing-chart aliases, not just the co-arriving batch.
 
 Neither collision is caught downstream: `validate_chart_graph` (`11381-11489`) runs on the **already-alias-resolved** graph, so a mis-wired edge looks perfectly valid to it.
@@ -62,14 +64,16 @@ Note for implementation: `validate_and_build_initial_map` is called **twice** pe
 <!-- scope: both -->
 
 - **R1:** Supersession cascades process dependents in premise-first order, so a replacement created for a dependent is wired to the replacement of any premise that this same cascade superseded, never to the superseded premise itself. Proven with a non-topological chart (D2 depends on D3, D3 depends on D1, both resolved; D4 supersedes D1): both replacements exist, the replacement of D2 depends on the replacement of D3, and a subsequent supersession reaches the whole chain.
-- **R2:** Alias uniqueness is validated across the generated (`<n>`, `d<n>`, full D-ID) and caller-supplied (`id`) namespaces in both the initial-map and resolve-sharpen paths. A duplicate or colliding alias is rejected atomically with a `validation` error before any D-ID allocation or file write; the pre-existing no-collision behavior is unchanged.
+- **R2:** A **collision** is defined as one normalized alias mapping to two **different decision owners**. Registering the same alias twice for the *same* owner is idempotent and legal - sharpen already writes `d<i>` twice for one decision (`13848`, `13849`), and a caller may legitimately supply an `id` equal to that decision's own generated alias. Owner identity is the D-ID for a persisted decision and the batch index for an incoming one. A collision is rejected atomically with a `validation` error before any D-ID allocation or file write; non-colliding input behaves exactly as today.
 - **R3:** Both fixes carry regression tests in the existing chart suites, driven through the real CLI via each file's `_run_flowctl` subprocess helper, and the full repository gate plus the fn-135 propagation chain (dual `.flow/bin` copies, tracker manifest, `sync-codex.sh` twice, byte-idempotent) stay green. No version bump.
-- **R4:** The guard covers **all** `local_map` write sites, generated and caller-supplied alike, in both paths - not only the `raw["id"]` assignment. Proven by a test where a caller-supplied `id` of `d<n>` collides with a *later* decision's generated alias (the reverse-direction case a narrow fix would miss).
-- **R5:** The sharpen path additionally validates new aliases against **already-persisted** chart decisions' aliases (`13865-13871`), so a sharpened `id` of `d3` on a chart that already has D3 is rejected rather than silently resolving to the existing decision.
-- **R6:** The closure's topological order is **deterministic and specified**: Kahn's algorithm with a min-heap on local D-number, so equal-eligibility nodes emerge in ascending D-number and repeated runs on the same graph produce byte-identical `affected` / `cascade_open` / `cascade_resolved` / `replacements` arrays. A test asserts the exact order on a graph with a genuine tie.
-- **R7:** `--keep-dependents` is exempt from the reordering. Its branch (`13606-13624`) has no cross-iteration data dependency and no correctness defect, so it keeps emitting dependents in local-number order; changing it would churn a public `--json` array for callers who never hit either bug. A test pins that its ordering is unchanged.
-- **R8:** The rejection names what a caller needs to fix: the colliding alias, and both conflicting entries identified by whatever each side actually has - the batch index and title for an incoming decision, the D-ID for an already-persisted one. The `details` shape is asymmetric by necessity (an existing decision has no batch index) and is documented in `docs/flowctl.md` alongside the other chart error codes.
-- **R9:** The aliasing-and-validation logic is a **single shared helper** called by both paths. The two blocks are hand-duplicated today; leaving them duplicated means the next change fixes one and not the other.
+- **R4:** In the **initial-map** path the namespace is flat - every decision is new - so all four write-site classes (`<n>`, `d<n>`, full D-ID, caller `id`) are validated against each other in both directions. Proven by a test where a caller-supplied `id` of `d<n>` collides with a *later* decision's generated alias, the reverse-direction case a fix scoped to `raw["id"]` would miss.
+- **R5:** In the **sharpen** path, batch-ordinal aliases (`<n>`, `d<n>`) are **removed from the addressable namespace**. New sharpen decisions are addressable only by their full new D-ID or an explicit caller-supplied `id`; `<n>` / `d<n>` / full-ID belong to already-persisted decisions. This is a deliberate, narrow behavior change - see Decision Context - not a preservation of today's semantics, because today's are index-dependent and cannot be validated coherently.
+- **R6:** The closure's topological order is **deterministic and specified**: Kahn's algorithm with a min-heap on local D-number, so equal-eligibility nodes emerge in ascending D-number and repeated runs on the same graph produce byte-identical `affected` / `cascade_open` / `cascade_resolved` / `replacements` arrays. A test asserts the exact arrays, not merely their membership, on a graph with a genuine tie.
+- **R7:** `--keep-dependents` keeps emitting dependents in **local-number order**, and the call-site separation is explicit: the non-keep cascade consumes the Kahn order while the keep branch re-sorts the closure by local D-number before emitting its notes and `affected` (equivalently, reachability and ordering are split into two helpers). Both branches currently consume one returned list, so an implementation that changes the shared helper alone would silently reorder the keep branch's public `--json` arrays. A test pins the keep branch's full arrays unchanged.
+- **R8:** The rejection is a `validation`-class `ChartError` with code **`alias_collision`** and a stable `details` schema: `alias` (the normalized colliding alias), plus `first` and `second`, each an object carrying `kind` (`incoming` | `persisted`), and `index` + `title` for an incoming decision or `id` for a persisted one. The asymmetry is intrinsic - a persisted decision has no batch index. The code and this schema are documented in `docs/flowctl.md` in the chart subcommand section that already lists the envelope error classes, and asserted by exact-CLI tests.
+- **R9:** The aliasing-and-validation logic is a **single shared helper** called by both paths, parameterized by namespace policy (flat for initial-map, persisted-only-ordinals for sharpen) rather than duplicated. The two blocks are hand-duplicated today; leaving them duplicated is how this defect acquired two homes.
+- **R10:** Atomic rejection is **demonstrated, not asserted**. For an initial-map rejection: no chart files exist afterwards and the next valid chart still receives the expected `fn-N`. For a sharpen rejection: the chart sidecar and decision files are byte-identical to a pre-call snapshot, the primary decision remains `open`, parked questions are intact, and the next successful decision receives the D-number the rejected call did not consume.
+- **R11:** Sharpen collision coverage includes the **new-versus-new** case, not only new-versus-persisted: two co-arriving sharpen decisions claiming the same explicit `id` are rejected. Without it, an implementation that seeds the helper correctly for initial-map but only partially for sharpen passes every other test.
 
 ## Boundaries
 <!-- scope: business -->
@@ -89,27 +93,37 @@ Note for implementation: `validate_and_build_initial_map` is called **twice** pe
 
 **Why Kahn with a number-keyed heap rather than DFS.** Both are topologically valid. Only the heap variant makes "local-number order to break genuine ties" true as written, and only a fully specified order keeps the public `--json` arrays reproducible - which matters because those arrays are what an autonomous driver reads.
 
+**Why sharpen drops batch ordinals rather than preserving today's behavior (R5).** The naive fix - validate incoming aliases against persisted ones - rejects every sharpen batch, because incoming #1 and persisted D1 always both claim `1`. Preserving today's behavior is not an option either: the shadowing is index-dependent, so `<n>` silently means different things depending on chart size, and no validator can distinguish a caller who meant the persisted decision from one who meant the incoming one. Removing batch ordinals from sharpen's namespace makes it decidable: persisted decisions own `<n>` / `d<n>` / full-ID, incoming decisions are addressed by full new D-ID or an explicit `id`. **This is a deliberate behavior change and is called out as one** - a sharpen payload that today references an unshadowed high index (say `3` on a two-decision chart) will need the full D-ID or an explicit `id` instead. The blast radius is small because the shipped `/flow-next:chart` skill never emits explicit ids and never references batch ordinals in sharpen, and any caller relying on the unshadowed range was relying on chart size, which is not a contract anyone should depend on.
+
+**Why collision is defined by owner rather than by key (R2).** A helper that rejects every duplicate key would reject sharpen's own `d<i>` double-write (`13848` and `13849` register the same alias for the same decision) and a caller who harmlessly supplies an `id` equal to that decision's generated alias. A helper that permits all duplicates catches nothing. Owner identity is the discriminator that makes the check both correct and quiet on legal input.
+
+**Why `--keep-dependents` needs a stated call-site separation (R7).** Both branches consume the single list `_depends_on_closure` returns. Reordering that helper without separating the call sites silently reorders the keep branch's public `--json` arrays too - a change to a documented output for a code path that has no defect. The exemption is only real if the separation is specified, not implied.
+
 **Why reject rather than disambiguate aliases.** A colliding alias has no correct interpretation - the caller meant one of two decisions and we cannot know which. Silently taking the last writer is the current bug; taking the first would be an equally arbitrary guess. Refusing before allocation matches how every other invalid graph input is handled (missing targets, self-edges, duplicate edges, cycles) and keeps the failure at the caller's input rather than in the persisted chart.
 
 **Why `--keep-dependents` is exempt.** Reordering it would change a documented output array for a code path that has no defect. The cost is a small asymmetry in the closure's contract; the benefit is not breaking callers to fix a bug they cannot hit.
 
 ## Early proof point
 
-Task fn-153-chart-graph-integrity-premise-ordered.1 validates the cascade fix, which is the harder of the two: it needs a non-topological chart, and no existing test helper can build one (`_add_decision` allocates strictly in creation order, so reaching D2-depends-on-D3 requires `chart wire-decision` or a batch `--initial-map-file` payload). If constructing that fixture proves impossible through the public CLI, the defect is unreachable by any caller and the deferral was right - stop and report rather than shipping an unprovable fix.
+Task fn-153-chart-graph-integrity-premise-ordered.1 validates the cascade fix, which is the harder of the two. The fixture is buildable through the public CLI - `chart wire-decision` accepts `--depends-on`, validates atomically, and is already exercised by real-CLI tests - so the recipe is concrete: create D1 through D3, `wire-decision D2 --depends-on D3`, `wire-decision D3 --depends-on D1`, resolve D2 and D3, then `resolve D4 --supersedes D1`. The file's `_add_decision` helper allocates strictly in creation order and cannot produce this shape on its own; `wire-decision` is what makes it reachable.
+
+If premise-first ordering cannot be introduced without breaking the existing supersession pins (`TestSupersession`), stop and report rather than loosening those tests - they encode the cascade contract this spec is trying to strengthen.
 
 ## Requirement coverage
 
 | Req | Description | Task(s) | Gap justification |
 |-----|-------------|---------|-------------------|
 | R1 | Premise-first cascade wiring | .1 | - |
-| R2 | Alias uniqueness, both paths | .2 | - |
+| R2 | Collision defined by owner; same-owner registration idempotent | .2 | - |
 | R3 | Regression tests, gate, propagation, no bump | .1, .2 | - |
-| R4 | All four write sites, both directions | .2 | - |
-| R5 | Sharpen vs already-persisted aliases | .2 | - |
-| R6 | Deterministic Kahn order with number tie-break | .1 | - |
-| R7 | `--keep-dependents` ordering unchanged | .1 | - |
-| R8 | Rejection names alias + both entries; documented | .2 | - |
-| R9 | Single shared helper, no duplication | .2 | - |
+| R4 | Initial-map: all four write sites, both directions | .2 | - |
+| R5 | Sharpen: batch ordinals removed from the namespace | .2 | - |
+| R6 | Deterministic Kahn order; exact arrays asserted | .1 | - |
+| R7 | `--keep-dependents` ordering preserved via call-site separation | .1 | - |
+| R8 | `alias_collision` code + stable asymmetric details schema, documented | .2 | - |
+| R9 | Single shared helper, parameterized by namespace policy | .2 | - |
+| R10 | Atomic rejection demonstrated (no files, no consumed D-number) | .2 | - |
+| R11 | New-versus-new sharpen collision covered | .2 | - |
 
 ## References
 

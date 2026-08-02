@@ -4,22 +4,15 @@ satisfies: [R2, R3, R4, R5, R8, R9]
 # fn-153-chart-graph-integrity-premise-ordered.2 Alias uniqueness in one shared helper; actionable rejection
 
 ## Description
-Refuse an ambiguous alias namespace before any D-ID is allocated, in both aliasing paths, through one shared helper.
+Refuse an ambiguous alias namespace before any D-ID is allocated, through one shared helper - with **different rules for the two paths**, because they do not share a namespace.
 
-**The defect is wider than "a caller-supplied `id` overwrites".** Both sites populate `local_map` with FOUR plain, unguarded assignments each:
+**Initial-map: flat namespace.** Every decision is new, so `<n>`, `d<n>`, the full D-ID and a caller-supplied `id` all live in one space and any two of them mapping to different decisions is a collision. Four unguarded write sites today (`11846`, `11847`, `11848`, `11851`); guarding only `raw["id"]` leaves the reverse direction open - decision #3 supplies `id: "d7"` before D7 exists, then decision #7's own generated write clobbers it.
 
-| Site | Generated | Caller-supplied |
-|---|---|---|
-| `validate_and_build_initial_map` | `str(i)` `11846`, `f"d{i}"` `11847`, `did.lower()` `11848` | `raw["id"]` `11851` |
-| resolve-sharpen (inside `resolve_chart_decision`) | `str(i)` `13847`, `f"d{i}"` `13848`, `f"D{i}".lower()` `13849`, `new_id.lower()` `13850` | `raw["id"]` `13852` |
+**Sharpen: batch ordinals are removed from the namespace.** This is the correction that came out of plan review. The new-decision loop writes batch aliases (`13847-13852`) and the existing-decision fold then overwrites them (`13866-13871`), so persisted D1 always wins `1` - but only where a persisted counterpart exists. Sharpen five decisions onto a two-decision chart and indices `3`, `4`, `5` still resolve to the incoming ones. `<n>` therefore means different things depending on chart size, which cannot be validated, and requiring incoming aliases to be unique against persisted ones would reject **every** sharpen batch. After this task, persisted decisions own `<n>` / `d<n>` / full-ID and incoming decisions are addressed by full new D-ID or an explicit `id`. **That is a deliberate behavior change** - document it; do not describe it as preserving today's semantics.
 
-Guarding only the caller-supplied write leaves the collision reachable in reverse: decision #3 supplies `id: "d7"` while D7 does not exist yet, then decision #7's own **generated** write to `local_map["d7"]` silently clobbers #3's mapping, with no error. Guard every write site symmetrically.
+**Collision means different owners.** Same-owner re-registration is legal and idempotent: sharpen writes `d<i>` twice for one decision (`13848`, `13849`), and a caller may supply an `id` equal to that decision's own generated alias. Owner identity is the D-ID for a persisted decision and the batch index for an incoming one. A helper that rejects every duplicate key breaks legal input; one that permits all duplicates catches nothing.
 
-**The sharpen path has a third surface.** After the new-decision loop, `13865-13871` folds **existing** chart decisions' aliases into the same map unconditionally, so a sharpened decision whose `id` is `"d3"` on a chart that already has D3 resolves its edges to the pre-existing decision. The namespace under validation is generated-new + caller-supplied-new + existing-chart.
-
-**One shared helper, not two blocks.** The aliasing logic is hand-duplicated today with no common function. Leaving it duplicated means the next change fixes one path and silently misses the other - which is exactly how this defect got two homes.
-
-**The rejection has to be actionable.** Name the colliding alias and both conflicting entries, identified by whatever each side actually has: batch index and title for an incoming decision, D-ID for an already-persisted one. The `details` shape is asymmetric by necessity - an existing decision has no batch index. Document the new code in `docs/flowctl.md` beside the other chart error codes.
+**The rejection is a named, stable contract.** `ChartError("validation", "alias_collision", ...)` with `details` carrying `alias`, `first` and `second`, where each party has `kind` (`incoming` | `persisted`) plus `index` + `title` for incoming or `id` for persisted. The asymmetry is intrinsic - a persisted decision has no batch index.
 
 Finally: land the `## Unreleased` CHANGELOG entry for both tasks and run the full gate.
 
@@ -28,57 +21,63 @@ Finally: land the `## Unreleased` CHANGELOG entry for both tasks and run the ful
 
 ### Approach
 
-- Raise `ChartError("validation", <code>, <message>, details={...})` - `validation` is the class the pre-allocation checks in this function already use (`title_required` `11826`, `invalid_initial_decision` `11818`, `max_decisions_exceeded` `11790`). `invalid_graph` is for the post-resolution graph checks and is the wrong class here.
-- Match the error-assertion style of `test_chart_graph_claims.py::TestGraphValidation::test_rejects_missing_self_duplicate_and_cycle_edges` (`312-393`) - it asserts exact `err["error"]["class"]` / `["code"]` pairs through the real CLI.
-- No test supplies a caller `id` today, so both R2 and R4 need new coverage rather than an edit.
+- One shared helper, parameterized by namespace policy (flat vs persisted-only-ordinals). The two blocks are hand-duplicated today, which is how this defect acquired two homes.
+- Raise `ChartError("validation", "alias_collision", ...)`. `validation` is the class the other pre-allocation checks in `validate_and_build_initial_map` already use (`title_required` `11826`, `invalid_initial_decision` `11818`, `max_decisions_exceeded` `11790`); `invalid_graph` belongs to the post-resolution graph checks and is the wrong class here.
+- Match the error-assertion style of `test_chart_graph_claims.py::TestGraphValidation::test_rejects_missing_self_duplicate_and_cycle_edges` (`312-393`) - exact `err["error"]["class"]` / `["code"]` pairs through the real CLI.
+- No test supplies a caller `id` today, so every collision case below is new coverage rather than an edit.
 
 ### Investigation targets
 
 **Required** (read before coding):
-- `plugins/flow-next/scripts/flowctl.py:11814-11896` - the initial-map aliasing loop and what it already validates
-- `plugins/flow-next/scripts/flowctl.py:13814-13872` - the sharpen aliasing loop, including the existing-decision fold at `13865-13871`
+- `plugins/flow-next/scripts/flowctl.py:11814-11896` - initial-map aliasing loop and what it already validates
+- `plugins/flow-next/scripts/flowctl.py:13814-13872` - sharpen aliasing loop, including the existing-decision fold at `13866-13871` that causes the shadowing
 - `plugins/flow-next/scripts/flowctl.py:11345-11378` - `_normalize_edge_refs`, the shared reader (it only reads `local_map`; it never validates)
 - `plugins/flow-next/tests/test_chart_graph_claims.py:311-435` - `TestGraphValidation`, the error-assertion precedent
 
 **Optional** (reference as needed):
 - `plugins/flow-next/scripts/flowctl.py:11381-11489` - `validate_chart_graph`, to see why it cannot catch this (it runs on the already-resolved graph)
-- `plugins/flow-next/docs/flowctl.md` - the chart error-code documentation
+- `plugins/flow-next/docs/flowctl.md` - the chart subcommand section listing envelope error classes
 
 ### Key context
 
-`validate_and_build_initial_map` is called TWICE per `chart create --initial-map-file` (`23329` provisional pass, `23345` rebind pass). A pre-allocation check fires on both. That is harmless and deterministic, but do not be surprised by it, and do not "fix" it by making the check stateful.
+`validate_and_build_initial_map` is called TWICE per `chart create --initial-map-file` (`23329` provisional pass, `23345` rebind pass). A pre-allocation check fires on both. That is harmless and deterministic - do not "fix" it by making the check stateful.
 
-Rejection must happen **before any D-ID allocation or file write** - that is the atomicity R2 asks for.
+Rejection must happen **before any D-ID allocation or file write**, and R10 requires proving it rather than asserting it.
 
 Existing charts on disk are NOT migrated or detected; there is no `chart doctor` and this spec does not add one.
 
-`flowctl.py` edits require the propagation chain (see task .1 Key context). No version bump (`CLAUDE.md:101` batching rule) - stage under `## Unreleased`.
+`flowctl.py` edits require the propagation chain (see task .1 Key context). No version bump - stage under `## Unreleased`.
 
 ### Acceptance
-- [ ] One shared helper performs aliasing + collision validation for both the initial-map and resolve-sharpen paths (R9)
-- [ ] All four write-site classes are guarded in both paths, generated and caller-supplied alike (R4)
-- [ ] Real-CLI test: two decisions with the same caller-supplied `id` are rejected (R2)
-- [ ] Real-CLI test: a caller-supplied `id` of `d<n>` colliding with a **later** decision's generated alias is rejected - the reverse-direction case a narrow fix misses (R4)
-- [ ] Real-CLI test: a sharpened `id` of `d3` on a chart that already has D3 is rejected, not silently resolved to the existing decision (R5)
-- [ ] Rejection is a `validation`-class `ChartError` raised before any D-ID allocation or file write; `details` names the alias and both entries (batch index + title for incoming, D-ID for persisted) (R2, R8)
-- [ ] The new error code is documented in `docs/flowctl.md` beside the other chart error codes (R8)
+- [ ] One shared helper performs aliasing + collision validation for both paths, parameterized by namespace policy (R9)
+- [ ] Collision is defined as one normalized alias mapping to two different owners; same-owner re-registration is idempotent and legal (R2)
+- [ ] Initial-map: all four write-site classes guarded against each other in both directions (R4)
+- [ ] Sharpen: batch ordinals removed from the addressable namespace; persisted decisions own `<n>`/`d<n>`/full-ID; the behavior change is documented (R5)
+- [ ] Real-CLI test: two initial-map decisions with the same caller-supplied `id` are rejected (R2)
+- [ ] Real-CLI test: a caller `id` of `d<n>` colliding with a **later** decision's generated alias is rejected - the reverse direction (R4)
+- [ ] Real-CLI test: two co-arriving **sharpen** decisions claiming the same explicit `id` are rejected (R11)
+- [ ] Real-CLI test: a sharpen decision whose explicit `id` collides with a persisted decision's alias is rejected (R5)
+- [ ] Real-CLI test: legal same-owner repetition is NOT rejected - a caller `id` equal to that decision's own generated alias still succeeds (R2)
+- [ ] Error is `validation` / `alias_collision` with `details` = `alias`, `first`, `second` (`kind` + `index`/`title` or `id`); documented in `docs/flowctl.md` and asserted by exact-CLI tests (R8)
+- [ ] Atomicity demonstrated: initial-map rejection leaves no chart files and the next chart still gets the expected `fn-N`; sharpen rejection leaves chart and decision files byte-identical, the primary decision `open`, parked questions intact, and the next successful decision takes the unconsumed D-number (R10)
 - [ ] Pre-existing no-collision behavior unchanged; `TestInitialMapMaxDecisions` and `TestGraphValidation` pass unmodified (R2, R3)
 - [ ] `## Unreleased` CHANGELOG entry covering both tasks; no version bump
-- [ ] Propagation chain run; full gate green: `python3 scripts/run_tests_parallel.py` and `uvx ruff@0.16.0 check .`
-
+- [ ] Propagation chain run; full gate green
 ## Acceptance
-- [ ] Single shared aliasing+validation helper used by both paths
-- [ ] All four write-site classes guarded in both paths
-- [ ] Duplicate caller `id` rejected (real CLI)
-- [ ] Caller `id` colliding with a LATER decision's generated alias rejected (reverse direction)
-- [ ] Sharpen `id` colliding with an already-persisted decision's alias rejected
-- [ ] `validation`-class error before any allocation or write; details name the alias and both entries
-- [ ] New error code documented in docs/flowctl.md
+- [ ] Single shared helper, parameterized by namespace policy
+- [ ] Collision = different owners; same-owner registration idempotent
+- [ ] Initial-map: four write-site classes guarded both directions
+- [ ] Sharpen: batch ordinals removed from the namespace, change documented
+- [ ] Duplicate caller `id` rejected (initial-map, real CLI)
+- [ ] Reverse-direction generated-alias collision rejected
+- [ ] New-versus-new sharpen collision rejected
+- [ ] Sharpen-versus-persisted collision rejected
+- [ ] Legal same-owner repetition still succeeds
+- [ ] `validation` / `alias_collision` with the stable details schema, documented + asserted
+- [ ] Atomic rejection demonstrated (no files, no consumed D-number)
 - [ ] Existing no-collision behavior and both existing test classes unchanged
 - [ ] Unreleased CHANGELOG entry, no version bump
 - [ ] Propagation chain run; full gate green
-
-
 ## Done summary
 TBD
 
