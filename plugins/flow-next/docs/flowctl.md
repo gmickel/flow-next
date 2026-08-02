@@ -1882,7 +1882,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 - **Counter surfaces:** plan reviews increment a spec-scoped `plan_review_rounds`; impl reviews increment a per-task `impl_review_rounds[<task-id>]`. **Completion reviews reuse the spec-scoped `plan_review_rounds` counter** (they are spec-scoped, no task in context) — a plan review and a completion review on the same spec spend the *same* cap, so neither can independently re-open the runaway. Both surface in `flowctl show --json`.
 - **Enforcement:** each backend reserves a round BEFORE running the reviewer
   (codex/copilot/cursor inside their wrapper; rp via `review-rounds increment`).
-  At `${MAX_REVIEW_ITERATIONS:-4}` delivered-verdict rounds it refuses before
+  At `${MAX_REVIEW_ITERATIONS:-8}` delivered-verdict rounds it refuses before
   dispatch, prints `ESCALATE:`, and exits `4`. The message includes live verdict
   rounds and refunded transport attempts.
 - **Round-counting:** a round is consumed only when reviewer output contains

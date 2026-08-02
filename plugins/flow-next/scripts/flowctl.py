@@ -9128,10 +9128,20 @@ def build_review_prompt(
     return "\n\n".join(parts)
 
 def get_max_review_iterations() -> int:
-    """Resolve the cumulative review-round cap (``MAX_REVIEW_ITERATIONS``, default 4).
+    """Resolve the cumulative review-round cap (``MAX_REVIEW_ITERATIONS``, default 8).
 
-    A non-positive or non-integer env value falls back to the default 4 — the
+    A non-positive or non-integer env value falls back to the default — the
     cap can never be disabled or made zero (that would reopen the runaway).
+
+    Raised 4 -> 8 as an interim measure. The cap counts *dispatches*, which
+    cannot distinguish a loop that is genuinely stuck from one converging in
+    severity while each fix surfaces one more small thing. Field evidence: in a
+    single session three specs hit the cap at 4, and in every case the findings
+    remaining were trivial residue - two were reset by a human and shipped
+    almost immediately after. 8 buys headroom for that convergence pattern
+    without removing the runaway stop the counter exists for. The real fix is a
+    convergence-aware terminal (severity trend, new-vs-residue classification,
+    an explicit escalate-to-human verdict) rather than a bigger number.
     """
     raw = os.environ.get("MAX_REVIEW_ITERATIONS")
     if raw:
@@ -9141,7 +9151,7 @@ def get_max_review_iterations() -> int:
                 return val
         except ValueError:
             pass
-    return 4
+    return 8
 
 
 # Exit code the review commands use when the deterministic cap is hit. Distinct

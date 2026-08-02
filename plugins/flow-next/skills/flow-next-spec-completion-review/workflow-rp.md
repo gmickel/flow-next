@@ -603,7 +603,7 @@ fi
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 
 **MAX ITERATIONS**: Limit fix+re-review cycles to
-**${MAX_REVIEW_ITERATIONS:-4}** iterations (default 4, configurable in Ralph's
+**${MAX_REVIEW_ITERATIONS:-8}** iterations (default 8, configurable in Ralph's
 config.env). The `review-rounds increment` gate (step 6 below and Phase 3)
 enforces this deterministically across fresh invocations — completion reviews
 share the spec-scoped plan counter, so plan + completion rounds cannot each

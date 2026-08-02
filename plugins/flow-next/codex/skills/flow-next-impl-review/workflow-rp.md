@@ -504,7 +504,7 @@ See [workflow-common.md](workflow-common.md) "Phase ordering & flag-combination 
 
 **CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
 
-**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-4}** iterations (default 4, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh. The `review-rounds increment` gate (step 6 below and Phase 3) enforces this deterministically across fresh invocations: at the cap it refuses with an `ESCALATE:` marker + exit 4, which is NOT retryable — surface it and stop (Ralph: NEEDS_HUMAN).
+**MAX ITERATIONS**: Limit fix+re-review cycles to **${MAX_REVIEW_ITERATIONS:-8}** iterations (default 8, configurable in Ralph's config.env). If still NEEDS_WORK after max rounds, output `<promise>RETRY</promise>` and stop — let the next Ralph iteration start fresh. The `review-rounds increment` gate (step 6 below and Phase 3) enforces this deterministically across fresh invocations: at the cap it refuses with an `ESCALATE:` marker + exit 4, which is NOT retryable — surface it and stop (Ralph: NEEDS_HUMAN).
 
 If verdict is NEEDS_WORK:
 

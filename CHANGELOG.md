@@ -2,6 +2,25 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Review loops get twice the room before they stop and ask for you.**
+  `MAX_REVIEW_ITERATIONS` defaults to **8** instead of 4. The cap counts review
+  *dispatches*, which cannot tell a loop that is genuinely stuck from one that
+  is converging while each fix surfaces one more small thing. In a single
+  session three specs hit the cap at 4, and every time the findings left were
+  trivial residue - two were reset by hand and shipped almost immediately
+  after, one on the very next round. Eight buys room for that pattern without
+  removing the stop the counter exists for: it still refuses to dispatch at the
+  cap, still exits `4` with `ESCALATE:`, and still resets only on a `SHIP`
+  verdict or an explicit `flowctl spec reset-review-rounds`. Set
+  `MAX_REVIEW_ITERATIONS` yourself to go higher or lower; it can never be zero
+  or disabled. This is an interim measure - the real fix is a convergence-aware
+  terminal that reads the severity trend and can escalate to a human on
+  purpose, rather than a bigger number.
+
 ## [flow-next 3.13.2] - 2026-08-02
 
 Three chart defects that all failed the same way - silently. A reopened chart
