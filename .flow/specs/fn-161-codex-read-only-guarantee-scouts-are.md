@@ -1,3 +1,19 @@
+# fn-161 CLOSED - absorbed into fn-98
+
+**Closed 2026-08-03 without separate implementation. Not withdrawn: the finding is real and the work is scheduled - it moved.**
+
+Merged into [[fn-98]] as R5-R9, verbatim in substance. Reasons:
+
+- **Same host, same artifacts.** Both specs edit the generated Codex roles, `sync-codex.sh`, and `docs/platforms.md`. They were rewriting different paragraphs of the same file for the same underlying reason (what is and is not true about Codex subagents on 0.146.0). Landing them separately guaranteed a conflicting rewrite and an ordering constraint that bought nothing.
+- **Same evidence.** Both were closed by one probe matrix. The read-only finding (P6, P11, P12, P13) came out of the steering investigation, not a separate effort.
+- **Nothing left to decide.** R2 here resolved negative by measurement - there is no role-level read-only mechanism on Codex - so R3 (emit a `permissions` block) was dropped. What remained was documentation plus one sync guard, which is the shape fn-98's R2 already had.
+
+The investigation record moved to fn-98 in full. Nothing was dropped except R3, which had nothing to build.
+
+---
+
+*Original spec text retained below for reference.*
+
 # fn-161 Codex read-only guarantee: scouts are declared read-only and are not
 
 ## Goal & Context

@@ -1,4 +1,6 @@
-# fn-98 Re-check codex MAv2 subagent model steering fixes (watch, ~2026-07-22)
+# fn-98 Codex MAv2: steering re-check, docs currency, and the read-only guarantee
+
+*(Originally a watch stub for subagent model steering. Absorbed fn-161 - the Codex read-only guarantee - on 2026-08-03: same host, same generated roles, same `platforms.md` paragraphs, and both investigations closed by the same probe matrix. Keeping them separate guaranteed a conflicting rewrite of one file.)*
 
 ## Goal & Context
 <!-- scope: business -->
@@ -26,10 +28,18 @@ None.
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- R1: **DONE (2026-08-03, codex-cli 0.146.0).** #32782 CLOSED, #33268 CLOSED, #31814 CLOSED; #33314 and #33267 OPEN. Recorded with the probe matrix below.
-- R3: **DONE (2026-08-03).** Ten-probe matrix, every verdict read from the child thread's rollout `turn_context`. Steering works on both the role path and the explicit-parameter path.
-- R2: docs caveats (`docs/orchestration.md` x2, `docs/platforms.md`, `templates/usage.md` + `skills/flow-next-setup/templates/model-routing-snippet.md`, the flow-next.dev orchestration page) must stop saying subagent model steering is unreliable, and must instead state: (a) steering works on 0.146.0 via both paths; (b) **a role's `sandbox_mode` is not enforced** - read-only is prompt-only on Codex; (c) the two dispatch gotchas (`agent_type` takes the role's `name`, not the `[agents.<key>]` table key; `agent_type` requires `fork_turns: "none"`); (d) the model-selection precedence rule below. The `codex exec -m` self-bridge stays valid, but is no longer the only reliable route.
-- R4: pin the interview fact-scout on Codex hosts. **Verified implementation (P10):** the mirror's dispatch becomes `spawn_agent` with `agent_type: explorer`, `model: gpt-5.6-terra`, `reasoning_effort: medium`, `fork_turns: "none"`. `explorer` is a Codex **builtin** role that declares no model of its own, so the explicit parameter applies - no new role needs registering. Today it inherits the session model (`sol`/`high`), which is the cost gap. The edit lands in `codex/skills/flow-next-interview/SKILL.md` via a `sync-codex.sh` transform, and that line sits under the fn-100 scout-tier hard-fail guard, so the guard moves with it.
+- **R1:** **DONE (2026-08-03, codex-cli 0.146.0).** #32782 CLOSED, #33268 CLOSED, #31814 CLOSED; #33314 and #33267 OPEN. Recorded with the probe matrix below.
+- **R2:** docs caveats (`docs/orchestration.md` x2, `docs/platforms.md`, `templates/usage.md` + `skills/flow-next-setup/templates/model-routing-snippet.md`, the flow-next.dev orchestration page) must stop saying subagent model steering is unreliable, and must instead state: (a) steering works on 0.146.0 via both paths; (b) **a role's `sandbox_mode` is not enforced** - read-only is prompt-only on Codex; (c) the two dispatch gotchas (`agent_type` takes the role's `name`, not the `[agents.<key>]` table key; `agent_type` requires `fork_turns: "none"`); (d) the model-selection precedence rule below. The `codex exec -m` self-bridge stays valid, but is no longer the only reliable route.
+- **R3:** **DONE (2026-08-03).** Ten-probe matrix, every verdict read from the child thread's rollout `turn_context`. Steering works on both the role path and the explicit-parameter path.
+- **R4:** pin the interview fact-scout on Codex hosts. **Verified implementation (P10):** the mirror's dispatch becomes `spawn_agent` with `agent_type: explorer`, `model: gpt-5.6-terra`, `reasoning_effort: medium`, `fork_turns: "none"`. `explorer` is a Codex **builtin** role that declares no model of its own, so the explicit parameter applies - no new role needs registering. Today it inherits the session model (`sol`/`high`), which is the cost gap. The edit lands in `codex/skills/flow-next-interview/SKILL.md` via a `sync-codex.sh` transform, and that line sits under the fn-100 scout-tier hard-fail guard, so the guard moves with it.
+- **R5:** `scripts/sync-codex.sh:1650`'s claim - "Codex enforces read-only via sandbox_mode" - is corrected in place, with the measured evidence cited next to it (child-side `patch_apply_end`: `Success. Updated the following files: A ro-probe.txt`, under a role declaring `sandbox_mode = "read-only"`). A future reader must not be able to re-assert host parity from the comment alone. The same applies to `:1671`, which drops `disallowedTools` on that rationale.
+- **R6:** `docs/platforms.md` states the read-only guarantee per host explicitly: **harness-enforced on Claude Code** via `disallowedTools`; **prompt-only on Codex**, where a role can neither narrow nor widen a child's sandbox. It also documents the one lever that does work - containment comes from the **parent process launch flag** (`codex -s read-only`), never from a role. The current text implying uniform coverage is replaced, not annotated.
+- **R7:** The repo `CLAUDE.md` cross-platform "Agent permissions" bullet is corrected to match R6. It currently reads as though the `disallowedTools` blacklist translates cleanly to every host.
+- **R8:** `sync-codex.sh` validation fails if any emitted role TOML carries a key outside the measured accepted set (`name`, `description`, `model`, `model_reasoning_effort`, `sandbox_mode`, `nickname_candidates`, `developer_instructions`). Rationale: an unrecognized key does not error - Codex warns and **discards the entire role**, so one bad field silently removes all 21 scout roles and turns every scout dispatch into `unknown agent_type`. The schema is undocumented and moved across three CLI releases.
+- **R9:** No behavior change on Claude Code, Droid, Cursor or Grok. `sync-codex.sh` runs twice with a clean second diff.
+
+**Framing constraint for R5-R9 (carried from fn-161):** this is truth-in-labelling, **not a security fix**. No CVE framing, no urgency language in CHANGELOG or docs. The realistic failure is a scout that misreads its brief and edits a file - recoverable and visible in git. Nothing routes untrusted input into a scout. The reason to act is that we state a guarantee we do not keep on one host. Equally out of scope: any new abstraction over host permissions, and any change to the canonical agent frontmatter (`readonly: true` / `disallowedTools` are correct on the host that enforces them).
+
 
 **Model-selection precedence on Codex 0.146.0 (measured, P3/P4b/P4c/P5b/P7b/P9/P10):**
 
@@ -187,3 +197,25 @@ The Codex mirror instructs `spawn_agent` with `agent_type: explorer`, and no `ex
 This also **corrects the generalization drawn from P5b.** "Role always wins over the explicit parameter" is wrong. The rule is: a role's *declared* model wins; where the role declares none, the explicit parameter applies. P5b's custom role declared `terra`, which is why the explicit `sol` lost.
 
 Net: R4 is a one-line dispatch change with no new role to register, and it is measured rather than assumed.
+
+
+## Investigation record 2026-08-03 (R2 closed, codex-cli 0.146.0)
+
+Resolved by reading the shipped schema and source, then testing live. No part of this is left for implementation.
+
+**Upstream schema (authoritative).** `codex-rs/core/config.schema.json` defines `AgentRoleToml` for the `[agents.<key>]` table (`config_file`, `description`, `nickname_candidates` only). The file that `config_file` points at is described as "a role-specific config layer", so it accepts top-level config keys - which is why `permissions` parsed at all. `permissions` is `BTreeMap<String, PermissionProfileToml>` (`config/src/permissions_toml.rs`): a map of *named profiles*, not a restriction. The selector is the separate root key **`default_permissions`** - "Names starting with `:` refer to built-in profiles". The built-ins are `:read-only`, `:workspace`, `:danger-full-access` (`protocol/src/models.rs:304-310`). `PermissionProfileToml` fields: `description`, `extends`, `filesystem`, `network`, `workspace_roots`.
+
+**Live results.**
+
+| # | Setup | Child sandbox | Write |
+|---|---|---|---|
+| P6 | role `sandbox_mode="read-only"`, parent `workspace-write` | `workspace-write` | **succeeded** (child `patch_apply_end`: `Success. Updated the following files: A ro-probe.txt`) |
+| P12 | role `default_permissions=":read-only"`, parent `workspace-write` | `workspace-write` | **succeeded** (child verified the bytes `57 52 4f 54 45 0a`) |
+| P13 | same role, parent launched `-s read-only` | `read-only` | blocked; no file |
+| P11 | role with an unrecognized key (`tools`) | n/a | role **silently discarded**; dispatch failed `unknown agent_type` |
+
+**Verdict.** There is no role-level read-only mechanism on 0.146.0. A child's sandbox is inherited from its parent in both directions; a role can neither narrow nor widen it. `default_permissions` in a role file is accepted, parses, and has no effect on a spawned child.
+
+**Consequence.** There is nothing to emit, so the absorbed work is purely R5 (correct the false comment), R6 (state the per-host guarantee and the parent-launch lever), R7 (`CLAUDE.md` parity bullet), R8 (guard the silent-drop mode), R9 (no behavior change elsewhere). Zero uncertainty remains.
+
+**One divergence from upstream worth noting.** openai/codex#33314's 2026-08-01 report describes a `-s read-only` parent producing children that report `workspace-write`. P13 did not reproduce that: the read-only parent produced a read-only child. Their case involved project-local custom roles and `-a never`; ours used a single role and default approvals. Not contradicted, not reproduced - and it does not change this spec's conclusion, which rests on the workspace-write-parent case that flow-next actually runs.

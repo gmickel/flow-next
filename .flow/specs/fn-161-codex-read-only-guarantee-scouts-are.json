@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-161-codex-read-only-guarantee-scouts-are.md",
-  "status": "open",
+  "status": "done",
   "title": "Codex read-only guarantee: scouts are declared read-only and are not",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T23:49:26.695701Z"
+  "updated_at": "2026-08-02T23:56:20.187625Z"
 }
