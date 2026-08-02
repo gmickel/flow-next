@@ -4,6 +4,7 @@ satisfies: [R1, R3, R6, R7]
 # fn-153-chart-graph-integrity-premise-ordered.1 Premise-first cascade ordering (Kahn, number tie-break); keep-dependents exempt
 
 ## Description
+
 Make supersession cascades wire replacements to replacements, not to the premises this same cascade just superseded.
 
 `_depends_on_closure` (`flowctl.py:13040-13059`) walks a reverse index by DFS and then **sorts by local D-number at line 13058**. `resolve_chart_decision` consumes that order and builds `premise_rewrite` incrementally - a resolved dependent's replacement id is registered at `13724`, after its own rewiring already read `premise_rewrite.get(p, p)` at `13686`. With non-topological numbering (D2 depends on D3, D3 depends on D1) D2 is processed first and its replacement is wired to the **superseded** D3.
@@ -40,14 +41,7 @@ If premise-first ordering cannot be introduced without breaking the existing `Te
 
 `flowctl.py` edits require the propagation chain or `test_tracker_distribution` fails: `cp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py` (never overwrite the bash launcher `.flow/bin/flowctl`), `rsync -a --delete --exclude __pycache__ plugins/flow-next/scripts/flowctl_tracker/ .flow/bin/flowctl_tracker/`, `python3 scripts/gen_tracker_manifest.py`, then `./scripts/sync-codex.sh` twice.
 
-### Acceptance
-- [ ] `_depends_on_closure` returns premise-first order via Kahn + min-heap on local D-number; the tie-break is ascending D-number (R1, R6)
-- [ ] Real-CLI test on a non-topological chart (D2 depends on D3, D3 depends on D1, both resolved; D4 supersedes D1): both replacements exist, the replacement of D2 depends on the **replacement** of D3, and a subsequent supersession reaches the whole chain (R1)
-- [ ] Test asserts the exact `affected` / `cascade_open` / `cascade_resolved` / `replacements` arrays (not just membership) on a graph with a genuine tie, and a second run of the SAME ordered inputs reproduces them. Note the scope: `affected` opens with the primary decision and preserves caller order for named `--supersedes` targets, so Kahn governs the closure-derived subsequences only (R6)
-- [ ] The keep/non-keep call-site separation is explicit in the code, and a test pins the keep branch's FULL `affected` / `cascade_*` arrays unchanged in local-number order (R7)
-- [ ] `TestSupersession`'s existing tests pass unmodified (R3)
-- [ ] Propagation chain run; `cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution test_chart_graph_claims test_chart_store -q` green
-
+#
 ## Acceptance
 - [ ] Premise-first closure via Kahn + min-heap on local D-number
 - [ ] Non-topological cascade test: replacement wired to replacement, chain reachable by a later supersession

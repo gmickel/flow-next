@@ -11,6 +11,6 @@
   "spec": "fn-153-chart-graph-integrity-premise-ordered",
   "spec_path": ".flow/tasks/fn-153-chart-graph-integrity-premise-ordered.2.md",
   "status": "todo",
-  "title": "Alias uniqueness in one shared helper; actionable rejection",
-  "updated_at": "2026-08-02T00:00:42.350568Z"
+  "title": "Initial-map alias uniqueness with an actionable rejection",
+  "updated_at": "2026-08-02T07:06:18.067792Z"
 }
