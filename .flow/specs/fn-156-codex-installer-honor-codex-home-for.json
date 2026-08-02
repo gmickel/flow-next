@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-156-codex-installer-honor-codex-home-for",
-  "completion_review_status": "needs_work",
-  "completion_reviewed_at": "2026-08-02T20:27:54.614053Z",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-02T20:29:05.566300Z",
   "created_at": "2026-08-01T20:25:46.706898Z",
   "default_impl": null,
   "default_review": null,
@@ -12,7 +12,7 @@
     "fn-156-codex-installer-honor-codex-home-for.1": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 3,
+  "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-08-02T19:15:13.418332Z",
   "ready": true,
@@ -114,11 +114,25 @@
       "task": null,
       "timestamp": "2026-08-02T20:27:54.611530Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "f275497966b0793be3cce0f9618581e5c699fc06",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "c995b0f7580069cd315fec9c0948c670c7f7fbcf92bd2ac57ceccc88ec0e78b9",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-08-02T20:28:56.299646Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {
     "impl:fn-156-codex-installer-honor-codex-home-for.1": 1,
-    "plan": 4
+    "plan": 5
   },
   "review_transport_failures": {
     "completion": 0,
@@ -139,5 +153,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T20:27:54.614053Z"
+  "updated_at": "2026-08-02T20:29:05.566475Z"
 }
