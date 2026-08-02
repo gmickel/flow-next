@@ -43,7 +43,7 @@ If premise-first ordering cannot be introduced without breaking the existing `Te
 ### Acceptance
 - [ ] `_depends_on_closure` returns premise-first order via Kahn + min-heap on local D-number; the tie-break is ascending D-number (R1, R6)
 - [ ] Real-CLI test on a non-topological chart (D2 depends on D3, D3 depends on D1, both resolved; D4 supersedes D1): both replacements exist, the replacement of D2 depends on the **replacement** of D3, and a subsequent supersession reaches the whole chain (R1)
-- [ ] Test asserts the exact `affected` / `cascade_open` / `cascade_resolved` / `replacements` arrays (not just membership) on a graph with a genuine tie, proving determinism (R6)
+- [ ] Test asserts the exact `affected` / `cascade_open` / `cascade_resolved` / `replacements` arrays (not just membership) on a graph with a genuine tie, and a second run of the SAME ordered inputs reproduces them. Note the scope: `affected` opens with the primary decision and preserves caller order for named `--supersedes` targets, so Kahn governs the closure-derived subsequences only (R6)
 - [ ] The keep/non-keep call-site separation is explicit in the code, and a test pins the keep branch's FULL `affected` / `cascade_*` arrays unchanged in local-number order (R7)
 - [ ] `TestSupersession`'s existing tests pass unmodified (R3)
 - [ ] Propagation chain run; `cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution test_chart_graph_claims test_chart_store -q` green

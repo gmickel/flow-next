@@ -1,5 +1,5 @@
 ---
-satisfies: [R2, R3, R4, R5, R8, R9]
+satisfies: [R2, R3, R4, R5, R8, R9, R10, R11, R12]
 ---
 # fn-153-chart-graph-integrity-premise-ordered.2 Alias uniqueness in one shared helper; actionable rejection
 
@@ -12,7 +12,7 @@ Refuse an ambiguous alias namespace before any D-ID is allocated, through one sh
 
 **Collision means different owners.** Same-owner re-registration is legal and idempotent: sharpen writes `d<i>` twice for one decision (`13848`, `13849`), and a caller may supply an `id` equal to that decision's own generated alias. Owner identity is the D-ID for a persisted decision and the batch index for an incoming one. A helper that rejects every duplicate key breaks legal input; one that permits all duplicates catches nothing.
 
-**The rejection is a named, stable contract.** `ChartError("validation", "alias_collision", ...)` with `details` carrying `alias`, `first` and `second`, where each party has `kind` (`incoming` | `persisted`) plus `index` + `title` for incoming or `id` for persisted. The asymmetry is intrinsic - a persisted decision has no batch index.
+**The rejection is a named, stable contract.** `ChartError("validation", "alias_collision", ...)` with `details` carrying `alias`, `first` and `second`, where each party has `kind` (`incoming` | `persisted`) plus `index` + `title` for incoming or `id` for persisted. The asymmetry is intrinsic - a persisted decision has no batch index. **`first` is the incumbent registration, `second` the rejected one**, which requires a fixed registration order: persisted decisions in local-number order, then incoming in batch order (initial-map has no persisted tier). Without that, two implementations emit opposite envelopes for the same collision.
 
 Finally: land the `## Unreleased` CHANGELOG entry for both tasks and run the full gate.
 
@@ -62,6 +62,7 @@ Existing charts on disk are NOT migrated or detected; there is no `chart doctor`
 - [ ] Atomicity demonstrated: initial-map rejection leaves no chart files and the next chart still gets the expected `fn-N`; sharpen rejection leaves chart and decision files byte-identical, the primary decision `open`, parked questions intact, and the next successful decision takes the unconsumed D-number (R10)
 - [ ] Pre-existing no-collision behavior unchanged; `TestInitialMapMaxDecisions` and `TestGraphValidation` pass unmodified (R2, R3)
 - [ ] `## Unreleased` CHANGELOG entry covering both tasks; no version bump
+- [ ] `test_chart_docs_inventory.py` pins both new public doc contracts - `alias_collision` with its `alias`/`first`/`second` schema, and the sharpen batch-ordinal removal (R12)
 - [ ] Propagation chain run; full gate green
 ## Acceptance
 - [ ] Single shared helper, parameterized by namespace policy
