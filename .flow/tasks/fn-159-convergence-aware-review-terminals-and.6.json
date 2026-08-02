@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-02T19:19:45.670605Z",
+  "depends_on": [
+    "fn-159-convergence-aware-review-terminals-and.4",
+    "fn-159-convergence-aware-review-terminals-and.5"
+  ],
+  "id": "fn-159-convergence-aware-review-terminals-and.6",
+  "priority": null,
+  "spec": "fn-159-convergence-aware-review-terminals-and",
+  "spec_path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.6.md",
+  "status": "todo",
+  "title": "Docs + CHANGELOG + STRATEGY sentence + propagation/sync + downstream chain",
+  "updated_at": "2026-08-02T20:42:26.757897Z"
+}

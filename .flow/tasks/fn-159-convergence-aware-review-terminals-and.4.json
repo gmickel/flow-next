@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-02T19:19:45.174538Z",
+  "depends_on": [
+    "fn-159-convergence-aware-review-terminals-and.3"
+  ],
+  "id": "fn-159-convergence-aware-review-terminals-and.4",
+  "priority": null,
+  "spec": "fn-159-convergence-aware-review-terminals-and",
+  "spec_path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.4.md",
+  "status": "todo",
+  "title": "Per-surface calibration: plan/completion severity + confidence gate, impl settled-plan clause",
+  "updated_at": "2026-08-02T20:32:08.355361Z"
+}

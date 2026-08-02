@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-02T19:18:42.789268Z",
+  "depends_on": [
+    "fn-159-convergence-aware-review-terminals-and.1",
+    "fn-159-convergence-aware-review-terminals-and.7"
+  ],
+  "id": "fn-159-convergence-aware-review-terminals-and.2",
+  "priority": null,
+  "spec": "fn-159-convergence-aware-review-terminals-and",
+  "spec_path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.2.md",
+  "status": "todo",
+  "title": "flowctl: stall detector on findings lineage + ratchet reads structured items",
+  "updated_at": "2026-08-02T20:42:26.509342Z"
+}
