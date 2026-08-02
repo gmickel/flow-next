@@ -1337,9 +1337,9 @@ class LockRaceViaResolveVerb(unittest.TestCase):
 
             def dest_ex(request):
                 # Rendezvous, not a performance assertion: the timeout only stops a
-                # genuinely broken test from hanging. CI runs this suite at the runner's
-                # full core count (fn-155), so sibling interpreters compete for the same
-                # cores and a tight bound flakes.
+                # genuinely broken test from hanging, so it should be generous. Shared
+                # CI runners schedule unpredictably regardless of how the suite is
+                # parallelised - this has never failed, the headroom is precautionary.
                 barrier.wait(timeout=120)
                 time.sleep(0.02)
                 return ok({
