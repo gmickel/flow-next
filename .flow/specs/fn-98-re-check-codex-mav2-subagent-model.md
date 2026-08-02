@@ -157,3 +157,14 @@ Nine probes against a throwaway `CODEX_HOME` with purpose-built roles, so nothin
 **The one finding that is a real flow-next defect.** Every generated scout role in the Codex mirror declares `sandbox_mode = "read-only"`. P6 shows that declaration is **not enforced** - the child runs at the parent's `workspace-write` and can write. This is stronger evidence than openai/codex#33314's own repro, which explicitly could not distinguish an enforcement defect from a reporting defect; here the file landed on disk. Consequence: **the read-only guarantee for flow-next scouts does not hold on a Codex host.** It is mitigated only by prompt (`disallowedTools` / instructions), never by the sandbox. Do not describe Codex scouts as sandbox-enforced read-only, and do not rely on the role sandbox as a boundary for anything with real blast radius.
 
 **Net upstream reading.** Model and effort steering is working on both paths. #33267 did not reproduce for plain nested spawns. #33314's model-attestation half is explained by self-report being unreliable; its **sandbox half is real, reproduced here, and is the only part that still affects us**.
+
+### P6 re-verification (same session): the finding holds, on child-side evidence
+
+The first P6 run was under-evidenced - it concluded "the child wrote" from the file existing on disk, which does not attribute the write. An isolated re-run then reported `WRITE=BLOCKED` with no file, which looked like a contradiction. Both were resolved by reading the **child's** rollout rather than the parent's summary:
+
+- **Run 1** (child `role=probe-ro`): the child executed `patch_apply` itself; the record carries `stdout: "Success. Updated the following files:\nA ro-probe.txt"`. The write is the child's, and it succeeded.
+- **Run 2** (child `role=probe-ro`): zero `ro-probe` events in the child's rollout - the child never attempted the write, because its role `developer_instructions` say "Reply with the single word ACK. Do nothing else." The parent's `WRITE=BLOCKED` was inferred from an absent result. Nothing was blocked; nothing was tried.
+
+**Confirmed:** a child whose role declares `sandbox_mode = "read-only"`, spawned under a `workspace-write` parent, runs at `workspace-write` and can complete a write. What differed between runs was the child obeying its own instructions, not sandbox enforcement.
+
+**Method note, third instance of the same error in one session.** Self-report is not evidence; a parent's narration of a child is not evidence; a side effect on disk does not attribute itself to an actor. Only the child's own rollout settles any of it. A probe whose role instructions ("do nothing else") conflict with its task prompt also produces non-attempts that read as blocks - keep probe roles permissive and put the task in the prompt.
