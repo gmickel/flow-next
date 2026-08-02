@@ -58,7 +58,7 @@
     "enabled": true
   },
   "review": {
-    "backend": "rp"
+    "backend": "codex:gpt-5.6-sol:medium"
   },
   "scouts": {
     "github": false
@@ -140,7 +140,7 @@
     "version": 1
   },
   "work": {
-    "delegate": false,
+    "delegate": "codex",
     "delegateConsent": true,
     "delegateDecision": "auto",
     "delegateEffort": "medium",

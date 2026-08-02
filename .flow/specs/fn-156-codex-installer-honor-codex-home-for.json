@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-156-codex-installer-honor-codex-home-for",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-01T20:25:46.706898Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-156-codex-installer-honor-codex-home-for",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-156-codex-installer-honor-codex-home-for.md",
   "status": "open",
   "title": "Codex installer: honor CODEX_HOME for alternate homes",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T20:26:30.221693Z"
+  "updated_at": "2026-08-02T18:04:36.719327Z"
 }
