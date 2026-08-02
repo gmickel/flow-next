@@ -66,9 +66,8 @@ Rejection must make **no durable reservation and write no file**; R10 requires p
 - [ ] `## Unreleased` CHANGELOG entry covering both tasks; no version bump
 - [ ] Propagation chain run; full gate green
 ## Done summary
-TBD
-
+The initial-map alias namespace is now owner-aware: `_InitialMapAliasRegistrar` guards all four write-site classes (`<n>`, `d<n>`, full D-ID, caller-supplied `id`) against each other in both directions, refusing one normalized alias claimed by two different decisions with `validation` / `alias_collision` (`details` = `alias` plus `first`/`second`, each `index` + `title`, `first` = incumbent) before any durable allocation. Same-owner re-registration stays idempotent (and hardens a weak claim to strong), empty-normalizing aliases stay ignored, and the provisional sentinel pass claims chart-id-dependent full D-IDs weakly so it manufactures no false collision while resolving edges exactly as the real-id pass does. Contract documented in `docs/flowctl.md`, pinned in `test_chart_docs_inventory.py`, covered by new real-CLI tests, and both fn-153 tasks are staged under `## Unreleased` with no version bump.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4d394b2084b909f7e9fbc32566ca38df1c603757, 9ea735df51a16672608036c95343623bb06670cd, ad835f70c1b5293df17efed33e4d7cffbfe53268
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution test_chart_graph_claims test_chart_store -q (baseline: green), python3 scripts/run_tests_parallel.py (179 files, 3874 tests, 0 failures), uvx ruff@0.16.0 check ., cp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py; rsync -a --delete --exclude __pycache__ plugins/flow-next/scripts/flowctl_tracker/ .flow/bin/flowctl_tracker/; python3 scripts/gen_tracker_manifest.py; ./scripts/sync-codex.sh x2
 - PRs:
