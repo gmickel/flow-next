@@ -16,6 +16,38 @@ package and names what it supersedes.
 ### Fixed
 
 - **Running the suite from a Cursor agent session keeps its local headroom.** Cursor sets `CI=1` in its agent shell, so CI detection alone would have handed the whole machine to the test runner on a developer box - starving the editor and the agent that the two-core reservation exists to protect. A non-empty `CURSOR_AGENT` now forces the local branch; hosted runners never set it, so real CI is unaffected.
+- **A superseded premise no longer strands the decision that depends on it.**
+  When one supersession cascaded through several resolved dependents, the
+  cascade processed them in local D-number order, not premise-first. A
+  dependent numbered ahead of its own premise was replaced first, so its
+  replacement was wired to the premise the same cascade was about to supersede
+  rather than to that premise's replacement. Nothing raised, nothing logged:
+  the chart persisted a graph that looked correct and answered every later
+  supersession, briefing, and capture question from the stale edge. Cascades
+  now walk the dependency graph premise-first (Kahn's algorithm with a
+  min-heap on the local D-number), so equal-eligibility decisions still emerge
+  in ascending D-number and identical ordered inputs reproduce byte-identical
+  `affected`, `cascade_open`, `cascade_resolved`, and `replacements` arrays.
+  `--keep-dependents` is untouched - it keeps emitting dependents in
+  local-number order from its own call site, so its public `--json` arrays are
+  byte-identical to before.
+- **An ambiguous initial map is refused instead of silently mis-wired.**
+  `chart create --initial-map-file` resolves edges through one flat alias
+  namespace - the ordinal `<n>`, the `d<n>` form, the full decision id, and an
+  optional explicit `id` - and every one of those was a plain assignment where
+  the last writer won. A decision supplying `id: "d7"` while D7 did not exist
+  yet had its alias silently taken over when decision #7 registered its own
+  generated `d7`, and every edge naming that alias then pointed at the wrong
+  decision. Graph validation could not catch it: it runs on the
+  already-resolved graph, where the mis-wiring looks perfectly valid. One
+  alias claimed by two different decisions is now refused up front with a
+  `validation` / `alias_collision` error naming the alias and both claimants
+  (`first` is the incumbent, `second` the rejected one), documented in
+  `docs/flowctl.md`. Legal input is unchanged: the same alias registered twice
+  for the same decision is still idempotent - an explicit `id` equal to that
+  decision's own generated alias keeps working - and an id that normalizes to
+  the empty string is still ignored. A rejection makes no durable reservation
+  and writes no file, so the next valid create still receives the same `fn-N`.
 - **A reopened chart can always be briefed again.** `chart reopen` stales the
   existing briefing, which is right - it was written before the reopen. But
   briefing identity was computed from the chart revision, the proposal, and the
