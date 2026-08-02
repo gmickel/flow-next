@@ -105,7 +105,15 @@ cd flow-next
 ./scripts/install-codex.sh flow-next
 ```
 
-The script copies pre-built files from `codex/` to `~/.codex/` (skills, 21 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into `config.toml`. Idempotent — re-run after `git pull` to update. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
+The script copies pre-built files from `codex/` to the **active Codex home** (skills, 21 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into that home's `config.toml`. Idempotent — re-run after `git pull` to update.
+
+**Multiple Codex homes.** The target is `${CODEX_HOME:-$HOME/.codex}`, so a second CLI home (a work account, a client sandbox, another instance) gets its own full surface:
+
+```bash
+CODEX_HOME="$HOME/.codex-work" ./scripts/install-codex.sh flow-next
+```
+
+Run it once per home; quote the value if the path contains spaces. Generated skills and agents resolve their bundled tools through the same expansion at runtime, so one installed artifact is correct in whichever home it sits — nothing reaches back into the primary home. With `CODEX_HOME` unset the behavior is exactly as before. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
 
 ### Skill invocation
 
@@ -136,7 +144,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 - Planning, work execution, interviews, reviews — full workflow.
 - Multi-agent roles: 21 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
 - Cross-model reviews (Codex as review backend).
-- flowctl CLI (`~/.codex/scripts/flowctl`).
+- flowctl CLI (`${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`).
 - Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/flowctl to project; Ralph hooks only if the Ralph ceremony answers yes.
 - `openai.yaml` UI metadata for Codex app display (brand color, descriptions).
 - Tracker lifecycle touchpoints use the same deterministic `flowctl tracker sync`
@@ -172,7 +180,7 @@ CODEX_MAX_THREADS=12 ./scripts/install-codex.sh flow-next   # CODEX_MAX_THREADS 
 
 Codex supports hooks, but flow-next installs **none** by default: the Codex mirror ships no `hooks.json`, and `install-codex.sh` does not copy one (fn-114 zero-default). Project hooks land only when Ralph is enabled via `$flow-next-ralph-init` (or setup's Ralph yes path), which writes/merges project `.codex/hooks.json` with the Codex subset (`PreToolUse`/`PostToolUse` shell + `Stop`; no `SubagentStop`, no `Edit`/`Write` matchers).
 
-`install-codex.sh` still sets `[features] hooks = true` in `~/.codex/config.toml` (feature flag only, not a Ralph install). That flag enables Codex's hooks runtime so a later ralph-init project hooks file can load; it does **not** install any guard entries by itself.
+`install-codex.sh` still sets `[features] hooks = true` in the active home's `config.toml` (feature flag only, not a Ralph install). That flag enables Codex's hooks runtime so a later ralph-init project hooks file can load; it does **not** install any guard entries by itself.
 
 **Limitation:** Codex hooks only intercept `Bash` (not `Edit`/`Write`). Ralph's file-modification guard won't catch direct file edits. The `SubagentStop` event is also not supported.
 

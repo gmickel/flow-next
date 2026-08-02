@@ -77,7 +77,7 @@ If any rewrite site turns out to be narrative prose or a JSON/manifest string ra
 - [ ] With `CODEX_HOME` unset the installer targets `~/.codex` exactly as before (R1)
 - [ ] `test_precheck_mode_contract.py` updated to the new form, not relaxed (R4)
 - [ ] `./scripts/sync-codex.sh` is byte-idempotent across the SECOND run, proven by hashing the mirror after run 1 and after run 2 and requiring equality (`find plugins/flow-next/codex -type f -exec shasum {} + | shasum`). `git diff --stat` cannot serve - the first run legitimately rewrites ~46 tracked files, so it can never be empty during this task (R4)
-- [ ] `README.md` documents `CODEX_HOME=<home> ./scripts/install-codex.sh`, run once per home (R3)
+- [ ] `README.md` documents the per-home install with a **copy-paste-safe** example - never an angle-bracket placeholder, which bash parses as redirections and which truncates the installer to zero bytes when pasted (R3)
 - [ ] No new flag, no `config.toml` change, no other installer touched (R5)
 - [ ] `## Unreleased` CHANGELOG entry; no version bump
 - [ ] Full gate green: `python3 scripts/run_tests_parallel.py` and `uvx ruff@0.16.0 check .`

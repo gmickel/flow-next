@@ -6,7 +6,7 @@ All notable changes to the flow-next.
 
 ### Changed
 
-- **Codex installs now honor `CODEX_HOME`.** Run `CODEX_HOME=<home> ./scripts/install-codex.sh` once for each alternate Codex home; generated skills and agents now resolve their bundled tools from that same home at runtime. Installer progress and cleanup messages name the real destination, while an unset `CODEX_HOME` keeps the existing `~/.codex` behavior.
+- **Codex installs now honor `CODEX_HOME`.** Run `CODEX_HOME="$HOME/.codex-work" ./scripts/install-codex.sh` once for each alternate Codex home; generated skills and agents now resolve their bundled tools from that same home at runtime. Installer progress and cleanup messages name the real destination, while an unset `CODEX_HOME` keeps the existing `~/.codex` behavior.
 
 - **Review loops get twice the room before they stop and ask for you.**
   `MAX_REVIEW_ITERATIONS` defaults to **8** instead of 4. The cap counts review
