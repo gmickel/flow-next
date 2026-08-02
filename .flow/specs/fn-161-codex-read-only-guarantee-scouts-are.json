@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-161-codex-read-only-guarantee-scouts-are",
+  "created_at": "2026-08-02T23:48:20.041384Z",
+  "depends_on_epics": [],
+  "id": "fn-161-codex-read-only-guarantee-scouts-are",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-161-codex-read-only-guarantee-scouts-are.md",
+  "status": "open",
+  "title": "Codex read-only guarantee: scouts are declared read-only and are not",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-02T23:49:26.695701Z"
+}
