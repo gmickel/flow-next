@@ -30,7 +30,9 @@ Three assertion sites, one measured behavior, one candidate mechanism.
 "permission_profile": {"type": "managed", "file_system": {"type": "restricted", "entries": [...]}}
 ```
 
-`permissions` is therefore the **only** candidate mechanism for a real restriction. `tools`, `allowed_tools`, `disallowed_tools` are all rejected.
+**Both candidates were then tested and both failed** (see Decision Context). The upstream schema (`codex-rs/core/config.schema.json`, `config/src/permissions_toml.rs`, `protocol/src/models.rs`) shows `permissions` is a map of *named profiles* and the selector is `default_permissions`, which accepts the built-ins `:read-only`, `:workspace`, `:danger-full-access`. Setting `default_permissions = ":read-only"` in a role parses cleanly and is still not enforced for the spawned child. `tools`, `allowed_tools`, `disallowed_tools` are rejected outright and silently discard the role.
+
+**The governing fact: a child's sandbox is inherited from its parent, not declared by its role.** Measured in both directions - `workspace-write` parent yields a `workspace-write` child regardless of what the role says (P6, P12), and a `read-only` parent yields a `read-only` child (P13). The only containment lever available to flow-next is the sandbox the **parent process** was launched with.
 
 **The failure mode that governs the whole design (probe P11).** An unrecognized key does not fail loudly. Codex emits `warning: Ignoring malformed agent role definition: ... unknown field` and **discards the entire role**. The next dispatch then fails with `Could not spawn subagent: unknown agent_type '<name>'`. Applied to our sync, a single bad key in the emitted schema silently removes **all 21 scout roles**, and every scout dispatch across every skill fails at once. Any change to what we emit must be gated on this, not merely tested for parse success.
 
@@ -58,8 +60,9 @@ If the investigation finds `permissions` enforceable, the contract added is one 
 <!-- scope: both -->
 
 - **R1:** `sync-codex.sh:1650`'s enforcement claim is corrected in place, with the measured evidence (fn-98 P6: child-side `patch_apply` success under a role declaring `sandbox_mode = "read-only"`) cited next to it so a future reader cannot re-assert parity from the comment alone.
-- **R2:** A live investigation determines whether `permissions` can express an enforced read-only file system for a spawned child under a `workspace-write` parent on codex-cli 0.146.0. The verdict is recorded in Decision Context with the exact TOML tried and the child-side rollout evidence, whichever way it lands. **A negative result closes this criterion**; it does not block the spec.
-- **R3:** If and only if R2 is positive, read-only roles emit the verified `permissions` block, and `sync-codex.sh` gains a guard that fails the build when a canonical agent carrying `readonly: true` would emit a role without it.
+- **R2:** ~~Investigate whether `permissions` can express an enforced read-only child.~~ **RESOLVED NEGATIVE, 2026-08-03, measured - see Decision Context.** No role-level mechanism enforces read-only for a spawned child. Both candidates were tested against the shipped schema and live: role `sandbox_mode = "read-only"` (P6) and role `default_permissions = ":read-only"` (P12) are ignored; in both the child ran at the parent's `workspace-write` and completed `patch_apply`. The child inherits the **parent's** sandbox in both directions (P13: a `-s read-only` parent yields a `read-only` child). Nothing further to build here.
+- **R3:** ~~Emit a verified `permissions` block.~~ **DROPPED** - conditional on R2 being positive; it was not.
+- **R3b:** Document the one lever that does work: containment comes from the **parent process launch flag** (`codex -s read-only`), never from a role. Anywhere flow-next documents scout read-only behavior on Codex must say this instead of implying the role declares it.
 - **R4:** `docs/platforms.md` states the guarantee per host explicitly: harness-enforced on Claude Code via `disallowedTools`; on Codex either enforced via `permissions` (if R2 positive) or **prompt-only and not sandbox-enforced** (if negative). The current text implying uniform coverage is replaced, not annotated.
 - **R5:** The repo `CLAUDE.md` cross-platform "Agent permissions" bullet is corrected to match R4. It currently reads as though the blacklist translates cleanly to every host.
 - **R6:** A regression guard exists for the silent-role-drop failure mode: the sync validation fails if any emitted role TOML contains a key outside the measured accepted set. This protects all 21 roles from a future one-key mistake regardless of how R2 lands.
@@ -88,3 +91,24 @@ If the investigation finds `permissions` enforceable, the contract added is one 
 **Sequencing against fn-98.** Both touch `platforms.md`. fn-98's R2 rewrites the model-steering caveat; this spec's R4 rewrites the permissions claim. They are different paragraphs, but landing them concurrently invites a conflicting rewrite. Land fn-98 first (it is further along and its docs edit is larger), then this one on top.
 
 **Evidence source.** All measurements are from the fn-98 probe matrix, 2026-08-03, codex-cli 0.146.0, run against a disposable `CODEX_HOME` so the maintainer's real config was untouched. Probes P6 (sandbox not enforced, child-side `patch_apply` success), P11 (unknown key silently discards the role), and the schema-acceptance sweep that identified `permissions` as the sole typed candidate.
+
+## Investigation record 2026-08-03 (R2 closed, codex-cli 0.146.0)
+
+Resolved by reading the shipped schema and source, then testing live. No part of this is left for implementation.
+
+**Upstream schema (authoritative).** `codex-rs/core/config.schema.json` defines `AgentRoleToml` for the `[agents.<key>]` table (`config_file`, `description`, `nickname_candidates` only). The file that `config_file` points at is described as "a role-specific config layer", so it accepts top-level config keys - which is why `permissions` parsed at all. `permissions` is `BTreeMap<String, PermissionProfileToml>` (`config/src/permissions_toml.rs`): a map of *named profiles*, not a restriction. The selector is the separate root key **`default_permissions`** - "Names starting with `:` refer to built-in profiles". The built-ins are `:read-only`, `:workspace`, `:danger-full-access` (`protocol/src/models.rs:304-310`). `PermissionProfileToml` fields: `description`, `extends`, `filesystem`, `network`, `workspace_roots`.
+
+**Live results.**
+
+| # | Setup | Child sandbox | Write |
+|---|---|---|---|
+| P6 | role `sandbox_mode="read-only"`, parent `workspace-write` | `workspace-write` | **succeeded** (child `patch_apply_end`: `Success. Updated the following files: A ro-probe.txt`) |
+| P12 | role `default_permissions=":read-only"`, parent `workspace-write` | `workspace-write` | **succeeded** (child verified the bytes `57 52 4f 54 45 0a`) |
+| P13 | same role, parent launched `-s read-only` | `read-only` | blocked; no file |
+| P11 | role with an unrecognized key (`tools`) | n/a | role **silently discarded**; dispatch failed `unknown agent_type` |
+
+**Verdict.** There is no role-level read-only mechanism on 0.146.0. A child's sandbox is inherited from its parent in both directions; a role can neither narrow nor widen it. `default_permissions` in a role file is accepted, parses, and has no effect on a spawned child.
+
+**Consequence for the spec.** R3 is dropped - there is nothing to emit. The work is R1 (correct the false comment), R3b (document the parent-launch lever), R4/R5 (state the per-host guarantee honestly), R6 (guard the silent-drop mode), R7 (no behavior change elsewhere). This is now a documentation-and-guard spec with zero uncertainty remaining.
+
+**One divergence from upstream worth noting.** openai/codex#33314's 2026-08-01 report describes a `-s read-only` parent producing children that report `workspace-write`. P13 did not reproduce that: the read-only parent produced a read-only child. Their case involved project-local custom roles and `-a never`; ours used a single role and default approvals. Not contradicted, not reproduced - and it does not change this spec's conclusion, which rests on the workspace-write-parent case that flow-next actually runs.
