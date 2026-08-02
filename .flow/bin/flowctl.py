@@ -9,6 +9,7 @@ Agents must use flowctl for all writes - never edit .flow/* directly.
 import argparse
 import errno
 import hashlib
+import heapq
 import html
 import io
 import json
@@ -13040,7 +13041,14 @@ def _depends_on_reverse_index(decisions: list[dict]) -> dict[str, list[str]]:
 def _depends_on_closure(
     seeds: list[str], decisions: list[dict]
 ) -> list[str]:
-    """Direct + transitive dependents via depends_on (excludes seeds)."""
+    """Direct + transitive dependents via depends_on (excludes seeds).
+
+    Reachability only, emitted in local-number order. This is what
+    `--keep-dependents` consumes: that branch has no cross-iteration data
+    dependency, so its published order stays exactly as shipped. The
+    cascading branch re-orders the same set premise-first via
+    `_depends_on_topological_order`.
+    """
     rev = _depends_on_reverse_index(decisions)
     seen: set[str] = set()
     order: list[str] = []
@@ -13056,6 +13064,70 @@ def _depends_on_closure(
             stack.append(dep)
     # Stable by local number.
     order.sort(key=lambda did: decision_local_number(did))
+    return order
+
+
+def _depends_on_topological_order(
+    dependent_ids: list[str], decisions: list[dict]
+) -> list[str]:
+    """Re-order a dependent closure premise-first (Kahn, ties by D-number).
+
+    The supersession cascade rewires each dependent's premises from the
+    `premise_rewrite` map it fills in as it goes, so a dependent processed
+    before a premise this same cascade supersedes would be wired to the
+    SUPERSEDED premise instead of that premise's replacement. Local D-number
+    order does not imply premise order (D2 may depend on D3), hence a real
+    topological sort.
+
+    Kahn's algorithm with a min-heap keyed on the local D-number: a premise
+    always precedes its dependents, and nodes of equal eligibility emerge in
+    ascending D-number, so the derived `--json` arrays are fully determined.
+    Only edges INSIDE the closure constrain the order; premises outside it
+    (the superseded seeds, untouched decisions) are already settled.
+    """
+    members = set(dependent_ids)
+    entry_by_id = {
+        d["id"]: d
+        for d in decisions
+        if isinstance(d, dict) and d.get("id") in members
+    }
+    indegree = {did: 0 for did in dependent_ids}
+    dependents: dict[str, list[str]] = {did: [] for did in dependent_ids}
+    for did in dependent_ids:
+        seen_deps: set[str] = set()
+        for premise in (entry_by_id.get(did) or {}).get("depends_on") or []:
+            if not isinstance(premise, str):
+                continue
+            if premise == did or premise not in members or premise in seen_deps:
+                continue
+            seen_deps.add(premise)
+            indegree[did] += 1
+            dependents[premise].append(did)
+    heap = [
+        (decision_local_number(did), did)
+        for did in dependent_ids
+        if indegree[did] == 0
+    ]
+    heapq.heapify(heap)
+    order: list[str] = []
+    while heap:
+        _, node = heapq.heappop(heap)
+        order.append(node)
+        for nxt in dependents[node]:
+            indegree[nxt] -= 1
+            if indegree[nxt] == 0:
+                heapq.heappush(heap, (decision_local_number(nxt), nxt))
+    if len(order) < len(dependent_ids):
+        # Unreachable in practice: validate_chart_graph cycle-checks the same
+        # depends_on edge set before every persisted write. Never drop a
+        # dependent if it ever happens.
+        emitted = set(order)
+        order.extend(
+            sorted(
+                (did for did in dependent_ids if did not in emitted),
+                key=decision_local_number,
+            )
+        )
     return order
 
 
@@ -13623,6 +13695,13 @@ def resolve_chart_decision(
             if dep not in affected:
                 affected.append(dep)
     else:
+        # Premise-first: the wiring below reads premise_rewrite incrementally,
+        # so every premise inside this closure must be replaced before any of
+        # its dependents is rewired. --keep-dependents above keeps the
+        # local-number order it has always published.
+        dependent_ids = _depends_on_topological_order(
+            dependent_ids, list(by_id.values())
+        )
         next_n = _next_decision_number({"decisions": list(by_id.values())})
         # Replacement premises must follow the supersession: a replacement
         # copying depends_on=[D1] after D4 superseded D1 would be invisible
