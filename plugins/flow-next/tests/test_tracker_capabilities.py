@@ -1141,12 +1141,13 @@ class Round2HostFixes(unittest.TestCase):
 
                 def execute(request):
                     if request.op == "relate-list":
-                        # Rendezvous, not a performance assertion: the timeout only
-                        # stops a genuinely broken test from hanging. It must be far
-                        # above worst-case scheduling delay - CI runs this suite at the
-                        # runner's full core count (fn-155), so sibling interpreters
-                        # compete for the same cores and a tight bound flakes.
-                        barrier.wait(timeout=120)  # both probe pre-write state
+                        # Same best-effort rendezvous as the sibling test below:
+                        # a worker that backs off early never arrives, so a hard
+                        # barrier would strand the other one.
+                        try:
+                            barrier.wait(timeout=10)  # both probe pre-write state
+                        except threading.BrokenBarrierError:
+                            pass
                         return empty
                     return create
                 results[dep] = R.relate(flow, "fn-1-demo", blocked_by=dep,
@@ -1802,14 +1803,19 @@ class RelatePendingClaim(unittest.TestCase):
 
                 def execute(request):
                     if request.op == "relate-list":
-                        # BOTH workers probe the edge as absent before either
-                        # reaches the claim - the exact reviewed race.
-                        # Rendezvous, not a performance assertion - see the note on the
-                        # sibling barrier above. A tight bound flakes under fn-155's
-                        # full-core-count CI parallelism, and the failure looks like
-                        # `got []` (both threads died before the create) rather than a
-                        # real double-create, which would be `got ['w1', 'w2']`.
-                        barrier.wait(timeout=120)
+                        # Best-effort attempt to force BOTH workers past the
+                        # absent-probe before either claims - the reviewed race.
+                        # It is deliberately NOT a hard rendezvous: when the
+                        # claim lands first, the loser backs off WITHOUT issuing
+                        # relate-list, so it never arrives here and a blocking
+                        # barrier would strand the winner until timeout and
+                        # produce zero creates. Both interleavings must yield
+                        # exactly one create, so tolerate the broken barrier and
+                        # carry on.
+                        try:
+                            barrier.wait(timeout=10)
+                        except threading.BrokenBarrierError:
+                            pass
                         return empty
                     if request.op == "relate-create":
                         with creates_lock:
