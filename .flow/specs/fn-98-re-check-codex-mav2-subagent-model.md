@@ -125,3 +125,35 @@ The child override was not honored end to end. The probe did successfully spawn 
 5. `gpt-5.6-luna` remains `multi_agent_version: "v1"` and cannot be selected by a V2 parent (open ask on #31814, 2026-08-01).
 
 **Disposition:** re-check complete, R1 and R3 satisfied. R2 and R4 are now real work - docs currency across four properties plus the fact-scout pin - and should be planned rather than absorbed into this stub.
+
+## Probe matrix 2026-08-03 (codex-cli 0.146.0, disposable `CODEX_HOME`)
+
+Nine probes against a throwaway `CODEX_HOME` with purpose-built roles, so nothing touched the real config. Every verdict below is read from the **child thread's rollout `turn_context`**, not from the child's self-report, and the write test is confirmed on disk.
+
+| # | Setup | Result |
+|---|---|---|
+| P1 | explicit `model=terra effort=medium`, no `agent_type` | **applied** - child `terra/medium` |
+| P2 | no overrides (control) | **inherits** - child `sol/high` |
+| P3 | `agent_type=probe-terra`, no explicit model | **role model applied** - child `terra/medium` |
+| P4b | `agent_type=probe-luna` | **applied** - child `gpt-5.6-luna` |
+| P4c | explicit `model=luna`, no `agent_type` | **hard error**: ``Unknown model `gpt-5.6-luna` for spawn_agent. Available models: gpt-5.6-sol, gpt-5.6-terra`` |
+| P5b | `agent_type=probe-terra` **+** explicit `model=sol effort=high` | **role wins** - child ran `terra/medium`; the explicit args were silently ignored |
+| P7b | `reasoning_effort=low` only | **applied** - child `sol/low` |
+| P8 | depth-2 nested spawn | **works** - grandchild reply returned verbatim (`GRANDCHILD=DEEP`) |
+| P6 | role `sandbox_mode="read-only"` under a `workspace-write` parent | **NOT enforced** - child `sandbox=workspace-write`, and the child **actually created the file** (verified on disk) |
+
+**Corrections to earlier entries in this spec.** Two claims made before this matrix were wrong and are retracted:
+
+1. "Role-profile application is unverifiable / the role path is broken" - **false**. P3 and P4b show role-declared model and effort applied end to end. The role path is the *stronger* of the two.
+2. "Pin the fact-scout via explicit spawn params rather than a role model" - **backwards**. Explicit params are the weaker path: restricted to `sol`/`terra` (P4c) and silently overridden by the role whenever `agent_type` is set (P5b).
+
+**Two asymmetries worth remembering.** The role path reaches models the direct spawn parameter cannot (`luna` works as a role, errors as a param). And role beats explicit param rather than the reverse - so an `agent_type` dispatch cannot be model-overridden at the call site at all.
+
+**Two dispatch gotchas.**
+
+- `agent_type` must match the role's `name` field (hyphenated, `probe-terra`), NOT the `[agents.<key>]` table key (underscored, `probe_terra`). The first attempt with the table key failed and the agent silently retried with the name.
+- `agent_type` is incompatible with a full-history fork: ``Full-history forked agents inherit the parent agent type; omit agent_type, or spawn without a full-history fork.`` Always pass `fork_turns: "none"` alongside `agent_type`.
+
+**The one finding that is a real flow-next defect.** Every generated scout role in the Codex mirror declares `sandbox_mode = "read-only"`. P6 shows that declaration is **not enforced** - the child runs at the parent's `workspace-write` and can write. This is stronger evidence than openai/codex#33314's own repro, which explicitly could not distinguish an enforcement defect from a reporting defect; here the file landed on disk. Consequence: **the read-only guarantee for flow-next scouts does not hold on a Codex host.** It is mitigated only by prompt (`disallowedTools` / instructions), never by the sandbox. Do not describe Codex scouts as sandbox-enforced read-only, and do not rely on the role sandbox as a boundary for anything with real blast radius.
+
+**Net upstream reading.** Model and effort steering is working on both paths. #33267 did not reproduce for plain nested spawns. #33314's model-attestation half is explained by self-report being unreliable; its **sandbox half is real, reproduced here, and is the only part that still affects us**.
