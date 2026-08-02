@@ -89,3 +89,39 @@ terminal result: CHILD_MODEL=gpt-5.6-sol
 ```
 
 The child override was not honored end to end. The probe did successfully spawn and join a child, so the defect remains specifically model/effort steering rather than basic fork/join. Disposition: keep the inheritance-safe behavior and the `codex exec -m` self-bridge guidance; do not pin the interview fact-scout through `spawn_agent`. Re-check only after #33314 reports a released fix or a later Codex release explicitly claims full profile/model application.
+
+## Status check 2026-08-03 (Codex CLI 0.146.0) - STEERING WORKS; prior finding was a false negative
+
+**R1 - upstream state.** Local `codex-cli 0.146.0`.
+
+| Issue | State | Last update | Subject |
+|---|---|---|---|
+| #32782 | CLOSED | 2026-07-16 | `spawn_agent` `agent_type` exposure |
+| #33268 | CLOSED | 2026-07-16 | model / `reasoning_effort` silently dropped |
+| #31814 | CLOSED | 2026-07-15 | umbrella: cannot specify subagent models |
+| #33314 | OPEN | 2026-08-01 | full-profile application + verifiable effective-config receipt |
+| #33267 | OPEN | 2026-07-27 | `codex exec` MAv2 results undecodable in parent turn |
+
+**R3 - live probe, and the correction it forces.** Parent `gpt-5.6-sol` @ high, requested child `gpt-5.6-terra` @ medium.
+
+- Child self-report: `CHILD_MODEL=gpt-5.6-sol` - identical to the 2026-07-23 result.
+- Parent rollout `spawn_agent` call carried `"model":"gpt-5.6-terra","reasoning_effort":"medium"` - the override was emitted.
+- **Child thread rollout `turn_context`: `model=gpt-5.6-terra, effort=medium`**, and the child rollout contains four `gpt-5.6-terra` mentions and zero `sol`. Child session `019fc4bb-d10f-7ae1-b58c-78311e786b3c`, `thread_source=subagent`, `agent_path=/root/report_model`.
+- **Control run** (identical prompt, NO override): child `turn_context` = `model=gpt-5.6-sol, effort=high`. The field tracks the request rather than echoing a constant, which is what makes the positive result load-bearing.
+
+**Verdict: model and reasoning-effort steering via `spawn_agent` works on 0.146.0.** The 2026-07-23 status check recorded "the child override was not honored end to end" from the child's self-report. That was a **false negative**: a model cannot reliably name its own model id - the Codex base instructions themselves say "You are Codex, an agent based on GPT-5", so `gpt-5.6-sol` was a plausible-sounding guess, not a routing observation. **Never verify routing by asking the model; read the host record.**
+
+**What the two OPEN issues actually are - neither blocks model steering.**
+
+- **#33314 is about sandbox/permission profile application and the absence of an in-band receipt**, not model selection. The 2026-08-01 macOS repro (same 0.146.0) shows a `read-only` parent spawning children that report `workspace-write`, and separately that the children could not attest their own model or effort. That second half is the same self-report defect this check just diagnosed - the information exists in the rollout, just not in-band.
+- **#33267 concerns richer exec-surface shapes** (malformed `encrypted_content` blocks under `fork_turns: "none"` with routed custom roles). Plain task-prompt spawns return results fine; both probes here joined and returned cleanly.
+
+**Consequences for flow-next.**
+
+1. **R2 docs are now factually stale.** The "Known Codex limitation (Jul 2026)" note in `orchestration.md`, the `platforms.md` caveat, and the `usage.md` self-bridge parenthetical all state that subagent model steering is unreliable. On 0.146.0 it is not. The `codex exec -m` self-bridge stays a valid route, but it is no longer the *only* reliable one.
+2. **R4 is unblocked.** The interview fact-scout on Codex hosts can be pinned (`gpt-5.6-terra` @ medium remains the cost-optimal candidate) instead of inheriting the session model.
+3. **Verification carries a real cost.** There is no in-band receipt - confirming an effective pin means reading `~/.codex/sessions/**/rollout-*.jsonl` for the child thread's `turn_context`. Nothing in flow-next should attempt runtime verification of a pin; pin and trust, and re-probe out of band when a Codex release lands.
+4. **Sandbox inheritance stays untrustworthy (#33314).** A pinned child does not reliably inherit a narrowed sandbox. Do not use a role's `sandbox_mode` as a security boundary for anything flow-next spawns.
+5. `gpt-5.6-luna` remains `multi_agent_version: "v1"` and cannot be selected by a V2 parent (open ask on #31814, 2026-08-01).
+
+**Disposition:** re-check complete, R1 and R3 satisfied. R2 and R4 are now real work - docs currency across four properties plus the fact-scout pin - and should be planned rather than absorbed into this stub.
