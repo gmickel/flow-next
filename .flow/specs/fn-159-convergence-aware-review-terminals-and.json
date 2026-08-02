@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-159-convergence-aware-review-terminals-and",
+  "created_at": "2026-08-02T19:06:42.490098Z",
+  "depends_on_epics": [],
+  "id": "fn-159-convergence-aware-review-terminals-and",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-159-convergence-aware-review-terminals-and.md",
+  "status": "open",
+  "title": "Convergence-aware review terminals and per-surface blocking calibration",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-02T19:08:30.131925Z"
+}
