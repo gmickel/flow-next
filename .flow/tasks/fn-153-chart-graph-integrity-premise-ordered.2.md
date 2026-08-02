@@ -14,7 +14,7 @@ Scope was cut at plan-review round 3. The resolve-sharpen path is no longer part
 
 **Guarding only `raw["id"]` is not enough.** The collision is reachable in reverse: decision #3 supplies `id: "d7"` while D7 does not exist yet, then decision #7's own generated write to `local_map["d7"]` silently clobbers #3's mapping. Every write site needs the same guard.
 
-**Collision means different owners.** Registering the same alias twice for the same decision is legal and idempotent - a caller may supply an `id` equal to that decision's own generated alias. Owner identity here is the batch index. A helper that rejects every duplicate key would break legal input; one that permits all duplicates catches nothing.
+**Collision means different owners.** Registering the same alias twice for the same decision is legal and idempotent - a caller may supply an `id` equal to that decision's own generated alias. Owner identity here is the batch index. **Aliases normalizing to the empty string are excluded**: a whitespace-only `id` writes `local_map[""]` today, and `_normalize_edge_refs` discards empty references, so that entry is unreachable and cannot cause ambiguity. Guarding it would reject input that works today. A helper that rejects every duplicate key would break legal input; one that permits all duplicates catches nothing.
 
 **The rejection is a named, stable contract.** `ChartError("validation", "alias_collision", ...)` with `details` carrying `alias`, `first` and `second`, each with `index` and `title`. `first` is the incumbent registration and `second` the rejected one, which is well-defined because initial-map registers in batch order.
 
@@ -45,7 +45,7 @@ Do NOT touch the resolve-sharpen aliasing block (`13814-13872`). It is out of sc
 
 `validate_and_build_initial_map` is called TWICE per `chart create --initial-map-file` (`23329` provisional pass with a sentinel chart id, `23345` rebind pass after real allocation). Validate ordinal and explicit-alias collisions in the chart-independent pass; a full-D-ID alias depends on the chart id, so a sentinel-pass rejection on that form would be an artifact rather than a real collision.
 
-Rejection must happen **before any D-ID allocation or file write**, and R10 requires proving it, not asserting it.
+Rejection must make **no durable reservation and write no file**; R10 requires proving that, not asserting it. Constructing candidate ids in memory is expected - a genuine canonical full-ID collision cannot be detected before a candidate chart id exists.
 
 `flowctl.py` edits require the propagation chain (see task .1 Key context). No version bump - stage under `## Unreleased`.
 ## Acceptance
@@ -55,7 +55,8 @@ Rejection must happen **before any D-ID allocation or file write**, and R10 requ
 - [ ] Real-CLI test: a caller `id` of `d<n>` colliding with a **later** decision's generated alias is rejected - the reverse direction (R4)
 - [ ] Real-CLI test: legal same-owner repetition still succeeds - a caller `id` equal to that decision's own generated alias is not rejected (R2)
 - [ ] Real-CLI test: a GENUINE full-D-ID collision is rejected - decision 1 claims `id: "fn-1.D2"` while decision 2 owns generated `fn-1.D2`; assert `validation`/`alias_collision`, the exact claimant details, no files written, and that the next valid creation still receives `fn-1` (R4, R10)
-- [ ] Real-CLI test: the provisional-pass sentinel chart id cannot manufacture a FALSE collision on a full-D-ID alias (R2)
+- [ ] Real-CLI test: the provisional-pass sentinel chart id cannot manufacture a FALSE collision on a full-D-ID alias, **and resolution stays correct through it** - decision 1 claims `id: "fn-999999999.D2"`, decision 2 REFERENCES that alias in an edge, and the created chart's edge points at decision 1 rather than collapsing into a self-edge when decision 2's generated provisional full ID is registered. Suppressing the false collision alone is not enough (R2, R10)
+- [ ] Real-CLI test: two decisions with whitespace-only explicit `id` values are still accepted, exactly as today (R2)
 - [ ] Error is `validation` / `alias_collision`, `details` = `alias`, `first`, `second` (each `index` + `title`), `first` = incumbent; documented in `docs/flowctl.md` and pinned in `test_chart_docs_inventory.py` (R8)
 - [ ] Atomicity demonstrated: a rejected initial map leaves no chart files and the next valid chart still receives the expected `fn-N` (R10)
 - [ ] The resolve-sharpen aliasing block is untouched (Boundaries)
