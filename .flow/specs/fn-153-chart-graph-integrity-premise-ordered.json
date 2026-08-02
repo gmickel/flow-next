@@ -9,7 +9,8 @@
   "depends_on_epics": [],
   "id": "fn-153-chart-graph-integrity-premise-ordered",
   "impl_review_rounds": {
-    "fn-153-chart-graph-integrity-premise-ordered.1": 0
+    "fn-153-chart-graph-integrity-premise-ordered.1": 0,
+    "fn-153-chart-graph-integrity-premise-ordered.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -128,11 +129,40 @@
       "task": "fn-153-chart-graph-integrity-premise-ordered.1",
       "timestamp": "2026-08-02T11:33:23.916961Z",
       "verdict": "SHIP"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "4d394b2084b909f7e9fbc32566ca38df1c603757",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "4f1bed099df60305c9d9e6174af3b2d7cf35b1957fbba8cdb63d7daa615d57a3",
+      "round_consumed": true,
+      "scope": "impl:fn-153-chart-graph-integrity-premise-ordered.2",
+      "task": "fn-153-chart-graph-integrity-premise-ordered.2",
+      "timestamp": "2026-08-02T12:00:08.437238Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "rp",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "9ea735df51a16672608036c95343623bb06670cd",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "cae94098ba20935f67dfb3876f86c34b20f670a34d9a738719677dd3ddacd2e0",
+      "round_consumed": true,
+      "scope": "impl:fn-153-chart-graph-integrity-premise-ordered.2",
+      "task": "fn-153-chart-graph-integrity-premise-ordered.2",
+      "timestamp": "2026-08-02T12:08:02.312673Z",
+      "verdict": "SHIP"
     }
   ],
   "review_pending_rounds": {},
   "review_transport_failures": {
     "impl:fn-153-chart-graph-integrity-premise-ordered.1": 0,
+    "impl:fn-153-chart-graph-integrity-premise-ordered.2": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-153-chart-graph-integrity-premise-ordered.md",
@@ -149,5 +179,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T11:33:24.381836Z"
+  "updated_at": "2026-08-02T12:08:11.209540Z"
 }
