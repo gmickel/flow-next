@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-02T19:19:45.424224Z",
+  "depends_on": [
+    "fn-159-convergence-aware-review-terminals-and.3"
+  ],
+  "id": "fn-159-convergence-aware-review-terminals-and.5",
+  "priority": null,
+  "spec": "fn-159-convergence-aware-review-terminals-and",
+  "spec_path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.5.md",
+  "status": "todo",
+  "title": "Bot-surface bounding (resolve-pr triage, land trigger text) + guard-block reset/--force",
+  "updated_at": "2026-08-02T20:13:33.606316Z"
+}

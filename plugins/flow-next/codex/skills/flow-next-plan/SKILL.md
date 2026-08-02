@@ -21,7 +21,7 @@ A **ready** (or already-captured) spec whose work is understood stays in plan - 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks (here and in `steps.md`) use `$FLOWCTL`:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
@@ -29,7 +29,7 @@ FLOWCTL="$HOME/.codex/scripts/flowctl"
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-Before Step 0, read `.flow/meta.json` and `$HOME/.codex/plugin.json` once to perform this check. In copy mode only, when both `.flow/meta.json` `setup_version` and the installed plugin manifest version are available and differ, ask exactly `Local Flow-Next copy v<X> differs from plugin v<Y>. Refresh before planning?` via plain-text numbered prompt. Offer exactly **Refresh now (Recommended)** and **Continue this run**. Refresh stops cleanly, tells the user to run `/flow-next:setup`, then rerun Plan; never invoke Setup or resume this Plan invocation. Continue warns once and proceeds. Under autonomous, Ralph, or receipt-driven execution, warn once and proceed without asking. Version match, plugin mode, or unavailable comparison evidence is silent. Never read or write legacy `version_ack` / `snippet_ack`; Setup alone owns setup-mode and snippet integrity.
+Before Step 0, read `.flow/meta.json` and `${CODEX_HOME:-$HOME/.codex}/plugin.json` once to perform this check. In copy mode only, when both `.flow/meta.json` `setup_version` and the installed plugin manifest version are available and differ, ask exactly `Local Flow-Next copy v<X> differs from plugin v<Y>. Refresh before planning?` via plain-text numbered prompt. Offer exactly **Refresh now (Recommended)** and **Continue this run**. Refresh stops cleanly, tells the user to run `/flow-next:setup`, then rerun Plan; never invoke Setup or resume this Plan invocation. Continue warns once and proceeds. Under autonomous, Ralph, or receipt-driven execution, warn once and proceed without asking. Version match, plugin mode, or unavailable comparison evidence is silent. Never read or write legacy `version_ack` / `snippet_ack`; Setup alone owns setup-mode and snippet integrity.
 
 **Role**: product-minded planner with strong repo awareness.
 **Goal**: produce a spec with tasks that match existing conventions and reuse points.

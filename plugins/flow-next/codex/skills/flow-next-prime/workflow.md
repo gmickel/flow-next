@@ -14,7 +14,7 @@ Classify what KIND of project this is BEFORE anything downstream runs. The class
 Classification is **deterministic and host-inline**: the raw signals come from the `flowctl prime classify --json` emitter; the skill layers the Axis-5 shape reasoning, the per-axis confidence, and playbook selection on top. Invoke the emitter (`ROOT` is its positional argument; every fenced block re-declares its own vars):
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ROOT="${ROOT:-.}"
 "$FLOWCTL" prime classify --json "$ROOT" # JSON on stdout; progress/diagnostics on stderr
@@ -446,7 +446,7 @@ FH9 is informational (host env) - it feeds the report header (Phase 4) and is ex
 One bash call decides DC8 — run it during synthesis (no scout covers it):
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
 ```
@@ -588,7 +588,7 @@ For each pillar with a failing or ⚠️ criterion, expand ONLY those rows with 
 Detection - `flowctl` is **bundled, not on `PATH`** after install, so use the same `FLOWCTL` prelude pattern as the other skills (canonical Droid+Claude fallback; sync-codex.sh rewrites it to `$HOME/.codex/scripts/flowctl` for the Codex mirror). Each fenced block re-declares its own vars; POSIX shell:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 # Suggestion fires only when NO map exists AND the detected stack's stacks.md Map cell is `yes`.
 [ -d .clawpatch ] && [ "$("$FLOWCTL" repo-map list --count 2>/dev/null)" -gt 0 ] && MAP_EXISTS=1 || MAP_EXISTS=0

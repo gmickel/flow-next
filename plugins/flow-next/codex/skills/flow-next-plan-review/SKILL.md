@@ -98,14 +98,14 @@ issues and re-review. Never use the plain-text numbered prompt in this loop.**
 stop with `BLOCKED: DESIGN_CONFLICT` (Ralph: `<promise>RETRY</promise>`). Only
 `NEEDS_WORK` enters the loop.
 
-Fix+re-review cycles are bounded at `${MAX_REVIEW_ITERATIONS:-4}`. The counter
+Fix+re-review cycles are bounded at `${MAX_REVIEW_ITERATIONS:-8}`. The counter
 is flowctl-owned; never keep an agent-side counter. On cap exhaustion, surface
 surviving findings and stop (Ralph: `<promise>RETRY</promise>`).
 
 **The cap is enforced deterministically by flowctl:** every dispatch reserves a
 spec-scoped round before launch. SHIP / NEEDS_WORK / MAJOR_RETHINK consume it;
 a no-verdict transport failure is durably recorded and refunded. At
-`${MAX_REVIEW_ITERATIONS:-4}` verdict rounds, flowctl refuses with `ESCALATE:`
+`${MAX_REVIEW_ITERATIONS:-8}` verdict rounds, flowctl refuses with `ESCALATE:`
 and exit 4. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive
 no-verdict failures stop separately with `TRANSPORT_UNHEALTHY` + exit 5.
 Callers invoke plan-review once and act on its terminal result. The verdict

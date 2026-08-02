@@ -107,7 +107,7 @@ present the form for the operator's host, not Claude-only:
   ```bash
   claude mcp add --transport stdio cua-driver -- cua-driver mcp
   ```
-- **Codex** — add to `~/.codex/config.toml`:
+- **Codex** — add to the active Codex home's `config.toml` (`$CODEX_HOME`, default `~/.codex`):
   ```toml
   [mcp_servers.cua-driver]
   command = "cua-driver"

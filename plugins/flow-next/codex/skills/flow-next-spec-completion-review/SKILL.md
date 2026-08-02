@@ -308,7 +308,7 @@ Verdict-bearing attempts consume the reservation; no-verdict transport failures
 are recorded and refunded.
 
 When a delivered `NEEDS_WORK` consumes round
-`${MAX_REVIEW_ITERATIONS:-4}`, it is the terminal capped verdict:
+`${MAX_REVIEW_ITERATIONS:-8}`, it is the terminal capped verdict:
 
 - codex/copilot/cursor already self-wrote `needs_work` while handling that
  verdict; do not duplicate it.

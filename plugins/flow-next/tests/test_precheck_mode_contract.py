@@ -108,7 +108,7 @@ class PrecheckModeContractTest(unittest.TestCase):
         self.assertEqual(text.count(CONTINUE), 1)
         self.assertIn("plain-text numbered prompt", text)
         self.assertNotIn("AskUserQuestion", text)
-        self.assertIn("`$HOME/.codex/plugin.json`", text)
+        self.assertIn("`${CODEX_HOME:-$HOME/.codex}/plugin.json`", text)
         self.assertNotIn(".codex/.codex-plugin/plugin.json", text)
         installer = CODEX_INSTALLER.read_text(encoding="utf-8")
         self.assertIn(

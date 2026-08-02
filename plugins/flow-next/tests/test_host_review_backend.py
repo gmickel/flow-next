@@ -279,7 +279,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 {
                     "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
                     "review_rounds": 0,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 },
                 0,
                 "ship",
@@ -292,8 +292,10 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                     "attempts": [
                         {"outcome": "verdict", "verdict": "NEEDS_WORK"}
                     ],
-                    "review_rounds": 4,
-                    "review_rounds_cap": 4,
+                    # "Capped" is rounds >= cap, not a magic number: keep these
+                    # two in step or the scenario silently stops being capped.
+                    "review_rounds": 8,
+                    "review_rounds_cap": 8,
                 },
                 4,
                 "needs_work",
@@ -310,7 +312,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                         }
                     ],
                     "review_rounds": 3,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 },
                 0,
                 None,
@@ -324,7 +326,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                         {"outcome": "verdict", "verdict": "NEEDS_WORK"}
                     ],
                     "review_rounds": 3,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 },
                 0,
                 None,
@@ -336,7 +338,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 {
                     "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
                     "review_rounds": 0,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 },
                 0,
                 "ship",
@@ -348,7 +350,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 {
                     "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
                     "review_rounds": 0,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 },
                 0,
                 None,
@@ -360,7 +362,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 {
                     "attempts": [{"outcome": "verdict", "verdict": "SHIP"}],
                     "review_rounds": 0,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 },
                 0,
                 None,
@@ -514,7 +516,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                                 }
                             ],
                             "review_rounds": 0,
-                            "review_rounds_cap": 4,
+                            "review_rounds_cap": 8,
                         }
                     ),
                     "SPEC_STATE_PAYLOAD": json.dumps(
@@ -566,7 +568,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                         }
                     ],
                     "review_rounds": 0,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 }
             )
             rp_without_receipt = subprocess.run(
@@ -592,7 +594,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                         }
                     ],
                     "review_rounds": 0,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 }
             )
             host_requires_receipt = subprocess.run(
@@ -642,7 +644,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                         }
                     ],
                     "review_rounds": 0,
-                    "review_rounds_cap": 4,
+                    "review_rounds_cap": 8,
                 }
             )
             stale_result = subprocess.run(

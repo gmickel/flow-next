@@ -1,11 +1,144 @@
 {
   "branch_name": "fn-156-codex-installer-honor-codex-home-for",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-02T20:29:05.566300Z",
   "created_at": "2026-08-01T20:25:46.706898Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-156-codex-installer-honor-codex-home-for",
+  "impl_review_rounds": {
+    "fn-156-codex-installer-honor-codex-home-for.1": 0
+  },
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 0,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-02T19:15:13.418332Z",
+  "ready": true,
+  "review_attempts": [
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "318ef606a03cdac1f938258c5ec88c5c0d075956",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "b131efc783f23d4e7a7d34fd5bb94f30154f5c15d3102160f6943417e4c33df0",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-02T18:09:46.969128Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "e2d8e08d68a1f845f27b74b8e52a78833410077a",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "83c53aae40da3da2569cb89ac2af69bb4f8dc5a7644a544ec1e3463948b4c2cd",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-02T18:12:15.508143Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "0df2db7908e1258d96cba90a70634ba25db2ed3a",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "d319c4915d235497bb70e4670f10717a4484631255641c82b72449dea32903b2",
+      "round_consumed": true,
+      "scope": "plan",
+      "task": null,
+      "timestamp": "2026-08-02T19:15:05.593603Z",
+      "verdict": "SHIP"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "559132586917f479c5c11aa3d8cf7230e23ee790",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "e26d0e00a9dc2275d396ad371d0efa29d667291a4d1875c056038df7937afa3f",
+      "round_consumed": true,
+      "scope": "impl:fn-156-codex-installer-honor-codex-home-for.1",
+      "task": "fn-156-codex-installer-honor-codex-home-for.1",
+      "timestamp": "2026-08-02T20:01:54.447130Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "head_sha": "c859d06d3b9b0ba1f74850937d89277a5a5e1b1f",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "33ad68e30fc111b855b65f9e2fb83254f01710c31c6427a92ee07608b9490a5c",
+      "round_consumed": true,
+      "scope": "impl:fn-156-codex-installer-honor-codex-home-for.1",
+      "task": "fn-156-codex-installer-honor-codex-home-for.1",
+      "timestamp": "2026-08-02T20:18:26.034077Z",
+      "verdict": "SHIP"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "ef4939b6adaea82e29e66a4630f113198a75756b",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "53f2b9543323a96762f621e35809f9706d229ffec624ea18ec83e9996229abb4",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-08-02T20:26:21.829732Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "ef4939b6adaea82e29e66a4630f113198a75756b",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "f035cc8716620c27b593c73679503915a373d4c090d714400c9302117dfd076e",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-08-02T20:27:54.611530Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "head_sha": "f275497966b0793be3cce0f9618581e5c699fc06",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "c995b0f7580069cd315fec9c0948c670c7f7fbcf92bd2ac57ceccc88ec0e78b9",
+      "round_consumed": true,
+      "scope": "completion",
+      "task": null,
+      "timestamp": "2026-08-02T20:28:56.299646Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_pending_rounds": {
+    "impl:fn-156-codex-installer-honor-codex-home-for.1": 1,
+    "plan": 5
+  },
+  "review_transport_failures": {
+    "completion": 0,
+    "impl:fn-156-codex-installer-honor-codex-home-for.1": 0,
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-156-codex-installer-honor-codex-home-for.md",
   "status": "open",
   "title": "Codex installer: honor CODEX_HOME for alternate homes",
@@ -20,5 +153,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-01T20:26:30.221693Z"
+  "updated_at": "2026-08-02T20:29:05.566475Z"
 }

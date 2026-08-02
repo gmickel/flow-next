@@ -106,7 +106,7 @@ if [[ -d .clawpatch ]]; then
   # bundled copy a `/flow-next:setup` run installs at `.flow/bin/flowctl`
   # (carries `repo-map` since 1.3.0). If neither resolves, skip Step 0 and
   # degrade to standard tools — never hard-fail on the enrichment path.
-  FLOWCTL="$HOME/.codex/scripts/flowctl"
+  FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
   [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
   if [ -x "$FLOWCTL" ]; then
     "$FLOWCTL" repo-map list --json
@@ -121,7 +121,7 @@ When `.clawpatch/` is absent, no working `flowctl` resolves, OR the returned `co
 ### Step 0.5: Glossary terms (optional — husk-aware, budget-capped)
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 if [ -x "$FLOWCTL" ]; then
   "$FLOWCTL" glossary list --json

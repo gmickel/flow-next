@@ -61,7 +61,7 @@ marketplace install surfaces as an ordinary Python `ImportError` on first
 tracker-verb use - reinstall the plugin to fix. Detecting arbitrary corruption
 at runtime would require the per-command hashing this design rejects.
 
-Why other hosts can't have plugin mode: Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves flowctl from `$HOME/.codex/scripts/`; Droid's bin injection is unverified. A plugin-mode repo remains **workable from Codex and Droid** (Codex skills self-resolve flowctl from `$HOME/.codex/scripts/`; Droid reads the plugin-root envs) — but **NOT from Cursor**, whose skill preambles need `.flow/bin`; a Cursor visitor is offered a consented convert-to-copy. If teammates on other hosts are the norm, choose copy mode. Switching modes later is a consented `/flow-next:setup` re-run; the mode stamp (`setup_mode` in `.flow/meta.json`) is written only by `flowctl setup-mode set`, which refuses a plugin stamp unless the CLAUDE.md rail is present and no copy snapshots remain. Contributor-facing internals: [`agent_docs/setup-modes.md`](../../../agent_docs/setup-modes.md).
+Why other hosts can't have plugin mode: Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves flowctl from `${CODEX_HOME:-$HOME/.codex}/scripts/`; Droid's bin injection is unverified. A plugin-mode repo remains **workable from Codex and Droid** (Codex skills self-resolve flowctl from `${CODEX_HOME:-$HOME/.codex}/scripts/`; Droid reads the plugin-root envs) — but **NOT from Cursor**, whose skill preambles need `.flow/bin`; a Cursor visitor is offered a consented convert-to-copy. If teammates on other hosts are the norm, choose copy mode. Switching modes later is a consented `/flow-next:setup` re-run; the mode stamp (`setup_mode` in `.flow/meta.json`) is written only by `flowctl setup-mode set`, which refuses a plugin stamp unless the CLAUDE.md rail is present and no copy snapshots remain. Contributor-facing internals: [`agent_docs/setup-modes.md`](../../../agent_docs/setup-modes.md).
 
 **Team / org-wide deployment (Claude Code).** To install flow-next across a whole team without each developer running the commands, deploy it through Claude Code settings rather than per-user: a `managed-settings.json` for org-wide rollout (admin/IT, via MDM/GPO — `extraKnownMarketplaces` registers the marketplace, `enabledPlugins` force-enables `flow-next@flow-next`, not user-overridable), or a committed `.claude/settings.json` for a prompt-on-trust install scoped to one repo. A one-time trust prompt still appears by design, and each repo still needs `/flow-next:setup` to wire the local `.flow/` state. Full JSON + OS paths: [flow-next.dev/install → Team / org-wide deployment](https://flow-next.dev/install/#team--org-wide-deployment-claude-code-managed-settings).
 
@@ -105,7 +105,15 @@ cd flow-next
 ./scripts/install-codex.sh flow-next
 ```
 
-The script copies pre-built files from `codex/` to `~/.codex/` (skills, 21 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into `config.toml`. Idempotent — re-run after `git pull` to update. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
+The script copies pre-built files from `codex/` to the **active Codex home** (skills, 21 `.toml` agents, hooks, flowctl, prompts, ralph templates) and merges agent + feature entries into that home's `config.toml`. Idempotent — re-run after `git pull` to update.
+
+**Multiple Codex homes.** The target is `${CODEX_HOME:-$HOME/.codex}`, so a second CLI home (a work account, a client sandbox, another instance) gets its own full surface:
+
+```bash
+CODEX_HOME="$HOME/.codex-work" ./scripts/install-codex.sh flow-next
+```
+
+Run it once per home; quote the value if the path contains spaces. Generated skills and agents resolve their bundled tools through the same expansion at runtime, so one installed artifact is correct in whichever home it sits — nothing reaches back into the primary home. With `CODEX_HOME` unset the behavior is exactly as before. The native `/plugins` install path isn't used because Codex's plugin manifest only declares `skills`, not custom agents or hooks; until that changes, the script is the only way to get the full multi-agent experience.
 
 ### Skill invocation
 
@@ -136,7 +144,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 - Planning, work execution, interviews, reviews — full workflow.
 - Multi-agent roles: 21 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
 - Cross-model reviews (Codex as review backend).
-- flowctl CLI (`~/.codex/scripts/flowctl`).
+- flowctl CLI (`${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`).
 - Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/flowctl to project; Ralph hooks only if the Ralph ceremony answers yes.
 - `openai.yaml` UI metadata for Codex app display (brand color, descriptions).
 - Tracker lifecycle touchpoints use the same deterministic `flowctl tracker sync`
@@ -172,7 +180,7 @@ CODEX_MAX_THREADS=12 ./scripts/install-codex.sh flow-next   # CODEX_MAX_THREADS 
 
 Codex supports hooks, but flow-next installs **none** by default: the Codex mirror ships no `hooks.json`, and `install-codex.sh` does not copy one (fn-114 zero-default). Project hooks land only when Ralph is enabled via `$flow-next-ralph-init` (or setup's Ralph yes path), which writes/merges project `.codex/hooks.json` with the Codex subset (`PreToolUse`/`PostToolUse` shell + `Stop`; no `SubagentStop`, no `Edit`/`Write` matchers).
 
-`install-codex.sh` still sets `[features] hooks = true` in `~/.codex/config.toml` (feature flag only, not a Ralph install). That flag enables Codex's hooks runtime so a later ralph-init project hooks file can load; it does **not** install any guard entries by itself.
+`install-codex.sh` still sets `[features] hooks = true` in the active home's `config.toml` (feature flag only, not a Ralph install). That flag enables Codex's hooks runtime so a later ralph-init project hooks file can load; it does **not** install any guard entries by itself.
 
 **Limitation:** Codex hooks only intercept `Bash` (not `Edit`/`Write`). Ralph's file-modification guard won't catch direct file edits. The `SubagentStop` event is also not supported.
 
@@ -189,24 +197,27 @@ Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your 
 **Manual setup** (alternative):
 
 ```bash
+# Resolve the active Codex home once (defaults to ~/.codex)
+CODEX_BIN="${CODEX_HOME:-$HOME/.codex}/scripts"
+
 # Initialize .flow/ directory
-~/.codex/scripts/flowctl init
+"$CODEX_BIN/flowctl" init
 
 # Optional: copy flowctl locally
 mkdir -p .flow/bin
-cp ~/.codex/scripts/flowctl .flow/bin/
-cp ~/.codex/scripts/flowctl.py .flow/bin/
+cp "$CODEX_BIN/flowctl" .flow/bin/
+cp "$CODEX_BIN/flowctl.py" .flow/bin/
 chmod +x .flow/bin/flowctl
 
 # Configure review backend
-~/.codex/scripts/flowctl config set review.backend codex
+"$CODEX_BIN/flowctl" config set review.backend codex
 ```
 
 ### Caveats
 
 - Ralph autonomous mode is limited — hooks intercept Bash only (not Edit/Write), no `SubagentStop` support.
 - `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching).
-- Global install prompts (`/prompts:*`) are global-only (`~/.codex/prompts/`); native plugin avoids this limitation.
+- Global install prompts (`/prompts:*`) are global-only (`${CODEX_HOME:-$HOME/.codex}/prompts/`); native plugin avoids this limitation.
 
 ## Grok Build (Claude Code compatibility)
 

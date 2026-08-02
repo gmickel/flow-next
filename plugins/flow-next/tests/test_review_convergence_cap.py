@@ -7,7 +7,7 @@ findings (round 1 / legacy receipt) it falls back to the original fresh-review
 preamble (back-compatible).
 
 R5 (deterministic cap): a flowctl-owned cumulative round counter on spec state,
-enforced at ``MAX_REVIEW_ITERATIONS`` (default 4), surviving FRESH invocations,
+enforced at ``MAX_REVIEW_ITERATIONS`` (default 8), surviving FRESH invocations,
 reset only on SHIP / re-plan. At the cap the review refuses with an ESCALATE
 marker (exit REVIEW_CAP_EXIT_CODE), never a retryable error.
 
@@ -234,8 +234,8 @@ class TestDeterministicCap(unittest.TestCase):
             (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
         )
 
-    def test_default_cap_is_four(self):
-        self.assertEqual(flowctl.get_max_review_iterations(), 4)
+    def test_default_cap_is_eight(self):
+        self.assertEqual(flowctl.get_max_review_iterations(), 8)
 
     def test_env_overrides_cap(self):
         with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": "5"}):
@@ -244,7 +244,7 @@ class TestDeterministicCap(unittest.TestCase):
     def test_cap_never_zero_or_negative(self):
         for bad in ("0", "-1", "abc", ""):
             with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": bad}):
-                self.assertEqual(flowctl.get_max_review_iterations(), 4)
+                self.assertEqual(flowctl.get_max_review_iterations(), 8)
 
     def test_increment_persists_across_fresh_calls(self):
         """Each enforce call increments and persists — cap survives fresh

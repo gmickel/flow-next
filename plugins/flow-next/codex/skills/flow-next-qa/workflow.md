@@ -6,7 +6,7 @@ Execute these phases in order. Each gates on the prior. Stop on a user-blocking 
 
 ```bash
 set -e
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%d)"

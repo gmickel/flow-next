@@ -13,7 +13,7 @@ Manually trigger plan-sync to update downstream task specs.
 **CRITICAL: flowctl is BUNDLED - NOT installed globally.** Define once; subsequent blocks use `$FLOWCTL`:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
@@ -135,7 +135,7 @@ Build context and spawn via Task tool:
 Sync task specs from <source> to downstream tasks.
 
 COMPLETED_TASK_ID: <source task id - the input task, or selected source for spec mode>
-FLOWCTL: $HOME/.codex/scripts/flowctl
+FLOWCTL: ${CODEX_HOME:-$HOME/.codex}/scripts/flowctl
 SPEC_ID: <spec id>
 DOWNSTREAM_TASK_IDS: <comma-separated list from step 4>
 DRY_RUN: <true|false>

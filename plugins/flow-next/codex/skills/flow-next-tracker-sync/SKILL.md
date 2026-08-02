@@ -39,7 +39,7 @@ result. Do not reconstruct provider requests in skill prose or shell.
 Use the lifecycle facade for event-driven projection:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 $FLOWCTL tracker sync "$SPEC_ID" --op "$OP" --event "$EVENT" \
  --flow-file "$FLOW_FILE" --body-file "$BODY_FILE" \

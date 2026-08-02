@@ -15,9 +15,9 @@ Coordinate resolution of unresolved GitHub PR review threads, top-level PR comme
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). The resolver scripts are bundled alongside the skill:
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-SCRIPTS="$HOME/.codex/skills/flow-next-resolve-pr/scripts"
+SCRIPTS="${CODEX_HOME:-$HOME/.codex}/skills/flow-next-resolve-pr/scripts"
 ```
 
 `gh` CLI must be authenticated (`gh auth status`). `jq` must be on PATH.
@@ -79,10 +79,10 @@ Autonomous runs end with the machine-readable `RESOLVE_PR_VERDICT=<RESOLVED|PEND
 ## Platform detection
 
 - **Claude Code** → has `Agent` / `Task` tool with `subagent_type` — dispatch resolver units in parallel via `Task` with `subagent_type: pr-comment-resolver`, respecting file-overlap avoidance.
-- **Codex** (0.102.0+) → native multi-agent role support. `pr-comment-resolver.toml` installs into `~/.codex/agents/` via `scripts/install-codex.sh`. Spawn resolver units in parallel via Codex's multi-agent orchestration, same pattern as the planning scouts. Respect the same file-overlap avoidance.
+- **Codex** (0.102.0+) → native multi-agent role support. `pr-comment-resolver.toml` installs into the active Codex home's `agents/` (`$CODEX_HOME`, default `~/.codex`) via `scripts/install-codex.sh`. Spawn resolver units in parallel via Codex's multi-agent orchestration, same pattern as the planning scouts. Respect the same file-overlap avoidance.
 - **Copilot / Droid** → no parallel subagent dispatch — loop serially over units.
 
-Detect by checking for the `Task` tool with subagent support (Claude Code) or `~/.codex/agents/pr-comment-resolver.toml` (Codex). Default to serial when in doubt (correct output, slightly slower).
+Detect by checking for the `Task` tool with subagent support (Claude Code) or `${CODEX_HOME:-$HOME/.codex}/agents/pr-comment-resolver.toml` (Codex). Default to serial when in doubt (correct output, slightly slower).
 
 **Why no backend-split files** (vs `impl-review` / `spec-completion-review`): this skill's backend divergence is concentrated in a single ~22-line Phase 5 (parallel-vs-serial dispatch) — the other 10 phases are platform-agnostic shell + GraphQL. Per the heuristic in `agent_docs/adding-skills.md` (≥50 lines of divergence triggers a split), this skill stays inline.
 

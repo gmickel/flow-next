@@ -303,7 +303,7 @@ write_config "none" "none" "none" "0" "new" "3" "5" "2"
 ui_output="$(STUB_MODE=success CLAUDE_BIN="$TEST_DIR/bin/claude" scripts/ralph/ralph.sh 2>&1)"
 
 # Check elapsed time format [X:XX]
-if echo "$ui_output" | grep -qE '\[[0-9]+:[0-9]{2}\]'; then
+if grep -qE '\[[0-9]+:[0-9]{2}\]' <<< "$ui_output"; then
   echo -e "${GREEN}✓${NC} elapsed time shown"
   PASS=$((PASS + 1))
 else
@@ -312,7 +312,7 @@ else
 fi
 
 # Check progress counter (Spec X/Y * Task X/Y; was "Epic X/Y" in 0.x)
-if echo "$ui_output" | grep -qE 'Spec [0-9]+/[0-9]+.*Task [0-9]+/[0-9]+'; then
+if grep -qE 'Spec [0-9]+/[0-9]+.*Task [0-9]+/[0-9]+' <<< "$ui_output"; then
   echo -e "${GREEN}✓${NC} progress counter shown"
   PASS=$((PASS + 1))
 else
@@ -321,7 +321,7 @@ else
 fi
 
 # Check task title is shown (quoted)
-if echo "$ui_output" | grep -q '"UI Test Task"'; then
+if grep -q '"UI Test Task"' <<< "$ui_output"; then
   echo -e "${GREEN}✓${NC} task title shown"
   PASS=$((PASS + 1))
 else
@@ -330,7 +330,7 @@ else
 fi
 
 # Check completion summary shows Tasks: X/Y
-if echo "$ui_output" | grep -qE 'Tasks:.*[0-9]+/[0-9]+'; then
+if grep -qE 'Tasks:.*[0-9]+/[0-9]+' <<< "$ui_output"; then
   echo -e "${GREEN}✓${NC} completion summary shown"
   PASS=$((PASS + 1))
 else
@@ -339,7 +339,7 @@ else
 fi
 
 # Check branch is shown
-if echo "$ui_output" | grep -q 'Branch:'; then
+if grep -q 'Branch:' <<< "$ui_output"; then
   echo -e "${GREEN}✓${NC} branch shown"
   PASS=$((PASS + 1))
 else

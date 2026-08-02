@@ -252,23 +252,24 @@ fi
 
 # --- PATH patches (all .md files) ---
 find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
-  # Rewrite FLOWCTL assignment to the direct $HOME/.codex form.
+  # Rewrite FLOWCTL assignment to the runtime CODEX_HOME form.
   # Inside Codex, neither DROID_PLUGIN_ROOT nor CLAUDE_PLUGIN_ROOT is ever set —
-  # only $HOME/.codex resolves (install-codex.sh's canonical target). The old
+  # CODEX_HOME (defaulting to $HOME/.codex) resolves. The old
   # `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.codex}}` chain was dead
   # code in the mirror. See fn-48.1 (R4a).
   sed -i.bak \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl|$HOME/.codex/scripts/flowctl|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl|${CODEX_HOME:-$HOME/.codex}/scripts/flowctl|g' \
+    -e 's|FLOWCTL="$HOME/.codex/scripts/flowctl"|FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"|g' \
     "$f"
 
   # fn-48.6: canonical files now use a once-per-skill `PLUGIN_ROOT` prelude
   # (e.g. flow-next-ralph-init/SKILL.md) to collapse 10+ inline expansions.
-  # Rewrite the PLUGIN_ROOT assignment to the direct Codex form so subsequent
+  # Rewrite the PLUGIN_ROOT assignment to the runtime Codex form so subsequent
   # `$PLUGIN_ROOT/...` references resolve. Then path-remap specific subtrees
   # that have different on-disk layouts in the Codex install (templates land
   # at `~/.codex/templates/<skill>` rather than `~/.codex/skills/<skill>/templates`).
   sed -i.bak \
-    -e 's|PLUGIN_ROOT="\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}"|PLUGIN_ROOT="$HOME/.codex"|g' \
+    -e 's|PLUGIN_ROOT="\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}"|PLUGIN_ROOT="${CODEX_HOME:-$HOME/.codex}"|g' \
     "$f"
 
   # After every FLOWCTL= line, insert local fallback — IDEMPOTENT.
@@ -307,23 +308,25 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # Template/script path patches — both legacy inline form and the new
   # fn-48.6 `$PLUGIN_ROOT/...` consolidated form.
   sed -i.bak \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates|~/.codex/templates/flow-next-ralph-init|g' \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-worktree-kit/scripts|~/.codex/scripts|g' \
-    -e 's|\$PLUGIN_ROOT/skills/flow-next-ralph-init/templates|~/.codex/templates/flow-next-ralph-init|g' \
-    -e 's|\$PLUGIN_ROOT/skills/flow-next-worktree-kit/scripts|~/.codex/scripts|g' \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/|$HOME/.codex/skills/|g' \
-    -e 's|\$PLUGIN_ROOT/skills/|$HOME/.codex/skills/|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-ralph-init/templates|${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-worktree-kit/scripts|${CODEX_HOME:-$HOME/.codex}/scripts|g' \
+    -e 's|\$PLUGIN_ROOT/skills/flow-next-ralph-init/templates|${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init|g' \
+    -e 's|\$PLUGIN_ROOT/skills/flow-next-worktree-kit/scripts|${CODEX_HOME:-$HOME/.codex}/scripts|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/skills/|${CODEX_HOME:-$HOME/.codex}/skills/|g' \
+    -e 's|\$PLUGIN_ROOT/skills/|${CODEX_HOME:-$HOME/.codex}/skills/|g' \
     "$f"
   # The two generic /skills/ rules above are a catch-all for skill-local asset
   # paths (e.g. resolve-pr's SCRIPTS dir) — install-codex.sh copies each skill
-  # dir wholesale to ~/.codex/skills/, so that root always resolves. Specific
+  # dir wholesale to CODEX_HOME/skills/, so that root always resolves. Specific
   # destinations (ralph-init templates, worktree-kit scripts) are rewritten
   # first and therefore win. $HOME (not ~) so the path expands inside quotes.
 
   # The Codex installer flattens `.codex-plugin/plugin.json` to
-  # `$HOME/.codex/plugin.json`; mirror prose must target that installed path.
+  # `${CODEX_HOME:-$HOME/.codex}/plugin.json`; mirror prose must target that installed path.
   sed -i.bak \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/\.claude-plugin/plugin\.json|$HOME/.codex/plugin.json|g' \
+    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/\.claude-plugin/plugin\.json|${CODEX_HOME:-$HOME/.codex}/plugin.json|g' \
+    -e 's|AGENTS_SRC="$HOME/.codex/agents"|AGENTS_SRC="${CODEX_HOME:-$HOME/.codex}/agents"|g' \
+    -e 's|or ~/.codex/agents/|or ${CODEX_HOME:-$HOME/.codex}/agents/|g' \
     -e 's|\.factory-plugin/plugin\.json|.claude-plugin/plugin.json|g' \
     "$f"
 
@@ -1695,14 +1698,14 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # (Droid + Claude fallback). In Codex neither env var is set, so the
   # expansion resolves to `/scripts/flowctl` — broken. Mirror the skill-side
   # rewrite (line ~183) here so generated `.toml` agent bodies use the direct
-  # Codex form plus the local `.flow/bin/flowctl` fallback. fn-50.3 added the
+  # runtime Codex form plus the local `.flow/bin/flowctl` fallback. fn-50.3 added the
   # repo-scout / context-scout `repo-map` probes that surfaced this gap.
-  body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/scripts/flowctl|$HOME/.codex/scripts/flowctl|g')"
+  body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/scripts/flowctl|${CODEX_HOME:-$HOME/.codex}/scripts/flowctl|g')"
   # Rewrite skill-file paths in agent bodies: neither plugin-root variable
-  # resolves inside Codex; the installed mirror lives at ~/.codex/skills/.
-  body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/skills/|$HOME/.codex/skills/|g')"
+  # resolves inside Codex; the installed mirror lives at CODEX_HOME/skills/.
+  body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/skills/|${CODEX_HOME:-$HOME/.codex}/skills/|g')"
   # Insert the local fallback line after every FLOWCTL= assignment that points
-  # at the Codex path. Matches `FLOWCTL="$HOME/.codex/scripts/flowctl"` with
+  # at the Codex path. Matches the runtime CODEX_HOME form with
   # any leading whitespace; the inserted fallback line preserves that
   # indentation so embedded bash blocks stay aligned. Uses POSIX awk
   # (no gawk-only 3-arg match) so macOS / Linux behave identically.
@@ -1723,7 +1726,7 @@ for md_file in "$SRC_AGENTS"/*.md; do
         pending = 0
       }
     }
-    /^[[:space:]]*FLOWCTL="\$HOME\/\.codex\/scripts\/flowctl"[[:space:]]*$/ {
+    /^[[:space:]]*FLOWCTL="\$\{CODEX_HOME:-\$HOME\/\.codex\}\/scripts\/flowctl"[[:space:]]*$/ {
       print
       indent = ""
       i = 1
@@ -1845,7 +1848,7 @@ else
 fi
 
 # Check no plugin-root /skills/ path refs survive (must be rewritten to
-# $HOME/.codex/skills/ or a specific destination — an unrewritten ref expands
+# ${CODEX_HOME:-$HOME/.codex}/skills/ or a specific destination — an unrewritten ref expands
 # to a broken /skills/... path inside Codex where neither var is set)
 skills_refs=$( { grep -rE '(DROID_PLUGIN_ROOT|CLAUDE_PLUGIN_ROOT|\$PLUGIN_ROOT)[^[:space:]]*/skills/' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
 if [ "$skills_refs" != "0" ]; then
@@ -1857,11 +1860,11 @@ fi
 
 # Plan's copy-mode version check must read the flattened installer target.
 plan_skill="$CODEX_DIR/skills/flow-next-plan/SKILL.md"
-if grep -Fq '$HOME/.codex/plugin.json' "$plan_skill" 2>/dev/null \
+if grep -Fq '${CODEX_HOME:-$HOME/.codex}/plugin.json' "$plan_skill" 2>/dev/null \
   && ! grep -Fq '.codex/.codex-plugin/plugin.json' "$plan_skill" 2>/dev/null; then
   echo -e "  ${GREEN}✓${NC} Codex Plan manifest path matches install-codex.sh"
 else
-  echo -e "  ${RED}✗${NC} Codex Plan manifest path must be \$HOME/.codex/plugin.json"
+  echo -e "  ${RED}✗${NC} Codex Plan manifest path must be \${CODEX_HOME:-\$HOME/.codex}/plugin.json"
   errors=$((errors + 1))
 fi
 
@@ -1981,13 +1984,51 @@ fi
 
 # fn-50.6 symmetry rule: agent toml bodies must not carry unrewritten
 # plugin-root /skills/ paths - the agents-pipeline rewrite maps them to
-# $HOME/.codex/skills/. The skills-side guard above has no agents coverage.
+# ${CODEX_HOME:-$HOME/.codex}/skills/. The skills-side guard above has no agents coverage.
 agent_skill_refs=$( { grep -rE '(DROID_PLUGIN_ROOT|CLAUDE_PLUGIN_ROOT|\$PLUGIN_ROOT)[^[:space:]]*/skills/' "$CODEX_DIR/agents/" 2>/dev/null || true; } | wc -l | tr -d ' ')
 if [ "$agent_skill_refs" != "0" ]; then
   echo -e "  ${RED}✗${NC} $agent_skill_refs unrewritten plugin-root /skills/ path refs in codex/agents/"
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No unrewritten plugin-root /skills/ path refs in codex/agents/"
+fi
+
+# fn-156 R2: executable Codex-home paths must remain portable across multiple
+# Codex homes. The runtime form is allowed; these exact prose snippets only
+# describe the default location and are never evaluated by a shell. Keep the
+# allowlist narrow so a newly baked primary-home path fails closed.
+is_narrative_primary_home_ref() {
+  case "$1" in
+    *'sync-codex.sh rewrites it to `$HOME/.codex/scripts/flowctl` for the Codex mirror'* | \
+    *'`config.toml` (`$CODEX_HOME`, default `~/.codex`)'* | \
+    *'`agents/` (`$CODEX_HOME`, default `~/.codex`)'* | \
+    *'**There is NO "defer to `~/.codex/config.toml`"'* | \
+    *'> `[mcp_servers]` configured in `~/.codex/config.toml`, a `codex exec'* | \
+    *'a pure `~/.codex` install'* | \
+    *'under `$CODEX_HOME` (default `~/.codex`)'* | \
+    *'under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT`'*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+primary_home_refs=0
+while IFS= read -r primary_home_ref; do
+  stripped_primary_home_ref=$(printf '%s\n' "$primary_home_ref" | sed 's|\${CODEX_HOME:-\$HOME/\.codex}||g')
+  if ! printf '%s\n' "$stripped_primary_home_ref" | grep -Eq '\$HOME/\.codex|~/\.codex'; then
+    continue
+  fi
+  if is_narrative_primary_home_ref "$primary_home_ref"; then
+    continue
+  fi
+  echo -e "  ${RED}✗${NC} executable primary-home reference escaped CODEX_HOME rewrite: $primary_home_ref"
+  primary_home_refs=$((primary_home_refs + 1))
+done < <(grep -rnE '\$HOME/\.codex|~/\.codex' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" "$CODEX_DIR/references/" "$CODEX_DIR/templates/" 2>/dev/null || true)
+if [ "$primary_home_refs" != "0" ]; then
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No executable primary-home references escaped CODEX_HOME rewrite"
 fi
 
 # fn-100 R12 follow-up: the Claude-specific scout-tier example "(sonnet on

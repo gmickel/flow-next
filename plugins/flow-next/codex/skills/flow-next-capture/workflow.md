@@ -6,7 +6,7 @@ Execute these phases in order. Each gates on the prior. Stop on user-blocking er
 
 ```bash
 set -e
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 SPECS_DIR="$REPO_ROOT/.flow/specs"
@@ -801,7 +801,7 @@ The frontmatter top of the spec is whatever `flowctl spec create` writes (it gen
 **Tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel captures stop colliding on `fn-N`. Route from the preamble root config snapshot (fn-110) — **no new `config get`**. Explicit user override in the invocation always wins. Do **not** nag about the id scheme at this mint site (withdrawn R10).
 
 ```bash
-FLOWCTL="$HOME/.codex/scripts/flowctl"
+FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 SPEC_TITLE="<chosen title from Phase 3 or Phase 1.3>"
 

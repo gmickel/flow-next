@@ -293,7 +293,7 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 **MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
 flowctl reserves a per-task round before every task-scoped dispatch. A delivered
 SHIP / NEEDS_WORK / MAJOR_RETHINK consumes it; a no-verdict transport failure
-is durably recorded and refunded. At `${MAX_REVIEW_ITERATIONS:-4}` verdict
+is durably recorded and refunded. At `${MAX_REVIEW_ITERATIONS:-8}` verdict
 rounds it refuses with `ESCALATE:` + exit 4. More than
 `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict failures stop
 separately with `TRANSPORT_UNHEALTHY` + exit 5: repair the backend, never reset

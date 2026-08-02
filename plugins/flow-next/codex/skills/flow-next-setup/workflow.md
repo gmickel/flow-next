@@ -226,14 +226,14 @@ On Codex, agents live in project-scoped `.codex/` directories (not in the plugin
 ```bash
 # Source: pre-built agents from plugin (or global install)
 AGENTS_SRC="${PLUGIN_ROOT}/codex/agents"
-[ -d "$AGENTS_SRC" ] || AGENTS_SRC="$HOME/.codex/agents"
+[ -d "$AGENTS_SRC" ] || AGENTS_SRC="${CODEX_HOME:-$HOME/.codex}/agents"
 
 if [ -d "$AGENTS_SRC" ]; then
  mkdir -p .codex/agents
  cp "$AGENTS_SRC"/*.toml .codex/agents/
  echo "Copied $(ls .codex/agents/*.toml 2>/dev/null | wc -l | tr -d ' ') agent configs to .codex/agents/"
 else
- echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ~/.codex/agents/"
+ echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ${CODEX_HOME:-$HOME/.codex}/agents/"
 fi
 ```
 

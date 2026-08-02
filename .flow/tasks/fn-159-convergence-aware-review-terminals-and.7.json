@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-02T20:38:00.261459Z",
+  "depends_on": [
+    "fn-159-convergence-aware-review-terminals-and.1"
+  ],
+  "id": "fn-159-convergence-aware-review-terminals-and.7",
+  "priority": null,
+  "spec": "fn-159-convergence-aware-review-terminals-and",
+  "spec_path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.7.md",
+  "status": "todo",
+  "title": "Hash-guard wiring: blob builders, per-transport reserve points, NOT_RETRYABLE contract, RP/host fences",
+  "updated_at": "2026-08-02T20:56:34.366882Z"
+}
