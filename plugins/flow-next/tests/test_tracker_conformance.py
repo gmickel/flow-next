@@ -1336,7 +1336,11 @@ class LockRaceViaResolveVerb(unittest.TestCase):
             barrier = threading.Barrier(2)
 
             def dest_ex(request):
-                barrier.wait(timeout=5)
+                # Rendezvous, not a performance assertion: the timeout only stops a
+                # genuinely broken test from hanging. CI runs this suite at the runner's
+                # full core count (fn-155), so sibling interpreters compete for the same
+                # cores and a tight bound flakes.
+                barrier.wait(timeout=120)
                 time.sleep(0.02)
                 return ok({
                     "id": 1, "path_with_namespace": "g/p",
@@ -1345,7 +1349,7 @@ class LockRaceViaResolveVerb(unittest.TestCase):
                 })
 
             def caps_ex(request):
-                barrier.wait(timeout=5)
+                barrier.wait(timeout=120)
                 time.sleep(0.02)
                 return ok({"id": 9, "plan": "free"})
 

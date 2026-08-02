@@ -1,0 +1,579 @@
+{
+  "artifactId": "fn-153-chart-graph-integrity-premise-ordered-9fd5fdd8d4ba-aid1",
+  "baseSha": "f18279f473e697a60324ef891f6afe037eaa9e11",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r1",
+          "r2",
+          "task1",
+          "task2"
+        ],
+        "summary": "Superseding a decision rewired dependents in D-number order, which is not dependency order, so a replacement could be wired to the premise this same cascade had just superseded. Separately, initial-map aliases were written by plain assignment, so a caller-supplied id could silently clobber another decision's alias and every edge using it resolved elsewhere. Neither raises, neither logs; both validate and persist.",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.1",
+          "fn-153-chart-graph-integrity-premise-ordered.2"
+        ],
+        "title": "Two ways the chart store silently persists a wrong graph"
+      },
+      {
+        "files": [
+          {
+            "additions": 178,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1",
+              "R2",
+              "R4",
+              "R6",
+              "R7",
+              "R8"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r1",
+              "r2",
+              "r4",
+              "r6",
+              "r7",
+              "r8",
+              "task1",
+              "task2"
+            ],
+            "summary": "Topological ordering helper plus the call-site separation in the non-keep cascade branch; owner-aware alias registrar for initial-map.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1",
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R6",
+          "R7"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r1",
+          "r6",
+          "r7",
+          "task1",
+          "c1"
+        ],
+        "summary": "A new topological helper orders the closure by Kahn's algorithm with a min-heap on local D-number, so a premise's replacement always exists before any dependent of it is rewired. `_depends_on_closure` keeps its old contract for `--keep-dependents`, which has no defect and whose public arrays must not churn - the separation is two helpers, not a re-sort. Ties break on ascending D-number so the emitted arrays stay reproducible.",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.1"
+        ],
+        "title": "Cascade dependents premise-first"
+      },
+      {
+        "files": [
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [
+              "R8"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r8",
+              "task2"
+            ],
+            "summary": "The alias_collision code and its details schema, beside the envelope error classes.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R2",
+          "R4",
+          "R8",
+          "R10"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "r4",
+          "r8",
+          "r10",
+          "task2",
+          "c2"
+        ],
+        "summary": "All four alias classes register through an owner-aware registrar, so an alias claimed by two different decisions is refused in either direction. Collision is by owner, so re-registering the same alias for the same decision stays legal, and empty-normalizing aliases are ignored because they are already unreachable. Rejection is `validation`/`alias_collision` naming the alias and both claimants, with no durable reservation and no file written.",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.2"
+        ],
+        "title": "Refuse an ambiguous initial-map alias namespace"
+      },
+      {
+        "files": [
+          {
+            "additions": 55,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_docs_inventory.py",
+            "rIds": [
+              "R8"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r8",
+              "task2"
+            ],
+            "summary": "Pins the new error contract so code and docs cannot drift.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          },
+          {
+            "additions": 234,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_graph_claims.py",
+            "rIds": [
+              "R2",
+              "R4",
+              "R8",
+              "R10"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r2",
+              "r4",
+              "r8",
+              "r10",
+              "task2"
+            ],
+            "summary": "Initial-map alias collision suite, real CLI.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          },
+          {
+            "additions": 182,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_resolution.py",
+            "rIds": [
+              "R1",
+              "R6",
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r1",
+              "r6",
+              "r7",
+              "task1"
+            ],
+            "summary": "Premise-first cascade, tie determinism, keep-dependents arrays pinned.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R3",
+          "R4",
+          "R6",
+          "R10"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "r4",
+          "r6",
+          "r10",
+          "task1",
+          "task2"
+        ],
+        "summary": "Cascade tests build a genuinely non-topological graph through the public CLI and pin exact arrays, not membership. Alias tests cover both collision directions across every generated class including the numeric site, the genuine full-D-ID case, the provisional sentinel resolving correctly rather than merely not false-positiving, legal same-owner repetition, blank ids, and atomicity.",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.1",
+          "fn-153-chart-graph-integrity-premise-ordered.2"
+        ],
+        "title": "Prove it, including the cases that would pass a weaker fix"
+      },
+      {
+        "files": [
+          {
+            "additions": 178,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task1",
+              "task2"
+            ],
+            "summary": "Propagated copy.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1",
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task1",
+              "task2"
+            ],
+            "summary": "Regenerated manifest.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1",
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task1",
+              "task2"
+            ],
+            "summary": "Regenerated manifest.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1",
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          },
+          {
+            "additions": 32,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task1",
+              "task2"
+            ],
+            "summary": "Unreleased entry covering both fixes; no version bump.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1",
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "task1",
+          "task2"
+        ],
+        "summary": "flowctl.py changes require the dual .flow/bin copy and tracker manifest regeneration or test_tracker_distribution fails. Changelog staged under Unreleased with no version bump, per the batched-release rule.",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.1",
+          "fn-153-chart-graph-integrity-premise-ordered.2"
+        ],
+        "title": "Propagation and release surface"
+      },
+      {
+        "files": [
+          {
+            "additions": 25,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/runtime-errors/same-owner-alias-re-registration-must-2026-08-02.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task2"
+            ],
+            "summary": "Memory: a same-owner strong claim must harden its own weak incumbent.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          },
+          {
+            "additions": 66,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/specs/fn-153-chart-graph-integrity-premise-ordered.json",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task1",
+              "task2"
+            ],
+            "summary": "Spec state: both gates ship.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1",
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-153-chart-graph-integrity-premise-ordered.1.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task1"
+            ],
+            "summary": "Task 1 done summary and evidence.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.1"
+            ]
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-153-chart-graph-integrity-premise-ordered.2.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "diff",
+              "r3",
+              "task2"
+            ],
+            "summary": "Task 2 done summary and evidence.",
+            "taskIds": [
+              "fn-153-chart-graph-integrity-premise-ordered.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 6,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "task1",
+          "task2"
+        ],
+        "summary": "Spec and task records, plus a memory entry for the same-owner weak-alias lesson the implementation review surfaced.",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.1",
+          "fn-153-chart-graph-integrity-premise-ordered.2"
+        ],
+        "title": "Pipeline state and a captured lesson"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 7,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r2",
+          "task2"
+        ],
+        "summary": "The resolve-sharpen aliasing block is untouched: its namespace cannot be made decidable without changing public input semantics, which this spec's goal forbids. That work is spec fn-158, which depends on this one. Open dependents keep their stale depends_on, and charts already on disk are not migrated - both stated boundaries, not oversights.",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.2"
+        ],
+        "title": "Deliberately unchanged"
+      },
+      {
+        "files": [],
+        "kind": "verify",
+        "ordinal": 8,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "r3",
+          "diff",
+          "task1",
+          "task2"
+        ],
+        "summary": "Full suite 3874 tests green, ruff clean, propagation chain run and sync-codex byte-idempotent. Plan review SHIP and completion review SHIP, both rp. The cascade fix was mutation-tested: with the reorder removed the new test fails with cascade_resolved [D2, D3] instead of [D3, D2].",
+        "taskIds": [
+          "fn-153-chart-graph-integrity-premise-ordered.1",
+          "fn-153-chart-graph-integrity-premise-ordered.2"
+        ],
+        "title": "Gates and the regression proof"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Both defects silent",
+        "sourceRefs": [
+          "spec",
+          "r1",
+          "r2"
+        ],
+        "value": "each validated and persisted a wrong graph with no error and no log"
+      },
+      {
+        "label": "Mutation-tested",
+        "sourceRefs": [
+          "r1",
+          "task1"
+        ],
+        "value": "removing the reorder makes the new test fail with cascade_resolved [D2, D3]"
+      },
+      {
+        "label": "Gates",
+        "sourceRefs": [
+          "r3",
+          "diff"
+        ],
+        "value": "3874 tests green, ruff clean, plan review SHIP, completion review SHIP"
+      },
+      {
+        "label": "Scope held",
+        "sourceRefs": [
+          "spec",
+          "r2"
+        ],
+        "value": "R5/R9/R11/R12 moved to fn-158 rather than shipping a public-semantics break"
+      }
+    ],
+    "thesis": "Two silent ways the chart store could persist a wrong decision graph are closed, scoped to exactly the fixes that change no public input semantics - the third defect the work surfaced needs a design decision and moved to its own spec."
+  },
+  "generatedAt": "2026-08-02T02:30:00Z",
+  "headSha": "9fd5fdd8d4bace458489b21bf0d85df91813fdf9",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-153-chart-graph-integrity-premise-ordered"
+    },
+    {
+      "id": "task1",
+      "kind": "task",
+      "ref": "fn-153-chart-graph-integrity-premise-ordered.1"
+    },
+    {
+      "id": "task2",
+      "kind": "task",
+      "ref": "fn-153-chart-graph-integrity-premise-ordered.2"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "f18279f473e697a60324ef891f6afe037eaa9e11..9fd5fdd8d4bace458489b21bf0d85df91813fdf9"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "0cb8d8ab5701984dbdb9a88a4778cd92a2e559e7"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "4d394b2084b909f7e9fbc32566ca38df1c603757"
+    },
+    {
+      "id": "r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "r7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "r8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "r10",
+      "kind": "rid",
+      "ref": "R10"
+    }
+  ],
+  "specId": "fn-153-chart-graph-integrity-premise-ordered"
+}
