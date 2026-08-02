@@ -1,0 +1,26 @@
+{
+  "branch_name": "fn-158-chart-sharpen-alias-namespace-make-edge",
+  "created_at": "2026-08-02T07:07:12.552406Z",
+  "depends_on_epics": [
+    "fn-153-chart-graph-integrity-premise-ordered"
+  ],
+  "id": "fn-158-chart-sharpen-alias-namespace-make-edge",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-158-chart-sharpen-alias-namespace-make-edge.md",
+  "status": "open",
+  "title": "Chart sharpen alias namespace: make edge references decidable",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-02T07:07:55.333302Z"
+}
