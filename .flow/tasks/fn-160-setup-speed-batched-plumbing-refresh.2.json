@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-02T19:35:07.390692Z",
+  "depends_on": [
+    "fn-160-setup-speed-batched-plumbing-refresh.1"
+  ],
+  "id": "fn-160-setup-speed-batched-plumbing-refresh.2",
+  "priority": null,
+  "spec": "fn-160-setup-speed-batched-plumbing-refresh",
+  "spec_path": ".flow/tasks/fn-160-setup-speed-batched-plumbing-refresh.2.md",
+  "status": "todo",
+  "title": "flowctl setup refresh: zero-question copy-mode upgrade fast path",
+  "updated_at": "2026-08-02T19:35:07.390692Z"
+}
