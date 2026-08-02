@@ -61,7 +61,7 @@ marketplace install surfaces as an ordinary Python `ImportError` on first
 tracker-verb use - reinstall the plugin to fix. Detecting arbitrary corruption
 at runtime would require the per-command hashing this design rejects.
 
-Why other hosts can't have plugin mode: Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves flowctl from `$HOME/.codex/scripts/`; Droid's bin injection is unverified. A plugin-mode repo remains **workable from Codex and Droid** (Codex skills self-resolve flowctl from `$HOME/.codex/scripts/`; Droid reads the plugin-root envs) — but **NOT from Cursor**, whose skill preambles need `.flow/bin`; a Cursor visitor is offered a consented convert-to-copy. If teammates on other hosts are the norm, choose copy mode. Switching modes later is a consented `/flow-next:setup` re-run; the mode stamp (`setup_mode` in `.flow/meta.json`) is written only by `flowctl setup-mode set`, which refuses a plugin stamp unless the CLAUDE.md rail is present and no copy snapshots remain. Contributor-facing internals: [`agent_docs/setup-modes.md`](../../../agent_docs/setup-modes.md).
+Why other hosts can't have plugin mode: Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves flowctl from `${CODEX_HOME:-$HOME/.codex}/scripts/`; Droid's bin injection is unverified. A plugin-mode repo remains **workable from Codex and Droid** (Codex skills self-resolve flowctl from `${CODEX_HOME:-$HOME/.codex}/scripts/`; Droid reads the plugin-root envs) — but **NOT from Cursor**, whose skill preambles need `.flow/bin`; a Cursor visitor is offered a consented convert-to-copy. If teammates on other hosts are the norm, choose copy mode. Switching modes later is a consented `/flow-next:setup` re-run; the mode stamp (`setup_mode` in `.flow/meta.json`) is written only by `flowctl setup-mode set`, which refuses a plugin stamp unless the CLAUDE.md rail is present and no copy snapshots remain. Contributor-facing internals: [`agent_docs/setup-modes.md`](../../../agent_docs/setup-modes.md).
 
 **Team / org-wide deployment (Claude Code).** To install flow-next across a whole team without each developer running the commands, deploy it through Claude Code settings rather than per-user: a `managed-settings.json` for org-wide rollout (admin/IT, via MDM/GPO — `extraKnownMarketplaces` registers the marketplace, `enabledPlugins` force-enables `flow-next@flow-next`, not user-overridable), or a committed `.claude/settings.json` for a prompt-on-trust install scoped to one repo. A one-time trust prompt still appears by design, and each repo still needs `/flow-next:setup` to wire the local `.flow/` state. Full JSON + OS paths: [flow-next.dev/install → Team / org-wide deployment](https://flow-next.dev/install/#team--org-wide-deployment-claude-code-managed-settings).
 
@@ -197,24 +197,27 @@ Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your 
 **Manual setup** (alternative):
 
 ```bash
+# Resolve the active Codex home once (defaults to ~/.codex)
+CODEX_BIN="${CODEX_HOME:-$HOME/.codex}/scripts"
+
 # Initialize .flow/ directory
-~/.codex/scripts/flowctl init
+"$CODEX_BIN/flowctl" init
 
 # Optional: copy flowctl locally
 mkdir -p .flow/bin
-cp ~/.codex/scripts/flowctl .flow/bin/
-cp ~/.codex/scripts/flowctl.py .flow/bin/
+cp "$CODEX_BIN/flowctl" .flow/bin/
+cp "$CODEX_BIN/flowctl.py" .flow/bin/
 chmod +x .flow/bin/flowctl
 
 # Configure review backend
-~/.codex/scripts/flowctl config set review.backend codex
+"$CODEX_BIN/flowctl" config set review.backend codex
 ```
 
 ### Caveats
 
 - Ralph autonomous mode is limited — hooks intercept Bash only (not Edit/Write), no `SubagentStop` support.
 - `claude-md-scout` is auto-renamed to `agents-md-scout` (CLAUDE.md → AGENTS.md patching).
-- Global install prompts (`/prompts:*`) are global-only (`~/.codex/prompts/`); native plugin avoids this limitation.
+- Global install prompts (`/prompts:*`) are global-only (`${CODEX_HOME:-$HOME/.codex}/prompts/`); native plugin avoids this limitation.
 
 ## Grok Build (Claude Code compatibility)
 
