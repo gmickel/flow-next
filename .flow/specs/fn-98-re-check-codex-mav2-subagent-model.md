@@ -26,9 +26,17 @@ None.
 ## Acceptance Criteria
 <!-- scope: both -->
 
-- R1: openai/codex #32782, #33268, #33314, #33267 statuses checked and recorded here with the CLI version tested.
-- R2: docs caveats (orchestration.md, platforms.md, usage.md template + dogfood, flow-next.dev orchestration page) updated or re-dated to match reality.
-- R3: live probe result recorded if any issue claims a fix.
+- R1: **DONE (2026-08-03, codex-cli 0.146.0).** #32782 CLOSED, #33268 CLOSED, #31814 CLOSED; #33314 and #33267 OPEN. Recorded with the probe matrix below.
+- R3: **DONE (2026-08-03).** Ten-probe matrix, every verdict read from the child thread's rollout `turn_context`. Steering works on both the role path and the explicit-parameter path.
+- R2: docs caveats (`docs/orchestration.md` x2, `docs/platforms.md`, `templates/usage.md` + `skills/flow-next-setup/templates/model-routing-snippet.md`, the flow-next.dev orchestration page) must stop saying subagent model steering is unreliable, and must instead state: (a) steering works on 0.146.0 via both paths; (b) **a role's `sandbox_mode` is not enforced** - read-only is prompt-only on Codex; (c) the two dispatch gotchas (`agent_type` takes the role's `name`, not the `[agents.<key>]` table key; `agent_type` requires `fork_turns: "none"`); (d) the model-selection precedence rule below. The `codex exec -m` self-bridge stays valid, but is no longer the only reliable route.
+- R4: pin the interview fact-scout on Codex hosts. **Verified implementation (P10):** the mirror's dispatch becomes `spawn_agent` with `agent_type: explorer`, `model: gpt-5.6-terra`, `reasoning_effort: medium`, `fork_turns: "none"`. `explorer` is a Codex **builtin** role that declares no model of its own, so the explicit parameter applies - no new role needs registering. Today it inherits the session model (`sol`/`high`), which is the cost gap. The edit lands in `codex/skills/flow-next-interview/SKILL.md` via a `sync-codex.sh` transform, and that line sits under the fn-100 scout-tier hard-fail guard, so the guard moves with it.
+
+**Model-selection precedence on Codex 0.146.0 (measured, P3/P4b/P4c/P5b/P7b/P9/P10):**
+
+1. A role's **declared** `model` / `model_reasoning_effort` wins over an explicit spawn parameter (P5b: `agent_type=probe-terra` + explicit `model=sol` ran `terra`).
+2. Where the role declares **no** model, the explicit parameter applies (P10: builtin `explorer` + explicit `terra/medium` ran `terra/medium`).
+3. With no `agent_type` at all, the explicit parameter applies; `reasoning_effort` may be set alone (P1, P7b).
+4. The explicit `model` parameter accepts **only** `gpt-5.6-sol` and `gpt-5.6-terra` (P4c errors on `luna`). A **role** can pin `luna` successfully (P4b) - the role path reaches models the parameter cannot.
 
 ## Boundaries
 <!-- scope: business -->
@@ -168,3 +176,14 @@ The first P6 run was under-evidenced - it concluded "the child wrote" from the f
 **Confirmed:** a child whose role declares `sandbox_mode = "read-only"`, spawned under a `workspace-write` parent, runs at `workspace-write` and can complete a write. What differed between runs was the child obeying its own instructions, not sandbox enforcement.
 
 **Method note, third instance of the same error in one session.** Self-report is not evidence; a parent's narration of a child is not evidence; a side effect on disk does not attribute itself to an actor. Only the child's own rollout settles any of it. A probe whose role instructions ("do nothing else") conflict with its task prompt also produces non-attempts that read as blocks - keep probe roles permissive and put the task in the prompt.
+
+### Probes P9/P10 (2026-08-03): the fact-scout dispatch, resolved
+
+The Codex mirror instructs `spawn_agent` with `agent_type: explorer`, and no `explorer` role is registered anywhere in the generated config or `~/.codex/agents/`. That looked like a live defect (an unregistered role name would error, as a wrong table key did in P3).
+
+- **P9:** `agent_type: explorer` spawns cleanly - child `role=explorer`, `model=gpt-5.6-sol effort=high`. `explorer` is a **Codex builtin**, not something flow-next registers. **No live bug**; the dispatch works and simply inherits the session model.
+- **P10:** `agent_type: explorer` **+** explicit `model=gpt-5.6-terra reasoning_effort=medium` - child ran `terra/medium`. The pin applies.
+
+This also **corrects the generalization drawn from P5b.** "Role always wins over the explicit parameter" is wrong. The rule is: a role's *declared* model wins; where the role declares none, the explicit parameter applies. P5b's custom role declared `terra`, which is why the explicit `sol` lost.
+
+Net: R4 is a one-line dispatch change with no new role to register, and it is measured rather than assumed.
