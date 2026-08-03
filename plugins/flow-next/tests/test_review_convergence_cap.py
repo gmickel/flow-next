@@ -4679,6 +4679,83 @@ class TestSupersededJournalNeverRegressesStatus(_JournalReplayBase):
         )
 
 
+class TestSupersededJournalFinalizesAndCleansUp(_JournalReplayBase):
+    """PR #290 bot r7 P1: the d65d60be concurrent-SHIP interleave, carried
+    through to journal finalization. A reservation superseded by a concurrent
+    SHIP finalizes with ``round_consumed: false`` BY DESIGN, and the digest
+    backfill's row matcher demanded a consumed round — so the superseded
+    journal's digest leg could never complete, the journal was retained
+    forever, and every later dispatch replayed instead of reserving."""
+
+    def test_superseded_journal_completes_and_gate_reopens(self):
+        ship_id, late_id = self._reserve(), self._reserve()
+        receipt = self.root / "rp-receipt.json"
+
+        # The winner finalizes SHIP: counter -> 0, epoch advances, the
+        # outstanding reservation is superseded beneath it.
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>SHIP</verdict>", verdict="SHIP",
+            review_type="plan", reservation_id=ship_id,
+            status_target="plan", reset_rounds_on_ship=True,
+            receipt_target=str(receipt),
+            receipt_payload={**self._payload(), "verdict": "SHIP"},
+        )
+        published = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(published, dict) and published["replayed"])
+        ship_receipt = json.loads(receipt.read_text())
+        self.assertEqual(ship_receipt["review_reservation_id"], ship_id)
+        self.assertEqual(self._data()["plan_review_status"], "ship")
+        self.assertEqual(
+            self._data()["review_reservations"][late_id]["superseded_by"],
+            ship_id,
+        )
+
+        # The loser finalizes afterwards, carrying findings: receipt + digest
+        # legs journal as pending, no round charged.
+        self._record_findings_round(late_id, receipt)
+        journal_path = self._journal_path(late_id)
+        self.assertTrue(journal_path.exists())
+        row = next(
+            r for r in self._data()["review_attempts"]
+            if r.get("reservation_id") == late_id
+        )
+        self.assertFalse(row["round_consumed"])
+        self.assertEqual(row["superseded_by"], ship_id)
+
+        replay = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(replay, dict) and replay["replayed"])
+
+        # Both legs terminal, digest backfilled onto the superseded row, and
+        # the journal is gone — not retained forever.
+        data = self._data()
+        row = next(
+            r for r in data["review_attempts"]
+            if r.get("reservation_id") == late_id
+        )
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        self.assertEqual(row["finalized"]["digest"], "complete")
+        self.assertIsInstance(row.get("findings_digest"), dict)
+        self.assertFalse(journal_path.exists())
+
+        # The shipped receipt and status are untouched: publication declined
+        # to overwrite the newer receipt.
+        self.assertEqual(json.loads(receipt.read_text()), ship_receipt)
+        self.assertEqual(data["plan_review_status"], "ship")
+
+        # And the gate is open again — the next dispatch reserves.
+        self.assertIsInstance(
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", return_reservation=True
+            ),
+            tuple,
+        )
+
+
 class TestSingleLockedCompletionStatusWrite(_InProcessBackendReviewBase):
     """PR #290 bot r5 P1: publication-from-journal completes the deferred
     status leg inside the receipt+sidecar lock, and the completion handler

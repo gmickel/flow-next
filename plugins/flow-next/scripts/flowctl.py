@@ -9779,9 +9779,17 @@ def _journal_digest_backfill_row(
         "impl": "implementation",
         "completion": "completion",
     }.get(review_type)
+    # PR #290 bot r7: a reservation superseded by a concurrent SHIP finalizes
+    # with `round_consumed: false` BY DESIGN (it charges no round against the
+    # fresh post-SHIP budget). Requiring a consumed round here would leave its
+    # journal's digest leg permanently pending — journal retained forever, and
+    # every later dispatch exiting REPLAY_REQUIRED. An explicitly superseded
+    # verdict row is therefore an accepted match; identity and scope checks are
+    # unchanged, and the receipt/status legs still decline to overwrite the
+    # newer values (record-only, per the supersession identity table).
     if (
         row.get("outcome") != "verdict"
-        or not row.get("round_consumed")
+        or not (row.get("round_consumed") or row.get("superseded_by"))
         or row.get("scope") != journal.get("scope")
         or row.get("backend") != journal.get("backend")
         or expected_kind is None
