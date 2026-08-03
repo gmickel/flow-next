@@ -1428,6 +1428,31 @@ class _JournalReplayBase(unittest.TestCase):
             receipt_payload=self._payload(),
         )
 
+    def _record_findings_round(
+        self, reservation_id: str, target: Path
+    ) -> dict:
+        """Record a round whose response carries a real findings container."""
+        return flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="rp",
+            output=(
+                "## Issue\n"
+                "- **Severity**: Major\n"
+                "- **Confidence**: 100\n"
+                "- **Classification**: introduced\n"
+                "- **Location**: Task acceptance\n"
+                f"- **Problem**: Acceptance {reservation_id} is not testable.\n"
+                "- **Suggestion**: Add an executable assertion.\n"
+                "<verdict>NEEDS_WORK</verdict>\n"
+            ),
+            verdict="NEEDS_WORK",
+            review_type="plan",
+            reservation_id=reservation_id,
+            receipt_target=str(target),
+            receipt_payload=self._payload(),
+        )
+
     def _journal_path(self, reservation_id: str) -> Path:
         return self.root / ".flow" / "review-runs" / f"{reservation_id}.json"
 
@@ -1549,8 +1574,24 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         target = self.root / "receipt.json"
         self._record_with_receipt(reservation_id, target)
         # A LATER reservation already advanced the receipt pointer: replaying
-        # the old bytes over it would regress the newer receipt.
-        newer = {**self._payload(), "review_reservation_id": "f" * 32}
+        # the old bytes over it would regress the newer receipt. Supersession
+        # must be PROVEN, so the newer id is backed by a finalized attempt row
+        # in the same scope stamped after this journal was created.
+        newer_id = "f" * 32
+        spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        data = json.loads(spec_path.read_text())
+        data["review_attempts"].append({
+            "timestamp": "9999-01-01T00:00:00Z",
+            "scope": "plan", "counter_kind": "plan", "task": None,
+            "kind": "plan", "backend": "rp", "outcome": "verdict",
+            "verdict": "NEEDS_WORK", "reservation_id": newer_id,
+            "finalized": {
+                "receipt": "complete", "digest": "not_applicable",
+                "status": "not_applicable",
+            },
+        })
+        spec_path.write_text(json.dumps(data))
+        newer = {**self._payload(), "review_reservation_id": newer_id}
         target.write_text(json.dumps(newer))
         result = flowctl.enforce_and_increment_review_cap(
             self.spec_id, "plan", return_reservation=True
@@ -1558,6 +1599,156 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         self.assertTrue(isinstance(result, dict) and result["replayed"])
         self.assertEqual(json.loads(target.read_text()), newer)
         self.assertFalse(self._journal_path(reservation_id).exists())
+
+    def test_unproven_differing_receipt_id_is_published_over(self):
+        """Round-1 review r1 P0: a differing reservation id on a REUSED
+        receipt path is the PRIOR round, not a newer one. Without proof of
+        supersession the delivered verdict must be published, never dropped."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        # No attempt row backs this id: unproven, therefore not superseding.
+        target.write_text(
+            json.dumps({**self._payload(), "review_reservation_id": "f" * 32})
+        )
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(
+            json.loads(target.read_text()),
+            {**self._payload(), "review_reservation_id": reservation_id},
+        )
+        self.assertFalse(self._journal_path(reservation_id).exists())
+
+    def test_legacy_receipt_without_reservation_id_is_published_over(self):
+        """Round-1 review r1 P0: a pre-fn-159 receipt carries no reservation
+        id; publishing over it must succeed instead of failing closed and
+        wedging every later gate call on REPLAY_REQUIRED."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        target.write_text(json.dumps({**self._payload(), "verdict": "SHIP"}))
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(
+            json.loads(target.read_text()),
+            {**self._payload(), "review_reservation_id": reservation_id},
+        )
+        self.assertFalse(self._journal_path(reservation_id).exists())
+        # The gate is not wedged: the next call dispatches normally.
+        self.assertIsInstance(
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", return_reservation=True
+            ),
+            tuple,
+        )
+
+    def test_two_rounds_against_one_receipt_path_land_second_payload(self):
+        """Round-1 review r1 P0: receipt paths are stable per spec, so the
+        second round's journaled payload must land over the first."""
+        first = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(first, target)
+        code, _, err = self._run_cli(
+            "review-findings", "attach", "--reservation-id", first,
+            "--receipt", str(target), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(
+            json.loads(target.read_text())["review_reservation_id"], first
+        )
+        second = self._reserve()
+        self._record_with_receipt(second, target, verdict="SHIP")
+        code, out, err = self._run_cli(
+            "review-findings", "attach", "--reservation-id", second,
+            "--receipt", str(target), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertTrue(json.loads(out)["published_from_journal"])
+        self.assertEqual(
+            json.loads(target.read_text()),
+            {**self._payload(), "review_reservation_id": second},
+        )
+        self.assertFalse(self._journal_path(second).exists())
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["reservation_id"], second)
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+
+    def test_journal_publish_preserves_prior_receipt_generation(self):
+        """Round-1 review r1 P2: the journal publish must preserve the prior
+        findings generation exactly like the direct writer and legacy attach."""
+        target = self.root / "receipt.json"
+        first = self._reserve()
+        self._record_findings_round(first, target)
+        code, _, err = self._run_cli(
+            "review-findings", "attach", "--reservation-id", first,
+            "--receipt", str(target), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        first_findings = json.loads(target.read_text())["findings"]
+        second = self._reserve()
+        self._record_findings_round(second, target)
+        code, _, err = self._run_cli(
+            "review-findings", "attach", "--reservation-id", second,
+            "--receipt", str(target), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        second_findings = json.loads(target.read_text())["findings"]
+        self.assertNotEqual(
+            second_findings["sourceReceiptId"],
+            first_findings["sourceReceiptId"],
+        )
+        generations = flowctl.load_review_receipt_generations(target)
+        self.assertIsNotNone(generations)
+        self.assertEqual(len(generations), 2)
+        self.assertIn(
+            first_findings["sourceReceiptId"],
+            {entry["findings"]["sourceReceiptId"] for entry in generations},
+        )
+
+    def test_completion_journal_publish_carries_bound_criteria(self):
+        """Round-1 review r1 P2: record binds completion criteria into the
+        journal, so a journal-published completion receipt keeps them."""
+        (self.root / ".flow" / "criteria.md").write_text(
+            "- **G1:** Every route change regenerates the contract.\n",
+            encoding="utf-8",
+        )
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        payload = {
+            "type": "completion_review", "id": self.spec_id,
+            "mode": "rp", "head": "a" * 40,
+        }
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output=(
+                "## Global criteria\n"
+                "G1: met - contract regenerated\n"
+                "<verdict>SHIP</verdict>\n"
+            ),
+            verdict="SHIP", review_type="completion",
+            reservation_id=reservation_id,
+            receipt_target=str(target), receipt_payload=payload,
+        )
+        journal = json.loads(self._journal_path(reservation_id).read_text())
+        self.assertEqual(
+            journal["criteria"],
+            [{"id": "G1", "status": "met", "note": "contract regenerated"}],
+        )
+        code, _, err = self._run_cli(
+            "review-findings", "attach", "--reservation-id", reservation_id,
+            "--receipt", str(target), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        published = json.loads(target.read_text())
+        self.assertEqual(
+            published["criteria"],
+            [{"id": "G1", "status": "met", "note": "contract regenerated"}],
+        )
+        self.assertTrue(flowctl.validate_review_receipt_criteria(published))
 
     def test_mixed_verdict_two_incomplete_journals_zero_dispatch(self):
         first, second = self._reserve(), self._reserve()
@@ -1771,6 +1962,98 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         # fn-134.7 / R22: pending untouched by the reset half (record's own
         # consume already popped it; nothing else was cleared).
         self.assertNotIn("plan", data.get("review_pending_rounds", {}))
+
+
+class TestReplayAwareInProcessCallers(unittest.TestCase):
+    """Round-1 review r1 P2: the in-process backend handlers must ABORT the
+    dispatch on a typed replay result rather than paying for a second review
+    that then fails its finalize with pending_count < 1."""
+
+    def _capture(self, result, **kwargs) -> "tuple[bool, str]":
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            handled = flowctl.handle_replayed_review_cap(result, **kwargs)
+        return handled, out.getvalue()
+
+    def test_non_replay_result_never_intercepts(self):
+        for result in (1, (1, "res"), None, {"replayed": False}):
+            handled, printed = self._capture(
+                result, review_type="plan_review", review_id="fn-1-demo",
+                use_json=True,
+            )
+            self.assertFalse(handled)
+            self.assertEqual(printed, "")
+
+    def test_replay_result_aborts_dispatch_and_surfaces_verdict(self):
+        handled, printed = self._capture(
+            {"replayed": True, "replays": [
+                {"reservation_id": "a" * 32, "verdict": "NEEDS_WORK"},
+            ]},
+            review_type="impl_review", review_id="fn-1-demo.1", use_json=True,
+        )
+        self.assertTrue(handled)
+        payload = json.loads(printed)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertTrue(payload["replayed"])
+        self.assertFalse(payload["dispatched"])
+        self.assertEqual(payload["replays"][0]["reservation_id"], "a" * 32)
+
+    def test_terminal_precedence_over_mixed_replays(self):
+        ship_only = [{"reservation_id": "a", "verdict": "SHIP"}]
+        self.assertEqual(
+            flowctl.review_replay_terminal_verdict(ship_only), "SHIP"
+        )
+        self.assertEqual(
+            flowctl.review_replay_terminal_verdict(
+                ship_only + [{"reservation_id": "b", "verdict": "NEEDS_WORK"}]
+            ),
+            "NEEDS_WORK",
+        )
+        self.assertEqual(
+            flowctl.review_replay_terminal_verdict([
+                {"reservation_id": "a", "verdict": "SHIP"},
+                {"reservation_id": "b", "verdict": "NEEDS_WORK"},
+                {"reservation_id": "c", "verdict": "NEEDS_HUMAN"},
+            ]),
+            "NEEDS_HUMAN",
+        )
+        self.assertIsNone(flowctl.review_replay_terminal_verdict([]))
+
+    def test_incomplete_journal_in_scope_aborts_handler_dispatch(self):
+        """End-to-end shape: the gate returns a replay dict for an incomplete
+        in-scope journal, and the shared helper turns it into a no-dispatch
+        terminal — the two halves the handlers wire together."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        _init_flow_repo(root)
+        cwd = os.getcwd()
+        os.chdir(root)
+        self.addCleanup(os.chdir, cwd)
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            "fn-1-demo", "plan", review_type="plan", return_reservation=True,
+        )
+        flowctl.record_review_attempt(
+            "fn-1-demo", "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            review_type="plan", reservation_id=reservation_id,
+            receipt_target=str(root / "receipt.json"),
+            receipt_payload={
+                "type": "plan_review", "id": "fn-1-demo",
+                "mode": "rp", "head": "a" * 40,
+            },
+        )
+        result = flowctl.enforce_and_increment_review_cap("fn-1-demo", "plan")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            handled = flowctl.handle_replayed_review_cap(
+                result, review_type="plan_review", review_id="fn-1-demo",
+                use_json=True,
+            )
+        self.assertTrue(handled)
+        payload = json.loads(out.getvalue())
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertFalse(payload["dispatched"])
 
 
 class TestOverlappingReviewProcesses(_JournalReplayBase):

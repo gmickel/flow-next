@@ -9391,8 +9391,53 @@ def _review_journal_receipt_payload(journal: dict) -> Optional[dict]:
     findings = journal.get("findings_container")
     if isinstance(findings, dict):
         payload["findings"] = findings
+    criteria = journal.get("criteria")
+    if isinstance(criteria, list):
+        payload["criteria"] = criteria
     payload["review_reservation_id"] = journal.get("reservation_id")
     return payload
+
+
+def _review_receipt_proven_newer(
+    journal: dict,
+    existing_reservation: object,
+    spec_data: Optional[dict],
+) -> bool:
+    """True only when the receipt on disk PROVABLY postdates this journal.
+
+    Receipt paths are stable per spec and reused every round, so a differing
+    ``review_reservation_id`` alone means nothing — it is usually the PRIOR
+    round's receipt.  Supersession is claimed only with evidence: the existing
+    receipt's reservation id resolves to a finalized attempt row in the same
+    scope whose timestamp is later than this journal's creation.  Anything
+    else (unknown id, legacy receipt with no id) is not proof, and the
+    journaled verdict must be published rather than silently dropped.
+    """
+    if not isinstance(existing_reservation, str) or not existing_reservation:
+        return False
+    if existing_reservation == journal.get("reservation_id"):
+        return False
+    if not isinstance(spec_data, dict):
+        return False
+    created = journal.get("timestamp")
+    if not isinstance(created, str) or not created:
+        return False
+    scope = journal.get("scope")
+    attempts = spec_data.get("review_attempts")
+    if not isinstance(attempts, list):
+        return False
+    for row in attempts:
+        if not isinstance(row, dict):
+            continue
+        if row.get("reservation_id") != existing_reservation:
+            continue
+        if scope is not None and row.get("scope") != scope:
+            continue
+        timestamp = row.get("timestamp")
+        # now_iso() is a fixed-width UTC ISO-8601 stamp: lexical == temporal.
+        if isinstance(timestamp, str) and timestamp > created:
+            return True
+    return False
 
 
 def _complete_review_journal(
@@ -9409,11 +9454,15 @@ def _complete_review_journal(
     temporary reviewer response.  A receipt target is optional for the older
     direct-record API; absent legs are explicitly not applicable.
 
-    Every write carries the reservation identity: an exact-match already-
-    applied write is a successful no-op; a receipt target that a LATER
-    reservation already advanced past is treated as superseded (replaying the
-    old bytes over a newer receipt would regress it).  Any other conflict
-    fails closed with zero mutation.
+    Every write carries the reservation identity, and the decision is made on
+    IDENTITY, never on mere existence: receipt paths are stable per spec and
+    reused every round, so the target normally already holds the previous
+    round's receipt.  An exact-match already-applied write is a successful
+    no-op; a receipt PROVEN newer (its reservation id resolves to a later
+    attempt row in the same scope) is left alone, because replaying the old
+    bytes over it would regress it; every other state — a differing but
+    unproven id, or a legacy receipt with no id at all — is published over,
+    since dropping a delivered verdict is the worse failure.
     """
     progress = _journal_progress(journal)
     receipt_target = journal.get("receipt_target")
@@ -9434,13 +9483,16 @@ def _complete_review_journal(
             )
             if existing == payload:
                 pass  # receipt-published/progress-unmarked boundary: no-op.
-            elif (
-                isinstance(existing_reservation, str)
-                and existing_reservation != journal.get("reservation_id")
+            elif _review_receipt_proven_newer(
+                journal, existing_reservation, spec_data
             ):
-                pass  # receipt pointer advanced past this reservation.
+                pass  # PROVEN newer receipt: replaying would regress it.
             else:
-                return False
+                # Same lock the receipt writers hold (callers take the
+                # two-resource lock receipt-before-sidecar): keep the prior
+                # findings generation before advancing the latest pointer.
+                _preserve_review_receipt_generation(target)
+                atomic_write_json(target, payload)
         else:
             atomic_write_json(target, payload)
         progress["receipt"] = "complete"
@@ -9746,6 +9798,9 @@ def _record_review_attempt_locked(
         journal_receipt = receipt_target and isinstance(receipt_payload, dict)
         progress = {
             "receipt": "pending" if journal_receipt else "not_applicable",
+            # Deferred to fn-159.2: that task sets this leg pending/complete
+            # from the findings_digest build; until then no digest artifact
+            # exists to finalize, so the leg is not applicable at creation.
             "digest": "not_applicable",
             "status": "pending" if expected_status else "not_applicable",
         }
@@ -9806,6 +9861,19 @@ def _record_review_attempt_locked(
             except Exception:
                 container = None
             journal["findings_container"] = container
+            # Completion receipts additionally carry the bound standing
+            # criteria (cf. the direct writer and the legacy attach path).
+            # Bound here, pre-consumption, from the same response text so a
+            # journal-published completion receipt is not missing the field.
+            if (review_type or review_kind) == "completion" or (
+                receipt_payload.get("type") == "completion_review"
+            ):
+                try:
+                    journal["criteria"] = bind_review_criteria(
+                        parse_review_criteria(output)
+                    )
+                except Exception:
+                    journal["criteria"] = None
         atomic_write_json(journal_path, journal)
     if pending_count == 1:
         pending.pop(counter_scope, None)
@@ -9974,6 +10042,63 @@ def enforce_and_increment_review_cap(
             artifact_sha256=artifact_sha256, review_type=review_type,
             forced=forced, return_reservation=return_reservation,
         )
+
+
+# Terminal precedence over replayed verdicts (fn-159 round 8): the worst
+# delivered verdict wins; SHIP is terminal only when every replay shipped.
+_REVIEW_REPLAY_PRECEDENCE = ("NEEDS_HUMAN", "NEEDS_WORK", "MAJOR_RETHINK", "SHIP")
+
+
+def review_replay_terminal_verdict(replays: list) -> Optional[str]:
+    """Fold replayed verdicts into one terminal per the precedence order."""
+    delivered = {
+        row.get("verdict")
+        for row in replays
+        if isinstance(row, dict) and isinstance(row.get("verdict"), str)
+    }
+    for verdict in _REVIEW_REPLAY_PRECEDENCE:
+        if verdict in delivered:
+            return verdict
+    return None
+
+
+def handle_replayed_review_cap(
+    result: Any,
+    *,
+    review_type: str,
+    review_id: str,
+    use_json: bool,
+) -> bool:
+    """Surface a typed replay instead of dispatching a paid review round.
+
+    ``enforce_and_increment_review_cap`` returns a replay dict when it
+    recovered an already-delivered verdict; no reservation exists, so a
+    dispatch here would pay for a second review and then fail its finalize
+    with ``pending_count < 1``.  Returns True when the caller MUST return
+    without dispatching (the replayed terminal has been reported), False for
+    the ordinary increment path.
+    """
+    if not (isinstance(result, dict) and result.get("replayed")):
+        return False
+    replays = result.get("replays")
+    if not isinstance(replays, list):
+        replays = []
+    verdict = review_replay_terminal_verdict(replays)
+    if use_json:
+        json_output(
+            {
+                "type": review_type,
+                "id": review_id,
+                "verdict": verdict,
+                "replayed": True,
+                "replays": replays,
+                "dispatched": False,
+            }
+        )
+    else:
+        print(json.dumps({"replayed": True, "replays": replays}, indent=2))
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+    return True
 
 
 def _enforce_and_increment_review_cap_locked(
@@ -37061,9 +37186,17 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
 
     # fn-90 R5: deterministic cap — enforce + increment BEFORE dispatch.
     if not standalone:
-        enforce_and_increment_review_cap(
+        cap_result = enforce_and_increment_review_cap(
             spec_id_from_task(task_id), "impl", task_id=task_id, use_json=args.json
         )
+        # A recovered verdict is the terminal for this call — never dispatch.
+        if handle_replayed_review_cap(
+            cap_result,
+            review_type="impl_review",
+            review_id=task_id if task_id else "branch",
+            use_json=args.json,
+        ):
+            return
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -37389,7 +37522,15 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             task_ids=task_ids or None,
         )
 
-    enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
+    cap_result = enforce_and_increment_review_cap(
+        epic_id, "plan", use_json=args.json
+    )
+    # A recovered verdict is the terminal for this call — never dispatch.
+    if handle_replayed_review_cap(
+        cap_result, review_type="plan_review", review_id=epic_id,
+        use_json=args.json,
+    ):
+        return
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -37574,7 +37715,15 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             prompt = rereview_preamble + prompt
 
     # Completion reviews reuse the spec-scoped plan-review counter.
-    enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
+    cap_result = enforce_and_increment_review_cap(
+        epic_id, "plan", use_json=args.json
+    )
+    # A recovered verdict is the terminal for this call — never dispatch.
+    if handle_replayed_review_cap(
+        cap_result, review_type="completion_review", review_id=epic_id,
+        use_json=args.json,
+    ):
+        return
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
