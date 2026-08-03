@@ -3701,6 +3701,23 @@ PLAN_REVIEW_FINDING = (
     "<verdict>NEEDS_WORK</verdict>\n"
 )
 
+COMPLETION_REVIEW_FINDING = (
+    "## Issue\n"
+    "- **Severity**: Major\n"
+    "- **Confidence**: 100\n"
+    "- **Classification**: introduced\n"
+    "- **Location**: app.py\n"
+    "- **Problem**: R1 is not implemented.\n"
+    "- **Suggestion**: Implement it.\n"
+    "\n"
+    "## Global criteria\n"
+    "\n"
+    "G1: met\n"
+    "G2: n/a - no UI\n"
+    "\n"
+    "<verdict>NEEDS_WORK</verdict>\n"
+)
+
 
 class _InProcessBackendReviewBase(unittest.TestCase):
     """A real git repo + spec sidecar for end-to-end in-process dispatch."""
@@ -3768,6 +3785,35 @@ class _InProcessBackendReviewBase(unittest.TestCase):
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 with contextlib.suppress(SystemExit):
                     flowctl._backend_plan_review(self._plan_args(receipt), backend)
+        return json.loads(out.getvalue()), err.getvalue()
+
+    def _dispatch_completion(
+        self, receipt: "Path | None", *, backend: str = "codex",
+        review_text: str = COMPLETION_REVIEW_FINDING,
+    ) -> "tuple[dict, str]":
+        """Dispatch a completion review whose transport output is a real codex
+        JSONL envelope — the criteria/findings parsers can only read the
+        EXTRACTED message, which is exactly what a replay no longer has."""
+        envelope = json.dumps({
+            "type": "item.completed",
+            "item": {"type": "agent_message", "text": review_text},
+        }) + "\n"
+
+        def fake_exec(_prompt, **_kwargs):
+            return envelope, "sess-c1", 0, ""
+
+        args = argparse.Namespace(
+            epic=self.spec_id, base="HEAD~1", json=True,
+            receipt=str(receipt) if receipt else None,
+            spec=None, model=None, effort=None, force=False, sandbox=None,
+        )
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(
+            flowctl.BACKEND_REGISTRY[backend], {"run_exec": fake_exec}
+        ):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                with contextlib.suppress(SystemExit):
+                    flowctl._backend_completion_review(args, backend)
         return json.loads(out.getvalue()), err.getvalue()
 
     def _fresh_process(self, *argv: str) -> "subprocess.CompletedProcess[str]":
@@ -3847,6 +3893,67 @@ class TestInProcessReceiptJournaledPreConsumption(_InProcessBackendReviewBase):
             (self.root / ".flow" / "review-runs"
              / f"{row['reservation_id']}.json").exists()
         )
+
+    def test_completion_crash_replay_publishes_journaled_criteria_and_container(self):
+        """The crashed process bound the criteria and built the findings
+        container from the EXTRACTED reviewer message. The journal keeps the
+        raw transport envelope, so the replay must pass the journaled evidence
+        through — re-deriving from `response` yields nothing and would publish
+        a criteria-less receipt with a re-derived (empty) container."""
+        (self.root / ".flow" / "criteria.md").write_text(
+            "- **G1:** Criterion one.\n- **G2:** Criterion two.\n",
+            encoding="utf-8",
+        )
+        receipt = self.root / "completion-receipt.json"
+        # The induced crash is INSIDE record: the journal is written, the
+        # reservation is not yet consumed. That is the boundary the
+        # pre-increment gate resumes by re-calling record.
+        spec_json = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        real_write = flowctl.atomic_write_json
+        armed = []
+
+        def crash_after_journal(path, data, *a, **kw):
+            if armed and Path(path) == spec_json:
+                raise RuntimeError("induced crash before reservation consumption")
+            real_write(path, data, *a, **kw)
+            if Path(path).parent.name == "review-runs":
+                armed.append(True)
+
+        with mock.patch.object(flowctl, "atomic_write_json", crash_after_journal):
+            with self.assertRaises(RuntimeError):
+                self._dispatch_completion(receipt)
+        self.assertFalse(receipt.exists())
+
+        journals = list((self.root / ".flow" / "review-runs").glob("*.json"))
+        self.assertEqual(len(journals), 1)
+        journal_path = journals[0]
+        journal = json.loads(journal_path.read_text())
+        reservation_id = journal["reservation_id"]
+        # Reservation still open, no attempt row: the replay branch owns it.
+        self.assertIn(reservation_id, self._data().get("review_reservations", {}))
+        self.assertEqual(self._data().get("review_attempts", []), [])
+        # Pre-condition: the journal holds the envelope, not the message.
+        self.assertIn('"item.completed"', journal["response"])
+        self.assertIsNone(flowctl.parse_review_criteria(journal["response"]))
+        self.assertEqual(
+            journal["criteria"],
+            [{"id": "G1", "status": "met"}, {"id": "G2", "status": "n/a", "note": "no UI"}],
+        )
+        journaled_container = journal["findings_container"]
+        self.assertIsNotNone(journaled_container)
+        self.assertTrue(journaled_container["items"])
+
+        replay = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "completion", "--json",
+        )
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertTrue(json.loads(replay.stdout)["replayed"])
+
+        published = json.loads(receipt.read_text())
+        self.assertEqual(published["criteria"], journal["criteria"])
+        self.assertEqual(published["findings"], journaled_container)
+        self.assertEqual(published["review_reservation_id"], reservation_id)
 
     def test_receiptless_run_keeps_receipt_leg_not_applicable(self):
         payload, _ = self._dispatch_plan(None)

@@ -10079,6 +10079,8 @@ def _record_review_attempt_locked(
     receipt_target: Optional[str] = None,
     receipt_payload: Optional[dict] = None,
     receipt_criteria_text: Optional[str] = None,
+    receipt_criteria: Optional[list] = None,
+    criteria_built: bool = False,
     status_target: Optional[str] = None,
     findings_container: Optional[dict] = None,
     findings_digest: Optional[dict] = None,
@@ -10306,20 +10308,32 @@ def _record_review_attempt_locked(
             if (review_type or review_kind) == "completion" or (
                 receipt_payload.get("type") == "completion_review"
             ):
-                try:
-                    # In-process backends supply the EXTRACTED reviewer
-                    # message: `output` is a transport envelope (codex returns
-                    # a JSONL event stream) that the criteria parser cannot
-                    # read. RP/host fences pass nothing and keep `output`.
-                    journal["criteria"] = bind_review_criteria(
-                        parse_review_criteria(
-                            receipt_criteria_text
-                            if receipt_criteria_text is not None
-                            else output
-                        )
+                if criteria_built:
+                    # Crash replay: the crashed process already bound these
+                    # criteria from the reviewer message it still had. Its
+                    # `output` here is the journaled transport envelope, so
+                    # re-parsing would silently drop them — pass them through.
+                    journal["criteria"] = (
+                        receipt_criteria
+                        if isinstance(receipt_criteria, list)
+                        else None
                     )
-                except Exception:
-                    journal["criteria"] = None
+                else:
+                    try:
+                        # In-process backends supply the EXTRACTED reviewer
+                        # message: `output` is a transport envelope (codex
+                        # returns a JSONL event stream) that the criteria
+                        # parser cannot read. RP/host fences pass nothing and
+                        # keep `output`.
+                        journal["criteria"] = bind_review_criteria(
+                            parse_review_criteria(
+                                receipt_criteria_text
+                                if receipt_criteria_text is not None
+                                else output
+                            )
+                        )
+                    except Exception:
+                        journal["criteria"] = None
         atomic_write_json(journal_path, journal)
     if pending_count == 1:
         pending.pop(counter_scope, None)
@@ -10803,6 +10817,16 @@ def _enforce_and_increment_review_cap_locked(
                 receipt_payload=(journal.get("receipt_payload") if isinstance(journal.get("receipt_payload"), dict) else None),
                 status_target=(journal.get("status_target") if isinstance(journal.get("status_target"), str) else None),
                 reset_rounds_on_ship=bool(journal.get("reset_rounds_on_ship", False)),
+                # Journaled evidence is authoritative: the crashed process
+                # bound the criteria and built the findings container from the
+                # reviewer MESSAGE, which is gone. `response` is the transport
+                # envelope, so re-deriving either here would overwrite correct
+                # evidence with an empty re-parse.
+                receipt_criteria=(journal.get("criteria") if isinstance(journal.get("criteria"), list) else None),
+                criteria_built="criteria" in journal,
+                findings_container=(journal.get("findings_container") if isinstance(journal.get("findings_container"), dict) else None),
+                findings_digest=(journal.get("findings_digest") if isinstance(journal.get("findings_digest"), dict) else None),
+                findings_built="findings_container" in journal,
             )
             spec_data = normalize_epic(
                 load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
