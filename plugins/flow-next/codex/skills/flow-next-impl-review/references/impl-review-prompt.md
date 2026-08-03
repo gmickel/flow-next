@@ -68,6 +68,9 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+**Settled plan:** A finding that re-litigates a recorded Decision Context decision
+or matching `knowledge/decisions` entry is FYI, never blocking.
+
 {smell_baseline_block}{r_id_coverage_block}
 {confidence_rubric_block}
 {classification_rubric_block}
@@ -93,5 +96,9 @@ After the findings, add (only when applicable): the `## Requirements coverage` t
 <verdict>SHIP</verdict> - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
 <verdict>NEEDS_WORK</verdict> - `introduced` issues or unaddressed R-IDs must be fixed
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
+<verdict>NEEDS_HUMAN</verdict> - A human must adjudicate a design judgment
+
+Use NEEDS_HUMAN only for a design judgment needing human authority; never as a
+soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
 
 Do NOT skip this tag. The automation depends on it.

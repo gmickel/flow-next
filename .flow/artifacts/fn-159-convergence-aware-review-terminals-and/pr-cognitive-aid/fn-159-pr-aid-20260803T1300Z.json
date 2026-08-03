@@ -1,0 +1,1858 @@
+{
+  "artifactId": "fn-159-pr-aid-20260803T1300Z",
+  "baseSha": "4c5c1d4db2a78e5f84235f7189cbb95e5e2a48de",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "Before this change the only review terminal was an exhausted round budget: a loop could re-dispatch on an unchanged artifact, repeat the same unfixed findings for rounds, and then exit on cap exhaustion having never converged - and cap exhaustion could silently produce an unreviewed ship.",
+        "taskIds": [],
+        "title": "Review loops could burn the budget without converging"
+      },
+      {
+        "files": [],
+        "kind": "principle",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "The reviewer never decides its own budget. Every new terminal is deterministic plumbing in flowctl over persisted evidence - no new LLM calls, no new subprocess judges, no new exit codes, and the count-based cap stays enabled and untouched.",
+        "taskIds": [],
+        "title": "Reviewers emit data and terminal verdicts; flowctl owns the arithmetic"
+      },
+      {
+        "files": [
+          {
+            "additions": 2337,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 157,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Byte-identical distributed copy of the flowctl engine, propagated per the repo's flowctl-change gate and parity-tested.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Generated mirror of the flowctl change; regenerated, not hand-written.",
+            "taskIds": []
+          },
+          {
+            "additions": 2337,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 157,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t1",
+              "t2",
+              "t3",
+              "t7"
+            ],
+            "summary": "Review engine: artifact-hash dispatch guard with reservation registry and write-ahead finalization journal, the three-rule stall detector over persisted findings digests, the structured-findings convergence ratchet, NEEDS_HUMAN verdict parsing plus the four verdict->status maps, system-owned SHIP reset with hash-epoch advance, and the new review-artifact / rp mode-probe CLI surfaces.",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.1",
+              "fn-159-convergence-aware-review-terminals-and.2",
+              "fn-159-convergence-aware-review-terminals-and.3",
+              "fn-159-convergence-aware-review-terminals-and.7"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Generated mirror of the flowctl change; regenerated, not hand-written.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R2",
+          "R3",
+          "R4",
+          "R9"
+        ],
+        "sourceRefs": [
+          "spec",
+          "diff",
+          "t1",
+          "t2",
+          "t3",
+          "t7",
+          "r1",
+          "r2",
+          "r3",
+          "r4",
+          "r9"
+        ],
+        "summary": "flowctl gains the domain-separated artifact-hash dispatch guard (refuses a re-review of an unchanged artifact with NOT_RETRYABLE, exit 1, zero mutation, --force override), the three-rule stall detector over persisted findings digests that exits 4 with ESCALATE, NEEDS_HUMAN as a first-class terminal verdict with persist-then-exit ordering across all four verdict->status maps, the structured findings.items convergence ratchet with a labeled legacy-prose fallback, and a system-owned SHIP reset that advances the hash epoch.",
+        "taskIds": [
+          "fn-159-convergence-aware-review-terminals-and.1",
+          "fn-159-convergence-aware-review-terminals-and.2",
+          "fn-159-convergence-aware-review-terminals-and.3",
+          "fn-159-convergence-aware-review-terminals-and.7"
+        ],
+        "title": "Engine: unchanged-artifact guard, stall detector, NEEDS_HUMAN, system-owned SHIP reset"
+      },
+      {
+        "files": [
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 94,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 199,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 70,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 64,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 26,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 99,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 33,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/prompt_completion.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/prompt_plan.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/prompt_work.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 26,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/ralph.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 20,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 104,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 49,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 193,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 78,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical skill file.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 94,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 202,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 73,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 64,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 26,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 113,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 47,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_completion.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_work.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 26,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 21,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 104,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 49,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 201,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 86,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-rp.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Review-surface prompt/workflow text updated for the per-surface severity calibration, confidence-suppression gate, settled-plan FYI clause, and the NEEDS_HUMAN verdict grammar.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R3",
+          "R5",
+          "R6"
+        ],
+        "sourceRefs": [
+          "spec",
+          "diff",
+          "t3",
+          "t4",
+          "r3",
+          "r5",
+          "r6"
+        ],
+        "summary": "The four hash-pinned review prompts are recalibrated in one pass: plan and completion gain outcome-anchored P0-P3 severities and the confidence-suppression gate (drop below 75, P0 exempt at 50+, suppression before the ratchet contract); impl gains the settled-plan clause that makes findings re-litigating a recorded Decision Context decision FYI rather than blocking; every template, byte-parity fallback, ralph-init prompt, and host/RP workflow fence learns the NEEDS_HUMAN verdict grammar.",
+        "taskIds": [
+          "fn-159-convergence-aware-review-terminals-and.3",
+          "fn-159-convergence-aware-review-terminals-and.4"
+        ],
+        "title": "Per-surface prompt calibration and the NEEDS_HUMAN verdict grammar"
+      },
+      {
+        "files": [
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/agents/pr-comment-resolver.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t5"
+            ],
+            "summary": "Triage contract: spec/doc-prose findings on code PRs are classified fix-or-record and are never merge-gating, with the prose-reveals-behavior-gap carve-out treated as a code finding.",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.5"
+            ]
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/agents/pr-comment-resolver.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical file.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-land/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Codex mirror regenerated by sync-codex.sh from the canonical file.",
+            "taskIds": []
+          },
+          {
+            "additions": 192,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/scripts/hooks/ralph-guard.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "t5"
+            ],
+            "summary": "Ralph guard blocks the gate-integrity escapes: spec reset-review-rounds, review-rounds reset, and --force on review dispatch/increment via tokenized argv matching; NEEDS_HUMAN added to the guard's verdict sites.",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.3",
+              "fn-159-convergence-aware-review-terminals-and.5"
+            ]
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-land/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Bot-surface bounding: the recommended scoped land review-trigger text and the declaration that bot prose findings sit outside the detector/guard blast radius.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R7",
+          "R8",
+          "R9"
+        ],
+        "sourceRefs": [
+          "spec",
+          "diff",
+          "t5",
+          "r7",
+          "r8",
+          "r9"
+        ],
+        "summary": "resolve-pr triage now classifies spec/doc-prose findings on code PRs as fix-or-record and never merge-gating, with the prose-reveals-behavior-gap carve-out treated as a code finding; land documents a recommended scoped review-trigger text; ralph-guard blocks the counter-reset and --force escapes so the new terminals cannot be worked around.",
+        "taskIds": [
+          "fn-159-convergence-aware-review-terminals-and.5"
+        ],
+        "title": "Bot-surface bounding and gate-integrity guard blocks"
+      },
+      {
+        "files": [
+          {
+            "additions": 71,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t6"
+            ],
+            "summary": "Outcome-first ## Unreleased entry covering the stall detector, NEEDS_HUMAN terminal, unchanged-artifact guard, per-surface calibration, structured-findings ratchet, bot bounding, and the 4->8 default cap raise. No version bump (batched release rule).",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.6"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "GLOSSARY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t3"
+            ],
+            "summary": "NEEDS_HUMAN added to the canonical verdict vocabulary.",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "STRATEGY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t6"
+            ],
+            "summary": "Ralph-track quality-discipline sentence extended to name convergence-aware review terminals.",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.6"
+            ]
+          },
+          {
+            "additions": 77,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 19,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Documentation for the new CLI surfaces, exit-code contracts, stall rules, hash epochs, and the needs_human status.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Documentation for the new CLI surfaces, exit-code contracts, stall rules, hash epochs, and the needs_human status.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/docs/ralph.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Documentation for the new CLI surfaces, exit-code contracts, stall rules, hash epochs, and the needs_human status.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/review-findings.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Documentation for the new CLI surfaces, exit-code contracts, stall rules, hash epochs, and the needs_human status.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/docs/troubleshooting.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Documentation for the new CLI surfaces, exit-code contracts, stall rules, hash epochs, and the needs_human status.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R10",
+          "R12",
+          "R13"
+        ],
+        "sourceRefs": [
+          "spec",
+          "diff",
+          "t6",
+          "r10",
+          "r12",
+          "r13"
+        ],
+        "summary": "The new CLI surfaces, exit-code contracts, stall rules, hash epochs, and needs_human status are documented across flowctl.md, ralph.md, troubleshooting.md, review-findings.md and orchestration.md; the 4->8 default cap raise ships with an outcome-first ## Unreleased CHANGELOG entry; STRATEGY.md names convergence-aware review terminals; GLOSSARY.md learns NEEDS_HUMAN.",
+        "taskIds": [
+          "fn-159-convergence-aware-review-terminals-and.6"
+        ],
+        "title": "Docs, CHANGELOG, strategy, and the downstream chain"
+      },
+      {
+        "files": [
+          {
+            "additions": 401,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/specs/fn-159-convergence-aware-review-terminals-and.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.6.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/tasks/fn-159-convergence-aware-review-terminals-and.7.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task/spec state file updated by the pipeline as tasks completed - not hand-written code.",
+            "taskIds": []
+          },
+          {
+            "additions": 153,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 47,
+            "path": "optimization/reached-path/evidence/fn136/review-output-format-token-delta.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Optimization-run evidence artifact regenerated by the parity script.",
+            "taskIds": []
+          },
+          {
+            "additions": 197,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "optimization/reached-path/generate_review_prompt_parity_evidence.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "New script that regenerates the review-prompt parity/token-delta evidence under optimization/reached-path/.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "optimization/reached-path/pilot-candidates.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Optimization-run evidence artifact regenerated by the parity script.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 24,
+            "path": "optimization/reached-path/runs/plan-review-candidate.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Optimization-run evidence artifact regenerated by the parity script.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "optimization/reached-path/work-candidate.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Optimization-run evidence artifact regenerated by the parity script.",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/completion.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/completion_no_tasks.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/impl.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/impl_empty_optional.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 29,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/plan.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 29,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/plan_no_tasks.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/standalone.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/standalone_no_focus.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Pinned prompt-text fixture regenerated to match the calibrated prompts.",
+            "taskIds": []
+          },
+          {
+            "additions": 9,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_codex_verdict_extraction.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 28,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_criteria.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_cursor_clean_tree.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_cursor_review_commands.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 72,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 24,
+            "path": "plugins/flow-next/tests/test_host_review_backend.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": "plugins/flow-next/tests/test_prompt_text_pinned.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_qa_receipt.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 180,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_ralph_guard.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t5"
+            ],
+            "summary": "Regression tests for the new guard blocks on reset and --force paths.",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.5"
+            ]
+          },
+          {
+            "additions": 2349,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/test_review_convergence_cap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "t1",
+              "t2",
+              "t7"
+            ],
+            "summary": "Primary regression surface for this spec: hash-guard refusal and --force, reservation round-trip, journal replay, the three stall rules, hash epochs, and the structured ratchet.",
+            "taskIds": [
+              "fn-159-convergence-aware-review-terminals-and.1",
+              "fn-159-convergence-aware-review-terminals-and.2",
+              "fn-159-convergence-aware-review-terminals-and.7"
+            ]
+          },
+          {
+            "additions": 108,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 67,
+            "path": "plugins/flow-next/tests/test_review_prompt_template_parity.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_rp_setup_workflow_contract.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_skill_prose_diet.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_tracker_receipts.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Verification and task-state artifact updated alongside the implementation.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 6,
+        "rIds": [
+          "R11"
+        ],
+        "sourceRefs": [
+          "spec",
+          "diff",
+          "t6",
+          "r11"
+        ],
+        "summary": "Regression coverage lands beside the engine: the convergence-cap suite grows by ~2.3k lines for the guard, reservation round-trip, journal replay, stall rules and ratchet; ralph-guard tests cover the new blocks; the pinned prompt-text fixtures and parity evidence are regenerated for the recalibrated prompts. Task and spec state files ride along.",
+        "taskIds": [
+          "fn-159-convergence-aware-review-terminals-and.6"
+        ],
+        "title": "Tests, pinned fixtures, and evidence"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Acceptance criteria",
+        "sourceRefs": [
+          "spec"
+        ],
+        "value": "13 of 13 satisfied (R1-R13)"
+      },
+      {
+        "label": "Tasks",
+        "sourceRefs": [
+          "spec",
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5",
+          "t6",
+          "t7"
+        ],
+        "value": "7 of 7 done"
+      },
+      {
+        "label": "Diff scope",
+        "sourceRefs": [
+          "diff"
+        ],
+        "value": "114 files, +10728 / -1269"
+      },
+      {
+        "label": "Full suite",
+        "sourceRefs": [
+          "t6"
+        ],
+        "value": "run_tests_parallel.py - 3995 tests, 0 failures"
+      },
+      {
+        "label": "Lint",
+        "sourceRefs": [
+          "t6"
+        ],
+        "value": "uvx ruff@0.16.0 check . - all checks passed"
+      },
+      {
+        "label": "Codex mirror",
+        "sourceRefs": [
+          "t6"
+        ],
+        "value": "./scripts/sync-codex.sh run twice, idempotent"
+      },
+      {
+        "label": "Spec completion review",
+        "sourceRefs": [
+          "completion-review"
+        ],
+        "value": "SHIP"
+      }
+    ],
+    "thesis": "Review loops get terminals that fire on measured non-convergence instead of only on an exhausted budget. flowctl refuses to re-review an unchanged artifact, escalates when two consecutive rounds show the same unfixed findings or no severity progress, and accepts NEEDS_HUMAN as a first-class terminal verdict from every backend. Alongside that, the per-surface prompts are recalibrated so severity means a named downstream outcome, low-confidence findings are suppressed before they can block, and bot prose findings on code PRs stop acting as merge gates. All arithmetic stays in flowctl - the reviewer only emits data and terminal verdicts."
+  },
+  "generatedAt": "2026-08-03T12:55:20Z",
+  "headSha": "5a8a15b924d859e8ed34c40f3fe29e1077564e5c",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-159-convergence-aware-review-terminals-and"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "4c5c1d4db2a78e5f84235f7189cbb95e5e2a48de..5a8a15b924d859e8ed34c40f3fe29e1077564e5c"
+    },
+    {
+      "id": "completion-review",
+      "kind": "review_receipt",
+      "ref": "completion_review_status=ship (fn-159, 2026-08-03T12:25:20Z)"
+    },
+    {
+      "id": "r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "r7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "r8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "r9",
+      "kind": "rid",
+      "ref": "R9"
+    },
+    {
+      "id": "r10",
+      "kind": "rid",
+      "ref": "R10"
+    },
+    {
+      "id": "r11",
+      "kind": "rid",
+      "ref": "R11"
+    },
+    {
+      "id": "r12",
+      "kind": "rid",
+      "ref": "R12"
+    },
+    {
+      "id": "r13",
+      "kind": "rid",
+      "ref": "R13"
+    },
+    {
+      "id": "t1",
+      "kind": "task",
+      "ref": "fn-159-convergence-aware-review-terminals-and.1"
+    },
+    {
+      "id": "t2",
+      "kind": "task",
+      "ref": "fn-159-convergence-aware-review-terminals-and.2"
+    },
+    {
+      "id": "t3",
+      "kind": "task",
+      "ref": "fn-159-convergence-aware-review-terminals-and.3"
+    },
+    {
+      "id": "t4",
+      "kind": "task",
+      "ref": "fn-159-convergence-aware-review-terminals-and.4"
+    },
+    {
+      "id": "t5",
+      "kind": "task",
+      "ref": "fn-159-convergence-aware-review-terminals-and.5"
+    },
+    {
+      "id": "t6",
+      "kind": "task",
+      "ref": "fn-159-convergence-aware-review-terminals-and.6"
+    },
+    {
+      "id": "t7",
+      "kind": "task",
+      "ref": "fn-159-convergence-aware-review-terminals-and.7"
+    }
+  ],
+  "specId": "fn-159-convergence-aware-review-terminals-and"
+}

@@ -1,4 +1,4 @@
-<!-- placeholders: plan_quality_block, protected_artifacts_block, review_json_tally_block -->
+<!-- placeholders: plan_quality_block, confidence_rubric_block, protected_artifacts_block, review_json_tally_block -->
 ## Context Gathering
 
 This review includes:
@@ -59,6 +59,17 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+## Blocking calibration
+
+- **P0** — following the plan produces a wrong or impossible implementation.
+- **P1** — material ambiguity likely to mislead a competent implementer.
+- **P2/P3** — consistency or polish; never blocking.
+
+{confidence_rubric_block}
+Any finding that drives NEEDS_WORK must name the concrete bad downstream outcome.
+Worked examples: a task made impossible by the plan blocks (fn-153); a true
+self-contradiction with no downstream consequence is FYI, not blocking (fn-156).
+
 {plan_quality_block}{protected_artifacts_block}
 ## Output Format
 
@@ -80,5 +91,9 @@ Be critical. Find real issues.
 <verdict>SHIP</verdict> - Plan is solid, ready to implement
 <verdict>NEEDS_WORK</verdict> - Plan has gaps that need addressing
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
+<verdict>NEEDS_HUMAN</verdict> - A human must adjudicate a design judgment
+
+Use NEEDS_HUMAN only for a design judgment needing human authority; never as a
+soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
 
 Do NOT skip this tag. The automation depends on it.

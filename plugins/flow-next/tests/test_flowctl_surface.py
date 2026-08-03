@@ -138,6 +138,7 @@ prospect archive
 prospect promote
 ready
 repo-map list
+review-artifact
 review-backend
 review-deep-auto
 review-findings attach
@@ -148,6 +149,7 @@ review-rounds reset
 review-walkthrough-defer
 review-walkthrough-record
 rp chat-send
+rp mode-probe
 rp prompt-export
 rp prompt-get
 rp prompt-set

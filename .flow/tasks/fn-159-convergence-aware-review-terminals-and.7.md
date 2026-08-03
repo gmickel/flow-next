@@ -25,7 +25,7 @@ Wire the artifact-hash dispatch guard onto the .1 foundation: domain-separated b
 - `plugins/flow-next/scripts/flowctl.py:36160-36230` — cursor fitting path
 
 **Optional:**
-- `plugins/flow-next/scripts/flowctl.py:9429-9510` — enforce entry
+- `plugins/flow-next/scripts/flowctl.py:10104-10250` — enforce entry, now `_enforce_and_increment_review_cap_locked` (was :9429-9510 pre-.1; the file grew ~788 lines in this region). The sidecar-exists check landed at :10117-10120; the cap branch (`if current >= cap:`) is at :10245 — the hash guard goes between them, per the spec's "after the sidecar-exists check, before the cap branch" placement. <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.1 shifted this region; anchor corrected -->
 - `_backend_completion_review` diff assembly (grep)
 
 ### Key context
@@ -45,9 +45,8 @@ Wire the artifact-hash dispatch guard onto the .1 foundation: domain-separated b
 ## Acceptance
 - [ ] Guard half of R1 satisfied end-to-end on all transports incl. host
 ## Done summary
-TBD
-
+Wired the fn-159 artifact-hash dispatch guard onto the .1 foundation: domain-separated blob builders + `review-artifact` CLI, the hash refusal (`NOT_RETRYABLE: artifact unchanged since last verdict`, exit 1, zero mutation, `--force` + forced stamp, fail-open on missing hash) between the sidecar/replay checks and the cap branch, side-effect-free `rp mode-probe` with per-transport reserve points (CE/Classic/Cursor-post-fit/host-post-compose), reservation-id passing + reset-call removal + plural-replay consumption in all three workflow-rp.md and workflow-host.md fences, and the NOT_RETRYABLE human-action driver terminal in plan/impl/completion terminal owners, pilot, land, ralph docs, and ralph.sh. Exhaustive regressions added (fn-155 shape, completion-after-impl-only-fix, intervening-change, Cursor-fitted-diff, per-branch refund, driver no-repeat); two stale host-fence assertions in test_host_review_backend.py updated to the new record/attach contract.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7402fba77e90c024ff559115ceb991fff0ea3072, ad1bf873, a2a769be
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity test_ralph_guard -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_review_convergence_cap.py plugins/flow-next/tests/test_ralph_guard.py plugins/flow-next/tests/test_host_review_backend.py, baseline: green (spec Quick commands passed pre-edit), python3 scripts/run_tests_parallel.py (3933 tests, 0 failures, post-r2-fix), uvx ruff@0.16.0 check . (clean)
 - PRs:

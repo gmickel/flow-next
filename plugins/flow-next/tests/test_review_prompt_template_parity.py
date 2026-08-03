@@ -4,9 +4,13 @@ Embedded review prompts moved into skill-owned ``references/*.md`` templates.
 ``flowctl`` still ships byte-identical FALLBACK constants for installs where the
 plugin root is unavailable. Edit one, edit the other - this test fails on drift.
 
-Also compares rendered prompts with frozen pre-fn-136 fixtures. Intentional
-changes may occur only inside ``## Output Format``; every other byte stays
-pinned, and the reached-path character/token proxy may not grow.
+Also compares rendered prompts with frozen fn-159 fixtures. Intentional
+instruction changes require a measured rebaseline against an immutable commit;
+the resulting fixture bytes, masked hashes, and bounded token deltas stay pinned.
+Baseline renders are verified against the immutable commit by the generator
+(``optimization/reached-path/generate_review_prompt_parity_evidence.py``); this
+suite binds the evidence to the CURRENT source without spawning processes (the
+fn-136 no-subprocess constraint guard covers this file).
 
 Run:
     python3 -m unittest plugins.flow-next.tests.test_review_prompt_template_parity -v
@@ -48,7 +52,7 @@ HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent  # plugins/flow-next
 REPO_ROOT = PLUGIN_DIR.parent.parent
 FIXTURES = HERE.parent / "fixtures" / "review_prompts"
-PRE_CHANGE_COMMIT = "2cfef991b548ddfbae3f787911be3a3b882f031a"
+PRE_CHANGE_COMMIT = "dc74a6c717377f73f689be6c9bcd68bed40ad4c2"
 TOKEN_EVIDENCE = (
     REPO_ROOT
     / "optimization/reached-path/evidence/fn136/review-output-format-token-delta.json"
@@ -111,30 +115,6 @@ def _without_output_format(text: str) -> str:
     return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
 
 
-def _output_format(text: str) -> str:
-    start = text.index("## Output Format\n")
-    offset = start + len("## Output Format\n")
-    in_fence = False
-    for line in text[offset:].splitlines(keepends=True):
-        if line.startswith("```"):
-            in_fence = not in_fence
-        elif not in_fence and line.startswith("## "):
-            return text[start:offset]
-        offset += len(line)
-    raise AssertionError("Output Format has no following section boundary")
-
-
-def _without_plan_finding_schema(text: str) -> str:
-    section = _output_format(text)
-    starts = ("For each issue found:\n", "Severity: P0/P1/P2/P3\n")
-    start = next((section.index(marker) for marker in starts if marker in section), -1)
-    if start == -1:
-        raise AssertionError("plan finding schema start missing")
-    end_marker = "After the issues list, emit "
-    end = section.index(end_marker, start)
-    return section[:start] + "<FINDING_SCHEMA>\n" + section[end:]
-
-
 class TestReviewPromptTemplateParity(unittest.TestCase):
     def test_fallbacks_match_template_files(self) -> None:
         for const_name, rel in PARITY_PAIRS:
@@ -151,7 +131,7 @@ class TestReviewPromptTemplateParity(unittest.TestCase):
 
 
 class TestReviewPromptRenderedFixtures(unittest.TestCase):
-    """Rendered prompt drift is confined to the output-format section."""
+    """Rendered prompt drift requires one deliberate full-fixture rebaseline."""
 
     def _assert_fixture(self, name: str, rendered: str) -> None:
         path = FIXTURES / f"{name}.txt"
@@ -159,16 +139,7 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         baseline = _normalize(path.read_text(encoding="utf-8"))
         current = _normalize(rendered)
 
-        self.assertEqual(
-            _without_output_format(current),
-            _without_output_format(baseline),
-            f"rendered {name} changed outside ## Output Format",
-        )
-        self.assertLessEqual(
-            len(current),
-            len(baseline),
-            f"rendered {name} grew under the reached-path chars/4 token proxy",
-        )
+        self.assertEqual(current, baseline, f"rendered {name} drifted from fixture")
 
     def test_impl_review_prompt(self) -> None:
         self._assert_fixture(
@@ -237,7 +208,7 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
 
 
 class TestReviewPromptPreChangeBinding(unittest.TestCase):
-    """Every assembled route variant differs only inside Output Format."""
+    """Every route is bound to the deliberate fn-159 rebaseline."""
 
     def rendered_prompts(self) -> dict[str, str]:
         prompts = {
@@ -291,44 +262,33 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
             )
         return prompts
 
-    def test_all_route_variants_are_format_only_against_pre_change_commit(self) -> None:
+    def test_all_route_variants_bind_the_rebaselined_masked_hash(self) -> None:
+        """Current masked renders bind to the evidence; baseline hashes stay
+        well-formed. The generator (not this suite - no subprocess here, per the
+        fn-136 constraint guard) re-renders ``PRE_CHANGE_COMMIT`` and records
+        the baseline hashes this suite treats as provenance."""
         evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
         current = self.rendered_prompts()
         self.assertEqual(current.keys(), evidence["prompts"].keys())
-        for name, prompt in current.items():
+        for name in current:
             with self.subTest(prompt=name):
+                row = evidence["prompts"][name]
+                for field in ("baseline_sha256", "baseline_masked_sha256"):
+                    self.assertRegex(row[field], r"^[0-9a-f]{64}$")
                 self.assertEqual(
                     hashlib.sha256(
-                        _without_output_format(prompt).encode("utf-8")
+                        _without_output_format(current[name]).encode("utf-8")
                     ).hexdigest(),
-                    evidence["prompts"][name]["baseline_masked_sha256"],
-                    f"{name} changed outside ## Output Format relative to {PRE_CHANGE_COMMIT}",
+                    row["candidate_masked_sha256"],
+                    f"{name} drifted from the fn-159 rebaseline - regenerate "
+                    "the evidence deliberately, never hand-edit",
                 )
-
-    def test_plan_output_changes_only_the_finding_schema(self) -> None:
-        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
-        fixture = (FIXTURES / "plan.txt").read_text(encoding="utf-8")
-        self.assertEqual(
-            hashlib.sha256(fixture.encode("utf-8")).hexdigest(),
-            evidence["prompts"]["plan"]["baseline_sha256"],
-            "pre-change plan fixture drifted from its commit-bound SHA-256",
-        )
-        baseline = _without_plan_finding_schema(fixture)
-        prompts = self.rendered_prompts()
-        for name in (
-            "plan",
-            "plan_no_tasks",
-            "plan_corpus_risky",
-            "plan_corpus_clean",
-            "plan_corpus_user_edited",
-        ):
-            with self.subTest(prompt=name):
-                self.assertEqual(_without_plan_finding_schema(prompts[name]), baseline)
 
     def test_actual_token_measurement_is_bound_to_assembled_prompts(self) -> None:
         evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
         self.assertEqual(evidence["baseline"]["commit"], PRE_CHANGE_COMMIT)
         self.assertEqual(evidence["measurement"]["tool"], "tiktoken")
+        self.assertEqual(evidence["schema_version"], 2)
         current = self.rendered_prompts()
         self.assertEqual(evidence["prompts"].keys(), current.keys())
         for name, row in evidence["prompts"].items():
@@ -337,12 +297,93 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
                     row["candidate_sha256"],
                     hashlib.sha256(current[name].encode("utf-8")).hexdigest(),
                 )
+                self.assertEqual(
+                    row["candidate_masked_sha256"],
+                    hashlib.sha256(
+                        _without_output_format(current[name]).encode("utf-8")
+                    ).hexdigest(),
+                )
                 for counts in row["tokens"].values():
                     self.assertEqual(
                         counts["delta"], counts["candidate"] - counts["baseline"]
                     )
-                    self.assertLessEqual(counts["delta"], 0)
-        self.assertTrue(evidence["acceptance"]["all_deltas_lte_zero"])
+        for encoding, budget in evidence["rebaseline"]["max_token_delta"].items():
+            for row in evidence["prompts"].values():
+                self.assertLessEqual(row["tokens"][encoding]["delta"], budget)
+        self.assertTrue(evidence["acceptance"]["all_deltas_within_rebaseline_budget"])
+
+
+class TestReviewPromptCalibration(unittest.TestCase):
+    def test_plan_severities_are_outcome_anchored(self) -> None:
+        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        for severity in (
+            "P0** — following the plan produces a wrong or impossible implementation.",
+            "P1** — material ambiguity likely to mislead a competent implementer.",
+            "P2/P3** — consistency or polish; never blocking.",
+        ):
+            with self.subTest(severity=severity):
+                self.assertIn(severity, prompt)
+
+    def test_plan_confidence_gate_precedes_ratchet_blockers(self) -> None:
+        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        self.assertIn(flowctl.CONFIDENCE_RUBRIC_BLOCK, prompt)
+        self.assertIn(
+            "Suppression gate: drop findings below 75, EXCEPT P0 at 50+", prompt
+        )
+        ratchet = flowctl.build_convergence_ratchet_block(
+            "prior finding", review_type="plan"
+        )
+        self.assertIn("first apply the confidence gate", ratchet)
+
+    def test_plan_ratchet_requires_a_concrete_bad_outcome(self) -> None:
+        ratchet = flowctl.build_convergence_ratchet_block("prior finding", review_type="plan")
+        self.assertIn("concrete bad downstream implementation outcome", ratchet)
+
+    def test_fn_153_impossible_plan_blocks(self) -> None:
+        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        self.assertIn("a task made impossible by the plan blocks (fn-153)", prompt)
+
+    def test_fn_156_consequence_free_contradiction_is_fyi(self) -> None:
+        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        self.assertIn(
+            "self-contradiction with no downstream consequence is FYI, not blocking (fn-156)",
+            prompt,
+        )
+
+    def test_impl_settled_plan_findings_are_fyi(self) -> None:
+        prompt = flowctl.build_review_prompt(
+            "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
+        )
+        self.assertIn("Decision Context decision", prompt)
+        self.assertIn("`knowledge/decisions` entry is FYI, never blocking", prompt)
+
+    def test_completion_inherits_plan_severity_definitions_verbatim(self) -> None:
+        plan = (REPO_ROOT / PARITY_PAIRS[2][1]).read_text(encoding="utf-8")
+        completion = (REPO_ROOT / PARITY_PAIRS[3][1]).read_text(encoding="utf-8")
+        definition = (
+            "- **P0** — following the plan produces a wrong or impossible implementation.\n"
+            "- **P1** — material ambiguity likely to mislead a competent implementer.\n"
+            "- **P2/P3** — consistency or polish; never blocking."
+        )
+        self.assertIn(definition, plan)
+        self.assertIn(definition, completion)
+
+    def test_all_canonical_prompts_have_needs_human_grammar(self) -> None:
+        for name, (_, rel) in zip(
+            ("impl", "standalone", "plan", "completion"), PARITY_PAIRS, strict=True
+        ):
+            with self.subTest(prompt=name):
+                self.assertIn(
+                    "<verdict>NEEDS_HUMAN</verdict>",
+                    (REPO_ROOT / rel).read_text(encoding="utf-8"),
+                )
+
+    def test_all_ralph_prompts_have_needs_human_guidance(self) -> None:
+        for name in ("plan", "work", "completion"):
+            with self.subTest(prompt=name):
+                text = (REPO_ROOT / f"plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_{name}.md").read_text(encoding="utf-8")
+                self.assertIn("NEEDS_HUMAN", text)
+                self.assertIn("never a soft", text)
 
 
 class TestDeepPassFallbackCoverage(unittest.TestCase):

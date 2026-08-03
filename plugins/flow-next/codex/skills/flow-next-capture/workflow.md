@@ -861,9 +861,12 @@ fi
 # On retry: if produced_specs already has this B-ID+cluster identity, discover
 # that entry and link the existing spec instead of minting another (Phase 1.2b).
 if [[ -n "$CHART_ID" && -n "$BRIEFING_ID" ]]; then
- LINK_ARGS=(chart link-spec "$CHART_ID" --briefing "$BRIEFING_ID" --spec "$SPEC_ID" --decisions "$CHART_DECISIONS" --json)
+ # Subcommand tokens stay LITERAL on the command line (the Ralph guard blocks
+ # a variable in either of the two tokens after the launcher); only arguments
+ # come from the array.
+ LINK_ARGS=("$CHART_ID" --briefing "$BRIEFING_ID" --spec "$SPEC_ID" --decisions "$CHART_DECISIONS" --json)
  [[ -n "$CLUSTER_KEY" ]] && LINK_ARGS+=(--cluster "$CLUSTER_KEY")
- "$FLOWCTL" "${LINK_ARGS[@]}"
+ "$FLOWCTL" chart link-spec "${LINK_ARGS[@]}"
 fi
 
 # Run anchor for Phase 6's sync check — written at the write step, BEFORE the

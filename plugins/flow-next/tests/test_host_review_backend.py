@@ -220,28 +220,45 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             self.assertIn("deterministic round cap", host_lower)
             self.assertNotIn("Return the verdict", host)
 
-    def test_completion_status_has_one_shared_owner(self) -> None:
+    def test_completion_status_is_journaled_before_host_or_rp_terminal(self) -> None:
         root = _read("flow-next-spec-completion-review/SKILL.md")
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         work = _read("flow-next-work/phases.md")
         pilot = _read("flow-next-pilot/workflow.md")
         command = "$FLOWCTL spec set-completion-review-status"
-        self.assertEqual(root.count(command), 1, "shared owner must issue one status write")
-        self.assertNotIn(command, host, "selected host workflow must never write status")
-        self.assertNotIn(command, rp, "selected rp workflow must never write status")
+        self.assertEqual(root.count(command), 1, "recovery owner must issue one status write")
+        self.assertIn("--status-target completion", host)
+        self.assertIn("--status-target completion", rp)
         self.assertNotIn(command, work, "work caller must never repeat the status write")
-        self.assertIn("This shared step is the sole writer for host and rp", root)
-        self.assertIn("never write completion status", root)
-        self.assertIn("This host workflow never writes terminal completion status", host)
-        self.assertIn("stop without writing completion status", host)
+        self.assertIn("NEEDS_HUMAN", root)
+        self.assertIn("needs_human", host)
+        self.assertIn("NEEDS_HUMAN", rp)
         self.assertIn("Work never writes that status again", work)
         self.assertIn(
             "the spec-completion-review skill writes terminal "
             "`completion_review_status` through its backend-aware shared owner",
             pilot,
         )
-        self.assertNotIn("or write status here", host)
+        self.assertIn("ESCALATE: reviewer requested human review", host)
+
+    def test_host_needs_human_fences_attach_before_exit(self) -> None:
+        for skill in (
+            "flow-next-plan-review",
+            "flow-next-impl-review",
+            "flow-next-spec-completion-review",
+        ):
+            with self.subTest(skill=skill):
+                host = _read(f"{skill}/workflow-host.md")
+                record_at = host.index("review-rounds record")
+                attach_at = host.index("review-findings attach", record_at)
+                terminal_at = host.index(
+                    "ESCALATE: reviewer requested human review", attach_at
+                )
+                self.assertLess(record_at, attach_at)
+                self.assertLess(attach_at, terminal_at)
+                if skill != "flow-next-impl-review":
+                    self.assertIn("--status-target", host[record_at:attach_at])
 
     def test_capped_completion_status_precedes_exit(self) -> None:
         root = _read("flow-next-spec-completion-review/SKILL.md")
@@ -665,6 +682,16 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         source = (
             REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
         ).read_text(encoding="utf-8")
+        payload_builder = _section(
+            source,
+            "def _backend_review_receipt_payload(",
+            "def _publish_review_receipt_from_journal(",
+        )
+        publisher = _section(
+            source,
+            "def _publish_review_receipt_from_journal(",
+            "def _write_backend_review_receipt(",
+        )
         writer = _section(
             source,
             "def _write_backend_review_receipt(",
@@ -676,29 +703,39 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             "def cmd_codex_impl_review(",
         )
         self.assertIn("completion-review-receipt-recovery-", source)
-        self.assertIn('receipt_data["attempt_timestamp"]', writer)
+        self.assertIn('receipt_data["attempt_timestamp"]', payload_builder)
         self.assertIn(
             "_completion_review_receipt_recovery_path(review_id)", writer
         )
+        # PR #290 bot P1: the journaled publish keeps the same pre-pointer
+        # recovery copy the unjournaled direct writer wrote.
+        self.assertIn("_completion_review_receipt_recovery_path(", publisher)
         self.assertNotIn("recovery_path.unlink", writer)
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         recovery = "completion-review-receipt-recovery-${SPEC_ID}.json"
         self.assertIn(recovery, host)
-        self.assertIn(recovery, rp)
-        self.assertLess(rp.index('cat > "$RECOVERY_TMP"'), rp.index(
-            '--receipt "$REVIEW_RECEIPT_PATH"'
-        ))
-        self.assertIn('mktemp "${RECEIPT_RECOVERY}.tmp.XXXXXX"', rp)
-        self.assertIn('if ! cat > "$RECOVERY_TMP"', rp)
-        self.assertNotIn('mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"', rp)
-        self.assertIn('--input "$RECOVERY_TMP"', rp)
-        self.assertIn('--recovery "$RECEIPT_RECOVERY"', rp)
+        # fn-159.7 review r1: the RP transport no longer hand-rolls a /tmp
+        # recovery copy. `review-rounds record` journals the exact intended
+        # payload under .flow/review-runs/ BEFORE the receipt advances, which
+        # is the same guarantee with a durable, identity-bound artifact.
+        self.assertNotIn('RECOVERY_TMP', rp)
+        self.assertNotIn('--recovery "$RECEIPT_RECOVERY"', rp)
+        self.assertLess(
+            rp.index('--receipt-payload-file "$RECEIPT_INPUT"'),
+            rp.index('review-findings attach'),
+        )
+        self.assertIn('--receipt-target "$REVIEW_RECEIPT_PATH"', rp)
+        self.assertIn('--reservation-id "$RESERVATION_ID"', rp)
         self.assertNotIn(
             'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
         )
+        # fn-159.7: the host fence assembles receipt inputs BEFORE record
+        # (record journals them); attach only publishes by reservation id.
+        self.assertIn('--receipt-target "$RECEIPT_PATH"', host)
+        self.assertIn('--receipt-payload-file "$RECEIPT_INPUT"', host)
+        self.assertIn('--reservation-id "$RESERVATION_ID"', host)
         self.assertIn('--receipt "$RECEIPT_PATH"', host)
-        self.assertIn('--recovery "$RECEIPT_RECOVERY"', host)
         self.assertLess(
             completion.index("_write_backend_review_receipt("),
             completion.index("_self_write_review_status("),
@@ -709,18 +746,48 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 "_completion_review_receipt_recovery_path(epic_id).unlink"
             ),
         )
+        # PR #290 bot r2: both the terminal status write and the recovery
+        # cleanup are GATED on publication succeeding — a failed publish must
+        # leave the wedge-free state the replay gate recovers from.
+        self.assertIn("receipt_published = _write_backend_review_receipt(", completion)
+        self.assertIn("if receipt_published:", completion)
+        self.assertLess(
+            completion.index("if receipt_published:"),
+            completion.index("_self_write_review_status("),
+        )
+        # The impl handler writes no terminal review status at all, so there
+        # is nothing to gate there.
+        impl = _section(
+            source,
+            "def _backend_impl_review(",
+            "def _current_review_rounds(",
+        )
+        self.assertNotIn("_self_write_review_status(", impl)
 
     def test_rp_recorder_failure_cannot_be_swallowed_by_verdict_echo(self) -> None:
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
-        block = _bash_fence_after(
-            rp, "Redirect the review response to the literal response file"
-        )
+        # fn-159.7 review r1: recording moved into the Phase 4 finalize fence
+        # so the receipt inputs are assembled BEFORE record.
+        block = _bash_fence_after(rp, "This is the single recorder fence")
         block = block.replace("<spec-id>", "fn-1").replace("<suffix>", "test")
         self.assertIn('RECORD_EXIT=$?', block)
         self.assertLess(block.index('RECORD_EXIT=$?'), block.index('echo "VERDICT='))
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
+            (temp / "flow-completion-review-snapshot-fn-1-test.env").write_text(
+                "REVIEW_HEAD_SHA=deadbeef\nREVIEW_BASE_SHA=deadbeef\n",
+                encoding="utf-8",
+            )
+            (temp / "flow-completion-review-dispatch-result-fn-1-test.env").write_text(
+                "RP_EXIT=0\nVERDICT=SHIP\n", encoding="utf-8",
+            )
+            (temp / "flow-completion-review-reservation-fn-1-test.json").write_text(
+                '{"reservation_id":"reservation-test"}', encoding="utf-8",
+            )
+            (temp / "flow-completion-review-response-fn-1-test.md").write_text(
+                "<verdict>SHIP</verdict>\n", encoding="utf-8",
+            )
             flowctl_stub = temp / "flowctl-stub"
             flowctl_stub.write_text(
                 "#!/usr/bin/env bash\n"
@@ -759,7 +826,12 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
     def test_host_completion_uses_shared_cap_attempt_lifecycle(self) -> None:
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         self.assertIn(
-            '$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json',
+            '$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan',
+            host,
+        )
+        # fn-159.7: the reserve carries the completion artifact hash inputs.
+        self.assertIn(
+            '--review-type completion --artifact-file "$ARTIFACT_FILE" --json',
             host,
         )
         self.assertIn(
@@ -767,9 +839,15 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             host,
         )
         self.assertIn("--review-type completion --backend host", host)
-        self.assertIn(
+        # fn-159 R9: SHIP reset is system-owned inside `record`; the explicit
+        # reset verb is a human-only recovery tool and must NOT appear as an
+        # autonomous host-fence command.
+        self.assertNotIn(
             '$FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json',
             host,
+        )
+        self.assertIn(
+            "Never issue `review-rounds reset` autonomously", host
         )
         self.assertIn("(`REVIEW_ROUND == REVIEW_CAP`)", host)
         self.assertIn("<verdict>SHIP</verdict>", host)

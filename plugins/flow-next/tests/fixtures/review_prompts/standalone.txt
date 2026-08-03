@@ -82,15 +82,16 @@ Verdict gate: only `introduced` findings affect the verdict — a review whose s
 NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped.
 ## Output Format
 
-For each surviving `introduced` finding:
-- **Severity**: Critical / Major / Minor / Nitpick (P0 / P1 / P2 / P3 accepted)
-- **Confidence**: 0 / 25 / 50 / 75 / 100 (one of the five discrete anchors)
-- **Classification**: introduced
-- **File:Line**: Exact location
+For each surviving finding:
+- **Severity**: P0 / P1 / P2 / P3
+- **Confidence**: 0 / 25 / 50 / 75 / 100
+- **Classification**: introduced / pre_existing
+- **File:Line**: `path:line`, or `-` when repo-wide
+- **R-IDs**: `[R1, R2]`, or `[]` when none
 - **Problem**: What's wrong
 - **Suggestion**: How to fix
 
-Then, under a separate `## Pre-existing issues (not blocking this verdict)` heading, list each `pre_existing` finding as `[severity, confidence N, introduced=false] file:line — summary`. Never silently drop pre-existing findings.
+Put `pre_existing` findings under `## Pre-existing issues (not blocking this verdict)`; never drop them.
 
 After the findings list, emit:
 - The `## Requirements coverage` table and `Unaddressed R-IDs:` line (only when the spec uses R-IDs; otherwise skip).
@@ -122,3 +123,7 @@ remain accepted as a logged fallback when this block is omitted.
 - `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
 - `<verdict>NEEDS_WORK</verdict>` - `introduced` issues or unaddressed R-IDs must be fixed first
 - `<verdict>MAJOR_RETHINK</verdict>` - Fundamental problems, reconsider approach
+- `<verdict>NEEDS_HUMAN</verdict>` - A human must adjudicate a design judgment
+
+Use NEEDS_HUMAN only for a design judgment needing human authority; never as a
+soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires redesign.

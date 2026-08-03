@@ -25,7 +25,7 @@ CODE_FILES="$(awk '/^## Key files/{f=1;next} /^## /{f=0} f' ".flow/specs/${SPEC_
 $FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" --receipt "$RECEIPT_PATH"
 ```
 
-Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`. The handler owns
+Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`. The handler owns
 status, cumulative rounds, and receipt writes. The receipt retains the resolved
 `model`, `effort`, round-trippable `spec`, and Copilot `session_id`.
 

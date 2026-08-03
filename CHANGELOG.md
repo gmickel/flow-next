@@ -2,6 +2,77 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Review loops now end the way a human lead would end them: converging work gets
+its room, a loop that has stopped improving reaches you early instead of
+burning its whole budget, and a reviewer facing a genuine judgment call can
+hand it to you directly - with the full evidence trail intact. The 4→8 cap
+raise that shipped in 3.13.3 was the interim measure; this is the mechanism it
+promised.
+
+### Added
+
+- **Stuck review loops reach you early instead of burning the full budget.**
+  The deterministic cap still counts dispatches, but it now also reads the
+  structured findings each verdict already persists and ends a loop that has
+  measurably stopped converging: an open finding chain that two consecutive
+  rounds fail to resolve, open severity and count both failing to improve, or
+  each fix introducing a fresh P0/P1. The loop exits `4` with
+  `ESCALATE: review loop stalled (<rule>)` - same exit code and marker family
+  drivers already handle, no logic changes needed. Detection is fail-inert:
+  missing, legacy, malformed, or truncated findings never manufacture a false
+  stall.
+- **Reviewers can hand a judgment call to a human.** A new terminal verdict,
+  `NEEDS_HUMAN`, means "a human must adjudicate" - distinct from `NEEDS_WORK`
+  (fixable) and `MAJOR_RETHINK` (redesign). It is accepted on every backend and
+  the host path, writes a real `needs_human` status plus its receipt before the
+  workflow exits `4` with `ESCALATE: reviewer requested human review`, so
+  drivers see durable state, never a silent stop. Prompts spell out the
+  distinction so it cannibalizes neither neighboring verdict.
+- **Repeat reviews stop wasting rounds on an unchanged artifact.** Dispatching
+  the same content that just received a verdict is refused before it costs
+  anything: `NOT_RETRYABLE: artifact unchanged since last verdict` (exit `1`,
+  nothing consumed). The identity is domain-separated per surface - plan hashes
+  spec + tasks, impl hashes the dispatched diff, completion hashes spec + tasks
+  + diff + global criteria - so a completion re-review after an
+  implementation-only fix dispatches cleanly. `SHIP` and an explicit human
+  re-plan start a fresh hash epoch; hash-compute failure fails open (the guard
+  is a waste-saver, never a review-blocker).
+
+### Changed
+
+- **Each review surface now blocks on what it can actually break.** Plan
+  review blocks only on findings that name a concrete bad downstream outcome -
+  outcome-free prose polish is FYI, not a round-consumer. Impl review treats
+  decisions recorded in the spec's Decision Context as settled (FYI, never
+  re-litigated). The land-loop PR bot gets scope guidance in its trigger
+  comment and its prose findings are triaged fix-or-record, never
+  merge-gating - a bounded safety net, not a second plan-review gate.
+- **The convergence ratchet argues from data, not prose.** Re-review context is
+  rendered from the validated structured findings (severity, status,
+  classification, lineage) instead of an 8000-char prose blob, with labeled
+  legacy prose only as fallback. Its shrink-only contract is unchanged.
+- **Autonomous loops cannot grant themselves more review rounds.** All the new
+  terminals are shorten-only - nothing can raise, refund, or disable the cap -
+  and ralph-guard blocks `spec reset-review-rounds`, `review-rounds reset`, and
+  `--force` on review dispatch as human-only recovery tools. Worst case remains
+  exactly `MAX_REVIEW_ITERATIONS` real dispatches.
+
+### Under the hood
+
+- `flowctl review-artifact plan|impl|completion` builds the domain-separated
+  artifact blob; `flowctl rp mode-probe` reports RepoPrompt CE/Classic
+  availability side-effect-free so RP workflows reserve immediately before
+  dispatch. `review-rounds increment` gains `--review-type`,
+  `--artifact-sha256`/`--artifact-file`, and `--force`, and returns a
+  reservation id; `record` consumes it via `--reservation-id` after journaling
+  receipt/status work (crash-safe replay). Attempt rows gain additive
+  `artifact_sha256`, `forced`, `hash_epoch`, `reservation_id`, `finalized`, and
+  `findings_digest` fields; spec state gains a per-scope `review_hash_epoch`
+  map. `needs_human` joins the review-status enums. No schema breaks; existing
+  readers ignore the new fields.
+
 ## [flow-next 3.13.3] - 2026-08-03
 
 Run Codex from more than one home and flow-next can now live in all of them.

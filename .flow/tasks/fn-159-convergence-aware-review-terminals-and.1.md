@@ -52,9 +52,8 @@ flowctl foundation for the convergence terminals: hash epoch, id-keyed reservati
 ## Acceptance
 - [ ] Foundation half of R1 (epoch, reservations, journal, replay, locks) proven by tests; no workflow files touched
 ## Done summary
-TBD
-
+flowctl foundation for the fn-159 convergence terminals: per-scope review_hash_epoch advanced by all three reset paths (with the SHIP reset now system-owned inside `review-rounds record`), an id-keyed reservation registry round-tripping {artifact_sha256, forced, epoch, review_type} from increment to record (unknown id exit 2 zero-mutation; id-less path only with exactly one pending), a durable write-ahead finalization journal under `.flow/review-runs/` that record completes pre-consumption (exact receipt payload + validated findings container) and `review-findings attach --reservation-id` publishes from without re-deriving, a pre-increment gate that replays incomplete finalizations with a typed plural result (`{replayed, replays:[...]}`, zero dispatch) and is idempotent at both defined crash boundaries, sidecar-scoped flocks with RECEIPT-before-SIDECAR lock order, and status surfaces gaining `--reservation-id`. Proven by 20 new tests incl. fresh-process replay with the response file deleted, truly concurrent increments, record-racing-reset, and receipt-lock overlap scaffolding. flowctl + tests only; no workflow files touched (those are .7).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b7e980389e9f19f47933be0131efe4108644946e, 30645332
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity -q, cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_review_convergence_cap.py, baseline: green (112 tests OK pre-edit), cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend -q (126 OK, post-fix), uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py (clean)
 - PRs:

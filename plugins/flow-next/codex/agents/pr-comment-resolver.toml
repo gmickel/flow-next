@@ -67,7 +67,13 @@ When the feedback questions an *approach* rather than a fact — "why this desig
 
 ### 3. Decide verdict
 
-Pick exactly one:
+First assign the feedback class. On a code PR, a finding that concerns only
+specification or documentation prose is **`fix-or-record`**: make a focused
+spec/doc touch-up commit when warranted, or leave a reasoned FYI reply and
+resolve it. It is never merge-gating. A prose finding that reveals the code
+does the wrong thing is instead a **code finding** and blocks normally.
+
+Pick exactly one verdict:
 
 | Verdict | When to use |
 |---------|-------------|
@@ -100,6 +106,10 @@ Reply tone matches the verdict:
 - `replied`: \\<the answer / acknowledgment / design rationale\\>
 - `not-addressing`: "Not addressing: \\<concrete evidence — file:line citation\\>"
 - `needs-human`: natural acknowledgment ("Flagging this for a decision — \\<short reason\\>")
+
+State the assigned feedback class in every reply (for example, `Class:
+fix-or-record` or `Class: code finding`). This makes a prose-only FYI visibly
+non-gating and records when a prose observation exposed a behavior gap.
 
 ## Security
 

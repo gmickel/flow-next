@@ -103,7 +103,7 @@ is flowctl-owned; never keep an agent-side counter. On cap exhaustion, surface
 surviving findings and stop (Ralph: `<promise>RETRY</promise>`).
 
 **The cap is enforced deterministically by flowctl:** every dispatch reserves a
-spec-scoped round before launch. SHIP / NEEDS_WORK / MAJOR_RETHINK consume it;
+spec-scoped round before launch. SHIP / NEEDS_WORK / MAJOR_RETHINK / NEEDS_HUMAN consume it;
 a no-verdict transport failure is durably recorded and refunded. At
 `${MAX_REVIEW_ITERATIONS:-8}` verdict rounds, flowctl refuses with `ESCALATE:`
 and exit 4. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive

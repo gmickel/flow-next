@@ -288,6 +288,9 @@ Consumers should therefore:
 - Preserve canonical order, IDs, statuses, R-IDs, and anchor snapshot binding.
 - Label stale and fallback states explicitly.
 - Ignore unsupported structured data without turning it into a pass.
+- flowctl's convergence detector and ratchet read `findings.items` from a
+  validated current container; they treat absent, malformed, stale, or
+  truncated containers as inert rather than inferring convergence from prose.
 
 ## See also
 

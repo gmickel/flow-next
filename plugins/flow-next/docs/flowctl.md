@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds,
+init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
@@ -216,7 +216,7 @@ See [`plugins/flow-next/templates/spec.md`](../templates/spec.md) for the canoni
 Set plan review status and timestamp.
 
 ```bash
-flowctl spec set-plan-review-status fn-1 --status ship|needs_work|unknown [--json]
+flowctl spec set-plan-review-status fn-1 --status ship|needs_work|needs_human|unknown [--json]
 ```
 
 ### spec set-completion-review-status
@@ -224,12 +224,12 @@ flowctl spec set-plan-review-status fn-1 --status ship|needs_work|unknown [--jso
 Set completion review status and timestamp.
 
 ```bash
-flowctl spec set-completion-review-status fn-1 --status ship|needs_work|unknown [--json]
+flowctl spec set-completion-review-status fn-1 --status ship|needs_work|needs_human|unknown [--json]
 ```
 
 ### spec reset-review-rounds
 
-Reset the deterministic review-round counter for a spec (fn-90) — the **re-plan** reset path. Zeroes the spec-scoped `plan_review_rounds` (which plan AND completion reviews share); pass `--impl` to also zero every per-task `impl_review_rounds[<task-id>]`. Use this after an explicit re-plan to re-open the review cap; a `SHIP` verdict resets automatically, so this is only for the deliberate re-plan case. See [codex impl-review § Deterministic review cap](#codex-impl-review) for the full cap/reset semantics.
+Reset the deterministic review-round counter for a spec — the **human-only re-plan** reset path. Zeroes the spec-scoped `plan_review_rounds` (which plan AND completion reviews share); pass `--impl` to also zero every per-task `impl_review_rounds[<task-id>]`, and advances the matching hash epochs without deleting the append-only attempts ledger. Use this after an explicit re-plan to re-open the review cap; a `SHIP` verdict resets automatically, so this is only for the deliberate re-plan case. Ralph blocks this recovery command. See [codex impl-review § Deterministic review cap](#codex-impl-review) for the full cap/reset semantics.
 
 ```bash
 flowctl spec reset-review-rounds fn-1 [--impl] [--json]
@@ -240,12 +240,23 @@ flowctl spec reset-review-rounds fn-1 [--impl] [--json]
 Prose-facing surface of the deterministic review-round cap for the **rp
 backend**, whose reviews run through `flowctl rp chat-send` rather than a
 `flowctl <backend> *-review` wrapper. `increment` reserves a round before every
-dispatch. `record` reads the response file: a terminal verdict consumes the
-reservation; no verdict refunds it and appends a durable attempt (backend,
-failure class, timestamp, output digest) to the spec sidecar. `attempts` reports
-verdict-bearing versus refunded attempts for one review scope. `reset` zeroes
-the live counter only after SHIP; explicit re-plans use
-`spec reset-review-rounds`. Completion passes `--kind plan --review-type
+dispatch and returns a reservation id. Supply the exact final dispatched
+artifact with `--review-type` plus `--artifact-sha256` or `--artifact-file`:
+an unchanged artifact in the current hash epoch is refused before dispatch
+with `NOT_RETRYABLE: artifact unchanged since last verdict` (exit 1), consuming
+nothing. Missing or unreadable artifact identity fails open with a warning.
+`--force` bypasses that guard and records a human-forced dispatch; Ralph blocks
+it as a human-only recovery tool.
+
+`record` consumes the matching reservation only after journaling the intended
+receipt/status work. A terminal `SHIP`, `NEEDS_WORK`, `MAJOR_RETHINK`, or
+`NEEDS_HUMAN` consumes it; no verdict refunds it and appends a durable attempt
+(backend, failure class, timestamp, findings digest) to the spec sidecar.
+`NEEDS_HUMAN` persists its receipt and `needs_human` status before exiting 4
+with `ESCALATE: reviewer requested human review`. `attempts` reports
+verdict-bearing versus refunded attempts for one review scope. A `SHIP` record
+resets its own counter atomically; `reset` is the human-only manual recovery
+command, while explicit re-plans use `spec reset-review-rounds`. Completion passes `--kind plan --review-type
 completion`; impl requires `--task`.
 
 More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict attempts
@@ -254,12 +265,38 @@ exits `5` with `TRANSPORT_UNHEALTHY`, distinct from review non-convergence
 verdict counter for transport failures.
 
 ```bash
-flowctl review-rounds increment fn-1 --kind plan|impl [--task fn-1.2] [--json]
+flowctl review-rounds increment fn-1 --kind plan|impl --review-type plan|impl|completion \
+  [--artifact-sha256 <sha256>|--artifact-file /tmp/review-artifact] [--force] [--task fn-1.2] [--json]
 flowctl review-rounds record fn-1 --kind plan|impl --review-type plan|impl|completion \
-  --output-file /tmp/review.md [--task fn-1.2] [--backend rp] [--json]
+  --output-file /tmp/review.md --reservation-id <id> [--receipt-target /tmp/receipt.json] \
+  [--task fn-1.2] [--backend rp] [--json]
 flowctl review-rounds attempts fn-1 --kind plan|impl --review-type plan|impl|completion \
   [--task fn-1.2] [--json]
 flowctl review-rounds reset fn-1 --kind plan|impl [--task fn-1.2] [--json]
+```
+
+### review-artifact
+
+Build the exact domain-separated artifact blob for an RP review fence. Plan
+blobs contain the normalized spec and sorted task markdown; impl blobs contain
+the exact dispatched diff; completion blobs contain spec, tasks, diff, and any
+applicable global criteria. Pass the resulting file to `review-rounds increment
+--artifact-file` so the stored hash identifies what the reviewer received.
+
+```bash
+flowctl review-artifact plan fn-1 --output /tmp/plan-artifact [--json]
+flowctl review-artifact impl fn-1 --diff-file /tmp/final.diff --output /tmp/impl-artifact [--json]
+flowctl review-artifact completion fn-1 --diff-file /tmp/final.diff --output /tmp/completion-artifact [--json]
+```
+
+### rp mode-probe
+
+Report whether RepoPrompt CE or Classic is available without creating or
+mutating a window or tab. RP workflows use this side-effect-free probe to place
+their single review-round reservation immediately before the actual dispatch.
+
+```bash
+flowctl rp mode-probe [--json]
 ```
 
 ### spec set-branch
@@ -800,7 +837,7 @@ flowctl config set memory.enabled false [--json]
 | `land.patienceMinutes` | int | `30` | Land's reviewer patience window, anchored to the LAST push (a land-authored CI-fix push restarts it). |
 | `land.reviewSignal` | string | `silence` | Land's merge review-signal: `silence` (automated review present + zero unresolved threads + window elapsed), `approve` (formal `reviewDecision == APPROVED`), or a GitHub login (that reviewer's latest review must be clean). |
 | `land.automatedReviewers` | string | `""` | CSV allowlist of reviewer logins land counts as automated, supplementing the `[bot]`-suffix rule. |
-| `land.reviewTrigger` | string | `""` | One-shot comment land posts to summon a reviewer bot on a draft PR with zero automated reviews (e.g. `"@codex review"` — bots don't auto-review drafts). Empty = never post. |
+| `land.reviewTrigger` | string | `""` | One-shot comment land posts to summon a reviewer bot on a draft PR with zero automated reviews. Recommended opt-in text: `"@codex review — focus on integration effects, the diff as narrative, and cross-task regressions. Spec/doc-prose findings are welcome as FYI, not merge-gating."` Bots do not auto-review drafts. Empty = never post. Bot comments are outside the review detector and Ralph-guard blast radius. |
 | `land.cleanReviewCommentPattern` | string | `(Didn'?t find any( major)? issues\|No( major)? issues found).*Reviewed commit` | **`/flow-next:land` clean-review comment signal (fn-65, 2.1.1+).** Under the default `silence` review signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate. Land scans `issues/<n>/comments` for an automated-reviewer (`[bot]`-suffix or `land.automatedReviewers`) comment matching this ERE that names the **current head SHA**, and only ever *adds* this evidence (CI, unresolved-thread, and window gates are unchanged; a stale-SHA or non-automated comment is ignored). The default is the structured built-in ERE shown here — it requires BOTH the clean phrase AND the `Reviewed commit` marker, so a bare "no issues" mention never satisfies the gate. `null`/missing (an unseeded older repo) falls back to this built-in default; **set to an empty string `""` to disable the comment scan** (pure reviews-API behavior — the only real off-switch). |
 | `land.ciFixBudget` | int | `3` | CI-fix attempts per PR before land durably labels it `flow-next:needs-human` and skips it on later ticks. |
 | `artifacts.html.enabled` | bool | `false` | **Optional HTML artifact mode (fn-62, 2.0.0+).** Enable with `flowctl config set artifacts.html.enabled true`: participating skills (capture, plan, make-pr) load the shared render-lens reference and emit self-contained HTML artifacts at the fixed paths `.flow/artifacts/<spec-id>/spec.html` / `pr.html` (regenerable lenses, never timestamped — markdown stays the sole source of truth and artifacts are never parsed back as state). **OFF by default** — with it off, no reference file loads, no artifacts are written, no Lavish session opens; behavior is byte-identical to markdown-only. flowctl only stores the knob; generation is skill-side. |
@@ -1875,27 +1912,48 @@ When the project defines global criteria in `.flow/criteria.md`, completion-revi
 
 **Session continuity:** Receipt includes `session_id` (thread_id from codex). Subsequent reviews read the existing receipt and resume the conversation, maintaining full context across fix → re-review cycles.
 
-**Deterministic review cap + convergence (fn-90 — all backends: codex/copilot/cursor internally; rp via `flowctl review-rounds`):**
+**Deterministic review cap + convergence (fn-90/fn-159 — all backends: codex/copilot/cursor internally; rp via `flowctl review-rounds`):**
 
 The fix→re-review loop is bounded by a **flowctl-owned cumulative round counter on spec state**, not just the host LLM's in-agent iteration counter (which resets on every fresh `/flow-next:*-review` invocation — the loop-runaway root cause). It applies to every backend and every review kind:
 
 - **Counter surfaces:** plan reviews increment a spec-scoped `plan_review_rounds`; impl reviews increment a per-task `impl_review_rounds[<task-id>]`. **Completion reviews reuse the spec-scoped `plan_review_rounds` counter** (they are spec-scoped, no task in context) — a plan review and a completion review on the same spec spend the *same* cap, so neither can independently re-open the runaway. Both surface in `flowctl show --json`.
-- **Enforcement:** each backend reserves a round BEFORE running the reviewer
+- **Artifact guard:** a reservation carries the caller-computed SHA-256 of the
+  exact final artifact the reviewer receives, domain-separated by review type.
+  The last consumed artifact in the current counter scope and hash epoch is the
+  baseline. An unchanged retry exits `1` with `NOT_RETRYABLE: artifact unchanged
+  since last verdict` and consumes nothing. Absent or unreadable identity warns
+  and fails open. `SHIP` and both human reset verbs (`review-rounds reset` and
+  `spec reset-review-rounds`) advance the hash epoch — a post-reset re-review of
+  an unchanged artifact dispatches cleanly without `--force`; `--force` bypasses
+  the guard, stamps the attempt as forced, and is blocked in Ralph.
+- **Early terminals:** before reserving, flowctl compares the last two
+  non-truncated structured-findings digests in the current epoch. It exits `4`
+  with `ESCALATE: review loop stalled (<rule>)` when an open finding chain stays
+  unresolved, open severity and count both fail to improve, or each round adds
+  a newly introduced P0/P1. The lineage and fresh-critical rules require the
+  same backend and review kind across both rounds; the flat-trajectory rule
+  does not. Missing, malformed, legacy, truncated, or insufficient findings
+  are inert. A reviewer-emitted `NEEDS_HUMAN` is the
+  other exit-4 terminal: receipt, attempt, and status persist before
+  `ESCALATE: reviewer requested human review` returns control to a human.
+- **Cap enforcement:** each backend reserves a round BEFORE running the reviewer
   (codex/copilot/cursor inside their wrapper; rp via `review-rounds increment`).
   At `${MAX_REVIEW_ITERATIONS:-8}` delivered-verdict rounds it refuses before
   dispatch, prints `ESCALATE:`, and exits `4`. The message includes live verdict
   rounds and refunded transport attempts.
 - **Round-counting:** a round is consumed only when reviewer output contains
-  SHIP, NEEDS_WORK, or MAJOR_RETHINK. Empty output, missing tags, timeout,
+  SHIP, NEEDS_WORK, MAJOR_RETHINK, or NEEDS_HUMAN. Empty output, missing tags, timeout,
   sandbox denial, and other no-verdict exits refund the pre-dispatch reservation
   and append an auditable attempt row to the spec sidecar. A delivered verdict
   is never refundable, even if the process also reports nonzero.
 - **Transport bound:** consecutive no-verdict failures are tracked separately
   per review scope. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` exits `5`
   with `TRANSPORT_UNHEALTHY`; it never emits the cap's `ESCALATE`.
-- **Reset semantics:** SHIP and explicit re-plan remain the only verdict-counter
-  resets. A transport refund is automatic accounting, not a reset ceremony;
-  never run `review-rounds reset` to recover from a flake.
+- **Reset semantics:** a `SHIP` record resets its counter atomically, and an
+  explicit human re-plan resets the relevant counters; both advance the hash
+  epoch. The `review-rounds reset` command is human-only recovery, not an
+  autonomous workflow step. A transport refund is automatic accounting, not a
+  reset ceremony.
 
 **Receipt convergence-ratchet fields (fn-90, back-compatible):**
 

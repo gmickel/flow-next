@@ -108,6 +108,15 @@ def _flow_repo():
             os.chdir(prev_cwd)
 
 
+def _mutate_plan_artifact(repo: Path, marker: str) -> None:
+    """Edit the spec the plan artifact is hashed from, as a real round would."""
+    spec_md = repo / ".flow" / "specs" / f"{EPIC_ID}.md"
+    spec_md.write_text(
+        spec_md.read_text(encoding="utf-8") + f"\n- **R2:** addressed in {marker}\n",
+        encoding="utf-8",
+    )
+
+
 def _fake_exec(result_text: str = REVIEW_OUTPUT, session_id: str = MINTED_SID,
                exit_code: int = 0, stderr: str = ""):
     """A ``run_cursor_exec`` stand-in that records its call and returns canned data."""
@@ -666,6 +675,11 @@ class CursorPersonaOverrideAndCap(unittest.TestCase):
             with mock.patch.object(flowctl, "run_cursor_exec", _fake_exec()):
                 with contextlib.redirect_stdout(io.StringIO()):
                     flowctl.cmd_cursor_plan_review(args)
+            # Round 2 must dispatch a DIFFERENT artifact: a byte-identical
+            # re-dispatch is the NOT_RETRYABLE terminal the guard exists for.
+            # Editing the plan between rounds is what a real NEEDS_WORK round
+            # produces, so mutate the spec the artifact is built from.
+            _mutate_plan_artifact(repo, "round 2")
             # Then a SHIP round must reset it to 0.
             ship_out = REVIEW_OUTPUT.replace(
                 "<verdict>NEEDS_WORK</verdict>", "<verdict>SHIP</verdict>"
@@ -692,6 +706,9 @@ class CursorPersonaOverrideAndCap(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     flowctl.cmd_cursor_plan_review(args)
             # Round 2 (re-review, resumed session) must inject the ratchet.
+            # It also needs a distinct artifact — an unchanged plan re-dispatch
+            # is refused as NOT_RETRYABLE before the prompt is ever built.
+            _mutate_plan_artifact(repo, "round 2")
             runner2 = _fake_exec()
             with mock.patch.object(flowctl, "run_cursor_exec", runner2):
                 with contextlib.redirect_stdout(io.StringIO()):

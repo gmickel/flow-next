@@ -29,7 +29,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.j
 $FLOWCTL cursor completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 ```
 
-**Output includes `VERDICT=SHIP|NEEDS_WORK`.**
+**Output includes `VERDICT=SHIP|NEEDS_WORK|NEEDS_HUMAN`.**
 
 The runner invokes `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (`--mode ask` is read-only — the reviewer never mutates the tree).
 

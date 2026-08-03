@@ -145,6 +145,15 @@ class TestCodexVerdictExtraction(unittest.TestCase):
         )
         self.assertEqual(flowctl.parse_codex_verdict(output), "MAJOR_RETHINK")
 
+    def test_needs_human_parses(self):
+        output = _stream(
+            _agent_message(
+                "This is a human design decision.\n"
+                "<verdict>NEEDS_HUMAN</verdict>"
+            ),
+        )
+        self.assertEqual(flowctl.parse_codex_verdict(output), "NEEDS_HUMAN")
+
     # --- plain-text (copilot / non-stream) fallback ---
 
     def test_plaintext_output_falls_through(self):

@@ -241,14 +241,16 @@ Opt-out: `--no-triage` argument or `FLOW_RALPH_NO_TRIAGE=1` env var.
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
   RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
-  TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
+  # Subcommand + one literal flag stay on the command line (the Ralph guard
+  # blocks a variable in either of the two tokens after the launcher).
+  TRIAGE_ARGS=(--receipt "$RECEIPT_PATH")
   [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
   [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
   # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
   # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
   [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
 
-  if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+  if TRIAGE_OUT=$($FLOWCTL triage-skip --json "${TRIAGE_ARGS[@]}" 2>/dev/null); then
     # Exit 0 = SKIP. Receipt already written by flowctl.
     SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
     echo "Triage-skip: $SKIP_REASON"
@@ -292,7 +294,7 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
 flowctl reserves a per-task round before every task-scoped dispatch. A delivered
-SHIP / NEEDS_WORK / MAJOR_RETHINK consumes it; a no-verdict transport failure
+SHIP / NEEDS_WORK / MAJOR_RETHINK / NEEDS_HUMAN consumes it; a no-verdict transport failure
 is durably recorded and refunded. At `${MAX_REVIEW_ITERATIONS:-8}` verdict
 rounds it refuses with `ESCALATE:` + exit 4. More than
 `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict failures stop
@@ -301,9 +303,14 @@ the verdict counter. This loop is internal; callers invoke impl-review once.
 The counter resets only on SHIP or explicit re-plan, never on an edit, fresh
 invocation, or transport failure.**
 
+**Unchanged-artifact terminal:** `NOT_RETRYABLE: artifact unchanged since last verdict` exits `1` before a review is sent. It is a human-action terminal:
+autonomous loops must stop without refunding, resetting, adding `--force`, or
+redispatching. The human may edit the artifact, explicitly reset, or choose a
+deliberate `--force` dispatch.
+
 **ANTI-PATTERN (never do either):**
 1. **A delivered verdict is never a transport failure.** Once flowctl parses
-   `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`, the round is consumed and the
+   `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`, the round is consumed and the
    attempt is recorded; transport classification is unreachable past that
    point. Do not re-dispatch, re-frame a `NEEDS_WORK` as a backend/sandbox
    problem, or claim a refund for it. `NEEDS_WORK` is fix-loop input, full

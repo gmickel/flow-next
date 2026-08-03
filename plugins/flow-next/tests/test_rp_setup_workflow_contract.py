@@ -109,8 +109,17 @@ class RepoPromptSetupWorkflowContractTest(unittest.TestCase):
                 "with open(os.environ['CALL_LOG'], 'a', encoding='utf-8') as handle:\n"
                 "    handle.write(' '.join(args) + '\\n')\n"
                 "pair = ' '.join(args[:2])\n"
+                # The fence probes RP mode before setup. Answer 'ce': the
+                # reservation legs this test exists to pin (pre-dispatch
+                # increment, and the record that finalizes a failed setup) are
+                # the CE path. Classic defers reservation until its final
+                # prompt exists, so it would exercise neither.
+                "if pair == 'rp mode-probe':\n"
+                "    print(json.dumps({'mode': 'ce'}))\n"
+                "    raise SystemExit(0)\n"
                 "if pair == 'review-rounds increment':\n"
-                "    print(json.dumps({'round': 1, 'cap': 4}))\n"
+                "    print(json.dumps("
+                "{'round': 1, 'cap': 4, 'reservation_id': 'res-1'}))\n"
                 "    raise SystemExit(4 if os.environ.get('FAIL_CAP') == '1' else 0)\n"
                 "if pair == 'rp setup-review':\n"
                 "    if os.environ.get('FAIL_SETUP') == '1':\n"

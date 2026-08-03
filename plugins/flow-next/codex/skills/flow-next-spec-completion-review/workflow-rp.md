@@ -84,8 +84,8 @@ Classification introduced or pre_existing. Suppress below 75 except P0 at
 50+; only introduced gaps block. Never recommend deleting protected `.flow/*`, generated
 plugin mirrors, spec/task records, review receipts, or Ralph artifacts.
 Emit suppression/classification/protected-path tallies when applicable.
-End with exactly one tag: <verdict>SHIP</verdict> or
-<verdict>NEEDS_WORK</verdict>.
+End with exactly one tag: <verdict>SHIP</verdict>,
+<verdict>NEEDS_WORK</verdict>, or <verdict>NEEDS_HUMAN</verdict>.
 EOF
 $FLOWCTL cat "$SPEC_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
 for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
@@ -97,11 +97,44 @@ done
 printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE"
 $FLOWCTL criteria prompt-block >> "$REVIEW_INSTRUCTIONS_FILE" || exit 1
 
-ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
-ROUND_EXIT=$?
-if [[ "$ROUND_EXIT" -ne 0 ]]; then
+RESERVATION_FILE="${TMPDIR:-/tmp}/flow-completion-review-reservation-<spec-id>-<suffix>.json"
+ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-artifact-<spec-id>-<suffix>.blob"
+DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-dispatch-<spec-id>-<suffix>.diff"
+# Phase 1's snapshot anchors do not survive across prompt turns: source them
+# before hashing. Unbound anchors would run `git diff ..`, hash an empty blob,
+# and falsely refuse the next round as NOT_RETRYABLE.
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
+source "$REVIEW_SNAPSHOT_FILE"
+PROBED_RP_MODE="$($FLOWCTL rp mode-probe --json | jq -er '.mode')" || exit $?
+if [[ "$PROBED_RP_MODE" == "ce" ]]; then
+ [[ -n "${REVIEW_BASE_SHA:-}" && -n "${REVIEW_HEAD_SHA:-}" ]] \
+ || { echo "unbound review snapshot; not reserving a round" >&2; exit 1; }
+ git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
+ || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+ [[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
+ || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+ $FLOWCTL review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+ ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+ --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
+ ROUND_EXIT=$?
+ if [[ "$ROUND_EXIT" -ne 0 ]]; then
  printf '%s\n' "$ROUND_JSON"
+ # NOT_RETRYABLE + exit 1 is human action only: no refund, force, reset,
+ # or autonomous redispatch.
  exit "$ROUND_EXIT"
+ fi
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+ # Apply NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP and stop
+ # with no dispatch.
+ printf '%s\n' "$ROUND_JSON"
+ # A superseded replay never votes (a concurrent SHIP reset the counter).
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
+ exit 0
+ fi
+ printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
 fi
 $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
  --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
@@ -109,13 +142,16 @@ $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
 SETUP_EXIT=$?
 if [[ "$SETUP_EXIT" -ne 0 ]]; then
  : > "$RESPONSE_FILE"
+ if [[ "$PROBED_RP_MODE" == "ce" ]]; then
  RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
  --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
+ --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
  --exit-code "$SETUP_EXIT" --json)"
  RECORD_EXIT=$?
  printf '%s\n' "$RECORD_JSON"
  if [[ "$RECORD_EXIT" -ne 0 ]]; then
  exit "$RECORD_EXIT"
+ fi
  fi
  exit "$SETUP_EXIT"
 fi
@@ -397,7 +433,7 @@ After the findings list, emit:
 - A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
-`<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
+`<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>NEEDS_HUMAN</verdict>`
 
 - SHIP: All `introduced` spec requirements are implemented and every R-ID is `met` or `deferred` (pre-existing gaps do not block)
 - NEEDS_WORK: One or more `introduced` requirements are missing, partial, or wrong — or any non-deferred R-ID is `not-addressed`
@@ -431,8 +467,41 @@ PROMPT_FILE="${TMPDIR:-/tmp}/flow-completion-review-prompt-<spec-id>-<suffix>.md
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md" # literal path
 SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
 source "$SETUP_FILE"
+# Snapshot anchors do not survive across prompt turns — source before hashing.
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
+source "$REVIEW_SNAPSHOT_FILE"
 
 if [[ "$RP_MODE" == "classic" ]]; then
+ # Final Classic prompt exists now: its one reservation is immediately before
+ # chat-send and its id travels to record.
+ DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-dispatch-<spec-id>-<suffix>.diff"
+ ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-artifact-<spec-id>-<suffix>.blob"
+ RESERVATION_FILE="${TMPDIR:-/tmp}/flow-completion-review-reservation-<spec-id>-<suffix>.json"
+ [[ -n "${REVIEW_BASE_SHA:-}" && -n "${REVIEW_HEAD_SHA:-}" ]] \
+ || { echo "unbound review snapshot; not reserving a round" >&2; exit 1; }
+ git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
+ || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+ [[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
+ || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+ $FLOWCTL review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+ ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+ --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
+ ROUND_EXIT=$?
+ if [[ "$ROUND_EXIT" -ne 0 ]]; then
+ printf '%s\n' "$ROUND_JSON"
+ # NOT_RETRYABLE is a human terminal, never a transport refund/retry.
+ exit "$ROUND_EXIT"
+ fi
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+ printf '%s\n' "$ROUND_JSON"
+ # A superseded replay never votes (a concurrent SHIP reset the counter).
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
+ exit 0
+ fi
+ printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
  $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Spec Completion Review: $SPEC_ID" > "$RESPONSE_FILE"
  RP_EXIT=$?
 else
@@ -441,31 +510,24 @@ fi
 
 # Extract verdict tag from the response file
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
- | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
+ | grep -oE '<verdict>(SHIP|NEEDS_WORK|NEEDS_HUMAN)</verdict>' \
  | tail -n 1 \
  | sed -E 's#</?verdict>##g')"
 
-RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
- --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
- --exit-code "$RP_EXIT" --json)"
-RECORD_EXIT=$?
-printf '%s\n' "$RECORD_JSON"
-if [[ "$RECORD_EXIT" -ne 0 ]]; then
- exit "$RECORD_EXIT"
-fi
-
-if [[ -z "$VERDICT" ]]; then
- echo "No verdict tag found in response"
- echo "<promise>RETRY</promise>"
- exit 0
-fi
-
-echo "VERDICT=$VERDICT"
+# Round-8 ordering: recording happens in Phase 4, AFTER the receipt inputs are
+# assembled, so `record` journals the exact intended payload in the same
+# transaction that consumes the reservation. Persist the dispatch facts — bash
+# vars do not survive across prompt turns.
+REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-completion-review-dispatch-result-<spec-id>-<suffix>.env"
+printf 'RP_EXIT=%q\nVERDICT=%q\n' "$RP_EXIT" "$VERDICT" > "$REVIEW_DISPATCH_FILE"
 ```
 
 **WAIT** for response. Takes 1-5+ minutes.
 
-The `record` call refunds no-verdict reservations and logs the failure. After
+Do not echo the verdict or enter the fix loop from this block: Phase 4's
+recorder is the gate, and nothing may run after a failed recorder.
+
+The Phase 4 `record` call refunds no-verdict reservations and logs the failure. After
 more than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive failures it exits
 5 / `TRANSPORT_UNHEALTHY`: stop for backend repair, never reset the review
 counter. No command may follow a failed recorder and make that Bash fence
@@ -478,37 +540,34 @@ durable completion attempt consumed by the shared terminal owner.
 
 ## Phase 4: Receipt + Status (RP)
 
-### Reset the cap counter on SHIP (fn-90 R5 convergence)
+### SHIP owns its cap reset
 
-Immediately after parsing a SHIP verdict:
+`review-rounds record` atomically resets the shared plan counter and advances
+its hash epoch on SHIP. Direct `review-rounds reset` and `--force` are
+human-only recovery tools; never issue either from the autonomous workflow.
+
+### Finalize the round: receipt inputs, then record, then publish
+
+This is the single recorder fence. Assemble receipt inputs FIRST for every
+delivered verdict (including NEEDS_HUMAN), hand them to `review-rounds record`,
+and only then publish. A no-verdict transport failure assembles nothing, so a
+refund never consumes receipt inputs. The payload carries an EMPTY `attempt_timestamp`:
+that is the request for `record` to stamp its own attempt clock into the
+journaled payload, which pre-record assembly cannot know.
 
 ```bash
-if [[ "$VERDICT" == "SHIP" ]]; then
- $FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json
-fi
-```
+# Literal paths from Phase 3 (path-persistence rule — type them verbatim)
+RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
+RESERVATION_FILE="${TMPDIR:-/tmp}/flow-completion-review-reservation-<spec-id>-<suffix>.json"
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
+REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-completion-review-dispatch-result-<spec-id>-<suffix>.env"
+source "$REVIEW_SNAPSHOT_FILE"
+source "$REVIEW_DISPATCH_FILE"
 
-### Write receipt (if REVIEW_RECEIPT_PATH set)
-
-Receipt written after SHIP verdict (not on NEEDS_WORK):
-
-```bash
-if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
+RECEIPT_ARGS=()
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
- REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
- source "$REVIEW_SNAPSHOT_FILE"
- ATTEMPT_AT="$(printf '%s' "$RECORD_JSON" \
- | jq -r '.attempts[-1].timestamp // ""')"
- if [[ -z "$ATTEMPT_AT" ]]; then
- echo "<promise>RETRY</promise>"
- exit 0
- fi
  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
- RECEIPT_RECOVERY="$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json"
- mkdir -p "$(dirname "$RECEIPT_RECOVERY")"
-
- # Same literal response file from Phase 3 (path-persistence rule — type it verbatim)
- RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-response-<spec-id>-<suffix>.md"
 
  # Optional: capture suppression-gate tally (fn-29.3).
  # Reviewer emits a line like "Suppressed findings: 3 at anchor 50, 7 at anchor 25, 2 at anchor 0."
@@ -582,35 +641,73 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
  EXTRA_FIELDS+=",\"unaddressed\":$UNADDRESSED_JSON"
  fi
 
- if ! RECOVERY_TMP="$(mktemp "${RECEIPT_RECOVERY}.tmp.XXXXXX")"; then
- echo "<promise>RETRY</promise>"
- exit 0
- fi
- if ! cat > "$RECOVERY_TMP" <<EOF
-{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"timestamp":"$ts","attempt_timestamp":"$ATTEMPT_AT"}
+ RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-completion-review-receipt-<spec-id>-<suffix>.json"
+ if ! cat > "$RECEIPT_INPUT" <<EOF
+{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts","attempt_timestamp":""}
 EOF
  then
- rm -f "$RECOVERY_TMP"
  echo "<promise>RETRY</promise>"
  exit 0
  fi
+ RECEIPT_ARGS=(--receipt-target "$REVIEW_RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT")
+fi
+
+# Record with the receipt inputs already in hand. Nothing may run after a
+# failed recorder — no verdict echo, no receipt, no status owner, no fix loop.
+# `--status-target completion` JOURNALS the terminal status; it does not write
+# it here. Because a receipt target is journaled in the same finalization, the
+# status lands only when that receipt publishes — via the `review-findings
+# attach` below, or via the pre-increment replay gate in a later invocation. A
+# failed attach therefore leaves NO terminal status behind, which is what keeps
+# the Step 0.5 checkpoint's retry from becoming permanent.
+RESERVATION_ID="$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+ || { echo "no reservation id for this dispatch; refusing to finalize" >&2; exit 2; }
+RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+ --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
+ --reservation-id "$RESERVATION_ID" --status-target completion \
+ ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} \
+ --exit-code "$RP_EXIT" --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+if [[ "$RECORD_EXIT" -ne 0 ]]; then
+ exit "$RECORD_EXIT"
+fi
+# A concurrent SHIP landed while this review ran: the verdict was recorded as
+# evidence, charged no round, and wrote no status. Routing it as a live
+# terminal would fix-loop (or write a terminal status) against a pre-SHIP
+# artifact, so stop here — the receipt/attach leg belongs to the SHIP's round.
+if [[ "$(printf '%s' "$RECORD_JSON" | jq -r '.superseded // false')" == "true" ]]; then
+ echo "VERDICT=SUPERSEDED"
+ echo "review superseded by a newer SHIP — durable state unchanged; verdict recorded as evidence only" >&2
+ exit 0
+fi
+
+if [[ -z "$VERDICT" ]]; then
+ echo "No verdict tag found in response"
+ echo "<promise>RETRY</promise>"
+ exit 0
+fi
+echo "VERDICT=$VERDICT"
+
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
+ ATTEMPT_AT="$(printf '%s' "$RECORD_JSON" \
+ | jq -r '.attempts[-1].timestamp // ""')"
+ if [[ -z "$ATTEMPT_AT" ]]; then
+ echo "<promise>RETRY</promise>"
+ exit 0
+ fi
+ # Publish the journaled payload only — never re-derive it here.
  if ! "$FLOWCTL" review-findings attach \
- --input "$RECOVERY_TMP" \
+ --reservation-id "$RESERVATION_ID" \
  --receipt "$REVIEW_RECEIPT_PATH" \
- --recovery "$RECEIPT_RECOVERY" \
- --review-file "$RESPONSE_FILE" \
- --base "$REVIEW_BASE_SHA" \
- --head "$REVIEW_HEAD_SHA" \
  --json >/dev/null; then
- rm -f "$RECOVERY_TMP"
  echo "<promise>RETRY</promise>"
  exit 0
  fi
- rm -f "$RECOVERY_TMP"
- if ! jq -e --arg id "$SPEC_ID" --arg attempt_at "$ATTEMPT_AT" \
+ if ! jq -e --arg id "$SPEC_ID" --arg attempt_at "$ATTEMPT_AT" --arg verdict "$VERDICT" \
  '.type == "completion_review"
  and .id == $id
- and .verdict == "SHIP"
+ and .verdict == $verdict
  and .mode == "rp"
  and .attempt_timestamp == $attempt_at' \
  "$REVIEW_RECEIPT_PATH" >/dev/null; then
@@ -618,6 +715,11 @@ EOF
  exit 0
  fi
  echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
+fi
+
+if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
 fi
 ```
 
@@ -698,13 +800,50 @@ If verdict is NEEDS_WORK:
  delivered in this run: do NOT dispatch or write completion status; surface
  the ESCALATE message and stop (never retry):
 
+ Recompute the post-fix snapshot **first**, in this same block: the fence must
+ hash the fixed tree, never the pre-fix HEAD.
+
  ```bash
- ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
+ # Post-fix snapshot recompute — ABOVE the hash fence.
+ DIFF_BASE="main"
+ git rev-parse --verify main >/dev/null 2>&1 || DIFF_BASE="master"
+ git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 \
+ || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
+ REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
+ REVIEW_HEAD_SHA="$(git rev-parse HEAD)" || exit 1
+ REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
+ [[ -n "$REVIEW_HEAD_SHA" && -n "$REVIEW_BASE_SHA" ]] \
+ || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
+ printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+ "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+
+ # Compose the re-review prompt first, then bind the exact final diff.
+ DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.diff"
+ ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.blob"
+ RESERVATION_FILE="${TMPDIR:-/tmp}/flow-completion-review-reservation-<spec-id>-<suffix>.json"
+ git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
+ || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+ [[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
+ || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+ $FLOWCTL review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+ ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+ --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
  ROUND_EXIT=$?
  if [[ "$ROUND_EXIT" -ne 0 ]]; then
  printf '%s\n' "$ROUND_JSON"
  exit "$ROUND_EXIT"
  fi
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+ # Prior delivery replay: terminal precedence, no second dispatch.
+ printf '%s\n' "$ROUND_JSON"
+ # A superseded replay never votes (a concurrent SHIP reset the counter).
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
+ exit 0
+ fi
+ printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
  REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
  REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
  ```
@@ -713,16 +852,8 @@ If verdict is NEEDS_WORK:
  cat > "${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.md" << 'EOF'
  Gaps addressed. Please re-review for spec compliance.
 
- **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
+ **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>NEEDS_HUMAN</verdict>`
  EOF
-
- DIFF_BASE="main"
- git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
- REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-snapshot-<spec-id>-<suffix>.env"
- REVIEW_HEAD_SHA="$(git rev-parse HEAD)"
- REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"
- printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
- "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
 
  SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
  source "$SETUP_FILE"
@@ -738,10 +869,13 @@ If verdict is NEEDS_WORK:
  fi
  ```
 
- Re-extract the verdict from the response file (same grep as Phase 3), call
- the same `review-rounds record ... --review-type completion` command with
- the captured `rp chat-send` exit code, capture and check `RECORD_EXIT`
- exactly as in Phase 3, then Read the file once for the next round's gaps.
+ Re-extract the verdict from the response file (same grep as Phase 3), then
+ run Phase 4's finalize fence verbatim: assemble the receipt inputs FIRST,
+ pass them to the same
+ `review-rounds record ... --review-type completion --status-target completion`
+ command with the captured `rp chat-send` exit code, capture and check
+ `RECORD_EXIT`, and publish by reservation id. Then Read the file once for
+ the next round's gaps.
  A nonzero recorder exit stops that round immediately; never echo a verdict
  or continue to the shared status owner afterward.
 7. **Repeat** until SHIP

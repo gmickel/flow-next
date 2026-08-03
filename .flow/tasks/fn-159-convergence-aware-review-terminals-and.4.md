@@ -23,7 +23,8 @@ Per-surface blocking calibration in the three review prompts (outcome-anchored P
 - `plugins/flow-next/tests/test_review_prompt_template_parity.py` — FULL read: every invariant, fixture, size assertion
 - `plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md` — full read
 - `plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md` — gate block + clause placement
-- `plugins/flow-next/scripts/flowctl.py:8478-8900, 9598-9660` — rubric blocks, fallbacks, ratchet rule text
+- `plugins/flow-next/scripts/flowctl.py:8478-8900` — rubric blocks, fallbacks
+- `plugins/flow-next/scripts/flowctl.py:11006-11101` — `build_convergence_ratchet_block` ratchet rule text (rule 2 prose at :11053-11056) <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.7 landed the hash guard before the cap branch, shifting this region forward (was :9598-9660 pre-.1); fn-159-convergence-aware-review-terminals-and.2 landed the structured-findings ratchet (function now takes prior_items/max_total_chars/scaffold_only params, not just prior_findings prose), shifting it further to :11006-11101 and changing its signature — the plan-kind rule-2 tightening in this task now edits the structured-item rendering path, not a plain prose string -->
 - `plugins/flow-next/agents/pr-comment-resolver.md:60-75`
 
 **Optional:**
@@ -42,9 +43,8 @@ Per-surface blocking calibration in the three review prompts (outcome-anchored P
 ## Acceptance
 - [ ] R5, R6 satisfied; parity suite rebaselined deliberately (rationale + token counts), never blindly
 ## Done summary
-TBD
-
+Per-surface review blocking calibration across all hash-pinned prompts in one pass: plan prompt gains outcome-anchored P0-P3 severities, the verbatim impl confidence gate (suppression before the ratchet contract), the name-the-bad-outcome blocking rule and the fn-153/fn-156 worked example; completion inherits the severity definitions; impl gains the settled-plan (Decision Context) FYI clause; all four templates + byte-parity fallbacks + ralph-init prompt_{plan,work,completion}.md gain the NEEDS_HUMAN verdict grammar + guidance; plan-kind ratchet rule 2 tightened in build_convergence_ratchet_block (review_type threaded through cursor fitting/rereview). Parity/pin/fixture/token-evidence deliberately rebaselined once via a committed generator (schema v2, baseline dc74a6c7, tiktoken, +310/+308 max delta budget); commit message carries rationale + before/after token counts.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 698d3e0c5d7bb5588eb23e3df98155850ba3e9fb
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity -q), cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity test_tracker_distribution -q (222 passed), cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_template_parity test_review_prompt_constraints test_prompt_text_pinned -q (37 passed), python3 scripts/run_tests_parallel.py (3977 ran, 0 failures, 0 errors, 4 skipped), uvx ruff@0.16.0 check . (clean), ./scripts/sync-codex.sh x2 (idempotent)
 - PRs:

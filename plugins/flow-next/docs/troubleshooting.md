@@ -74,20 +74,21 @@ cat scripts/ralph/runs/*/receipts/impl-fn-1.1.json
 
 Ralph reads receipts to decide whether to advance, retry, or block. A missing or malformed receipt freezes the loop. The bundled `flowctl validate --all` checks state-file shape; receipt-shape errors usually mean a backend wrote the file mid-iteration and the loop crashed.
 
-## Review loop runs away (many rounds, never converges — fixed in fn-90)
+## Review loop stalls, repeats unchanged work, or runs away (fn-90/fn-159)
 
 **Symptoms:** a plan/impl/completion review loops far more than the ~3-round cap — the field report was **~11×** on a large ticket before the reviewer and implementer converged. Most common on the **Cursor** review backend, but the underlying causes were backend-agnostic.
 
-**What was happening (root causes, all fixed in fn-90):**
+**What was happening (root causes, now bounded):**
 - **The cap was prose-only and reset every invocation.** `MAX_REVIEW_ITERATIONS` (then default 4; now 8) was an instruction to the host LLM to keep an in-context counter — but it reset to 0 on every *fresh* review invocation (a new Ralph iteration, a new pilot tick, a human retry). The runaway was ≈ 5–6 fresh invocations × ~3 in-agent rounds. Now flowctl owns a **cumulative counter on spec state** that survives fresh invocations and **refuses at the cap** (exit `4` + `ESCALATE:`).
-- **Every re-review was a fresh blind review** (a churn lottery — two identical fresh Cursor reviews overlapped on only ~50% of findings, so SHIP was statistically near-unreachable within the cap). Now a **convergence ratchet** injects the prior round's findings with a shrink-only contract (verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ MUST SHIP).
+- **Every re-review was a fresh blind review** (a churn lottery — two identical fresh Cursor reviews overlapped on only ~50% of findings, so SHIP was statistically near-unreachable within the cap). The **convergence ratchet** now renders the validated `findings.items` records (severity, classification, and status) with labeled legacy prose only as a fallback. Its shrink-only contract remains: verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ MUST SHIP.
 - **Codex/copilot verdicts could be poisoned** by a verdict literal echoed in tool output (e.g. a grep of `smoke_test.sh`'s assertions), making flowctl report SHIP while the reviewer said NEEDS_WORK — a false SHIP *or* a false NEEDS_WORK that kept a loop alive. The parse now isolates the final agent message (last-match).
 - **Cursor's ambient injection** (its built-in persona rubric + auto-attached `AGENTS.md`) diluted the scope anchor. A **persona-override preamble** now rides in every cursor review prompt (see [`orchestration.md`](orchestration.md)).
 
 **What to do if you hit the cap now:**
-- The review command exits with code **`4`** and an `ESCALATE:` message — this is **NOT retryable**. Under Ralph/autonomous it surfaces as NEEDS_HUMAN. A human should look at whether the plan/diff genuinely needs re-work (the reviewer strictness is often *signal* — big/ambiguous plans really do re-fail).
-- After an explicit **re-plan** (you rewrote the spec/approach, not just patched a finding), reset the counter to re-open the cap: `flowctl spec reset-review-rounds <spec-id>` (add `--impl` to also clear per-task impl-review counters). A `SHIP` verdict resets it automatically.
-- Raise the cap for a genuinely large ticket via `MAX_REVIEW_ITERATIONS` (env / Ralph `config.env`) — but prefer escalation: the cap is a backstop, the ratchet is the actual convergence fix.
+- `NOT_RETRYABLE: artifact unchanged since last verdict` exits **1** before dispatch and consumes no round. Change the actual reviewed artifact, or have a human decide whether an explicit re-plan is warranted; do not blindly retry it.
+- Either `ESCALATE: review loop stalled (<rule>)` or `ESCALATE: reviewer requested human review` exits **4** and is **not retryable**. Under Ralph/autonomous it surfaces as NEEDS_HUMAN. A human should inspect the persisted receipt and findings trail, then decide whether the work needs redesign, a focused fix, or a re-plan.
+- After an explicit **re-plan** (you rewrote the spec/approach, not just patched a finding), a human can reset the counter to re-open the cap: `flowctl spec reset-review-rounds <spec-id>` (add `--impl` to also clear per-task impl-review counters). A `SHIP` verdict resets automatically. Ralph blocks reset commands and `--force`; they are never autonomous recovery tools.
+- The default is 8. You can tune `MAX_REVIEW_ITERATIONS` for a genuinely large ticket, but the cap remains enabled and escalation remains preferable to a larger budget.
 - Full semantics: [`flowctl.md` § Deterministic review cap](flowctl.md#codex-impl-review) and [`ralph.md` § Review Loops Until SHIP](ralph.md#3-review-loops-until-ship).
 
 ## Review reports a model downgrade / floor (fn-76 resolution ladder)

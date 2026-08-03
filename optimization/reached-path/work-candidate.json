@@ -12,7 +12,7 @@
   },
   "prompt_hashes": {
     "plugins/flow-next/skills/flow-next-work/SKILL.md": "c6b319c27827270f4bb5eeb9a7d71c96d0312266a485b31de6efc3a20702e6dd",
-    "plugins/flow-next/skills/flow-next-work/phases.md": "ed523747cf2c3150d5cf2fd3a148b111ceace709bb204df8c912e6bf6c7639e5",
+    "plugins/flow-next/skills/flow-next-work/phases.md": "8be3c73c487c35c3dda5893dbdb82436a7b8d85871a79777691317e8bc58b1a5",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md": "1e72fe556e16476e2a71da32536792703a69cfc7dd5f65a4215ce595f4445858",
     "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md": "9853594ad12db98edafc83780b266f5f7cc95a1090acade3a178c890e1d43a3b",
     "plugins/flow-next/skills/flow-next-work/references/tracker-touchpoints.md": "a9d2319fb4b48cc1e32f8d24307107aa29199feab701a31744f15e13970aaed1"
@@ -21,15 +21,15 @@
     "algorithm": "lf-full-file-on-activation-once-per-path-hash",
     "default_path": {
       "baseline_reached_path_chars": 51330,
-      "candidate_reached_path_chars": 51033,
-      "reduction_chars": 297,
-      "reduction_percent": 0.58
+      "candidate_reached_path_chars": 51188,
+      "reduction_chars": 142,
+      "reduction_percent": 0.28
     },
     "delegation_active_path": {
       "baseline_reached_path_chars": 102426,
-      "candidate_reached_path_chars": 102129,
-      "reduction_chars": 297,
-      "reduction_percent": 0.29
+      "candidate_reached_path_chars": 102284,
+      "reduction_chars": 142,
+      "reduction_percent": 0.14
     },
     "revisions": [
       {
@@ -95,6 +95,12 @@
         "date": "2026-07-29",
         "reason": "Repeatable work.done and completionReview comments now name stable occurrence-specific evidence tokens at both the primary touchpoint and retro-fire path.",
         "baseline_note": "The explicit evidence contract adds 235 characters to both always-loaded paths. Both remain 297 characters below their current ratchet baselines; the tracker-touchpoints reference hash changes for the same required lifecycle identity contract."
+      },
+      {
+        "spec": "fn-159-convergence-aware-review-terminals-and.5",
+        "date": "2026-08-03",
+        "reason": "phases.md 3d.0 escalation prose now states review-counter reset and --force review dispatch/increment are human-only recovery tools (R9).",
+        "baseline_note": "The human-only line adds 155 characters to both always-loaded paths. Both remain 142 characters below their ratchet baselines."
       }
     ]
   },
