@@ -10078,6 +10078,7 @@ def _record_review_attempt_locked(
     reservation_id: Optional[str] = None,
     receipt_target: Optional[str] = None,
     receipt_payload: Optional[dict] = None,
+    receipt_criteria_text: Optional[str] = None,
     status_target: Optional[str] = None,
     findings_container: Optional[dict] = None,
     findings_digest: Optional[dict] = None,
@@ -10306,8 +10307,16 @@ def _record_review_attempt_locked(
                 receipt_payload.get("type") == "completion_review"
             ):
                 try:
+                    # In-process backends supply the EXTRACTED reviewer
+                    # message: `output` is a transport envelope (codex returns
+                    # a JSONL event stream) that the criteria parser cannot
+                    # read. RP/host fences pass nothing and keep `output`.
                     journal["criteria"] = bind_review_criteria(
-                        parse_review_criteria(output)
+                        parse_review_criteria(
+                            receipt_criteria_text
+                            if receipt_criteria_text is not None
+                            else output
+                        )
                     )
                 except Exception:
                     journal["criteria"] = None
@@ -37599,20 +37608,182 @@ def _build_backend_review_findings(
     if base_sha is None and base_branch:
         base_sha = _resolve_review_sha(base_branch)
     prior_path = Path(receipt_path) if receipt_path else None
-    container = build_review_receipt_findings(
-        review_text,
-        review_type=review_type,
-        review_id=review_id,
-        backend=backend,
-        head_sha=head_sha,
-        base_sha=base_sha,
-        prior_receipt_path=prior_path,
-        anchor_side="head",
-    )
-    digest = build_review_findings_digest(
-        container, prior_receipt_path=prior_path
-    ) if container is not None else None
-    return container, digest
+
+    def _build(lineage_path: Optional[Path]) -> tuple[Optional[dict], Optional[dict]]:
+        built = build_review_receipt_findings(
+            review_text,
+            review_type=review_type,
+            review_id=review_id,
+            backend=backend,
+            head_sha=head_sha,
+            base_sha=base_sha,
+            prior_receipt_path=lineage_path,
+            anchor_side="head",
+        )
+        return built, (
+            build_review_findings_digest(built, prior_receipt_path=lineage_path)
+            if built is not None else None
+        )
+
+    try:
+        return _build(prior_path)
+    except ReviewReceiptHistoryError as exc:
+        # fn-159 (PR #290 bot P1): this runs AFTER the paid dispatch and BEFORE
+        # `_finish_backend_exec`. An escaping exception here strands the
+        # reservation — round reserved, verdict delivered, nothing consumed or
+        # refunded. Unusable lineage (e.g. a stale-receipt archive from another
+        # backend, then a retry through a different one) is fail-inert
+        # everywhere else in this spec, so degrade to a lineage-less container
+        # and let finalization proceed.
+        print(
+            "warning: review findings history unusable; building this round "
+            f"without prior lineage: {exc}",
+            file=sys.stderr,
+        )
+        try:
+            return _build(None)
+        except ReviewReceiptHistoryError:
+            return None, None
+
+
+def _backend_review_receipt_payload(
+    *,
+    review_type: str,
+    review_id: str,
+    backend: str,
+    verdict: str,
+    session_id: Optional[str],
+    effective_model: Optional[str],
+    effective_effort: Optional[str],
+    resolved_spec: "BackendSpec",
+    review_text: str,
+    include_effort: bool,
+    base_branch: Optional[str] = None,
+    focus: Optional[str] = None,
+    suppressed_count=None,
+    classification_counts=None,
+    unaddressed_rids=None,
+    pre_consumption: bool = False,
+) -> dict:
+    """Build the receipt body (no findings/criteria) with stable key order.
+
+    ``pre_consumption`` builds the payload BEFORE ``record_review_attempt``
+    creates the attempt row, so the completion-review ``attempt_timestamp``
+    cannot be read from the ledger yet: an explicitly empty value is record's
+    documented request to stamp its own attempt clock into that slot.
+    """
+    receipt_data: dict = {
+        "type": review_type,
+        "id": review_id,
+        "mode": backend,
+    }
+    # Key order matches pre-migration writers:
+    #   plan:        type,id,mode,verdict,session_id,model,[effort],spec,timestamp,review
+    #   impl/compl:  type,id,mode,base,verdict,session_id,model,[effort],spec,timestamp,review
+    if review_type in ("impl_review", "completion_review"):
+        receipt_data["base"] = base_branch
+    receipt_data["verdict"] = verdict
+    receipt_data["session_id"] = session_id
+    receipt_data["model"] = effective_model
+    if include_effort:
+        receipt_data["effort"] = effective_effort
+    receipt_data["spec"] = str(resolved_spec)
+    receipt_data["timestamp"] = now_iso()
+    receipt_data["review"] = review_text
+    if review_type == "completion_review":
+        if pre_consumption:
+            receipt_data["attempt_timestamp"] = ""
+        else:
+            flow_dir = get_flow_dir()
+            spec_path = find_spec_json_path(flow_dir, review_id)
+            if spec_path.exists():
+                spec_data = normalize_epic(
+                    load_json_or_exit(
+                        spec_path, f"Spec {review_id}", use_json=False
+                    )
+                )
+                attempts = _review_attempt_summary(
+                    spec_data,
+                    "plan",
+                    None,
+                    review_type="completion",
+                )["attempts"]
+                latest = attempts[-1] if attempts else {}
+                if (
+                    latest.get("backend") == backend
+                    and latest.get("verdict") == verdict
+                    and isinstance(latest.get("timestamp"), str)
+                ):
+                    receipt_data["attempt_timestamp"] = latest["timestamp"]
+    stamp_ralph_iteration(receipt_data)
+    if focus:
+        receipt_data["focus"] = focus
+    if suppressed_count:
+        receipt_data["suppressed_count"] = suppressed_count
+    if classification_counts is not None:
+        receipt_data["introduced_count"] = classification_counts["introduced"]
+        receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
+    if unaddressed_rids is not None:
+        receipt_data["unaddressed"] = unaddressed_rids
+    return receipt_data
+
+
+def _publish_review_receipt_from_journal(
+    reservation_id: str, receipt_path: str
+) -> bool:
+    """Publish the receipt operation journaled BEFORE the round was consumed.
+
+    fn-159 (PR #290 bot P1): the in-process backends used to publish an
+    unjournaled receipt after ``record_review_attempt`` had already consumed
+    the verdict, so a crash or write error in that gap burned a round (and,
+    for a plan SHIP, reset the counter) with no receipt evidence and nothing
+    for the replay gate to recover. The payload is now journaled
+    pre-consumption and published FROM the journal — same idempotent,
+    identity-keyed decision table the RP attach fence uses.
+    """
+    flow_dir = get_flow_dir()
+    try:
+        journal_path = _review_journal_path(flow_dir, reservation_id)
+        journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return False
+    if not isinstance(journal, dict) or journal.get("reservation_id") != reservation_id:
+        return False
+    receipt_target = journal.get("receipt_target")
+    payload = _review_journal_receipt_payload(journal)
+    if not isinstance(receipt_target, str) or payload is None:
+        return False
+    if Path(receipt_target) != Path(receipt_path):
+        return False
+    spec_id = journal.get("spec_id")
+    if not isinstance(spec_id, str) or not spec_id:
+        return False
+    with _review_two_resource_lock(flow_dir, spec_id, [Path(receipt_target)]):
+        spec_json_path = find_spec_json_path(flow_dir, spec_id)
+        if not spec_json_path.exists():
+            return False
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=False)
+        )
+        if payload.get("type") == "completion_review":
+            # Same pre-pointer recovery copy the direct writer keeps.
+            atomic_write_json(
+                _completion_review_receipt_recovery_path(
+                    payload.get("id") or spec_id
+                ),
+                payload,
+            )
+        if not _complete_review_journal(
+            flow_dir, journal_path, journal, spec_data=spec_data
+        ):
+            return False
+        progress = dict(_journal_progress(journal))
+        for row in spec_data.get("review_attempts") or []:
+            if isinstance(row, dict) and row.get("reservation_id") == reservation_id:
+                row["finalized"] = dict(progress)
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
+    return True
 
 
 def _write_backend_review_receipt(
@@ -37637,58 +37808,41 @@ def _write_backend_review_receipt(
     reviewed_head_sha: Optional[str] = None,
     findings_container: Optional[dict] = None,
     findings_built: bool = False,
+    journaled_reservation_id: Optional[str] = None,
 ) -> None:
     """Write a review receipt with stable key order (Ralph / pilot / land)."""
-    receipt_data: dict = {
-        "type": review_type,
-        "id": review_id,
-        "mode": backend,
-    }
-    # Key order matches pre-migration writers:
-    #   plan:        type,id,mode,verdict,session_id,model,[effort],spec,timestamp,review
-    #   impl/compl:  type,id,mode,base,verdict,session_id,model,[effort],spec,timestamp,review
-    if review_type in ("impl_review", "completion_review"):
-        receipt_data["base"] = base_branch
-    receipt_data["verdict"] = verdict
-    receipt_data["session_id"] = session_id
-    receipt_data["model"] = effective_model
-    if include_effort:
-        receipt_data["effort"] = effective_effort
-    receipt_data["spec"] = str(resolved_spec)
-    receipt_data["timestamp"] = now_iso()
-    receipt_data["review"] = review_text
-    if review_type == "completion_review":
-        flow_dir = get_flow_dir()
-        spec_path = find_spec_json_path(flow_dir, review_id)
-        if spec_path.exists():
-            spec_data = normalize_epic(
-                load_json_or_exit(
-                    spec_path, f"Spec {review_id}", use_json=False
-                )
+    if journaled_reservation_id:
+        # The journal is authoritative: never write a second, unjournaled
+        # receipt beside it. A failed publish stays recoverable — the journal
+        # keeps its `receipt` leg pending and the pre-increment replay gate
+        # refuses the next dispatch until it completes.
+        if not _publish_review_receipt_from_journal(
+            journaled_reservation_id, receipt_path
+        ):
+            print(
+                "warning: journaled review receipt not published yet for "
+                f"reservation {journaled_reservation_id}; the next review "
+                "dispatch will replay it from the journal.",
+                file=sys.stderr,
             )
-            attempts = _review_attempt_summary(
-                spec_data,
-                "plan",
-                None,
-                review_type="completion",
-            )["attempts"]
-            latest = attempts[-1] if attempts else {}
-            if (
-                latest.get("backend") == backend
-                and latest.get("verdict") == verdict
-                and isinstance(latest.get("timestamp"), str)
-            ):
-                receipt_data["attempt_timestamp"] = latest["timestamp"]
-    stamp_ralph_iteration(receipt_data)
-    if focus:
-        receipt_data["focus"] = focus
-    if suppressed_count:
-        receipt_data["suppressed_count"] = suppressed_count
-    if classification_counts is not None:
-        receipt_data["introduced_count"] = classification_counts["introduced"]
-        receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
-    if unaddressed_rids is not None:
-        receipt_data["unaddressed"] = unaddressed_rids
+        return
+    receipt_data = _backend_review_receipt_payload(
+        review_type=review_type,
+        review_id=review_id,
+        backend=backend,
+        verdict=verdict,
+        session_id=session_id,
+        effective_model=effective_model,
+        effective_effort=effective_effort,
+        resolved_spec=resolved_spec,
+        review_text=review_text,
+        include_effort=include_effort,
+        base_branch=base_branch,
+        focus=focus,
+        suppressed_count=suppressed_count,
+        classification_counts=classification_counts,
+        unaddressed_rids=unaddressed_rids,
+    )
     receipt_file = Path(receipt_path)
     with cross_process_lock(_review_receipt_lock_path(receipt_file)):
         if findings_built:
@@ -38217,6 +38371,40 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha=reviewed_base_sha,
         base_branch=base_branch,
     )
+
+    # Tallies parse from the EXTRACTED reviewer message (codex returns a JSONL
+    # event stream in `output`; a compliant fenced block lives escaped inside
+    # it and is only visible in review_text).
+    suppressed_count = parse_suppressed_count(review_text)
+    classification_counts = parse_classification_counts(review_text)
+    unaddressed_rids = parse_unaddressed_rids(review_text)
+
+    # fn-159 (PR #290 bot P1): the receipt operation is journaled with the
+    # finalization, pre-consumption; only a delivered verdict reaches it.
+    journaled_verdict = parse_codex_verdict(output)
+    receipt_target = (
+        receipt_path if receipt_path and reservation_id and journaled_verdict
+        else None
+    )
+    receipt_payload = _backend_review_receipt_payload(
+        review_type="impl_review",
+        review_id=review_id,
+        backend=backend,
+        verdict=journaled_verdict,
+        session_id=returned_session_id,
+        effective_model=effective_model,
+        effective_effort=effective_effort,
+        resolved_spec=resolved_spec,
+        review_text=review_text,
+        include_effort=reg["include_effort"],
+        base_branch=base_branch,
+        focus=focus,
+        suppressed_count=suppressed_count,
+        classification_counts=classification_counts,
+        unaddressed_rids=unaddressed_rids,
+        pre_consumption=True,
+    ) if receipt_target else None
+
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
@@ -38230,14 +38418,10 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         findings_container=findings_container,
         findings_digest=findings_digest,
         findings_built=True,
+        receipt_target=receipt_target,
+        receipt_payload=receipt_payload,
+        receipt_criteria_text=review_text,
     )
-
-    # Tallies parse from the EXTRACTED reviewer message (codex returns a JSONL
-    # event stream in `output`; a compliant fenced block lives escaped inside
-    # it and is only visible in review_text).
-    suppressed_count = parse_suppressed_count(review_text)
-    classification_counts = parse_classification_counts(review_text)
-    unaddressed_rids = parse_unaddressed_rids(review_text)
 
     if receipt_path:
         _write_backend_review_receipt(
@@ -38261,6 +38445,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             reviewed_head_sha=reviewed_head_sha,
             findings_container=findings_container,
             findings_built=True,
+            journaled_reservation_id=reservation_id if receipt_target else None,
         )
 
     if args.json:
@@ -38335,6 +38520,9 @@ def _finish_backend_exec(
     findings_container: Optional[dict] = None,
     findings_digest: Optional[dict] = None,
     findings_built: bool = False,
+    receipt_target: Optional[str] = None,
+    receipt_payload: Optional[dict] = None,
+    receipt_criteria_text: Optional[str] = None,
 ) -> str:
     """Shared post-exec gates and verdict-aware round finalization.
 
@@ -38361,6 +38549,12 @@ def _finish_backend_exec(
                 findings_container=findings_container,
                 findings_digest=findings_digest,
                 findings_built=findings_built,
+                # fn-159 (PR #290 bot P1): journal the intended receipt
+                # operation BEFORE the reservation is consumed. Publication
+                # happens from that journal, never beside it.
+                receipt_target=receipt_target,
+                receipt_payload=receipt_payload,
+                receipt_criteria_text=receipt_criteria_text,
             )
             if attempt_out is not None:
                 attempt_out.update(summary)
@@ -38597,6 +38791,29 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha=reviewed_base_sha,
         base_branch=base_branch,
     )
+    # fn-159 (PR #290 bot P1): journal the receipt operation with the
+    # finalization so a plan SHIP can never consume the round (and reset the
+    # counter) with the receipt evidence left unwritten and unrecoverable.
+    journaled_verdict = parse_codex_verdict(output)
+    receipt_target = (
+        receipt_path if receipt_path and reservation_id and journaled_verdict
+        else None
+    )
+    receipt_payload = _backend_review_receipt_payload(
+        review_type="plan_review",
+        review_id=epic_id,
+        backend=backend,
+        verdict=journaled_verdict,
+        session_id=returned_session_id,
+        effective_model=effective_model,
+        effective_effort=effective_effort,
+        resolved_spec=resolved_spec,
+        review_text=review_text,
+        include_effort=reg["include_effort"],
+        base_branch=base_branch,
+        pre_consumption=True,
+    ) if receipt_target else None
+
     attempt_summary: dict = {}
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
@@ -38612,6 +38829,9 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         findings_container=findings_container,
         findings_digest=findings_digest,
         findings_built=True,
+        receipt_target=receipt_target,
+        receipt_payload=receipt_payload,
+        receipt_criteria_text=review_text,
     )
 
     # issue #279: attempt row, plan_review_status, and the SHIP cap reset all
@@ -38636,6 +38856,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             reviewed_head_sha=reviewed_head_sha,
             findings_container=findings_container,
             findings_built=True,
+            journaled_reservation_id=reservation_id if receipt_target else None,
         )
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
@@ -38844,6 +39065,39 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha=reviewed_base_sha,
         base_branch=base_branch,
     )
+
+    # Preserve session_id for continuity (avoid clobbering on resumed sessions).
+    session_id_to_write = returned_session_id or session_id
+
+    # Extracted-message scope: see the impl-review call site.
+    suppressed_count = parse_suppressed_count(review_text)
+    classification_counts = parse_classification_counts(review_text)
+    unaddressed_rids = parse_unaddressed_rids(review_text)
+
+    # fn-159 (PR #290 bot P1): journal the receipt operation pre-consumption.
+    journaled_verdict = parse_codex_verdict(output)
+    receipt_target = (
+        receipt_path if receipt_path and reservation_id and journaled_verdict
+        else None
+    )
+    receipt_payload = _backend_review_receipt_payload(
+        review_type="completion_review",
+        review_id=epic_id,
+        backend=backend,
+        verdict=journaled_verdict,
+        session_id=session_id_to_write,
+        effective_model=effective_model,
+        effective_effort=effective_effort,
+        resolved_spec=resolved_spec,
+        review_text=review_text,
+        include_effort=reg["include_effort"],
+        base_branch=base_branch,
+        suppressed_count=suppressed_count,
+        classification_counts=classification_counts,
+        unaddressed_rids=unaddressed_rids,
+        pre_consumption=True,
+    ) if receipt_target else None
+
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
@@ -38856,15 +39110,10 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         findings_container=findings_container,
         findings_digest=findings_digest,
         findings_built=True,
+        receipt_target=receipt_target,
+        receipt_payload=receipt_payload,
+        receipt_criteria_text=review_text,
     )
-
-    # Preserve session_id for continuity (avoid clobbering on resumed sessions).
-    session_id_to_write = returned_session_id or session_id
-
-    # Extracted-message scope: see the impl-review call site.
-    suppressed_count = parse_suppressed_count(review_text)
-    classification_counts = parse_classification_counts(review_text)
-    unaddressed_rids = parse_unaddressed_rids(review_text)
 
     if receipt_path:
         _write_backend_review_receipt(
@@ -38887,6 +39136,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             reviewed_head_sha=reviewed_head_sha,
             findings_container=findings_container,
             findings_built=True,
+            journaled_reservation_id=reservation_id if receipt_target else None,
         )
 
     # Receipt evidence must land before terminal status. If receipt persistence

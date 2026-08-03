@@ -3690,5 +3690,243 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         self.assertEqual(digest["items"][-1]["chainRoot"], root_item["id"])
 
 
+PLAN_REVIEW_FINDING = (
+    "## Issue\n"
+    "- **Severity**: Major\n"
+    "- **Confidence**: 100\n"
+    "- **Classification**: introduced\n"
+    "- **Location**: Task acceptance\n"
+    "- **Problem**: The acceptance is not testable.\n"
+    "- **Suggestion**: Add an executable assertion.\n"
+    "<verdict>NEEDS_WORK</verdict>\n"
+)
+
+
+class _InProcessBackendReviewBase(unittest.TestCase):
+    """A real git repo + spec sidecar for end-to-end in-process dispatch."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name).resolve()
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        (self.root / ".flow" / "specs" / f"{self.spec_id}.md").write_text(
+            "# Demo\n\n## Acceptance Criteria\n\n- R1: works\n", encoding="utf-8"
+        )
+        (self.root / ".flow" / "tasks" / f"{self.spec_id}.1.md").write_text(
+            "# Task 1\n\nImplement R1.\n", encoding="utf-8"
+        )
+        self._git("init", "-q", "-b", "main")
+        self._git("config", "user.email", "t@example.com")
+        self._git("config", "user.name", "t")
+        (self.root / "app.py").write_text("x = 1\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "base")
+        (self.root / "app.py").write_text("x = 2\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "change")
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, self._cwd)
+        self._old_env = os.environ.pop("MAX_REVIEW_ITERATIONS", None)
+        if self._old_env is not None:
+            self.addCleanup(
+                os.environ.__setitem__, "MAX_REVIEW_ITERATIONS", self._old_env
+            )
+        flowctl._wire_backend_review_hooks()
+
+    def _git(self, *argv: str) -> None:
+        subprocess.run(
+            ["git", *argv], cwd=self.root, check=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+
+    def _data(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+
+    def _plan_args(self, receipt: "Path | None") -> argparse.Namespace:
+        return argparse.Namespace(
+            epic=self.spec_id, base="HEAD~1", json=True, files="app.py",
+            receipt=str(receipt) if receipt else None,
+            spec=None, model=None, effort=None, force=False, sandbox=None,
+        )
+
+    def _dispatch_plan(
+        self, receipt: "Path | None", *, backend: str = "codex",
+        review_text: str = PLAN_REVIEW_FINDING,
+    ) -> "tuple[dict, str]":
+        def fake_exec(_prompt, **_kwargs):
+            return review_text, "sess-1", 0, ""
+
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict(
+            flowctl.BACKEND_REGISTRY[backend], {"run_exec": fake_exec}
+        ):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                with contextlib.suppress(SystemExit):
+                    flowctl._backend_plan_review(self._plan_args(receipt), backend)
+        return json.loads(out.getvalue()), err.getvalue()
+
+    def _fresh_process(self, *argv: str) -> "subprocess.CompletedProcess[str]":
+        env = dict(os.environ)
+        env.pop("MAX_REVIEW_ITERATIONS", None)
+        return subprocess.run(
+            [sys.executable, str(FLOWCTL_PY), *argv],
+            cwd=self.root, env=env, capture_output=True, text=True,
+        )
+
+
+class TestInProcessReceiptJournaledPreConsumption(_InProcessBackendReviewBase):
+    """PR #290 bot P1: a direct-backend receipt must be journaled BEFORE the
+    round is consumed, and published FROM that journal. Otherwise a crash in
+    the record→publish gap burns a verdict (with a SHIP counter reset) leaving
+    no receipt evidence and nothing for the replay gate to recover."""
+
+    def test_crash_between_record_and_publish_replays_receipt_from_journal(self):
+        receipt = self.root / "plan-receipt.json"
+        # The induced crash: record journals + consumes, the process dies
+        # before publication ever runs.
+        with mock.patch.object(
+            flowctl, "_publish_review_receipt_from_journal", return_value=False
+        ):
+            payload, _ = self._dispatch_plan(receipt)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertFalse(receipt.exists())
+
+        data = self._data()
+        row = data["review_attempts"][-1]
+        reservation_id = row["reservation_id"]
+        self.assertTrue(row["round_consumed"])
+        # Verdict consumed, receipt evidence still owed — and recoverable.
+        self.assertEqual(row["finalized"]["receipt"], "pending")
+        journal = json.loads(
+            (self.root / ".flow" / "review-runs" / f"{reservation_id}.json")
+            .read_text()
+        )
+        self.assertEqual(journal["receipt_target"], str(receipt))
+        self.assertEqual(journal["receipt_payload"]["verdict"], "NEEDS_WORK")
+        self.assertIn("findings_container", journal)
+
+        # A FRESH process replays it at the pre-increment gate: zero dispatch.
+        replay = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--json",
+        )
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        result = json.loads(replay.stdout)
+        self.assertTrue(result["replayed"])
+        self.assertEqual(
+            result["replays"],
+            [{"reservation_id": reservation_id, "verdict": "NEEDS_WORK"}],
+        )
+        published = json.loads(receipt.read_text())
+        self.assertEqual(published["verdict"], "NEEDS_WORK")
+        self.assertEqual(published["review_reservation_id"], reservation_id)
+        self.assertEqual(
+            published["review"], journal["receipt_payload"]["review"]
+        )
+        after = self._data()
+        self.assertEqual(after["review_attempts"][-1]["reservation_id"], reservation_id)
+        self.assertEqual(after.get("review_pending_rounds", {}), {})
+        self.assertEqual(after.get("review_reservations", {}), {})
+
+    def test_normal_run_publishes_from_journal_and_clears_it(self):
+        receipt = self.root / "plan-receipt.json"
+        payload, _ = self._dispatch_plan(receipt)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        published = json.loads(receipt.read_text())
+        self.assertEqual(
+            published["review_reservation_id"], row["reservation_id"]
+        )
+        self.assertFalse(
+            (self.root / ".flow" / "review-runs"
+             / f"{row['reservation_id']}.json").exists()
+        )
+
+    def test_receiptless_run_keeps_receipt_leg_not_applicable(self):
+        payload, _ = self._dispatch_plan(None)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["receipt"], "not_applicable")
+        self.assertTrue(row["round_consumed"])
+        self.assertEqual(self._data().get("review_pending_rounds", {}), {})
+
+
+class TestUnusableFindingsHistoryDegrades(_InProcessBackendReviewBase):
+    """PR #290 bot P1: `_build_backend_review_findings` runs AFTER the paid
+    dispatch and BEFORE finalization. A ReviewReceiptHistoryError escaping
+    there strands the reservation — round reserved, verdict delivered,
+    nothing consumed or refunded."""
+
+    def _archive_foreign_backend_receipt(self, receipt: Path) -> None:
+        """Mirror `_clear_stale_review_receipt` on a failed codex attempt."""
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.root,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        container = flowctl.build_review_receipt_findings(
+            PLAN_REVIEW_FINDING,
+            review_type="plan_review",
+            review_id=self.spec_id,
+            backend="codex",
+            head_sha=head,
+            anchor_side="head",
+        )
+        self.assertIsNotNone(container)
+        flowctl.atomic_write_json(receipt, {
+            "type": "plan_review", "id": self.spec_id, "mode": "codex",
+            "verdict": "NEEDS_WORK", "session_id": "s0", "model": "m",
+            "spec": "codex", "timestamp": flowctl.now_iso(),
+            "review": PLAN_REVIEW_FINDING, "findings": container,
+        })
+        flowctl._clear_stale_review_receipt(str(receipt))
+        self.assertFalse(receipt.exists())
+        self.assertTrue(flowctl._review_receipt_history_dir(receipt).exists())
+
+    def test_history_error_raises_without_the_guard(self):
+        receipt = self.root / "plan-receipt.json"
+        self._archive_foreign_backend_receipt(receipt)
+        with self.assertRaises(flowctl.ReviewReceiptHistoryError):
+            flowctl.build_review_receipt_findings(
+                PLAN_REVIEW_FINDING,
+                review_type="plan_review",
+                review_id=self.spec_id,
+                backend="cursor",
+                head_sha="c" * 40,
+                prior_receipt_path=receipt,
+                anchor_side="head",
+            )
+
+    def test_mixed_backend_retry_finalizes_with_lineage_less_container(self):
+        receipt = self.root / "plan-receipt.json"
+        self._archive_foreign_backend_receipt(receipt)
+        payload, stderr = self._dispatch_plan(receipt, backend="cursor")
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertIn("review findings history unusable", stderr)
+
+        data = self._data()
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["backend"], "cursor")
+        self.assertTrue(row["round_consumed"])
+        self.assertEqual(row["outcome"], "verdict")
+        # No strand: the reservation is consumed, nothing left pending.
+        self.assertEqual(data.get("review_pending_rounds", {}), {})
+        self.assertEqual(data.get("review_reservations", {}), {})
+        self.assertEqual(data["plan_review_rounds"], 1)
+        published = json.loads(receipt.read_text())
+        self.assertEqual(published["mode"], "cursor")
+        # Lineage-less: a fresh chain, never a bogus supersession of the
+        # foreign-backend generation.
+        findings = published.get("findings")
+        if findings is not None:
+            self.assertEqual(findings["round"], 1)
+            self.assertIsNone(findings.get("supersedesReceiptId"))
+
+
 if __name__ == "__main__":
     unittest.main()

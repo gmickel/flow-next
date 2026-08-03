@@ -682,6 +682,16 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         source = (
             REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
         ).read_text(encoding="utf-8")
+        payload_builder = _section(
+            source,
+            "def _backend_review_receipt_payload(",
+            "def _publish_review_receipt_from_journal(",
+        )
+        publisher = _section(
+            source,
+            "def _publish_review_receipt_from_journal(",
+            "def _write_backend_review_receipt(",
+        )
         writer = _section(
             source,
             "def _write_backend_review_receipt(",
@@ -693,10 +703,13 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             "def cmd_codex_impl_review(",
         )
         self.assertIn("completion-review-receipt-recovery-", source)
-        self.assertIn('receipt_data["attempt_timestamp"]', writer)
+        self.assertIn('receipt_data["attempt_timestamp"]', payload_builder)
         self.assertIn(
             "_completion_review_receipt_recovery_path(review_id)", writer
         )
+        # PR #290 bot P1: the journaled publish keeps the same pre-pointer
+        # recovery copy the unjournaled direct writer wrote.
+        self.assertIn("_completion_review_receipt_recovery_path(", publisher)
         self.assertNotIn("recovery_path.unlink", writer)
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
