@@ -7,6 +7,10 @@ Ralph is Flow-Next's repo-local **hardened** autonomous harness. It exists becau
 > refunds, resets, forces, or redispatches it; edit the artifact, explicitly
 > reset, or deliberately use `--force` as a human.
 
+> **Review-counter recovery:** `spec reset-review-rounds`, `review-rounds
+> reset`, and `--force` on review dispatch/increment are human-only recovery
+> tools; Ralph must surface the terminal instead.
+
 > **TL;DR**: External shell loop → fresh Claude session per task → cross-model review gates → receipt-based proof-of-work → iterate until SHIP.
 >
 > **Which loop do I want?** The default autonomy path is the in-session **pilot + land pipeline** (`/loop 10m /flow-next:pilot` to build, `/loop 30m /flow-next:land` to ship) — zero scaffold, transcript verdicts, host-driven. Reach for Ralph when a run outlasts a session or prose guardrails aren't enough: Ralph owns the loop in a shell script with hook-enforced guardrails. The two are alternative drivers for the same pipeline and are **never nested**. See [Host-driven loop vs Ralph](#host-driven-loop-vs-ralph).
@@ -800,6 +804,7 @@ Ralph guard hooks enforce workflow rules deterministically. They are **not** par
 | Direct `codex` / `copilot` blocked (use `flowctl` wrappers) | Receipt + session continuity |
 | Canonical `FLOW_DELEGATE_CODEX=1 codex exec …` allowlist | fn-55 delegation carve-out only |
 | No `--last` (codex) / no `--continue` (copilot) | Session continuity via receipt `session_id` |
+| No review-counter reset or `--force` review dispatch/increment | Those recovery tools are human-only |
 | `flowctl done` structured success only | Exit code / `--json` status=done / exact completion line (no word sniff) |
 | `flowctl done` requires `--summary-file` + `--evidence-json` | Structured completion |
 | Receipt schema + ordering (`type`/`id`/`verdict`; no write before review) | Honest Ralph gate |

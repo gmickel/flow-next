@@ -30,18 +30,19 @@
         "qa_reference_hash": "8f6119464248d3edb4ca821521e664fe2760589b4aa745745b6c73b5370d2d9f"
       },
       "candidate": {
-        "ready_reached_path_chars": 63039,
-        "backlog_reached_path_chars": 93859,
+        "ready_reached_path_chars": 63132,
+        "backlog_reached_path_chars": 93952,
         "skill_chars": 14621,
         "skill_hash": "92fea8a3889ffaacb677f43517edf361726d668e4eefe357fc65f5356e6849ab",
         "backlog_reference_hash": "248bbc3e8a3cb5dab879b5ff5fa5f941183add59a35187ef24d9948fa043e873",
-        "workflow_hash": "be5bfccdfc65d29876af45c15cf960756743cec6920e297f87cd3347607a0cb4",
+        "workflow_hash": "62cef686fb042ee9ff0d4906499bf3718c3f9024dbc4ad1b63754c1eb842fcd8",
         "qa_reference_hash": "f9d8178edff045d0f6a201df4a5a0ecbfba9cc74378cf7d27f936ae220691cef"
       },
       "improvement": {
-        "ready_reached_path_chars": -1733,
-        "ready_percent": -2.73767021579176,
-        "backlog_reached_path_chars": 1005
+        "ready_reached_path_chars": -170,
+        "ready_percent": -0.268553916147989,
+        "backlog_reached_path_chars": 3530,
+        "note": "fn-159.5 adds the human-only review-counter recovery line to workflow.md (+93 chars on both paths); ready stays below the B1 baseline ratchet."
       },
       "oracles": [
         "ready root retains ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN grammar",

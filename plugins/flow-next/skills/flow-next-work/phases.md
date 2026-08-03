@@ -381,6 +381,9 @@ A host-deferred worker returns with the task still `in_progress` BY DESIGN — t
 4. On `SHIP`: UPDATE the evidence JSON before completing — append the review receipt path + reviewer model, AND when the fix loop committed changes (step 5), add those commits and any test commands run during fixes (the worker's pre-review evidence alone omits exactly the changes that earned the SHIP). Then run `$FLOWCTL done <task-id> --summary-file <worker summary> --evidence-json <updated evidence>` and re-run `$FLOWCTL show` — status is now `done`; continue to 3d.1/plan-sync as normal.
 5. On `NEEDS_WORK`: drive the impl-review fix loop (standard bounded cap); `done` only after a SHIP verdict (whose evidence update in step 4 captures the fix commits). On cap exhaustion: escalate exactly like the failure path below (NEEDS_HUMAN under autonomy; surface and stop interactively).
 
+Review-counter reset and `--force` review dispatch/increment are human-only
+recovery tools; on escalation, surface the terminal rather than using either.
+
 Only after this gate does the standard rule below apply to host-deferred tasks.
 
 If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker failed. Diagnose from ground truth (below) then retry — but **BOUNDED**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). After **2** consecutive non-`done` returns for the *same task* (a worker that keeps aborting early or a persistently red Quick command), STOP retrying and escalate — do NOT respawn unboundedly. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.

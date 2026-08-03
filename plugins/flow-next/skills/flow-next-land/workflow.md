@@ -9,6 +9,9 @@ review is `LAND_VERDICT=NEEDS_HUMAN`. Stop; do not treat it as CI/transport,
 refund it, reset/force it, or redispatch. A human must edit the artifact,
 explicitly reset, or deliberately use `--force`.
 
+Review-counter reset and `--force` review dispatch/increment are human-only
+recovery tools.
+
 ## Preamble
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`:
@@ -350,6 +353,12 @@ fi
 A non-automated login (step 1 fails), a body with no clean phrase (step 2 fails), and a comment whose only SHA is stale or absent (step 3 finds no qualifying token) are ALL ignored — the gate falls through to the unchanged reviews-API result. `AUTO_REVIEW_SOURCE` defaults unset (reviews-API satisfaction) and is set to `comment` only on a comment-driven match; surface `AUTO_REVIEW_SOURCE` + `AUTO_REVIEW_EVIDENCE` (author + matched SHA prefix) in the `--dry-run` classification report and the verdict report so a transcript reader sees WHY the gate passed.
 
 **Draft-PR review trigger (one-shot per head SHA).** Review bots do not auto-review DRAFT PRs (Codex's triggers are open-for-review, draft→ready, or an explicit `@codex review` comment) — and pilot's PRs are born draft, so without a nudge the review wait would dead-end at the no-review `NEEDS_HUMAN`, and a land-authored CI-fix push would go un-re-reviewed. When the PR `isDraft` AND `land.reviewTrigger` is non-empty AND the ledger's `triggerSha` for this PR differs from the current head SHA AND a review nudge is due (`AUTO_REVIEW_CURRENT == 0` — no automated review of the current head): post the trigger (`gh pr comment "$PR_NUMBER" --body "$REVIEW_TRIGGER"`), set `triggerSha: <head-sha>` in the PR's ledger entry (atomic jq+mv; under `--dry-run` report would-trigger instead of posting), and report `AWAITING_REVIEW`, reason `review trigger posted; patience window open`. Keying the marker to the head SHA means each push gets at most one nudge — never a comment loop. The window still anchors to the last push. An empty `land.reviewTrigger` (the default) never posts — the no-review-beyond-window path stays `NEEDS_HUMAN` as below.
+
+Recommended opt-in trigger text: `@codex review — focus on integration effects,
+the diff as narrative, and cross-task regressions. Spec/doc-prose findings are
+welcome as FYI, not merge-gating.` Bot comments are outside the review detector
+and Ralph-guard blast radius; resolve-pr applies the prose-vs-code triage rule
+when handling them.
 
 Signal evaluation (only reached with green CI and `UNRESOLVED == 0`):
 

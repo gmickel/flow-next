@@ -670,11 +670,124 @@ def handle_file_tool_receipt_check(data: dict) -> None:
             )
 
 
+_SHELL_COMMAND_SEPARATORS = frozenset({"|", "||", "&", "&&", ";", "(", ")"})
+_FLOWCTL_PATH_RE = re.compile(r"(?:.*/)?flowctl(?:\.py)?$")
+_REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor"})
+_REVIEW_DISPATCHES = frozenset({"impl-review", "plan-review", "completion-review"})
+
+
+def _tokenize_shell_command(command: str) -> Optional[list[str]]:
+    """Return shell tokens, preserving operators as command boundaries.
+
+    These are guard decisions, so quoted flags must become their real argv
+    tokens rather than matching only as raw command substrings. ``shlex`` is
+    sufficient here because this only identifies each top-level flowctl argv;
+    malformed shell text fails closed for this guard.
+    """
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;()<>")
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        return list(lexer)
+    except ValueError:
+        return None
+
+
+def _is_flowctl_executable(token: str) -> bool:
+    """Recognize direct, path, and variable-backed bundled flowctl launchers."""
+    return token in {"$FLOWCTL", "${FLOWCTL}", "FLOWCTL"} or bool(
+        _FLOWCTL_PATH_RE.fullmatch(token)
+    )
+
+
+def _flowctl_argvs(command: str) -> Optional[list[list[str]]]:
+    """Extract direct flowctl argv vectors from a tokenized shell command."""
+    tokens = _tokenize_shell_command(command)
+    if tokens is None:
+        return None
+
+    commands: list[list[str]] = []
+    start = 0
+    for index, token in enumerate([*tokens, ";"]):
+        if token not in _SHELL_COMMAND_SEPARATORS:
+            continue
+        segment = tokens[start:index]
+        start = index + 1
+        while segment and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", segment[0]):
+            segment.pop(0)
+        # `python3 .flow/bin/flowctl.py …` is the same launcher one hop out.
+        if (
+            len(segment) > 1
+            and re.fullmatch(r"(?:.*/)?python(?:3)?(?:\.\d+)?", segment[0])
+            and _is_flowctl_executable(segment[1])
+        ):
+            segment.pop(0)
+        if segment and _is_flowctl_executable(segment[0]):
+            commands.append(segment[1:])
+    return commands
+
+
+def _unparseable_command_has_recovery_markers(command: str) -> bool:
+    """Raw-text screen used ONLY when the command cannot be tokenized.
+
+    Valid bash can defeat ``shlex`` (a heredoc body with an odd apostrophe
+    count, say), and blocking every unparseable command would break ordinary
+    Ralph prose-bearing writes. Instead the forbidden verbs stay fail-closed
+    on a marker co-occurrence screen while everything else passes.
+    """
+    if re.search(r"reset-review-rounds", command):
+        return True
+    if re.search(r"review-rounds\s+['\"]?reset\b", command):
+        return True
+    # (?![\w-]) so `--force-with-lease` — a different, legitimate flag — never
+    # trips the screen.
+    if re.search(r"--force(?![\w-])", command) and re.search(
+        r"review-rounds\s+['\"]?increment\b|impl-review|plan-review|completion-review",
+        command,
+    ):
+        return True
+    return False
+
+
+def _blocks_review_counter_recovery(command: str) -> bool:
+    """Return whether tokenized argv invokes a human-only review escape hatch."""
+    flowctl_argvs = _flowctl_argvs(command)
+    if flowctl_argvs is None:
+        # Unparseable shell text cannot be classified as argv. Fall back to a
+        # conservative marker screen: the forbidden verbs stay fail-closed,
+        # ordinary unbalanced-quote prose (heredoc summaries etc.) passes.
+        return _unparseable_command_has_recovery_markers(command)
+
+    for argv in flowctl_argvs:
+        if argv[:2] == ["spec", "reset-review-rounds"]:
+            return True
+        if argv[:2] == ["review-rounds", "reset"]:
+            return True
+        if "--force" not in argv:
+            continue
+        if argv[:2] == ["review-rounds", "increment"]:
+            return True
+        if argv and argv[0] in _REVIEW_BACKENDS and any(
+            token in _REVIEW_DISPATCHES for token in argv[1:]
+        ):
+            return True
+    return False
+
+
 def handle_pre_tool_use(data: dict) -> None:
     """Handle PreToolUse event - validate commands before execution."""
     tool_input = data.get("tool_input", {})
     command = tool_input.get("command", "")
     session_id = data.get("session_id", "unknown")
+
+    # fn-159 R9: SHIP resets inside ``review-rounds record``; these explicit
+    # resets and forced review dispatches are human-only recovery tools. Match
+    # argv tokens, not raw substrings, so quoting/spacing cannot evade the gate.
+    if _blocks_review_counter_recovery(command):
+        output_block(
+            "BLOCKED: review-counter reset and --force review dispatch/increment are "
+            "human-only recovery tools. Ralph must surface the terminal instead."
+        )
 
     # Check for chat-send commands
     if "chat-send" in command:

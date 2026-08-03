@@ -43,9 +43,8 @@ Per-surface blocking calibration in the three review prompts (outcome-anchored P
 ## Acceptance
 - [ ] R5, R6 satisfied; parity suite rebaselined deliberately (rationale + token counts), never blindly
 ## Done summary
-TBD
-
+Per-surface review blocking calibration across all hash-pinned prompts in one pass: plan prompt gains outcome-anchored P0-P3 severities, the verbatim impl confidence gate (suppression before the ratchet contract), the name-the-bad-outcome blocking rule and the fn-153/fn-156 worked example; completion inherits the severity definitions; impl gains the settled-plan (Decision Context) FYI clause; all four templates + byte-parity fallbacks + ralph-init prompt_{plan,work,completion}.md gain the NEEDS_HUMAN verdict grammar + guidance; plan-kind ratchet rule 2 tightened in build_convergence_ratchet_block (review_type threaded through cursor fitting/rereview). Parity/pin/fixture/token-evidence deliberately rebaselined once via a committed generator (schema v2, baseline dc74a6c7, tiktoken, +310/+308 max delta budget); commit message carries rationale + before/after token counts.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 698d3e0c5d7bb5588eb23e3df98155850ba3e9fb
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity -q), cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity test_tracker_distribution -q (222 passed), cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_template_parity test_review_prompt_constraints test_prompt_text_pinned -q (37 passed), python3 scripts/run_tests_parallel.py (3977 ran, 0 failures, 0 errors, 4 skipped), uvx ruff@0.16.0 check . (clean), ./scripts/sync-codex.sh x2 (idempotent)
 - PRs:

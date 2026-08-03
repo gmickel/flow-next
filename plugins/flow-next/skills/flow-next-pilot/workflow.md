@@ -10,6 +10,9 @@ When a delegated plan, implementation, or completion review exits `1` with
 artifact, explicit reset, or deliberate `--force`), never a retry/transport
 refund, autonomous reset/force, or redispatch.
 
+Review-counter reset and `--force` review dispatch/increment are human-only
+recovery tools.
+
 ## Preamble
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`:

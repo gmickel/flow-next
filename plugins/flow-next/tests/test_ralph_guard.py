@@ -172,6 +172,86 @@ class NeedsHumanReceiptVerdictTestCase(unittest.TestCase):
         self.assertEqual(source.count("MAJOR_RETHINK|NEEDS_HUMAN"), 3)
 
 
+class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
+    """fn-159.5: real PreToolUse hook blocks human-only review escapes."""
+
+    def _hook(self, command: str) -> subprocess.CompletedProcess:
+        return _drive_hook(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": "review-counter-recovery",
+                "tool_input": {"command": command},
+            }
+        )
+
+    def test_blocks_spec_reset_review_rounds(self) -> None:
+        proc = self._hook("flowctl spec reset-review-rounds fn-159")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_review_rounds_reset(self) -> None:
+        proc = self._hook(".flow/bin/flowctl review-rounds reset fn-159 --kind plan")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_force_on_review_dispatch(self) -> None:
+        proc = self._hook("$FLOWCTL codex impl-review fn-159.5 --base main --force")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_force_on_review_rounds_increment(self) -> None:
+        proc = self._hook(
+            "$FLOWCTL review-rounds increment fn-159 --kind plan --force"
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_quoted_and_spaced_reset_bypass(self) -> None:
+        proc = self._hook('FLOWCTL=.flow/bin/flowctl "$FLOWCTL" spec "reset-review-rounds" fn-159')
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_spaced_force_bypass(self) -> None:
+        proc = self._hook("flowctl review-rounds increment fn-159 --kind plan \"--force\"")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_python_launcher_reset_bypass(self) -> None:
+        proc = self._hook("python3 .flow/bin/flowctl.py spec reset-review-rounds fn-159")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_unparseable_prose_heredoc_is_allowed(self) -> None:
+        # Odd apostrophe count -> shlex ValueError. Ordinary Ralph prose writes
+        # (summaries, receipts) must NOT be blocked wholesale on parse failure.
+        proc = self._hook(
+            "cat > /tmp/summary.md << 'MD'\nIt doesn't gate merges.\nMD"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_unparseable_command_with_reset_marker_blocked(self) -> None:
+        # Same parse failure, but the forbidden verb is present -> fail closed.
+        proc = self._hook(
+            "cat > /tmp/x << 'MD'\nDon't\nMD\nflowctl review-rounds reset fn-159 --kind plan"
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_force_with_lease_push_is_allowed(self) -> None:
+        proc = self._hook("git push --force-with-lease origin fn-159")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_ship_flow_record_is_allowed_with_blocks_active(self) -> None:
+        # fn-159.1 moved SHIP's reset into record, so this ordinary SHIP fence
+        # must pass while reset/force blocks are active.
+        proc = self._hook(
+            "$FLOWCTL review-rounds record fn-159 --kind plan --review-type plan "
+            "--backend rp --output-file /tmp/review.txt --reservation-id r1"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
 class DebugLogGatingTestCase(unittest.TestCase):
     def test_no_debug_log_without_env(self) -> None:
         with tempfile.TemporaryDirectory() as td:
