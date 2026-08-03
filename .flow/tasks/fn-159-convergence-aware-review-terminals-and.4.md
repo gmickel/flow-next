@@ -23,7 +23,8 @@ Per-surface blocking calibration in the three review prompts (outcome-anchored P
 - `plugins/flow-next/tests/test_review_prompt_template_parity.py` — FULL read: every invariant, fixture, size assertion
 - `plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md` — full read
 - `plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md` — gate block + clause placement
-- `plugins/flow-next/scripts/flowctl.py:8478-8900, 9598-9660` — rubric blocks, fallbacks, ratchet rule text
+- `plugins/flow-next/scripts/flowctl.py:8478-8900` — rubric blocks, fallbacks
+- `plugins/flow-next/scripts/flowctl.py:10471-10536` — `build_convergence_ratchet_block` ratchet rule text <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.7 landed the hash guard before the cap branch, shifting this region forward (was :9598-9660 pre-.1) -->
 - `plugins/flow-next/agents/pr-comment-resolver.md:60-75`
 
 **Optional:**

@@ -121,7 +121,9 @@ Give the subagent:
   `.flow/criteria.md` before re-running the review)
 - Task list + evidence that work claims done
 - Diff / implementation surfaces to check compliance (not code-quality taste — that is impl-review)
-- Prior findings for convergence (on re-review)
+- Prior findings for convergence as structured `findings.items` (on re-review; render
+  ordinal, severity, classification, status, title, and file:line; use legacy
+  review prose only when the structured field is absent)
 - For every gap: Severity, Confidence `0|25|50|75|100`, and Classification
   `introduced|pre_existing`
 - Required exact verdict tags: `<verdict>SHIP</verdict>` /

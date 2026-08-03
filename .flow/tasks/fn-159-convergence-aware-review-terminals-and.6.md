@@ -11,7 +11,7 @@ Docs, CHANGELOG, STRATEGY.md sentence, propagation, codex sync, full gate, and t
 
 ### Approach
 - CHANGELOG `## Unreleased`: expand the existing 4→8 draft entry to cover the full fn-159 story, user-outcome-first per agent_docs/releasing.md (converging loops stop wasting rounds; stuck loops escalate early; reviewers can hand a judgment call to a human; plan reviews stop blocking on outcome-free prose). No version bump (batched-release rule).
-- flowctl.md: hash-guard + NOT_RETRYABLE stanza + --force in the review-rounds section; stall rules + both new ESCALATE variants + NEEDS_HUMAN in the deterministic-cap section; verdict grammar mentions; land.reviewTrigger row already updated in .5 — verify.
+- flowctl.md: hash-guard + NOT_RETRYABLE stanza + --force in the review-rounds section; the `review-artifact` CLI verb (domain-separated blob builders) and the side-effect-free `rp mode-probe` command landed by .7 — document both in the review-rounds/CLI reference section; stall rules + both new ESCALATE variants + NEEDS_HUMAN in the deterministic-cap section; verdict grammar mentions; land.reviewTrigger row already updated in .5 — verify. <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.7 landed the review-artifact CLI + rp mode-probe, not yet documented anywhere -->
 - ralph.md: cap section notes stall/NEEDS_HUMAN escalation routes; guard table row from .5 — verify; verdict enum note matches ralph-guard.
 - troubleshooting.md: NOT_RETRYABLE entry (distinct from cap ESCALATE); ratchet description now structured-findings; reset runbook gains human-only caveat.
 - review-findings.md: consumer note — flowctl's detector/ratchet now read findings.items (fn-159).

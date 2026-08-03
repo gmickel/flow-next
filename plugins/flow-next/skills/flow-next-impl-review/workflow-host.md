@@ -107,7 +107,9 @@ Give the subagent:
 - The impl-review rubric ([references/impl-review-prompt.md](references/impl-review-prompt.md))
 - Diff scope (`--base` / branch vs main as resolved in Phase 0)
 - Task id / focus areas if any
-- Prior findings for convergence (on re-review)
+- Prior findings for convergence as structured `findings.items` (on re-review; render
+  ordinal, severity, classification, status, title, and file:line; use legacy
+  review prose only when the structured field is absent)
 - Required verdict tags: `SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`
 
 Wait for the subagent result (blocking — do not background).

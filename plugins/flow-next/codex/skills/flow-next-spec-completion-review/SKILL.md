@@ -322,6 +322,10 @@ not invent a `needs_work` write. More than
 separately with `TRANSPORT_UNHEALTHY` + exit 5; never write completion status or
 reset the verdict counter for transport health.
 
+**Unchanged-artifact terminal:** `NOT_RETRYABLE: artifact unchanged since last verdict` exits `1` before dispatch. Stop for human action; never refund, reset,
+use `--force`, or redispatch autonomously. A human may edit the exact artifact,
+explicitly reset, or deliberately apply `--force`.
+
 **ANTI-PATTERN (never do either):** (1) a delivered verdict is never a
 transport failure. Once flowctl parses `VERDICT=...` the round is consumed and
 recorded; do not re-dispatch or re-frame a `NEEDS_WORK` as a backend/sandbox

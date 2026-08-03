@@ -1186,6 +1186,20 @@ Violations break automation and leave the user with incomplete work. Be precise,
 
   log "claude rc=$claude_rc log=$iter_log"
 
+  # A hash-guard refusal is not a transient missing-receipt or transport
+  # failure. Stop before the receipt checks can convert it into a retry loop.
+  # Content-matched only: flowctl exits 1 inside the session, so the session
+  # itself routinely exits 0 with the marker in its log. Gating on rc would
+  # miss exactly the common case.
+  if grep -Fq "NOT_RETRYABLE: artifact unchanged since last verdict" "$iter_log"; then
+    reason="review artifact unchanged since last verdict; human must edit it, explicitly reset, or deliberately use --force"
+    log "review no-repeat terminal: $reason"
+    append_progress "NEEDS_HUMAN" "" "" "" ""
+    ui_fail "NEEDS_HUMAN: $reason"
+    write_completion_marker "NEEDS_HUMAN: review no-repeat terminal"
+    exit 1
+  fi
+
   force_retry=$worker_timeout
   plan_review_status=""
   task_status=""

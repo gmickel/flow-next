@@ -2,6 +2,14 @@
 
 Execute these phases in order. One invocation advances at most one selected spec by one pipeline stage and ends with the terminal verdict line.
 
+## Review no-repeat terminal
+
+When a delegated plan, implementation, or completion review exits `1` with
+`NOT_RETRYABLE: artifact unchanged since last verdict`, emit
+`PILOT_VERDICT=NEEDS_HUMAN` and stop this tick. It is human action (edit the
+artifact, explicit reset, or deliberate `--force`), never a retry/transport
+refund, autonomous reset/force, or redispatch.
+
 ## Preamble
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`:

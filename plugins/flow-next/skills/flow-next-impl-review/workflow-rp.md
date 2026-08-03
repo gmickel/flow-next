@@ -522,14 +522,19 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   # never re-derive). Standalone branch review has no spec state and therefore
   # no reservation, so it keeps the direct attach.
   if [[ -n "$TASK_ID" ]]; then
-    ATTACH_ARGS=(--reservation-id "$RESERVATION_ID" --receipt "$REVIEW_RECEIPT_PATH")
+    if ! "$FLOWCTL" review-findings attach \
+      --reservation-id "$RESERVATION_ID" \
+      --receipt "$REVIEW_RECEIPT_PATH" --json >/dev/null; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
   else
     ATTACH_ARGS=(--input "$RECEIPT_INPUT" --receipt "$REVIEW_RECEIPT_PATH"
       --review-file "$RESPONSE_FILE" --base "$REVIEW_BASE_SHA" --head "$REVIEW_HEAD_SHA")
-  fi
-  if ! "$FLOWCTL" review-findings attach "${ATTACH_ARGS[@]}" --json >/dev/null; then
-    echo "<promise>RETRY</promise>"
-    exit 0
+    if ! "$FLOWCTL" review-findings attach "${ATTACH_ARGS[@]}" --json >/dev/null; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
   fi
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi

@@ -301,6 +301,11 @@ the verdict counter. This loop is internal; callers invoke impl-review once.
 The counter resets only on SHIP or explicit re-plan, never on an edit, fresh
 invocation, or transport failure.**
 
+**Unchanged-artifact terminal:** `NOT_RETRYABLE: artifact unchanged since last verdict` exits `1` before a review is sent. It is a human-action terminal:
+autonomous loops must stop without refunding, resetting, adding `--force`, or
+redispatching. The human may edit the artifact, explicitly reset, or choose a
+deliberate `--force` dispatch.
+
 **ANTI-PATTERN (never do either):**
 1. **A delivered verdict is never a transport failure.** Once flowctl parses
  `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`, the round is consumed and the

@@ -23,9 +23,9 @@ Build the deterministic stall detector on spec-state findings digests (persisted
 
 ### Investigation targets
 **Required:**
-- `plugins/flow-next/scripts/flowctl.py:9670-10062` — record path where the digest is built (post-.1 shape: `_record_review_attempt_locked`, `_complete_review_journal`, `review_replay_terminal_verdict`)
+- `plugins/flow-next/scripts/flowctl.py:9454-10083` — record path where the digest is built (`_complete_review_journal` :9454, `_record_review_attempt_locked` :9681, `review_replay_terminal_verdict` :10073)
 - `plugins/flow-next/scripts/flowctl.py:5322-5450, 5783-5900` — findings validator + container shape (unaffected by .1's line shift, not yet re-verified)
-- `plugins/flow-next/scripts/flowctl.py:10335-10429` — `_read_prior_findings` (:10335) and `build_convergence_ratchet_block` (:10386, still prose-blob-only signature — `prior_findings: Optional[str]` — pre-.2), rereview preamble <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.1 shifted this region ~788 lines forward (was :9547-9700); anchors corrected -->
+- `plugins/flow-next/scripts/flowctl.py:10420-10536` — `_read_prior_findings` (:10420) and `build_convergence_ratchet_block` (:10471, still prose-blob-only signature — `prior_findings: Optional[str]` — pre-.2), rereview preamble <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.7 landed the hash guard + reservation dict before the cap branch, shifting this region ~85 lines further forward (was :10335-10429 post-.1); anchors corrected -->
 - `plugins/flow-next/tests/test_review_convergence_cap.py:84` — TestConvergenceRatchet conventions
 
 **Optional:**

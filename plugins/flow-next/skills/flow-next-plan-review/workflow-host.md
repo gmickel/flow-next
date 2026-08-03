@@ -74,8 +74,10 @@ retain that literal through receipt writing.
 | Grok | host pin + tool-enforced read-only; same-family writer fails closed |
 | Other | fresh context; record that pin enforcement is host-dependent |
 
-Give it the current spec, all task specs, prior findings on re-review, focus
-areas, and the plan-review rubric from
+Give it the current spec, all task specs, and on re-review the receipt's
+structured `findings.items` (ordinal, severity, classification, status, title,
+and file:line) rather than the legacy review prose. Include focus areas and the
+plan-review rubric from
 [references/plan-review-prompt.md](references/plan-review-prompt.md). Require
 exactly one `SHIP`, `NEEDS_WORK`, or `MAJOR_RETHINK` verdict tag. Wait
 blocking for the result.

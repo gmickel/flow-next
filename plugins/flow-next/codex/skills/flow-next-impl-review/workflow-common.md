@@ -1,5 +1,12 @@
 # Implementation Review Workflow — Common
 
+## Unchanged-artifact terminal
+
+`NOT_RETRYABLE: artifact unchanged since last verdict` plus exit `1` is a
+human-action terminal, not a transport error. Stop the autonomous flow; never
+refund, reset, use `--force`, or redispatch. The human path is edit the exact
+artifact, explicitly reset, or deliberately use `--force`.
+
 ## Philosophy
 
 The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex, Copilot, and Cursor use context hints from flowctl (codex/copilot/cursor backends).
