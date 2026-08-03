@@ -804,7 +804,7 @@ Ralph guard hooks enforce workflow rules deterministically. They are **not** par
 | Direct `codex` / `copilot` blocked (use `flowctl` wrappers) | Receipt + session continuity |
 | Canonical `FLOW_DELEGATE_CODEX=1 codex exec …` allowlist | fn-55 delegation carve-out only |
 | No `--last` (codex) / no `--continue` (copilot) | Session continuity via receipt `session_id` |
-| No review-counter reset or `--force` review dispatch/increment | Those recovery tools are human-only |
+| No review-counter reset or `--force` review dispatch/increment | Those recovery tools are human-only (wrappers — `sh -c`, `eval`, `timeout`, `env`, `xargs` — are unwrapped, not trusted) |
 | `flowctl done` structured success only | Exit code / `--json` status=done / exact completion line (no word sniff) |
 | `flowctl done` requires `--summary-file` + `--evidence-json` | Structured completion |
 | Receipt schema + ordering (`type`/`id`/`verdict`; no write before review) | Honest Ralph gate |
@@ -812,6 +812,8 @@ Ralph guard hooks enforce workflow rules deterministically. They are **not** par
 | Bash **and** file tools block receipt-path writes pre-review | Close Edit/Write/Create/ApplyPatch bypass |
 | File tools on protected workflow files blocked | Ralph must not self-modify guard/flowctl/hooks |
 | Dual-platform tool names | Shell: `Bash`\|`Execute`; files: `Edit`\|`Write`\|`Create`\|`ApplyPatch` |
+
+**Marker screen (review-counter row).** The counter-recovery rule also runs a raw-text screen on every shell command, so a command that merely *mentions* the guarded verbs — a heredoc summary or prose containing `reset-review-rounds`, `review-rounds reset`, or `--force` next to a review dispatch — trips the block even though it executes nothing. That is deliberate: it is the floor that catches wrappers the argv parser cannot model. Write the text with the file tool (`Write`/`Edit`) instead of a shell heredoc and the block clears.
 
 **Where it lives (after ralph-init):**
 

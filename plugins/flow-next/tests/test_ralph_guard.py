@@ -222,6 +222,46 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_sh_dash_c_wrapper_bypass(self) -> None:
+        proc = self._hook('sh -c "flowctl spec reset-review-rounds fn-159"')
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_bash_dash_c_wrapper_bypass(self) -> None:
+        proc = self._hook("bash -c 'flowctl review-rounds reset fn-159 --kind plan'")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_eval_wrapper_bypass(self) -> None:
+        proc = self._hook('eval "flowctl spec reset-review-rounds fn"')
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_timeout_wrapper_bypass(self) -> None:
+        proc = self._hook("timeout 60 flowctl spec reset-review-rounds fn-159")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_env_wrapper_bypass(self) -> None:
+        proc = self._hook("env FOO=1 flowctl spec reset-review-rounds fn-159")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_xargs_wrapper_bypass(self) -> None:
+        proc = self._hook("xargs -I{} flowctl spec reset-review-rounds {} </tmp/ids")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_wrapped_ship_flow_record_is_allowed(self) -> None:
+        # Wrapper unwrapping must not widen the block: `review-rounds record`
+        # is the system-owned SHIP reset and stays allowed under a wrapper.
+        proc = self._hook(
+            "timeout 60 sh -c \"$FLOWCTL review-rounds record fn-159 --kind plan "
+            "--review-type plan --backend rp --output-file /tmp/review.txt "
+            '--reservation-id r1"'
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_unparseable_prose_heredoc_is_allowed(self) -> None:
         # Odd apostrophe count -> shlex ValueError. Ordinary Ralph prose writes
         # (summaries, receipts) must NOT be blocked wholesale on parse failure.
