@@ -124,9 +124,9 @@ printf '%s\n' "$RECORD_JSON"
 It reads any prior receipt before atomic replacement, carries only valid
 same-backend plan lineage, and adds no reviewer/model/network call.
 
-`record` owns plan status and the SHIP counter reset. Carry the verdict directly
-into SKILL.md's shared Fix Loop; an `ESCALATE:` or `NOT_RETRYABLE:` fence exit
-never becomes a transport refund.
+`record` owns plan status and the SHIP counter reset.
+Carry the verdict directly into SKILL.md's shared Fix Loop; an `ESCALATE:` or
+`NOT_RETRYABLE:` fence exit never becomes a transport refund.
 
 ## Anti-patterns
 

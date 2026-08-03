@@ -1188,7 +1188,10 @@ Violations break automation and leave the user with incomplete work. Be precise,
 
   # A hash-guard refusal is not a transient missing-receipt or transport
   # failure. Stop before the receipt checks can convert it into a retry loop.
-  if [[ "$claude_rc" -eq 1 ]] && grep -Fq "NOT_RETRYABLE: artifact unchanged since last verdict" "$iter_log"; then
+  # Content-matched only: flowctl exits 1 inside the session, so the session
+  # itself routinely exits 0 with the marker in its log. Gating on rc would
+  # miss exactly the common case.
+  if grep -Fq "NOT_RETRYABLE: artifact unchanged since last verdict" "$iter_log"; then
     reason="review artifact unchanged since last verdict; human must edit it, explicitly reset, or deliberately use --force"
     log "review no-repeat terminal: $reason"
     append_progress "NEEDS_HUMAN" "" "" "" ""

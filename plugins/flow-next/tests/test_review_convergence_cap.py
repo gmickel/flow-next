@@ -2054,6 +2054,33 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         self.assertEqual(len(self._data()["review_attempts"]), 1)
         self.assertEqual(self._data()["plan_review_rounds"], 1)
 
+    def test_baseline_ignores_the_other_review_type_on_the_shared_counter(self):
+        """fn-159.7 review r1: plan and completion share the plan counter, so
+        an interleaved completion row must not become the plan baseline."""
+        plan_artifact = flowctl._review_artifact_sha256(
+            flowctl.build_plan_review_artifact_blob("spec", "tasks")
+        )
+        completion_artifact = flowctl._review_artifact_sha256(
+            flowctl.build_completion_review_artifact_blob(
+                "spec", "tasks", "diff", ""
+            )
+        )
+        self._reserve_and_record(plan_artifact, review_type="plan")
+        self._reserve_and_record(completion_artifact, review_type="completion")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.enforce_and_increment_review_cap(
+                    self.spec_id, "plan", artifact_sha256=plan_artifact,
+                    review_type="plan", return_reservation=True,
+                )
+        self.assertEqual(exc.exception.code, 1)
+        self.assertEqual(
+            err.getvalue().strip(),
+            "NOT_RETRYABLE: artifact unchanged since last verdict",
+        )
+        self.assertEqual(len(self._data()["review_attempts"]), 2)
+
     def test_reset_allows_clean_redispatch_without_force(self):
         artifact = flowctl._review_artifact_sha256(
             flowctl.build_plan_review_artifact_blob("spec", "tasks")
@@ -2514,6 +2541,29 @@ class TestRpRecorderFailureFences(unittest.TestCase):
                 "RP_MODE=classic W=1 T=classic-tab\n",
                 encoding="utf-8",
             )
+            # fn-159.7 review r1: the fences bind their snapshot anchors before
+            # hashing and read the dispatch result from disk, so the fixture
+            # must supply both (an empty base..head range is legal here).
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=REPO, capture_output=True, text=True, check=True,
+            ).stdout.strip()
+            (temp / "flow-plan-review-snapshot-fn-1-test.env").write_text(
+                f"REVIEW_HEAD_SHA={head}\n", encoding="utf-8",
+            )
+            (temp / "flow-impl-review-snapshot-fn-1-1-test.env").write_text(
+                f"REVIEW_HEAD_SHA={head}\nREVIEW_BASE_SHA={head}\n",
+                encoding="utf-8",
+            )
+            (temp / "flow-impl-review-dispatch-result-fn-1-1-test.env").write_text(
+                "RP_EXIT=0\nVERDICT=SHIP\n", encoding="utf-8",
+            )
+            (temp / "flow-impl-review-reservation-fn-1-1-test.json").write_text(
+                '{"reservation_id":"reservation-test"}', encoding="utf-8",
+            )
+            (temp / "flow-impl-review-response-fn-1-1-test.md").write_text(
+                "<verdict>SHIP</verdict>\n", encoding="utf-8",
+            )
             env = os.environ.copy()
             env.update(
                 {
@@ -2545,7 +2595,7 @@ class TestRpRecorderFailureFences(unittest.TestCase):
     def test_impl_rp_recorder_failure_precedes_verdict_echo(self):
         result = self._run_fence(
             "flow-next-impl-review/workflow-rp.md",
-            "Redirect the review response to the literal response file",
+            "This is the single recorder fence",
             task_id="fn-1.1",
         )
         self.assertEqual(
@@ -2557,12 +2607,142 @@ class TestRpRecorderFailureFences(unittest.TestCase):
     def test_impl_standalone_review_keeps_no_recorder_path(self):
         result = self._run_fence(
             "flow-next-impl-review/workflow-rp.md",
-            "Redirect the review response to the literal response file",
+            "This is the single recorder fence",
         )
         self.assertEqual(
             result.returncode, 0, result.stdout + result.stderr
         )
         self.assertIn("VERDICT=SHIP", result.stdout)
+
+
+class TestExecutableFenceChain(unittest.TestCase):
+    """fn-159.7 review r1: run the real fence chain, not just its prose.
+
+    The prose fences hash a diff produced from snapshot anchors. Unbound
+    anchors used to hash an empty blob and falsely refuse round 2, and no test
+    executed the chain end to end. This one does: build → increment → record →
+    refuse on unchanged → pass after a real edit.
+    """
+
+    SPEC_ID = "fn-1-demo"
+    TASK_ID = "fn-1-demo.1"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        flow = self.root / ".flow"
+        (flow / "specs").mkdir(parents=True)
+        (flow / "tasks").mkdir(parents=True)
+        (flow / "specs" / f"{self.SPEC_ID}.json").write_text(
+            json.dumps({
+                "id": self.SPEC_ID, "title": "Demo", "status": "in_progress",
+                "tasks": [{"id": self.TASK_ID, "title": "T", "status": "in_progress"}],
+            })
+        )
+        (flow / "specs" / f"{self.SPEC_ID}.md").write_text("# Demo\n")
+        (flow / "tasks" / f"{self.TASK_ID}.md").write_text("# T\n")
+        self.source = self.root / "app.py"
+        self.source.write_text("value = 1\n")
+        env = {**os.environ, "GIT_CONFIG_GLOBAL": "/dev/null"}
+        for argv in (
+            ["git", "init", "-q"],
+            ["git", "config", "user.email", "t@example.com"],
+            ["git", "config", "user.name", "T"],
+            ["git", "add", "-A"],
+            ["git", "commit", "-qm", "base"],
+        ):
+            subprocess.run(argv, cwd=self.root, check=True, env=env)
+        self.base_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.root,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        self.git_env = env
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _flowctl(self, *argv: str) -> "subprocess.CompletedProcess[str]":
+        env = dict(os.environ)
+        env.pop("MAX_REVIEW_ITERATIONS", None)
+        return subprocess.run(
+            [sys.executable, str(FLOWCTL_PY), *argv],
+            cwd=self.root, env=env, capture_output=True, text=True,
+        )
+
+    def _build_artifact(self) -> Path:
+        """Exactly what the fences do: snapshot → diff → review-artifact."""
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.root,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        diff_file = self.root / "dispatch.diff"
+        diff = subprocess.run(
+            ["git", "diff", f"{self.base_sha}..{head}"], cwd=self.root,
+            capture_output=True, text=True, check=True,
+        ).stdout
+        diff_file.write_text(diff)
+        blob = self.root / "artifact.blob"
+        built = self._flowctl(
+            "review-artifact", "impl", self.SPEC_ID,
+            "--diff-file", str(diff_file), "--output", str(blob), "--json",
+        )
+        self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
+        return blob
+
+    def _increment(self, blob: Path) -> "subprocess.CompletedProcess[str]":
+        return self._flowctl(
+            "review-rounds", "increment", self.SPEC_ID, "--kind", "impl",
+            "--task", self.TASK_ID, "--review-type", "impl",
+            "--artifact-file", str(blob), "--json",
+        )
+
+    def _commit(self, text: str) -> None:
+        self.source.write_text(text)
+        subprocess.run(
+            ["git", "commit", "-qam", "edit"], cwd=self.root, check=True,
+            env=self.git_env,
+        )
+
+    def test_chain_refuses_unchanged_artifact_and_passes_after_an_edit(self):
+        self._commit("value = 2\n")
+        blob = self._build_artifact()
+        first = self._increment(blob)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        reservation_id = json.loads(first.stdout)["reservation_id"]
+
+        response = self.root / "response.md"
+        response.write_text("<verdict>NEEDS_WORK</verdict>\n")
+        recorded = self._flowctl(
+            "review-rounds", "record", self.SPEC_ID, "--kind", "impl",
+            "--task", self.TASK_ID, "--review-type", "impl", "--backend", "rp",
+            "--output-file", str(response),
+            "--reservation-id", reservation_id, "--json",
+        )
+        self.assertEqual(recorded.returncode, 0, recorded.stdout + recorded.stderr)
+
+        repeat = self._increment(self._build_artifact())
+        self.assertEqual(repeat.returncode, 1, repeat.stdout + repeat.stderr)
+        self.assertIn(
+            "NOT_RETRYABLE: artifact unchanged since last verdict",
+            repeat.stdout + repeat.stderr,
+        )
+
+        self._commit("value = 3\n")
+        after_fix = self._increment(self._build_artifact())
+        self.assertEqual(
+            after_fix.returncode, 0, after_fix.stdout + after_fix.stderr
+        )
+        self.assertIn("reservation_id", json.loads(after_fix.stdout))
+
+    def test_chain_hashes_the_diff_not_an_empty_blob(self):
+        """An unbound-anchor fence would hash the same empty diff every round;
+        two genuinely different trees must produce different artifacts."""
+        self._commit("value = 2\n")
+        first = self._build_artifact().read_bytes()
+        self._commit("value = 3\n")
+        second = self._build_artifact().read_bytes()
+        self.assertNotEqual(first, second)
+        self.assertIn(b"value = 3", second)
 
 
 class TestReviewedHeadShaBinding(TestCombinedFinalizeWrite):

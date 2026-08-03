@@ -29,7 +29,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Iterator
-from contextlib import contextmanager, redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stdout
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -6227,8 +6227,111 @@ def load_review_receipt_generations(receipt_path: Path) -> Optional[list[dict]]:
     return receipts or None
 
 
+def _attach_publish_from_journal(args: argparse.Namespace) -> None:
+    """fn-159 round 8: publish the journaled payload by reservation id.
+
+    Container construction ownership is SINGULAR — `review-rounds record`
+    constructed and journaled the exact receipt operation (including the
+    validated findings container) before consuming the reservation. This path
+    only validates and publishes that journaled payload; it never re-derives
+    from the reviewer response. Lock order: RECEIPT before SIDECAR, held
+    through sidecar mutation and receipt publication.
+    """
+    reservation_id = args.reservation_id
+    flow_dir = get_flow_dir()
+    try:
+        journal_path = _review_journal_path(flow_dir, reservation_id)
+    except ValueError:
+        error_exit(
+            f"invalid reservation id: {reservation_id}",
+            use_json=args.json, code=2,
+        )
+    try:
+        journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        error_exit(
+            f"no finalization journal for reservation {reservation_id}",
+            use_json=args.json, code=2,
+        )
+    except (OSError, ValueError, TypeError) as exc:
+        error_exit(
+            f"unreadable finalization journal for {reservation_id}: {exc}",
+            use_json=args.json, code=2,
+        )
+    if not isinstance(journal, dict) or journal.get("reservation_id") != reservation_id:
+        error_exit(
+            f"finalization journal does not match reservation {reservation_id}",
+            use_json=args.json, code=2,
+        )
+    receipt_target = journal.get("receipt_target")
+    payload = _review_journal_receipt_payload(journal)
+    if not isinstance(receipt_target, str) or payload is None:
+        error_exit(
+            f"journal for {reservation_id} carries no receipt operation",
+            use_json=args.json, code=2,
+        )
+    if args.receipt and Path(args.receipt) != Path(receipt_target):
+        error_exit(
+            "receipt path does not match the journaled receipt target",
+            use_json=args.json, code=2,
+        )
+    spec_id = journal.get("spec_id")
+    if not isinstance(spec_id, str) or not spec_id:
+        error_exit(
+            f"journal for {reservation_id} carries no spec id",
+            use_json=args.json, code=2,
+        )
+    with _review_two_resource_lock(flow_dir, spec_id, [Path(receipt_target)]):
+        spec_json_path = find_spec_json_path(flow_dir, spec_id)
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=args.json)
+        )
+        attempts = spec_data.get("review_attempts")
+        matching = [
+            row for row in (attempts if isinstance(attempts, list) else [])
+            if isinstance(row, dict) and row.get("reservation_id") == reservation_id
+        ]
+        if len(matching) != 1:
+            error_exit(
+                f"expected exactly one finalized attempt for reservation "
+                f"{reservation_id}; found {len(matching)} — zero mutation",
+                use_json=args.json, code=2,
+            )
+        if not _complete_review_journal(
+            flow_dir, journal_path, journal, spec_data=spec_data
+        ):
+            error_exit(
+                f"journal for {reservation_id} could not be completed",
+                use_json=args.json, code=2,
+            )
+        matching[0]["finalized"] = dict(_journal_progress(journal))
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
+    result = {
+        "success": True,
+        "receipt": receipt_target,
+        "reservation_id": reservation_id,
+        "findings_attached": isinstance(journal.get("findings_container"), dict),
+        "published_from_journal": True,
+    }
+    if args.json:
+        json_output(result)
+    else:
+        print(f"review receipt published from journal: {receipt_target}")
+
+
 def cmd_review_findings_attach(args: argparse.Namespace) -> None:
     """Atomically attach parsed findings and advance a direct-writer receipt."""
+    if getattr(args, "reservation_id", None):
+        _attach_publish_from_journal(args)
+        return
+    if not args.input or not args.review_file:
+        error_exit(
+            "review-findings attach requires --input and --review-file "
+            "unless --reservation-id is supplied",
+            use_json=args.json,
+            code=2,
+        )
     try:
         input_path = Path(args.input)
         receipt_path = Path(args.receipt)
@@ -9215,6 +9318,219 @@ def _review_counter_scope(review_kind: str, task_id: Optional[str]) -> str:
     return f"impl:{task_id}" if review_kind == "impl" and task_id else "plan"
 
 
+def _review_sidecar_lock_path(flow_dir: Path, spec_id: str) -> Path:
+    """One lock for every review-round transition for a spec.
+
+    Receipt writers take their receipt lock before calling into this state
+    machine.  Keeping the sidecar lock separate makes that lock order explicit:
+    receipt lock, then this lock; never the reverse.
+    """
+    digest = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()
+    return flow_dir / "locks" / f"review-rounds-{digest}.lock"
+
+
+@contextmanager
+def _review_sidecar_lock(flow_dir: Path, spec_id: str):
+    with cross_process_lock(_review_sidecar_lock_path(flow_dir, spec_id)):
+        yield
+
+
+def _review_hash_epoch(spec_data: dict, counter_scope: str) -> int:
+    """Current append-only-ledger epoch, creating only a valid map."""
+    epochs = spec_data.get("review_hash_epoch")
+    if not isinstance(epochs, dict):
+        epochs = {}
+        spec_data["review_hash_epoch"] = epochs
+    value = epochs.get(counter_scope, 0)
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _advance_review_hash_epoch(spec_data: dict, counter_scope: str) -> int:
+    value = _review_hash_epoch(spec_data, counter_scope) + 1
+    spec_data["review_hash_epoch"][counter_scope] = value
+    return value
+
+
+def _review_reservations(spec_data: dict) -> dict:
+    reservations = spec_data.get("review_reservations")
+    if not isinstance(reservations, dict):
+        reservations = {}
+        spec_data["review_reservations"] = reservations
+    return reservations
+
+
+def _review_runs_dir(flow_dir: Path) -> Path:
+    return flow_dir / "review-runs"
+
+
+def _review_journal_path(flow_dir: Path, reservation_id: str) -> Path:
+    # Reservation ids are generated here; still reject a path separator if a
+    # damaged sidecar is later replayed.
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", reservation_id):
+        raise ValueError("invalid review reservation id")
+    return _review_runs_dir(flow_dir) / f"{reservation_id}.json"
+
+
+def _journal_progress(journal: dict) -> dict:
+    progress = journal.get("finalized")
+    if not isinstance(progress, dict):
+        progress = {}
+        journal["finalized"] = progress
+    for leg in ("receipt", "digest", "status"):
+        if progress.get(leg) not in {"pending", "complete", "not_applicable"}:
+            progress[leg] = "not_applicable"
+    return progress
+
+
+def _review_journal_receipt_payload(journal: dict) -> Optional[dict]:
+    """The exact receipt write the journal intends, stamped with identity."""
+    receipt_payload = journal.get("receipt_payload")
+    if not isinstance(receipt_payload, dict):
+        return None
+    payload = dict(receipt_payload)
+    findings = journal.get("findings_container")
+    if isinstance(findings, dict):
+        payload["findings"] = findings
+    criteria = journal.get("criteria")
+    if isinstance(criteria, list):
+        payload["criteria"] = criteria
+    payload["review_reservation_id"] = journal.get("reservation_id")
+    return payload
+
+
+def _review_receipt_proven_newer(
+    journal: dict,
+    existing_reservation: object,
+    spec_data: Optional[dict],
+) -> bool:
+    """True only when the receipt on disk PROVABLY postdates this journal.
+
+    Receipt paths are stable per spec and reused every round, so a differing
+    ``review_reservation_id`` alone means nothing — it is usually the PRIOR
+    round's receipt.  Supersession is claimed only with evidence: the existing
+    receipt's reservation id resolves to a finalized attempt row in the same
+    scope whose timestamp is later than this journal's creation.  Anything
+    else (unknown id, legacy receipt with no id) is not proof, and the
+    journaled verdict must be published rather than silently dropped.
+    """
+    if not isinstance(existing_reservation, str) or not existing_reservation:
+        return False
+    if existing_reservation == journal.get("reservation_id"):
+        return False
+    if not isinstance(spec_data, dict):
+        return False
+    created = journal.get("timestamp")
+    if not isinstance(created, str) or not created:
+        return False
+    scope = journal.get("scope")
+    attempts = spec_data.get("review_attempts")
+    if not isinstance(attempts, list):
+        return False
+    for row in attempts:
+        if not isinstance(row, dict):
+            continue
+        if row.get("reservation_id") != existing_reservation:
+            continue
+        if scope is not None and row.get("scope") != scope:
+            continue
+        timestamp = row.get("timestamp")
+        # now_iso() is a fixed-width UTC ISO-8601 stamp: lexical == temporal.
+        if isinstance(timestamp, str) and timestamp > created:
+            return True
+    return False
+
+
+def _complete_review_journal(
+    flow_dir: Path,
+    journal_path: Path,
+    journal: dict,
+    *,
+    spec_data: Optional[dict] = None,
+) -> bool:
+    """Finish the deterministic, journaled legs without re-reading /tmp input.
+
+    The journal deliberately contains the exact intended receipt payload as
+    JSON.  A replay therefore remains possible after callers remove their
+    temporary reviewer response.  A receipt target is optional for the older
+    direct-record API; absent legs are explicitly not applicable.
+
+    Every write carries the reservation identity, and the decision is made on
+    IDENTITY, never on mere existence: receipt paths are stable per spec and
+    reused every round, so the target normally already holds the previous
+    round's receipt.  An exact-match already-applied write is a successful
+    no-op; a receipt PROVEN newer (its reservation id resolves to a later
+    attempt row in the same scope) is left alone, because replaying the old
+    bytes over it would regress it; every other state — a differing but
+    unproven id, or a legacy receipt with no id at all — is published over,
+    since dropping a delivered verdict is the worse failure.
+    """
+    progress = _journal_progress(journal)
+    receipt_target = journal.get("receipt_target")
+    if progress["receipt"] == "pending":
+        payload = _review_journal_receipt_payload(journal)
+        if not isinstance(receipt_target, str) or payload is None:
+            return False
+        target = Path(receipt_target)
+        if target.exists():
+            try:
+                existing = json.loads(target.read_text(encoding="utf-8"))
+            except (OSError, ValueError, TypeError):
+                return False
+            existing_reservation = (
+                existing.get("review_reservation_id")
+                if isinstance(existing, dict)
+                else None
+            )
+            if existing == payload:
+                pass  # receipt-published/progress-unmarked boundary: no-op.
+            elif _review_receipt_proven_newer(
+                journal, existing_reservation, spec_data
+            ):
+                pass  # PROVEN newer receipt: replaying would regress it.
+            else:
+                # Same lock the receipt writers hold (callers take the
+                # two-resource lock receipt-before-sidecar): keep the prior
+                # findings generation before advancing the latest pointer.
+                _preserve_review_receipt_generation(target)
+                atomic_write_json(target, payload)
+        else:
+            atomic_write_json(target, payload)
+        progress["receipt"] = "complete"
+        atomic_write_json(journal_path, journal)
+    if progress["digest"] == "pending":
+        # fn-159 round 7: the digest leg tracks the parse OPERATION, not
+        # digest presence. A completed validated parse that yielded an
+        # absent/legacy/malformed/no-findings container is recorded in the
+        # journal as findings_container (possibly null) — that is complete.
+        # Only an interrupted operation (key absent entirely) stays pending.
+        if "findings_container" not in journal:
+            return False
+        progress["digest"] = "complete"
+        atomic_write_json(journal_path, journal)
+    if progress["status"] == "pending":
+        status_target = journal.get("status_target")
+        status = {
+            "SHIP": "ship",
+            "NEEDS_WORK": "needs_work",
+            "MAJOR_RETHINK": "needs_work",
+        }.get(journal.get("verdict") or "")
+        if spec_data is None or status_target not in ("plan", "completion"):
+            return False
+        if status:
+            # Idempotent re-apply: same verdict-derived value every replay.
+            spec_data[f"{status_target}_review_status"] = status
+            spec_data[f"{status_target}_reviewed_at"] = now_iso()
+        progress["status"] = "complete"
+        atomic_write_json(journal_path, journal)
+    if all(progress[leg] in {"complete", "not_applicable"} for leg in progress):
+        try:
+            journal_path.unlink()
+        except FileNotFoundError:
+            pass
+        return True
+    return False
+
+
 def _review_attempt_summary(
     spec_data: dict,
     review_kind: str,
@@ -9279,7 +9595,79 @@ def _review_head_sha() -> Optional[str]:
         return None
 
 
+def _journal_receipt_targets(flow_dir: Path, counter_scope: str) -> list[Path]:
+    """Receipt paths in-scope journals intend to write (pre-lock scan).
+
+    Read WITHOUT any lock held so the lock-order contract (RECEIPT lock
+    BEFORE SIDECAR lock) can be honored: callers acquire these receipt locks
+    first, then the sidecar lock. A journal that appears between the scan and
+    the lock acquisition is picked up by the next state transition.
+    """
+    targets: list[Path] = []
+    try:
+        journal_paths = sorted(_review_runs_dir(flow_dir).glob("*.json"))
+    except OSError:
+        return targets
+    for journal_path in journal_paths:
+        try:
+            journal = json.loads(journal_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            continue
+        if not isinstance(journal, dict) or journal.get("counter_scope") != counter_scope:
+            continue
+        target = journal.get("receipt_target")
+        if isinstance(target, str) and target:
+            targets.append(Path(target))
+    return targets
+
+
+@contextmanager
+def _review_two_resource_lock(
+    flow_dir: Path, spec_id: str, receipt_targets: list[Path]
+):
+    """RECEIPT lock(s) BEFORE the SIDECAR lock (fn-159 lock-order contract).
+
+    Held together from lineage validation through sidecar mutation and
+    receipt publication. Targets are sorted for a deterministic acquisition
+    order between concurrent two-resource operations.
+    """
+    seen: set[str] = set()
+    ordered: list[Path] = []
+    for target in sorted(receipt_targets, key=lambda p: str(p)):
+        key = str(target)
+        if key not in seen:
+            seen.add(key)
+            ordered.append(target)
+    with ExitStack() as stack:
+        for target in ordered:
+            stack.enter_context(
+                cross_process_lock(_review_receipt_lock_path(target))
+            )
+        stack.enter_context(_review_sidecar_lock(flow_dir, spec_id))
+        yield
+
+
 def record_review_attempt(
+    spec_id: str,
+    review_kind: str,
+    **kwargs: Any,
+) -> dict:
+    """Finalize a reservation under the spec's cross-process sidecar lock.
+
+    When the finalization touches a receipt too, the receipt lock is taken
+    FIRST (fn-159 lock-order contract), then the sidecar lock, and both are
+    held through the sidecar mutation.
+    """
+    flow_dir = get_flow_dir()
+    receipt_target = kwargs.get("receipt_target")
+    receipt_targets = (
+        [Path(receipt_target)] if isinstance(receipt_target, str) and receipt_target else []
+    )
+    with _review_two_resource_lock(flow_dir, spec_id, receipt_targets):
+        return _record_review_attempt_locked(spec_id, review_kind, **kwargs)
+
+
+def _record_review_attempt_locked(
     spec_id: str,
     review_kind: str,
     *,
@@ -9293,6 +9681,10 @@ def record_review_attempt(
     finalize_status_kind: Optional[str] = None,
     reset_rounds_on_ship: bool = False,
     reviewed_head_sha: Optional[str] = None,
+    reservation_id: Optional[str] = None,
+    receipt_target: Optional[str] = None,
+    receipt_payload: Optional[dict] = None,
+    status_target: Optional[str] = None,
 ) -> dict:
     """Finalize one pre-dispatch reservation and persist its outcome.
 
@@ -9326,13 +9718,173 @@ def record_review_attempt(
         pending = {}
         spec_data["review_pending_rounds"] = pending
     pending_count = int(pending.get(counter_scope, 0) or 0)
-    if pending_count < 1:
+    reservations = _review_reservations(spec_data)
+    scope_reservations = {
+        key: value for key, value in reservations.items()
+        if isinstance(value, dict) and value.get("counter_scope") == counter_scope
+    }
+    output_sha256 = hashlib.sha256(
+        (output or "").encode("utf-8", errors="replace")
+    ).hexdigest()
+    attempts = spec_data.get("review_attempts")
+    if not isinstance(attempts, list):
+        attempts = []
+        spec_data["review_attempts"] = attempts
+
+    # Replaying the same completed journal/finalizer is an intentionally quiet
+    # no-op.  A mismatched duplicate is never allowed to reinterpret a verdict.
+    if reservation_id:
+        matching = [
+            row for row in attempts
+            if isinstance(row, dict) and row.get("reservation_id") == reservation_id
+        ]
+        if matching:
+            row = matching[-1]
+            if row.get("output_sha256") == output_sha256 and row.get("verdict") == verdict:
+                return {
+                    "recorded": True, "replayed": True, "outcome": row.get("outcome"),
+                    "verdict": row.get("verdict"), "reservation_id": reservation_id,
+                    "review_rounds": _read_review_rounds(spec_data, review_kind, task_id),
+                }
+            error_exit("Reservation was already finalized with different output", use_json=use_json, code=2)
+        if pending_count < 1:
+            error_exit(
+                f"No reserved {review_kind}-review round exists for "
+                f"{task_id or spec_id}; refusing to finalize or refund.",
+                use_json=use_json,
+                code=2,
+            )
+        metadata = reservations.get(reservation_id)
+        if not isinstance(metadata, dict) or metadata.get("counter_scope") != counter_scope:
+            error_exit("Unknown review reservation id; refusing to mutate state", use_json=use_json, code=2)
+    elif pending_count == 1 and len(scope_reservations) == 1:
+        reservation_id, metadata = next(iter(scope_reservations.items()))
+    elif pending_count == 1 and not scope_reservations:
+        # Pre-fn-159 count-only reservations.  This keeps the one serial RP
+        # fence working during the coordinated .1/.7 landing window.
+        metadata = None
+    else:
+        if pending_count < 1:
+            error_exit(
+                f"No reserved {review_kind}-review round exists for "
+                f"{task_id or spec_id}; refusing to finalize or refund.",
+                use_json=use_json,
+                code=2,
+            )
         error_exit(
-            f"No reserved {review_kind}-review round exists for "
-            f"{task_id or spec_id}; refusing to finalize or refund.",
+            "Review reservation id is required unless exactly one reservation is pending",
             use_json=use_json,
             code=2,
         )
+    # fn-159 round 7/8: --status-target is the CLI spelling of the folded
+    # status write; unify so the journaled operation and the sidecar write
+    # share one code path (and one atomic transaction).
+    if finalize_status_kind is None and status_target in ("plan", "completion"):
+        finalize_status_kind = status_target
+    expected_status = {
+        "SHIP": "ship",
+        "NEEDS_WORK": "needs_work",
+        "MAJOR_RETHINK": "needs_work",
+    }.get(verdict or "") if finalize_status_kind in ("plan", "completion") else None
+    # Write-ahead journal before consuming the reservation.  It contains all
+    # input needed to recreate this finalized row after a process crash —
+    # including the exact intended receipt payload and the validated findings
+    # container (fn-159 round 8: container construction ownership is SINGULAR;
+    # attach only publishes what is journaled here, never re-derives).
+    outcome = "verdict" if verdict else "transport_failure"
+    # One clock for the attempt row and the journaled receipt payload.  The RP
+    # and host fences assemble the receipt payload BEFORE calling record
+    # (fn-159 round 8 ordering), so they cannot know this attempt's timestamp.
+    # An explicitly EMPTY `attempt_timestamp` is their request to have it
+    # stamped here; an absent key stays absent, and a supplied value wins.
+    attempt_at = now_iso()
+    if isinstance(receipt_payload, dict) and not receipt_payload.get(
+        "attempt_timestamp", "absent"
+    ):
+        receipt_payload = {**receipt_payload, "attempt_timestamp": attempt_at}
+    journal_path: Optional[Path] = None
+    if reservation_id:
+        journal_path = _review_journal_path(flow_dir, reservation_id)
+        journal_receipt = receipt_target and isinstance(receipt_payload, dict)
+        progress = {
+            "receipt": "pending" if journal_receipt else "not_applicable",
+            # Deferred to fn-159.2: that task sets this leg pending/complete
+            # from the findings_digest build; until then no digest artifact
+            # exists to finalize, so the leg is not applicable at creation.
+            "digest": "not_applicable",
+            "status": "pending" if expected_status else "not_applicable",
+        }
+        journal = {
+            "reservation_id": reservation_id,
+            "response": output,
+            "response_sha256": output_sha256,
+            "receipt_payload": receipt_payload,
+            "receipt_target": receipt_target,
+            "status_target": finalize_status_kind if expected_status else None,
+            "spec_id": spec_id,
+            "counter_scope": counter_scope,
+            "scope": scope,
+            "review_kind": review_kind,
+            "review_type": review_type or review_kind,
+            "task_id": task_id,
+            "backend": backend,
+            "verdict": verdict,
+            "failure_class": failure_class,
+            "outcome": outcome,
+            "reset_rounds_on_ship": bool(reset_rounds_on_ship),
+            "metadata": metadata,
+            "finalized": progress,
+            "timestamp": now_iso(),
+        }
+        if journal_receipt:
+            # Validated findings container, built pre-consumption from the
+            # response + receipt identity. A legacy/malformed/absent-findings
+            # response is a SUCCESSFUL parse outcome (container null) — the
+            # key is journaled either way so replay can tell "operation
+            # completed, nothing supportable" from "operation interrupted".
+            container = None
+            try:
+                head_for_findings = receipt_payload.get("head")
+                if not isinstance(head_for_findings, str) or not head_for_findings:
+                    head_for_findings = reviewed_head_sha or _review_head_sha()
+                if (
+                    isinstance(head_for_findings, str)
+                    and isinstance(receipt_payload.get("type"), str)
+                    and isinstance(receipt_payload.get("id"), str)
+                    and isinstance(receipt_payload.get("mode"), str)
+                ):
+                    base_for_findings = receipt_payload.get("base")
+                    container = build_review_receipt_findings(
+                        output,
+                        review_type=receipt_payload["type"],
+                        review_id=receipt_payload["id"],
+                        backend=receipt_payload["mode"],
+                        head_sha=head_for_findings,
+                        base_sha=(
+                            base_for_findings
+                            if isinstance(base_for_findings, str)
+                            else None
+                        ),
+                        prior_receipt_path=Path(receipt_target),
+                        anchor_side="head",
+                    )
+            except Exception:
+                container = None
+            journal["findings_container"] = container
+            # Completion receipts additionally carry the bound standing
+            # criteria (cf. the direct writer and the legacy attach path).
+            # Bound here, pre-consumption, from the same response text so a
+            # journal-published completion receipt is not missing the field.
+            if (review_type or review_kind) == "completion" or (
+                receipt_payload.get("type") == "completion_review"
+            ):
+                try:
+                    journal["criteria"] = bind_review_criteria(
+                        parse_review_criteria(output)
+                    )
+                except Exception:
+                    journal["criteria"] = None
+        atomic_write_json(journal_path, journal)
     if pending_count == 1:
         pending.pop(counter_scope, None)
     else:
@@ -9343,7 +9895,6 @@ def record_review_attempt(
         failures = {}
         spec_data["review_transport_failures"] = failures
 
-    outcome = "verdict" if verdict else "transport_failure"
     refunded = outcome == "transport_failure"
     if refunded:
         current = _read_review_rounds(spec_data, review_kind, task_id)
@@ -9357,7 +9908,7 @@ def record_review_attempt(
         failures[scope] = 0
 
     row = {
-        "timestamp": now_iso(),
+        "timestamp": attempt_at,
         "scope": scope,
         "backend": backend,
         "kind": review_type or review_kind,
@@ -9366,19 +9917,30 @@ def record_review_attempt(
         "outcome": outcome,
         "verdict": verdict,
         "failure_class": failure_class if refunded else None,
-        "output_sha256": hashlib.sha256(
-            (output or "").encode("utf-8", errors="replace")
-        ).hexdigest(),
+        "output_sha256": output_sha256,
         "round_consumed": not refunded,
         # The sha the review OBSERVED (pre-dispatch snapshot) when the caller
         # has it; finalize-time HEAD is only the fallback (rp/refund paths).
         "head_sha": reviewed_head_sha or _review_head_sha(),
+        "reservation_id": reservation_id,
+        "hash_epoch": (metadata or {}).get("epoch", _review_hash_epoch(spec_data, counter_scope)),
+        "artifact_sha256": (metadata or {}).get("artifact_sha256"),
+        "forced": bool((metadata or {}).get("forced", False)),
+        "finalized": (
+            dict(_journal_progress(journal)) if journal_path is not None else {
+                "receipt": "not_applicable", "digest": "not_applicable", "status": "not_applicable"
+            }
+        ),
     }
-    attempts = spec_data.get("review_attempts")
-    if not isinstance(attempts, list):
-        attempts = []
-        spec_data["review_attempts"] = attempts
+    if journal_path is not None and row["finalized"]["status"] == "pending":
+        # The folded status write below lands in the SAME atomic sidecar
+        # write that persists this row, so the row can already record the
+        # status leg complete — there is no window where the row exists
+        # without the status.
+        row["finalized"]["status"] = "complete"
     attempts.append(row)
+    if reservation_id:
+        reservations.pop(reservation_id, None)
     # issue #279: fold the denormalized status write and the SHIP cap reset
     # into THIS sidecar mutation so the attempt ledger, <kind>_review_status,
     # and the round counter land in ONE atomic_write_json - no interrupt
@@ -9398,8 +9960,25 @@ def record_review_attempt(
         # Same counter mutation reset_review_cap performs; pending is
         # deliberately left alone (fn-134.7 / R22).
         _write_review_rounds(spec_data, review_kind, task_id, 0)
+        _advance_review_hash_epoch(spec_data, counter_scope)
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
+
+    if journal_path is not None:
+        progress = _journal_progress(journal)
+        if progress["status"] == "pending":
+            # Completed by the sidecar write above (folded transaction).
+            progress["status"] = "complete"
+        if progress["receipt"] == "pending":
+            # Receipt publication is owned by `review-findings attach
+            # --reservation-id` (or the pre-increment replay after a crash) —
+            # record never publishes it. Persist the updated leg states so a
+            # crash between here and attach replays deterministically.
+            atomic_write_json(journal_path, journal)
+        elif _complete_review_journal(flow_dir, journal_path, journal):
+            row["finalized"] = dict(progress)
+        else:
+            atomic_write_json(journal_path, journal)
 
     summary = _review_attempt_summary(
         spec_data, review_kind, task_id, review_type=review_type
@@ -9421,6 +10000,8 @@ def record_review_attempt(
             ),
         }
     )
+    if reservation_id:
+        summary["reservation_id"] = reservation_id
     if finalize_status_kind is not None:
         summary["status_written"] = status_written
     return summary
@@ -9432,7 +10013,11 @@ def enforce_and_increment_review_cap(
     *,
     task_id: Optional[str] = None,
     use_json: bool = False,
-) -> int:
+    artifact_sha256: Optional[str] = None,
+    review_type: Optional[str] = None,
+    forced: bool = False,
+    return_reservation: bool = False,
+) -> Any:
     """Enforce the cumulative review-round cap and increment the counter.
 
     Called at the TOP of every plan/impl-review backend handler, BEFORE
@@ -9454,16 +10039,282 @@ def enforce_and_increment_review_cap(
     Completion reviews reuse the plan counter surface (they are spec-scoped like
     plan reviews); pass ``review_kind="plan"`` for them.
     """
+    flow_dir = get_flow_dir()
+    # Journal replays inside the gate may publish receipts; honor the
+    # lock-order contract by taking those receipt locks BEFORE the sidecar
+    # lock (pre-lock scan; a journal landing after the scan waits one call).
+    receipt_targets = _journal_receipt_targets(
+        flow_dir, _review_counter_scope(review_kind, task_id)
+    )
+    with _review_two_resource_lock(flow_dir, spec_id, receipt_targets):
+        return _enforce_and_increment_review_cap_locked(
+            spec_id, review_kind, task_id=task_id, use_json=use_json,
+            artifact_sha256=artifact_sha256, review_type=review_type,
+            forced=forced, return_reservation=return_reservation,
+        )
+
+
+# Terminal precedence over replayed verdicts (fn-159 round 8): the worst
+# delivered verdict wins; SHIP is terminal only when every replay shipped.
+_REVIEW_REPLAY_PRECEDENCE = ("NEEDS_HUMAN", "NEEDS_WORK", "MAJOR_RETHINK", "SHIP")
+
+
+def review_replay_terminal_verdict(replays: list) -> Optional[str]:
+    """Fold replayed verdicts into one terminal per the precedence order."""
+    delivered = {
+        row.get("verdict")
+        for row in replays
+        if isinstance(row, dict) and isinstance(row.get("verdict"), str)
+    }
+    for verdict in _REVIEW_REPLAY_PRECEDENCE:
+        if verdict in delivered:
+            return verdict
+    return None
+
+
+def handle_replayed_review_cap(
+    result: Any,
+    *,
+    review_type: str,
+    review_id: str,
+    use_json: bool,
+) -> bool:
+    """Surface a typed replay instead of dispatching a paid review round.
+
+    ``enforce_and_increment_review_cap`` returns a replay dict when it
+    recovered an already-delivered verdict; no reservation exists, so a
+    dispatch here would pay for a second review and then fail its finalize
+    with ``pending_count < 1``.  Returns True when the caller MUST return
+    without dispatching (the replayed terminal has been reported), False for
+    the ordinary increment path.
+    """
+    if not (isinstance(result, dict) and result.get("replayed")):
+        return False
+    replays = result.get("replays")
+    if not isinstance(replays, list):
+        replays = []
+    verdict = review_replay_terminal_verdict(replays)
+    if use_json:
+        json_output(
+            {
+                "type": review_type,
+                "id": review_id,
+                "verdict": verdict,
+                "replayed": True,
+                "replays": replays,
+                "dispatched": False,
+            }
+        )
+    else:
+        print(json.dumps({"replayed": True, "replays": replays}, indent=2))
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+    return True
+
+
+def _latest_consumed_artifact_sha256(
+    spec_data: dict,
+    review_kind: str,
+    task_id: Optional[str],
+    epoch: int,
+    review_type: Optional[str] = None,
+) -> Optional[str]:
+    """Return this review type's latest hash-bearing consumed verdict.
+
+    ``review_type`` is encoded into every blob, so a cross-type row can never
+    produce a false REFUSAL.  It can produce a false PASS: plan and completion
+    share one counter, so a plan → completion → plan sequence would otherwise
+    take the completion row as the baseline and wave an unchanged plan artifact
+    straight through.  Filter on the row's dispatched surface (``kind``) so the
+    baseline is always the same review type this dispatch is.
+    """
+    attempts = spec_data.get("review_attempts")
+    if not isinstance(attempts, list):
+        return None
+    wanted_type = review_type or review_kind
+    for row in reversed(attempts):
+        if not isinstance(row, dict):
+            continue
+        if (
+            row.get("counter_kind") == review_kind
+            and row.get("kind") == wanted_type
+            and row.get("task") == task_id
+            and row.get("round_consumed") is True
+            and row.get("hash_epoch") == epoch
+            and isinstance(row.get("artifact_sha256"), str)
+        ):
+            return row["artifact_sha256"]
+    return None
+
+
+def _enforce_and_increment_review_cap_locked(
+    spec_id: str,
+    review_kind: str,
+    *,
+    task_id: Optional[str],
+    use_json: bool,
+    artifact_sha256: Optional[str],
+    review_type: Optional[str],
+    forced: bool,
+    return_reservation: bool,
+) -> Any:
     cap = get_max_review_iterations()
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_json_path.exists():
         # No spec state to enforce against (standalone/branch review) — no cap.
-        return 0
+        return (0, None) if return_reservation else 0
     spec_data = normalize_epic(
         load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
     )
     current = _read_review_rounds(spec_data, review_kind, task_id)
+    counter_scope = _review_counter_scope(review_kind, task_id)
+    epoch = _review_hash_epoch(spec_data, counter_scope)
+    # A complete journal is removed by its writer.  An incomplete journal is
+    # authoritative recovery work: do not send a second review into the same
+    # scope merely because the sidecar write did not reach its attempt row.
+    # Replays are typed and PLURAL (fn-159 rounds 7-8): every recovered
+    # finalization is reported; when any replay ran, NO reservation is created
+    # and the caller applies terminal precedence over the replayed verdicts.
+    replays: list[dict] = []
+    sidecar_dirty = False
+    journals = []
+    try:
+        journals = sorted(_review_runs_dir(flow_dir).glob("*.json"))
+    except OSError:
+        journals = []
+    for journal_path in journals:
+        try:
+            journal = json.loads(journal_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            continue
+        if not isinstance(journal, dict) or journal.get("counter_scope") != counter_scope:
+            continue
+        if journal.get("spec_id") not in (None, spec_id):
+            continue
+        reservation_id = journal.get("reservation_id")
+        reservations = _review_reservations(spec_data)
+        attempt_rows = spec_data.get("review_attempts")
+        already_consumed = isinstance(attempt_rows, list) and any(
+            isinstance(row, dict) and row.get("reservation_id") == reservation_id
+            for row in attempt_rows
+        )
+        # Journal-before-consumption is a real crash boundary.  Resume the
+        # original operation from its write-ahead data; never manufacture a
+        # new dispatch or depend on the caller's deleted temporary response.
+        if (
+            isinstance(reservation_id, str)
+            and reservation_id in reservations
+            and not already_consumed
+        ):
+            _record_review_attempt_locked(
+                spec_id,
+                review_kind,
+                backend=str(journal.get("backend") or "unknown"),
+                output=str(journal.get("response") or ""),
+                verdict=journal.get("verdict") if isinstance(journal.get("verdict"), str) else None,
+                failure_class=(journal.get("failure_class") if isinstance(journal.get("failure_class"), str) else None),
+                task_id=(journal.get("task_id") if isinstance(journal.get("task_id"), str) else task_id),
+                review_type=(journal.get("review_type") if isinstance(journal.get("review_type"), str) else None),
+                use_json=use_json,
+                reservation_id=reservation_id,
+                receipt_target=(journal.get("receipt_target") if isinstance(journal.get("receipt_target"), str) else None),
+                receipt_payload=(journal.get("receipt_payload") if isinstance(journal.get("receipt_payload"), dict) else None),
+                status_target=(journal.get("status_target") if isinstance(journal.get("status_target"), str) else None),
+                reset_rounds_on_ship=bool(journal.get("reset_rounds_on_ship", False)),
+            )
+            spec_data = normalize_epic(
+                load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
+            )
+            replays.append({
+                "reservation_id": reservation_id,
+                "verdict": journal.get("verdict"),
+            })
+            # The resumed record may still leave a receipt leg pending
+            # (attach never ran and never will — its input is gone).
+            # Fall through to journal completion below on the next scan…
+            try:
+                journal = json.loads(journal_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError, TypeError):
+                continue
+            if not isinstance(journal, dict):
+                continue
+        if _complete_review_journal(
+            flow_dir, journal_path, journal, spec_data=spec_data
+        ):
+            attempt_rows = spec_data.get("review_attempts")
+            if isinstance(attempt_rows, list):
+                for row in attempt_rows:
+                    if (
+                        isinstance(row, dict)
+                        and row.get("reservation_id") == reservation_id
+                    ):
+                        row["finalized"] = dict(_journal_progress(journal))
+            sidecar_dirty = True
+            if not any(r["reservation_id"] == reservation_id for r in replays):
+                replays.append({
+                    "reservation_id": reservation_id,
+                    "verdict": journal.get("verdict"),
+                })
+        else:
+            error_exit(
+                "REPLAY_REQUIRED: an earlier delivered review verdict is still being finalized",
+                use_json=use_json,
+                code=2,
+            )
+    if sidecar_dirty:
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
+    attempts = spec_data.get("review_attempts")
+    if isinstance(attempts, list):
+        incomplete = [
+            row for row in attempts
+            if isinstance(row, dict)
+            and row.get("counter_kind") == review_kind
+            and row.get("task") == task_id
+            and any((row.get("finalized") or {}).get(leg) == "pending"
+                    for leg in ("receipt", "digest", "status"))
+        ]
+        if incomplete:
+            # A pending leg with no journal left to replay from is human
+            # recovery territory; with a journal it was handled above.
+            error_exit(
+                "REPLAY_REQUIRED: an earlier delivered review verdict is still being finalized",
+                use_json=use_json,
+                code=2,
+            )
+    if replays:
+        # Zero dispatch: the delivered verdict(s) are the terminal for this
+        # call. Callers apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP precedence.
+        return {"replayed": True, "replays": replays}
+    if not isinstance(artifact_sha256, str) or not artifact_sha256:
+        # Compatibility and hash-I/O failures must never block a legitimate
+        # review.  Old callers reserve normally; new callers warn so a broken
+        # blob-builder is observable instead of silently defeating the guard.
+        print(
+            "warning: review artifact hash unavailable; unchanged-artifact "
+            "guard is fail-open for this dispatch",
+            file=sys.stderr,
+        )
+    elif not forced:
+        baseline = _latest_consumed_artifact_sha256(
+            spec_data, review_kind, task_id, epoch, review_type
+        )
+        if baseline == artifact_sha256:
+            marker = "NOT_RETRYABLE: artifact unchanged since last verdict"
+            if use_json:
+                json_output(
+                    {
+                        "error": marker,
+                        "not_retryable": True,
+                        "review_kind": review_kind,
+                        "spec": spec_id,
+                        "task": task_id,
+                    },
+                    success=False,
+                )
+            else:
+                print(marker, file=sys.stderr)
+            sys.exit(1)
     scope = task_id if (review_kind == "impl" and task_id) else spec_id
     if current >= cap:
         attempts = _review_attempt_summary(
@@ -9504,11 +10355,18 @@ def enforce_and_increment_review_cap(
     if not isinstance(pending, dict):
         pending = {}
         spec_data["review_pending_rounds"] = pending
-    counter_scope = _review_counter_scope(review_kind, task_id)
     pending[counter_scope] = int(pending.get(counter_scope, 0) or 0) + 1
+    reservation_id = uuid.uuid4().hex
+    _review_reservations(spec_data)[reservation_id] = {
+        "counter_scope": counter_scope,
+        "artifact_sha256": artifact_sha256 if isinstance(artifact_sha256, str) else None,
+        "forced": bool(forced),
+        "epoch": epoch,
+        "review_type": review_type or review_kind,
+    }
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
-    return new_val
+    return (new_val, reservation_id) if return_reservation else new_val
 
 
 def reset_review_cap(
@@ -9531,13 +10389,17 @@ def reset_review_cap(
         spec_json_path = find_spec_json_path(flow_dir, spec_id)
         if not spec_json_path.exists():
             return
-        spec_data = normalize_epic(
-            load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=True)
-        )
-        _write_review_rounds(spec_data, review_kind, task_id, 0)
-        # Intentionally leave review_pending_rounds alone — see docstring.
-        spec_data["updated_at"] = now_iso()
-        atomic_write_json(spec_json_path, spec_data)
+        with _review_sidecar_lock(flow_dir, spec_id):
+            spec_data = normalize_epic(
+                load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=True)
+            )
+            _write_review_rounds(spec_data, review_kind, task_id, 0)
+            _advance_review_hash_epoch(
+                spec_data, _review_counter_scope(review_kind, task_id)
+            )
+            # Intentionally leave review_pending_rounds alone — see docstring.
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_path, spec_data)
     except SystemExit:
         raise
     except Exception:
@@ -10397,6 +11259,88 @@ def _file_sha256(path: Path) -> Optional[str]:
         return h.hexdigest()
     except OSError:
         return None
+
+
+def _normalize_review_artifact_text(text: str) -> str:
+    """Canonical text form for the artifact identity supplied to a reviewer."""
+    return text.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n") + "\n"
+
+
+def _build_review_artifact_blob(
+    review_type: str, sections: list[tuple[str, str]]
+) -> bytes:
+    """Build an unambiguous, domain-separated review artifact identity.
+
+    Hashes are intentionally over this blob rather than over an incidental
+    prompt.  The wire format length-prefixes every section, so markdown from
+    adjacent spec/task files cannot collide at a concatenation boundary.
+    """
+    if review_type not in {"plan", "impl", "completion"}:
+        raise ValueError(f"unsupported review artifact type: {review_type}")
+    chunks = [b"flow-next-review-artifact-v1\0", review_type.encode("utf-8"), b"\0"]
+    for name, content in sections:
+        normalized = _normalize_review_artifact_text(content).encode("utf-8")
+        label = name.encode("utf-8")
+        chunks.extend((
+            str(len(label)).encode("ascii"), b":", label,
+            b"=", str(len(normalized)).encode("ascii"), b":", normalized,
+        ))
+    return b"".join(chunks)
+
+
+def build_plan_review_artifact_blob(epic_spec: str, task_specs: str) -> bytes:
+    """Identity for a plan review: normalized spec plus sorted task markdown."""
+    return _build_review_artifact_blob(
+        "plan", [("spec", epic_spec), ("tasks", task_specs)]
+    )
+
+
+def build_impl_review_artifact_blob(diff_content: str) -> bytes:
+    """Identity for an implementation review: exact dispatched diff text."""
+    return _build_review_artifact_blob("impl", [("diff", diff_content)])
+
+
+def build_completion_review_artifact_blob(
+    epic_spec: str,
+    task_specs: str,
+    diff_content: str,
+    criteria_content: str,
+) -> bytes:
+    """Identity for completion: spec/tasks, dispatched diff, and criteria."""
+    return _build_review_artifact_blob(
+        "completion",
+        [
+            ("spec", epic_spec),
+            ("tasks", task_specs),
+            ("diff", diff_content),
+            ("criteria", criteria_content),
+        ],
+    )
+
+
+def _review_artifact_sha256(blob: bytes) -> str:
+    """Return the stable identity stored with a review reservation."""
+    return hashlib.sha256(blob).hexdigest()
+
+
+def _review_artifact_hash_or_warn(
+    builder: Any, *args: str
+) -> Optional[str]:
+    """Hash an assembled artifact, failing open when identity construction fails."""
+    try:
+        return _review_artifact_sha256(builder(*args))
+    except (OSError, UnicodeError, ValueError, TypeError) as exc:
+        print(
+            f"warning: cannot hash review artifact; guard is fail-open: {exc}",
+            file=sys.stderr,
+        )
+        return None
+
+
+def _dispatched_diff_from_prompt(prompt: str, fallback: str) -> str:
+    """Return the diff component that survived prompt fitting, if intact."""
+    matches = re.findall(r"<diff_content>\n?(.*?)\n?</diff_content>", prompt, re.S)
+    return matches[-1] if matches else fallback
 
 
 def _fsync_path(path: Path) -> None:
@@ -26516,6 +27460,66 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
 # Backward-compat alias (T2 layers the deprecation warning).
 
 
+def _apply_reservation_status_leg(
+    flow_dir: Path,
+    spec_data: dict,
+    reservation_id: str,
+    use_json: bool,
+) -> None:
+    """fn-159: bind a status write to its reservation's attempt row.
+
+    Requires exactly one attempt row stamped with the reservation id (error
+    exit 2, zero mutation, otherwise); marks its ``finalized.status`` leg
+    complete and mirrors the completion into any surviving journal. The
+    caller persists spec_data in its own atomic write.
+    """
+    attempts = spec_data.get("review_attempts")
+    matching = [
+        row for row in (attempts if isinstance(attempts, list) else [])
+        if isinstance(row, dict) and row.get("reservation_id") == reservation_id
+    ]
+    if len(matching) != 1:
+        error_exit(
+            f"expected exactly one finalized attempt for reservation "
+            f"{reservation_id}; found {len(matching)} — zero mutation",
+            use_json=use_json,
+            code=2,
+        )
+    finalized = matching[0].get("finalized")
+    if not isinstance(finalized, dict):
+        finalized = {
+            "receipt": "not_applicable",
+            "digest": "not_applicable",
+            "status": "not_applicable",
+        }
+        matching[0]["finalized"] = finalized
+    if finalized.get("status") == "pending":
+        finalized["status"] = "complete"
+    try:
+        journal_path = _review_journal_path(flow_dir, reservation_id)
+    except ValueError:
+        return
+    try:
+        journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return
+    except (OSError, ValueError, TypeError):
+        return
+    if isinstance(journal, dict):
+        progress = _journal_progress(journal)
+        if progress.get("status") == "pending":
+            progress["status"] = "complete"
+        if all(
+            progress[leg] in {"complete", "not_applicable"} for leg in progress
+        ):
+            try:
+                journal_path.unlink()
+            except FileNotFoundError:
+                pass
+        else:
+            atomic_write_json(journal_path, journal)
+
+
 def cmd_spec_set_plan_review_status(args: argparse.Namespace) -> None:
     """Set plan review status for a spec."""
     if not ensure_flow_exists():
@@ -26531,13 +27535,19 @@ def cmd_spec_set_plan_review_status(args: argparse.Namespace) -> None:
     if not spec_json_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    )
-    spec_data["plan_review_status"] = args.status
-    spec_data["plan_reviewed_at"] = now_iso()
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_json_path, spec_data)
+    reservation_id = getattr(args, "reservation_id", None)
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+        )
+        if reservation_id:
+            _apply_reservation_status_leg(
+                flow_dir, spec_data, reservation_id, args.json
+            )
+        spec_data["plan_review_status"] = args.status
+        spec_data["plan_reviewed_at"] = now_iso()
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
 
     if args.json:
         json_output(
@@ -26570,13 +27580,19 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
     if not spec_json_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    )
-    spec_data["completion_review_status"] = args.status
-    spec_data["completion_reviewed_at"] = now_iso()
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_json_path, spec_data)
+    reservation_id = getattr(args, "reservation_id", None)
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+        )
+        if reservation_id:
+            _apply_reservation_status_leg(
+                flow_dir, spec_data, reservation_id, args.json
+            )
+        spec_data["completion_review_status"] = args.status
+        spec_data["completion_reviewed_at"] = now_iso()
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
 
     if args.json:
         json_output(
@@ -26613,22 +27629,50 @@ def cmd_spec_reset_review_rounds(args: argparse.Namespace) -> None:
     if not spec_json_path.exists():
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    )
-    spec_data["plan_review_rounds"] = 0
     also_impl = getattr(args, "impl", False)
-    if also_impl:
-        spec_data["impl_review_rounds"] = {}
-    pending = spec_data.get("review_pending_rounds")
-    if isinstance(pending, dict):
-        pending.pop("plan", None)
+    with _review_sidecar_lock(flow_dir, args.id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+        )
+        spec_data["plan_review_rounds"] = 0
+        _advance_review_hash_epoch(spec_data, "plan")
         if also_impl:
-            for key in list(pending):
-                if key.startswith("impl:"):
-                    pending.pop(key, None)
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_json_path, spec_data)
+            previous = spec_data.get("impl_review_rounds")
+            impl_scopes = set(previous) if isinstance(previous, dict) else set()
+            pending = spec_data.get("review_pending_rounds")
+            if isinstance(pending, dict):
+                impl_scopes.update(key for key in pending if key.startswith("impl:"))
+            spec_data["impl_review_rounds"] = {}
+            for scope in impl_scopes:
+                _advance_review_hash_epoch(spec_data, scope)
+        pending = spec_data.get("review_pending_rounds")
+        if isinstance(pending, dict):
+            pending.pop("plan", None)
+            if also_impl:
+                for key in list(pending):
+                    if key.startswith("impl:"):
+                        pending.pop(key, None)
+        # Re-plan abandons the popped pending keys' reservations too — the
+        # id-keyed metadata rides alongside the pending count (fn-159). Any
+        # write-ahead journal for an abandoned reservation is deleted with
+        # it, so the pre-increment gate never wedges on abandoned work.
+        reservations = spec_data.get("review_reservations")
+        if isinstance(reservations, dict):
+            for res_id in list(reservations):
+                meta = reservations[res_id]
+                res_scope = meta.get("counter_scope") if isinstance(meta, dict) else None
+                if res_scope == "plan" or (
+                    also_impl
+                    and isinstance(res_scope, str)
+                    and res_scope.startswith("impl:")
+                ):
+                    reservations.pop(res_id, None)
+                    try:
+                        _review_journal_path(flow_dir, res_id).unlink()
+                    except (FileNotFoundError, OSError, ValueError):
+                        pass
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
 
     if args.json:
         json_output(
@@ -26685,9 +27729,40 @@ def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
     convention as the in-handler call sites.
     """
     spec_id, task_id = _resolve_review_rounds_args(args)
-    rounds = enforce_and_increment_review_cap(
-        spec_id, args.kind, task_id=task_id, use_json=args.json
+    artifact_sha256 = getattr(args, "artifact_sha256", None)
+    artifact_file = getattr(args, "artifact_file", None)
+    if artifact_file and not artifact_sha256:
+        try:
+            artifact_sha256 = hashlib.sha256(
+                Path(artifact_file).read_bytes()
+            ).hexdigest()
+        except OSError as exc:
+            # The later guard is deliberately fail-open; recording no identity
+            # is safer than making an I/O blip a review-blocking condition.
+            print(f"warning: cannot hash review artifact: {exc}", file=sys.stderr)
+    result = enforce_and_increment_review_cap(
+        spec_id, args.kind, task_id=task_id, use_json=args.json,
+        artifact_sha256=artifact_sha256,
+        review_type=getattr(args, "review_type", None),
+        forced=bool(getattr(args, "force", False)), return_reservation=True,
     )
+    if isinstance(result, dict) and result.get("replayed"):
+        # Typed recovery result (fn-159 rounds 7-8): delivered verdict(s)
+        # were replayed; NO reservation was created and nothing may dispatch
+        # on this call. Callers apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP.
+        if args.json:
+            json_output(result)
+        else:
+            summary = ", ".join(
+                f"{r.get('reservation_id')}={r.get('verdict')}"
+                for r in result.get("replays", [])
+            )
+            print(
+                f"replayed delivered review verdict(s); no new round "
+                f"dispatched: {summary}"
+            )
+        return
+    rounds, reservation_id = result
     cap = get_max_review_iterations()
     scope = task_id if (args.kind == "impl" and task_id) else spec_id
     if args.json:
@@ -26698,10 +27773,11 @@ def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
                 "task": task_id,
                 "round": rounds,
                 "cap": cap,
+                "reservation_id": reservation_id,
             }
         )
     else:
-        print(f"{args.kind}-review round {rounds}/{cap} for {scope}")
+        print(f"{args.kind}-review round {rounds}/{cap} for {scope} ({reservation_id})")
 
 
 def cmd_review_rounds_reset(args: argparse.Namespace) -> None:
@@ -26747,6 +27823,33 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
         else:
             failure_class = "missing_verdict"
 
+    receipt_target = getattr(args, "receipt_target", None)
+    receipt_payload: Optional[dict] = None
+    receipt_payload_file = getattr(args, "receipt_payload_file", None)
+    if receipt_payload_file:
+        try:
+            loaded = json.loads(
+                Path(receipt_payload_file).read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            error_exit(
+                f"Unable to read receipt payload {receipt_payload_file}: {exc}",
+                use_json=args.json,
+                code=2,
+            )
+        if not isinstance(loaded, dict):
+            error_exit(
+                "Receipt payload must be a JSON object",
+                use_json=args.json,
+                code=2,
+            )
+        receipt_payload = loaded
+    if bool(receipt_target) != bool(receipt_payload is not None):
+        error_exit(
+            "--receipt-target and --receipt-payload-file must be supplied together",
+            use_json=args.json,
+            code=2,
+        )
     result = record_review_attempt(
         spec_id,
         args.kind,
@@ -26757,6 +27860,14 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
         task_id=task_id,
         review_type=args.review_type,
         use_json=args.json,
+        reservation_id=getattr(args, "reservation_id", None),
+        receipt_target=receipt_target,
+        receipt_payload=receipt_payload,
+        status_target=getattr(args, "status_target", None),
+        # fn-159 R9: SHIP reset is system-owned. Recording a SHIP verdict
+        # atomically resets the counter and advances the hash epoch in the
+        # same finalize transaction; the explicit reset verbs stay human-only.
+        reset_rounds_on_ship=True,
     )
     if result.get("transport_unhealthy"):
         error_exit(
@@ -26831,6 +27942,68 @@ def cmd_review_rounds_attempts(args: argparse.Namespace) -> None:
             f"{result['consecutive_transport_failures']}/"
             f"{result['transport_failure_cap']} consecutive transport failures"
         )
+
+
+def cmd_review_artifact_build(args: argparse.Namespace) -> None:
+    """Write the exact domain-separated blob consumed by an RP reserve fence."""
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    _, _, epic_spec, task_specs, _ = _load_epic_and_task_specs(
+        spec_id,
+        use_json=args.json,
+        missing_label="Spec markdown not found",
+    )
+    if args.kind == "plan":
+        blob = build_plan_review_artifact_blob(epic_spec, task_specs)
+    else:
+        if not args.diff_file:
+            error_exit(
+                f"review-artifact {args.kind} requires --diff-file",
+                use_json=args.json,
+                code=2,
+            )
+        try:
+            diff_content = Path(args.diff_file).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            error_exit(
+                f"Unable to read review diff {args.diff_file}: {exc}",
+                use_json=args.json,
+                code=2,
+            )
+        if args.kind == "impl":
+            blob = build_impl_review_artifact_blob(diff_content)
+        else:
+            criteria_path = get_criteria_path()
+            try:
+                criteria_content = (
+                    criteria_path.read_text(encoding="utf-8")
+                    if criteria_path.exists() else ""
+                )
+            except (OSError, UnicodeError) as exc:
+                error_exit(
+                    f"Unable to read global criteria: {exc}",
+                    use_json=args.json,
+                    code=2,
+                )
+            blob = build_completion_review_artifact_blob(
+                epic_spec, task_specs, diff_content, criteria_content
+            )
+    output_path = Path(args.output)
+    atomic_write(output_path, blob.decode("utf-8"))
+    result = {
+        "id": spec_id,
+        "review_type": args.kind,
+        "artifact_file": str(output_path),
+        "artifact_sha256": _review_artifact_sha256(blob),
+    }
+    if args.json:
+        json_output(result)
+    else:
+        print(result["artifact_sha256"])
 
 
 def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
@@ -31018,6 +32191,16 @@ def cmd_rp_prompt_export(args: argparse.Namespace) -> None:
     ]
     res = run_rp_cli(cmd)
     print(res.stdout, end="")
+
+
+def cmd_rp_mode_probe(args: argparse.Namespace) -> None:
+    """Report RP transport mode without selecting a window or opening a tab."""
+    rp_cli = require_rp_cli()
+    mode = "classic" if Path(rp_cli).name == "rp-cli" else "ce"
+    if args.json:
+        json_output({"mode": mode})
+    else:
+        print(f"RP_MODE={mode}")
 
 
 def cmd_rp_setup_review(args: argparse.Namespace) -> None:
@@ -36054,6 +37237,7 @@ def _dispatch_backend_review(
     review_type: str,
     task_id: Optional[str] = None,
     reviewed_head_sha: Optional[str] = None,
+    reservation_id: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run a backend and refund if dispatch itself terminates before a result."""
     try:
@@ -36078,6 +37262,7 @@ def _dispatch_backend_review(
                 reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
+                reservation_id=reservation_id,
             )
         _clear_stale_review_receipt(receipt_path)
         if attempt.get("transport_unhealthy"):
@@ -36105,6 +37290,7 @@ def _dispatch_backend_review(
                 reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
+                reservation_id=reservation_id,
             )
         _clear_stale_review_receipt(receipt_path)
         if attempt.get("transport_unhealthy"):
@@ -36229,11 +37415,31 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     else:
         repo_root = get_repo_root()
 
+    # The identity is calculated after Cursor's argv fit: this is the exact
+    # diff component delivered to that backend, not the pre-fit git diff.
+    artifact_sha256 = _review_artifact_hash_or_warn(
+        build_impl_review_artifact_blob,
+        _dispatched_diff_from_prompt(prompt, diff_content),
+    )
+
     # fn-90 R5: deterministic cap — enforce + increment BEFORE dispatch.
+    reservation_id: Optional[str] = None
     if not standalone:
-        enforce_and_increment_review_cap(
-            spec_id_from_task(task_id), "impl", task_id=task_id, use_json=args.json
+        cap_result = enforce_and_increment_review_cap(
+            spec_id_from_task(task_id), "impl", task_id=task_id,
+            use_json=args.json, artifact_sha256=artifact_sha256,
+            review_type="impl", forced=bool(getattr(args, "force", False)),
+            return_reservation=True,
         )
+        # A recovered verdict is the terminal for this call — never dispatch.
+        if handle_replayed_review_cap(
+            cap_result,
+            review_type="impl_review",
+            review_id=task_id if task_id else "branch",
+            use_json=args.json,
+        ):
+            return
+        _, reservation_id = cap_result
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -36251,6 +37457,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_type="impl",
         task_id=None if standalone else task_id,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -36267,6 +37474,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         task_id=None if standalone else task_id,
         reset_rounds_on_ship=not standalone,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     review_id = task_id if task_id else "branch"
@@ -36367,6 +37575,7 @@ def _finish_backend_exec(
     reset_rounds_on_ship: bool = False,
     attempt_out: Optional[dict] = None,
     reviewed_head_sha: Optional[str] = None,
+    reservation_id: Optional[str] = None,
 ) -> str:
     """Shared post-exec gates and verdict-aware round finalization.
 
@@ -36389,6 +37598,7 @@ def _finish_backend_exec(
                 finalize_status_kind=finalize_status_kind,
                 reset_rounds_on_ship=reset_rounds_on_ship,
                 reviewed_head_sha=reviewed_head_sha,
+                reservation_id=reservation_id,
             )
             if attempt_out is not None:
                 attempt_out.update(summary)
@@ -36421,6 +37631,7 @@ def _finish_backend_exec(
             reviewed_head_sha=reviewed_head_sha,
             review_type=review_type,
             use_json=args.json,
+            reservation_id=reservation_id,
         )
     if attempt.get("transport_unhealthy"):
         _clear_stale_review_receipt(receipt_path)
@@ -36559,7 +37770,21 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             task_ids=task_ids or None,
         )
 
-    enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
+    artifact_sha256 = _review_artifact_hash_or_warn(
+        build_plan_review_artifact_blob, epic_spec, task_specs
+    )
+    cap_result = enforce_and_increment_review_cap(
+        epic_id, "plan", use_json=args.json,
+        artifact_sha256=artifact_sha256, review_type="plan",
+        forced=bool(getattr(args, "force", False)), return_reservation=True,
+    )
+    # A recovered verdict is the terminal for this call — never dispatch.
+    if handle_replayed_review_cap(
+        cap_result, review_type="plan_review", review_id=epic_id,
+        use_json=args.json,
+    ):
+        return
+    _, reservation_id = cap_result
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -36576,6 +37801,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         review_kind="plan",
         review_type="plan",
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -36594,6 +37820,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         reset_rounds_on_ship=True,
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     # issue #279: attempt row, plan_review_status, and the SHIP cap reset all
@@ -36743,8 +37970,42 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             )
             prompt = rereview_preamble + prompt
 
+    try:
+        criteria_path = get_criteria_path()
+        criteria_content = (
+            criteria_path.read_text(encoding="utf-8")
+            if criteria_path.exists() else ""
+        )
+    except (OSError, UnicodeError) as exc:
+        print(
+            f"warning: cannot hash review artifact; guard is fail-open: {exc}",
+            file=sys.stderr,
+        )
+        criteria_content = None
+    artifact_sha256 = (
+        _review_artifact_hash_or_warn(
+            build_completion_review_artifact_blob,
+            epic_spec,
+            task_specs,
+            _dispatched_diff_from_prompt(prompt, diff_content),
+            criteria_content,
+        )
+        if criteria_content is not None else None
+    )
+
     # Completion reviews reuse the spec-scoped plan-review counter.
-    enforce_and_increment_review_cap(epic_id, "plan", use_json=args.json)
+    cap_result = enforce_and_increment_review_cap(
+        epic_id, "plan", use_json=args.json,
+        artifact_sha256=artifact_sha256, review_type="completion",
+        forced=bool(getattr(args, "force", False)), return_reservation=True,
+    )
+    # A recovered verdict is the terminal for this call — never dispatch.
+    if handle_replayed_review_cap(
+        cap_result, review_type="completion_review", review_id=epic_id,
+        use_json=args.json,
+    ):
+        return
+    _, reservation_id = cap_result
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -36761,6 +38022,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         review_kind="plan",
         review_type="completion",
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -36776,6 +38038,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         review_type="completion",
         reset_rounds_on_ship=True,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     # Preserve session_id for continuity (avoid clobbering on resumed sessions).
@@ -42045,6 +43308,11 @@ def _add_impl_review_parser(sub, backend: str):
     p.add_argument(
         "--receipt", help="Receipt file path for session continuity"
     )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Human-only override for an unchanged-artifact refusal",
+    )
     p.add_argument("--json", action="store_true", help="JSON output")
     if backend == "codex":
         _add_sandbox_arg(p)
@@ -42112,6 +43380,11 @@ def _add_plan_review_parser(sub, backend: str):
     )
     p.add_argument("--base", default="main", help="Base branch for context")
     p.add_argument("--receipt", help="Receipt file path for session continuity")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Human-only override for an unchanged-artifact refusal",
+    )
     p.add_argument("--json", action="store_true", help="JSON output")
     if backend == "codex":
         _add_sandbox_arg(p)
@@ -42134,6 +43407,11 @@ def _add_completion_review_parser(sub, backend: str):
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p.add_argument("--base", default="main", help="Base branch for diff")
     p.add_argument("--receipt", help="Receipt file path for session continuity")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Human-only override for an unchanged-artifact refusal",
+    )
     p.add_argument("--json", action="store_true", help="JSON output")
     if backend == "codex":
         _add_sandbox_arg(p)
@@ -42866,11 +44144,21 @@ def main() -> None:
         "--receipt", required=True, help="Final receipt path"
     )
     p_findings_attach.add_argument(
-        "--input", required=True, help="Base receipt JSON payload"
+        "--input", help="Base receipt JSON payload (required without --reservation-id)"
     )
     p_findings_attach.add_argument(
-        "--review-file", required=True, dest="review_file",
-        help="Reviewer output already captured by the caller",
+        "--review-file", dest="review_file",
+        help=(
+            "Reviewer output already captured by the caller "
+            "(required without --reservation-id)"
+        ),
+    )
+    p_findings_attach.add_argument(
+        "--reservation-id",
+        help=(
+            "Publish the payload journaled by `review-rounds record` for this "
+            "reservation instead of re-deriving from --input/--review-file"
+        ),
     )
     p_findings_attach.add_argument(
         "--prior",
@@ -42957,6 +44245,19 @@ def main() -> None:
     p_rr_inc.add_argument(
         "--task", help="Task ID (required with --kind impl; counter is per-task)"
     )
+    p_rr_inc.add_argument(
+        "--review-type", choices=["plan", "impl", "completion"],
+        help="Actual dispatched review surface (stored with the reservation)",
+    )
+    p_rr_inc.add_argument(
+        "--artifact-sha256", help="SHA-256 of the exact dispatched artifact"
+    )
+    p_rr_inc.add_argument(
+        "--artifact-file", help="File containing the exact dispatched artifact"
+    )
+    p_rr_inc.add_argument(
+        "--force", action="store_true", help="Record a human-forced dispatch"
+    )
     p_rr_inc.add_argument("--json", action="store_true", help="JSON output")
     p_rr_inc.set_defaults(func=cmd_review_rounds_increment)
 
@@ -43001,6 +44302,27 @@ def main() -> None:
         "--output-file", required=True, help="File containing reviewer output"
     )
     p_rr_record.add_argument(
+        "--reservation-id", help="Reservation id returned by review-rounds increment"
+    )
+    p_rr_record.add_argument(
+        "--receipt-target",
+        help=(
+            "Receipt path this verdict will publish to; journaled with the "
+            "exact intended payload BEFORE the reservation is consumed"
+        ),
+    )
+    p_rr_record.add_argument(
+        "--receipt-payload-file",
+        help="JSON file with the exact intended receipt payload",
+    )
+    p_rr_record.add_argument(
+        "--status-target", choices=["plan", "completion"],
+        help=(
+            "Fold the verdict-derived <kind>_review_status write into the "
+            "same atomic finalize transaction"
+        ),
+    )
+    p_rr_record.add_argument(
         "--exit-code", type=int, default=0, help="Transport process exit code"
     )
     p_rr_record.add_argument(
@@ -43038,6 +44360,23 @@ def main() -> None:
     )
     p_rr_attempts.add_argument("--json", action="store_true", help="JSON output")
     p_rr_attempts.set_defaults(func=cmd_review_rounds_attempts)
+
+    p_review_artifact = subparsers.add_parser(
+        "review-artifact",
+        help="Build the exact domain-separated artifact blob for an RP review fence",
+    )
+    p_review_artifact.add_argument(
+        "kind", choices=["plan", "impl", "completion"],
+        help="Reviewed surface",
+    )
+    p_review_artifact.add_argument("id", help="Spec ID")
+    p_review_artifact.add_argument(
+        "--diff-file",
+        help="Exact dispatched diff (required for impl and completion)",
+    )
+    p_review_artifact.add_argument("--output", required=True, help="Blob output path")
+    p_review_artifact.add_argument("--json", action="store_true", help="JSON output")
+    p_review_artifact.set_defaults(func=cmd_review_artifact_build)
 
     # memory
     p_memory = subparsers.add_parser("memory", help="Memory commands")
@@ -43967,6 +45306,13 @@ def main() -> None:
             choices=["ship", "needs_work", "unknown"],
             help="Plan review status",
         )
+        p_set_review.add_argument(
+            "--reservation-id",
+            help=(
+                "Bind this status write to its review reservation (requires "
+                "exactly one matching finalized attempt)"
+            ),
+        )
         p_set_review.add_argument("--json", action="store_true", help="JSON output")
         p_set_review.set_defaults(func=cmd_spec_set_plan_review_status)
 
@@ -43981,6 +45327,13 @@ def main() -> None:
             required=True,
             choices=["ship", "needs_work", "unknown"],
             help="Completion review status",
+        )
+        p_set_completion_review.add_argument(
+            "--reservation-id",
+            help=(
+                "Bind this status write to its review reservation (requires "
+                "exactly one matching finalized attempt)"
+            ),
         )
         p_set_completion_review.add_argument("--json", action="store_true", help="JSON output")
         p_set_completion_review.set_defaults(func=cmd_spec_set_completion_review_status)
@@ -44699,6 +46052,13 @@ def main() -> None:
     p_rp_export.add_argument("--tab", required=True, help="Tab id or name")
     p_rp_export.add_argument("--out", required=True, help="Output file")
     p_rp_export.set_defaults(func=cmd_rp_prompt_export)
+
+    p_rp_mode_probe = rp_sub.add_parser(
+        "mode-probe",
+        help="Report CE or Classic availability without mutating an RP window",
+    )
+    p_rp_mode_probe.add_argument("--json", action="store_true", help="JSON output")
+    p_rp_mode_probe.set_defaults(func=cmd_rp_mode_probe)
 
     p_rp_setup = rp_sub.add_parser(
         "setup-review", help="Atomic: resolve window + open builder tab"

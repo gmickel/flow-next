@@ -9792,6 +9792,16 @@ def _record_review_attempt_locked(
     # container (fn-159 round 8: container construction ownership is SINGULAR;
     # attach only publishes what is journaled here, never re-derives).
     outcome = "verdict" if verdict else "transport_failure"
+    # One clock for the attempt row and the journaled receipt payload.  The RP
+    # and host fences assemble the receipt payload BEFORE calling record
+    # (fn-159 round 8 ordering), so they cannot know this attempt's timestamp.
+    # An explicitly EMPTY `attempt_timestamp` is their request to have it
+    # stamped here; an absent key stays absent, and a supplied value wins.
+    attempt_at = now_iso()
+    if isinstance(receipt_payload, dict) and not receipt_payload.get(
+        "attempt_timestamp", "absent"
+    ):
+        receipt_payload = {**receipt_payload, "attempt_timestamp": attempt_at}
     journal_path: Optional[Path] = None
     if reservation_id:
         journal_path = _review_journal_path(flow_dir, reservation_id)
@@ -9898,7 +9908,7 @@ def _record_review_attempt_locked(
         failures[scope] = 0
 
     row = {
-        "timestamp": now_iso(),
+        "timestamp": attempt_at,
         "scope": scope,
         "backend": backend,
         "kind": review_type or review_kind,
@@ -10106,21 +10116,27 @@ def _latest_consumed_artifact_sha256(
     review_kind: str,
     task_id: Optional[str],
     epoch: int,
+    review_type: Optional[str] = None,
 ) -> Optional[str]:
-    """Return this counter scope's latest hash-bearing consumed verdict.
+    """Return this review type's latest hash-bearing consumed verdict.
 
-    ``review_type`` is encoded into every blob.  Deliberately do not filter by
-    it here: plan and completion share a counter, and the domain-separated
-    identity is what makes their otherwise adjacent ledger rows incomparable.
+    ``review_type`` is encoded into every blob, so a cross-type row can never
+    produce a false REFUSAL.  It can produce a false PASS: plan and completion
+    share one counter, so a plan → completion → plan sequence would otherwise
+    take the completion row as the baseline and wave an unchanged plan artifact
+    straight through.  Filter on the row's dispatched surface (``kind``) so the
+    baseline is always the same review type this dispatch is.
     """
     attempts = spec_data.get("review_attempts")
     if not isinstance(attempts, list):
         return None
+    wanted_type = review_type or review_kind
     for row in reversed(attempts):
         if not isinstance(row, dict):
             continue
         if (
             row.get("counter_kind") == review_kind
+            and row.get("kind") == wanted_type
             and row.get("task") == task_id
             and row.get("round_consumed") is True
             and row.get("hash_epoch") == epoch
@@ -10281,7 +10297,7 @@ def _enforce_and_increment_review_cap_locked(
         )
     elif not forced:
         baseline = _latest_consumed_artifact_sha256(
-            spec_data, review_kind, task_id, epoch
+            spec_data, review_kind, task_id, epoch, review_type
         )
         if baseline == artifact_sha256:
             marker = "NOT_RETRYABLE: artifact unchanged since last verdict"

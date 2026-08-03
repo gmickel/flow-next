@@ -281,6 +281,20 @@ class UnchangedArtifactDriverTerminalTestCase(unittest.TestCase):
         self.assertIn("exit 1", ralph)
         self.assertNotIn("force_retry=1", ralph[ralph.index(self.MARKER):ralph.index(self.MARKER) + 700])
 
+    def test_ralph_terminal_fires_on_marker_content_alone(self) -> None:
+        """fn-159.7 review r1: flowctl exits 1 INSIDE a session that itself
+        exits 0, so an rc conjunct would never fire on the common case."""
+        ralph = (
+            PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh"
+        ).read_text()
+        gate_at = ralph.index(self.MARKER)
+        line_start = ralph.rindex("\n", 0, gate_at) + 1
+        gate_line = ralph[line_start:ralph.index("\n", gate_at)]
+        self.assertIn("grep -Fq", gate_line)
+        self.assertNotIn("claude_rc", gate_line)
+        # Content-matched terminals elsewhere in the template set the pattern.
+        self.assertTrue(gate_line.lstrip().startswith("if grep -Fq"), gate_line)
+
 
 if __name__ == "__main__":
     unittest.main()

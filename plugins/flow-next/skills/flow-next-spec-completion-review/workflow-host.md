@@ -34,12 +34,32 @@ fix the file, re-run; absent file exits 0 and costs nothing):
 ```
 
 Then, after the complete reviewer input and final diff are composed but before
-**every** host dispatch (including the first), build the completion artifact and
-reserve one shared spec-scoped round:
+**every** host dispatch (including the first), bind the reviewed range, build
+the completion artifact, and reserve one shared spec-scoped round.
+
+The snapshot anchors are bound **in this same block, above the diff** — an
+unbound `$REVIEW_BASE_SHA`/`$REVIEW_HEAD_SHA` makes `git diff ..` fail, hashes
+an empty blob, and falsely refuses the next round as NOT_RETRYABLE. The fence
+fails closed (no reservation) whenever the range cannot be bound or diffed.
 
 ```bash
+DIFF_BASE="${BASE_COMMIT:-main}"
+git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 || DIFF_BASE="master"
+git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 \
+  || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.env"
+REVIEW_HEAD_SHA="$(git rev-parse HEAD)" || exit 1
+REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
+[[ -n "$REVIEW_HEAD_SHA" && -n "$REVIEW_BASE_SHA" ]] \
+  || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
+printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
+  "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+
 DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.diff"
-git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
+  || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+[[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
+  || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
 ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.blob"
 "$FLOWCTL" review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" \
   --output "$ARTIFACT_FILE" --json
@@ -70,12 +90,10 @@ Exit 4 / `ESCALATE:` before a reviewer runs means no completion verdict was
 delivered in this run. Stop without writing completion status; autonomous
 callers surface `NEEDS_HUMAN`.
 
-Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
-Immediately beforehand resolve `DIFF_BASE="${BASE_COMMIT:-main}"` (fall back
-to `master` only when `main` does not resolve), fail closed unless it resolves,
-then capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
-`REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")"`.
-Retain those literal anchors through receipt writing.
+Dispatch a **fresh** read-only reviewer subagent with the resolved pin. The
+`REVIEW_HEAD_SHA` / `REVIEW_BASE_SHA` anchors bound in the fence above are the
+reviewed range; retain them (re-`source "$REVIEW_SNAPSHOT_FILE"` in any later
+block) through receipt writing.
 
 | Host | How to pin |
 |------|------------|
@@ -136,12 +154,14 @@ Build this payload once:
   "session_id": null,
   "review": "<full reviewer output text - findings + verdict>",
   "timestamp": "<ISO-8601>",
-  "attempt_timestamp": "<.attempts[-1].timestamp from RECORD_JSON>"
+  "attempt_timestamp": ""
 }
 ```
 
 Write that base payload and the full reviewer output to temporary files BEFORE
-the record fence above. After its successful journaled finalization, validate
+the record fence above. The empty `attempt_timestamp` is the request for
+`record` to stamp its own attempt clock into the journaled payload — pre-record
+assembly cannot know it. After its successful journaled finalization, validate
 and publish that payload by reservation id (never re-derive it):
 
 ```bash

@@ -685,15 +685,18 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         recovery = "completion-review-receipt-recovery-${SPEC_ID}.json"
         self.assertIn(recovery, host)
-        self.assertIn(recovery, rp)
-        self.assertLess(rp.index('cat > "$RECOVERY_TMP"'), rp.index(
-            '--receipt "$REVIEW_RECEIPT_PATH"'
-        ))
-        self.assertIn('mktemp "${RECEIPT_RECOVERY}.tmp.XXXXXX"', rp)
-        self.assertIn('if ! cat > "$RECOVERY_TMP"', rp)
-        self.assertNotIn('mv -f "$RECOVERY_TMP" "$RECEIPT_RECOVERY"', rp)
-        self.assertIn('--input "$RECOVERY_TMP"', rp)
-        self.assertIn('--recovery "$RECEIPT_RECOVERY"', rp)
+        # fn-159.7 review r1: the RP transport no longer hand-rolls a /tmp
+        # recovery copy. `review-rounds record` journals the exact intended
+        # payload under .flow/review-runs/ BEFORE the receipt advances, which
+        # is the same guarantee with a durable, identity-bound artifact.
+        self.assertNotIn('RECOVERY_TMP', rp)
+        self.assertNotIn('--recovery "$RECEIPT_RECOVERY"', rp)
+        self.assertLess(
+            rp.index('--receipt-payload-file "$RECEIPT_INPUT"'),
+            rp.index('review-findings attach'),
+        )
+        self.assertIn('--receipt-target "$REVIEW_RECEIPT_PATH"', rp)
+        self.assertIn('--reservation-id "$RESERVATION_ID"', rp)
         self.assertNotIn(
             'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
         )
@@ -716,15 +719,28 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
 
     def test_rp_recorder_failure_cannot_be_swallowed_by_verdict_echo(self) -> None:
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
-        block = _bash_fence_after(
-            rp, "Redirect the review response to the literal response file"
-        )
+        # fn-159.7 review r1: recording moved into the Phase 4 finalize fence
+        # so the receipt inputs are assembled BEFORE record.
+        block = _bash_fence_after(rp, "This is the single recorder fence")
         block = block.replace("<spec-id>", "fn-1").replace("<suffix>", "test")
         self.assertIn('RECORD_EXIT=$?', block)
         self.assertLess(block.index('RECORD_EXIT=$?'), block.index('echo "VERDICT='))
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
+            (temp / "flow-completion-review-snapshot-fn-1-test.env").write_text(
+                "REVIEW_HEAD_SHA=deadbeef\nREVIEW_BASE_SHA=deadbeef\n",
+                encoding="utf-8",
+            )
+            (temp / "flow-completion-review-dispatch-result-fn-1-test.env").write_text(
+                "RP_EXIT=0\nVERDICT=SHIP\n", encoding="utf-8",
+            )
+            (temp / "flow-completion-review-reservation-fn-1-test.json").write_text(
+                '{"reservation_id":"reservation-test"}', encoding="utf-8",
+            )
+            (temp / "flow-completion-review-response-fn-1-test.md").write_text(
+                "<verdict>SHIP</verdict>\n", encoding="utf-8",
+            )
             flowctl_stub = temp / "flowctl-stub"
             flowctl_stub.write_text(
                 "#!/usr/bin/env bash\n"

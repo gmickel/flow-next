@@ -222,10 +222,14 @@ without invoking RepoPrompt. Otherwise run one blocking foreground call:
 PROMPT_FILE="${TMPDIR:-/tmp}/flow-plan-review-prompt-<spec-id>-<suffix>.md"
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
 SETUP_FILE="${TMPDIR:-/tmp}/flow-plan-review-setup-<spec-id>-<suffix>.env"
+# Both branches consume these literal paths — declare them at block top, not
+# inside the Classic branch, or the CE path finalizes with an empty id.
+RESERVATION_FILE="${TMPDIR:-/tmp}/flow-plan-review-reservation-<spec-id>-<suffix>.json"
+REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-plan-review-snapshot-<spec-id>-<suffix>.env"
 source "$SETUP_FILE"
+source "$REVIEW_SNAPSHOT_FILE"
 if [[ "$RP_MODE" == "classic" ]]; then
   # Classic's final prompt now exists; reserve immediately before chat-send.
-  RESERVATION_FILE="${TMPDIR:-/tmp}/flow-plan-review-reservation-<spec-id>-<suffix>.json"
   ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-<spec-id>-<suffix>.blob"
   $FLOWCTL review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
   ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
@@ -246,18 +250,40 @@ if [[ "$RP_MODE" == "classic" ]]; then
 else
   RP_EXIT=0
 fi
+RESERVATION_ID="$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+  || { echo "no reservation id for this dispatch; refusing to finalize" >&2; exit 2; }
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
   | tail -n 1 | sed -E 's#</?verdict>##g')"
+
+# Round-8 ordering: the receipt inputs are assembled BEFORE `record`, which
+# journals the exact intended payload while consuming the reservation. Phase 4
+# only publishes that journaled payload. A no-verdict transport failure
+# assembles nothing, so a refund never consumes receipt inputs.
+RECEIPT_ARGS=()
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
+  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+  RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-plan-review-receipt-<spec-id>-<suffix>.json"
+  jq -n --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+    --arg head "${REVIEW_HEAD_SHA:-}" \
+    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{type:"plan_review",id:$id,mode:"rp",verdict:$verdict,head:$head,timestamp:$timestamp}' \
+    > "$RECEIPT_INPUT"
+  RECEIPT_ARGS=(--receipt-target "$REVIEW_RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT")
+fi
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
   --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
-  --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+  --reservation-id "$RESERVATION_ID" --status-target plan \
+  ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} \
   --exit-code "$RP_EXIT" --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
 if [[ "$RECORD_EXIT" -ne 0 ]]; then
   exit "$RECORD_EXIT"
 fi
+REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-plan-review-dispatch-<spec-id>-<suffix>.env"
+printf 'VERDICT=%q\nRESERVATION_ID=%q\n' "$VERDICT" "$RESERVATION_ID" \
+  > "$REVIEW_DISPATCH_FILE"
 ```
 
 If no verdict exists, the `record` call refunds the reservation and durably
@@ -270,31 +296,24 @@ file once for findings; do not echo/cat it.
 
 ## Phase 4: Receipt and Status
 
-When `REVIEW_RECEIPT_PATH` is set, write the existing plan-review receipt and
-atomically attach supported structured findings from the response already on
-disk:
+The receipt payload was journaled by Phase 3's `record`. Publication is a pure
+journal read: `review-findings attach --reservation-id --receipt` validates and
+writes it. Never re-derive the payload or the findings container here — Phase 3
+owns their construction:
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
-  RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
-  REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-plan-review-snapshot-<spec-id>-<suffix>.env"
-  source "$REVIEW_SNAPSHOT_FILE"
-  RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-plan-review-receipt.XXXXXX.json")"
-  jq -n --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
-    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{type:"plan_review",id:$id,mode:"rp",verdict:$verdict,timestamp:$timestamp}' \
-    > "$RECEIPT_INPUT"
-  if ! "$FLOWCTL" review-findings attach \
-    --input "$RECEIPT_INPUT" \
-    --receipt "$REVIEW_RECEIPT_PATH" \
-    --review-file "$RESPONSE_FILE" \
-    --head "$REVIEW_HEAD_SHA" \
-    --json >/dev/null; then
-    rm -f "$RECEIPT_INPUT"
-    echo "<promise>RETRY</promise>"
-    exit 0
+  REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-plan-review-dispatch-<spec-id>-<suffix>.env"
+  source "$REVIEW_DISPATCH_FILE"
+  if [[ -n "${VERDICT:-}" ]]; then
+    if ! "$FLOWCTL" review-findings attach \
+      --reservation-id "$RESERVATION_ID" \
+      --receipt "$REVIEW_RECEIPT_PATH" \
+      --json >/dev/null; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
   fi
-  rm -f "$RECEIPT_INPUT"
 fi
 ```
 
@@ -320,10 +339,12 @@ Only after the current spec and affected task specs are updated:
    `--window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review`
    with no `--tab`; `T` is CE's canonical context binding, not visible-tab
    projection.
-5. Overwrite the same response file, parse the verdict, call the same
-   `review-rounds record ... --review-type plan` command with the captured
-   `rp chat-send` exit code, capture and check `RECORD_EXIT` exactly as in the
-   first dispatch, then read the response once and update receipt/status.
+5. Overwrite the same response file, parse the verdict, assemble the receipt
+   inputs FIRST, then call the same
+   `review-rounds record ... --review-type plan --status-target plan` command
+   with those inputs and the captured `rp chat-send` exit code, capture and
+   check `RECORD_EXIT` exactly as in the first dispatch, then read the response
+   once and publish the receipt by reservation id.
    A nonzero recorder exit stops the round before any verdict/control path.
 
 ## Anti-patterns
