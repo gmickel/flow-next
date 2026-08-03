@@ -4395,5 +4395,209 @@ class TestUnusableFindingsHistoryDegrades(_InProcessBackendReviewBase):
             self.assertIsNone(findings.get("supersedesReceiptId"))
 
 
+class TestSupersededJournalNeverRegressesStatus(_JournalReplayBase):
+    """PR #290 bot r5 P1: when the receipt on disk is PROVEN newer, the older
+    journal's receipt leg is left alone — but its STATUS leg used to run
+    anyway, stamping the older verdict onto the single
+    ``plan_review_status`` / ``completion_review_status`` slot. The receipt
+    then said SHIP while the sidecar said needs_work, decided by nothing but
+    journal scan order."""
+
+    def _record_cli(self, reservation_id: str, receipt: Path) -> dict:
+        response = self.root / f"response-{reservation_id}.md"
+        response.write_text("<verdict>NEEDS_WORK</verdict>")
+        payload_file = self.root / f"payload-{reservation_id}.json"
+        payload_file.write_text(
+            json.dumps({**self._payload(), "verdict": "NEEDS_WORK"})
+        )
+        code, out, err = self._run_cli(
+            "review-rounds", "record", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--backend", "rp",
+            "--output-file", str(response),
+            "--reservation-id", reservation_id,
+            "--status-target", "plan", "--exit-code", "0", "--json",
+            "--receipt-target", str(receipt),
+            "--receipt-payload-file", str(payload_file),
+        )
+        self.assertEqual(code, 0, err)
+        return json.loads(out)
+
+    def _publish_newer_round(self, receipt: Path) -> str:
+        """A later round finalizes and publishes a SHIP receipt + status."""
+        newer_id = "f" * 32
+        spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        data = json.loads(spec_path.read_text())
+        data["review_attempts"].append({
+            "timestamp": "9999-01-01T00:00:00Z",
+            "scope": "plan", "counter_kind": "plan", "task": None,
+            "kind": "plan", "backend": "rp", "outcome": "verdict",
+            "verdict": "SHIP", "reservation_id": newer_id,
+            "finalized": {
+                "receipt": "complete", "digest": "not_applicable",
+                "status": "complete",
+            },
+        })
+        data["plan_review_status"] = "ship"
+        data["plan_reviewed_at"] = "9999-01-01T00:00:00Z"
+        spec_path.write_text(json.dumps(data))
+        receipt.write_text(json.dumps({
+            **self._payload(), "verdict": "SHIP",
+            "review_reservation_id": newer_id,
+        }))
+        return newer_id
+
+    def test_older_journal_replay_leaves_newer_status_alone(self):
+        reservation_id = self._reserve()
+        receipt = self.root / "rp-receipt.json"
+        self._record_cli(reservation_id, receipt)
+        # Deferred, as bot r4 requires: nothing terminal yet.
+        self.assertEqual(self._data()["plan_review_status"], "unknown")
+
+        newer = self._publish_newer_round(receipt)
+        before = json.loads(receipt.read_text())
+
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+
+        # Receipt untouched AND the status it states is untouched.
+        self.assertEqual(json.loads(receipt.read_text()), before)
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertEqual(data["plan_reviewed_at"], "9999-01-01T00:00:00Z")
+        # The older journal is finished, not stuck: both legs terminal.
+        row = next(
+            r for r in data["review_attempts"]
+            if r.get("reservation_id") == reservation_id
+        )
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        self.assertEqual(row["finalized"]["status"], "superseded")
+        self.assertFalse(self._journal_path(reservation_id).exists())
+        # …and the gate is not wedged behind it.
+        self.assertIsInstance(
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", return_reservation=True
+            ),
+            tuple,
+        )
+        self.assertEqual(
+            json.loads(receipt.read_text())["review_reservation_id"], newer
+        )
+
+    def test_receipt_leg_already_complete_still_supersedes_status(self):
+        """The receipt leg can have been completed by an earlier partial
+        replay, with a newer round publishing over the stable receipt path
+        before this journal's status leg ever ran."""
+        reservation_id = self._reserve()
+        receipt = self.root / "rp-receipt.json"
+        self._record_cli(reservation_id, receipt)
+        journal_path = self._journal_path(reservation_id)
+        journal = json.loads(journal_path.read_text())
+        journal["finalized"]["receipt"] = "complete"
+        journal["finalized"]["digest"] = "complete"
+        journal_path.write_text(json.dumps(journal))
+
+        self._publish_newer_round(receipt)
+        before = json.loads(receipt.read_text())
+
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(json.loads(receipt.read_text()), before)
+        self.assertEqual(self._data()["plan_review_status"], "ship")
+        self.assertFalse(journal_path.exists())
+
+    def test_unsuperseded_journal_still_lands_its_status(self):
+        """The floor stays: with no proven-newer receipt, the delivered
+        verdict's status must still be written."""
+        reservation_id = self._reserve()
+        receipt = self.root / "rp-receipt.json"
+        self._record_cli(reservation_id, receipt)
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "needs_work")
+        self.assertEqual(
+            json.loads(receipt.read_text())["review_reservation_id"],
+            reservation_id,
+        )
+
+
+class TestSingleLockedCompletionStatusWrite(_InProcessBackendReviewBase):
+    """PR #290 bot r5 P1: publication-from-journal completes the deferred
+    status leg inside the receipt+sidecar lock, and the completion handler
+    then ran ``_self_write_review_status`` as a SECOND, unlocked
+    read-modify-write of the same spec JSON. Anything a concurrent
+    reserve/finalize landed between that read and its write was overwritten by
+    the stale snapshot."""
+
+    def _spec_path(self) -> Path:
+        return self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+
+    def test_concurrent_sidecar_mutation_survives_publication(self):
+        receipt = self.root / "completion-receipt.json"
+        spec_path = self._spec_path()
+        published = {"done": False}
+        real_publish = flowctl._publish_review_receipt_from_journal
+        real_load = flowctl.load_json_or_exit
+
+        def publish(reservation_id, receipt_path, *, result_out=None):
+            ok = real_publish(reservation_id, receipt_path, result_out=result_out)
+            published["done"] = True
+            return ok
+
+        def racing_load(path, what, use_json=True):
+            data = real_load(path, what, use_json=use_json)
+            if published["done"] and Path(path) == spec_path:
+                # Another process finalizes/reserves immediately after this
+                # read — ONCE, so a later reader cannot restore it. Any
+                # unlocked read-modify-write over this snapshot loses it.
+                published["done"] = False
+                concurrent = json.loads(spec_path.read_text())
+                concurrent["review_pending_rounds"] = {"plan": 1}
+                concurrent["concurrent_marker"] = "kept"
+                spec_path.write_text(json.dumps(concurrent))
+            return data
+
+        with mock.patch.object(
+            flowctl, "_publish_review_receipt_from_journal", publish
+        ), mock.patch.object(flowctl, "load_json_or_exit", racing_load):
+            payload, err = self._dispatch_completion(receipt)
+
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertTrue(receipt.exists())
+        data = self._data()
+        # The concurrent mutation is intact — no stale snapshot wrote over it.
+        self.assertEqual(data.get("concurrent_marker"), "kept")
+        self.assertEqual(data.get("review_pending_rounds"), {"plan": 1})
+        # …and the status the LOCKED transaction wrote is what's reported.
+        self.assertEqual(data["completion_review_status"], "needs_work")
+        self.assertEqual(payload["completion_review_status"], "needs_work")
+
+    def test_journaled_path_does_not_self_write_status(self):
+        receipt = self.root / "completion-receipt.json"
+        with mock.patch.object(
+            flowctl, "_self_write_review_status", side_effect=AssertionError(
+                "journaled publication owns the status write"
+            )
+        ):
+            payload, _ = self._dispatch_completion(receipt)
+        self.assertEqual(payload["completion_review_status"], "needs_work")
+        self.assertEqual(self._data()["completion_review_status"], "needs_work")
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["status"], "complete")
+
+    def test_unjournaled_path_still_self_writes_status(self):
+        """No receipt target (no `--receipt`) means no journal owns the
+        status: the direct writer must still land it."""
+        payload, _ = self._dispatch_completion(None)
+        self.assertEqual(payload["completion_review_status"], "needs_work")
+        self.assertEqual(self._data()["completion_review_status"], "needs_work")
+
+
 if __name__ == "__main__":
     unittest.main()

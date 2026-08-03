@@ -9699,13 +9699,23 @@ def _review_journal_path(flow_dir: Path, reservation_id: str) -> Path:
     return _review_runs_dir(flow_dir) / f"{reservation_id}.json"
 
 
+# Journal legs are terminal in three ways: written (`complete`), never
+# applicable to this journal (`not_applicable`), or deliberately NOT written
+# because a later round already published a newer value (`superseded`,
+# PR #290 bot r5). All three are terminal; only `pending` blocks the gate.
+_JOURNAL_LEG_STATES = frozenset(
+    {"pending", "complete", "not_applicable", "superseded"}
+)
+_JOURNAL_LEG_TERMINAL = frozenset({"complete", "not_applicable", "superseded"})
+
+
 def _journal_progress(journal: dict) -> dict:
     progress = journal.get("finalized")
     if not isinstance(progress, dict):
         progress = {}
         journal["finalized"] = progress
     for leg in ("receipt", "digest", "status"):
-        if progress.get(leg) not in {"pending", "complete", "not_applicable"}:
+        if progress.get(leg) not in _JOURNAL_LEG_STATES:
             progress[leg] = "not_applicable"
     return progress
 
@@ -9837,12 +9847,44 @@ def _review_status_from_verdict(verdict: Optional[str]) -> Optional[str]:
     return _REVIEW_VERDICT_STATUS.get(verdict or "")
 
 
+def _review_status_superseded(
+    journal: dict,
+    receipt_target: object,
+    spec_data: Optional[dict],
+    progress: dict,
+) -> bool:
+    """Whether a newer round already owns this journal's status slot.
+
+    PR #290 bot r5. The receipt leg can have been completed by an EARLIER
+    partial replay, with a later round publishing over the same stable receipt
+    path before this journal's status leg ever ran. The published receipt is
+    then the authority for the denormalized status, so re-check supersession
+    from the receipt on disk instead of trusting only this call's receipt leg.
+    """
+    if progress.get("receipt") == "not_applicable":
+        return False
+    if not isinstance(receipt_target, str) or not receipt_target:
+        return False
+    try:
+        existing = json.loads(Path(receipt_target).read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return False
+    if not isinstance(existing, dict):
+        return False
+    if existing == _review_journal_receipt_payload(journal):
+        return False
+    return _review_receipt_proven_newer(
+        journal, existing.get("review_reservation_id"), spec_data
+    )
+
+
 def _complete_review_journal(
     flow_dir: Path,
     journal_path: Path,
     journal: dict,
     *,
     spec_data: Optional[dict] = None,
+    result_out: Optional[dict] = None,
 ) -> bool:
     """Finish the deterministic, journaled legs without re-reading /tmp input.
 
@@ -9860,8 +9902,15 @@ def _complete_review_journal(
     bytes over it would regress it; every other state — a differing but
     unproven id, or a legacy receipt with no id at all — is published over,
     since dropping a delivered verdict is the worse failure.
+
+    A receipt left alone because it is PROVEN newer also supersedes this
+    journal's STATUS leg (PR #290 bot r5): the denormalized
+    ``<kind>_review_status`` is a single slot, so applying an older journal's
+    verdict after a newer receipt has published would make the sidecar
+    contradict the receipt on nothing but journal scan order.
     """
     progress = _journal_progress(journal)
+    receipt_superseded = False
     digest_backfill: Optional[tuple[dict, Optional[dict]]] = None
     if progress["digest"] == "pending":
         # Validate now, before receipt publication.  The caller has the
@@ -9893,7 +9942,9 @@ def _complete_review_journal(
             elif _review_receipt_proven_newer(
                 journal, existing_reservation, spec_data
             ):
-                pass  # PROVEN newer receipt: replaying would regress it.
+                # PROVEN newer receipt: replaying would regress it — and so
+                # would this journal's status leg below.
+                receipt_superseded = True
             else:
                 # Same lock the receipt writers hold (callers take the
                 # two-resource lock receipt-before-sidecar): keep the prior
@@ -9918,13 +9969,23 @@ def _complete_review_journal(
         status = _review_status_from_verdict(journal.get("verdict"))
         if spec_data is None or status_target not in ("plan", "completion"):
             return False
-        if status:
-            # Idempotent re-apply: same verdict-derived value every replay.
-            spec_data[f"{status_target}_review_status"] = status
-            spec_data[f"{status_target}_reviewed_at"] = now_iso()
-        progress["status"] = "complete"
+        if receipt_superseded or _review_status_superseded(
+            journal, receipt_target, spec_data, progress
+        ):
+            # A later round already owns this slot: complete the leg WITHOUT
+            # writing, so the sidecar keeps the newer verdict the published
+            # receipt states.
+            progress["status"] = "superseded"
+        else:
+            if status:
+                # Idempotent re-apply: same verdict-derived value every replay.
+                spec_data[f"{status_target}_review_status"] = status
+                spec_data[f"{status_target}_reviewed_at"] = now_iso()
+                if result_out is not None:
+                    result_out["status_written"] = status
+            progress["status"] = "complete"
         atomic_write_json(journal_path, journal)
-    if all(progress[leg] in {"complete", "not_applicable"} for leg in progress):
+    if all(progress[leg] in _JOURNAL_LEG_TERMINAL for leg in progress):
         # PR #290 bot r3: the recovery payload exists only to survive the gap
         # between receipt publication and the terminal status write. Both legs
         # are now complete, so drop it here — the direct handler's own cleanup
@@ -28337,9 +28398,7 @@ def _apply_reservation_status_leg(
         progress = _journal_progress(journal)
         if progress.get("status") == "pending":
             progress["status"] = "complete"
-        if all(
-            progress[leg] in {"complete", "not_applicable"} for leg in progress
-        ):
+        if all(progress[leg] in _JOURNAL_LEG_TERMINAL for leg in progress):
             try:
                 journal_path.unlink()
             except FileNotFoundError:
@@ -37867,7 +37926,7 @@ def _backend_review_receipt_payload(
 
 
 def _publish_review_receipt_from_journal(
-    reservation_id: str, receipt_path: str
+    reservation_id: str, receipt_path: str, *, result_out: Optional[dict] = None
 ) -> bool:
     """Publish the receipt operation journaled BEFORE the round was consumed.
 
@@ -37912,7 +37971,8 @@ def _publish_review_receipt_from_journal(
                 payload,
             )
         if not _complete_review_journal(
-            flow_dir, journal_path, journal, spec_data=spec_data
+            flow_dir, journal_path, journal, spec_data=spec_data,
+            result_out=result_out,
         ):
             return False
         progress = dict(_journal_progress(journal))
@@ -37921,6 +37981,8 @@ def _publish_review_receipt_from_journal(
                 row["finalized"] = dict(progress)
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, spec_data)
+    if result_out is not None:
+        result_out["published"] = True
     return True
 
 
@@ -37947,6 +38009,7 @@ def _write_backend_review_receipt(
     findings_container: Optional[dict] = None,
     findings_built: bool = False,
     journaled_reservation_id: Optional[str] = None,
+    publish_out: Optional[dict] = None,
 ) -> bool:
     """Write a review receipt with stable key order (Ralph / pilot / land).
 
@@ -37955,6 +38018,11 @@ def _write_backend_review_receipt(
     write a terminal review status or delete the recovery payload on a False —
     doing so wedges the next invocation (terminal status, no receipt, no
     payload) before it ever reaches the pre-increment replay gate.
+
+    ``publish_out`` reports what the JOURNALED path did inside its locked
+    transaction — ``published`` and, when the deferred status leg landed
+    there, ``status_written``. Callers read that instead of re-writing the
+    status themselves (PR #290 bot r5).
     """
     if journaled_reservation_id:
         # The journal is authoritative: never write a second, unjournaled
@@ -37962,7 +38030,7 @@ def _write_backend_review_receipt(
         # keeps its `receipt` leg pending and the pre-increment replay gate
         # refuses the next dispatch until it completes.
         if not _publish_review_receipt_from_journal(
-            journaled_reservation_id, receipt_path
+            journaled_reservation_id, receipt_path, result_out=publish_out
         ):
             print(
                 "warning: journaled review receipt not published yet for "
@@ -39280,6 +39348,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     )
 
     receipt_published = True
+    publish_out: dict = {}
     if receipt_path:
         receipt_published = _write_backend_review_receipt(
             receipt_path,
@@ -39302,6 +39371,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             findings_container=findings_container,
             findings_built=True,
             journaled_reservation_id=reservation_id if receipt_target else None,
+            publish_out=publish_out,
         )
 
     # Receipt evidence must land before terminal status (PR #290 bot r2): when
@@ -39311,11 +39381,24 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     # path for the next invocation.
     written_status = None
     if receipt_published:
-        written_status = _self_write_review_status(
-            epic_id, "completion", verdict, use_json=args.json
-        )
-        if written_status is not None and receipt_path:
-            _completion_review_receipt_recovery_path(epic_id).unlink(missing_ok=True)
+        if publish_out.get("published"):
+            # PR #290 bot r5: publication-from-journal already completed the
+            # deferred status leg INSIDE the receipt+sidecar lock, and cleared
+            # the recovery payload with it. A second, unlocked read-modify-
+            # write of the spec JSON here would clobber any concurrent
+            # reserve/finalize that landed in between, so just report what the
+            # locked transaction wrote.
+            written_status = publish_out.get("status_written")
+        else:
+            # No journal for this round (no reservation or no parsed verdict):
+            # the direct receipt writer owns the status write.
+            written_status = _self_write_review_status(
+                epic_id, "completion", verdict, use_json=args.json
+            )
+            if written_status is not None and receipt_path:
+                _completion_review_receipt_recovery_path(epic_id).unlink(
+                    missing_ok=True
+                )
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
 

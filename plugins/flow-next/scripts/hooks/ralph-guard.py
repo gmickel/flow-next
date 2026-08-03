@@ -695,6 +695,19 @@ _FORCE_ASSIGN_RE = re.compile(
     r"(?:review-rounds|increment|impl-review|plan-review|completion-review)"
     r"['\"]?(?=[\s;&|)]|$)"
 )
+# PR #290 bot r5: an argv token carrying an unexpanded shell expansion —
+# `$verb`, `${verb}`, `$(…)`, backticks. Composition (`verb="${verb}-rounds"`)
+# defeats every value-matching screen, so the SUBCOMMAND positions are held to
+# a literal-only contract instead: what a variable might expand to is
+# unknowable here, so an expansion in those positions fails closed.
+_ARGV_EXPANSION_RE = re.compile(r"[$`]")
+# The FIRST token after the launcher is always a subcommand, so an expansion
+# there is unknowable and blocked outright. The SECOND token is a subcommand
+# only under a group (`review-rounds reset`, `spec reset-review-rounds`,
+# `codex impl-review`); under a leaf verb it is an ARGUMENT, and
+# `flowctl show "$TASK_ID"` / `flowctl done "$ID"` must stay legal. So depth 2
+# is enforced exactly for the groups that OWN a guarded verb.
+_GUARDED_SUBCOMMAND_GROUPS = frozenset({"spec", "review-rounds"})
 _ARGV_WRAPPERS = frozenset({
     "env", "timeout", "nice", "xargs", "nohup", "stdbuf",
     # PR #290 bot r3: shell builtins that run their argv transparently. Without
@@ -879,6 +892,21 @@ def _blocks_review_counter_recovery(command: str) -> bool:
         return False
 
     for argv in flowctl_argvs:
+        # Structural rule, ending the regex arms race (PR #290 bot r5): in a
+        # guarded session a flowctl SUBCOMMAND must be a literal. Composition
+        # (`verb=review; verb="${verb}-rounds"`) leaves no verb text anywhere
+        # for a value-matching screen to find, so the position — not the value
+        # — decides: an unexpanded variable or command substitution in a
+        # subcommand slot is blocked regardless of what it might expand to.
+        # Every shipped fence spells its subcommands literally; variable
+        # ARGUMENTS (ids, paths, `--reservation-id "$(jq …)"`) stay legal.
+        if argv and _ARGV_EXPANSION_RE.search(argv[0]):
+            return True
+        if len(argv) > 1 and _ARGV_EXPANSION_RE.search(argv[1]):
+            if argv[0] in _GUARDED_SUBCOMMAND_GROUPS:
+                return True
+            if argv[0] in _REVIEW_BACKENDS and "--force" in argv:
+                return True
         if argv[:2] == ["spec", "reset-review-rounds"]:
             return True
         if argv[:2] == ["review-rounds", "reset"]:
@@ -908,7 +936,10 @@ def handle_pre_tool_use(data: dict) -> None:
             "BLOCKED: review-counter reset and --force review dispatch/increment are "
             "human-only recovery tools. Ralph must surface the terminal instead. "
             "A shell command that merely mentions those verbs (prose, heredoc) trips "
-            "the same screen - write the text with the file tool instead."
+            "the same screen - write the text with the file tool instead. "
+            "flowctl SUBCOMMANDS must also be spelled literally: a variable or "
+            "command substitution in either of the two tokens after the launcher "
+            "is blocked (variable ARGUMENTS - ids, paths, --reservation-id - are fine)."
         )
 
     # Check for chat-send commands

@@ -126,12 +126,14 @@ diffs default to REVIEW. Opt-in to LLM judge with `FLOW_TRIAGE_LLM=1`.
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
- TRIAGE_ARGS=(triage-skip --receipt "$RECEIPT_PATH" --json)
+ # Subcommand + one literal flag stay on the command line (the Ralph guard
+ # blocks a variable in either of the two tokens after the launcher).
+ TRIAGE_ARGS=(--receipt "$RECEIPT_PATH")
  [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
  [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
  [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
 
- if TRIAGE_OUT=$($FLOWCTL "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+ if TRIAGE_OUT=$($FLOWCTL triage-skip --json "${TRIAGE_ARGS[@]}" 2>/dev/null); then
  SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null)
  echo "Triage-skip: $SKIP_REASON"
  echo "VERDICT=SHIP"

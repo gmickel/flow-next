@@ -40,10 +40,12 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_
 
 # Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely
 # (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).
-args=(cursor impl-review)
+# Subcommand tokens stay LITERAL on the command line (the Ralph guard blocks
+# a variable in either of the two tokens after the launcher).
+args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")
-$FLOWCTL "${args[@]}"
+$FLOWCTL cursor impl-review "${args[@]}"
 ```
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`.**

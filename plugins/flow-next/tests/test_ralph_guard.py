@@ -341,6 +341,50 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
                 proc = self._hook(command)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_blocks_composed_variable_subcommand(self) -> None:
+        # PR #290 bot r5: value-matching screens lose to composition — the
+        # verb never appears as a literal anywhere in the text. The structural
+        # rule ends the arms race: a flowctl SUBCOMMAND position holding an
+        # unexpanded expansion is blocked on that ground alone.
+        for command in (
+            'verb=review; verb="${verb}-rounds"; sub=re; sub="${sub}set"; '
+            '"$FLOWCTL" "$verb" "$sub" fn-1 --kind plan',
+            'a=rev; b=iew-rounds; "$FLOWCTL" "${a}${b}" reset fn-1 --kind plan',
+            '"$FLOWCTL" "$(printf %s review-rounds)" reset fn-1 --kind plan',
+            '"$FLOWCTL" review-rounds "`printf %s reset`" fn-1 --kind plan',
+            'v=spec; .flow/bin/flowctl "$v" reset-review-rounds fn-1',
+            'd=impl-review; "$FLOWCTL" codex "$d" fn-1.1 --base main --force',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_shipped_fence_shapes_stay_allowed(self) -> None:
+        # Variable ARGUMENTS (ids, paths, --reservation-id) are legal; only the
+        # two subcommand positions must be literal. These are the real shapes
+        # the plan/impl/completion fences and ralph.sh ship.
+        for command in (
+            '"$FLOWCTL" review-rounds record "$SPEC_ID" --kind plan '
+            '--review-type plan --backend rp --output-file "$RESPONSE" '
+            '--reservation-id "$RESERVATION_ID" --status-target plan --json',
+            '"$FLOWCTL" review-rounds record "$SPEC_ID" --kind plan '
+            '--reservation-id "$(jq -r .reservation_id "$TMP/reserve.json")" '
+            '--output-file "$TMP/review.md"',
+            '"$FLOWCTL" review-artifact hash --spec "$SPEC_ID" '
+            '--out "${TMPDIR:-/tmp}/artifact.json"',
+            '"$FLOWCTL" review-findings attach --reservation-id "$RID" '
+            '--receipt "$RECEIPT_PATH" --json',
+            '"$FLOWCTL" codex impl-review "$TASK_ID" --base "$DIFF_BASE" '
+            '--receipt "$RECEIPT_PATH"',
+            '"$FLOWCTL" triage-skip --json --receipt "$RECEIPT_PATH"',
+            '"$FLOWCTL" list',
+            '"$FLOWCTL" show "$TASK_ID"',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_force_with_lease_push_is_allowed(self) -> None:
         proc = self._hook("git push --force-with-lease origin fn-159")
         self.assertEqual(proc.returncode, 0, proc.stderr)
