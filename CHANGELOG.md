@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.14.0] - 2026-08-04
 
 Review loops now end the way a human lead would end them: converging work gets
 its room, a loop that has stopped improving reaches you early instead of
