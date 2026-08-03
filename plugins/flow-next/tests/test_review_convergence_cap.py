@@ -4034,6 +4034,83 @@ class TestTerminalStatusGatedOnReceiptPublication(_InProcessBackendReviewBase):
         self.assertTrue(receipt.exists())
         self.assertFalse(self._recovery_path().exists())
 
+    def _replay_completion(self) -> "subprocess.CompletedProcess[str]":
+        return self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "completion", "--json",
+        )
+
+    def _deferred_publication_failure(self) -> "tuple[Path, str]":
+        """Dispatch a completion review whose receipt publication fails."""
+        receipt = self.root / "completion-receipt.json"
+        with mock.patch.object(
+            flowctl, "_complete_review_journal", return_value=False
+        ):
+            payload, _ = self._dispatch_completion(receipt)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertNotIn("completion_review_status", payload)
+        row = self._data()["review_attempts"][-1]
+        # Both legs owed: the status is journaled PENDING with its target, not
+        # folded into the record write and not silently `not_applicable`.
+        self.assertEqual(row["finalized"]["receipt"], "pending")
+        self.assertEqual(row["finalized"]["status"], "pending")
+        journal = json.loads(
+            (self.root / ".flow" / "review-runs"
+             / f"{row['reservation_id']}.json").read_text()
+        )
+        self.assertEqual(journal["status_target"], "completion")
+        self.assertTrue(self._recovery_path().exists())
+        return receipt, row["reservation_id"]
+
+    def test_replay_lands_the_deferred_status_and_cleans_recovery(self):
+        """PR #290 bot r3: the replay that publishes the receipt must also
+        finish the deferred status leg. Before the fix the finalization
+        journaled that leg `not_applicable`, so the gate replayed the verdict,
+        deleted the journal, and NOBODY ever wrote completion_review_status or
+        removed the recovery payload — the invocation after that hit the
+        unchanged-artifact refusal with the spec still non-terminal."""
+        receipt, reservation_id = self._deferred_publication_failure()
+
+        replay = self._replay_completion()
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertTrue(json.loads(replay.stdout)["replayed"])
+
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+        data = self._data()
+        self.assertEqual(data["completion_review_status"], "needs_work")
+        self.assertTrue(data.get("completion_reviewed_at"))
+        self.assertFalse(self._recovery_path().exists())
+        row = next(
+            r for r in data["review_attempts"]
+            if r["reservation_id"] == reservation_id
+        )
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        self.assertEqual(row["finalized"]["status"], "complete")
+        self.assertFalse(
+            (self.root / ".flow" / "review-runs"
+             / f"{reservation_id}.json").exists()
+        )
+
+    def test_second_replay_is_a_no_op(self):
+        """Replaying an already-statused journal changes nothing."""
+        self._deferred_publication_failure()
+        self.assertEqual(self._replay_completion().returncode, 0)
+        after_first = self._data()
+
+        second = self._replay_completion()
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertFalse(json.loads(second.stdout).get("replayed", False))
+        after_second = self._data()
+        self.assertEqual(
+            after_second["completion_review_status"],
+            after_first["completion_review_status"],
+        )
+        self.assertEqual(
+            after_second["completion_reviewed_at"],
+            after_first["completion_reviewed_at"],
+        )
+        self.assertFalse(self._recovery_path().exists())
+
     def test_plan_handler_writes_status_atomically_with_the_journal(self):
         """The plan handler has no post-publish status write to gate: status
         lands inside record_review_attempt's atomic sidecar write, so a failed
@@ -4054,6 +4131,89 @@ class TestTerminalStatusGatedOnReceiptPublication(_InProcessBackendReviewBase):
         self.assertEqual(replay.returncode, 0, replay.stderr)
         self.assertTrue(json.loads(replay.stdout)["replayed"])
         self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+
+
+class TestJournalScanLockGapIsClosed(_InProcessBackendReviewBase):
+    """PR #290 bot r3: `_journal_receipt_targets` scans WITHOUT locks so the
+    receipt-before-sidecar order can be honored. A finalizer that journals a
+    receipt-bearing run in the gap between that scan and the lock acquisition
+    used to be published by the replay loop on a lock this pass never held —
+    racing a concurrent attach holding the receipt lock while waiting for the
+    sidecar lock."""
+
+    def _pending_journal(self) -> "tuple[Path, Path]":
+        receipt = self.root / "plan-receipt.json"
+        with mock.patch.object(
+            flowctl, "_publish_review_receipt_from_journal", return_value=False
+        ):
+            self._dispatch_plan(receipt)
+        reservation_id = self._data()["review_attempts"][-1]["reservation_id"]
+        journal_path = (
+            self.root / ".flow" / "review-runs" / f"{reservation_id}.json"
+        )
+        self.assertTrue(journal_path.exists())
+        self.assertFalse(receipt.exists())
+        return receipt, journal_path
+
+    def _gate(self) -> Any:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(
+            io.StringIO()
+        ):
+            return flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", review_type="plan", use_json=True
+            )
+
+    def test_journal_never_seen_by_a_scan_is_not_published_unlocked(self):
+        receipt, journal_path = self._pending_journal()
+        # Every scan misses it (the worst case of the scan/lock gap): its
+        # receipt lock is never acquired, so the replay loop must skip it.
+        with mock.patch.object(
+            flowctl, "_journal_receipt_targets", return_value=[]
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                self._gate()
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertFalse(receipt.exists())
+        self.assertTrue(journal_path.exists())
+
+        # The next pass sees it, locks it, and publishes it.
+        result = self._gate()
+        self.assertTrue(result["replayed"])
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+        self.assertFalse(journal_path.exists())
+
+    def test_journal_landing_after_the_prelock_scan_is_relocked_then_published(self):
+        receipt, journal_path = self._pending_journal()
+        real_targets = flowctl._journal_receipt_targets
+        real_lock = flowctl.cross_process_lock
+        scans: list[int] = []
+        locked: list[str] = []
+
+        def hide_from_first_scan(flow_dir, counter_scope):
+            scans.append(1)
+            if len(scans) == 1:
+                # The journal "lands" right after this pre-lock scan.
+                return []
+            return real_targets(flow_dir, counter_scope)
+
+        def tracking_lock(path, *args, **kwargs):
+            locked.append(str(path))
+            return real_lock(path, *args, **kwargs)
+
+        with mock.patch.object(
+            flowctl, "_journal_receipt_targets", hide_from_first_scan
+        ), mock.patch.object(flowctl, "cross_process_lock", tracking_lock):
+            result = self._gate()
+
+        # Rescan under the locks found it, so the pass reacquired (receipt
+        # before sidecar) instead of publishing on an unheld lock.
+        self.assertTrue(result["replayed"])
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+        self.assertFalse(journal_path.exists())
+        self.assertIn(
+            str(flowctl._review_receipt_lock_path(receipt)), locked
+        )
 
 
 class TestUnusableFindingsHistoryDegrades(_InProcessBackendReviewBase):

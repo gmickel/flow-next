@@ -9824,6 +9824,19 @@ def _review_receipt_proven_newer(
     return False
 
 
+_REVIEW_VERDICT_STATUS = {
+    "SHIP": "ship",
+    "NEEDS_WORK": "needs_work",
+    "MAJOR_RETHINK": "needs_work",
+    "NEEDS_HUMAN": "needs_human",
+}
+
+
+def _review_status_from_verdict(verdict: Optional[str]) -> Optional[str]:
+    """Map a delivered verdict to its denormalized review status."""
+    return _REVIEW_VERDICT_STATUS.get(verdict or "")
+
+
 def _complete_review_journal(
     flow_dir: Path,
     journal_path: Path,
@@ -9902,12 +9915,7 @@ def _complete_review_journal(
         atomic_write_json(journal_path, journal)
     if progress["status"] == "pending":
         status_target = journal.get("status_target")
-        status = {
-            "SHIP": "ship",
-            "NEEDS_WORK": "needs_work",
-            "MAJOR_RETHINK": "needs_work",
-            "NEEDS_HUMAN": "needs_human",
-        }.get(journal.get("verdict") or "")
+        status = _review_status_from_verdict(journal.get("verdict"))
         if spec_data is None or status_target not in ("plan", "completion"):
             return False
         if status:
@@ -9917,12 +9925,31 @@ def _complete_review_journal(
         progress["status"] = "complete"
         atomic_write_json(journal_path, journal)
     if all(progress[leg] in {"complete", "not_applicable"} for leg in progress):
+        # PR #290 bot r3: the recovery payload exists only to survive the gap
+        # between receipt publication and the terminal status write. Both legs
+        # are now complete, so drop it here — the direct handler's own cleanup
+        # never runs on the replay path.
+        _clear_completion_receipt_recovery(journal)
         try:
             journal_path.unlink()
         except FileNotFoundError:
             pass
         return True
     return False
+
+
+def _clear_completion_receipt_recovery(journal: dict) -> None:
+    """Delete the completion-review recovery payload for a finished journal."""
+    payload = journal.get("receipt_payload")
+    if not isinstance(payload, dict) or payload.get("type") != "completion_review":
+        return
+    review_id = payload.get("id") or journal.get("spec_id")
+    if not isinstance(review_id, str) or not review_id:
+        return
+    try:
+        _completion_review_receipt_recovery_path(review_id).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _review_attempt_summary(
@@ -9987,6 +10014,11 @@ def _review_head_sha() -> Optional[str]:
         return sha or None
     except Exception:
         return None
+
+
+# Bounded reacquisition when a journal appears between the pre-lock scan and
+# the lock acquisition (PR #290 bot r3).
+_REVIEW_JOURNAL_RESCAN_ATTEMPTS = 3
 
 
 def _journal_receipt_targets(flow_dir: Path, counter_scope: str) -> list[Path]:
@@ -10082,6 +10114,7 @@ def _record_review_attempt_locked(
     receipt_criteria: Optional[list] = None,
     criteria_built: bool = False,
     status_target: Optional[str] = None,
+    deferred_status_target: Optional[str] = None,
     findings_container: Optional[dict] = None,
     findings_digest: Optional[dict] = None,
     findings_built: bool = False,
@@ -10181,12 +10214,19 @@ def _record_review_attempt_locked(
     # share one code path (and one atomic transaction).
     if finalize_status_kind is None and status_target in ("plan", "completion"):
         finalize_status_kind = status_target
-    expected_status = {
-        "SHIP": "ship",
-        "NEEDS_WORK": "needs_work",
-        "MAJOR_RETHINK": "needs_work",
-        "NEEDS_HUMAN": "needs_human",
-    }.get(verdict or "") if finalize_status_kind in ("plan", "completion") else None
+    expected_status = (
+        _review_status_from_verdict(verdict)
+        if finalize_status_kind in ("plan", "completion") else None
+    )
+    # PR #290 bot r3: the completion handler must not write its terminal status
+    # until the receipt publishes, so that status is NOT folded here — it is
+    # journaled PENDING with its target and completed by whoever publishes the
+    # receipt (this process, or the pre-increment replay gate in a later one).
+    deferred_status = (
+        _review_status_from_verdict(verdict)
+        if expected_status is None
+        and deferred_status_target in ("plan", "completion") else None
+    )
     # Write-ahead journal before consuming the reservation.  It contains all
     # input needed to recreate this finalized row after a process crash —
     # including the exact intended receipt payload and the validated findings
@@ -10229,7 +10269,10 @@ def _record_review_attempt_locked(
                 else "pending" if journal_receipt
                 else "not_applicable"
             ),
-            "status": "pending" if expected_status else "not_applicable",
+            "status": (
+                "pending" if (expected_status or deferred_status)
+                else "not_applicable"
+            ),
         }
         journal = {
             "reservation_id": reservation_id,
@@ -10237,7 +10280,11 @@ def _record_review_attempt_locked(
             "response_sha256": output_sha256,
             "receipt_payload": receipt_payload,
             "receipt_target": receipt_target,
-            "status_target": finalize_status_kind if expected_status else None,
+            "status_target": (
+                finalize_status_kind if expected_status
+                else deferred_status_target if deferred_status
+                else None
+            ),
             "spec_id": spec_id,
             "counter_scope": counter_scope,
             "scope": scope,
@@ -10384,11 +10431,16 @@ def _record_review_attempt_locked(
     }
     if findings_built and findings_digest is not None:
         row["findings_digest"] = dict(findings_digest)
-    if journal_path is not None and row["finalized"]["status"] == "pending":
+    if (
+        journal_path is not None
+        and expected_status
+        and row["finalized"]["status"] == "pending"
+    ):
         # The folded status write below lands in the SAME atomic sidecar
         # write that persists this row, so the row can already record the
         # status leg complete — there is no window where the row exists
-        # without the status.
+        # without the status. A DEFERRED status target is deliberately left
+        # pending: it lands with receipt publication, not here.
         row["finalized"]["status"] = "complete"
     attempts.append(row)
     if reservation_id:
@@ -10419,8 +10471,9 @@ def _record_review_attempt_locked(
 
     if journal_path is not None:
         progress = _journal_progress(journal)
-        if progress["status"] == "pending":
+        if expected_status and progress["status"] == "pending":
             # Completed by the sidecar write above (folded transaction).
+            # Deferred targets stay pending until the receipt publishes.
             progress["status"] = "complete"
         if progress["receipt"] == "pending":
             # Receipt publication is owned by `review-findings attach
@@ -10493,18 +10546,36 @@ def enforce_and_increment_review_cap(
     plan reviews); pass ``review_kind="plan"`` for them.
     """
     flow_dir = get_flow_dir()
+    counter_scope = _review_counter_scope(review_kind, task_id)
     # Journal replays inside the gate may publish receipts; honor the
     # lock-order contract by taking those receipt locks BEFORE the sidecar
-    # lock (pre-lock scan; a journal landing after the scan waits one call).
-    receipt_targets = _journal_receipt_targets(
-        flow_dir, _review_counter_scope(review_kind, task_id)
-    )
-    with _review_two_resource_lock(flow_dir, spec_id, receipt_targets):
-        return _enforce_and_increment_review_cap_locked(
-            spec_id, review_kind, task_id=task_id, use_json=use_json,
-            artifact_sha256=artifact_sha256, review_type=review_type,
-            forced=forced, return_reservation=return_reservation,
-        )
+    # lock (pre-lock scan).
+    #
+    # PR #290 bot r3: a finalizer can journal a receipt-bearing run AFTER that
+    # scan and BEFORE the locks are held, so the set is RESCANNED under the
+    # locks. A target discovered late is never published on an unheld lock:
+    # the locks are released and reacquired with the union (still
+    # receipt-before-sidecar), and on the last attempt the replay loop simply
+    # skips whatever this pass does not hold — the next invocation gets it.
+    receipt_targets = _journal_receipt_targets(flow_dir, counter_scope)
+    for attempt in range(_REVIEW_JOURNAL_RESCAN_ATTEMPTS):
+        with _review_two_resource_lock(flow_dir, spec_id, receipt_targets):
+            locked = {str(target) for target in receipt_targets}
+            unlocked = [
+                target
+                for target in _journal_receipt_targets(flow_dir, counter_scope)
+                if str(target) not in locked
+            ]
+            if unlocked and attempt < _REVIEW_JOURNAL_RESCAN_ATTEMPTS - 1:
+                receipt_targets = [*receipt_targets, *unlocked]
+                continue
+            return _enforce_and_increment_review_cap_locked(
+                spec_id, review_kind, task_id=task_id, use_json=use_json,
+                artifact_sha256=artifact_sha256, review_type=review_type,
+                forced=forced, return_reservation=return_reservation,
+                locked_receipt_targets=locked,
+            )
+    raise AssertionError("rescan loop must return")
 
 
 # Terminal precedence over replayed verdicts (fn-159 round 8): the worst
@@ -10752,6 +10823,7 @@ def _enforce_and_increment_review_cap_locked(
     review_type: Optional[str],
     forced: bool,
     return_reservation: bool,
+    locked_receipt_targets: Optional[set] = None,
 ) -> Any:
     cap = get_max_review_iterations()
     flow_dir = get_flow_dir()
@@ -10773,6 +10845,7 @@ def _enforce_and_increment_review_cap_locked(
     # and the caller applies terminal precedence over the replayed verdicts.
     replays: list[dict] = []
     sidecar_dirty = False
+    skipped_unlocked = False
     journals = []
     try:
         journals = sorted(_review_runs_dir(flow_dir).glob("*.json"))
@@ -10786,6 +10859,20 @@ def _enforce_and_increment_review_cap_locked(
         if not isinstance(journal, dict) or journal.get("counter_scope") != counter_scope:
             continue
         if journal.get("spec_id") not in (None, spec_id):
+            continue
+        journal_receipt_target = journal.get("receipt_target")
+        if (
+            locked_receipt_targets is not None
+            and isinstance(journal_receipt_target, str)
+            and journal_receipt_target
+            and str(Path(journal_receipt_target)) not in locked_receipt_targets
+        ):
+            # PR #290 bot r3: this journal landed after the pre-lock scan, so
+            # its receipt lock is NOT held here. Publishing it would race a
+            # concurrent attach that holds that lock. Leave it for the next
+            # invocation; the refusal below keeps this call from dispatching a
+            # second paid review in the meantime.
+            skipped_unlocked = True
             continue
         reservation_id = journal.get("reservation_id")
         reservations = _review_reservations(spec_data)
@@ -10892,6 +10979,14 @@ def _enforce_and_increment_review_cap_locked(
         # Zero dispatch: the delivered verdict(s) are the terminal for this
         # call. Callers apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP precedence.
         return {"replayed": True, "replays": replays}
+    if skipped_unlocked:
+        # A receipt-bearing journal exists that this pass could not lock.
+        # Refuse rather than pay for a review while it is still unfinalized.
+        error_exit(
+            "REPLAY_REQUIRED: an earlier delivered review verdict is still being finalized",
+            use_json=use_json,
+            code=2,
+        )
     if not isinstance(artifact_sha256, str) or not artifact_sha256:
         # Compatibility and hash-I/O failures must never block a legitimate
         # review.  Old callers reserve normally; new callers warn so a broken
@@ -38551,6 +38646,7 @@ def _finish_backend_exec(
     review_type: Optional[str] = None,
     task_id: Optional[str] = None,
     finalize_status_kind: Optional[str] = None,
+    deferred_status_target: Optional[str] = None,
     reset_rounds_on_ship: bool = False,
     attempt_out: Optional[dict] = None,
     reviewed_head_sha: Optional[str] = None,
@@ -38581,6 +38677,7 @@ def _finish_backend_exec(
                 review_type=review_type,
                 use_json=args.json,
                 finalize_status_kind=finalize_status_kind,
+                deferred_status_target=deferred_status_target,
                 reset_rounds_on_ship=reset_rounds_on_ship,
                 reviewed_head_sha=reviewed_head_sha,
                 reservation_id=reservation_id,
@@ -39147,6 +39244,11 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         spec_id=epic_id,
         review_kind="plan",
         review_type="completion",
+        # PR #290 bot r3: the status write below is gated on receipt
+        # publication, so journal it as a PENDING leg with its target — a
+        # failed publish is then completed (status + recovery cleanup) by the
+        # pre-increment replay gate instead of being lost forever.
+        deferred_status_target="completion" if receipt_target else None,
         reset_rounds_on_ship=True,
         reviewed_head_sha=reviewed_head_sha,
         reservation_id=reservation_id,

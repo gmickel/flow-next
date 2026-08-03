@@ -252,6 +252,39 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_command_builtin_wrapper_bypass(self) -> None:
+        # PR #290 bot r3: `command` ran the launcher transparently, so the argv
+        # pass classified the segment as a `command` invocation and the
+        # per-token-quoted verbs slipped past the raw-text floor too.
+        proc = self._hook(
+            'command "$FLOWCTL" "review-rounds" "reset" fn-1 --kind plan'
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_exec_wrapper_bypass(self) -> None:
+        proc = self._hook('exec "$FLOWCTL" "review-rounds" "reset" fn-1 --kind plan')
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_builtin_and_sudo_wrapper_bypass(self) -> None:
+        for command in (
+            "builtin command $FLOWCTL review-rounds reset fn-1 --kind plan",
+            "sudo $FLOWCTL review-rounds reset fn-1 --kind plan",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_command_wrapped_record_is_still_allowed(self) -> None:
+        proc = self._hook(
+            "command $FLOWCTL review-rounds record fn-159 --kind plan "
+            "--review-type plan --backend rp --output-file /tmp/review.txt "
+            "--reservation-id r1"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_wrapped_ship_flow_record_is_allowed(self) -> None:
         # Wrapper unwrapping must not widen the block: `review-rounds record`
         # is the system-owned SHIP reset and stays allowed under a wrapper.

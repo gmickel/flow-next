@@ -676,7 +676,13 @@ _REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor"})
 _REVIEW_DISPATCHES = frozenset({"impl-review", "plan-review", "completion-review"})
 _ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 _DURATION_RE = re.compile(r"\d+(?:\.\d+)?[smhd]?")
-_ARGV_WRAPPERS = frozenset({"env", "timeout", "nice", "xargs", "nohup", "stdbuf"})
+_ARGV_WRAPPERS = frozenset({
+    "env", "timeout", "nice", "xargs", "nohup", "stdbuf",
+    # PR #290 bot r3: shell builtins that run their argv transparently. Without
+    # them, `command "$FLOWCTL" "review-rounds" "reset" …` was classified as a
+    # `command` invocation and never reached the flowctl argv screen.
+    "command", "exec", "builtin", "sudo",
+})
 _SHELL_INTERPRETERS = frozenset({"sh", "bash", "zsh", "dash", "ksh"})
 _MAX_WRAPPER_DEPTH = 3
 
@@ -800,12 +806,16 @@ def _command_has_recovery_markers(command: str) -> bool:
     """
     if re.search(r"reset-review-rounds", command):
         return True
-    if re.search(r"review-rounds\s+['\"]?reset\b", command):
+    # Quotes are stripped on BOTH sides of the gap (PR #290 bot r3): a
+    # per-token-quoted `"review-rounds" "reset"` closes its quote before the
+    # whitespace, which the old one-sided screen never matched.
+    if re.search(r"review-rounds['\"]?\s+['\"]?reset\b", command):
         return True
     # (?![\w-]) so `--force-with-lease` — a different, legitimate flag — never
     # trips the screen.
     if re.search(r"--force(?![\w-])", command) and re.search(
-        r"review-rounds\s+['\"]?increment\b|impl-review|plan-review|completion-review",
+        r"review-rounds['\"]?\s+['\"]?increment\b"
+        r"|impl-review|plan-review|completion-review",
         command,
     ):
         return True
