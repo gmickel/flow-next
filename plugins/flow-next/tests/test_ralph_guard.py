@@ -252,6 +252,49 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_wrapper_option_value_bypass(self) -> None:
+        # PR #290 bot r8: the stripper dropped a wrapper OPTION but left its
+        # separate VALUE token, which then looked like the executable — so no
+        # flowctl argv was found and the composed verb was never screened.
+        for command in (
+            'sub=re; sub+=set; env -u X "$FLOWCTL" review-rounds "$sub" fn-1 --kind plan',
+            'sub=re; sub+=set; env --unset=X "$FLOWCTL" review-rounds "$sub" fn-1 --kind plan',
+            'env -u X "$FLOWCTL" review-rounds reset fn-1 --kind plan',
+            "env -u PATH -C /tmp flowctl spec reset-review-rounds fn-1",
+            "timeout -s KILL 60 flowctl spec reset-review-rounds fn-1",
+            'timeout -k 5s -s TERM 60 $FLOWCTL review-rounds reset fn-1 --kind plan',
+            "xargs -I{} -a /f flowctl spec reset-review-rounds {}",
+            "xargs -I {} -a /f flowctl review-rounds reset {} --kind plan",
+            "nice -n 5 flowctl spec reset-review-rounds fn-1",
+            "stdbuf -o L flowctl review-rounds reset fn-1 --kind plan",
+            "sudo -u root $FLOWCTL review-rounds reset fn-1 --kind plan",
+            'env -u X "$FLOWCTL" review-rounds increment fn-1 --kind plan --force',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_wrapper_option_values_do_not_widen_the_block(self) -> None:
+        # The same consumption must not swallow a legitimate launcher: wrapped
+        # `record` / read-only verbs stay allowed.
+        for command in (
+            'env -u X "$FLOWCTL" review-rounds record fn-1 --kind plan '
+            "--review-type plan --backend rp --output-file /tmp/r.txt "
+            "--reservation-id r1",
+            "timeout -s KILL 60 $FLOWCTL review-rounds record fn-1 --kind plan "
+            "--review-type plan --backend rp --output-file /tmp/r.txt "
+            "--reservation-id r1",
+            "xargs -I{} -a /f $FLOWCTL show {}",
+            "nice -n 5 flowctl list",
+            "stdbuf -oL $FLOWCTL review-rounds attempts fn-1 --kind plan "
+            "--review-type plan",
+            'env -u X $FLOWCTL show "$TASK_ID"',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_blocks_command_builtin_wrapper_bypass(self) -> None:
         # PR #290 bot r3: `command` ran the launcher transparently, so the argv
         # pass classified the segment as a `command` invocation and the

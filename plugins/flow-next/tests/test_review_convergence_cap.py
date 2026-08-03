@@ -3004,6 +3004,149 @@ class TestNeedsHumanHandlerOrdering(unittest.TestCase):
         self.assertEqual(payload["plan_review_status"], "needs_human")
 
 
+class TestSupersededVerdictNeverSurfacesAsTerminal(TestNeedsHumanHandlerOrdering):
+    """PR #290 bot r8: a concurrent SHIP lands WHILE a review is in flight.
+
+    The late finalization correctly consumes nothing and writes no status, but
+    the handler used to route its NEEDS_WORK/NEEDS_HUMAN out as a live terminal
+    — exit 4 / fix-loop — while durable state said ship, so pilot and Ralph
+    acted on a pre-SHIP artifact. The late verdict must surface as SUPERSEDED
+    evidence instead.
+    """
+
+    def _run_superseded(
+        self, handler, args, verdict: str, *, review_kind: str, task_id=None
+    ) -> dict:
+        """Run a handler whose reservation is superseded mid-dispatch."""
+
+        def fake_exec(_prompt, **_kwargs):
+            # The concurrent SHIP lands after this review reserved its round
+            # and before it finalizes — the exact interleave.
+            _, ship_id = flowctl.enforce_and_increment_review_cap(
+                self.spec_id, review_kind, task_id=task_id,
+                review_type="plan" if review_kind == "plan" else "impl",
+                return_reservation=True,
+            )
+            flowctl.record_review_attempt(
+                self.spec_id, review_kind, backend="rp",
+                output="<verdict>SHIP</verdict>", verdict="SHIP",
+                task_id=task_id,
+                review_type="plan" if review_kind == "plan" else "impl",
+                reservation_id=ship_id,
+                status_target="plan" if review_kind == "plan" else None,
+                reset_rounds_on_ship=True,
+            )
+            return f"<verdict>{verdict}</verdict>", "sess-1", 0, ""
+
+        out = io.StringIO()
+        with mock.patch.dict(
+            flowctl.BACKEND_REGISTRY["codex"], {"run_exec": fake_exec}
+        ):
+            with contextlib.redirect_stdout(out):
+                # No SystemExit: a superseded verdict is not a terminal.
+                handler(args, "codex")
+        printed = out.getvalue()
+        payload = json.loads(printed)  # exactly one JSON document
+        self.assertTrue(payload["superseded"])
+        self.assertTrue(payload["dispatched"])
+        self.assertEqual(payload["verdict"], verdict)
+        self.assertNotIn("escalate", payload)
+        self.assertNotIn(flowctl.NEEDS_HUMAN_ESCALATION_MARKER, printed)
+        self.assertNotIn("ESCALATE", printed)
+        self.assertEqual(payload["note"], flowctl.SUPERSEDED_REVIEW_NOTICE)
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["verdict"], verdict)
+        self.assertFalse(row["round_consumed"])  # evidence only
+        self.assertEqual(payload["superseded_by"], row["superseded_by"])
+        return payload
+
+    def test_impl_late_needs_work_is_superseded_not_terminal(self):
+        args = argparse.Namespace(
+            task=f"{self.spec_id}.1", base="HEAD~1", focus=None, json=True,
+            receipt=str(self.root / "impl-receipt.json"), spec=None,
+            model=None, effort=None, force=False, sandbox=None,
+        )
+        payload = self._run_superseded(
+            flowctl._backend_impl_review, args, "NEEDS_WORK",
+            review_kind="impl", task_id=f"{self.spec_id}.1",
+        )
+        self.assertEqual(payload["effective_status"], "ship")
+
+    def test_plan_late_needs_human_is_superseded_not_exit_four(self):
+        args = argparse.Namespace(
+            epic=self.spec_id, base="HEAD~1", json=True, files="app.py",
+            receipt=str(self.root / "plan-receipt.json"), spec=None,
+            model=None, effort=None, force=False, sandbox=None,
+        )
+        payload = self._run_superseded(
+            flowctl._backend_plan_review, args, "NEEDS_HUMAN",
+            review_kind="plan",
+        )
+        data = self._data()
+        # The SHIP's durable terminal is what callers must act on.
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertEqual(payload["effective_status"], "ship")
+        self.assertNotIn("plan_review_status", payload)
+
+    def test_completion_late_needs_work_never_regresses_durable_status(self):
+        args = argparse.Namespace(
+            epic=self.spec_id, base="HEAD~1", json=True,
+            receipt=str(self.root / "completion-receipt.json"), spec=None,
+            model=None, effort=None, force=False, sandbox=None,
+        )
+        payload = self._run_superseded(
+            flowctl._backend_completion_review, args, "NEEDS_WORK",
+            review_kind="plan",
+        )
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertNotEqual(data.get("completion_review_status"), "needs_work")
+        self.assertEqual(payload["effective_status"], "ship")
+        self.assertNotIn("completion_review_status", payload)
+
+    def test_record_cli_reports_superseded_without_a_terminal_exit(self):
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True,
+        )
+        _, ship_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True,
+        )
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            verdict="SHIP", review_type="plan", reservation_id=ship_id,
+            status_target="plan", reset_rounds_on_ship=True,
+        )
+        response = self.root / "late-response.txt"
+        response.write_text("<verdict>NEEDS_WORK</verdict>", encoding="utf-8")
+        args = argparse.Namespace(
+            id=self.spec_id, kind="plan", review_type="plan", backend="rp",
+            output_file=str(response), task=None, json=True, force=False,
+            reservation_id=reservation_id, exit_code=0, failure_class=None,
+            receipt_target=None, receipt_payload_file=None, status_target="plan",
+        )
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            flowctl.cmd_review_rounds_record(args)
+        payload = json.loads(out.getvalue())
+        self.assertTrue(payload["superseded"])
+        self.assertEqual(payload["superseded_by"], ship_id)
+        self.assertEqual(payload["effective_status"], "ship")
+        self.assertEqual(payload["note"], flowctl.SUPERSEDED_REVIEW_NOTICE)
+        self.assertEqual(self._data()["plan_review_status"], "ship")
+
+    def test_non_superseded_terminal_contract_is_unchanged(self):
+        # The drivers' existing contract must not move for ordinary verdicts.
+        args = argparse.Namespace(
+            epic=self.spec_id, base="HEAD~1", json=True, files="app.py",
+            receipt=str(self.root / "plan-receipt.json"), spec=None,
+            model=None, effort=None, force=False, sandbox=None,
+        )
+        payload, code = self._run(flowctl._backend_plan_review, args)
+        self.assertEqual(code, flowctl.REVIEW_CAP_EXIT_CODE)
+        self.assertTrue(payload["escalate"])
+        self.assertNotIn("superseded", payload)
+
+
 class TestOverlappingReviewProcesses(_JournalReplayBase):
     """fn-159.1: truly concurrent state transitions under the sidecar lock,
     plus attach-vs-finalize lock-order scaffolding."""

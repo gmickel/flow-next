@@ -10682,6 +10682,20 @@ def _record_review_attempt_locked(
         # terminal status was written (PR #290 bot r6).
         summary["superseded_by"] = metadata.get("superseded_by")
         summary["status_written"] = None
+        # The status callers must act on is the DURABLE one the superseding
+        # SHIP left behind, never this late verdict (PR #290 bot r8).
+        # `finalize_status_kind` was already cleared by the supersession
+        # branch, so the durable status is read off the review TYPE.
+        durable_status = (
+            spec_data.get(f"{review_type}_review_status")
+            if review_type in ("plan", "completion")
+            else None
+        )
+        # "unknown" is the unset placeholder; the superseding event was a SHIP
+        # on this counter, so that is the effective state either way.
+        if durable_status in (None, "", "unknown"):
+            durable_status = "ship"
+        summary["effective_status"] = durable_status
     elif finalize_status_kind is not None:
         summary["status_written"] = status_written
     elif deferred_status:
@@ -10830,6 +10844,43 @@ def apply_needs_human_escalation(payload: dict, verdict: Optional[str]) -> bool:
         return False
     payload["error"] = NEEDS_HUMAN_ESCALATION_MARKER
     payload["escalate"] = True
+    return True
+
+
+SUPERSEDED_REVIEW_NOTICE = (
+    "review superseded by a newer SHIP — durable state unchanged; "
+    "verdict recorded as evidence only"
+)
+
+
+def review_attempt_superseded(attempt: Optional[dict]) -> bool:
+    """Whether a finalization landed under a concurrent SHIP's reset."""
+    return bool(isinstance(attempt, dict) and attempt.get("superseded_by"))
+
+
+def apply_superseded_review_outcome(
+    payload: dict, attempt: Optional[dict]
+) -> bool:
+    """Turn a superseded late verdict into a non-terminal outcome.
+
+    PR #290 bot r8: when a concurrent SHIP superseded the reservation, the
+    finalization consumed nothing and wrote no status - but the handler still
+    routed the late NEEDS_WORK/NEEDS_HUMAN out as a live terminal, so pilot and
+    Ralph acted on a pre-SHIP artifact while durable state said ship. The
+    verdict stays in the payload as evidence; ``superseded`` plus
+    ``effective_status`` say what the caller must actually act on, and the
+    NEEDS_HUMAN escalation/exit-4 tail is skipped by the caller.
+    """
+    if not review_attempt_superseded(attempt):
+        return False
+    payload["superseded"] = True
+    payload["superseded_by"] = attempt["superseded_by"]
+    payload["effective_status"] = attempt.get("effective_status") or "ship"
+    payload["dispatched"] = True
+    payload["note"] = SUPERSEDED_REVIEW_NOTICE
+    # A superseded verdict is not an escalation, whatever it said.
+    payload.pop("error", None)
+    payload.pop("escalate", None)
     return True
 
 
@@ -28881,10 +28932,22 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
         )
+    superseded = review_attempt_superseded(result)
+    if superseded:
+        # PR #290 bot r8: the fences read this record's JSON, so it must say
+        # the verdict is evidence — not a live terminal to route on.
+        result["superseded"] = True
+        result["note"] = SUPERSEDED_REVIEW_NOTICE
     if args.json:
         json_output(result)
     else:
-        if verdict:
+        if superseded:
+            print(
+                f"{SUPERSEDED_REVIEW_NOTICE} (recorded verdict: "
+                f"{verdict or 'UNKNOWN'}; effective status: "
+                f"{result.get('effective_status') or 'ship'})"
+            )
+        elif verdict:
             print(
                 f"{args.review_type}-review verdict {verdict} recorded; "
                 f"round consumed"
@@ -38740,6 +38803,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         pre_consumption=True,
     ) if receipt_target else None
 
+    attempt_summary: dict = {}
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
@@ -38748,6 +38812,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_type="impl",
         task_id=None if standalone else task_id,
         reset_rounds_on_ship=not standalone,
+        attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reservation_id=reservation_id,
         findings_container=findings_container,
@@ -38810,10 +38875,22 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
                 sid, "impl", task_id=task_id, use_json=args.json
             )
             json_payload["review_rounds_cap"] = get_max_review_iterations()
+        if apply_superseded_review_outcome(json_payload, attempt_summary):
+            print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
+            json_output(json_payload)
+            return
         escalated = apply_needs_human_escalation(json_payload, verdict)
         json_output(json_payload, success=not escalated)
     else:
         print(output)
+        if review_attempt_superseded(attempt_summary):
+            print("\nVERDICT=SUPERSEDED")
+            print(
+                f"{SUPERSEDED_REVIEW_NOTICE} (recorded verdict: "
+                f"{verdict or 'UNKNOWN'}; effective status: "
+                f"{attempt_summary.get('effective_status') or 'ship'})"
+            )
+            return
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
     _exit_needs_human_after_persistence(verdict, use_json=args.json)
 
@@ -39220,10 +39297,22 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             json_payload["plan_review_status"] = written_status
         json_payload["review_rounds"] = review_rounds
         json_payload["review_rounds_cap"] = get_max_review_iterations()
+        if apply_superseded_review_outcome(json_payload, attempt_summary):
+            print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
+            json_output(json_payload)
+            return
         escalated = apply_needs_human_escalation(json_payload, verdict)
         json_output(json_payload, success=not escalated)
     else:
         print(output)
+        if review_attempt_superseded(attempt_summary):
+            print("\nVERDICT=SUPERSEDED")
+            print(
+                f"{SUPERSEDED_REVIEW_NOTICE} (recorded verdict: "
+                f"{verdict or 'UNKNOWN'}; effective status: "
+                f"{attempt_summary.get('effective_status') or 'ship'})"
+            )
+            return
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
     _exit_needs_human_after_persistence(verdict, use_json=args.json)
 
@@ -39440,6 +39529,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         pre_consumption=True,
     ) if receipt_target else None
 
+    attempt_summary: dict = {}
     verdict = _finish_backend_exec(
         backend=backend, reg=reg, args=args, receipt_path=receipt_path,
         output=output, stderr=stderr, exit_code=exit_code,
@@ -39452,6 +39542,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         # pre-increment replay gate instead of being lost forever.
         deferred_status_target="completion" if receipt_target else None,
         reset_rounds_on_ship=True,
+        attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reservation_id=reservation_id,
         findings_container=findings_container,
@@ -39495,7 +39586,12 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     # pre-increment replay gate — not a wedged terminal state — is the recovery
     # path for the next invocation.
     written_status = None
-    if receipt_published:
+    if review_attempt_superseded(attempt_summary):
+        # PR #290 bot r8: a concurrent SHIP already published the terminal for
+        # this counter. Writing this late verdict's status here would regress
+        # durable state to the pre-SHIP artifact's answer.
+        written_status = None
+    elif receipt_published:
         if publish_out.get("published"):
             # PR #290 bot r5: publication-from-journal already completed the
             # deferred status leg INSIDE the receipt+sidecar lock, and cleared
@@ -39542,10 +39638,22 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             json_payload["completion_review_status"] = written_status
         json_payload["review_rounds"] = review_rounds
         json_payload["review_rounds_cap"] = get_max_review_iterations()
+        if apply_superseded_review_outcome(json_payload, attempt_summary):
+            print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
+            json_output(json_payload)
+            return
         escalated = apply_needs_human_escalation(json_payload, verdict)
         json_output(json_payload, success=not escalated)
     else:
         print(output)
+        if review_attempt_superseded(attempt_summary):
+            print("\nVERDICT=SUPERSEDED")
+            print(
+                f"{SUPERSEDED_REVIEW_NOTICE} (recorded verdict: "
+                f"{verdict or 'UNKNOWN'}; effective status: "
+                f"{attempt_summary.get('effective_status') or 'ship'})"
+            )
+            return
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
     _exit_needs_human_after_persistence(verdict, use_json=args.json)
 

@@ -150,6 +150,8 @@ fi
 
 LATEST_OUTCOME="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
   | jq -r '.attempts[-1].outcome // ""')"
+LATEST_SUPERSEDED_BY="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
+  | jq -r '.attempts[-1].superseded_by // ""')"
 VERDICT="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
   | jq -r '.attempts[-1].verdict // ""')"
 ATTEMPT_BACKEND="$(printf '%s' "$TERMINAL_REVIEW_JSON" \
@@ -167,6 +169,13 @@ CURRENT_REVIEWED_AT="$(printf '%s' "$SPEC_STATE_JSON" \
 
 TERMINAL_STATUS=""
 TERMINAL_EXIT=0
+if [[ -n "$LATEST_SUPERSEDED_BY" ]]; then
+  # A concurrent SHIP superseded this attempt: it reviewed a pre-SHIP artifact,
+  # charged no round, and must never write a terminal status here.
+  echo "review superseded by a newer SHIP — durable state unchanged; verdict recorded as evidence only" >&2
+  echo "COMPLETION_REVIEW_STATUS=$CURRENT_STATUS"
+  exit 0
+fi
 if [[ "$LATEST_OUTCOME" == "verdict" && "$VERDICT" == "SHIP" ]]; then
   TERMINAL_STATUS="ship"
 elif [[ "$LATEST_OUTCOME" == "verdict" \

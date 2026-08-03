@@ -290,6 +290,14 @@ printf '%s\n' "$RECORD_JSON"
 if [[ "$RECORD_EXIT" -ne 0 ]]; then
   exit "$RECORD_EXIT"
 fi
+# A concurrent SHIP landed while this review ran: the verdict was recorded as
+# evidence, charged no round, and wrote no status. Routing it as a live
+# terminal would fix-loop against a pre-SHIP artifact.
+if [[ "$(printf '%s' "$RECORD_JSON" | jq -r '.superseded // false')" == "true" ]]; then
+  echo "VERDICT=SUPERSEDED"
+  echo "review superseded by a newer SHIP — durable state unchanged; verdict recorded as evidence only" >&2
+  exit 0
+fi
 REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-plan-review-dispatch-<spec-id>-<suffix>.env"
 printf 'VERDICT=%q\nRESERVATION_ID=%q\n' "$VERDICT" "$RESERVATION_ID" \
   > "$REVIEW_DISPATCH_FILE"

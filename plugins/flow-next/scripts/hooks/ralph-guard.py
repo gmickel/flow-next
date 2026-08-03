@@ -743,6 +743,32 @@ _ARGV_WRAPPERS = frozenset({
     # `command` invocation and never reached the flowctl argv screen.
     "command", "exec", "builtin", "sudo",
 })
+# PR #290 bot r8: an option that takes a SEPARATE value token. Popping the
+# option alone left its value sitting in the launcher position
+# (`env -u X "$FLOWCTL" review-rounds "$sub" …` classified `X` as the
+# executable), so the whole flowctl argv screen — including the composed-verb
+# rules — was skipped. Attached spellings (`--unset=X`, `-I{}`, `-n5`) carry
+# their value inside the one token and need no extra pop.
+_WRAPPER_VALUE_OPTIONS: dict[str, frozenset[str]] = {
+    "env": frozenset({"-u", "--unset", "-C", "--chdir", "-S", "--split-string"}),
+    "timeout": frozenset({"-s", "--signal", "-k", "--kill-after"}),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "xargs": frozenset({
+        "-a", "--arg-file", "-I", "-i", "--replace", "-d", "--delimiter",
+        "-n", "--max-args", "-P", "--max-procs", "-s", "--max-chars",
+        "-L", "--max-lines", "-E", "-e", "--eof",
+    }),
+    "stdbuf": frozenset({"-i", "--input", "-o", "--output", "-e", "--error"}),
+    "nohup": frozenset(),
+    "sudo": frozenset({"-u", "--user", "-g", "--group", "-p", "--prompt"}),
+    # `command -p/-v/-V`, `builtin`, `exec -a NAME`.
+    "command": frozenset(),
+    "builtin": frozenset(),
+    "exec": frozenset({"-a"}),
+}
+# Only `timeout` takes a bare DURATION positional before its command; popping
+# digit-ish tokens for every wrapper would eat a legitimate first argument.
+_DURATION_POSITIONAL_WRAPPERS = frozenset({"timeout"})
 _SHELL_INTERPRETERS = frozenset({"sh", "bash", "zsh", "dash", "ksh"})
 _MAX_WRAPPER_DEPTH = 3
 
@@ -804,17 +830,47 @@ def _strip_argv_wrappers(segment: list[str]) -> list[str]:
         if _ENV_ASSIGN_RE.fullmatch(segment[0]):
             segment.pop(0)
             continue
-        if os.path.basename(segment[0]) in _ARGV_WRAPPERS:
+        wrapper = os.path.basename(segment[0])
+        if wrapper in _ARGV_WRAPPERS:
             segment.pop(0)
-            while segment and (
-                segment[0].startswith("-")
-                or _ENV_ASSIGN_RE.fullmatch(segment[0])
-                or _DURATION_RE.fullmatch(segment[0])
-            ):
-                segment.pop(0)
+            _strip_wrapper_options(segment, wrapper)
             continue
         break
     return segment
+
+
+def _strip_wrapper_options(segment: list[str], wrapper: str) -> None:
+    """Consume one wrapper's options — value-taking ones with their value."""
+    value_options = _WRAPPER_VALUE_OPTIONS.get(wrapper, frozenset())
+    while segment:
+        token = segment[0]
+        if _ENV_ASSIGN_RE.fullmatch(token):
+            segment.pop(0)
+            continue
+        if wrapper in _DURATION_POSITIONAL_WRAPPERS and _DURATION_RE.fullmatch(token):
+            segment.pop(0)
+            continue
+        if not token.startswith("-") or len(token) == 1:
+            return
+        segment.pop(0)
+        if _wrapper_option_takes_value(token, value_options) and segment:
+            # The value is the NEXT token, so it is not the executable.
+            segment.pop(0)
+    return
+
+
+def _wrapper_option_takes_value(token: str, value_options: frozenset) -> bool:
+    """Whether this option spelling expects a separate value token."""
+    if "=" in token:
+        return False  # `--unset=X` / `-d=,`: value is attached.
+    if token in value_options:
+        return True
+    # Short-option cluster (`env -iu NAME`): only the LAST letter can take a
+    # value. `-I{}` / `-n5` carry an attached value, and their trailing char
+    # is not a known option, so nothing extra is consumed.
+    if not token.startswith("--") and len(token) > 2:
+        return f"-{token[-1]}" in value_options
+    return False
 
 
 def _segment_argvs(segment: list[str], depth: int) -> list[list[str]]:
