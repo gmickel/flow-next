@@ -8541,6 +8541,23 @@ def fit_cursor_prompt_to_budget(
     return fitted
 
 
+def _strip_ratchet_from_preamble(preamble: str, ratchet: str) -> str:
+    """Return the NON-ratchet remainder of a ``build_rereview_preamble`` result.
+
+    ``build_rereview_preamble`` PREPENDS the ratchet block to the re-review
+    body. A caller that re-renders the ratchet under a byte budget must drop
+    only that prefix and keep the body (header, updated-files list,
+    re-read-from-disk instruction, plan's Task Spec Sync section, closing
+    contract line). ``ratchet`` is recomputed from the SAME inputs, so no
+    literal marker is duplicated here and there is nothing to drift.
+    """
+    if ratchet and preamble.startswith(ratchet):
+        return preamble[len(ratchet):]
+    if ratchet and ratchet in preamble:
+        return preamble.replace(ratchet, "", 1)
+    return preamble
+
+
 def fit_cursor_rereview_prompt_to_budget(
     prompt: str,
     *,
@@ -8550,30 +8567,56 @@ def fit_cursor_rereview_prompt_to_budget(
     repo_root: Path,
     spec_id: Optional[str] = None,
     task_ids: Optional[list[str]] = None,
+    persona: str = "",
 ) -> str:
     """Fit Cursor's structured ratchet without splitting items or delimiters.
 
     ``prompt`` is the complete non-ratchet review prompt, after all normal
-    prompt assembly.  First fit that real prompt to the capacity left after the
-    fixed ratchet scaffold, then derive the structured-item budget from the
-    *actual* fitted length.  The final block only appends whole rendered items;
+    prompt assembly, WITHOUT the persona override — pass that as ``persona`` so
+    it can be held at position 0 (fn-90 R7: the override only supersedes the
+    ambient persona if the model reads it first). First fit the real prompt to
+    the capacity left after the persona, the non-ratchet preamble tail, and the
+    fixed ratchet scaffold; then derive the structured-item budget from the
+    *actual* fitted length. The final block only appends whole rendered items;
     if no paired block fits, it is omitted rather than leaving a broken tag.
+
+    The non-ratchet remainder of ``rereview_preamble`` (the re-review header,
+    updated-files list, re-read-from-disk instruction, plan's Task Spec Sync
+    section, and the closing contract line) is carried through verbatim — it is
+    not scaffold, and dropping it silently turned every Cursor re-review into a
+    ratchet with no re-review framing.
     """
     if not rereview_preamble:
-        return fit_cursor_prompt_to_budget(
-            prompt, repo_root=repo_root, spec_id=spec_id, task_ids=task_ids
+        return persona + fit_cursor_prompt_to_budget(
+            prompt,
+            repo_root=repo_root,
+            spec_id=spec_id,
+            task_ids=task_ids,
+            max_chars=CURSOR_ARGV_PROMPT_MAX - len(persona),
         )
-    if prior_items is None:
+    if not prior_items:
         # Legacy prose already has a bounded path. Its preamble is still kept
         # whole; the final generic fitter remains the only truncation point.
-        return fit_cursor_prompt_to_budget(
+        return persona + fit_cursor_prompt_to_budget(
             rereview_preamble + prompt,
             repo_root=repo_root,
             spec_id=spec_id,
             task_ids=task_ids,
+            max_chars=CURSOR_ARGV_PROMPT_MAX - len(persona),
         )
-    scaffold = build_convergence_ratchet_block(prior_items=[])
-    base_limit = max(0, CURSOR_ARGV_PROMPT_MAX - len(scaffold) - _CURSOR_PROMPT_FIT_MARGIN)
+    preamble_tail = _strip_ratchet_from_preamble(
+        rereview_preamble,
+        build_convergence_ratchet_block(prior_findings, prior_items=prior_items),
+    )
+    scaffold = build_convergence_ratchet_block(scaffold_only=True)
+    base_limit = max(
+        0,
+        CURSOR_ARGV_PROMPT_MAX
+        - len(persona)
+        - len(preamble_tail)
+        - len(scaffold)
+        - _CURSOR_PROMPT_FIT_MARGIN,
+    )
     fitted_prompt = fit_cursor_prompt_to_budget(
         prompt,
         repo_root=repo_root,
@@ -8581,15 +8624,21 @@ def fit_cursor_rereview_prompt_to_budget(
         task_ids=task_ids,
         max_chars=base_limit,
     )
-    remaining = CURSOR_ARGV_PROMPT_MAX - len(fitted_prompt) - _CURSOR_PROMPT_FIT_MARGIN
+    remaining = (
+        CURSOR_ARGV_PROMPT_MAX
+        - len(persona)
+        - len(preamble_tail)
+        - len(fitted_prompt)
+        - _CURSOR_PROMPT_FIT_MARGIN
+    )
     structured = build_convergence_ratchet_block(
         prior_findings,
         prior_items=prior_items,
         max_total_chars=max(0, remaining),
     )
-    # Both terms were budgeted independently, so this stays strictly inside
+    # Every term was budgeted independently, so this stays strictly inside
     # Cursor's argv cap without a final substring operation over the tags.
-    return structured + fitted_prompt
+    return persona + structured + preamble_tail + fitted_prompt
 
 
 def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
@@ -10959,6 +11008,7 @@ def build_convergence_ratchet_block(
     *,
     prior_items: Optional[list[dict]] = None,
     max_total_chars: Optional[int] = None,
+    scaffold_only: bool = False,
 ) -> str:
     """fn-90 R4: the shrink-only convergence contract for re-reviews.
 
@@ -10971,9 +11021,15 @@ def build_convergence_ratchet_block(
     NEW ≥Major findings may block; else SHIP.
 
     Returns "" when there are no prior findings (round 1 / receipt without the
-    field — treated as a fresh review, back-compatible).
+    field — treated as a fresh review, back-compatible). A v1 container that
+    carries ZERO items is not "structured findings": it would render an empty
+    ``<prior_findings>`` block plus the shrink-only closing, i.e. a ratchet over
+    nothing. Such a container falls through to the prose path (or to "" when
+    there is no prose either). ``scaffold_only`` is the one internal exception —
+    it renders the fixed prefix/suffix with no items so callers can MEASURE the
+    scaffold cost before deciding an item budget.
     """
-    structured = prior_items is not None
+    structured = scaffold_only or bool(prior_items)
     prior = (prior_findings or "").strip()
     if not structured and not prior:
         return ""
@@ -11015,7 +11071,7 @@ expand scope.
         return ""
     if structured:
         rendered: list[str] = []
-        for item in prior_items:
+        for item in prior_items or []:
             rendered_item = _render_structured_prior_finding(item)
             if rendered_item is None:
                 return ""
@@ -37977,12 +38033,13 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         if rereview_preamble and prompt.startswith(rereview_preamble):
             prompt = prompt[len(rereview_preamble):]
         prompt = fit_cursor_rereview_prompt_to_budget(
-            build_cursor_persona_override() + prompt,
+            prompt,
             rereview_preamble=rereview_preamble,
             prior_findings=prior_findings,
             prior_items=prior_items,
             repo_root=repo_root,
             task_ids=[task_id] if task_id else None,
+            persona=build_cursor_persona_override(),
         )
     else:
         repo_root = get_repo_root()
@@ -38361,13 +38418,14 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
 
     if reg["prompt_fit"] == "cursor_argv":
         prompt = fit_cursor_rereview_prompt_to_budget(
-            build_cursor_persona_override() + prompt,
+            prompt,
             rereview_preamble=rereview_preamble if (is_rereview or prior_findings is not None or prior_items is not None) else "",
             prior_findings=prior_findings,
             prior_items=prior_items,
             repo_root=repo_root,
             spec_id=epic_id,
             task_ids=task_ids or None,
+            persona=build_cursor_persona_override(),
         )
 
     artifact_sha256 = _review_artifact_hash_or_warn(
@@ -38552,13 +38610,14 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             epic_spec, task_specs, diff_summary, fitted_diff,
         )
         prompt = fit_cursor_rereview_prompt_to_budget(
-            build_cursor_persona_override() + prompt,
+            prompt,
             rereview_preamble=rereview_preamble,
             prior_findings=prior_findings,
             prior_items=prior_items,
             repo_root=repo_root,
             spec_id=epic_id,
             task_ids=task_ids or None,
+            persona=build_cursor_persona_override(),
         )
     else:
         diff_summary, diff_content = reg["gather_diff"](

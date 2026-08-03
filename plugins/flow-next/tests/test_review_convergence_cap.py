@@ -224,13 +224,16 @@ class TestConvergenceRatchet(unittest.TestCase):
             **item["anchor"],
             "path": "a" * (flowctl._FINDINGS_MAX_PATH - 3) + ".py",
         }
-        scaffold = flowctl.build_convergence_ratchet_block(prior_items=[])
+        scaffold = flowctl.build_convergence_ratchet_block(scaffold_only=True)
+        preamble = flowctl.build_rereview_preamble(
+            ["src/review.py"], "implementation", prior_items=[item]
+        )
         nearly_full = "P" * (
             flowctl.CURSOR_ARGV_PROMPT_MAX - len(scaffold) - 50
         )
         out = flowctl.fit_cursor_rereview_prompt_to_budget(
             nearly_full,
-            rereview_preamble=scaffold,
+            rereview_preamble=preamble,
             prior_findings=None,
             prior_items=[item],
             repo_root=REPO,
@@ -240,6 +243,131 @@ class TestConvergenceRatchet(unittest.TestCase):
         self.assertIn(out.count("<prior_findings>"), (0, 1))
         rendered = flowctl._render_structured_prior_finding(item)
         self.assertTrue(rendered not in out or out.count(rendered) == 1)
+
+    def test_cursor_structured_path_keeps_full_rereview_preamble(self):
+        """fn-159.2 r1: the structured Cursor path used to return
+        ``ratchet + prompt``, silently dropping everything else the re-review
+        preamble carries (header, updated-files list, re-read-from-disk
+        instruction, closing contract)."""
+        item = self._structured_item()
+        preamble = flowctl.build_rereview_preamble(
+            ["src/review.py", "src/other.py"],
+            "implementation",
+            prior_items=[item],
+        )
+        out = flowctl.fit_cursor_rereview_prompt_to_budget(
+            "BODY <review_instructions>rubric</review_instructions>",
+            rereview_preamble=preamble,
+            prior_findings=None,
+            prior_items=[item],
+            repo_root=REPO,
+        )
+        # Non-ratchet preamble survives.
+        self.assertIn("## IMPORTANT: Re-review After Fixes", out)
+        self.assertIn("- src/review.py", out)
+        self.assertIn("- src/other.py", out)
+        self.assertIn("do NOT rely on cached content", out)
+        self.assertIn("CONVERGENCE RATCHET contract above", out)
+        # Ratchet items + paired delimiters survive.
+        self.assertIn(flowctl._render_structured_prior_finding(item), out)
+        self.assertEqual(out.count("<prior_findings>"), 1)
+        self.assertEqual(out.count("</prior_findings>"), 1)
+        self.assertIn("BODY", out)
+        self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
+
+    def test_cursor_plan_structured_path_keeps_task_spec_sync_section(self):
+        item = self._structured_item()
+        preamble = flowctl.build_rereview_preamble(
+            [".flow/specs/fn-1.md"], "plan", prior_items=[item]
+        )
+        out = flowctl.fit_cursor_rereview_prompt_to_budget(
+            "BODY <review_instructions>rubric</review_instructions>",
+            rereview_preamble=preamble,
+            prior_findings=None,
+            prior_items=[item],
+            repo_root=REPO,
+            spec_id="fn-1",
+        )
+        self.assertIn("## Task Spec Sync Required", out)
+        self.assertIn("flowctl task set-spec", out)
+
+    def test_cursor_persona_override_stays_first_on_both_branches(self):
+        """fn-90 R7: the override only supersedes the ambient persona if the
+        model reads it FIRST — never after a ratchet block."""
+        persona = flowctl.build_cursor_persona_override()
+        item = self._structured_item()
+        structured = flowctl.fit_cursor_rereview_prompt_to_budget(
+            "BODY <review_instructions>rubric</review_instructions>",
+            rereview_preamble=flowctl.build_rereview_preamble(
+                ["src/review.py"], "implementation", prior_items=[item]
+            ),
+            prior_findings=None,
+            prior_items=[item],
+            repo_root=REPO,
+            persona=persona,
+        )
+        legacy = flowctl.fit_cursor_rereview_prompt_to_budget(
+            "BODY <review_instructions>rubric</review_instructions>",
+            rereview_preamble=flowctl.build_rereview_preamble(
+                ["src/review.py"], "implementation", prior_findings="old text"
+            ),
+            prior_findings="old text",
+            prior_items=None,
+            repo_root=REPO,
+            persona=persona,
+        )
+        fresh = flowctl.fit_cursor_rereview_prompt_to_budget(
+            "BODY <review_instructions>rubric</review_instructions>",
+            rereview_preamble="",
+            prior_findings=None,
+            prior_items=None,
+            repo_root=REPO,
+            persona=persona,
+        )
+        for name, out in (
+            ("structured", structured), ("legacy", legacy), ("fresh", fresh),
+        ):
+            with self.subTest(branch=name):
+                self.assertTrue(out.startswith(persona))
+                self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
+        self.assertLess(
+            structured.index("PERSONA OVERRIDE"),
+            structured.index("CONVERGENCE RATCHET"),
+        )
+        self.assertLess(
+            legacy.index("PERSONA OVERRIDE"),
+            legacy.index("CONVERGENCE RATCHET"),
+        )
+
+    def test_zero_item_container_never_renders_empty_structured_block(self):
+        """An empty v1 item list is not "structured findings" — it would emit
+        an empty <prior_findings> block plus a shrink-only contract over
+        nothing. It must degrade to prose / fresh-review instead."""
+        self.assertEqual(flowctl.build_convergence_ratchet_block(prior_items=[]), "")
+        prose = flowctl.build_convergence_ratchet_block(
+            "old review text", prior_items=[]
+        )
+        self.assertIn("[legacy prose fallback]", prose)
+        self.assertIn("old review text", prose)
+        fresh = flowctl.build_rereview_preamble(
+            ["src/x.py"], "implementation", prior_items=[]
+        )
+        self.assertNotIn("CONVERGENCE RATCHET", fresh)
+        self.assertNotIn("<prior_findings>", fresh)
+        self.assertIn("conduct a fresh implementation review", fresh)
+        # Scaffold measurement is the one place [] still renders the shell.
+        scaffold = flowctl.build_convergence_ratchet_block(scaffold_only=True)
+        self.assertIn("<prior_findings>", scaffold)
+        # Cursor path with a zero-item container: no empty structured block.
+        out = flowctl.fit_cursor_rereview_prompt_to_budget(
+            "BODY <review_instructions>rubric</review_instructions>",
+            rereview_preamble=fresh,
+            prior_findings=None,
+            prior_items=[],
+            repo_root=REPO,
+        )
+        self.assertNotIn("<prior_findings>", out)
+        self.assertIn("## IMPORTANT: Re-review After Fixes", out)
 
     def test_host_workflows_name_structured_ratchet_fields(self):
         for relative in (
