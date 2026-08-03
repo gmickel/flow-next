@@ -6058,7 +6058,11 @@ def parse_review_criteria(output: str) -> Optional[list[dict]]:
                 break
             if not stripped:
                 continue
-            if re.match(r"^<verdict>(SHIP|NEEDS_WORK)</verdict>$", stripped):
+            if re.match(
+                r"^<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)"
+                r"</verdict>$",
+                stripped,
+            ):
                 break  # the required terminal verdict tag ends the section
             if stripped.startswith(("- ", "* ", "+ ")):
                 stripped = stripped[2:].strip()
@@ -9524,6 +9528,9 @@ def get_max_review_iterations() -> int:
 # from transport/backend failure codes (2 = exec failure, 3 = sandbox) so hosts
 # and Ralph can't misread the refusal as a retryable error.
 REVIEW_CAP_EXIT_CODE = 4
+# Terminal marker for a reviewer-requested human escalation. Shares the cap's
+# exit code; hosts key off this string in prose mode and off `escalate` in JSON.
+NEEDS_HUMAN_ESCALATION_MARKER = "ESCALATE: reviewer requested human review"
 # Repeated no-verdict transport failures are not review non-convergence. Keep
 # their stop signal separate so callers never surface a false ESCALATE.
 REVIEW_TRANSPORT_EXIT_CODE = 5
@@ -10471,30 +10478,52 @@ def handle_replayed_review_cap(
         replays = []
     verdict = review_replay_terminal_verdict(replays)
     if use_json:
-        json_output(
-            {
-                "type": review_type,
-                "id": review_id,
-                "verdict": verdict,
-                "replayed": True,
-                "replays": replays,
-                "dispatched": False,
-            }
-        )
+        payload: dict = {
+            "type": review_type,
+            "id": review_id,
+            "verdict": verdict,
+            "replayed": True,
+            "replays": replays,
+            "dispatched": False,
+        }
+        escalated = apply_needs_human_escalation(payload, verdict)
+        json_output(payload, success=not escalated)
     else:
         print(json.dumps({"replayed": True, "replays": replays}, indent=2))
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
     return True
 
 
+def apply_needs_human_escalation(payload: dict, verdict: Optional[str]) -> bool:
+    """Fold the NEEDS_HUMAN terminal into an already-built JSON payload.
+
+    The escalation is part of the SAME object the caller emits - one JSON
+    document per invocation, matching the cap terminal's contract. Returns
+    True when the payload was marked, so the caller can flip ``success``.
+    """
+    if verdict != "NEEDS_HUMAN":
+        return False
+    payload["error"] = NEEDS_HUMAN_ESCALATION_MARKER
+    payload["escalate"] = True
+    return True
+
+
 def _exit_needs_human_after_persistence(verdict: Optional[str], *, use_json: bool) -> None:
-    """Emit the human-escalation terminal only after all writes are complete."""
-    if verdict == "NEEDS_HUMAN":
-        error_exit(
-            "ESCALATE: reviewer requested human review",
-            use_json=use_json,
-            code=REVIEW_CAP_EXIT_CODE,
-        )
+    """Exit on the human-escalation terminal, after all writes are complete.
+
+    In ``--json`` mode the marker was already folded into the single result
+    payload by ``apply_needs_human_escalation``; emitting here would produce a
+    second JSON document on stdout, so this only sets the exit code.
+    """
+    if verdict != "NEEDS_HUMAN":
+        return
+    if use_json:
+        sys.exit(REVIEW_CAP_EXIT_CODE)
+    error_exit(
+        NEEDS_HUMAN_ESCALATION_MARKER,
+        use_json=False,
+        code=REVIEW_CAP_EXIT_CODE,
+    )
 
 
 def _latest_consumed_artifact_sha256(
@@ -38202,7 +38231,8 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
                 sid, "impl", task_id=task_id, use_json=args.json
             )
             json_payload["review_rounds_cap"] = get_max_review_iterations()
-        json_output(json_payload)
+        escalated = apply_needs_human_escalation(json_payload, verdict)
+        json_output(json_payload, success=not escalated)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
@@ -38347,8 +38377,9 @@ def _finish_backend_exec(
     _clear_stale_review_receipt(receipt_path)
     error_exit(
         f"{reg['no_verdict_label']} review completed but no verdict found "
-        f"in output. Expected <verdict>SHIP</verdict> or "
-        f"<verdict>NEEDS_WORK</verdict>. The reserved review round was "
+        f"in output. Expected <verdict>SHIP</verdict>, "
+        f"<verdict>NEEDS_WORK</verdict>, <verdict>MAJOR_RETHINK</verdict>, or "
+        f"<verdict>NEEDS_HUMAN</verdict>. The reserved review round was "
         f"refunded and the transport attempt recorded.",
         use_json=args.json,
         code=2,
@@ -38566,7 +38597,8 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             json_payload["plan_review_status"] = written_status
         json_payload["review_rounds"] = review_rounds
         json_payload["review_rounds_cap"] = get_max_review_iterations()
-        json_output(json_payload)
+        escalated = apply_needs_human_escalation(json_payload, verdict)
+        json_output(json_payload, success=not escalated)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
@@ -38832,7 +38864,8 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             json_payload["completion_review_status"] = written_status
         json_payload["review_rounds"] = review_rounds
         json_payload["review_rounds_cap"] = get_max_review_iterations()
-        json_output(json_payload)
+        escalated = apply_needs_human_escalation(json_payload, verdict)
+        json_output(json_payload, success=not escalated)
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")

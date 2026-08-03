@@ -128,6 +128,10 @@ NOT_PROMPT_TEXT = {
     "COMPLETION_REVIEW_PROMPT_TEMPLATE_REL",
     "VALIDATOR_TEMPLATE_REL",
     "DEEP_PASSES_TEMPLATE_REL",
+    # fn-159.3: a machine terminal marker (one string, two emit sites), not
+    # prompt text. No agent is instructed by it; hosts and ralph.sh match on
+    # it, and those matchers are covered by their own tests.
+    "NEEDS_HUMAN_ESCALATION_MARKER",
 }
 
 # Condensations of the deep-passes.md blocks, NOT copies of them (#118).

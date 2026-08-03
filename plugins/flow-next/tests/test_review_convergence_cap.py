@@ -20,6 +20,7 @@ Run:
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import hashlib
 import importlib.util
@@ -2724,6 +2725,131 @@ class TestReplayAwareInProcessCallers(unittest.TestCase):
         payload = json.loads(out.getvalue())
         self.assertEqual(payload["verdict"], "NEEDS_WORK")
         self.assertFalse(payload["dispatched"])
+
+    def test_replayed_needs_human_folds_escalation_into_one_object(self):
+        """fn-159.3 r1: the replay terminal is ONE JSON document - the
+        escalation marker rides the result payload, never a second doc."""
+        handled, printed = self._capture(
+            {"replayed": True, "replays": [
+                {"reservation_id": "a" * 32, "verdict": "NEEDS_HUMAN"},
+            ]},
+            review_type="plan_review", review_id="fn-1-demo", use_json=True,
+        )
+        self.assertTrue(handled)
+        payload = json.loads(printed)  # a second doc would fail to parse
+        self.assertEqual(payload["verdict"], "NEEDS_HUMAN")
+        self.assertTrue(payload["escalate"])
+        self.assertFalse(payload["success"])
+        self.assertEqual(
+            payload["error"], flowctl.NEEDS_HUMAN_ESCALATION_MARKER
+        )
+
+
+class TestNeedsHumanHandlerOrdering(unittest.TestCase):
+    """fn-159.3 r1: run a NEEDS_HUMAN dispatch end-to-end through the
+    in-process handlers. The ordering claim itself is the assertion - the
+    attempt row, the receipt, and (for plan) the denormalized status must all
+    be durable AT the moment the handler exits 4, and stdout must carry
+    exactly one JSON object."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name).resolve()
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        (self.root / ".flow" / "specs" / f"{self.spec_id}.md").write_text(
+            "# Demo\n\n## Acceptance Criteria\n\n- R1: works\n", encoding="utf-8"
+        )
+        (self.root / ".flow" / "tasks" / f"{self.spec_id}.1.md").write_text(
+            "# Task 1\n\nImplement R1.\n", encoding="utf-8"
+        )
+        self._git("init", "-q", "-b", "main")
+        self._git("config", "user.email", "t@example.com")
+        self._git("config", "user.name", "t")
+        (self.root / "app.py").write_text("x = 1\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "base")
+        (self.root / "app.py").write_text("x = 2\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "change")
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(os.chdir, self._cwd)
+        self._old_env = os.environ.pop("MAX_REVIEW_ITERATIONS", None)
+        if self._old_env is not None:
+            self.addCleanup(
+                os.environ.__setitem__, "MAX_REVIEW_ITERATIONS", self._old_env
+            )
+        flowctl._wire_backend_review_hooks()
+
+    def _git(self, *argv: str) -> None:
+        subprocess.run(
+            ["git", *argv], cwd=self.root, check=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+
+    def _data(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+
+    def _run(self, handler, args) -> "tuple[dict, int]":
+        def fake_exec(_prompt, **_kwargs):
+            return "<verdict>NEEDS_HUMAN</verdict>", "sess-1", 0, ""
+
+        out = io.StringIO()
+        with mock.patch.dict(
+            flowctl.BACKEND_REGISTRY["codex"], {"run_exec": fake_exec}
+        ):
+            with contextlib.redirect_stdout(out):
+                with self.assertRaises(SystemExit) as ctx:
+                    handler(args, "codex")
+        return json.loads(out.getvalue()), ctx.exception.code
+
+    def test_impl_needs_human_exits_four_with_state_durable(self):
+        receipt = self.root / "impl-receipt.json"
+        args = argparse.Namespace(
+            task=f"{self.spec_id}.1", base="HEAD~1", focus=None, json=True,
+            receipt=str(receipt), spec=None, model=None, effort=None,
+            force=False, sandbox=None,
+        )
+        payload, code = self._run(flowctl._backend_impl_review, args)
+        self.assertEqual(code, flowctl.REVIEW_CAP_EXIT_CODE)
+        self.assertEqual(payload["verdict"], "NEEDS_HUMAN")
+        self.assertTrue(payload["escalate"])
+        self.assertFalse(payload["success"])
+        self.assertEqual(
+            payload["error"], flowctl.NEEDS_HUMAN_ESCALATION_MARKER
+        )
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["verdict"], "NEEDS_HUMAN")
+        self.assertTrue(row["round_consumed"])
+        self.assertEqual(
+            json.loads(receipt.read_text())["verdict"], "NEEDS_HUMAN"
+        )
+
+    def test_plan_needs_human_exits_four_with_status_durable(self):
+        receipt = self.root / "plan-receipt.json"
+        args = argparse.Namespace(
+            epic=self.spec_id, base="HEAD~1", json=True, files="app.py",
+            receipt=str(receipt), spec=None, model=None, effort=None,
+            force=False, sandbox=None,
+        )
+        payload, code = self._run(flowctl._backend_plan_review, args)
+        self.assertEqual(code, flowctl.REVIEW_CAP_EXIT_CODE)
+        self.assertEqual(payload["verdict"], "NEEDS_HUMAN")
+        self.assertTrue(payload["escalate"])
+        self.assertFalse(payload["success"])
+        data = self._data()
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["verdict"], "NEEDS_HUMAN")
+        self.assertTrue(row["round_consumed"])
+        self.assertEqual(data["plan_review_status"], "needs_human")
+        self.assertEqual(
+            json.loads(receipt.read_text())["verdict"], "NEEDS_HUMAN"
+        )
+        self.assertEqual(payload["plan_review_status"], "needs_human")
 
 
 class TestOverlappingReviewProcesses(_JournalReplayBase):

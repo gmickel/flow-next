@@ -175,6 +175,11 @@ elif [[ "$LATEST_OUTCOME" == "verdict" \
   && "$REVIEW_ROUND" -ge "$REVIEW_CAP" ]]; then
   TERMINAL_STATUS="needs_work"
   TERMINAL_EXIT=4
+elif [[ "$LATEST_OUTCOME" == "verdict" && "$VERDICT" == "NEEDS_HUMAN" ]]; then
+  # A reviewer-requested escalation is terminal at any round: persist it here
+  # and exit, never fall through and reserve another paid round.
+  TERMINAL_STATUS="needs_human"
+  TERMINAL_EXIT=4
 fi
 
 # A matching status means the terminal already persisted. A newer terminal
@@ -270,7 +275,11 @@ if [[ -n "$TERMINAL_STATUS" \
   fi
 
   if [[ "$TERMINAL_EXIT" -eq 4 ]]; then
-    echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
+    if [[ "$TERMINAL_STATUS" == "needs_human" ]]; then
+      echo "ESCALATE: reviewer requested human review"
+    else
+      echo "ESCALATE: completion-review did not converge in ${REVIEW_CAP} verdict rounds"
+    fi
     exit 4
   fi
   echo "VERDICT=SHIP"
@@ -363,8 +372,11 @@ Codex/copilot/cursor handlers already self-write status; their next invocation
 also runs Step 0.5 first, so a handler-side write failure recovers without
 another reviewer dispatch.
 
-For host and rp, write once on every delivered terminal path (SHIP,
-capped-NEEDS_WORK, and NEEDS_HUMAN). The write happens immediately after the
+For host and rp, write once on every delivered terminal path — Step 0.5 maps
+SHIP → `ship` (exit 0), capped-NEEDS_WORK → `needs_work` (exit 4), and
+NEEDS_HUMAN → `needs_human` (exit 4, `ESCALATE: reviewer requested human
+review`). A delivered NEEDS_HUMAN is terminal at ANY round: never reserve or
+dispatch another review for it. The write happens immediately after the
 final verdict is recorded and before `ESCALATE:` / exit 4; no later control
 flow is assumed. Transport failure, malformed verdict, and retry outcomes are
 non-terminal and never write completion status.

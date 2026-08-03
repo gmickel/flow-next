@@ -397,6 +397,34 @@ class TestParseReviewCriteria(unittest.TestCase):
             [{"id": "G1", "status": "met", "note": note}],
         )
 
+    def test_needs_human_terminal_ends_section(self) -> None:
+        # fn-159.3 r1: the terminator knows the FULL verdict grammar. A
+        # completion reviewer that escalates must still project its G-IDs.
+        text = (
+            "## Global criteria\n"
+            "\n"
+            "G1: met - ok\n"
+            "\n"
+            "<verdict>NEEDS_HUMAN</verdict>\n"
+        )
+        self.assertEqual(
+            flowctl.parse_review_criteria(text),
+            [{"id": "G1", "status": "met", "note": "ok"}],
+        )
+
+    def test_major_rethink_terminal_ends_section(self) -> None:
+        text = (
+            "## Global criteria\n"
+            "\n"
+            "G1: violated - wrong approach\n"
+            "\n"
+            "<verdict>MAJOR_RETHINK</verdict>\n"
+        )
+        self.assertEqual(
+            flowctl.parse_review_criteria(text),
+            [{"id": "G1", "status": "violated", "note": "wrong approach"}],
+        )
+
     def test_no_section_returns_none(self) -> None:
         text = "## Requirements Extracted\n\n1. something\n\n<verdict>SHIP</verdict>\n"
         self.assertIsNone(flowctl.parse_review_criteria(text))
