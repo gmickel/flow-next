@@ -21,6 +21,7 @@ Run:
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import inspect
 import io
@@ -678,7 +679,12 @@ class TestCombinedFinalizeWrite(unittest.TestCase):
                 finalize_status_kind="plan",
                 reset_rounds_on_ship=True,
             )
-        self.assertEqual(aw.call_count, 1)
+        # The write-ahead journal is a separate durable file; the sidecar
+        # transaction remains one atomic write.
+        sidecar_writes = [
+            call for call in aw.call_args_list if Path(call.args[0]).name == f"{self.spec_id}.json"
+        ]
+        self.assertEqual(len(sidecar_writes), 1)
         self.assertEqual(result["status_written"], "ship")
         data = self._spec_data()
         self.assertEqual(data["plan_review_status"], "ship")
@@ -772,7 +778,10 @@ class TestCombinedFinalizeWrite(unittest.TestCase):
                 attempt_out=attempt_out,
             )
         self.assertEqual(verdict, "SHIP")
-        self.assertEqual(aw.call_count, 1)
+        sidecar_writes = [
+            call for call in aw.call_args_list if Path(call.args[0]).name == f"{self.spec_id}.json"
+        ]
+        self.assertEqual(len(sidecar_writes), 1)
         self.assertEqual(attempt_out["status_written"], "ship")
         data = self._spec_data()
         self.assertEqual(data["plan_review_status"], "ship")
@@ -1175,6 +1184,716 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self.assertIn("No reserved", out + err)
         self.assertEqual(len(self._spec_json()["review_attempts"]), 1)
         self.assertEqual(self._spec_json()["plan_review_rounds"], 1)
+
+
+class TestConvergenceReservationFoundation(unittest.TestCase):
+    """fn-159.1: id-keyed, epoch-stamped review reservation state."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        self._tmp.cleanup()
+
+    def _data(self) -> dict:
+        return json.loads((self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text())
+
+    def _reserve(self, *, kind: str = "plan", task: str | None = None) -> str:
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, kind, task_id=task, review_type=kind,
+            artifact_sha256="a" * 64, return_reservation=True,
+        )
+        assert reservation_id is not None
+        return reservation_id
+
+    def test_reservation_id_round_trips_and_stamps_metadata(self):
+        reservation_id = self._reserve()
+        result = flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>NEEDS_WORK</verdict>",
+            verdict="NEEDS_WORK", review_type="plan", reservation_id=reservation_id,
+        )
+        self.assertEqual(result["reservation_id"], reservation_id)
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["reservation_id"], reservation_id)
+        self.assertEqual(row["artifact_sha256"], "a" * 64)
+        self.assertEqual(row["hash_epoch"], 0)
+
+    def test_unknown_id_is_exit_two_and_zero_mutation(self):
+        self._reserve()
+        before = self._data()
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.record_review_attempt(
+                    self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+                    verdict="SHIP", review_type="plan", reservation_id="missing",
+                )
+        self.assertEqual(exc.exception.code, 2)
+        self.assertEqual(self._data(), before)
+
+    def test_idless_zero_pending_is_rejected(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.record_review_attempt(
+                    self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+                    verdict="SHIP", review_type="plan",
+                )
+        self.assertEqual(exc.exception.code, 2)
+
+    def test_idless_one_pending_consumes_its_unique_reservation(self):
+        reservation_id = self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            verdict="SHIP", review_type="plan",
+        )
+        self.assertEqual(self._data()["review_attempts"][-1]["reservation_id"], reservation_id)
+
+    def test_idless_multiple_pending_is_rejected(self):
+        self._reserve()
+        self._reserve()
+        before = self._data()
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.record_review_attempt(
+                    self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+                    verdict="SHIP", review_type="plan",
+                )
+        self.assertEqual(exc.exception.code, 2)
+        self.assertEqual(self._data(), before)
+
+    def test_out_of_order_and_exact_duplicate_finalization_are_safe(self):
+        first, second = self._reserve(), self._reserve()
+        for reservation_id in (second, first):
+            flowctl.record_review_attempt(
+                self.spec_id, "plan", backend="rp", output="<verdict>NEEDS_WORK</verdict>",
+                verdict="NEEDS_WORK", review_type="plan", reservation_id=reservation_id,
+            )
+        replay = flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>NEEDS_WORK</verdict>",
+            verdict="NEEDS_WORK", review_type="plan", reservation_id=first,
+        )
+        self.assertTrue(replay["replayed"])
+        self.assertEqual(len(self._data()["review_attempts"]), 2)
+
+    def test_every_reset_path_advances_its_epoch_without_clearing_pending(self):
+        self._reserve()
+        flowctl.reset_review_cap(self.spec_id, "plan")
+        self.assertEqual(self._data()["review_hash_epoch"]["plan"], 1)
+        flowctl.cmd_spec_reset_review_rounds(mock.Mock(id=self.spec_id, impl=False, json=False))
+        self.assertEqual(self._data()["review_hash_epoch"]["plan"], 2)
+        reservation_id = self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            verdict="SHIP", review_type="plan", reservation_id=reservation_id,
+            reset_rounds_on_ship=True,
+        )
+        self.assertEqual(self._data()["review_hash_epoch"]["plan"], 3)
+        self.assertIn("review_pending_rounds", self._data())
+
+    def test_impl_bulk_reset_advances_every_impl_epoch_it_wipes(self):
+        t1, t2 = f"{self.spec_id}.1", f"{self.spec_id}.2"
+        for task in (t1, t2):
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "impl", task_id=task, review_type="impl",
+                return_reservation=True,
+            )
+        flowctl.cmd_spec_reset_review_rounds(
+            mock.Mock(id=self.spec_id, impl=True, json=False)
+        )
+        epochs = self._data()["review_hash_epoch"]
+        self.assertEqual(epochs[f"impl:{t1}"], 1)
+        self.assertEqual(epochs[f"impl:{t2}"], 1)
+        self.assertEqual(epochs["plan"], 1)
+
+    def test_status_target_folds_status_write_into_finalize(self):
+        reservation_id = self._reserve()
+        result = flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>SHIP</verdict>", verdict="SHIP",
+            review_type="plan", reservation_id=reservation_id,
+            status_target="plan",
+        )
+        self.assertEqual(result["status_written"], "ship")
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["status"], "complete")
+        # No receipt operation was journaled → journal fully complete → gone.
+        journal = (
+            self.root / ".flow" / "review-runs" / f"{reservation_id}.json"
+        )
+        self.assertFalse(journal.exists())
+
+    def test_journal_is_written_before_consumption_and_replays_without_response_file(self):
+        reservation_id = self._reserve()
+        flow = self.root / ".flow"
+        journal_path = flow / "review-runs" / f"{reservation_id}.json"
+        # This is the precise write-ahead crash boundary: journal persisted,
+        # reservation still live, no attempt row, and no caller temp file.
+        journal_path.parent.mkdir()
+        journal_path.write_text(json.dumps({
+            "reservation_id": reservation_id, "response": "<verdict>SHIP</verdict>",
+            "response_sha256": hashlib.sha256(b"<verdict>SHIP</verdict>").hexdigest(),
+            "counter_scope": "plan", "scope": "plan", "review_kind": "plan",
+            "review_type": "plan", "task_id": None, "backend": "rp",
+            "verdict": "SHIP", "failure_class": None, "outcome": "verdict",
+            "metadata": self._data()["review_reservations"][reservation_id],
+            "receipt_target": None, "receipt_payload": None,
+            "finalized": {"receipt": "not_applicable", "digest": "not_applicable", "status": "not_applicable"},
+        }))
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        # Typed recovery result (rounds 7-8): the delivered verdict is the
+        # terminal for this call — replayed, zero dispatch, no reservation.
+        self.assertEqual(
+            result,
+            {
+                "replayed": True,
+                "replays": [
+                    {"reservation_id": reservation_id, "verdict": "SHIP"}
+                ],
+            },
+        )
+        data = self._data()
+        rows = data["review_attempts"]
+        self.assertEqual(rows[0]["reservation_id"], reservation_id)
+        self.assertFalse(journal_path.exists())
+        self.assertEqual(data.get("review_reservations", {}), {})
+
+
+FLOWCTL_PY = REPO / "plugins" / "flow-next" / "scripts" / "flowctl.py"
+
+
+class _JournalReplayBase(unittest.TestCase):
+    """Shared fixture for fn-159.1 finalization-journal + replay tests."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self._old_env = os.environ.pop("MAX_REVIEW_ITERATIONS", None)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        if self._old_env is not None:
+            os.environ["MAX_REVIEW_ITERATIONS"] = self._old_env
+        self._tmp.cleanup()
+
+    def _data(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+
+    def _reserve(self) -> str:
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan",
+            artifact_sha256="a" * 64, return_reservation=True,
+        )
+        assert reservation_id is not None
+        return reservation_id
+
+    def _payload(self) -> dict:
+        return {
+            "type": "plan_review",
+            "id": self.spec_id,
+            "mode": "rp",
+            "head": "a" * 40,
+        }
+
+    def _record_with_receipt(
+        self,
+        reservation_id: str,
+        target: Path,
+        *,
+        verdict: str = "NEEDS_WORK",
+    ) -> dict:
+        return flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="rp",
+            output=f"<verdict>{verdict}</verdict>",
+            verdict=verdict,
+            review_type="plan",
+            reservation_id=reservation_id,
+            receipt_target=str(target),
+            receipt_payload=self._payload(),
+        )
+
+    def _journal_path(self, reservation_id: str) -> Path:
+        return self.root / ".flow" / "review-runs" / f"{reservation_id}.json"
+
+    def _run_cli(self, *argv: str) -> "tuple[int, str, str]":
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with mock.patch.object(sys, "argv", ["flowctl", *argv]):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                try:
+                    flowctl.main()
+                except SystemExit as e:
+                    code = int(e.code or 0)
+        return code, out.getvalue(), err.getvalue()
+
+    def _fresh_process(self, *argv: str) -> "subprocess.CompletedProcess[str]":
+        env = dict(os.environ)
+        env.pop("MAX_REVIEW_ITERATIONS", None)
+        return subprocess.run(
+            [sys.executable, str(FLOWCTL_PY), *argv],
+            cwd=self.root, env=env, capture_output=True, text=True,
+        )
+
+
+class TestFinalizationJournalReplay(_JournalReplayBase):
+    """fn-159.1 rounds 5-8: durable write-ahead finalization + idempotent
+    replay at every defined crash boundary, with zero dispatch until every
+    in-scope journal is complete."""
+
+    def test_record_journals_receipt_operation_before_consumption(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        result = self._record_with_receipt(reservation_id, target)
+        self.assertEqual(result["reservation_id"], reservation_id)
+        journal = json.loads(self._journal_path(reservation_id).read_text())
+        # The exact intended receipt operation is journaled…
+        self.assertEqual(journal["receipt_target"], str(target))
+        self.assertEqual(journal["receipt_payload"], self._payload())
+        # …including the validated-findings parse OUTCOME (key present even
+        # when the response carried no supportable findings container).
+        self.assertIn("findings_container", journal)
+        self.assertEqual(journal["finalized"]["receipt"], "pending")
+        # record never publishes the receipt; attach/replay owns publication.
+        self.assertFalse(target.exists())
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["receipt"], "pending")
+
+    def test_gate_replays_receipt_typed_result_zero_dispatch(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        rounds_before = self._data()["plan_review_rounds"]
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertEqual(
+            result,
+            {
+                "replayed": True,
+                "replays": [
+                    {"reservation_id": reservation_id, "verdict": "NEEDS_WORK"}
+                ],
+            },
+        )
+        # Byte-equivalent publication from the journal.
+        published = json.loads(target.read_text())
+        self.assertEqual(
+            published,
+            {**self._payload(), "review_reservation_id": reservation_id},
+        )
+        data = self._data()
+        self.assertEqual(data["plan_review_rounds"], rounds_before)
+        self.assertEqual(data.get("review_reservations", {}), {})
+        self.assertEqual(
+            data["review_attempts"][-1]["finalized"]["receipt"], "complete"
+        )
+        self.assertFalse(self._journal_path(reservation_id).exists())
+        # With every journal complete, the NEXT call dispatches normally.
+        follow_up = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertIsInstance(follow_up, tuple)
+
+    def test_receipt_published_progress_unmarked_replay_is_noop(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        # Crash boundary: receipt published, journal progress unmarked.
+        payload = {**self._payload(), "review_reservation_id": reservation_id}
+        target.write_text(json.dumps(payload, indent=2, sort_keys=True))
+        before = target.read_text()
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(json.loads(target.read_text()), json.loads(before))
+        self.assertFalse(self._journal_path(reservation_id).exists())
+
+    def test_digest_written_receipt_missing_replays_receipt(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        journal_path = self._journal_path(reservation_id)
+        journal = json.loads(journal_path.read_text())
+        # Crash boundary: digest leg already complete, receipt still missing.
+        journal["finalized"]["digest"] = "complete"
+        journal_path.write_text(json.dumps(journal))
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(
+            json.loads(target.read_text()),
+            {**self._payload(), "review_reservation_id": reservation_id},
+        )
+        self.assertFalse(journal_path.exists())
+
+    def test_receipt_pointer_advanced_replay_is_superseded_noop(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        # A LATER reservation already advanced the receipt pointer: replaying
+        # the old bytes over it would regress the newer receipt.
+        newer = {**self._payload(), "review_reservation_id": "f" * 32}
+        target.write_text(json.dumps(newer))
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(json.loads(target.read_text()), newer)
+        self.assertFalse(self._journal_path(reservation_id).exists())
+
+    def test_mixed_verdict_two_incomplete_journals_zero_dispatch(self):
+        first, second = self._reserve(), self._reserve()
+        self._record_with_receipt(first, self.root / "a.json", verdict="SHIP")
+        self._record_with_receipt(
+            second, self.root / "b.json", verdict="NEEDS_WORK"
+        )
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(
+            {(r["reservation_id"], r["verdict"]) for r in result["replays"]},
+            {(first, "SHIP"), (second, "NEEDS_WORK")},
+        )
+        data = self._data()
+        # Zero dispatch: nothing reserved, counter untouched by the replay.
+        self.assertEqual(data.get("review_reservations", {}), {})
+        self.assertEqual(data["plan_review_rounds"], 2)
+        self.assertNotIn("plan", data.get("review_pending_rounds", {}))
+
+    def test_per_verdict_replay_ship_only(self):
+        reservation_id = self._reserve()
+        self._record_with_receipt(
+            reservation_id, self.root / "receipt.json", verdict="SHIP"
+        )
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertEqual(
+            result["replays"],
+            [{"reservation_id": reservation_id, "verdict": "SHIP"}],
+        )
+        self.assertEqual(self._data().get("review_reservations", {}), {})
+
+    def test_pending_leg_without_journal_refuses_dispatch(self):
+        reservation_id = self._reserve()
+        self._record_with_receipt(reservation_id, self.root / "receipt.json")
+        self._journal_path(reservation_id).unlink()
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.enforce_and_increment_review_cap(
+                    self.spec_id, "plan", return_reservation=True
+                )
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("REPLAY_REQUIRED", err.getvalue())
+
+    def test_no_findings_digest_leg_completes_never_blocks(self):
+        """Round 7: finalized.digest tracks the OPERATION — a completed parse
+        with no supportable findings (legacy/malformed/absent) is complete."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        journal_path = self._journal_path(reservation_id)
+        journal = json.loads(journal_path.read_text())
+        self.assertIsNone(journal["findings_container"])  # no-findings parse
+        journal["finalized"]["digest"] = "pending"
+        journal_path.write_text(json.dumps(journal))
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertFalse(journal_path.exists())
+
+    def test_interrupted_digest_operation_stays_pending_and_blocks(self):
+        reservation_id = self._reserve()
+        self._record_with_receipt(reservation_id, self.root / "receipt.json")
+        journal_path = self._journal_path(reservation_id)
+        journal = json.loads(journal_path.read_text())
+        journal["finalized"]["digest"] = "pending"
+        del journal["findings_container"]  # operation never completed
+        journal_path.write_text(json.dumps(journal))
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.enforce_and_increment_review_cap(
+                    self.spec_id, "plan", return_reservation=True
+                )
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("REPLAY_REQUIRED", err.getvalue())
+
+    def test_attach_reservation_id_publishes_journaled_payload(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        code, out, _ = self._run_cli(
+            "review-findings", "attach",
+            "--reservation-id", reservation_id,
+            "--receipt", str(target), "--json",
+        )
+        self.assertEqual(code, 0)
+        payload = json.loads(out)
+        self.assertTrue(payload["published_from_journal"])
+        self.assertEqual(
+            json.loads(target.read_text()),
+            {**self._payload(), "review_reservation_id": reservation_id},
+        )
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        self.assertFalse(self._journal_path(reservation_id).exists())
+
+    def test_attach_unknown_reservation_id_exit_two_zero_mutation(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        before = self._data()
+        code, _, err = self._run_cli(
+            "review-findings", "attach",
+            "--reservation-id", "0" * 32,
+            "--receipt", str(target), "--json",
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(self._data(), before)
+        self.assertFalse(target.exists())
+
+    def test_status_surface_reservation_id_requires_exactly_one_attempt(self):
+        reservation_id = self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>SHIP</verdict>", verdict="SHIP",
+            review_type="plan", reservation_id=reservation_id,
+        )
+        # Simulate an out-of-band status leg left pending on the row.
+        spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        data = json.loads(spec_path.read_text())
+        data["review_attempts"][-1]["finalized"]["status"] = "pending"
+        spec_path.write_text(json.dumps(data))
+        code, _, _ = self._run_cli(
+            "spec", "set-plan-review-status", self.spec_id,
+            "--status", "ship", "--reservation-id", reservation_id, "--json",
+        )
+        self.assertEqual(code, 0)
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertEqual(
+            data["review_attempts"][-1]["finalized"]["status"], "complete"
+        )
+        # Unknown reservation id: exit 2, zero mutation.
+        before = self._data()
+        code, _, _ = self._run_cli(
+            "spec", "set-plan-review-status", self.spec_id,
+            "--status", "needs_work", "--reservation-id", "0" * 32, "--json",
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(self._data(), before)
+
+    def test_fresh_process_crash_after_record_before_attach_input_exists(self):
+        """Round 7 named test: record journaled the receipt operation and
+        consumed the reservation, then the process died before the attach
+        fence ever created its input file. A FRESH process replays the
+        receipt byte-equivalently from the journal — zero dispatch — with
+        the original /tmp response file already deleted."""
+        reserve = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--json",
+        )
+        self.assertEqual(reserve.returncode, 0, reserve.stderr)
+        reservation_id = json.loads(reserve.stdout)["reservation_id"]
+        response = self.root / "response.txt"
+        response.write_text("<verdict>NEEDS_WORK</verdict>")
+        payload_file = self.root / "payload.json"
+        payload_file.write_text(json.dumps(self._payload()))
+        target = self.root / "receipt.json"
+        record = self._fresh_process(
+            "review-rounds", "record", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--output-file", str(response),
+            "--reservation-id", reservation_id,
+            "--receipt-target", str(target),
+            "--receipt-payload-file", str(payload_file), "--json",
+        )
+        self.assertEqual(record.returncode, 0, record.stderr)
+        response.unlink()  # the reviewer response is gone forever
+        self.assertFalse(target.exists())  # attach input never existed
+        replay = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--json",
+        )
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        result = json.loads(replay.stdout)
+        self.assertTrue(result["replayed"])
+        self.assertEqual(
+            result["replays"],
+            [{"reservation_id": reservation_id, "verdict": "NEEDS_WORK"}],
+        )
+        # Byte-equivalent receipt replay after process restart.
+        self.assertEqual(
+            json.loads(target.read_text()),
+            {**self._payload(), "review_reservation_id": reservation_id},
+        )
+        data = self._data()
+        self.assertEqual(data.get("review_reservations", {}), {})
+        self.assertEqual(data["plan_review_rounds"], 1)
+
+    def test_ship_record_cli_is_system_owned_reset(self):
+        """fn-159 R9: recording SHIP resets the counter AND advances the hash
+        epoch inside record itself — no explicit reset verb needed."""
+        code, out, _ = self._run_cli(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--json",
+        )
+        self.assertEqual(code, 0)
+        response = self.root / "response.txt"
+        response.write_text("<verdict>SHIP</verdict>")
+        code, _, _ = self._run_cli(
+            "review-rounds", "record", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--output-file", str(response), "--json",
+        )
+        self.assertEqual(code, 0)
+        data = self._data()
+        self.assertEqual(data["plan_review_rounds"], 0)
+        self.assertEqual(data["review_hash_epoch"]["plan"], 1)
+        # fn-134.7 / R22: pending untouched by the reset half (record's own
+        # consume already popped it; nothing else was cleared).
+        self.assertNotIn("plan", data.get("review_pending_rounds", {}))
+
+
+class TestOverlappingReviewProcesses(_JournalReplayBase):
+    """fn-159.1: truly concurrent state transitions under the sidecar lock,
+    plus attach-vs-finalize lock-order scaffolding."""
+
+    def test_two_concurrent_increments_yield_distinct_reservations(self):
+        env = dict(os.environ)
+        env.pop("MAX_REVIEW_ITERATIONS", None)
+        argv = [
+            sys.executable, str(FLOWCTL_PY), "review-rounds", "increment",
+            self.spec_id, "--kind", "plan", "--json",
+        ]
+        procs = [
+            subprocess.Popen(
+                argv, cwd=self.root, env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            for _ in range(2)
+        ]
+        outputs = [p.communicate() for p in procs]
+        for p, (_out, err) in zip(procs, outputs, strict=True):
+            self.assertEqual(p.returncode, 0, err)
+        ids = {json.loads(out)["reservation_id"] for out, _ in outputs}
+        rounds = {json.loads(out)["round"] for out, _ in outputs}
+        self.assertEqual(len(ids), 2)
+        self.assertEqual(rounds, {1, 2})  # no lost update under the lock
+        data = self._data()
+        self.assertEqual(data["plan_review_rounds"], 2)
+        self.assertEqual(data["review_pending_rounds"]["plan"], 2)
+        self.assertEqual(set(data["review_reservations"]), ids)
+
+    def test_record_racing_reset_stays_consistent(self):
+        reserve = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--json",
+        )
+        self.assertEqual(reserve.returncode, 0, reserve.stderr)
+        reservation_id = json.loads(reserve.stdout)["reservation_id"]
+        response = self.root / "response.txt"
+        response.write_text("<verdict>NEEDS_WORK</verdict>")
+        env = dict(os.environ)
+        env.pop("MAX_REVIEW_ITERATIONS", None)
+        record = subprocess.Popen(
+            [
+                sys.executable, str(FLOWCTL_PY), "review-rounds", "record",
+                self.spec_id, "--kind", "plan", "--review-type", "plan",
+                "--output-file", str(response),
+                "--reservation-id", reservation_id, "--json",
+            ],
+            cwd=self.root, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        reset = subprocess.Popen(
+            [
+                sys.executable, str(FLOWCTL_PY), "spec",
+                "reset-review-rounds", self.spec_id, "--json",
+            ],
+            cwd=self.root, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        record_out = record.communicate()
+        reset_out = reset.communicate()
+        self.assertEqual(reset.returncode, 0, reset_out[1])
+        # The lock serializes the race into one of two legal histories:
+        # record-then-reset (row exists) or reset-then-record (the re-plan
+        # abandoned the reservation, so record refuses with zero mutation).
+        self.assertIn(record.returncode, (0, 2), record_out[1])
+        data = self._data()
+        rows = [
+            row for row in data.get("review_attempts", [])
+            if row.get("reservation_id") == reservation_id
+        ]
+        if record.returncode == 0:
+            self.assertEqual(len(rows), 1)
+        else:
+            self.assertEqual(rows, [])
+        # Either way: no stranded reservation, no torn sidecar, epoch
+        # advanced by the reset, pending fully drained, counter sane.
+        self.assertEqual(data.get("review_reservations", {}), {})
+        self.assertGreaterEqual(data["review_hash_epoch"]["plan"], 1)
+        self.assertIn(data["plan_review_rounds"], (0, 1))
+        self.assertNotIn("plan", data.get("review_pending_rounds", {}))
+        self.assertFalse(
+            (self.root / ".flow" / "review-runs" / f"{reservation_id}.json").exists()
+        )
+
+    @unittest.skipIf(os.name == "nt", "flock holder script is POSIX-only")
+    def test_finalize_waits_for_held_receipt_lock_no_deadlock(self):
+        """Lock-order scaffolding: a finalize that touches a receipt takes
+        the RECEIPT lock BEFORE the SIDECAR lock, so it queues behind an
+        attach-style holder of the receipt lock instead of deadlocking."""
+        import time
+
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        lock_path = flowctl._review_receipt_lock_path(target)
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        holder = subprocess.Popen(
+            [
+                sys.executable, "-c",
+                (
+                    "import fcntl,sys,time\n"
+                    f"fd = open({str(lock_path)!r}, 'a+')\n"
+                    "fcntl.flock(fd, fcntl.LOCK_EX)\n"
+                    "print('held', flush=True)\n"
+                    "time.sleep(1.2)\n"
+                ),
+            ],
+            stdout=subprocess.PIPE, text=True,
+        )
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), "held")
+            started = time.monotonic()
+            self._record_with_receipt(reservation_id, target)
+            elapsed = time.monotonic() - started
+        finally:
+            holder.wait()
+        # The finalize queued behind the holder (receipt lock honored) and
+        # then completed — no deadlock, no bypass.
+        self.assertGreater(elapsed, 0.8)
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["reservation_id"], reservation_id)
 
 
 class TestReviewRoundsCliAliasCanonicalization(unittest.TestCase):
