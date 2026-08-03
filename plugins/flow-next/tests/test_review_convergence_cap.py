@@ -1539,6 +1539,332 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         self.assertEqual(data.get("review_pending_rounds", {}).get("plan", 0), 0)
         self.assertEqual(data.get("review_reservations", {}), {})
 
+    def test_plan_ship_keeps_concurrent_completion_round_and_baseline(self):
+        """PR #290 bot r9: plan and completion share one spec counter. A plan
+        SHIP used to zero that counter and advance the single epoch, erasing
+        the CONCURRENT completion review's accounting — its later NEEDS_WORK
+        landed on a counter at 0 under a fresh epoch, so the round was free and
+        its unchanged-artifact baseline was gone too."""
+        _, plan_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan",
+            artifact_sha256="a" * 64, return_reservation=True,
+        )
+        _, completion_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="completion",
+            artifact_sha256="b" * 64, return_reservation=True,
+        )
+        self.assertEqual(self._data()["plan_review_rounds"], 2)
+
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            verdict="SHIP", review_type="plan", reservation_id=plan_id,
+            status_target="plan", reset_rounds_on_ship=True,
+        )
+        data = self._data()
+        # The live cross-type reservation keeps its charged round…
+        self.assertEqual(data["plan_review_rounds"], 1)
+        self.assertIsNone(
+            data["review_reservations"][completion_id].get("superseded_by")
+        )
+        # …and only the shipping type's epoch advances.
+        self.assertEqual(data["review_hash_epoch"]["plan"], 1)
+        self.assertEqual(data["review_hash_epoch"].get("plan#completion", 0), 0)
+
+        summary = flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            review_type="completion", reservation_id=completion_id,
+            status_target="completion", reset_rounds_on_ship=True,
+        )
+        data = self._data()
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["kind"], "completion")
+        self.assertTrue(row["round_consumed"])
+        self.assertIsNone(row["superseded_by"])
+        self.assertEqual(row["hash_epoch"], 0)
+        self.assertEqual(summary["status_written"], "needs_work")
+        self.assertEqual(data["completion_review_status"], "needs_work")
+        self.assertEqual(data["plan_review_status"], "ship")
+        # The completion round is charged and still counted.
+        self.assertEqual(data["plan_review_rounds"], 1)
+        self.assertEqual(summary["verdict_attempts"], 1)
+        # Its baseline survived the plan SHIP: the same completion artifact is
+        # still refused as unchanged.
+        with self.assertRaises(SystemExit) as raised:
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", review_type="completion",
+                artifact_sha256="b" * 64, return_reservation=True,
+            )
+        self.assertEqual(raised.exception.code, 1)
+
+    def test_superseded_journal_replay_reports_durable_state(self):
+        """PR #290 bot r9: a journaled verdict whose reservation a concurrent
+        SHIP superseded, crashed before publication. The replay copied the
+        stale verdict only, so recovery resurrected it as a LIVE terminal —
+        a NEEDS_HUMAN even exited 4 — against durable state that said ship."""
+        ship_id, late_id = self._reserve(), self._reserve()
+        flow = self.root / ".flow"
+        journal_path = flow / "review-runs" / f"{late_id}.json"
+        journal_path.parent.mkdir(exist_ok=True)
+        response = "<verdict>NEEDS_HUMAN</verdict>"
+        journal_path.write_text(json.dumps({
+            "reservation_id": late_id, "response": response,
+            "response_sha256": hashlib.sha256(response.encode()).hexdigest(),
+            "counter_scope": "plan", "scope": "plan", "review_kind": "plan",
+            "review_type": "plan", "task_id": None, "backend": "rp",
+            "verdict": "NEEDS_HUMAN", "failure_class": None, "outcome": "verdict",
+            "metadata": self._data()["review_reservations"][late_id],
+            "receipt_target": None, "receipt_payload": None,
+            "finalized": {
+                "receipt": "not_applicable", "digest": "not_applicable",
+                "status": "not_applicable",
+            },
+        }))
+        # The concurrent SHIP supersedes the journaled reservation…
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            verdict="SHIP", review_type="plan", reservation_id=ship_id,
+            status_target="plan", reset_rounds_on_ship=True,
+        )
+        # …and the crashed process never published. Recovery runs here.
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        self.assertTrue(result["replayed"])
+        replay = result["replays"][0]
+        self.assertEqual(replay["reservation_id"], late_id)
+        self.assertEqual(replay["verdict"], "NEEDS_HUMAN")
+        self.assertTrue(replay["superseded"])
+        self.assertEqual(replay["superseded_by"], ship_id)
+        self.assertEqual(replay["effective_status"], "ship")
+        # No live terminal, so no escalation and no exit 4.
+        self.assertIsNone(
+            flowctl.review_replay_terminal_verdict(result["replays"])
+        )
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertEqual(data["plan_review_rounds"], 0)
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["reservation_id"], late_id)
+        self.assertFalse(row["round_consumed"])
+        self.assertEqual(row["superseded_by"], ship_id)
+        self.assertFalse(journal_path.exists())
+
+    def _write_journal(self, reservation_id: str, *, review_type: str,
+                       verdict: str, status_target: str | None = None) -> Path:
+        """A crashed pre-publication journal for an outstanding reservation."""
+        journal_path = self.root / ".flow" / "review-runs" / f"{reservation_id}.json"
+        journal_path.parent.mkdir(exist_ok=True)
+        response = f"<verdict>{verdict}</verdict>"
+        journal_path.write_text(json.dumps({
+            "reservation_id": reservation_id, "response": response,
+            "response_sha256": hashlib.sha256(response.encode()).hexdigest(),
+            "counter_scope": "plan", "scope": "plan", "review_kind": "plan",
+            "review_type": review_type, "task_id": None, "backend": "rp",
+            "verdict": verdict, "failure_class": None, "outcome": "verdict",
+            "metadata": self._data()["review_reservations"][reservation_id],
+            "receipt_target": None, "receipt_payload": None,
+            "status_target": status_target,
+            "finalized": {
+                "receipt": "not_applicable", "digest": "not_applicable",
+                "status": "not_applicable" if status_target is None else "pending",
+            },
+        }))
+        return journal_path
+
+    def test_crashed_plan_journal_never_becomes_a_completion_verdict(self):
+        """fn-159 review F1: the replay scan selected journals by
+        counter_scope alone. Plan and completion share the `plan` counter, so
+        a crashed PLAN journal's SHIP was folded and RETURNED as the terminal
+        of a COMPLETION dispatch that never ran — a completion review shipped
+        on another workflow's verdict.
+
+        fn-159 verification F4: refusing until the OWNING type dispatched again
+        wedged the counter (post-SHIP there may be no such dispatch ever). The
+        co-tenant journal is now FINALIZED here, per its own type's rules, and
+        only its VERDICT is withheld — the completion dispatch proceeds."""
+        plan_id = self._reserve()
+        journal_path = self._write_journal(plan_id, review_type="plan",
+                                           verdict="SHIP", status_target="plan")
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="completion",
+            artifact_sha256="c" * 64, return_reservation=True,
+        )
+        # Not a replay: the completion dispatch got a real reservation.
+        rounds, reservation_id = result
+        self.assertIsInstance(reservation_id, str)
+        self.assertNotEqual(reservation_id, plan_id)
+        # The plan journal landed under PLAN rules and is gone.
+        self.assertFalse(journal_path.exists())
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "ship")
+        plan_row = next(
+            row for row in data["review_attempts"]
+            if row["reservation_id"] == plan_id
+        )
+        self.assertEqual(plan_row["kind"], "plan")
+        self.assertEqual(plan_row["verdict"], "SHIP")
+        # …and the completion verdict is untainted by it.
+        self.assertEqual(data["completion_review_status"], "unknown")
+        self.assertNotIn(
+            "SHIP",
+            [
+                row.get("verdict") for row in data["review_attempts"]
+                if row["reservation_id"] == reservation_id
+            ],
+        )
+        self.assertGreaterEqual(rounds, 1)
+
+    def test_crashed_completion_journal_never_becomes_a_plan_verdict(self):
+        """fn-159 review F1, the symmetric direction (F4 completion rules)."""
+        _, completion_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="completion",
+            artifact_sha256="b" * 64, return_reservation=True,
+        )
+        journal_path = self._write_journal(completion_id,
+                                           review_type="completion",
+                                           verdict="SHIP",
+                                           status_target="completion")
+        _, plan_reservation = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan",
+            artifact_sha256="a" * 64, return_reservation=True,
+        )
+        self.assertIsInstance(plan_reservation, str)
+        self.assertFalse(journal_path.exists())
+        data = self._data()
+        self.assertEqual(data["completion_review_status"], "ship")
+        self.assertEqual(data["plan_review_status"], "unknown")
+        completion_row = next(
+            row for row in data["review_attempts"]
+            if row["reservation_id"] == completion_id
+        )
+        self.assertEqual(completion_row["kind"], "completion")
+        self.assertEqual(completion_row["verdict"], "SHIP")
+
+    def test_unfinalizable_cross_type_journal_names_its_repair(self):
+        """fn-159 verification F4: when the co-tenant journal cannot be
+        completed even here, the refusal must name the repair instead of
+        looping on a bare REPLAY_REQUIRED with no path out."""
+        plan_id = self._reserve()
+        self._write_journal(plan_id, review_type="plan", verdict="SHIP")
+        with contextlib.redirect_stderr(io.StringIO()) as err, mock.patch.object(
+            flowctl, "_complete_review_journal", return_value=False
+        ), self.assertRaises(SystemExit) as raised:
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", review_type="completion",
+                artifact_sha256="c" * 64, return_reservation=True,
+            )
+        self.assertEqual(raised.exception.code, 2)
+        message = err.getvalue()
+        self.assertIn("REPLAY_REQUIRED", message)
+        self.assertIn("plan", message)
+        self.assertIn(f"reset-review-rounds {self.spec_id}", message)
+
+    def test_plan_ship_keeps_completion_rounds_already_charged(self):
+        """fn-159 review F3: the SHIP reset retained only LIVE cross-type
+        reservations, so a completion review's already-FINALIZED rounds were
+        zeroed by an unrelated plan SHIP — its budget became refundable
+        indefinitely, which is the fn-159 runaway itself."""
+        for index in range(2):
+            _, completion_id = flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", review_type="completion",
+                artifact_sha256=str(index) * 64, return_reservation=True,
+            )
+            flowctl.record_review_attempt(
+                self.spec_id, "plan", backend="rp",
+                output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+                review_type="completion", reservation_id=completion_id,
+                status_target="completion", reset_rounds_on_ship=True,
+            )
+        self.assertEqual(self._data()["plan_review_rounds"], 2)
+
+        plan_id = self._reserve()
+        self.assertEqual(self._data()["plan_review_rounds"], 3)
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            verdict="SHIP", review_type="plan", reservation_id=plan_id,
+            status_target="plan", reset_rounds_on_ship=True,
+        )
+        data = self._data()
+        # The plan's own round is released; the completion's two stay charged.
+        self.assertEqual(data["plan_review_rounds"], 2)
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertEqual(data["completion_review_status"], "needs_work")
+
+    def test_completion_epoch_seeds_from_the_counter_on_upgrade(self):
+        """fn-159 review F4: state written before the per-type epoch split has
+        only the unqualified key. Reading `plan#completion` off it returned 0
+        while its rows sat at the counter's epoch, so the completion baseline
+        (and stall history) vanished and an unchanged artifact was waved
+        through on the first post-upgrade dispatch."""
+        _, completion_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="completion",
+            artifact_sha256="b" * 64, return_reservation=True,
+        )
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            review_type="completion", reservation_id=completion_id,
+            status_target="completion", reset_rounds_on_ship=True,
+        )
+        # Re-shape the sidecar the way a pre-split install wrote it: one
+        # unqualified counter epoch, and rows stamped with it.
+        path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        data = json.loads(path.read_text())
+        data["review_hash_epoch"] = {"plan": 3}
+        for row in data["review_attempts"]:
+            row["hash_epoch"] = 3
+        path.write_text(json.dumps(data))
+
+        self.assertEqual(
+            flowctl._review_hash_epoch(json.loads(path.read_text()),
+                                       "plan#completion"),
+            3,
+        )
+        # The baseline still refuses the unchanged completion artifact.
+        with self.assertRaises(SystemExit) as raised:
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", review_type="completion",
+                artifact_sha256="b" * 64, return_reservation=True,
+            )
+        self.assertEqual(raised.exception.code, 1)
+
+    def test_reset_review_cap_supersedes_live_reservations(self):
+        """fn-159 review F6: the r6 supersession landed only in the folded
+        record path. `reset_review_cap` zeroed the counter beneath outstanding
+        reservations and left them live, so one could finalize later on a
+        fresh, uncharged budget."""
+        plan_id = self._reserve()
+        _, completion_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="completion",
+            artifact_sha256="b" * 64, return_reservation=True,
+        )
+        pending_before = self._data()["review_pending_rounds"]["plan"]
+
+        flowctl.reset_review_cap(self.spec_id, "plan")
+
+        data = self._data()
+        self.assertEqual(data["plan_review_rounds"], 0)
+        for reservation_id in (plan_id, completion_id):
+            reservation = data["review_reservations"][reservation_id]
+            self.assertEqual(reservation["superseded_by"], "reset")
+            self.assertEqual(reservation["superseded_epoch"], 1)
+        # The R22 pending invariant holds: reset never touches the count.
+        self.assertEqual(data["review_pending_rounds"]["plan"], pending_before)
+
+        # A superseded reservation finalizes without charging a round.
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            review_type="plan", reservation_id=plan_id,
+            status_target="plan", reset_rounds_on_ship=True,
+        )
+        data = self._data()
+        row = data["review_attempts"][-1]
+        self.assertFalse(row["round_consumed"])
+        self.assertEqual(row["superseded_by"], "reset")
+        self.assertEqual(data["plan_review_rounds"], 0)
+
     def test_impl_bulk_reset_advances_every_impl_epoch_it_wipes(self):
         t1, t2 = f"{self.spec_id}.1", f"{self.spec_id}.2"
         for task in (t1, t2):

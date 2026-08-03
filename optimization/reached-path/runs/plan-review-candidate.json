@@ -59,9 +59,9 @@
         "workflow-cursor.md",
         "workflow-rp.md"
       ],
-      "candidate_chars": 16961,
-      "reduction_chars": 31525,
-      "reduction_percent": 65.02
+      "candidate_chars": 17069,
+      "reduction_chars": 31417,
+      "reduction_percent": 64.8
     },
     {
       "route": "codex",
@@ -131,9 +131,9 @@
         "workflow-cursor.md",
         "workflow-host.md"
       ],
-      "candidate_chars": 28630,
-      "reduction_chars": 19856,
-      "reduction_percent": 40.95
+      "candidate_chars": 28850,
+      "reduction_chars": 19636,
+      "reduction_percent": 40.5
     },
     {
       "route": "configured-but-unavailable",

@@ -233,6 +233,130 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_combined_interpreter_option_bypass(self) -> None:
+        # PR #290 bot r9: only the exact token `-c` was recognized, so every
+        # combined short-option cluster a shell accepts (`-lc`, `-xc`, `-lec`)
+        # carried the same command string straight past the recursion. The
+        # payload composes the verb, so the raw-text floor cannot see it.
+        composed = 'sub=re; sub+=set; "$FLOWCTL" review-rounds "$sub" fn-1 --kind plan'
+        for command in (
+            f"bash -lc '{composed}'",
+            f"bash -xc '{composed}'",
+            f"bash -lec '{composed}'",
+            f"sh -lc -- '{composed}'",
+            f"zsh -xec '{composed}'",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_interpreter_option_screen_keeps_legit_shells_allowed(self) -> None:
+        # A login shell runs no command string, and an ordinary `-c` payload
+        # stays allowed.
+        for command in (
+            "bash -l",
+            "bash -c 'flowctl list'",
+            "bash -lc '.flow/bin/flowctl show fn-1'",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_blocks_line_continuation_bypass(self) -> None:
+        # fn-159 review F2: `shlex` keeps `\<newline>` as a token of its own,
+        # so the verb and its subcommand were never adjacent for either screen
+        # — while bash removes the continuation and runs the reset.
+        for command in (
+            ".flow/bin/flowctl review-rounds \\\n reset fn-1 --kind plan",
+            "flowctl spec \\\n reset-review-rounds fn-1",
+            'sub=re; sub+=set; "$FLOWCTL" review-rounds \\\n "$sub" fn-1',
+            ".flow/bin/flowctl review-rounds \\\r\n reset fn-1",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_intra_word_line_continuation_bypass(self) -> None:
+        # fn-159 verification F1: the collapse substituted a SPACE, but bash
+        # removes `\<newline>` ENTIRELY. Every INTRA-word continuation
+        # therefore re-split into two harmless tokens for both screens while
+        # bash ran the joined word — probe-verified exit 0 before this fix.
+        for command in (
+            ".flow/bin/flowctl review-rounds re\\\nset fn-1 --kind plan",
+            "flowctl spec reset-review-\\\nrounds fn-1",
+            "$FLOWCTL codex impl-review fn-1 --base main --fo\\\nrce",
+            ".flow/bin/flowctl review-rounds re\\\r\nset fn-1",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_line_continuation_keeps_legit_record_allowed(self) -> None:
+        proc = self._hook(
+            ".flow/bin/flowctl review-rounds record fn-1 \\\n"
+            "  --kind plan --verdict SHIP"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_self_defaulting_launcher_is_not_composition(self) -> None:
+        # fn-159 review F5: the composition screen read `${FLOWCTL:-…}` as a
+        # self-reference and blocked `review-rounds record` — a REQUIRED fence
+        # step — in the preamble's own self-defaulting idiom.
+        for value in (
+            "${FLOWCTL:-.flow/bin/flowctl}",
+            "${FLOWCTL-.flow/bin/flowctl}",
+            "${FLOWCTL:=.flow/bin/flowctl}",
+            "${FLOWCTL=.flow/bin/flowctl}",
+        ):
+            command = (
+                f'FLOWCTL="{value}"; "$FLOWCTL" review-rounds record fn-1 '
+                "--kind plan --verdict SHIP"
+            )
+            with self.subTest(value=value):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_self_defaulting_launcher_is_screened_as_a_launcher(self) -> None:
+        # fn-159 verification F2: the F5 exemption left a self-defaulting
+        # launcher var neither launcher-recognized NOR composed, so the whole
+        # flowctl argv screen was skipped for it — `"$fc" review-rounds "$V"`
+        # ran unscreened (differential probe: 2 before F5, 0 after).
+        for command in (
+            'fc="${fc:-.flow/bin/flowctl}"; "$fc" review-rounds "$V" fn-1',
+            'fc="${fc:-.flow/bin/flowctl}"; "$fc" spec reset-review-rounds fn-1',
+            # Both vars self-default; only the launcher one is exempt from the
+            # composition screen, and the subcommand slot is still an expansion.
+            'L="${L:-.flow/bin/flowctl}"; V="${V:-reset}"; '
+            '"$L" review-rounds "$V" fn-1',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_self_defaulting_launcher_with_nested_default_allows_record(self) -> None:
+        # The preamble's own shape must stay allowed for the REQUIRED fence step.
+        proc = self._hook(
+            'FLOWCTL="${FLOWCTL:-${CLAUDE_PLUGIN_ROOT}/scripts/flowctl}"; '
+            '"$FLOWCTL" review-rounds record fn-1 --kind plan --verdict SHIP'
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_real_composition_still_blocked(self) -> None:
+        for command in (
+            'p=.flow/bin/flow; p+=ctl; "$p" review-rounds "$v" fn-1',
+            'p=.flow/bin/flow; p="${p}ctl"; "$p" review-rounds "$v" fn-1',
+            # A self reference nested INSIDE the default is still composition.
+            'p=x; p="${p:-$p}ctl"; "$p" review-rounds "$v" fn-1',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
     def test_blocks_eval_wrapper_bypass(self) -> None:
         proc = self._hook('eval "flowctl spec reset-review-rounds fn"')
         self.assertEqual(proc.returncode, 2)

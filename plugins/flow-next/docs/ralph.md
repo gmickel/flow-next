@@ -805,7 +805,7 @@ Ralph guard hooks enforce workflow rules deterministically. They are **not** par
 | Direct `codex` / `copilot` blocked (use `flowctl` wrappers) | Receipt + session continuity |
 | Canonical `FLOW_DELEGATE_CODEX=1 codex exec …` allowlist | fn-55 delegation carve-out only |
 | No `--last` (codex) / no `--continue` (copilot) | Session continuity via receipt `session_id` |
-| No review-counter reset or `--force` review dispatch/increment | Those recovery tools are human-only (wrappers — `sh -c`, `eval`, `timeout`, `env`, `xargs` — are unwrapped, not trusted) |
+| No review-counter reset or `--force` review dispatch/increment | Those recovery tools are human-only (wrappers — `sh -c`, `eval`, `timeout`, `env`, `xargs` — are unwrapped, not trusted; interpreter command strings are recognized in every combined spelling: `bash -lc`, `-xec`, `-c --`) |
 | `flowctl done` structured success only | Exit code / `--json` status=done / exact completion line (no word sniff) |
 | `flowctl done` requires `--summary-file` + `--evidence-json` | Structured completion |
 | Receipt schema + ordering (`type`/`id`/`verdict`; no write before review) | Honest Ralph gate |

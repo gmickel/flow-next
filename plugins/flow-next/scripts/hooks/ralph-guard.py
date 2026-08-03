@@ -786,7 +786,13 @@ _WRAPPER_VALUE_OPTIONS: dict[str, frozenset[str]] = {
 # digit-ish tokens for every wrapper would eat a legitimate first argument.
 _DURATION_POSITIONAL_WRAPPERS = frozenset({"timeout"})
 _SHELL_INTERPRETERS = frozenset({"sh", "bash", "zsh", "dash", "ksh"})
+# Single-letter flags a shell accepts in a combined cluster alongside `c`
+# (`-lc`, `-xec`). Used only to tell a cluster apart from an ATTACHED command
+# string (`-cecho hi`), never to validate the invocation.
+_SHELL_SHORT_FLAG_LETTERS = frozenset("abefhiklmnprstuvxBCEHPT")
 _MAX_WRAPPER_DEPTH = 3
+# A shell line continuation: backslash + newline, which bash removes entirely.
+_LINE_CONTINUATION_RE = re.compile(r"\\\r?\n")
 # PR #290 bot r9 (a): a shell assignment, split into name / operator / value.
 # Values may be single-quoted, double-quoted, or bare.
 _SHELL_ASSIGN_RE = re.compile(
@@ -806,6 +812,21 @@ _ARRAY_ASSIGN_PREFIX_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
 _SIMPLE_VAR_TOKEN_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}$|\$([A-Za-z_][A-Za-z0-9_]*)$")
 
 
+def _collapse_line_continuations(command: str) -> str:
+    """Remove `\\<newline>` the way bash does, before any screen reads it.
+
+    Bash deletes the pair ENTIRELY — it is not whitespace. Substituting a space
+    (fn-159 verification F1) re-split every INTRA-word continuation the guard
+    exists to catch: `re\\<newline>set`, `reset-review-\\<newline>rounds` and
+    `--fo\\<newline>rce` all ran as the joined word while both screens saw two
+    harmless tokens. Removal also joins across single quotes, where bash would
+    keep the backslash-newline literal; that direction over-blocks a quoted
+    string that happens to look like a guarded verb, which is the fail-closed
+    side and matches the raw-text floor's existing posture.
+    """
+    return _LINE_CONTINUATION_RE.sub("", command)
+
+
 def _tokenize_shell_command(command: str) -> Optional[list[str]]:
     """Return shell tokens, preserving operators as command boundaries.
 
@@ -815,7 +836,13 @@ def _tokenize_shell_command(command: str) -> Optional[list[str]]:
     Malformed shell text is NOT classified here: it returns ``None`` so the
     caller falls back to the raw-text marker screen, which is what actually
     fails closed on the forbidden verbs.
+
+    Line continuations are collapsed FIRST (fn-159 review F2): ``shlex`` keeps
+    ``\\<newline>`` as a token of its own, so `review-rounds \\\\n reset` split
+    the verb from its subcommand for both this pass and the raw-text floor
+    while bash ran the very command both screens exist to block.
     """
+    command = _collapse_line_continuations(command)
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;()<>")
         lexer.whitespace_split = True
@@ -852,11 +879,49 @@ def _launcher_variables(command: str) -> frozenset:
     for name, operator, value in _SHELL_ASSIGN_RE.findall(command):
         if operator != "=":
             continue
-        if value[:1] in ("'", '"') and value[-1:] == value[:1] and len(value) > 1:
-            value = value[1:-1]
+        value = _unquote(value)
         if _FLOWCTL_PATH_RE.fullmatch(value):
             names.add(name)
+            continue
+        # fn-159 verification F2: a SELF-DEFAULT binds the launcher just as
+        # surely (`fc="${fc:-.flow/bin/flowctl}"`). Recognizing only the bare
+        # literal left such a var neither launcher-recognized nor composed, so
+        # `"$fc" review-rounds "$V" …` was screened by nothing at all.
+        default = _self_default_value(name, value)
+        if default is not None and _FLOWCTL_PATH_RE.fullmatch(default):
+            names.add(name)
     return frozenset(names)
+
+
+def _unquote(value: str) -> str:
+    """Drop one matched pair of surrounding quotes from an assignment value."""
+    if value[:1] in ("'", '"') and value[-1:] == value[:1] and len(value) > 1:
+        return value[1:-1]
+    return value
+
+
+def _strip_self_default_expansions(name: str, value: str) -> str:
+    """Drop `${name:-…}`-style default heads so they read as no self-reference.
+
+    Covers the four default-expansion operators (`:-`, `-`, `:=`, `=`). The
+    head alone is removed, so anything nested in the DEFAULT is still seen.
+    """
+    return re.sub(r"\$\{" + re.escape(name) + r":?[-=]", "", value)
+
+
+def _self_default_value(name: str, value: str) -> Optional[str]:
+    """The fallback literal when `value` is EXACTLY `${name:-…}`, else None.
+
+    Covers the four default operators (`:-`, `-`, `:=`, `=`). A self reference
+    that is only PART of the value (`"${p:-$p}ctl"`) is not a self-default —
+    it is composition — and returns None.
+    """
+    if not value.startswith("${" + name) or not value.endswith("}"):
+        return None
+    head = re.match(r"\$\{" + re.escape(name) + r":?[-=]", value)
+    if head is None:
+        return None
+    return value[head.end() : -1]
 
 
 def _composed_variables(command: str) -> frozenset:
@@ -867,12 +932,33 @@ def _composed_variables(command: str) -> frozenset:
     appears as a literal. Assignments that merely interpolate OTHER variables
     (`FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"`)
     are the standard preamble and are NOT composition.
+
+    Neither is a pure DEFAULT expansion of the name being assigned (fn-159
+    review F5): `FLOWCTL="${FLOWCTL:-.flow/bin/flowctl}"` builds nothing — it
+    picks a literal fallback — yet the self-reference read as composition and
+    blocked `review-rounds record`, a REQUIRED fence step, in the exact
+    self-defaulting idiom the preamble ships. Only the default-expansion head
+    is exempt: a self reference anywhere else in the value
+    (`${v:-$v}`, `${v}x`) is still composition.
+
+    The exemption is narrowed to the shapes that motivate it (fn-159
+    verification F2): a self-default whose fallback IS a launcher path — that
+    var is registered by `_launcher_variables`, so the full flowctl argv screen
+    applies to it — or an empty fallback (`${v:-}`), which carries no content.
+    A self-default to any OTHER literal (`V="${V:-reset}"`) stays composition:
+    exempting it would leave a guarded verb reachable through a variable that
+    no value-matching screen can see.
     """
+    launchers = _launcher_variables(command)
     composed = set()
     for name, operator, value in _SHELL_ASSIGN_RE.findall(command):
         if operator == "+=":
             composed.add(name)
-        elif name in _expansion_names(value):
+            continue
+        default = _self_default_value(name, _unquote(value))
+        if default is not None and (not default or name in launchers):
+            continue
+        if name in _expansion_names(_strip_self_default_expansions(name, value)):
             composed.add(name)
     return frozenset(composed)
 
@@ -1011,6 +1097,51 @@ def _wrapper_option_takes_value(token: str, value_options: frozenset) -> bool:
     return False
 
 
+def _interpreter_command_string(segment: list[str]) -> Optional[str]:
+    """Return the command string a `sh`/`bash`/… argv runs, else None.
+
+    PR #290 bot r9: matching the exact token ``-c`` recognized only the
+    textbook spelling. Every combined short-option cluster POSIX shells accept
+    — `bash -lc '…'`, `-xec`, `-lec` — runs the very same command string, so a
+    guarded verb hidden behind one bypassed the recursion entirely. A cluster
+    is one dash plus single-letter flags, so any cluster CONTAINING `c` is the
+    command-string form and the string is the next token (`--` may sit between
+    them). Anything attached after the `c` (`-cecho hi`) IS the string.
+
+    ``None`` means this argv runs no command string: a login shell (`bash -l`),
+    a script file (`bash script.sh`), or an unrecognized option shape — all of
+    which fall through to the raw-text floor rather than being trusted.
+    """
+    index = 1
+    seen_c = False
+    while index < len(segment):
+        token = segment[index]
+        if token == "--":
+            index += 1
+            break
+        if not token.startswith("-") or token == "-":
+            break
+        if token.startswith("--"):
+            # Long options (`--norc`, `--posix`) never carry the command string.
+            index += 1
+            continue
+        head, found, tail = token[1:].partition("c")
+        if not found or set(head) - _SHELL_SHORT_FLAG_LETTERS:
+            # No `c`, or the token is not an option cluster at all (a value).
+            if not found:
+                index += 1
+                continue
+            return None
+        if tail and set(tail) - _SHELL_SHORT_FLAG_LETTERS:
+            # Attached command string: `-cflowctl review-rounds …`.
+            return tail
+        seen_c = True
+        index += 1
+    if not seen_c or index >= len(segment):
+        return None
+    return segment[index]
+
+
 def _segment_argvs(
     segment: list[str], depth: int, scan: "_ShellScan"
 ) -> list[list[str]]:
@@ -1022,10 +1153,10 @@ def _segment_argvs(
     base = os.path.basename(segment[0])
     if depth < _MAX_WRAPPER_DEPTH:
         # `sh -c "flowctl …"` / `eval "flowctl …"` — recurse into the script text.
-        if base in _SHELL_INTERPRETERS and "-c" in segment[1:]:
-            index = segment.index("-c", 1)
-            if index + 1 < len(segment):
-                return _nested_argvs(segment[index + 1], depth + 1, scan)
+        if base in _SHELL_INTERPRETERS:
+            nested = _interpreter_command_string(segment)
+            if nested is not None:
+                return _nested_argvs(nested, depth + 1, scan)
         if base == "eval" and len(segment) > 1:
             return _nested_argvs(" ".join(segment[1:]), depth + 1, scan)
 
@@ -1060,7 +1191,12 @@ def _command_has_recovery_markers(command: str) -> bool:
     every such command would break ordinary Ralph prose-bearing writes.
     Instead the forbidden verbs stay fail-closed on a marker co-occurrence
     screen while everything else passes.
+
+    Line continuations are collapsed first (fn-159 review F2) — bash removes
+    `\\<newline>` before it ever parses, so every adjacency screen below must
+    read the command the shell will actually run.
     """
+    command = _collapse_line_continuations(command)
     if re.search(r"reset-review-rounds", command):
         return True
     # Quotes are stripped on BOTH sides of the gap (PR #290 bot r3): a

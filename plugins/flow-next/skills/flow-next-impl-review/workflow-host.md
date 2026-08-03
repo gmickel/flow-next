@@ -82,7 +82,8 @@ if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
   # Recovered verdict terminal precedence:
   # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP.
   printf '%s\n' "$ROUND_JSON"
-  if [[ "$(jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
+  # A superseded replay never votes (a concurrent SHIP reset the counter).
+  if [[ "$(jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
     echo "ESCALATE: reviewer requested human review" >&2
     exit 4
   fi

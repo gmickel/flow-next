@@ -9665,20 +9665,139 @@ def _review_sidecar_lock(flow_dir: Path, spec_id: str):
         yield
 
 
-def _review_hash_epoch(spec_data: dict, counter_scope: str) -> int:
-    """Current append-only-ledger epoch, creating only a valid map."""
+def _counter_default_review_type(counter_scope: str) -> str:
+    """The review type a counter scope belongs to by default."""
+    return "impl" if counter_scope.startswith("impl:") else "plan"
+
+
+def _counter_review_types(counter_scope: str) -> tuple:
+    """Every review type that shares this counter scope."""
+    return ("impl",) if counter_scope.startswith("impl:") else ("plan", "completion")
+
+
+def _review_epoch_scope(counter_scope: str, review_type: Optional[str]) -> str:
+    """Epoch key for one review TYPE on a shared counter (PR #290 bot r9).
+
+    Plan and completion reviews share the spec counter, but their baselines are
+    different artifacts.  A single per-counter epoch meant a plan SHIP's epoch
+    advance invalidated the CONCURRENT completion review's baseline (and vice
+    versa) — the unchanged-artifact guard silently fell open for a review that
+    nothing had happened to.  Keys stay unqualified for the counter's default
+    type so existing state (and its recorded ``hash_epoch`` rows) keeps
+    resolving; only the co-tenant type gets a qualified key.
+    """
+    kind = review_type or _counter_default_review_type(counter_scope)
+    if kind == _counter_default_review_type(counter_scope):
+        return counter_scope
+    return f"{counter_scope}#{kind}"
+
+
+def _review_hash_epoch(spec_data: dict, epoch_scope: str) -> int:
+    """Current append-only-ledger epoch, creating only a valid map.
+
+    An ABSENT qualified key falls back to the counter's unqualified value
+    (fn-159 review F4). Specs written before the per-type epoch split carry
+    only the unqualified key, so reading `plan#completion` off one of them
+    returned 0 while its recorded rows sat at the counter's real epoch — the
+    completion baseline and its stall history silently vanished on upgrade,
+    waving an unchanged artifact through. The fallback seeds the co-tenant
+    key from the counter it was split out of; the next advance persists it
+    under the qualified key.
+    """
     epochs = spec_data.get("review_hash_epoch")
     if not isinstance(epochs, dict):
         epochs = {}
         spec_data["review_hash_epoch"] = epochs
-    value = epochs.get(counter_scope, 0)
+    value = epochs.get(epoch_scope)
+    if value is None and "#" in epoch_scope:
+        value = epochs.get(epoch_scope.split("#", 1)[0], 0)
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
-def _advance_review_hash_epoch(spec_data: dict, counter_scope: str) -> int:
-    value = _review_hash_epoch(spec_data, counter_scope) + 1
-    spec_data["review_hash_epoch"][counter_scope] = value
+def _seed_cotenant_review_hash_epochs(spec_data: dict, counter_scope: str) -> None:
+    """Materialize absent co-tenant epoch keys from the counter's value.
+
+    The read fallback above only holds while the qualified key is absent, so
+    it must be pinned down BEFORE the unqualified counter epoch moves —
+    otherwise the co-tenant would keep inheriting the default type's advances
+    and lose its own baseline exactly as it did pre-split (fn-159 review F4).
+    Seeding is idempotent and rides the caller's atomic write.
+    """
+    base = _review_hash_epoch(spec_data, counter_scope)
+    epochs = spec_data["review_hash_epoch"]
+    for review_type in _counter_review_types(counter_scope):
+        key = _review_epoch_scope(counter_scope, review_type)
+        if key != counter_scope and key not in epochs:
+            epochs[key] = base
+
+
+def _advance_review_hash_epoch(spec_data: dict, epoch_scope: str) -> int:
+    if "#" not in epoch_scope:
+        _seed_cotenant_review_hash_epochs(spec_data, epoch_scope)
+    value = _review_hash_epoch(spec_data, epoch_scope) + 1
+    spec_data["review_hash_epoch"][epoch_scope] = value
     return value
+
+
+def _advance_all_review_hash_epochs(spec_data: dict, counter_scope: str) -> dict:
+    """Advance every type's epoch on a counter — for a WHOLE-counter reset.
+
+    An explicit reset (`review-rounds reset`, re-plan) zeroes the shared
+    counter for every workflow on it, so every type's baseline goes with it.
+    Returns the new epoch per review type.
+    """
+    return {
+        review_type: _advance_review_hash_epoch(
+            spec_data, _review_epoch_scope(counter_scope, review_type)
+        )
+        for review_type in _counter_review_types(counter_scope)
+    }
+
+
+def _charged_cross_type_rounds(
+    spec_data: dict,
+    attempts: Any,
+    counter_scope: str,
+    review_kind: str,
+    task_id: Optional[str],
+    ship_type: str,
+) -> int:
+    """Rounds a CO-TENANT review type has already charged to this counter.
+
+    fn-159 review F3: a SHIP's counter reset retained only the rounds behind
+    LIVE cross-type reservations, so a co-tenant's already-FINALIZED rounds
+    were wiped — a completion review two rounds deep had its budget zeroed by
+    an unrelated plan SHIP and could be refunded a fresh cap indefinitely
+    (the fn-159 runaway, through the co-tenancy back door). Count the
+    finalized, round-consuming verdict rows of every other type on this
+    counter, at that type's CURRENT epoch (rows from a pre-reset epoch of
+    their own are already written off).
+    """
+    if not isinstance(attempts, list):
+        return 0
+    epochs = {
+        kind: _review_hash_epoch(spec_data, _review_epoch_scope(counter_scope, kind))
+        for kind in _counter_review_types(counter_scope)
+        if kind != ship_type
+    }
+    if not epochs:
+        return 0
+    charged = 0
+    for row in attempts:
+        if not isinstance(row, dict):
+            continue
+        kind = row.get("kind")
+        if kind not in epochs:
+            continue
+        if (
+            row.get("counter_kind") == review_kind
+            and row.get("task") == task_id
+            and row.get("outcome") == "verdict"
+            and row.get("round_consumed") is True
+            and row.get("hash_epoch") == epochs[kind]
+        ):
+            charged += 1
+    return charged
 
 
 def _review_reservations(spec_data: dict) -> dict:
@@ -10127,6 +10246,18 @@ def _review_head_sha() -> Optional[str]:
 _REVIEW_JOURNAL_RESCAN_ATTEMPTS = 3
 
 
+def _journal_review_type(journal: dict, counter_scope: str) -> str:
+    """The review TYPE a journal belongs to (fn-159 review F1).
+
+    Pre-fn-159 journals carry no type: they can only have been written by the
+    counter's default workflow.
+    """
+    value = journal.get("review_type")
+    if isinstance(value, str) and value:
+        return value
+    return _counter_default_review_type(counter_scope)
+
+
 def _journal_receipt_targets(flow_dir: Path, counter_scope: str) -> list[Path]:
     """Receipt paths in-scope journals intend to write (pre-lock scan).
 
@@ -10134,6 +10265,12 @@ def _journal_receipt_targets(flow_dir: Path, counter_scope: str) -> list[Path]:
     BEFORE SIDECAR lock) can be honored: callers acquire these receipt locks
     first, then the sidecar lock. A journal that appears between the scan and
     the lock acquisition is picked up by the next state transition.
+
+    Covers BOTH types sharing the counter (fn-159 verification F4). Scoping
+    these locks to the dispatching type was correct only while a cross-type
+    journal merely blocked; the gate now FINALIZES the co-tenant's journal
+    too (publishing its receipt under its own type's rules), so its receipt
+    lock is very much this call's to take.
     """
     targets: list[Path] = []
     try:
@@ -10565,7 +10702,12 @@ def _record_review_attempt_locked(
         # has it; finalize-time HEAD is only the fallback (rp/refund paths).
         "head_sha": reviewed_head_sha or _review_head_sha(),
         "reservation_id": reservation_id,
-        "hash_epoch": (metadata or {}).get("epoch", _review_hash_epoch(spec_data, counter_scope)),
+        "hash_epoch": (metadata or {}).get(
+            "epoch",
+            _review_hash_epoch(
+                spec_data, _review_epoch_scope(counter_scope, review_type or review_kind)
+            ),
+        ),
         "artifact_sha256": (metadata or {}).get("artifact_sha256"),
         "forced": bool((metadata or {}).get("forced", False)),
         "finalized": (
@@ -10609,8 +10751,20 @@ def _record_review_attempt_locked(
     if reset_rounds_on_ship and verdict == "SHIP":
         # Same counter mutation reset_review_cap performs; pending is
         # deliberately left alone (fn-134.7 / R22).
-        _write_review_rounds(spec_data, review_kind, task_id, 0)
-        ship_epoch = _advance_review_hash_epoch(spec_data, counter_scope)
+        #
+        # PR #290 bot r9: the reset is scoped to the SHIPPING type, because
+        # everything on this counter is not this type's. The epoch advance is
+        # per type (`_review_epoch_scope`), so a plan SHIP no longer
+        # invalidates a live completion review's baseline. The COUNTER is
+        # genuinely shared and cannot be split, so zeroing it is wrong while a
+        # cross-type reservation is live: those rounds are already charged and
+        # their verdicts still consume them. Retain exactly that many rounds —
+        # the count of surviving (non-superseded) cross-type reservations on
+        # this counter — instead of zeroing the other workflow's accounting.
+        ship_type = review_type or review_kind
+        ship_epoch = _advance_review_hash_epoch(
+            spec_data, _review_epoch_scope(counter_scope, ship_type)
+        )
         # PR #290 bot r6: reservations still outstanding on this counter were
         # issued against the PRE-SHIP artifact and epoch, and this reset just
         # zeroed the counter beneath them. Letting one finalize normally later
@@ -10629,7 +10783,7 @@ def _record_review_attempt_locked(
         # completion NEEDS_WORK surface as a non-actionable superseded row with
         # an effective status of `ship` — masking the defect. A SHIP therefore
         # supersedes only same-typed reservations.
-        ship_type = review_type or review_kind
+        surviving_rounds = 0
         for other in reservations.values():
             if (
                 not isinstance(other, dict)
@@ -10642,9 +10796,17 @@ def _record_review_attempt_locked(
             # issued against this counter's default workflow, so it is
             # superseded (leaving it live would hand it the fresh budget).
             if isinstance(other_type, str) and other_type and other_type != ship_type:
+                # Live cross-type reservation: its round stays charged.
+                surviving_rounds += 1
                 continue
             other["superseded_by"] = reservation_id or "ship"
             other["superseded_epoch"] = ship_epoch
+        # …plus the rounds a co-tenant type ALREADY finalized on this counter
+        # (fn-159 review F3): live reservations are not the whole charge.
+        surviving_rounds += _charged_cross_type_rounds(
+            spec_data, attempts, counter_scope, review_kind, task_id, ship_type
+        )
+        _write_review_rounds(spec_data, review_kind, task_id, surviving_rounds)
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
 
@@ -10702,16 +10864,9 @@ def _record_review_attempt_locked(
         # SHIP left behind, never this late verdict (PR #290 bot r8).
         # `finalize_status_kind` was already cleared by the supersession
         # branch, so the durable status is read off the review TYPE.
-        durable_status = (
-            spec_data.get(f"{review_type}_review_status")
-            if review_type in ("plan", "completion")
-            else None
+        summary["effective_status"] = _superseded_effective_status(
+            spec_data, review_type
         )
-        # "unknown" is the unset placeholder; the superseding event was a SHIP
-        # on this counter, so that is the effective state either way.
-        if durable_status in (None, "", "unknown"):
-            durable_status = "ship"
-        summary["effective_status"] = durable_status
     elif finalize_status_kind is not None:
         summary["status_written"] = status_written
     elif deferred_status:
@@ -10798,11 +10953,18 @@ _REVIEW_REPLAY_PRECEDENCE = ("NEEDS_HUMAN", "MAJOR_RETHINK", "NEEDS_WORK", "SHIP
 
 
 def review_replay_terminal_verdict(replays: list) -> Optional[str]:
-    """Fold replayed verdicts into one terminal per the precedence order."""
+    """Fold replayed verdicts into one terminal per the precedence order.
+
+    A SUPERSEDED replay never votes (PR #290 bot r9): its reservation charged
+    no round and wrote no status, exactly as on the live path, so folding its
+    verdict in would resurrect a pre-SHIP terminal from a crash recovery.
+    """
     delivered = {
         row.get("verdict")
         for row in replays
-        if isinstance(row, dict) and isinstance(row.get("verdict"), str)
+        if isinstance(row, dict)
+        and isinstance(row.get("verdict"), str)
+        and not row.get("superseded")
     }
     for verdict in _REVIEW_REPLAY_PRECEDENCE:
         if verdict in delivered:
@@ -10832,6 +10994,11 @@ def handle_replayed_review_cap(
     if not isinstance(replays, list):
         replays = []
     verdict = review_replay_terminal_verdict(replays)
+    # Replays whose reservation a concurrent SHIP superseded: they carry no
+    # terminal, but the caller still needs the durable state to act on.
+    superseded = [
+        row for row in replays if isinstance(row, dict) and row.get("superseded")
+    ]
     if use_json:
         payload: dict = {
             "type": review_type,
@@ -10841,10 +11008,19 @@ def handle_replayed_review_cap(
             "replays": replays,
             "dispatched": False,
         }
+        if superseded and verdict is None:
+            payload["superseded"] = True
+            payload["superseded_by"] = superseded[-1].get("superseded_by")
+            payload["effective_status"] = (
+                superseded[-1].get("effective_status") or "ship"
+            )
+            payload["note"] = SUPERSEDED_REVIEW_NOTICE
         escalated = apply_needs_human_escalation(payload, verdict)
         json_output(payload, success=not escalated)
     else:
         print(json.dumps({"replayed": True, "replays": replays}, indent=2))
+        if superseded and verdict is None:
+            print(f"\n{SUPERSEDED_REVIEW_NOTICE}")
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
     return True
 
@@ -10867,6 +11043,51 @@ SUPERSEDED_REVIEW_NOTICE = (
     "review superseded by a newer SHIP — durable state unchanged; "
     "verdict recorded as evidence only"
 )
+
+
+def _superseded_effective_status(spec_data: dict, review_type: Optional[str]) -> str:
+    """The DURABLE status a superseded verdict's caller must act on.
+
+    The superseding event was a SHIP on this counter, so `ship` is the answer
+    whenever the typed slot is unset ("unknown" is the placeholder).
+    """
+    durable = (
+        spec_data.get(f"{review_type}_review_status")
+        if review_type in ("plan", "completion")
+        else None
+    )
+    return "ship" if durable in (None, "", "unknown") else durable
+
+
+def _replay_entry(spec_data: dict, reservation_id: Optional[str], journal: dict) -> dict:
+    """Build one replay row, carrying the attempt's supersession state.
+
+    PR #290 bot r9: the replay copied the journaled VERDICT alone. When a
+    concurrent same-type SHIP had superseded the reservation before the crash,
+    the recovered row looked like a live terminal — so a stale NEEDS_WORK /
+    NEEDS_HUMAN surfaced (exit 4 included) against durable state that said
+    ship. Join the journal to its attempt row by reservation id so the replay
+    reports what the live path reports (``apply_superseded_review_outcome``).
+    """
+    entry: dict = {
+        "reservation_id": reservation_id,
+        "verdict": journal.get("verdict"),
+    }
+    rows = spec_data.get("review_attempts")
+    attempt = None
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict) and row.get("reservation_id") == reservation_id:
+                attempt = row
+    if review_attempt_superseded(attempt):
+        review_type = journal.get("review_type") or (attempt or {}).get("kind")
+        entry["superseded"] = True
+        entry["superseded_by"] = attempt["superseded_by"]
+        entry["effective_status"] = _superseded_effective_status(
+            spec_data, review_type if isinstance(review_type, str) else None
+        )
+        entry["note"] = SUPERSEDED_REVIEW_NOTICE
+    return entry
 
 
 def review_attempt_superseded(attempt: Optional[dict]) -> bool:
@@ -10958,20 +11179,27 @@ def _review_stall_rule(
     review_kind: str,
     task_id: Optional[str],
     epoch: int,
+    review_type: Optional[str] = None,
 ) -> Optional[str]:
     """Return a proven two-round stall rule, or ``None`` to fail inert.
 
     This is intentionally a sidecar-only read.  A receipt can be missing,
     stale, or on a different machine; only the append-only consumed-attempt
     ledger and its validated bounded digest are evidence at dispatch time.
+
+    Rows are filtered to this dispatch's review TYPE: epochs are per type
+    (PR #290 bot r9), so two co-tenant types on one counter can hold the same
+    epoch number without their rows being the same repeated review.
     """
     attempts = spec_data.get("review_attempts")
     if not isinstance(attempts, list):
         return None
+    wanted_type = review_type or review_kind
     consumed = [
         row for row in attempts
         if isinstance(row, dict)
         and row.get("counter_kind") == review_kind
+        and row.get("kind") == wanted_type
         and row.get("task") == task_id
         and row.get("outcome") == "verdict"
         and row.get("round_consumed") is True
@@ -11087,7 +11315,9 @@ def _enforce_and_increment_review_cap_locked(
     )
     current = _read_review_rounds(spec_data, review_kind, task_id)
     counter_scope = _review_counter_scope(review_kind, task_id)
-    epoch = _review_hash_epoch(spec_data, counter_scope)
+    epoch = _review_hash_epoch(
+        spec_data, _review_epoch_scope(counter_scope, review_type)
+    )
     # A complete journal is removed by its writer.  An incomplete journal is
     # authoritative recovery work: do not send a second review into the same
     # scope merely because the sidecar write did not reach its attempt row.
@@ -11097,6 +11327,12 @@ def _enforce_and_increment_review_cap_locked(
     replays: list[dict] = []
     sidecar_dirty = False
     skipped_unlocked = False
+    # Co-tenant journals (the OTHER type sharing this counter, fn-159 review
+    # F1) are finalized here but never folded into this call's verdict; only
+    # the ones that could NOT be finalized are named in the refusal below.
+    cross_type_replays: list[dict] = []
+    cross_type_unfinalized: list[tuple[str, str]] = []
+    dispatch_type = review_type or _counter_default_review_type(counter_scope)
     # Journals applied in this pass, dropped only after the batched sidecar
     # write below lands (PR #290 bot r6).
     completed_journals: list[tuple[Path, dict]] = []
@@ -11114,6 +11350,22 @@ def _enforce_and_increment_review_cap_locked(
             continue
         if journal.get("spec_id") not in (None, spec_id):
             continue
+        journal_type = _journal_review_type(journal, counter_scope)
+        # fn-159 review F1: plan and completion share this counter but are
+        # different artifacts with different terminal slots. Selecting journals
+        # by counter alone folded a crashed PLAN journal's SHIP into a
+        # COMPLETION dispatch's verdict (and the reverse), shipping a review
+        # that never ran. The co-tenant's verdict therefore never votes here.
+        #
+        # It is still FINALIZED here (fn-159 verification F4). Refusing until
+        # its own type dispatched again wedged the counter whenever no such
+        # dispatch was coming — after a completion SHIP, a plan dispatch may
+        # never happen — leaving a crashed co-tenant journal blocking every
+        # future review with no repair path. The finalization machinery is
+        # type-aware (receipt target, status target and reset rules all come
+        # off the journal), so completing it publishes exactly what its own
+        # type's next call would have published; only the verdict is withheld.
+        is_cross_type = journal_type != dispatch_type
         journal_receipt_target = journal.get("receipt_target")
         if (
             locked_receipt_targets is not None
@@ -11172,10 +11424,9 @@ def _enforce_and_increment_review_cap_locked(
             spec_data = normalize_epic(
                 load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
             )
-            replays.append({
-                "reservation_id": reservation_id,
-                "verdict": journal.get("verdict"),
-            })
+            (cross_type_replays if is_cross_type else replays).append(
+                _replay_entry(spec_data, reservation_id, journal)
+            )
             # The resumed record may still leave a receipt leg pending
             # (attach never ran and never will — its input is gone).
             # Fall through to journal completion below on the next scan…
@@ -11200,11 +11451,15 @@ def _enforce_and_increment_review_cap_locked(
             # Retained until the batched sidecar write below is durable
             # (PR #290 bot r6).
             completed_journals.append((journal_path, journal))
-            if not any(r["reservation_id"] == reservation_id for r in replays):
-                replays.append({
-                    "reservation_id": reservation_id,
-                    "verdict": journal.get("verdict"),
-                })
+            sink = cross_type_replays if is_cross_type else replays
+            if not any(r["reservation_id"] == reservation_id for r in sink):
+                sink.append(_replay_entry(spec_data, reservation_id, journal))
+        elif is_cross_type:
+            # Its own type owns the repair; say which one, so a wedged counter
+            # is actionable instead of a bare REPLAY_REQUIRED loop.
+            cross_type_unfinalized.append(
+                (str(reservation_id or journal_path.stem), journal_type)
+            )
         else:
             error_exit(
                 "REPLAY_REQUIRED: an earlier delivered review verdict is still being finalized",
@@ -11229,8 +11484,26 @@ def _enforce_and_increment_review_cap_locked(
         if incomplete:
             # A pending leg with no journal left to replay from is human
             # recovery territory; with a journal it was handled above.
+            cross = sorted(
+                {
+                    str(row.get("kind"))
+                    for row in incomplete
+                    if row.get("kind") and row.get("kind") != dispatch_type
+                }
+            )
+            hint = ""
+            if cross:
+                # Same repair as the journal-backed case above: the pending
+                # leg belongs to the co-tenant type, not to this dispatch.
+                scopes = " / ".join(cross)
+                hint = (
+                    f" — the pending leg is {scopes}-scope; run a {scopes}-scope "
+                    f"dispatch or, if none is coming, "
+                    f"flowctl spec reset-review-rounds {spec_id}"
+                )
             error_exit(
-                "REPLAY_REQUIRED: an earlier delivered review verdict is still being finalized",
+                "REPLAY_REQUIRED: an earlier delivered review verdict is still "
+                f"being finalized{hint}",
                 use_json=use_json,
                 code=2,
             )
@@ -11238,6 +11511,22 @@ def _enforce_and_increment_review_cap_locked(
         # Zero dispatch: the delivered verdict(s) are the terminal for this
         # call. Callers apply NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP.
         return {"replayed": True, "replays": replays}
+    if cross_type_unfinalized:
+        # The co-tenant journal could not be completed even here, so it still
+        # owns a charge on this shared counter. Refuse — but name the repair,
+        # so the counter is recoverable without reverse-engineering the state.
+        pending = ", ".join(
+            f"journal {label} (type {jtype})"
+            for label, jtype in cross_type_unfinalized
+        )
+        scopes = " / ".join(sorted({jtype for _, jtype in cross_type_unfinalized}))
+        error_exit(
+            f"REPLAY_REQUIRED: {pending} pending — run a {scopes}-scope "
+            f"dispatch or, if none is coming, "
+            f"flowctl spec reset-review-rounds {spec_id}",
+            use_json=use_json,
+            code=2,
+        )
     if skipped_unlocked:
         # A receipt-bearing journal exists that this pass could not lock.
         # Refuse rather than pay for a review while it is still unfinalized.
@@ -11276,7 +11565,9 @@ def _enforce_and_increment_review_cap_locked(
                 print(marker, file=sys.stderr)
             sys.exit(1)
     scope = task_id if (review_kind == "impl" and task_id) else spec_id
-    stalled_rule = _review_stall_rule(spec_data, review_kind, task_id, epoch)
+    stalled_rule = _review_stall_rule(
+        spec_data, review_kind, task_id, epoch, review_type
+    )
     if stalled_rule is not None:
         marker = _review_stall_marker(
             stalled_rule,
@@ -11381,9 +11672,29 @@ def reset_review_cap(
                 load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=True)
             )
             _write_review_rounds(spec_data, review_kind, task_id, 0)
-            _advance_review_hash_epoch(
-                spec_data, _review_counter_scope(review_kind, task_id)
-            )
+            counter_scope = _review_counter_scope(review_kind, task_id)
+            epochs = _advance_all_review_hash_epochs(spec_data, counter_scope)
+            # Same supersession the folded SHIP path performs (PR #290 bot r6);
+            # it landed only in `record_review_attempt` (fn-159 review F6). A
+            # reservation outstanding here was issued against the PRE-SHIP
+            # artifact and epoch and this reset just zeroed the counter beneath
+            # it: finalizing normally later would publish a stale terminal on a
+            # fresh, uncharged budget. This is a WHOLE-counter reset, so every
+            # type on it is superseded. The pending COUNT stays untouched (the
+            # R22 invariant) — superseded reservations still finalize and still
+            # balance the lifecycle.
+            for reservation in _review_reservations(spec_data).values():
+                if (
+                    not isinstance(reservation, dict)
+                    or reservation.get("counter_scope") != counter_scope
+                    or reservation.get("superseded_by")
+                ):
+                    continue
+                reservation_type = reservation.get("review_type")
+                if reservation_type not in epochs:
+                    reservation_type = _counter_default_review_type(counter_scope)
+                reservation["superseded_by"] = "reset"
+                reservation["superseded_epoch"] = epochs[reservation_type]
             # Intentionally leave review_pending_rounds alone — see docstring.
             spec_data["updated_at"] = now_iso()
             atomic_write_json(spec_json_path, spec_data)
@@ -28726,7 +29037,7 @@ def cmd_spec_reset_review_rounds(args: argparse.Namespace) -> None:
             load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
         )
         spec_data["plan_review_rounds"] = 0
-        _advance_review_hash_epoch(spec_data, "plan")
+        _advance_all_review_hash_epochs(spec_data, "plan")
         if also_impl:
             previous = spec_data.get("impl_review_rounds")
             impl_scopes = set(previous) if isinstance(previous, dict) else set()
@@ -28734,8 +29045,14 @@ def cmd_spec_reset_review_rounds(args: argparse.Namespace) -> None:
             if isinstance(pending, dict):
                 impl_scopes.update(key for key in pending if key.startswith("impl:"))
             spec_data["impl_review_rounds"] = {}
-            for scope in impl_scopes:
-                _advance_review_hash_epoch(spec_data, scope)
+            # `impl_review_rounds` is keyed by bare task id, `pending` by
+            # counter scope. Epochs are keyed by counter scope only, so
+            # normalize before advancing — and dedupe, or a task present in
+            # both maps advances twice.
+            for scope in {
+                s if s.startswith("impl:") else f"impl:{s}" for s in impl_scopes
+            }:
+                _advance_all_review_hash_epochs(spec_data, scope)
         pending = spec_data.get("review_pending_rounds")
         if isinstance(pending, dict):
             pending.pop("plan", None)

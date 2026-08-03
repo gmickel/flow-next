@@ -130,7 +130,8 @@ if [[ -n "$TASK_ID" && "$PROBED_RP_MODE" == "ce" ]]; then
  # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP; recovered verdict
  # means no dispatch.
  printf '%s\n' "$ROUND_JSON"
- if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ # A superseded replay never votes (a concurrent SHIP reset the counter).
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
  echo "ESCALATE: reviewer requested human review" >&2
  exit 4
  fi
@@ -369,7 +370,8 @@ if [[ "$RP_MODE" == "classic" ]]; then
  fi
  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
  printf '%s\n' "$ROUND_JSON"
- if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ # A superseded replay never votes (a concurrent SHIP reset the counter).
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
  echo "ESCALATE: reviewer requested human review" >&2
  exit 4
  fi
@@ -707,7 +709,8 @@ If verdict is NEEDS_WORK:
  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
  # A delivered finalization replay is terminal; no refund or redispatch.
  printf '%s\n' "$ROUND_JSON"
- if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ # A superseded replay never votes (a concurrent SHIP reset the counter).
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
  echo "ESCALATE: reviewer requested human review" >&2
  exit 4
  fi
