@@ -4133,6 +4133,114 @@ class TestTerminalStatusGatedOnReceiptPublication(_InProcessBackendReviewBase):
         self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
 
 
+class TestStatusTargetDefersToPublication(_JournalReplayBase):
+    """PR #290 bot r4: the RP fences pass `--status-target` to `review-rounds
+    record` and publish the receipt afterwards, in a SEPARATE `review-findings
+    attach` process. Folding terminal status into the record write therefore
+    published it BEFORE the receipt existed: a failed attach left terminal
+    status with no valid receipt, which the workflow's Step 0.5 reads as
+    'retry' — forever. The status leg must be journaled pending and land with
+    the receipt, exactly like the in-process completion handler."""
+
+    def _record_cli(self, reservation_id: str, receipt: Path, **kw) -> dict:
+        response = self.root / f"response-{reservation_id}.md"
+        response.write_text("<verdict>NEEDS_WORK</verdict>")
+        payload_file = self.root / f"payload-{reservation_id}.json"
+        payload_file.write_text(
+            json.dumps({**self._payload(), "verdict": "NEEDS_WORK"})
+        )
+        argv = [
+            "review-rounds", "record", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--backend", "rp",
+            "--output-file", str(response),
+            "--reservation-id", reservation_id,
+            "--status-target", "plan", "--exit-code", "0", "--json",
+        ]
+        if kw.get("with_receipt", True):
+            argv += [
+                "--receipt-target", str(receipt),
+                "--receipt-payload-file", str(payload_file),
+            ]
+        code, out, err = self._run_cli(*argv)
+        self.assertEqual(code, 0, err)
+        return json.loads(out)
+
+    def test_status_is_journaled_pending_not_folded(self):
+        reservation_id = self._reserve()
+        receipt = self.root / "rp-receipt.json"
+        result = self._record_cli(reservation_id, receipt)
+
+        self.assertIsNone(result["status_written"])
+        self.assertEqual(result["status_deferred"], "plan")
+        # Step-0.5-safe: no terminal status until a receipt backs it.
+        self.assertEqual(self._data()["plan_review_status"], "unknown")
+        self.assertIsNone(self._data()["plan_reviewed_at"])
+        journal = json.loads(self._journal_path(reservation_id).read_text())
+        self.assertEqual(journal["status_target"], "plan")
+        self.assertEqual(journal["finalized"]["status"], "pending")
+        self.assertEqual(journal["finalized"]["receipt"], "pending")
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["status"], "pending")
+
+    def test_attach_publishes_receipt_and_lands_status(self):
+        reservation_id = self._reserve()
+        receipt = self.root / "rp-receipt.json"
+        self._record_cli(reservation_id, receipt)
+
+        code, _, err = self._run_cli(
+            "review-findings", "attach", "--reservation-id", reservation_id,
+            "--receipt", str(receipt), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "needs_work")
+        self.assertTrue(data["plan_reviewed_at"])
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["status"], "complete")
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        self.assertFalse(self._journal_path(reservation_id).exists())
+
+    def test_failed_attach_leaves_no_terminal_status_and_replay_lands_it(self):
+        reservation_id = self._reserve()
+        receipt = self.root / "rp-receipt.json"
+        self._record_cli(reservation_id, receipt)
+
+        with mock.patch.object(
+            flowctl, "_complete_review_journal", return_value=False
+        ):
+            code, _, _ = self._run_cli(
+                "review-findings", "attach", "--reservation-id", reservation_id,
+                "--receipt", str(receipt), "--json",
+            )
+        self.assertEqual(code, 2)
+        self.assertFalse(receipt.exists())
+        # The fence retries; the gate must NOT see a terminal status with no
+        # receipt behind it (the permanent-repeat state).
+        self.assertEqual(self._data()["plan_review_status"], "unknown")
+
+        replay = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--json",
+        )
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertTrue(json.loads(replay.stdout)["replayed"])
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+        self.assertEqual(self._data()["plan_review_status"], "needs_work")
+        self.assertFalse(self._journal_path(reservation_id).exists())
+
+    def test_status_target_without_a_receipt_still_folds(self):
+        """Legacy pure-status callers publish nothing, so there is nothing to
+        gate on: the fold stays, in the one atomic sidecar write."""
+        reservation_id = self._reserve()
+        result = self._record_cli(
+            reservation_id, self.root / "unused.json", with_receipt=False
+        )
+        self.assertEqual(result["status_written"], "needs_work")
+        self.assertNotIn("status_deferred", result)
+        self.assertEqual(self._data()["plan_review_status"], "needs_work")
+
+
 class TestJournalScanLockGapIsClosed(_InProcessBackendReviewBase):
     """PR #290 bot r3: `_journal_receipt_targets` scans WITHOUT locks so the
     receipt-before-sidecar order can be honored. A finalizer that journals a

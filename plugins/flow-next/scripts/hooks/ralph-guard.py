@@ -676,6 +676,25 @@ _REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor"})
 _REVIEW_DISPATCHES = frozenset({"impl-review", "plan-review", "completion-review"})
 _ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 _DURATION_RE = re.compile(r"\d+(?:\.\d+)?[smhd]?")
+# PR #290 bot r4: raw-text launcher reference — `$FLOWCTL`/`${FLOWCTL}`, a bare
+# or path-qualified `flowctl` / `flowctl.py`. Used only by the raw floor, where
+# "this text drives flowctl" is the question, not "which argv".
+_FLOWCTL_TEXT_RE = re.compile(
+    r"\$\{?FLOWCTL\}?|(?<![\w./-])(?:[\w.-]+/)*flowctl(?:\.py)?(?![\w-])"
+)
+# An assignment whose VALUE is a guarded recovery verb: `verb=review-rounds`,
+# `sub="reset"`, `v='reset-review-rounds'`. The verb never touches the launcher
+# until expansion, so the adjacency screens above cannot see it.
+_RECOVERY_ASSIGN_RE = re.compile(
+    r"(?:^|[\s;&|(])[A-Za-z_][A-Za-z0-9_]*=['\"]?"
+    r"(?:reset-review-rounds|review-rounds|reset)['\"]?(?=[\s;&|)]|$)"
+)
+# Same, for the --force screen's verbs.
+_FORCE_ASSIGN_RE = re.compile(
+    r"(?:^|[\s;&|(])[A-Za-z_][A-Za-z0-9_]*=['\"]?"
+    r"(?:review-rounds|increment|impl-review|plan-review|completion-review)"
+    r"['\"]?(?=[\s;&|)]|$)"
+)
 _ARGV_WRAPPERS = frozenset({
     "env", "timeout", "nice", "xargs", "nohup", "stdbuf",
     # PR #290 bot r3: shell builtins that run their argv transparently. Without
@@ -819,6 +838,24 @@ def _command_has_recovery_markers(command: str) -> bool:
         command,
     ):
         return True
+    # PR #290 bot r4: variable-expansion smuggle. In
+    # `verb=review-rounds; sub=reset; "$FLOWCTL" "$verb" "$sub" fn-1 --kind plan`
+    # no guarded verb is ever adjacent to the launcher — the verbs sit in
+    # assignment VALUES and only meet it at expansion time, which neither the
+    # argv pass nor the adjacency screens above can model. So when a command
+    # BOTH references a flowctl launcher AND assigns a guarded verb, fail
+    # closed. Direct `review-rounds record` carries no such assignment and
+    # stays allowed; prose that names the verbs without naming a launcher also
+    # stays allowed. The remaining false positives (a legitimate command whose
+    # variable happens to hold `reset`) match the floor's documented posture:
+    # rewrite it with the file tool.
+    if _FLOWCTL_TEXT_RE.search(command):
+        if _RECOVERY_ASSIGN_RE.search(command):
+            return True
+        if re.search(r"--force(?![\w-])", command) and _FORCE_ASSIGN_RE.search(
+            command
+        ):
+            return True
     return False
 
 

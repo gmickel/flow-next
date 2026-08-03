@@ -223,22 +223,25 @@ Persist it in this order:
 Continue into SKILL.md's shared Fix Loop in this same skill run. The shared
 terminal checkpoint re-reads the latest completion verdict and cap counters
 from `review-rounds attempts`; it never relies on shell variables surviving a
-tool call. The journaled `record --status-target completion` write owns this
-host workflow's terminal status.
+tool call. The journaled `record --status-target completion` leg owns this
+host workflow's terminal status — `record` journals it PENDING and it lands
+when the receipt publishes (the `attach` above, or the pre-increment replay
+gate in a later invocation), never before. A failed publish therefore leaves
+no terminal status with no receipt behind it.
 
-- `SHIP`: the journaled record already persisted `ship`; continue to the
-  shared terminal checkpoint.
+- `SHIP`: the journaled status leg persisted `ship` when attach published the
+  receipt; continue to the shared terminal checkpoint.
 - `NEEDS_WORK`: parse every valid gap, fix the implementation, run the relevant
   tests/lints, and commit the fixes before re-review. Then repeat Steps 1–3
   with a **new** read-only subagent, the same cross-family rules, and prior
   findings in its prompt. At the deterministic round cap
   (`REVIEW_ROUND == REVIEW_CAP`), do not start another fix/re-review cycle:
-  the journaled record already persisted `needs_work`; then emit `ESCALATE:`
-  and exit 4.
+  the journaled status leg persisted `needs_work` on publication; then emit
+  `ESCALATE:` and exit 4.
 - After `SHIP`, `record` already atomically reset the shared plan counter and
   advanced its hash epoch. Never issue `review-rounds reset` autonomously.
-- `NEEDS_HUMAN`: after `record` writes `needs_human` and attach publishes the
-  receipt, emit `ESCALATE: reviewer requested human review` and exit 4.
+- `NEEDS_HUMAN`: after attach publishes the receipt and lands `needs_human`,
+  emit `ESCALATE: reviewer requested human review` and exit 4.
   Dispatch failure, malformed verdict, receipt failure, or retry outcome stops
   without writing completion status; dispatch/transport failures output
   `<promise>RETRY</promise>` and never self-issue a verdict or switch backends.

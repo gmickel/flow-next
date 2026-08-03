@@ -624,6 +624,12 @@ fi
 
 # Record with the receipt inputs already in hand. Nothing may run after a
 # failed recorder — no verdict echo, no receipt, no status owner, no fix loop.
+# `--status-target completion` JOURNALS the terminal status; it does not write
+# it here. Because a receipt target is journaled in the same finalization, the
+# status lands only when that receipt publishes — via the `review-findings
+# attach` below, or via the pre-increment replay gate in a later invocation. A
+# failed attach therefore leaves NO terminal status behind, which is what keeps
+# the Step 0.5 checkpoint's retry from becoming permanent.
 RESERVATION_ID="$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
   || { echo "no reservation id for this dispatch; refusing to finalize" >&2; exit 2; }
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \

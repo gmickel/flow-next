@@ -311,6 +311,36 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_variable_expanded_recovery_verbs(self) -> None:
+        # PR #290 bot r4: the verbs live in assignment VALUES and only meet the
+        # launcher at expansion time, so no adjacency screen can see them.
+        for command in (
+            'verb=review-rounds; sub=reset; "$FLOWCTL" "$verb" "$sub" fn-1 --kind plan',
+            'verb=review-rounds; sub="reset"; "$FLOWCTL" "$verb" "$sub" fn-1 --kind plan',
+            'v=reset-review-rounds; "$FLOWCTL" spec "$v" fn-1',
+            "k=increment; $FLOWCTL review-rounds \"$k\" fn-1 --kind plan --force",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_variable_screen_keeps_legit_flows_allowed(self) -> None:
+        # The screen needs BOTH a launcher reference and a guarded-verb
+        # assignment; ordinary flowctl use and launcher-free prose stay open.
+        for command in (
+            "$FLOWCTL review-rounds record fn-1 --kind plan --review-type plan "
+            "--backend rp --output-file /tmp/review.txt --reservation-id r1",
+            ".flow/bin/flowctl review-rounds record fn-1 --kind plan "
+            "--backend rp --output-file /tmp/review.txt --reservation-id r1",
+            ".flow/bin/flowctl list",
+            "FLOWCTL=.flow/bin/flowctl; $FLOWCTL show fn-1",
+            "cat > /tmp/notes.md << 'MD'\nmode=reset was the old plan\nMD",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_force_with_lease_push_is_allowed(self) -> None:
         proc = self._hook("git push --force-with-lease origin fn-159")
         self.assertEqual(proc.returncode, 0, proc.stderr)

@@ -357,7 +357,11 @@ if [[ "${VERDICT:-}" == "NEEDS_HUMAN" ]]; then
 fi
 ```
 
-`review-rounds record` owns status and the SHIP reset. Do not issue an explicit
+`review-rounds record` owns status and the SHIP reset. It JOURNALS the status
+leg rather than writing it, because a receipt target is journaled in the same
+finalization: the status lands when that receipt publishes (`review-findings
+attach`, or the pre-increment replay gate later), so a failed publish never
+leaves a terminal status with no receipt behind it. Do not issue an explicit
 `review-rounds reset` after SHIP; it is a human-only recovery command.
 
 Carry the verdict directly into SKILL.md's shared Fix Loop.

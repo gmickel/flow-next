@@ -135,7 +135,9 @@ fi
 It reads any prior receipt before atomic replacement, carries only valid
 same-backend plan lineage, and adds no reviewer/model/network call.
 
-`record` owns plan status and the SHIP counter reset.
+`record` owns plan status and the SHIP counter reset; the status leg is
+journaled and lands with receipt publication (the `attach` above, or the
+pre-increment replay gate), never before it.
 Carry the verdict directly into SKILL.md's shared Fix Loop; an `ESCALATE:` or
 `NOT_RETRYABLE:` fence exit never becomes a transport refund.
 

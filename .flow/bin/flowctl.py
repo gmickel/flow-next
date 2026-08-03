@@ -10212,8 +10212,21 @@ def _record_review_attempt_locked(
     # fn-159 round 7/8: --status-target is the CLI spelling of the folded
     # status write; unify so the journaled operation and the sidecar write
     # share one code path (and one atomic transaction).
+    # PR #290 bot r4: that fold is only correct when NO receipt is published
+    # by the same finalization. When this call also journals a receipt target
+    # (the RP fences: record then `review-findings attach`), folding terminal
+    # status here would publish it BEFORE the receipt exists — a failed attach
+    # then leaves terminal status with no valid receipt, which the workflow's
+    # Step 0.5 reads as "retry forever". So route it through the same deferred
+    # leg the in-process completion handler uses: journaled pending with its
+    # target, landed by whoever publishes the receipt (attach, or the
+    # pre-increment replay gate). Pure-status callers keep the fold.
     if finalize_status_kind is None and status_target in ("plan", "completion"):
-        finalize_status_kind = status_target
+        if reservation_id and receipt_target and isinstance(receipt_payload, dict):
+            if deferred_status_target is None:
+                deferred_status_target = status_target
+        else:
+            finalize_status_kind = status_target
     expected_status = (
         _review_status_from_verdict(verdict)
         if finalize_status_kind in ("plan", "completion") else None
@@ -10510,6 +10523,12 @@ def _record_review_attempt_locked(
         summary["reservation_id"] = reservation_id
     if finalize_status_kind is not None:
         summary["status_written"] = status_written
+    elif deferred_status:
+        # PR #290 bot r4: the status leg is journaled, not written. Say so, so
+        # a caller that asked for --status-target never mistakes an absent
+        # status write for "the recorder ignored me".
+        summary["status_written"] = None
+        summary["status_deferred"] = deferred_status_target
     return summary
 
 
