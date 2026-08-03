@@ -84,3 +84,7 @@ Be critical. Find real issues.
 - `<verdict>SHIP</verdict>` - Ready to merge (no blocking `introduced` findings, all R-IDs met or deferred)
 - `<verdict>NEEDS_WORK</verdict>` - `introduced` issues or unaddressed R-IDs must be fixed first
 - `<verdict>MAJOR_RETHINK</verdict>` - Fundamental problems, reconsider approach
+- `<verdict>NEEDS_HUMAN</verdict>` - A human must adjudicate a design judgment
+
+Use NEEDS_HUMAN only for a design judgment needing human authority; never as a
+soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires redesign.

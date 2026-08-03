@@ -1,9 +1,9 @@
 {
   "acceptance": {
-    "all_deltas_lte_zero": true
+    "all_deltas_within_rebaseline_budget": true
   },
   "baseline": {
-    "commit": "2cfef991b548ddfbae3f787911be3a3b882f031a",
+    "commit": "dc74a6c717377f73f689be6c9bcd68bed40ad4c2",
     "kind": "immutable_git_commit"
   },
   "measurement": {
@@ -16,104 +16,210 @@
   },
   "prompts": {
     "completion": {
-      "baseline_sha256": "b53968a8b8b279e10e7cfba03da0e8c131d0616e4eacb70bd0a1a2c3cafa8af4",
       "baseline_masked_sha256": "2907159746080aaceb48050e36334e9eda4e4bc2591b369ca7b814fa3ae5c90a",
-      "candidate_sha256": "a509e0ff1258547535d6ba2f2b1a6a4f3af51381f0f8053be283bebd4fb2e023",
+      "baseline_sha256": "a509e0ff1258547535d6ba2f2b1a6a4f3af51381f0f8053be283bebd4fb2e023",
+      "candidate_masked_sha256": "ebea0ae4b654cffdc5ddcebb52af77778900f129438d5c841c4917347c0eec78",
+      "candidate_sha256": "ae3049ea8d8ccf9a1fb5eb9612835aab7b4eddc5d7eedf290a9ea5b800162676",
       "tokens": {
-        "cl100k_base": {"baseline": 1996, "candidate": 1898, "delta": -98},
-        "o200k_base": {"baseline": 1981, "candidate": 1885, "delta": -96}
+        "cl100k_base": {
+          "baseline": 1898,
+          "candidate": 2020,
+          "delta": 122
+        },
+        "o200k_base": {
+          "baseline": 1885,
+          "candidate": 2008,
+          "delta": 123
+        }
       }
     },
     "completion_no_tasks": {
-      "baseline_sha256": "8aae6e24156edde7a7ced8a6a45c6fd2d6cd92d21042c3fc2a08adfcf05b1a97",
       "baseline_masked_sha256": "28eb4bf4119ea9498d5e8b949f40af63e16d22106b088b0860043da9d027374b",
-      "candidate_sha256": "ddd5db2586f7d1f22b50423f92320dc06234271770ef9001915c96aa32bd2d55",
+      "baseline_sha256": "ddd5db2586f7d1f22b50423f92320dc06234271770ef9001915c96aa32bd2d55",
+      "candidate_masked_sha256": "548d9d6fd0dba42553b69ea5a92cbc7788a0745c592800317a53385a330fbe9e",
+      "candidate_sha256": "76307c7be168fc6ecbecfc2fbf8a5773d211538329c0ea9fd4a71bf10f1d2cc5",
       "tokens": {
-        "cl100k_base": {"baseline": 1982, "candidate": 1884, "delta": -98},
-        "o200k_base": {"baseline": 1967, "candidate": 1871, "delta": -96}
+        "cl100k_base": {
+          "baseline": 1884,
+          "candidate": 2006,
+          "delta": 122
+        },
+        "o200k_base": {
+          "baseline": 1871,
+          "candidate": 1994,
+          "delta": 123
+        }
       }
     },
     "impl": {
-      "baseline_sha256": "5e5446b58e1f392cc6863ea1c8eb54bae55c099836f7eed3499dccfc3d06400e",
       "baseline_masked_sha256": "303ece3a4ab4cf5050953706196b6f31f87ec05c12010352b3dd768efd616a66",
-      "candidate_sha256": "825fbe7dc6b4153ff39703a4ff5664562e9ac90a826b80f500e6110c9953f5f8",
+      "baseline_sha256": "825fbe7dc6b4153ff39703a4ff5664562e9ac90a826b80f500e6110c9953f5f8",
+      "candidate_masked_sha256": "9731ce687c3541fd940146ab35cfd44e7170c683be8cc3fd3840c5cec4e6d737",
+      "candidate_sha256": "1010b29830ab2ee0bf94f12113a16e42cb8ae6a322dc2959269d7c72748c7ead",
       "tokens": {
-        "cl100k_base": {"baseline": 1950, "candidate": 1934, "delta": -16},
-        "o200k_base": {"baseline": 1938, "candidate": 1925, "delta": -13}
+        "cl100k_base": {
+          "baseline": 1934,
+          "candidate": 2032,
+          "delta": 98
+        },
+        "o200k_base": {
+          "baseline": 1925,
+          "candidate": 2022,
+          "delta": 97
+        }
       }
     },
     "impl_empty_optional": {
-      "baseline_sha256": "5c2efc6a874ae679acf83c150689917a587712e1e706c953a7442011e1e299cc",
       "baseline_masked_sha256": "4460be924138cbf6c5b576cde9770e7fd0534d76180d47cf3d0c739447a51b0c",
-      "candidate_sha256": "d67bd35b53990bf2e4451c43b93519ce44ad024024c3f8f1a56faa7e3cbc5b36",
+      "baseline_sha256": "d67bd35b53990bf2e4451c43b93519ce44ad024024c3f8f1a56faa7e3cbc5b36",
+      "candidate_masked_sha256": "3801c1b43bb420d2feeba72dce2336c80d2039cfc1b1d7ab7224e5a49ad8da8a",
+      "candidate_sha256": "e1c56c3c4a5681ad79f1fcbd760a137f76b2e665ab45f6a93fef367bd73d12d1",
       "tokens": {
-        "cl100k_base": {"baseline": 1887, "candidate": 1871, "delta": -16},
-        "o200k_base": {"baseline": 1875, "candidate": 1862, "delta": -13}
+        "cl100k_base": {
+          "baseline": 1871,
+          "candidate": 1969,
+          "delta": 98
+        },
+        "o200k_base": {
+          "baseline": 1862,
+          "candidate": 1959,
+          "delta": 97
+        }
       }
     },
     "plan": {
-      "baseline_sha256": "451b6a726edd1148859865719c1fcb36ec340f13aa633ff70603cf37deeaed2a",
       "baseline_masked_sha256": "62e080702eccc845deabd5bf3e1b335b14cbc079b5298106faaa198deed8c957",
-      "candidate_sha256": "f7f433211a9c9f790be1b5bf62397b0916afb97a42b48af12ec34d51b166b464",
+      "baseline_sha256": "f7f433211a9c9f790be1b5bf62397b0916afb97a42b48af12ec34d51b166b464",
+      "candidate_masked_sha256": "1039e9b1adb71c5344c13ad23f20002f1d2849d8595db5ff20d41b1c9f0db8d8",
+      "candidate_sha256": "0db3239870a5bc62167b843910f743318a0da3d81bfb43fa60bcb21328a89dd5",
       "tokens": {
-        "cl100k_base": {"baseline": 1199, "candidate": 1195, "delta": -4},
-        "o200k_base": {"baseline": 1190, "candidate": 1184, "delta": -6}
+        "cl100k_base": {
+          "baseline": 1195,
+          "candidate": 1505,
+          "delta": 310
+        },
+        "o200k_base": {
+          "baseline": 1184,
+          "candidate": 1492,
+          "delta": 308
+        }
       }
     },
     "plan_corpus_clean": {
-      "baseline_sha256": "93772f17a31305a15150c6d4a1ff010579ba5fc800491f608355533cdcff1a61",
       "baseline_masked_sha256": "614719240090f130550ca7ec6432d92d5b219dea3216b2a02a032d209f26408e",
-      "candidate_sha256": "1f8161e0949e225e26b8387cd6dd7c96fc13c1ddfeae88db67acaeda65f9fe8c",
+      "baseline_sha256": "1f8161e0949e225e26b8387cd6dd7c96fc13c1ddfeae88db67acaeda65f9fe8c",
+      "candidate_masked_sha256": "7e364371f8e79054de3dc84201039a34552769c38d9dd7c9d1ba9b082e34f42d",
+      "candidate_sha256": "88048664b581ca485e4a97bf70486029c691f0bb94e9e29fd4df9d2f50069dda",
       "tokens": {
-        "cl100k_base": {"baseline": 1851, "candidate": 1847, "delta": -4},
-        "o200k_base": {"baseline": 1843, "candidate": 1837, "delta": -6}
+        "cl100k_base": {
+          "baseline": 1847,
+          "candidate": 2157,
+          "delta": 310
+        },
+        "o200k_base": {
+          "baseline": 1837,
+          "candidate": 2145,
+          "delta": 308
+        }
       }
     },
     "plan_corpus_risky": {
-      "baseline_sha256": "0f07f3967d6cf3ea4d60bdd13e41bdc727191ea7cd27b53137dce4ef884b0193",
       "baseline_masked_sha256": "b232ac1b0ac74bcf0e3d3fd308e819ce6b3d574f057bb57bccf99c02238a4e67",
-      "candidate_sha256": "c2daa9e9d992953a4f852bd82fe2e543119ebf2131d717f4df6c15cef865c6ec",
+      "baseline_sha256": "c2daa9e9d992953a4f852bd82fe2e543119ebf2131d717f4df6c15cef865c6ec",
+      "candidate_masked_sha256": "b89ee90ad9babe0ca017241090d8c04453009bd15a3b85f34e8f1b6b6c9d2cb8",
+      "candidate_sha256": "50ea82d29c4a7a791f6ddf29c7b23e8e1421a94351008cfee769cf16432a3c7c",
       "tokens": {
-        "cl100k_base": {"baseline": 1525, "candidate": 1521, "delta": -4},
-        "o200k_base": {"baseline": 1515, "candidate": 1509, "delta": -6}
+        "cl100k_base": {
+          "baseline": 1521,
+          "candidate": 1831,
+          "delta": 310
+        },
+        "o200k_base": {
+          "baseline": 1509,
+          "candidate": 1817,
+          "delta": 308
+        }
       }
     },
     "plan_corpus_user_edited": {
-      "baseline_sha256": "ba514fae460ade281207bb257713886ef693a572456a17849fb395a71a314b08",
       "baseline_masked_sha256": "848fdcfb5b1e99d86cf41f9107780ed31518d80254f21546536bd61bad36e33c",
-      "candidate_sha256": "b37fd8be54795771bad7d093369b42229fa240734ed46b8438d0411b48a3a371",
+      "baseline_sha256": "b37fd8be54795771bad7d093369b42229fa240734ed46b8438d0411b48a3a371",
+      "candidate_masked_sha256": "1e73300e16f9d8e3dab67632c6f6bdfb4dfd1518a0b35d75692f872a43b15b90",
+      "candidate_sha256": "0cadcbb2ae92913b192855aa9db1adb56821422dffd74c25944a4e03378cb39c",
       "tokens": {
-        "cl100k_base": {"baseline": 1237, "candidate": 1233, "delta": -4},
-        "o200k_base": {"baseline": 1228, "candidate": 1222, "delta": -6}
+        "cl100k_base": {
+          "baseline": 1233,
+          "candidate": 1543,
+          "delta": 310
+        },
+        "o200k_base": {
+          "baseline": 1222,
+          "candidate": 1530,
+          "delta": 308
+        }
       }
     },
     "plan_no_tasks": {
-      "baseline_sha256": "ce9bf40345f80cbfabcf8473e71fe12f78db5a99bafcdb1b41f4960d79eb71c9",
       "baseline_masked_sha256": "06dffa8f724d35e2cdb32312cffdc5c124cbd777d8242b76f6308f9696c94846",
-      "candidate_sha256": "1dcb59529c3526a21973c4bd0d263fb933fc7ccd924a34e54bd23a9dc4880a47",
+      "baseline_sha256": "1dcb59529c3526a21973c4bd0d263fb933fc7ccd924a34e54bd23a9dc4880a47",
+      "candidate_masked_sha256": "00c0fad946a658d43454beea064b74017cedad24174afe5398d168d25cfaaaeb",
+      "candidate_sha256": "16b5d7efce8c6fe4bd9ffe0f738d5e84597828d660032c0c700c74b73a44228d",
       "tokens": {
-        "cl100k_base": {"baseline": 1185, "candidate": 1181, "delta": -4},
-        "o200k_base": {"baseline": 1176, "candidate": 1170, "delta": -6}
+        "cl100k_base": {
+          "baseline": 1181,
+          "candidate": 1491,
+          "delta": 310
+        },
+        "o200k_base": {
+          "baseline": 1170,
+          "candidate": 1478,
+          "delta": 308
+        }
       }
     },
     "standalone": {
-      "baseline_sha256": "e1addf671032155e27979e59fec0e21b0eb2ee80627cd787b65a77fd0d26c3c4",
       "baseline_masked_sha256": "35a0fe28eb8466fbd684feda5d85c53ebface00a8b72e5beb4f814a93bcfe8bd",
-      "candidate_sha256": "dff4a6e0a40b48e029b94404fb8b3f30e389239ebce63a45be916bd6b32122e4",
+      "baseline_sha256": "dff4a6e0a40b48e029b94404fb8b3f30e389239ebce63a45be916bd6b32122e4",
+      "candidate_masked_sha256": "007f983615e73f627472eedd554e6f3ef323d88c149d692ddf8fee0eabba5ffe",
+      "candidate_sha256": "adc9e922c8f888698e2f259bee614dd5813fa90564e1170a884cc7aea6873883",
       "tokens": {
-        "cl100k_base": {"baseline": 1770, "candidate": 1757, "delta": -13},
-        "o200k_base": {"baseline": 1755, "candidate": 1745, "delta": -10}
+        "cl100k_base": {
+          "baseline": 1757,
+          "candidate": 1820,
+          "delta": 63
+        },
+        "o200k_base": {
+          "baseline": 1745,
+          "candidate": 1809,
+          "delta": 64
+        }
       }
     },
     "standalone_no_focus": {
-      "baseline_sha256": "9c19eddb6ef101d0eb311d9fcb41d3ac0760863de892e004ec1c91f4605db84c",
       "baseline_masked_sha256": "906a79d5aac757bf074cb4e5cddd48f405da221b46c96505df06d2b0b4f35615",
-      "candidate_sha256": "27da7257cc67181a7d40282afd994f4b2ef34b22aa4e8f3c9149b993e9c92cee",
+      "baseline_sha256": "27da7257cc67181a7d40282afd994f4b2ef34b22aa4e8f3c9149b993e9c92cee",
+      "candidate_masked_sha256": "64051c8bffb5dc8d4616ad730936167951ebc337438b4531897e58cebc96d8e6",
+      "candidate_sha256": "19efa1a2813ea05fe4e40a8dad54e98ea01378d346999963b4df1e5f9945a3f7",
       "tokens": {
-        "cl100k_base": {"baseline": 1753, "candidate": 1740, "delta": -13},
-        "o200k_base": {"baseline": 1738, "candidate": 1728, "delta": -10}
+        "cl100k_base": {
+          "baseline": 1740,
+          "candidate": 1803,
+          "delta": 63
+        },
+        "o200k_base": {
+          "baseline": 1728,
+          "candidate": 1792,
+          "delta": 64
+        }
       }
     }
   },
-  "schema_version": 1
+  "rebaseline": {
+    "max_token_delta": {
+      "cl100k_base": 310,
+      "o200k_base": 308
+    },
+    "rationale": "fn-159 intentionally changes review instructions outside Output Format: surface severity, confidence, terminal grammar, and settled-plan calibration."
+  },
+  "schema_version": 2
 }

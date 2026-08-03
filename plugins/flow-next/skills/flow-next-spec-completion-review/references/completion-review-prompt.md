@@ -72,6 +72,12 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 - Scope drift (task marked done without fully addressing spec intent)
 - Missing doc updates mentioned in spec
 
+## Blocking calibration
+
+- **P0** — following the plan produces a wrong or impossible implementation.
+- **P1** — material ambiguity likely to mislead a competent implementer.
+- **P2/P3** — consistency or polish; never blocking.
+
 {r_id_coverage_block}
 {confidence_rubric_block}
 {classification_rubric_block}
@@ -122,5 +128,10 @@ defined above.
 **REQUIRED**: End your response with exactly one verdict tag:
 <verdict>SHIP</verdict> - All requirements implemented (R-IDs all met or deferred)
 <verdict>NEEDS_WORK</verdict> - Gaps or unaddressed R-IDs need addressing
+<verdict>NEEDS_HUMAN</verdict> - A human must adjudicate a design judgment
+
+Use NEEDS_HUMAN only for a design judgment needing human authority; never as a
+soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires redesign;
+it is not a completion-review verdict.
 
 Do NOT skip this tag. The automation depends on it.

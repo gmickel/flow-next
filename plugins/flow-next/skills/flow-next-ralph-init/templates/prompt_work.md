@@ -23,7 +23,9 @@ When `--review=rp`, the worker subagent invokes `/flow-next:impl-review` interna
 When `--review=codex`, the worker uses `flowctl codex impl-review` for review.
 When `--review=copilot`, the worker uses `flowctl copilot impl-review` for review.
 When `--review=cursor`, the worker uses `flowctl cursor impl-review` for review.
-The impl-review skill handles review coordination and requires `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from reviewer.
+The impl-review skill handles review coordination and requires `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN</verdict>` from reviewer.
+NEEDS_HUMAN means a design judgment needs human authority, never a soft NEEDS_WORK;
+MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
 Do NOT improvise review prompts - the skill has the correct format.
 Never call `copilot` or `cursor-agent` directly; never pass `--continue` — session continuity is via stored UUID passed to `--resume=<uuid>`.
 

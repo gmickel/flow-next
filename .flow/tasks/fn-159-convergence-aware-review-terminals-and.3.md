@@ -45,9 +45,8 @@ Add NEEDS_HUMAN as a first-class terminal verdict end-to-end with persist-then-e
 ## Acceptance
 - [ ] R3 satisfied: persist-then-exit ordering proven per path; four grammar code sites + prose sweep complete
 ## Done summary
-TBD
-
+Added NEEDS_HUMAN as a first-class terminal verdict end-to-end with persist-then-exit ordering: parser regex + completion grammar, all four flowctl verdict->status maps (journal replay, expected_status, folded write, in-process helper) + status-CLI choices accept needs_human, in-process handlers exit 4 with `ESCALATE: reviewer requested human review` only after receipt/attach/status persistence (replay precedence NEEDS_HUMAN > NEEDS_WORK > all-SHIP), ralph-guard verdict sites, the three workflow-rp.md fences + host/codex/copilot/cursor prose, ralph.sh, and GLOSSARY.md. Zero hash-pinned files touched (pins land in .4); flowctl propagated to .flow/bin, tracker manifest regenerated, sync-codex run twice; plan-review reached-path evidence rebaselined for the grown skill prose.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b67fa1d7e81647082a27f6730717a05f61cc1bb2, dc74a6c7
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity -q), python3 scripts/run_tests_parallel.py (179 files, 3964 tests, 0 failures), uvx ruff@0.16.0 check ., cd plugins/flow-next/tests && python3 -m unittest test_backend_spec -q, python3 scripts/run_tests_parallel.py (3969/0 post-fix) + ruff clean
 - PRs:

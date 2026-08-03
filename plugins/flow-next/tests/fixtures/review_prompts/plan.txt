@@ -74,17 +74,37 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+## Blocking calibration
+
+- **P0** — following the plan produces a wrong or impossible implementation.
+- **P1** — material ambiguity likely to mislead a competent implementer.
+- **P2/P3** — consistency or polish; never blocking.
+
+## Confidence (pick ONE anchor; no interpolation)
+- **100** — definitive from code alone (mechanical: off-by-one, wrong type, swapped args).
+- **75** — full path traced; a normal caller hits it; reproducible from the diff.
+- **50** — depends on conditions visible but not confirmable here (e.g. can this be null? callers not in diff).
+- **25** — needs runtime conditions with no direct evidence.
+- **0** — speculative; don't file.
+Suppression gate: drop findings below 75, EXCEPT P0 at 50+ (those survive). Emit a `Suppressed findings:` count when any dropped.
+Any finding that drives NEEDS_WORK must name the concrete bad downstream outcome.
+Worked examples: a task made impossible by the plan blocks (fn-153); a true
+self-contradiction with no downstream consequence is FYI, not blocking (fn-156).
+
 
 ## Also explicitly verify (commonly-missed): a stated **test strategy**; **observability** (logging/metrics/progress) for any async/batch work; each task **sized for one iteration and correctly ordered** by dependency; and stated **non-functional requirements** (performance, security, privacy).
 ## Protected artifacts
 NEVER recommend deleting / gitignoring / removing these committed pipeline paths (flag bad CONTENT inside them, never their existence): `.flow/*`, `.flow/bin/*`, `.flow/memory/*`, `.flow/specs/*.md`, `.flow/tasks/*.md`, `docs/plans/*`, `docs/solutions/*`, `scripts/ralph/*`. Discard any such finding during synthesis; emit a `Protected-path filter:` count when any dropped.
 ## Output Format
 
-For each issue found:
-- **Severity**: Critical / Major / Minor / Nitpick
-- **Location**: Which task or section (e.g., "fn-1.3 Description" or "Epic Acceptance #2")
-- **Problem**: What's wrong
-- **Suggestion**: How to fix
+Severity: P0/P1/P2/P3
+Confidence: 0/25/50/75/100
+Classification: introduced/pre_existing
+File:Line: path:line / -
+R-IDs: [R1, R2] / []
+Location:
+Problem:
+Suggestion:
 
 After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
@@ -110,6 +130,10 @@ remain accepted as a logged fallback when this block is omitted.
 <verdict>SHIP</verdict> - Plan is solid, ready to implement
 <verdict>NEEDS_WORK</verdict> - Plan has gaps that need addressing
 <verdict>MAJOR_RETHINK</verdict> - Fundamental approach problems
+<verdict>NEEDS_HUMAN</verdict> - A human must adjudicate a design judgment
+
+Use NEEDS_HUMAN only for a design judgment needing human authority; never as a
+soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
 
 Do NOT skip this tag. The automation depends on it.
 
