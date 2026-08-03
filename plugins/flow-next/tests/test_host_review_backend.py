@@ -746,6 +746,23 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
                 "_completion_review_receipt_recovery_path(epic_id).unlink"
             ),
         )
+        # PR #290 bot r2: both the terminal status write and the recovery
+        # cleanup are GATED on publication succeeding — a failed publish must
+        # leave the wedge-free state the replay gate recovers from.
+        self.assertIn("receipt_published = _write_backend_review_receipt(", completion)
+        self.assertIn("if receipt_published:", completion)
+        self.assertLess(
+            completion.index("if receipt_published:"),
+            completion.index("_self_write_review_status("),
+        )
+        # The impl handler writes no terminal review status at all, so there
+        # is nothing to gate there.
+        impl = _section(
+            source,
+            "def _backend_impl_review(",
+            "def _current_review_rounds(",
+        )
+        self.assertNotIn("_self_write_review_status(", impl)
 
     def test_rp_recorder_failure_cannot_be_swallowed_by_verdict_echo(self) -> None:
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")

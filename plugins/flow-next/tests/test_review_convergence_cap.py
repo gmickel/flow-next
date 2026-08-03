@@ -3964,6 +3964,98 @@ class TestInProcessReceiptJournaledPreConsumption(_InProcessBackendReviewBase):
         self.assertEqual(self._data().get("review_pending_rounds", {}), {})
 
 
+class TestTerminalStatusGatedOnReceiptPublication(_InProcessBackendReviewBase):
+    """PR #290 bot r2: the completion handler used to write the terminal
+    completion status and delete the recovery payload even when journaled
+    receipt publication failed. The next invocation then saw a terminal status
+    with no receipt and no payload and exited RETRY in Step 0.5 — BEFORE the
+    pre-increment gate that would have replayed the journal. Permanent wedge."""
+
+    def _recovery_path(self) -> Path:
+        return (
+            self.root / ".flow" / "tmp"
+            / f"completion-review-receipt-recovery-{self.spec_id}.json"
+        )
+
+    def test_failed_publication_defers_status_and_recovery_cleanup(self):
+        receipt = self.root / "completion-receipt.json"
+        # Publication fails after the recovery copy lands (the malformed /
+        # unwritable-receipt class of failure): the journal's `receipt` leg
+        # stays pending.
+        with mock.patch.object(
+            flowctl, "_complete_review_journal", return_value=False
+        ):
+            payload, err = self._dispatch_completion(receipt)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertFalse(receipt.exists())
+
+        # Terminal status NOT written; recovery payload intact; leg pending.
+        self.assertNotIn("completion_review_status", payload)
+        self.assertEqual(
+            self._data().get("completion_review_status", "unknown"), "unknown"
+        )
+        self.assertTrue(self._recovery_path().exists())
+        self.assertEqual(
+            json.loads(self._recovery_path().read_text())["verdict"], "NEEDS_WORK"
+        )
+        row = self._data()["review_attempts"][-1]
+        reservation_id = row["reservation_id"]
+        self.assertEqual(row["finalized"]["receipt"], "pending")
+        self.assertIn("replay", err)
+
+        # A FRESH process replays the journal at the pre-increment gate.
+        replay = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "completion", "--json",
+        )
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertTrue(json.loads(replay.stdout)["replayed"])
+        published = json.loads(receipt.read_text())
+        self.assertEqual(published["verdict"], "NEEDS_WORK")
+        self.assertEqual(published["review_reservation_id"], reservation_id)
+        self.assertEqual(
+            self._data()["review_attempts"][-1]["finalized"]["receipt"], "complete"
+        )
+
+        # ...and only THEN does the terminal status land, on real evidence.
+        status = self._fresh_process(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "needs_work", "--json",
+        )
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertEqual(self._data()["completion_review_status"], "needs_work")
+
+    def test_successful_publication_writes_status_and_clears_recovery(self):
+        receipt = self.root / "completion-receipt.json"
+        payload, _ = self._dispatch_completion(receipt)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        self.assertEqual(payload["completion_review_status"], "needs_work")
+        self.assertEqual(self._data()["completion_review_status"], "needs_work")
+        self.assertTrue(receipt.exists())
+        self.assertFalse(self._recovery_path().exists())
+
+    def test_plan_handler_writes_status_atomically_with_the_journal(self):
+        """The plan handler has no post-publish status write to gate: status
+        lands inside record_review_attempt's atomic sidecar write, so a failed
+        publish leaves the journal pending for the same replay gate."""
+        receipt = self.root / "plan-receipt.json"
+        with mock.patch.object(
+            flowctl, "_complete_review_journal", return_value=False
+        ):
+            payload, _ = self._dispatch_plan(receipt)
+        self.assertEqual(payload["plan_review_status"], "needs_work")
+        self.assertFalse(receipt.exists())
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["finalized"]["receipt"], "pending")
+        replay = self._fresh_process(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--json",
+        )
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertTrue(json.loads(replay.stdout)["replayed"])
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+
+
 class TestUnusableFindingsHistoryDegrades(_InProcessBackendReviewBase):
     """PR #290 bot P1: `_build_backend_review_findings` runs AFTER the paid
     dispatch and BEFORE finalization. A ReviewReceiptHistoryError escaping

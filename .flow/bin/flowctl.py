@@ -37833,8 +37833,15 @@ def _write_backend_review_receipt(
     findings_container: Optional[dict] = None,
     findings_built: bool = False,
     journaled_reservation_id: Optional[str] = None,
-) -> None:
-    """Write a review receipt with stable key order (Ralph / pilot / land)."""
+) -> bool:
+    """Write a review receipt with stable key order (Ralph / pilot / land).
+
+    Returns True once the receipt evidence is durable. False means publication
+    failed and the journal's `receipt` leg is still pending: callers MUST NOT
+    write a terminal review status or delete the recovery payload on a False —
+    doing so wedges the next invocation (terminal status, no receipt, no
+    payload) before it ever reaches the pre-increment replay gate.
+    """
     if journaled_reservation_id:
         # The journal is authoritative: never write a second, unjournaled
         # receipt beside it. A failed publish stays recoverable — the journal
@@ -37849,7 +37856,13 @@ def _write_backend_review_receipt(
                 "dispatch will replay it from the journal.",
                 file=sys.stderr,
             )
-        return
+            print(
+                "warning: terminal review status and recovery cleanup are "
+                "deferred until that replay publishes the receipt.",
+                file=sys.stderr,
+            )
+            return False
+        return True
     receipt_data = _backend_review_receipt_payload(
         review_type=review_type,
         review_id=review_id,
@@ -37903,6 +37916,7 @@ def _write_backend_review_receipt(
         if receipt_file.exists():
             _preserve_review_receipt_generation(receipt_file)
         atomic_write(receipt_file, content)
+    return True
 
 
 
@@ -38862,6 +38876,11 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     # landed in ONE atomic sidecar write inside record_review_attempt.
     written_status = attempt_summary.get("status_written")
 
+    # No terminal-status deferral here (PR #290 bot r2): plan_review_status is
+    # written by record_review_attempt in the SAME atomic sidecar write that
+    # journals the receipt leg, so a failed publish leaves the journal pending
+    # and the pre-increment replay gate refuses the next dispatch until it
+    # completes. Only the completion handler writes status after the publish.
     if receipt_path:
         _write_backend_review_receipt(
             receipt_path,
@@ -39139,8 +39158,9 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         receipt_criteria_text=review_text,
     )
 
+    receipt_published = True
     if receipt_path:
-        _write_backend_review_receipt(
+        receipt_published = _write_backend_review_receipt(
             receipt_path,
             review_type="completion_review",
             review_id=epic_id,
@@ -39163,14 +39183,18 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             journaled_reservation_id=reservation_id if receipt_target else None,
         )
 
-    # Receipt evidence must land before terminal status. If receipt persistence
-    # fails, the recovery payload above remains and status stays non-terminal;
-    # the skill restores the receipt and status before any later dispatch.
-    written_status = _self_write_review_status(
-        epic_id, "completion", verdict, use_json=args.json
-    )
-    if written_status is not None and receipt_path:
-        _completion_review_receipt_recovery_path(epic_id).unlink(missing_ok=True)
+    # Receipt evidence must land before terminal status (PR #290 bot r2): when
+    # publication fails, status stays non-terminal, the recovery payload stays
+    # on disk and the journal's `receipt` leg stays pending, so the
+    # pre-increment replay gate — not a wedged terminal state — is the recovery
+    # path for the next invocation.
+    written_status = None
+    if receipt_published:
+        written_status = _self_write_review_status(
+            epic_id, "completion", verdict, use_json=args.json
+        )
+        if written_status is not None and receipt_path:
+            _completion_review_receipt_recovery_path(epic_id).unlink(missing_ok=True)
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
 
