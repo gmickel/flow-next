@@ -48,7 +48,7 @@ FOREGROUND_RULE_BULLET = (
 CAP_SENTENCE = (
     "**The cap is enforced deterministically by flowctl:** every dispatch "
     "reserves a\nspec-scoped round before launch. SHIP / NEEDS_WORK / "
-    "MAJOR_RETHINK consume it;\na no-verdict transport failure is durably "
+    "MAJOR_RETHINK / NEEDS_HUMAN consume it;\na no-verdict transport failure is durably "
     "recorded and refunded. At\n`${MAX_REVIEW_ITERATIONS:-8}` verdict rounds, "
     "flowctl refuses with `ESCALATE:`\nand exit 4. More than "
     "`${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive\nno-verdict failures "

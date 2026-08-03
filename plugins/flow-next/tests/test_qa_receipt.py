@@ -3,7 +3,7 @@
 `/flow-next:qa` emits a `type: qa_verdict` receipt carrying the four QA
 outcomes in a separate `qa_outcome` field, while `verdict` holds the
 Ralph-guard-compatible projection. The guard (`ralph-guard.py`) validates
-ONLY `verdict in {SHIP, NEEDS_WORK, MAJOR_RETHINK}` — so every one of the
+`verdict in {SHIP, NEEDS_WORK, MAJOR_RETHINK, NEEDS_HUMAN}` — so every one of the
 four outcomes MUST project to a verdict the guard accepts.
 
 This test mirrors the §6.2 projection table from

@@ -4499,8 +4499,8 @@ def extract_codex_final_message(output: str) -> str:
 def parse_codex_verdict(output: str) -> Optional[str]:
     """Extract verdict from codex output.
 
-    Looks for <verdict>SHIP</verdict>, <verdict>NEEDS_WORK</verdict>, or
-    <verdict>MAJOR_RETHINK</verdict>.
+    Looks for <verdict>SHIP</verdict>, <verdict>NEEDS_WORK</verdict>,
+    <verdict>MAJOR_RETHINK</verdict>, or <verdict>NEEDS_HUMAN</verdict>.
 
     fn-90 R3 — honest verdict extraction:
       1. Isolate the reviewer's **final agent message** from the codex JSON
@@ -4513,7 +4513,10 @@ def parse_codex_verdict(output: str) -> Optional[str]:
          message before emitting the real terminal verdict tag.
     """
     text = extract_codex_final_message(output)
-    matches = re.findall(r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", text)
+    matches = re.findall(
+        r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>",
+        text,
+    )
     return matches[-1] if matches else None
 
 
@@ -4523,7 +4526,8 @@ def parse_codex_verdict(output: str) -> Optional[str]:
 # Preferred path: one ```json block with suppressed_count / classification_counts /
 # unaddressed / deep_findings. Prose-regex parsers below are the logged fallback
 # when the block is omitted (deletable once field data shows the block is reliable).
-# The <verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict> tag contract is UNCHANGED.
+# The <verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN</verdict> tag contract
+# is unchanged.
 
 _REVIEW_JSON_FENCE_RE = re.compile(
     r"```json\s*\n(.*?)```",
@@ -9848,6 +9852,7 @@ def _complete_review_journal(
             "SHIP": "ship",
             "NEEDS_WORK": "needs_work",
             "MAJOR_RETHINK": "needs_work",
+            "NEEDS_HUMAN": "needs_human",
         }.get(journal.get("verdict") or "")
         if spec_data is None or status_target not in ("plan", "completion"):
             return False
@@ -10123,6 +10128,7 @@ def _record_review_attempt_locked(
         "SHIP": "ship",
         "NEEDS_WORK": "needs_work",
         "MAJOR_RETHINK": "needs_work",
+        "NEEDS_HUMAN": "needs_human",
     }.get(verdict or "") if finalize_status_kind in ("plan", "completion") else None
     # Write-ahead journal before consuming the reservation.  It contains all
     # input needed to recreate this finalized row after a process crash —
@@ -10320,6 +10326,7 @@ def _record_review_attempt_locked(
             "SHIP": "ship",
             "NEEDS_WORK": "needs_work",
             "MAJOR_RETHINK": "needs_work",
+            "NEEDS_HUMAN": "needs_human",
         }.get(verdict or "")
         if status:
             spec_data[f"{finalize_status_kind}_review_status"] = status
@@ -10478,6 +10485,16 @@ def handle_replayed_review_cap(
         print(json.dumps({"replayed": True, "replays": replays}, indent=2))
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
     return True
+
+
+def _exit_needs_human_after_persistence(verdict: Optional[str], *, use_json: bool) -> None:
+    """Emit the human-escalation terminal only after all writes are complete."""
+    if verdict == "NEEDS_HUMAN":
+        error_exit(
+            "ESCALATE: reviewer requested human review",
+            use_json=use_json,
+            code=REVIEW_CAP_EXIT_CODE,
+        )
 
 
 def _latest_consumed_artifact_sha256(
@@ -35077,7 +35094,7 @@ DEFER_SINK_DIR_REL = ".flow/review-deferred"
 # fn-52.1 (R12): sync receipts live in their OWN directory, deliberately NOT
 # under any path matching `receipts/` and NOT pointed to by REVIEW_RECEIPT_PATH.
 # The review-receipt guard (`hooks/ralph-guard.py`) only validates the file in
-# REVIEW_RECEIPT_PATH (verdict enum SHIP/NEEDS_WORK/MAJOR_RETHINK) and pattern-
+# REVIEW_RECEIPT_PATH (verdict enum SHIP/NEEDS_WORK/MAJOR_RETHINK/NEEDS_HUMAN) and pattern-
 # matches shell writes to `…receipts/…json`; a sync receipt with `type: "sync"`
 # and a status enum here is never seen by that validator, so it can't be rejected.
 SYNC_RUNS_DIR_REL = ".flow/sync-runs"
@@ -37633,14 +37650,16 @@ def _self_write_review_status(
 ) -> Optional[str]:
     """Write plan/completion review status from a parsed verdict (fn-110 deferral).
 
-    Maps SHIP -> ship, NEEDS_WORK/MAJOR_RETHINK -> needs_work. Returns the
-    status string written, or None when the verdict is unrecognized / no
-    spec JSON exists. Standalone ``set-*-review-status`` commands remain.
+    Maps SHIP -> ship, NEEDS_WORK/MAJOR_RETHINK -> needs_work, and
+    NEEDS_HUMAN -> needs_human. Returns the status string written, or None
+    when the verdict is unrecognized / no spec JSON exists. Standalone
+    ``set-*-review-status`` commands remain.
     """
     status_map = {
         "SHIP": "ship",
         "NEEDS_WORK": "needs_work",
         "MAJOR_RETHINK": "needs_work",
+        "NEEDS_HUMAN": "needs_human",
     }
     status = status_map.get(verdict)
     if not status:
@@ -38067,6 +38086,10 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             review_id=task_id if task_id else "branch",
             use_json=args.json,
         ):
+            _exit_needs_human_after_persistence(
+                review_replay_terminal_verdict(cap_result.get("replays", [])),
+                use_json=args.json,
+            )
             return
         _, reservation_id = cap_result
 
@@ -38183,6 +38206,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+    _exit_needs_human_after_persistence(verdict, use_json=args.json)
 
 def _current_review_rounds(
     spec_id: str,
@@ -38441,6 +38465,10 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         cap_result, review_type="plan_review", review_id=epic_id,
         use_json=args.json,
     ):
+        _exit_needs_human_after_persistence(
+            review_replay_terminal_verdict(cap_result.get("replays", [])),
+            use_json=args.json,
+        )
         return
     _, reservation_id = cap_result
 
@@ -38542,6 +38570,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+    _exit_needs_human_after_persistence(verdict, use_json=args.json)
 
 
 def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
@@ -38681,6 +38710,10 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         cap_result, review_type="completion_review", review_id=epic_id,
         use_json=args.json,
     ):
+        _exit_needs_human_after_persistence(
+            review_replay_terminal_verdict(cap_result.get("replays", [])),
+            use_json=args.json,
+        )
         return
     _, reservation_id = cap_result
 
@@ -38803,6 +38836,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     else:
         print(output)
         print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+    _exit_needs_human_after_persistence(verdict, use_json=args.json)
 
 
 
@@ -45995,7 +46029,7 @@ def main() -> None:
         p_set_review.add_argument(
             "--status",
             required=True,
-            choices=["ship", "needs_work", "unknown"],
+            choices=["ship", "needs_work", "needs_human", "unknown"],
             help="Plan review status",
         )
         p_set_review.add_argument(
@@ -46017,7 +46051,7 @@ def main() -> None:
         p_set_completion_review.add_argument(
             "--status",
             required=True,
-            choices=["ship", "needs_work", "unknown"],
+            choices=["ship", "needs_work", "needs_human", "unknown"],
             help="Completion review status",
         )
         p_set_completion_review.add_argument(

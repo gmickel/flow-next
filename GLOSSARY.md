@@ -97,7 +97,7 @@ Optional scout output field listing feature slices from the feature map that ove
 
 ## Receipt
 
-A review-layer JSON artefact that gates workflow state transitions. It carries a verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`), confidence and classification evidence, and may carry the optional versioned [`findings`](plugins/flow-next/docs/review-findings.md) projection. The receipt and original reviewer prose remain authoritative handover evidence when that additive projection is absent, stale, invalid, or unsupported. A Green receipt is the gate-layer counterpart, not a review-layer receipt; the sidecar bookkeeping that gates transitions is the Attempts ledger.
+A review-layer JSON artefact that gates workflow state transitions. It carries a verdict (`SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK` / `NEEDS_HUMAN`), confidence and classification evidence, and may carry the optional versioned [`findings`](plugins/flow-next/docs/review-findings.md) projection. `NEEDS_HUMAN` records a reviewer request for human adjudication; its receipt and status persist before the workflow exits with `ESCALATE:`. The receipt and original reviewer prose remain authoritative handover evidence when that additive projection is absent, stale, invalid, or unsupported. A Green receipt is the gate-layer counterpart, not a review-layer receipt; the sidecar bookkeeping that gates transitions is the Attempts ledger.
 
 _Relates to_: Green receipt, Attempts ledger
 

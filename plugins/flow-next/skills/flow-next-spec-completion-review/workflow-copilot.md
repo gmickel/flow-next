@@ -25,7 +25,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.j
 $FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 ```
 
-**Output includes `VERDICT=SHIP|NEEDS_WORK`.**
+**Output includes `VERDICT=SHIP|NEEDS_WORK|NEEDS_HUMAN`.**
 
 ## Step 3: Handle Verdict
 

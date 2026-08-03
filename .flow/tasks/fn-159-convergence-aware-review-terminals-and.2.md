@@ -55,9 +55,8 @@ Build the deterministic stall detector on spec-state findings digests (persisted
 - [ ] R2 satisfied (digest-based, exact severity math, fail-inert matrix)
 - [ ] R4 satisfied (structured render + legacy fallback + neutralization)
 ## Done summary
-TBD
-
+Built the fn-159 R2 deterministic stall detector on persisted findings digests (same-container construction as the receipt: in-process pre-finalize, RP via `review-findings attach --reservation-id` backfill under the receipt-before-sidecar lock, participating in `finalized.digest` parse-operation semantics) plus the R4 structured convergence ratchet (numbered `findings.items` render with injection neutralization, labeled legacy-prose fallback, budget-aware Cursor whole-item fitting). Three stall rules (same-not-fixed-lineage, flat-trajectory with MIN-rank severity math, fresh-introduced-critical) exit 4 with `ESCALATE: review loop stalled (<rule>)` after the hash guard, fail-inert on epoch boundaries, digestless/truncated rounds, and backend/kind switches for identity rules; 17 new tests, focused suites + tracker distribution + ruff green; flowctl propagated to .flow/bin, tracker manifest regenerated, sync-codex run twice (also sweeping mirror debt left by .1/.7).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 66c5980bd18ed650c447da8f1545ff674cfdbc37, b37e50a1
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_review_convergence_cap.py, python3 scripts/run_tests_parallel.py (3953/0 post-fix) + ruff clean
 - PRs:

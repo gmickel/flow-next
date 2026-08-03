@@ -44,6 +44,10 @@ if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
  # Record/attach recovery delivered the prior verdict. Apply terminal
  # precedence NEEDS_HUMAN > NEEDS_WORK > all-SHIP; no new dispatch.
  printf '%s\n' "$ROUND_JSON"
+ if [[ "$(jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
  exit 0
 fi
 RESERVATION_ID="$(jq -er '.reservation_id' <<<"$ROUND_JSON")"
@@ -79,7 +83,7 @@ structured `findings.items` (ordinal, severity, classification, status, title,
 and file:line) rather than the legacy review prose. Include focus areas and the
 plan-review rubric from
 [references/plan-review-prompt.md](references/plan-review-prompt.md). Require
-exactly one `SHIP`, `NEEDS_WORK`, or `MAJOR_RETHINK` verdict tag. Wait
+exactly one `SHIP`, `NEEDS_WORK`, `MAJOR_RETHINK`, or `NEEDS_HUMAN` verdict tag. Wait
 blocking for the result.
 
 ## Receipt and status
@@ -97,7 +101,7 @@ Write:
  "type": "plan_review",
  "id": "<spec-id>",
  "mode": "host",
- "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK>",
+ "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN>",
  "model": "<actual-reviewer-slug>",
  "spec": "host",
  "session_id": null,
@@ -121,6 +125,11 @@ printf '%s\n' "$RECORD_JSON"
 "$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
  --receipt "$RECEIPT_PATH" \
  --json
+
+if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+fi
 ```
 
 It reads any prior receipt before atomic replacement, carries only valid

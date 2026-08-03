@@ -292,7 +292,7 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
 flowctl reserves a per-task round before every task-scoped dispatch. A delivered
-SHIP / NEEDS_WORK / MAJOR_RETHINK consumes it; a no-verdict transport failure
+SHIP / NEEDS_WORK / MAJOR_RETHINK / NEEDS_HUMAN consumes it; a no-verdict transport failure
 is durably recorded and refunded. At `${MAX_REVIEW_ITERATIONS:-8}` verdict
 rounds it refuses with `ESCALATE:` + exit 4. More than
 `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict failures stop
@@ -308,7 +308,7 @@ deliberate `--force` dispatch.
 
 **ANTI-PATTERN (never do either):**
 1. **A delivered verdict is never a transport failure.** Once flowctl parses
-   `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`, the round is consumed and the
+   `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`, the round is consumed and the
    attempt is recorded; transport classification is unreachable past that
    point. Do not re-dispatch, re-frame a `NEEDS_WORK` as a backend/sandbox
    problem, or claim a refund for it. `NEEDS_WORK` is fix-loop input, full

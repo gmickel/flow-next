@@ -109,7 +109,7 @@ def output_block(reason: str) -> None:
     sys.exit(2)
 
 
-VALID_RECEIPT_VERDICTS = {"SHIP", "NEEDS_WORK", "MAJOR_RETHINK"}
+VALID_RECEIPT_VERDICTS = {"SHIP", "NEEDS_WORK", "MAJOR_RETHINK", "NEEDS_HUMAN"}
 
 
 def is_receipt_write_command(command: str, receipt_path: str) -> bool:
@@ -914,7 +914,7 @@ def handle_post_tool_use(data: dict) -> None:
     ):
         # Codex writes receipt automatically with --receipt flag, but we still track success
         verdict_in_output = re.search(
-            r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", response_text
+            r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>", response_text
         )
         if verdict_in_output:
             state["codex_review_succeeded"] = True
@@ -929,7 +929,7 @@ def handle_post_tool_use(data: dict) -> None:
     ):
         # Copilot writes receipt automatically with --receipt flag, but we still track success
         verdict_in_output = re.search(
-            r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", response_text
+            r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>", response_text
         )
         if verdict_in_output:
             state["copilot_review_succeeded"] = True
@@ -991,7 +991,7 @@ def handle_post_tool_use(data: dict) -> None:
 
     # Check for verdict in response
     verdict_match = re.search(
-        r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>", response_text
+        r"<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>", response_text
     )
     if verdict_match:
         state["last_verdict"] = verdict_match.group(1)

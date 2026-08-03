@@ -194,7 +194,7 @@ class TrackerReceiptTestCase(unittest.TestCase):
         )
 
     def test_review_guard_would_reject_sync_receipt(self) -> None:
-        # The review-receipt validator demands a SHIP/NEEDS_WORK/MAJOR_RETHINK
+        # The review-receipt validator demands a SHIP/NEEDS_WORK/MAJOR_RETHINK/NEEDS_HUMAN
         # verdict; a sync receipt has none. Proves WHY the sync receipt needs a
         # path the guard never inspects.
         res = self._receipt("pulled")

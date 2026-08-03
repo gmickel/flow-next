@@ -41,7 +41,7 @@ args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")
 $FLOWCTL "${args[@]}"
 ```
 
-**Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
+**Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`.**
 
 ## Step 3: Handle Verdict
 

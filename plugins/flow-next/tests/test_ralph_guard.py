@@ -164,6 +164,14 @@ class FileToolReceiptGateTestCase(unittest.TestCase):
         self.assertIn("before review completes", proc.stderr)
 
 
+class NeedsHumanReceiptVerdictTestCase(unittest.TestCase):
+    def test_needs_human_is_accepted_by_receipt_enum_and_all_verdict_regexes(self) -> None:
+        guard = _load_guard()
+        self.assertIn("NEEDS_HUMAN", guard.VALID_RECEIPT_VERDICTS)
+        source = GUARD_PY.read_text(encoding="utf-8")
+        self.assertEqual(source.count("MAJOR_RETHINK|NEEDS_HUMAN"), 3)
+
+
 class DebugLogGatingTestCase(unittest.TestCase):
     def test_no_debug_log_without_env(self) -> None:
         with tempfile.TemporaryDirectory() as td:

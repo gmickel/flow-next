@@ -88,6 +88,10 @@ if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
  # A delivered verdict was recovered. Apply NEEDS_HUMAN > NEEDS_WORK >
  # all-SHIP and do not dispatch another reviewer.
  printf '%s\n' "$ROUND_JSON"
+ if [[ "$(jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
  exit 0
 fi
 REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
@@ -127,7 +131,7 @@ Give the subagent:
 - For every gap: Severity, Confidence `0|25|50|75|100`, and Classification
  `introduced|pre_existing`
 - Required exact verdict tags: `<verdict>SHIP</verdict>` /
- `<verdict>NEEDS_WORK</verdict>`
+ `<verdict>NEEDS_WORK</verdict>` / `<verdict>NEEDS_HUMAN</verdict>`
 
 Wait for the subagent result (blocking — do not background).
 
@@ -159,7 +163,7 @@ Build this payload once:
  "type": "completion_review",
  "id": "<spec-id>",
  "mode": "host",
- "verdict": "<SHIP|NEEDS_WORK>",
+ "verdict": "<SHIP|NEEDS_WORK|NEEDS_HUMAN>",
  "model": "<actual-reviewer-slug>",
  "spec": "host",
  "session_id": null,
@@ -187,6 +191,11 @@ printf '%s\n' "$RECORD_JSON"
  --reservation-id "$RESERVATION_ID" \
  --receipt "$RECEIPT_PATH" \
  --json
+
+if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+fi
 ```
 
 Unsupported/legacy prose leaves the additive field absent. The same transaction
@@ -212,25 +221,27 @@ Persist it in this order:
 ## Step 4: Continue through the shared fix loop and status owner
 
 Continue into SKILL.md's shared Fix Loop in this same skill run. The shared
-terminal owner re-reads the latest completion verdict and cap counters from
-`review-rounds attempts`; it never relies on shell variables surviving a tool
-call. This host workflow never writes terminal completion status.
+terminal checkpoint re-reads the latest completion verdict and cap counters
+from `review-rounds attempts`; it never relies on shell variables surviving a
+prompt turn. The journaled `record --status-target completion` write owns this
+host workflow's terminal status.
 
-- `SHIP`: continue immediately to SKILL.md Step 3, the sole host status owner.
+- `SHIP`: the journaled record already persisted `ship`; continue to the
+ shared terminal checkpoint.
 - `NEEDS_WORK`: parse every valid gap, fix the implementation, run the relevant
  tests/lints, and commit the fixes before re-review. Then repeat Steps 1–3
  with a **new** read-only subagent, the same cross-family rules, and prior
  findings in its prompt. At the deterministic round cap
  (`REVIEW_ROUND == REVIEW_CAP`), do not start another fix/re-review cycle:
- continue immediately to SKILL.md Step 3, write terminal `needs_work` there
- exactly once, then emit `ESCALATE:` and exit 4.
+ the journaled record already persisted `needs_work`; then emit `ESCALATE:`
+ and exit 4.
 - After `SHIP`, `record` already atomically reset the shared plan counter and
- advanced its hash epoch; continue immediately to SKILL.md Step 3 for the
- sole `ship` status write. Never issue `review-rounds reset` autonomously.
-- `NEEDS_HUMAN`, dispatch failure, malformed verdict, receipt failure, or retry
- outcome: stop without writing completion status. Dispatch/transport failures
- output `<promise>RETRY</promise>`; never self-issue a verdict or switch
- backends.
+ advanced its hash epoch. Never issue `review-rounds reset` autonomously.
+- `NEEDS_HUMAN`: after `record` writes `needs_human` and attach publishes the
+ receipt, emit `ESCALATE: reviewer requested human review` and exit 4.
+ Dispatch failure, malformed verdict, receipt failure, or retry outcome stops
+ without writing completion status; dispatch/transport failures output
+ `<promise>RETRY</promise>` and never self-issue a verdict or switch backends.
 
 ## Anti-patterns (Host backend)
 
@@ -240,4 +251,3 @@ call. This host workflow never writes terminal completion status.
 - **Putting a model on the backend string** (`host:opus`) — rejected by flowctl; pins live in AGENTS.md
 - **Calling a non-existent `flowctl host` command**
 - **Fabricating resume/session ids** for host receipts
-- **Writing completion status here** instead of continuing to the shared owner

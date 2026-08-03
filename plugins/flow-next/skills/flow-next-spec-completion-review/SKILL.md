@@ -363,8 +363,8 @@ Codex/copilot/cursor handlers already self-write status; their next invocation
 also runs Step 0.5 first, so a handler-side write failure recovers without
 another reviewer dispatch.
 
-For host and rp, write once on BOTH terminal paths (SHIP and capped-NEEDS_WORK).
-The capped write happens immediately after the final verdict is recorded and
-before `ESCALATE:` / exit 4; no later control flow is assumed.
-`NEEDS_HUMAN`, transport failure, malformed verdict, and retry outcomes are
+For host and rp, write once on every delivered terminal path (SHIP,
+capped-NEEDS_WORK, and NEEDS_HUMAN). The write happens immediately after the
+final verdict is recorded and before `ESCALATE:` / exit 4; no later control
+flow is assumed. Transport failure, malformed verdict, and retry outcomes are
 non-terminal and never write completion status.

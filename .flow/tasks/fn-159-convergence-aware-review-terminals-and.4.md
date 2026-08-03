@@ -24,7 +24,7 @@ Per-surface blocking calibration in the three review prompts (outcome-anchored P
 - `plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md` — full read
 - `plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md` — gate block + clause placement
 - `plugins/flow-next/scripts/flowctl.py:8478-8900` — rubric blocks, fallbacks
-- `plugins/flow-next/scripts/flowctl.py:10471-10536` — `build_convergence_ratchet_block` ratchet rule text <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.7 landed the hash guard before the cap branch, shifting this region forward (was :9598-9660 pre-.1) -->
+- `plugins/flow-next/scripts/flowctl.py:11006-11101` — `build_convergence_ratchet_block` ratchet rule text (rule 2 prose at :11053-11056) <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.7 landed the hash guard before the cap branch, shifting this region forward (was :9598-9660 pre-.1); fn-159-convergence-aware-review-terminals-and.2 landed the structured-findings ratchet (function now takes prior_items/max_total_chars/scaffold_only params, not just prior_findings prose), shifting it further to :11006-11101 and changing its signature — the plan-kind rule-2 tightening in this task now edits the structured-item rendering path, not a plain prose string -->
 - `plugins/flow-next/agents/pr-comment-resolver.md:60-75`
 
 **Optional:**

@@ -84,8 +84,8 @@ Classification introduced or pre_existing. Suppress below 75 except P0 at
 50+; only introduced gaps block. Never recommend deleting protected `.flow/*`, generated
 plugin mirrors, spec/task records, review receipts, or Ralph artifacts.
 Emit suppression/classification/protected-path tallies when applicable.
-End with exactly one tag: <verdict>SHIP</verdict> or
-<verdict>NEEDS_WORK</verdict>.
+End with exactly one tag: <verdict>SHIP</verdict>,
+<verdict>NEEDS_WORK</verdict>, or <verdict>NEEDS_HUMAN</verdict>.
 EOF
 $FLOWCTL cat "$SPEC_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
 for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
@@ -126,6 +126,10 @@ if [[ "$PROBED_RP_MODE" == "ce" ]]; then
  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
  # Apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP and stop with no dispatch.
  printf '%s\n' "$ROUND_JSON"
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
  exit 0
  fi
  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
@@ -427,7 +431,7 @@ After the findings list, emit:
 - A `Protected-path filter:` line tallying gaps dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
-`<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
+`<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>NEEDS_HUMAN</verdict>`
 
 - SHIP: All `introduced` spec requirements are implemented and every R-ID is `met` or `deferred` (pre-existing gaps do not block)
 - NEEDS_WORK: One or more `introduced` requirements are missing, partial, or wrong — or any non-deferred R-ID is `not-addressed`
@@ -488,6 +492,10 @@ if [[ "$RP_MODE" == "classic" ]]; then
  fi
  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
  printf '%s\n' "$ROUND_JSON"
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
  exit 0
  fi
  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
@@ -499,7 +507,7 @@ fi
 
 # Extract verdict tag from the response file
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
- | grep -oE '<verdict>(SHIP|NEEDS_WORK)</verdict>' \
+ | grep -oE '<verdict>(SHIP|NEEDS_WORK|NEEDS_HUMAN)</verdict>' \
  | tail -n 1 \
  | sed -E 's#</?verdict>##g')"
 
@@ -537,10 +545,10 @@ human-only recovery tools; never issue either from the autonomous workflow.
 
 ### Finalize the round: receipt inputs, then record, then publish
 
-This is the single recorder fence. Assemble the receipt inputs FIRST (SHIP only
-— never on NEEDS_WORK), hand them to `review-rounds record`, and only then
-publish. A no-verdict transport failure assembles nothing, so a refund never
-consumes receipt inputs. The payload carries an EMPTY `attempt_timestamp`:
+This is the single recorder fence. Assemble receipt inputs FIRST for every
+delivered verdict (including NEEDS_HUMAN), hand them to `review-rounds record`,
+and only then publish. A no-verdict transport failure assembles nothing, so a
+refund never consumes receipt inputs. The payload carries an EMPTY `attempt_timestamp`:
 that is the request for `record` to stamp its own attempt clock into the
 journaled payload, which pre-record assembly cannot know.
 
@@ -554,7 +562,7 @@ source "$REVIEW_SNAPSHOT_FILE"
 source "$REVIEW_DISPATCH_FILE"
 
 RECEIPT_ARGS=()
-if [[ -n "${REVIEW_RECEIPT_PATH:-}" && "$VERDICT" == "SHIP" ]]; then
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
 
@@ -632,7 +640,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && "$VERDICT" == "SHIP" ]]; then
 
  RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-completion-review-receipt-<spec-id>-<suffix>.json"
  if ! cat > "$RECEIPT_INPUT" <<EOF
-{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"SHIP"$EXTRA_FIELDS,"base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts","attempt_timestamp":""}
+{"type":"completion_review","id":"$SPEC_ID","mode":"rp","verdict":"$VERDICT"$EXTRA_FIELDS,"base":"$REVIEW_BASE_SHA","head":"$REVIEW_HEAD_SHA","timestamp":"$ts","attempt_timestamp":""}
 EOF
  then
  echo "<promise>RETRY</promise>"
@@ -663,7 +671,7 @@ if [[ -z "$VERDICT" ]]; then
 fi
 echo "VERDICT=$VERDICT"
 
-if [[ -n "${REVIEW_RECEIPT_PATH:-}" && "$VERDICT" == "SHIP" ]]; then
+if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
  ATTEMPT_AT="$(printf '%s' "$RECORD_JSON" \
  | jq -r '.attempts[-1].timestamp // ""')"
  if [[ -z "$ATTEMPT_AT" ]]; then
@@ -678,10 +686,10 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && "$VERDICT" == "SHIP" ]]; then
  echo "<promise>RETRY</promise>"
  exit 0
  fi
- if ! jq -e --arg id "$SPEC_ID" --arg attempt_at "$ATTEMPT_AT" \
+ if ! jq -e --arg id "$SPEC_ID" --arg attempt_at "$ATTEMPT_AT" --arg verdict "$VERDICT" \
  '.type == "completion_review"
  and .id == $id
- and .verdict == "SHIP"
+ and .verdict == $verdict
  and .mode == "rp"
  and .attempt_timestamp == $attempt_at' \
  "$REVIEW_RECEIPT_PATH" >/dev/null; then
@@ -689,6 +697,11 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" && "$VERDICT" == "SHIP" ]]; then
  exit 0
  fi
  echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
+fi
+
+if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
 fi
 ```
 
@@ -805,6 +818,10 @@ If verdict is NEEDS_WORK:
  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
  # Prior delivery replay: terminal precedence, no second dispatch.
  printf '%s\n' "$ROUND_JSON"
+ if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+ echo "ESCALATE: reviewer requested human review" >&2
+ exit 4
+ fi
  exit 0
  fi
  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
@@ -816,7 +833,7 @@ If verdict is NEEDS_WORK:
  cat > "${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.md" << 'EOF'
  Gaps addressed. Please re-review for spec compliance.
 
- **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>`
+ **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>NEEDS_HUMAN</verdict>`
  EOF
 
  SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"

@@ -81,6 +81,10 @@ fi
 if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
   # Recovered verdict terminal precedence: NEEDS_HUMAN > NEEDS_WORK > all-SHIP.
   printf '%s\n' "$ROUND_JSON"
+  if [[ "$(jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
+    echo "ESCALATE: reviewer requested human review" >&2
+    exit 4
+  fi
   exit 0
 fi
 RESERVATION_ID="$(jq -er '.reservation_id' <<<"$ROUND_JSON")"
@@ -110,7 +114,7 @@ Give the subagent:
 - Prior findings for convergence as structured `findings.items` (on re-review; render
   ordinal, severity, classification, status, title, and file:line; use legacy
   review prose only when the structured field is absent)
-- Required verdict tags: `SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK`
+- Required verdict tags: `SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK` / `NEEDS_HUMAN`
 
 Wait for the subagent result (blocking — do not background).
 
@@ -129,7 +133,7 @@ Write a receipt compatible with existing consumers:
   "type": "impl_review",
   "id": "<task-id or branch scope>",
   "mode": "host",
-  "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK>",
+  "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN>",
   "model": "<actual-reviewer-slug>",
   "spec": "host",
   "session_id": null,
@@ -156,6 +160,11 @@ printf '%s\n' "$RECORD_JSON"
 "$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
   --receipt "$RECEIPT_PATH" \
   --json
+
+if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+  echo "ESCALATE: reviewer requested human review" >&2
+  exit 4
+fi
 ```
 
 The command reads the prior receipt before atomically replacing it. Unsupported

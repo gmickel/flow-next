@@ -46,7 +46,7 @@ args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")
 $FLOWCTL "${args[@]}"
 ```
 
-**Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK`.**
+**Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`.**
 
 The runner invokes `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (`--mode ask` is read-only — the reviewer never mutates the tree).
 

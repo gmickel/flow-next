@@ -2418,6 +2418,222 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         )
 
 
+class TestNeedsHumanTerminal(_JournalReplayBase):
+    """R3: every delivered NEEDS_HUMAN persists before exit 4."""
+
+    def _record_and_attach(
+        self,
+        *,
+        backend: str,
+        counter_kind: str,
+        review_type: str,
+        receipt_type: str,
+        status_target: str | None = None,
+        task_id: str | None = None,
+    ) -> tuple[dict, Path]:
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id,
+            counter_kind,
+            task_id=task_id,
+            review_type=review_type,
+            return_reservation=True,
+        )
+        assert reservation_id is not None
+        receipt = self.root / f"{backend}-{review_type}.json"
+        payload = {
+            "type": receipt_type,
+            "id": task_id or self.spec_id,
+            "mode": backend,
+            "verdict": "NEEDS_HUMAN",
+        }
+        flowctl.record_review_attempt(
+            self.spec_id,
+            counter_kind,
+            backend=backend,
+            output="<verdict>NEEDS_HUMAN</verdict>",
+            verdict="NEEDS_HUMAN",
+            task_id=task_id,
+            review_type=review_type,
+            reservation_id=reservation_id,
+            receipt_target=str(receipt),
+            receipt_payload=payload,
+            status_target=status_target,
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            flowctl.cmd_review_findings_attach(
+                mock.Mock(
+                    reservation_id=reservation_id,
+                    receipt=str(receipt),
+                    json=True,
+                )
+            )
+        return self._data(), receipt
+
+    def _assert_human_exit_after_persistence(
+        self, data: dict, receipt: Path, *, status_key: str | None
+    ) -> None:
+        row = data["review_attempts"][-1]
+        self.assertTrue(row["round_consumed"])
+        self.assertEqual(row["verdict"], "NEEDS_HUMAN")
+        self.assertEqual(row["finalized"]["receipt"], "complete")
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_HUMAN")
+        if status_key:
+            self.assertEqual(data[status_key], "needs_human")
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as ctx:
+                flowctl._exit_needs_human_after_persistence(
+                    "NEEDS_HUMAN", use_json=False
+                )
+        self.assertEqual(ctx.exception.code, flowctl.REVIEW_CAP_EXIT_CODE)
+        self.assertIn("ESCALATE: reviewer requested human review", err.getvalue())
+
+    def test_plan_needs_human_persists_before_exit(self):
+        data, receipt = self._record_and_attach(
+            backend="codex",
+            counter_kind="plan",
+            review_type="plan",
+            receipt_type="plan_review",
+            status_target="plan",
+        )
+        self._assert_human_exit_after_persistence(
+            data, receipt, status_key="plan_review_status"
+        )
+
+    def test_impl_needs_human_persists_before_exit(self):
+        data, receipt = self._record_and_attach(
+            backend="copilot",
+            counter_kind="impl",
+            review_type="impl",
+            receipt_type="impl_review",
+            task_id=f"{self.spec_id}.1",
+        )
+        self._assert_human_exit_after_persistence(data, receipt, status_key=None)
+
+    def test_completion_needs_human_persists_before_exit(self):
+        data, receipt = self._record_and_attach(
+            backend="cursor",
+            counter_kind="plan",
+            review_type="completion",
+            receipt_type="completion_review",
+            status_target="completion",
+        )
+        self._assert_human_exit_after_persistence(
+            data, receipt, status_key="completion_review_status"
+        )
+
+    def test_status_cli_accepts_needs_human_for_plan_and_completion(self):
+        for command, key in (
+            ("set-plan-review-status", "plan_review_status"),
+            ("set-completion-review-status", "completion_review_status"),
+        ):
+            with self.subTest(command=command):
+                code, _, err = self._run_cli(
+                    "spec", command, self.spec_id, "--status", "needs_human", "--json"
+                )
+                self.assertEqual(code, 0, err)
+                self.assertEqual(self._data()[key], "needs_human")
+
+    def test_standalone_needs_human_receipt_precedes_exit(self):
+        receipt = self.root / "standalone.json"
+        flowctl._write_backend_review_receipt(
+            str(receipt),
+            review_type="impl_review",
+            review_id="branch",
+            backend="codex",
+            verdict="NEEDS_HUMAN",
+            session_id=None,
+            effective_model="test-model",
+            effective_effort=None,
+            resolved_spec=mock.Mock(),
+            review_text="<verdict>NEEDS_HUMAN</verdict>",
+            include_effort=False,
+            findings_built=True,
+        )
+        self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_HUMAN")
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as ctx:
+                flowctl._exit_needs_human_after_persistence(
+                    "NEEDS_HUMAN", use_json=False
+                )
+        self.assertEqual(ctx.exception.code, 4)
+
+    def test_rp_nonzero_delivery_persists_before_exit(self):
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        assert reservation_id is not None
+        response = self.root / "rp-response.md"
+        response.write_text("<verdict>NEEDS_HUMAN</verdict>")
+        receipt = self.root / "rp-receipt.json"
+        payload = self.root / "rp-payload.json"
+        payload.write_text(json.dumps({
+            "type": "plan_review", "id": self.spec_id, "mode": "rp",
+            "verdict": "NEEDS_HUMAN",
+        }))
+        code, _, err = self._run_cli(
+            "review-rounds", "record", self.spec_id, "--kind", "plan",
+            "--review-type", "plan", "--backend", "rp", "--output-file",
+            str(response), "--reservation-id", reservation_id, "--receipt-target",
+            str(receipt), "--receipt-payload-file", str(payload), "--status-target",
+            "plan", "--exit-code", "7", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, _, err = self._run_cli(
+            "review-findings", "attach", "--reservation-id", reservation_id,
+            "--receipt", str(receipt), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self._assert_human_exit_after_persistence(
+            self._data(), receipt, status_key="plan_review_status"
+        )
+
+    def test_incomplete_finalization_replay_persists_before_exit_without_redispatch(self):
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        assert reservation_id is not None
+        receipt = self.root / "replay-receipt.json"
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="rp",
+            output="<verdict>NEEDS_HUMAN</verdict>",
+            verdict="NEEDS_HUMAN",
+            review_type="plan",
+            reservation_id=reservation_id,
+            receipt_target=str(receipt),
+            receipt_payload={
+                "type": "plan_review", "id": self.spec_id, "mode": "rp",
+                "verdict": "NEEDS_HUMAN",
+            },
+            status_target="plan",
+        )
+        replay = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(replay, dict) and replay["replayed"])
+        self.assertEqual(flowctl.review_replay_terminal_verdict(replay["replays"]), "NEEDS_HUMAN")
+        data = self._data()
+        self.assertEqual(len(data["review_attempts"]), 1)
+        self._assert_human_exit_after_persistence(
+            data, receipt, status_key="plan_review_status"
+        )
+
+    def test_rp_workflow_fences_attach_before_needs_human_exit(self):
+        for relative in (
+            "flow-next-plan-review/workflow-rp.md",
+            "flow-next-impl-review/workflow-rp.md",
+            "flow-next-spec-completion-review/workflow-rp.md",
+        ):
+            with self.subTest(workflow=relative):
+                text = (SKILLS / relative).read_text(encoding="utf-8")
+                attach_at = text.index("review-findings attach")
+                terminal_at = text.index(
+                    "ESCALATE: reviewer requested human review", attach_at
+                )
+                self.assertLess(attach_at, terminal_at)
+
+
 class TestReplayAwareInProcessCallers(unittest.TestCase):
     """Round-1 review r1 P2: the in-process backend handlers must ABORT the
     dispatch on a typed replay result rather than paying for a second review

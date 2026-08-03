@@ -220,28 +220,45 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             self.assertIn("deterministic round cap", host_lower)
             self.assertNotIn("Return the verdict", host)
 
-    def test_completion_status_has_one_shared_owner(self) -> None:
+    def test_completion_status_is_journaled_before_host_or_rp_terminal(self) -> None:
         root = _read("flow-next-spec-completion-review/SKILL.md")
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         rp = _read("flow-next-spec-completion-review/workflow-rp.md")
         work = _read("flow-next-work/phases.md")
         pilot = _read("flow-next-pilot/workflow.md")
         command = "$FLOWCTL spec set-completion-review-status"
-        self.assertEqual(root.count(command), 1, "shared owner must issue one status write")
-        self.assertNotIn(command, host, "selected host workflow must never write status")
-        self.assertNotIn(command, rp, "selected rp workflow must never write status")
+        self.assertEqual(root.count(command), 1, "recovery owner must issue one status write")
+        self.assertIn("--status-target completion", host)
+        self.assertIn("--status-target completion", rp)
         self.assertNotIn(command, work, "work caller must never repeat the status write")
-        self.assertIn("This shared step is the sole writer for host and rp", root)
-        self.assertIn("never write completion status", root)
-        self.assertIn("This host workflow never writes terminal completion status", host)
-        self.assertIn("stop without writing completion status", host)
+        self.assertIn("NEEDS_HUMAN", root)
+        self.assertIn("needs_human", host)
+        self.assertIn("NEEDS_HUMAN", rp)
         self.assertIn("Work never writes that status again", work)
         self.assertIn(
             "the spec-completion-review skill writes terminal "
             "`completion_review_status` through its backend-aware shared owner",
             pilot,
         )
-        self.assertNotIn("or write status here", host)
+        self.assertIn("ESCALATE: reviewer requested human review", host)
+
+    def test_host_needs_human_fences_attach_before_exit(self) -> None:
+        for skill in (
+            "flow-next-plan-review",
+            "flow-next-impl-review",
+            "flow-next-spec-completion-review",
+        ):
+            with self.subTest(skill=skill):
+                host = _read(f"{skill}/workflow-host.md")
+                record_at = host.index("review-rounds record")
+                attach_at = host.index("review-findings attach", record_at)
+                terminal_at = host.index(
+                    "ESCALATE: reviewer requested human review", attach_at
+                )
+                self.assertLess(record_at, attach_at)
+                self.assertLess(attach_at, terminal_at)
+                if skill != "flow-next-impl-review":
+                    self.assertIn("--status-target", host[record_at:attach_at])
 
     def test_capped_completion_status_precedes_exit(self) -> None:
         root = _read("flow-next-spec-completion-review/SKILL.md")

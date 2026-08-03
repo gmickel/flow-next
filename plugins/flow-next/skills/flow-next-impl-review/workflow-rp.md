@@ -68,7 +68,8 @@ For each surviving introduced finding emit Severity (P0-P3), Confidence,
 Classification, File:Line, Problem, and Suggestion. List pre-existing findings
 separately. Emit suppression/classification/protected-path tallies when
 applicable. End with exactly one tag: <verdict>SHIP</verdict>,
-<verdict>NEEDS_WORK</verdict>, or <verdict>MAJOR_RETHINK</verdict>.
+<verdict>NEEDS_WORK</verdict>, <verdict>MAJOR_RETHINK</verdict>, or
+<verdict>NEEDS_HUMAN</verdict>.
 EOF
 [[ -n "$TASK_ID" ]] && $FLOWCTL show "$TASK_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
 
@@ -101,6 +102,10 @@ if [[ -n "$TASK_ID" && "$PROBED_RP_MODE" == "ce" ]]; then
   if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
     # NEEDS_HUMAN > NEEDS_WORK > all-SHIP; recovered verdict means no dispatch.
     printf '%s\n' "$ROUND_JSON"
+    if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+      echo "ESCALATE: reviewer requested human review" >&2
+      exit 4
+    fi
     exit 0
   fi
   printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
@@ -287,7 +292,7 @@ Then list each `pre_existing` finding under a separate `## Pre-existing issues (
 After the findings, add (only when applicable): the `## Requirements coverage` table + `Unaddressed R-IDs:` line, and the `Suppressed findings:` / `Classification counts:` / `Protected-path filter:` tally lines named above.
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
-`<verdict>SHIP</verdict>` (no blocking `introduced` findings, all R-IDs met or deferred) or `<verdict>NEEDS_WORK</verdict>` (introduced findings or unaddressed R-IDs to fix) or `<verdict>MAJOR_RETHINK</verdict>`
+`<verdict>SHIP</verdict>` (no blocking `introduced` findings, all R-IDs met or deferred) or `<verdict>NEEDS_WORK</verdict>` (introduced findings or unaddressed R-IDs to fix) or `<verdict>MAJOR_RETHINK</verdict>` or `<verdict>NEEDS_HUMAN</verdict>`
 
 Do NOT skip this tag. The automation depends on it.
 EOF
@@ -336,6 +341,10 @@ if [[ "$RP_MODE" == "classic" ]]; then
     fi
     if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
       printf '%s\n' "$ROUND_JSON"
+      if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+        echo "ESCALATE: reviewer requested human review" >&2
+        exit 4
+      fi
       exit 0
     fi
     printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
@@ -348,7 +357,7 @@ else
 fi
 
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
-  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
+  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>' \
   | tail -n 1 \
   | sed -E 's#</?verdict>##g')"
 
@@ -538,6 +547,11 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
   fi
   echo "REVIEW_RECEIPT_WRITTEN: $REVIEW_RECEIPT_PATH"
 fi
+
+if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+  echo "ESCALATE: reviewer requested human review" >&2
+  exit 4
+fi
 ```
 
 If no verdict tag in response, output `<promise>RETRY</promise>` and stop.
@@ -654,10 +668,14 @@ If verdict is NEEDS_WORK:
        printf '%s\n' "$ROUND_JSON"
        exit "$ROUND_EXIT"
      fi
-     if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
-       # A delivered finalization replay is terminal; no refund or redispatch.
-       printf '%s\n' "$ROUND_JSON"
-       exit 0
+    if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+      # A delivered finalization replay is terminal; no refund or redispatch.
+      printf '%s\n' "$ROUND_JSON"
+      if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+        echo "ESCALATE: reviewer requested human review" >&2
+        exit 4
+      fi
+      exit 0
      fi
      printf '%s' "$ROUND_JSON" > "${TMPDIR:-/tmp}/flow-impl-review-reservation-<task-id-or-branch-slug>-<suffix>.json"
    fi
@@ -667,7 +685,7 @@ If verdict is NEEDS_WORK:
    cat > "${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.md" << 'EOF'
    Issues addressed. Please re-review.
 
-   **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
+   **REQUIRED**: End with `<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>` or `<verdict>NEEDS_HUMAN</verdict>`
    EOF
 
    SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"

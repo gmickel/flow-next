@@ -74,6 +74,10 @@ if [[ "$PROBED_RP_MODE" == "ce" ]]; then
   if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
     # Recovery precedence NEEDS_HUMAN > NEEDS_WORK > all-SHIP; no dispatch.
     printf '%s\n' "$ROUND_JSON"
+    if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+      echo "ESCALATE: reviewer requested human review" >&2
+      exit 4
+    fi
     exit 0
   fi
   printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
@@ -204,7 +208,7 @@ For each issue:
 After the issues list, emit a `Protected-path filter:` line tallying findings dropped by the protected-path filter (omit when nothing was dropped).
 
 **REQUIRED**: You MUST end your response with exactly one verdict tag. This is mandatory:
-`<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>`
+`<verdict>SHIP</verdict>` or `<verdict>NEEDS_WORK</verdict>` or `<verdict>MAJOR_RETHINK</verdict>` or `<verdict>NEEDS_HUMAN</verdict>`
 
 Do NOT skip this tag. The automation depends on it.
 EOF
@@ -242,6 +246,10 @@ if [[ "$RP_MODE" == "classic" ]]; then
   fi
   if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
     printf '%s\n' "$ROUND_JSON"
+    if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+      echo "ESCALATE: reviewer requested human review" >&2
+      exit 4
+    fi
     exit 0
   fi
   printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
@@ -253,7 +261,7 @@ fi
 RESERVATION_ID="$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
   || { echo "no reservation id for this dispatch; refusing to finalize" >&2; exit 2; }
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
-  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK)</verdict>' \
+  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>' \
   | tail -n 1 | sed -E 's#</?verdict>##g')"
 
 # Round-8 ordering: the receipt inputs are assembled BEFORE `record`, which
@@ -314,6 +322,11 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
       exit 0
     fi
   fi
+fi
+
+if [[ "${VERDICT:-}" == "NEEDS_HUMAN" ]]; then
+  echo "ESCALATE: reviewer requested human review" >&2
+  exit 4
 fi
 ```
 
