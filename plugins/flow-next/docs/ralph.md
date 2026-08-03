@@ -445,7 +445,7 @@ Every review produces a receipt JSON:
 
 This is at-least-once delivery. The agent is untrusted; receipts are proof-of-work.
 
-**`/flow-next:qa` emits a `type: qa_verdict` receipt** (live-app QA pass). The Ralph guard validates only `verdict ∈ {SHIP, NEEDS_WORK, MAJOR_RETHINK}`, so the four QA outcomes are carried in a separate `qa_outcome` field while `verdict` holds the enum-compatible projection: `SHIP → SHIP`, `NEEDS_WORK → NEEDS_WORK`, **`BLOCKED → NEEDS_WORK`** (could not verify → no ship claim on a QA basis), **`N/A → SHIP`** (no driveable UI → live QA raises no objection). Written to the caller-supplied `--receipt` / `REVIEW_RECEIPT_PATH`, else `.flow/review-receipts/qa-<spec-id>.json`. In autonomous mode (`mode:autonomous` / `FLOW_AUTONOMOUS=1` — the signal the optional pilot QA stage passes) QA **never prompts**: undocumented target URL / required accounts / no reachable local app ⇒ a clean `BLOCKED` receipt and exit. It always reaches a verdict and always writes a valid receipt; it is **not a hard Ralph receipt-gate in v1** (`parse_receipt_path` is unextended — a `qa-*.json` path validates via the existing verdict-enum check; gating a future board-executor is deferred).
+**`/flow-next:qa` emits a `type: qa_verdict` receipt** (live-app QA pass). The Ralph guard accepts `verdict ∈ {SHIP, NEEDS_WORK, MAJOR_RETHINK, NEEDS_HUMAN}`; QA's four outcomes are carried in a separate `qa_outcome` field while `verdict` holds the enum-compatible projection: `SHIP → SHIP`, `NEEDS_WORK → NEEDS_WORK`, **`BLOCKED → NEEDS_WORK`** (could not verify → no ship claim on a QA basis), **`N/A → SHIP`** (no driveable UI → live QA raises no objection). Written to the caller-supplied `--receipt` / `REVIEW_RECEIPT_PATH`, else `.flow/review-receipts/qa-<spec-id>.json`. In autonomous mode (`mode:autonomous` / `FLOW_AUTONOMOUS=1` — the signal the optional pilot QA stage passes) QA **never prompts**: undocumented target URL / required accounts / no reachable local app ⇒ a clean `BLOCKED` receipt and exit. It always reaches a verdict and always writes a valid receipt; it is **not a hard Ralph receipt-gate in v1** (`parse_receipt_path` is unextended — a `qa-*.json` path validates via the existing verdict-enum check; gating a future board-executor is deferred).
 
 When QA runs as the **optional `pipeline.qa` pilot stage** (default off — see "Optional QA stage" above), the pilot gate reads `qa_outcome` (NOT the Ralph-guard `verdict` projection): `SHIP`/`NA`/`BLOCKED` advance cleanly, and `NEEDS_WORK` still advances to make-pr (draft), with the findings surfaced into the PR body's `## Live QA` section + the bug-memory track. The stage is idempotent — a `head_sha` field on the receipt makes it fresh-iff `id == <spec-id>` AND `head_sha == <spec-branch HEAD>` AND `qa_outcome` is terminal, so a single-tick pilot classifies `qa` at most once per branch head and never re-loops. The QA stage **augments, never replaces** CI/staging/manual QA.
 
@@ -459,7 +459,7 @@ Reviews block progress until approved:
 
 Fix → re-review → fix → re-review... until the reviewer approves — bounded by `MAX_REVIEW_ITERATIONS`.
 
-**The cap is now deterministic (fn-90).** `MAX_REVIEW_ITERATIONS` (default 8) was previously prose-only — an instruction to the host LLM to "keep an iteration counter in agent context" that **reset to 0 on every fresh review invocation** (a new Ralph iteration, a new pilot tick, a human retry). That per-invocation reset was the review-loop-runaway root cause: the field-observed ~11× loop was ≈ 5–6 fresh invocations × ~3 in-agent rounds each. flowctl now owns a **cumulative round counter on spec state** (`plan_review_rounds` spec-scoped; `impl_review_rounds[<task-id>]` per-task; completion reviews reuse the plan counter) that **survives fresh invocations**. At the cap, the backend review command **refuses to dispatch** and exits with the dedicated code **`4`** (distinct from transport-failure `2`/`3`) plus an `ESCALATE:` marker. **Ralph MUST surface this as NEEDS_HUMAN — never a retry** (a retry loop on the cap re-creates the runaway one level up). Round-counting is deliberately biased toward safety: **every dispatch attempt counts, including a failed/malformed exec** (not only resolved SHIP/NEEDS_WORK rounds), so worst case is *early* human escalation. The counter resets only on a `SHIP` verdict or an explicit `flowctl spec reset-review-rounds <spec-id>` (re-plan) — never on a spec/code edit. Full semantics: [`flowctl.md` § Deterministic review cap](flowctl.md#codex-impl-review).
+**The cap is deterministic and convergence-aware (fn-90/fn-159).** `MAX_REVIEW_ITERATIONS` defaults to 8 and flowctl owns a **cumulative round counter on spec state** (`plan_review_rounds` spec-scoped; `impl_review_rounds[<task-id>]` per-task; completion reviews reuse the plan counter) that survives fresh invocations. Before a re-review, an unchanged domain-separated artifact hash exits 1 with `NOT_RETRYABLE`, consuming nothing. Before either an early terminal or the cap reserves another round, flowctl compares the last two valid structured-findings digests and exits 4 with `ESCALATE: review loop stalled (<rule>)` for a non-improving trajectory. A reviewer can instead return `NEEDS_HUMAN`; flowctl persists the receipt, attempt, and status before exiting 4 with `ESCALATE: reviewer requested human review`. **Ralph MUST surface either escalation as NEEDS_HUMAN — never retry it.** Missing/malformed findings are inert, and hash failures fail open. `SHIP` and an explicit human re-plan advance the hash epoch; `--force`, `review-rounds reset`, and `spec reset-review-rounds` are human-only recovery tools, guarded from Ralph. Full semantics: [`flowctl.md` § Deterministic review cap](flowctl.md#codex-impl-review).
 
 **Verdict tags:**
 
@@ -468,6 +468,7 @@ Fix → re-review → fix → re-review... until the reviewer approves — bound
 | `<verdict>SHIP</verdict>` | Approved, proceed |
 | `<verdict>NEEDS_WORK</verdict>` | Fix issues, re-review |
 | `<verdict>MAJOR_RETHINK</verdict>` | Fundamental problems |
+| `<verdict>NEEDS_HUMAN</verdict>` | A human must adjudicate; receipt and status persist, then Ralph stops |
 
 > **Common failures:**
 > - Plain text "SHIP" → review skill not used correctly
@@ -938,6 +939,7 @@ grep -i verdict scripts/ralph/runs/*/iter-*.log | tail -5
 - No receipt file → review skill not invoked
 - Wrong verdict format → plain text instead of XML tags
 - Receipt exists but verdict is NEEDS_WORK → implementation has issues
+- Receipt or terminal output says NEEDS_HUMAN / ESCALATE → stop the run and surface the decision; do not retry or reset it autonomously
 
 ### Auto-Blocked Tasks
 

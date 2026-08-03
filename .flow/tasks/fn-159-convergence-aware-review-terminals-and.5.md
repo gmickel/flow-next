@@ -38,9 +38,8 @@ Bot-surface bounding and gate-integrity guarding: resolve-pr prose-triage rule, 
 ## Acceptance
 - [ ] R7, R8, R9 satisfied
 ## Done summary
-TBD
-
+Bot-surface bounding + gate-integrity guarding (fn-159 R7/R8/R9): the pr-comment-resolver contract now classifies spec/doc-prose findings on code PRs as fix-or-record (never merge-gating, class named in each reply) with the behavior-gap carve-out as a code finding; flowctl.md's land.reviewTrigger row and land workflow 2.6 document the recommended scoped trigger text (default "" unchanged, bot comments declared outside detector/guard blast radius); ralph-guard blocks `spec reset-review-rounds`, `review-rounds reset`, and `--force` on review dispatch/increment via tokenized argv matching (quoted/spaced/python-launcher bypasses covered, unparseable-prose fallback screen so heredoc writes are not blocked, SHIP-flow `review-rounds record` proven allowed with blocks active), and human-only recovery prose landed in pilot/land/work/ralph plus the ralph.md guard table.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 24269a070a0c2ffdb9870cce22351e51f32dc0d1, 07495d52
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity -q), cd plugins/flow-next/tests && python3 -m unittest test_ralph_guard test_ralph_guard_codex_delegation -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (x2, idempotent), python3 scripts/run_tests_parallel.py (3995/0 post-fix) + ruff + live adversarial probes
 - PRs:

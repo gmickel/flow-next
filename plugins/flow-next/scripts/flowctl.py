@@ -9655,7 +9655,10 @@ def _review_sidecar_lock(flow_dir: Path, spec_id: str):
     # Best-effort: an unsafe/symlinked .flow/.gitignore makes this a no-op
     # rather than failing the review — a stray lock file is a mess, not a
     # correctness or disclosure break.
-    _ensure_flow_gitignore(flow_dir)
+    try:
+        _ensure_flow_gitignore(flow_dir)
+    except (OSError, UnicodeDecodeError):
+        pass
     with cross_process_lock(_review_sidecar_lock_path(flow_dir, spec_id)):
         yield
 

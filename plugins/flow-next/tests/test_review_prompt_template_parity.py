@@ -210,28 +210,28 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
 class TestReviewPromptPreChangeBinding(unittest.TestCase):
     """Every route is bound to the deliberate fn-159 rebaseline."""
 
-    def rendered_prompts(self, module: Any = flowctl) -> dict[str, str]:
+    def rendered_prompts(self) -> dict[str, str]:
         prompts = {
-            "impl": module.build_review_prompt(
+            "impl": flowctl.build_review_prompt(
                 "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
             ),
-            "impl_empty_optional": module.build_review_prompt(
+            "impl_empty_optional": flowctl.build_review_prompt(
                 "impl", _SPEC, "", diff_summary="", diff_content=""
             ),
-            "plan": module.build_review_prompt(
+            "plan": flowctl.build_review_prompt(
                 "plan", _SPEC, _HINTS, task_specs=_TASKS
             ),
-            "plan_no_tasks": module.build_review_prompt("plan", _SPEC, _HINTS),
-            "standalone": module.build_standalone_review_prompt(
+            "plan_no_tasks": flowctl.build_review_prompt("plan", _SPEC, _HINTS),
+            "standalone": flowctl.build_standalone_review_prompt(
                 _BASE, _FOCUS, _DSUM
             ),
-            "standalone_no_focus": module.build_standalone_review_prompt(
+            "standalone_no_focus": flowctl.build_standalone_review_prompt(
                 _BASE, None, _DSUM
             ),
-            "completion": module.build_completion_review_prompt(
+            "completion": flowctl.build_completion_review_prompt(
                 _SPEC, _TASKS, _DSUM, _DDIFF
             ),
-            "completion_no_tasks": module.build_completion_review_prompt(
+            "completion_no_tasks": flowctl.build_completion_review_prompt(
                 _SPEC, "", _DSUM, _DDIFF
             ),
         }
@@ -252,7 +252,7 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
             ),
         }
         for name, spec in corpus.items():
-            prompts[name] = module.build_review_prompt(
+            prompts[name] = flowctl.build_review_prompt(
                 "plan",
                 spec,
                 "Production Plan Review context hints.",

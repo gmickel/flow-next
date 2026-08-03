@@ -159,13 +159,15 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
         "13be57d3c2c7760bb0721a9ac158a4939e23b4aa422fe786dfda94550a7fa699",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
-    # ones an unattended run depends on most.
+    # ones an unattended run depends on most. fn-159.6 clarifies that a review
+    # call's tag set differs from the step's return set: NEEDS_WORK loops
+    # in-step, while only terminal tags return control to Ralph.
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md":
-        "bcef4d3d3d352062033d2410bfb16a8e6a26b3e45d26bae990c4c9dc6502b949",
+        "831b2343815f0638346b3e2e00f109274f4c00fd77603baa45f2bbefab04f9f0",
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_work.md":
         "ea6ec42334de84f704110b473f58866738255f4411332262a43901614daf796e",
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_completion.md":
-        "c0c995e4e02117d14685f763858485d216183eb43216eefd7ccd90dd188900d1",
+        "66a6787c41509a9161abb2818421773b039b17e21856556d27524314bb174a29",
 }
 
 

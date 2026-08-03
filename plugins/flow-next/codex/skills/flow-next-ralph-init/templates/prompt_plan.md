@@ -46,13 +46,11 @@ Ralph mode rules (must follow):
  /flow-next:plan-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
  automatically — no extra flag needed.
 
-4) The skill returns one terminal verdict: `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN</verdict>`.
+4) A single review call may emit one reviewer tag: `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN</verdict>`. This step returns control to Ralph only for SHIP, MAJOR_RETHINK, or NEEDS_HUMAN.
  - First review uses `--new-chat`
- - If NEEDS_WORK: skill fixes plan AND syncs affected task specs, re-reviews in SAME chat (no --new-chat)
- - Repeats until SHIP
+ - If NEEDS_WORK: skill fixes plan AND syncs affected task specs, then re-reviews in SAME chat (no --new-chat); NEEDS_WORK stays inside this step.
  - NEEDS_HUMAN means a design judgment needs human authority, never a soft
  NEEDS_WORK; MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
- - Only returns to Ralph after SHIP, MAJOR_RETHINK, or NEEDS_HUMAN
  - If context compacts mid-review: `scripts/ralph/flowctl checkpoint restore --spec {{SPEC_ID}} --json`
 
 5) IMMEDIATELY after SHIP verdict, write receipt (for rp mode):
