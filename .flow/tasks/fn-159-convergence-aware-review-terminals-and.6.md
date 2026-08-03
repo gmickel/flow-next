@@ -52,9 +52,10 @@ Docs, CHANGELOG, STRATEGY.md sentence, propagation, codex sync, full gate, and t
 ## Acceptance
 - [ ] R10, R11, R12, R13 satisfied
 ## Done summary
-TBD
+Docs/CHANGELOG/STRATEGY closeout for fn-159 (convergence-aware review terminals): staged an outcome-first `## Unreleased` CHANGELOG entry covering the stall detector, NEEDS_HUMAN terminal, unchanged-artifact guard, per-surface calibration, structured-findings ratchet, and bot bounding (released 3.13.3 entry left verbatim; no version bump); documented the new CLI surfaces (`review-artifact`, `rp mode-probe`, reservation ids, NOT_RETRYABLE + both ESCALATE variants, `needs_human` status, stall rules, hash epochs) across flowctl.md/ralph.md/troubleshooting.md/review-findings.md/orchestration.md; extended STRATEGY.md's Ralph-track quality-discipline sentence only; folded the three conductor-queued residuals (ralph-init verdict-phrasing de-contradiction with pin updates, dead parity-test `module` param, `_ensure_flow_gitignore` review-lock hardening); ran propagation + manifest + sync-codex x2 + full suite + ruff (all green).
 
+Downstream chain (per property): flow-next.dev = updated (troubleshooting, receipts, glossary, land trigger, staged Unreleased changelog entry; pnpm build green; committed a14863b in that repo). AI-x-SDLC guide = checked, no-op per page (flow-next.md, governance-loops.md, code-review-tools.md and the other grep hits either cite the released 3.13.3 accurately or are unrelated; the fn-159 mechanism is still unreleased, so a shipped-claim would break the proof-backed discipline — update at release). Vault = updated (Autonomy guardrail bullet + Release Timeline Unreleased row, direct edits).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9ed9084d0d2e5607d8016d66fbd606738d2cd992, 970838fc
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_host_review_backend test_prompt_text_pinned test_review_prompt_template_parity -q), python3 scripts/run_tests_parallel.py (files=179 ran=3995 failures=0 errors=0), uvx ruff@0.16.0 check . (All checks passed), ./scripts/sync-codex.sh x2 (idempotent, rc=0 both), cd ~/work/flow-next.dev && pnpm build (80 pages, rc=0), post-polish: pinned/parity/tracker/prose-diet/backend-spec suites OK + repo ruff clean
 - PRs:
