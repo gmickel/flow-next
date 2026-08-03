@@ -10620,12 +10620,28 @@ def _record_review_attempt_locked(
         # their finalization keeps balancing the reservation lifecycle) and
         # let it record evidence without charging a round or regressing the
         # shipped terminal.
+        #
+        # PR #290 bot r9: scoped by review TYPE, not just the counter. Plan and
+        # completion reviews share the spec counter but are different artifacts
+        # with different terminal slots (`plan_review_status` vs
+        # `completion_review_status`). A plan SHIP says nothing about a
+        # concurrent COMPLETION review, and marking it superseded made a real
+        # completion NEEDS_WORK surface as a non-actionable superseded row with
+        # an effective status of `ship` — masking the defect. A SHIP therefore
+        # supersedes only same-typed reservations.
+        ship_type = review_type or review_kind
         for other in reservations.values():
             if (
                 not isinstance(other, dict)
                 or other.get("counter_scope") != counter_scope
                 or other.get("superseded_by")
             ):
+                continue
+            other_type = other.get("review_type")
+            # A pre-fn-159 reservation carries no type: it can only have been
+            # issued against this counter's default workflow, so it is
+            # superseded (leaving it live would hand it the fresh budget).
+            if isinstance(other_type, str) and other_type and other_type != ship_type:
                 continue
             other["superseded_by"] = reservation_id or "ship"
             other["superseded_epoch"] = ship_epoch
@@ -12389,10 +12405,35 @@ def _review_artifact_hash_or_warn(
         return None
 
 
-def _dispatched_diff_from_prompt(prompt: str, fallback: str) -> str:
-    """Return the diff component that survived prompt fitting, if intact."""
-    matches = re.findall(r"<diff_content>\n?(.*?)\n?</diff_content>", prompt, re.S)
-    return matches[-1] if matches else fallback
+def _dispatched_diff_from_prompt(prompt: str, dispatched: str) -> str:
+    """Return the diff blob actually delivered inside ``prompt``.
+
+    ``dispatched`` is the blob the prompt was BUILT with (already fitted by any
+    diff-level budgeter). Whole-prompt fitting can still head-truncate it, so
+    the delivered blob is confirmed by CONTENT: the longest prefix of
+    ``dispatched`` still present in ``prompt``.
+
+    PR #290 bot r9: this deliberately does not scan the ``<diff_content>``
+    framing. The old non-greedy tag regex stopped at the first *inner* literal
+    ``</diff_content>`` — realistic in this repo, whose diffs edit prompt
+    templates — silently truncating the hashed identity so two different diffs
+    sharing that prefix produced the same artifact hash, which the convergence
+    guard reads as "nothing changed". Matching known content instead of framing
+    is unbreakable by any literal the diff can contain.
+    """
+    if not dispatched:
+        return ""
+    if dispatched in prompt:
+        return dispatched
+    # Monotone: if a prefix of length k is present, so is every shorter one.
+    low, high = 0, len(dispatched)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if dispatched[:mid] in prompt:
+            low = mid
+        else:
+            high = mid - 1
+    return dispatched[:low]
 
 
 def _fsync_path(path: Path) -> None:
@@ -37818,8 +37859,13 @@ def _build_impl_prompt_cursor(
     diff_summary: str,
     diff_content: str,
     rereview_preamble: str,
-) -> str:
-    """Cursor impl prompt: diff dynamically sized under CURSOR_ARGV_PROMPT_MAX."""
+) -> tuple[str, str]:
+    """Cursor impl prompt: diff dynamically sized under CURSOR_ARGV_PROMPT_MAX.
+
+    Returns ``(prompt, fitted_diff)`` — the fitted blob is carried to artifact
+    hashing directly instead of being re-extracted from the framed prompt
+    (PR #290 bot r9).
+    """
     if standalone:
         base_prompt = build_standalone_review_prompt(base_branch, focus, diff_summary)
         fitted_diff = fit_cursor_diff_to_budget(
@@ -37843,7 +37889,7 @@ def _build_impl_prompt_cursor(
         )
     if rereview_preamble:
         prompt = rereview_preamble + prompt
-    return prompt
+    return prompt, fitted_diff
 
 
 def _codex_run_exec(
@@ -38649,7 +38695,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
                 prior_findings=prior_findings,
                 prior_items=prior_items,
             )
-        prompt = _build_impl_prompt_cursor(
+        prompt, dispatched_diff = _build_impl_prompt_cursor(
             standalone=standalone,
             base_branch=base_branch,
             focus=focus,
@@ -38659,6 +38705,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             rereview_preamble=rereview_preamble,
         )
     else:
+        dispatched_diff = diff_content
         prompt = _build_impl_prompt_default(
             standalone=standalone,
             base_branch=base_branch,
@@ -38707,7 +38754,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     # diff component delivered to that backend, not the pre-fit git diff.
     artifact_sha256 = _review_artifact_hash_or_warn(
         build_impl_review_artifact_blob,
-        _dispatched_diff_from_prompt(prompt, diff_content),
+        _dispatched_diff_from_prompt(prompt, dispatched_diff),
     )
 
     # fn-90 R5: deterministic cap — enforce + increment BEFORE dispatch.
@@ -39235,7 +39282,16 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         spec_id=epic_id,
         review_kind="plan",
         review_type="plan",
-        finalize_status_kind="plan",
+        # PR #290 bot r9: same deferral the completion handler uses. Folding
+        # `plan_review_status` into finalization was only atomic with the
+        # JOURNAL write, not with receipt PUBLICATION — and the publish call
+        # below returns a bool this handler used to ignore. A SHIP whose
+        # receipt failed to publish therefore left a terminal status (and a
+        # reset counter) with no receipt evidence. Journal it as a PENDING leg
+        # with its target instead: publication lands it, and a failed publish
+        # leaves it for the pre-increment replay gate.
+        deferred_status_target="plan" if receipt_target else None,
+        finalize_status_kind=None if receipt_target else "plan",
         reset_rounds_on_ship=True,
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
@@ -39248,17 +39304,16 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         receipt_criteria_text=review_text,
     )
 
-    # issue #279: attempt row, plan_review_status, and the SHIP cap reset all
-    # landed in ONE atomic sidecar write inside record_review_attempt.
+    # issue #279: the attempt row and the SHIP cap reset land in ONE atomic
+    # sidecar write inside record_review_attempt. `plan_review_status` joins
+    # them only when there is no receipt to publish; otherwise it is a journaled
+    # PENDING leg landed by publication below (PR #290 bot r9).
     written_status = attempt_summary.get("status_written")
 
-    # No terminal-status deferral here (PR #290 bot r2): plan_review_status is
-    # written by record_review_attempt in the SAME atomic sidecar write that
-    # journals the receipt leg, so a failed publish leaves the journal pending
-    # and the pre-increment replay gate refuses the next dispatch until it
-    # completes. Only the completion handler writes status after the publish.
+    publish_out: dict = {}
+    receipt_published = True
     if receipt_path:
-        _write_backend_review_receipt(
+        receipt_published = _write_backend_review_receipt(
             receipt_path,
             review_type="plan_review",
             review_id=epic_id,
@@ -39276,7 +39331,26 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             findings_container=findings_container,
             findings_built=True,
             journaled_reservation_id=reservation_id if receipt_target else None,
+            publish_out=publish_out,
         )
+
+    # Receipt evidence lands before terminal status (PR #290 bot r9, mirroring
+    # the completion handler): a failed publish leaves `plan_review_status`
+    # non-terminal with the journal's status leg pending, so the next
+    # invocation's pre-increment replay gate — not a wedged terminal — is the
+    # recovery path.
+    if receipt_target:
+        if review_attempt_superseded(attempt_summary):
+            # A concurrent SHIP already published the terminal for this
+            # counter; this late verdict must not regress it.
+            written_status = None
+        elif receipt_published:
+            # Publication-from-journal completed the deferred status leg INSIDE
+            # the receipt+sidecar lock; report what that locked transaction
+            # wrote rather than racing it with a second unlocked write.
+            written_status = publish_out.get("status_written")
+        else:
+            written_status = None
 
     review_rounds = _current_review_rounds(epic_id, "plan", use_json=args.json)
 
@@ -39379,6 +39453,9 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         fitted_diff = fit_cursor_diff_to_budget(
             rereview_preamble + prompt_without_diff, diff_content
         )
+        # Carried to artifact hashing directly — never re-extracted from the
+        # framed prompt (PR #290 bot r9).
+        dispatched_diff = fitted_diff
         prompt = build_completion_review_prompt(
             epic_spec, task_specs, diff_summary, fitted_diff,
         )
@@ -39397,6 +39474,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         diff_summary, diff_content = reg["gather_diff"](
             reviewed_base_sha, reviewed_head_sha
         )
+        dispatched_diff = diff_content
         prompt = build_completion_review_prompt(
             epic_spec, task_specs, diff_summary, diff_content,
         )
@@ -39438,7 +39516,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             build_completion_review_artifact_blob,
             epic_spec,
             task_specs,
-            _dispatched_diff_from_prompt(prompt, diff_content),
+            _dispatched_diff_from_prompt(prompt, dispatched_diff),
             criteria_content,
         )
         if criteria_content is not None else None

@@ -1052,7 +1052,12 @@ class TestCombinedFinalizeWrite(unittest.TestCase):
         """The in-process plan path folds status + cap reset; the impl path
         folds the cap reset; neither makes a second sidecar write."""
         plan_src = inspect.getsource(flowctl._backend_plan_review)
-        self.assertIn('finalize_status_kind="plan"', plan_src)
+        # PR #290 bot r9: the status write is publication-gated when a receipt
+        # is journaled, and folded only when there is no receipt to gate on.
+        self.assertIn('deferred_status_target="plan" if receipt_target', plan_src)
+        self.assertIn(
+            'finalize_status_kind=None if receipt_target else "plan"', plan_src
+        )
         self.assertIn("reset_rounds_on_ship=True", plan_src)
         self.assertNotIn("reset_review_cap", plan_src)
         self.assertNotIn("_self_write_review_status", plan_src)
@@ -2476,8 +2481,9 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
             "prompt" * 6000, "after" * 10000
         )
         dispatched = flowctl._dispatched_diff_from_prompt(
-            f"<diff_content>\n{fitted}\n</diff_content>", "wrong"
+            f"<diff_content>\n{fitted}\n</diff_content>", fitted
         )
+        self.assertEqual(dispatched, fitted)
         changed = flowctl._review_artifact_sha256(
             flowctl.build_impl_review_artifact_blob(dispatched)
         )
@@ -2486,6 +2492,62 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         self._reserve_and_record(changed, review_type="impl")
         self.assertEqual(
             self._data()["review_attempts"][-1]["artifact_sha256"], changed
+        )
+
+    def test_diff_containing_the_closing_tag_round_trips_to_the_exact_hash(self):
+        """PR #290 bot r9: the old non-greedy tag regex stopped at the first
+        INNER `</diff_content>` — realistic in this repo, whose diffs edit
+        prompt templates — so the hashed identity was silently truncated."""
+        diff = (
+            "+--- a/prompt.py\n"
+            "+    parts.append(f\"<diff_content>\\n{diff}\\n</diff_content>\")\n"
+            "+tail that the old regex dropped\n"
+        )
+        prompt = f"head\n<diff_content>\n{diff}\n</diff_content>\n<review_instructions>x"
+        self.assertEqual(flowctl._dispatched_diff_from_prompt(prompt, diff), diff)
+        self.assertEqual(
+            flowctl._review_artifact_sha256(
+                flowctl.build_impl_review_artifact_blob(
+                    flowctl._dispatched_diff_from_prompt(prompt, diff)
+                )
+            ),
+            flowctl._review_artifact_sha256(
+                flowctl.build_impl_review_artifact_blob(diff)
+            ),
+        )
+
+    def test_diffs_sharing_the_truncated_prefix_hash_differently(self):
+        """Two diffs identical up to the embedded closing tag used to collide:
+        both extracted to the same prefix, so the unchanged-artifact guard read
+        the second review as 'nothing changed' and refused to dispatch."""
+        prefix = "+wrote f\"</diff_content>\"\n"
+        hashes = set()
+        for tail in ("+first variant\n", "+second variant\n"):
+            diff = prefix + tail
+            prompt = f"<diff_content>\n{diff}\n</diff_content>"
+            dispatched = flowctl._dispatched_diff_from_prompt(prompt, diff)
+            self.assertEqual(dispatched, diff)
+            hashes.add(
+                flowctl._review_artifact_sha256(
+                    flowctl.build_impl_review_artifact_blob(dispatched)
+                )
+            )
+        self.assertEqual(len(hashes), 2)
+
+    def test_whole_prompt_truncation_binds_the_delivered_prefix(self):
+        """Whole-prompt fitting can still head-truncate the blob the prompt was
+        built with; identity binds what was DELIVERED, confirmed by content."""
+        diff = "".join(f"+line {i}\n" for i in range(200))
+        prompt = f"<diff_content>\n{diff[:300]}"  # fitter cut mid-diff
+        dispatched = flowctl._dispatched_diff_from_prompt(prompt, diff)
+        self.assertEqual(dispatched, diff[:300])
+        self.assertNotEqual(
+            flowctl._review_artifact_sha256(
+                flowctl.build_impl_review_artifact_blob(dispatched)
+            ),
+            flowctl._review_artifact_sha256(
+                flowctl.build_impl_review_artifact_blob(diff)
+            ),
         )
 
     def test_ce_setup_failure_refunds_only_its_reservation(self):
@@ -3014,26 +3076,30 @@ class TestSupersededVerdictNeverSurfacesAsTerminal(TestNeedsHumanHandlerOrdering
     evidence instead.
     """
 
-    def _run_superseded(
-        self, handler, args, verdict: str, *, review_kind: str, task_id=None
-    ) -> dict:
-        """Run a handler whose reservation is superseded mid-dispatch."""
+    def _run_with_concurrent_ship(
+        self, handler, args, verdict: str, *, review_kind: str,
+        ship_review_type: str, task_id=None,
+    ) -> "tuple[dict, str]":
+        """Run a handler while a SHIP of ``ship_review_type`` lands mid-dispatch."""
 
         def fake_exec(_prompt, **_kwargs):
             # The concurrent SHIP lands after this review reserved its round
             # and before it finalizes — the exact interleave.
             _, ship_id = flowctl.enforce_and_increment_review_cap(
                 self.spec_id, review_kind, task_id=task_id,
-                review_type="plan" if review_kind == "plan" else "impl",
+                review_type=ship_review_type,
                 return_reservation=True,
             )
             flowctl.record_review_attempt(
                 self.spec_id, review_kind, backend="rp",
                 output="<verdict>SHIP</verdict>", verdict="SHIP",
                 task_id=task_id,
-                review_type="plan" if review_kind == "plan" else "impl",
+                review_type=ship_review_type,
                 reservation_id=ship_id,
-                status_target="plan" if review_kind == "plan" else None,
+                status_target=(
+                    ship_review_type
+                    if ship_review_type in ("plan", "completion") else None
+                ),
                 reset_rounds_on_ship=True,
             )
             return f"<verdict>{verdict}</verdict>", "sess-1", 0, ""
@@ -3043,10 +3109,22 @@ class TestSupersededVerdictNeverSurfacesAsTerminal(TestNeedsHumanHandlerOrdering
             flowctl.BACKEND_REGISTRY["codex"], {"run_exec": fake_exec}
         ):
             with contextlib.redirect_stdout(out):
-                # No SystemExit: a superseded verdict is not a terminal.
-                handler(args, "codex")
+                with contextlib.suppress(SystemExit):
+                    handler(args, "codex")
         printed = out.getvalue()
-        payload = json.loads(printed)  # exactly one JSON document
+        return json.loads(printed), printed
+
+    def _run_superseded(
+        self, handler, args, verdict: str, *, review_kind: str, task_id=None,
+        ship_review_type: "str | None" = None,
+    ) -> dict:
+        """Run a handler whose reservation is superseded mid-dispatch."""
+        payload, printed = self._run_with_concurrent_ship(
+            handler, args, verdict, review_kind=review_kind, task_id=task_id,
+            ship_review_type=ship_review_type or (
+                "plan" if review_kind == "plan" else "impl"
+            ),
+        )
         self.assertTrue(payload["superseded"])
         self.assertTrue(payload["dispatched"])
         self.assertEqual(payload["verdict"], verdict)
@@ -3088,21 +3166,45 @@ class TestSupersededVerdictNeverSurfacesAsTerminal(TestNeedsHumanHandlerOrdering
         self.assertEqual(payload["effective_status"], "ship")
         self.assertNotIn("plan_review_status", payload)
 
-    def test_completion_late_needs_work_never_regresses_durable_status(self):
-        args = argparse.Namespace(
+    def _completion_args(self) -> argparse.Namespace:
+        return argparse.Namespace(
             epic=self.spec_id, base="HEAD~1", json=True,
             receipt=str(self.root / "completion-receipt.json"), spec=None,
             model=None, effort=None, force=False, sandbox=None,
         )
+
+    def test_completion_late_needs_work_never_regresses_durable_status(self):
         payload = self._run_superseded(
-            flowctl._backend_completion_review, args, "NEEDS_WORK",
-            review_kind="plan",
+            flowctl._backend_completion_review, self._completion_args(),
+            "NEEDS_WORK", review_kind="plan", ship_review_type="completion",
         )
         data = self._data()
-        self.assertEqual(data["plan_review_status"], "ship")
-        self.assertNotEqual(data.get("completion_review_status"), "needs_work")
+        self.assertEqual(data["completion_review_status"], "ship")
         self.assertEqual(payload["effective_status"], "ship")
         self.assertNotIn("completion_review_status", payload)
+
+    def test_plan_ship_does_not_supersede_a_concurrent_completion_review(self):
+        """PR #290 bot r9: plan and completion share the spec counter but are
+        different artifacts with different terminal slots. Superseding on the
+        counter alone made a real completion NEEDS_WORK surface as
+        non-actionable superseded evidence with an effective status of `ship`,
+        masking the defect. Only same-typed reservations are superseded."""
+        payload, _ = self._run_with_concurrent_ship(
+            flowctl._backend_completion_review, self._completion_args(),
+            "NEEDS_WORK", review_kind="plan", ship_review_type="plan",
+        )
+        self.assertNotIn("superseded", payload)
+        self.assertNotIn("effective_status", payload)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
+        data = self._data()
+        # The plan SHIP owns the plan slot; the completion verdict owns its own.
+        self.assertEqual(data["plan_review_status"], "ship")
+        self.assertEqual(data["completion_review_status"], "needs_work")
+        self.assertEqual(payload["completion_review_status"], "needs_work")
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["kind"], "completion")
+        self.assertTrue(row["round_consumed"])
+        self.assertIsNone(row["superseded_by"])
 
     def test_record_cli_reports_superseded_without_a_terminal_exit(self):
         _, reservation_id = flowctl.enforce_and_increment_review_cap(
@@ -4406,19 +4508,37 @@ class TestTerminalStatusGatedOnReceiptPublication(_InProcessBackendReviewBase):
         )
         self.assertFalse(self._recovery_path().exists())
 
-    def test_plan_handler_writes_status_atomically_with_the_journal(self):
-        """The plan handler has no post-publish status write to gate: status
-        lands inside record_review_attempt's atomic sidecar write, so a failed
-        publish leaves the journal pending for the same replay gate."""
+    def test_plan_handler_defers_status_to_publication(self):
+        """PR #290 bot r9: the plan handler folded `plan_review_status` (and,
+        on SHIP, the counter reset) into finalization while IGNORING the bool
+        `_write_backend_review_receipt` returns. That fold was atomic with the
+        JOURNAL write, never with publication SUCCESS — a SHIP whose receipt
+        failed to publish left a terminal status with no receipt evidence. The
+        plan status is now a journaled PENDING leg, exactly like completion."""
         receipt = self.root / "plan-receipt.json"
         with mock.patch.object(
             flowctl, "_complete_review_journal", return_value=False
         ):
-            payload, _ = self._dispatch_plan(receipt)
-        self.assertEqual(payload["plan_review_status"], "needs_work")
+            payload, err = self._dispatch_plan(receipt)
+        self.assertEqual(payload["verdict"], "NEEDS_WORK")
         self.assertFalse(receipt.exists())
+        # No terminal status anywhere until a receipt backs it.
+        self.assertNotIn("plan_review_status", payload)
+        self.assertEqual(
+            self._data().get("plan_review_status", "unknown"), "unknown"
+        )
+        self.assertIn("replay", err)
         row = self._data()["review_attempts"][-1]
+        reservation_id = row["reservation_id"]
         self.assertEqual(row["finalized"]["receipt"], "pending")
+        self.assertEqual(row["finalized"]["status"], "pending")
+        journal = json.loads(
+            (self.root / ".flow" / "review-runs"
+             / f"{reservation_id}.json").read_text()
+        )
+        self.assertEqual(journal["status_target"], "plan")
+
+        # The replay publishes the receipt AND lands the deferred status.
         replay = self._fresh_process(
             "review-rounds", "increment", self.spec_id, "--kind", "plan",
             "--review-type", "plan", "--json",
@@ -4426,6 +4546,35 @@ class TestTerminalStatusGatedOnReceiptPublication(_InProcessBackendReviewBase):
         self.assertEqual(replay.returncode, 0, replay.stderr)
         self.assertTrue(json.loads(replay.stdout)["replayed"])
         self.assertEqual(json.loads(receipt.read_text())["verdict"], "NEEDS_WORK")
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "needs_work")
+        self.assertTrue(data.get("plan_reviewed_at"))
+        landed = next(
+            r for r in data["review_attempts"]
+            if r["reservation_id"] == reservation_id
+        )
+        self.assertEqual(landed["finalized"]["receipt"], "complete")
+        self.assertEqual(landed["finalized"]["status"], "complete")
+        self.assertFalse(
+            (self.root / ".flow" / "review-runs"
+             / f"{reservation_id}.json").exists()
+        )
+
+    def test_plan_successful_publication_writes_status(self):
+        receipt = self.root / "plan-receipt.json"
+        payload, _ = self._dispatch_plan(receipt)
+        self.assertEqual(payload["plan_review_status"], "needs_work")
+        self.assertEqual(self._data()["plan_review_status"], "needs_work")
+        self.assertTrue(receipt.exists())
+
+    def test_plan_receiptless_run_still_folds_status(self):
+        """No receipt target means nothing to gate on: the fold is correct."""
+        payload, _ = self._dispatch_plan(None)
+        self.assertEqual(payload["plan_review_status"], "needs_work")
+        self.assertEqual(self._data()["plan_review_status"], "needs_work")
+        row = self._data()["review_attempts"][-1]
+        # Folded into the same atomic sidecar write as the row itself.
+        self.assertEqual(row["finalized"]["status"], "complete")
 
 
 class TestStatusTargetDefersToPublication(_JournalReplayBase):

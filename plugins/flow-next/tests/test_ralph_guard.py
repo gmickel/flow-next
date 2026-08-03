@@ -11,6 +11,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -486,6 +487,109 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
             "--backend rp --output-file /tmp/review.txt --reservation-id r1"
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_blocks_variable_backed_launcher(self) -> None:
+        # PR #290 bot r9 (a): a variable ASSIGNED a launcher path in the same
+        # command text executes the launcher just as surely as spelling it out,
+        # so the whole flowctl argv screen — including the literal-subcommand
+        # rule — applies to `"$fc"`. Before this, none of these were classified
+        # as flowctl argvs at all.
+        for command in (
+            'fc=.flow/bin/flowctl; v=rev; v+=iew-rounds; s=re; s+=set; '
+            '"$fc" "$v" "$s" fn-1 --kind plan',
+            'FC="scripts/flowctl"; d=impl; d+=-review; '
+            '"$FC" codex "$d" fn-1.1 --base main --force',
+            'launcher=/repo/.flow/bin/flowctl.py; a=spe; a+=c; '
+            'python3 "$launcher" "$a" reset-review-rounds fn-1',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_variable_backed_launcher_keeps_ordinary_use_allowed(self) -> None:
+        # Recognizing the variable must not widen the block: literal
+        # subcommands through a bound launcher stay legal.
+        for command in (
+            "fc=.flow/bin/flowctl; $fc list",
+            'fc=.flow/bin/flowctl; "$fc" show fn-1',
+            'fc=.flow/bin/flowctl; "$fc" review-rounds record fn-1 --kind plan '
+            "--review-type plan --backend rp --output-file /tmp/r.txt "
+            '--reservation-id "$RID"',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_composition_plus_indirect_execution_fails_closed(self) -> None:
+        # PR #290 bot r9 (b): the structural screen. Composition means no verb
+        # (and no launcher path) ever appears as a literal, so the guard cannot
+        # know what runs — and no fence has this shape. Blocked on structure,
+        # regardless of content.
+        for command in (
+            # Launcher path itself composed: never matches the launcher regex.
+            'p=.flow/bin/flow; p+=ctl; v=review-rounds; s=reset; "$p" "$v" "$s" fn-1',
+            'p=/repo/.flow/bin/flow; p="${p}ctl"; "$p" spec reset-review-rounds fn-1',
+            # Composed executable that expands to something unknowable.
+            'x=fl; x+=owctl; y=re; y+=set; $x review-rounds "$y" fn-1 --kind plan',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_composition_screen_leaves_argument_arrays_alone(self) -> None:
+        # The shipped fences compose ARGUMENT arrays and expand them in
+        # argument position, with launcher and subcommands spelled literally.
+        # The screen must never fire on that shape.
+        for command in (
+            'args=(); [ -n "$TASK_ID" ] && args+=("$TASK_ID"); '
+            'args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH"); '
+            '$FLOWCTL codex impl-review "${args[@]}"',
+            'FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"; '
+            'args+=(--base main); "$FLOWCTL" cursor impl-review "$TASK_ID" '
+            '"${args[@]}"',
+            'EXTRA_FIELDS=",\\"a\\":1"; EXTRA_FIELDS+=",\\"b\\":2"; '
+            '"$FLOWCTL" review-rounds record fn-1 --kind plan --review-type plan '
+            "--backend rp --output-file /tmp/r.txt --reservation-id r1",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+
+class CompositionScreenShippedFenceSweepTestCase(unittest.TestCase):
+    """The composition screen must never fire on anything flow-next ships.
+
+    Sweeps every flowctl-bearing bash block in the plugin (canonical skills,
+    docs, the codex mirror, and the shell scripts) — the screen is fail-closed,
+    so a hit here means the rule is wrong, not that the fence is.
+    """
+
+    def test_no_shipped_bash_block_trips_the_composition_screen(self) -> None:
+        guard = _load_guard()
+        hits = []
+        probed = 0
+        for path in sorted(PLUGIN_DIR.rglob("*")):
+            if not path.is_file() or path.suffix not in (".md", ".sh"):
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            blocks = (
+                re.findall(r"```(?:bash|sh)\n(.*?)```", text, re.S)
+                if path.suffix == ".md" else [text]
+            )
+            for block in blocks:
+                if "flowctl" not in block and "FLOWCTL" not in block:
+                    continue
+                probed += 1
+                scan = guard._ShellScan(block)
+                argvs = guard._flowctl_argvs(block, scan)
+                if argvs is None:
+                    continue
+                if guard._composed_indirect_execution(scan, argvs):
+                    hits.append((str(path), block.strip().splitlines()[0][:70]))
+        self.assertGreater(probed, 100, "sweep found no fences to probe")
+        self.assertEqual(hits, [])
 
 
 class DebugLogGatingTestCase(unittest.TestCase):
