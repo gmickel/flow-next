@@ -28462,11 +28462,13 @@ def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
 
 
 def cmd_review_rounds_reset(args: argparse.Namespace) -> None:
-    """Reset the deterministic review-round counter on a SHIP verdict (fn-90 R5).
+    """Human-only recovery reset for the deterministic review-round counter.
 
-    rp-surface twin of the ``reset_review_cap`` call the codex/copilot/cursor
-    handlers make internally when they parse a SHIP verdict. The rp workflows
-    call this immediately after parsing SHIP. For a re-plan reset use
+    SHIP resets are system-owned inside ``review-rounds record`` (fn-159 R9) —
+    no workflow calls this verb anymore, and ralph-guard blocks it for
+    autonomous agents. It remains the manual recovery tool for a human
+    unsticking a capped or stalled loop; it advances the hash epoch alongside
+    the counter. For a re-plan reset use
     ``flowctl spec reset-review-rounds`` instead.
     """
     spec_id, task_id = _resolve_review_rounds_args(args)

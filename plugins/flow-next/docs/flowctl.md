@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds,
+init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
@@ -1922,15 +1922,18 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   The last consumed artifact in the current counter scope and hash epoch is the
   baseline. An unchanged retry exits `1` with `NOT_RETRYABLE: artifact unchanged
   since last verdict` and consumes nothing. Absent or unreadable identity warns
-  and fails open. `SHIP` and an explicit human re-plan advance the hash epoch;
-  `--force` bypasses the guard, stamps the attempt as forced, and is blocked in
-  Ralph.
+  and fails open. `SHIP` and both human reset verbs (`review-rounds reset` and
+  `spec reset-review-rounds`) advance the hash epoch — a post-reset re-review of
+  an unchanged artifact dispatches cleanly without `--force`; `--force` bypasses
+  the guard, stamps the attempt as forced, and is blocked in Ralph.
 - **Early terminals:** before reserving, flowctl compares the last two
   non-truncated structured-findings digests in the current epoch. It exits `4`
   with `ESCALATE: review loop stalled (<rule>)` when an open finding chain stays
   unresolved, open severity and count both fail to improve, or each round adds
-  a newly introduced P0/P1. Missing, malformed, legacy, truncated, or
-  insufficient findings are inert. A reviewer-emitted `NEEDS_HUMAN` is the
+  a newly introduced P0/P1. The lineage and fresh-critical rules require the
+  same backend and review kind across both rounds; the flat-trajectory rule
+  does not. Missing, malformed, legacy, truncated, or insufficient findings
+  are inert. A reviewer-emitted `NEEDS_HUMAN` is the
   other exit-4 terminal: receipt, attempt, and status persist before
   `ESCALATE: reviewer requested human review` returns control to a human.
 - **Cap enforcement:** each backend reserves a round BEFORE running the reviewer
