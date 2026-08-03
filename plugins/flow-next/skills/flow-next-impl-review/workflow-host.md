@@ -38,7 +38,16 @@ fails closed (no reservation) whenever the range cannot be bound or diffed.
 
 ```bash
 DIFF_BASE="${BASE_COMMIT:-main}"
-git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 || DIFF_BASE="master"
+# master is a fallback for the DEFAULT only. An explicit BASE_COMMIT that does
+# not resolve fails closed: silently reviewing against master would bind and
+# hash a range the caller never asked for.
+if ! git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1; then
+  if [[ -n "${BASE_COMMIT:-}" ]]; then
+    echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2
+    exit 1
+  fi
+  DIFF_BASE="master"
+fi
 git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 \
   || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
 REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.env"

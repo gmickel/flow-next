@@ -29,7 +29,12 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-FLOWCTL = REPO_ROOT / "plugins" / "flow-next" / "scripts" / "flowctl.py"
+SCRIPTS_DIR = REPO_ROOT / "plugins" / "flow-next" / "scripts"
+FLOWCTL = SCRIPTS_DIR / "flowctl.py"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+import flowctl  # noqa: E402
 
 EPIC_ID = "fn-1-cursor-live"
 TASK_ID = f"{EPIC_ID}.1"
@@ -65,6 +70,12 @@ class CursorCleanTreeLive(unittest.TestCase):
             flow = repo / ".flow"
             (flow / "specs").mkdir(parents=True)
             (flow / "tasks").mkdir(parents=True)
+            # Every flowctl-managed repo has the auto-managed ignore block
+            # (`flowctl init` writes it). Build it with flowctl's own writer so
+            # the fixture tracks the canonical pattern set instead of a frozen
+            # copy: a review's per-run state (locks/, tmp/, receipts/) is then
+            # ignored, and the write-time reconcile is a no-op.
+            flowctl._ensure_flow_gitignore(flow)
             (flow / "specs" / f"{EPIC_ID}.md").write_text(
                 "# Live demo\n\n## Acceptance Criteria\n\n- **R1:** add two numbers\n",
                 encoding="utf-8",

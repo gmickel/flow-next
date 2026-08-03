@@ -9331,6 +9331,17 @@ def _review_sidecar_lock_path(flow_dir: Path, spec_id: str) -> Path:
 
 @contextmanager
 def _review_sidecar_lock(flow_dir: Path, spec_id: str):
+    # Reconcile the auto-managed ignore block AT LOCK TIME, not on some future
+    # `init`. `locks/` is already in FLOW_GITIGNORE_AUTO_PATTERNS, but a project
+    # whose .flow/.gitignore predates that pattern would get an
+    # untracked-but-unignored .flow/locks/ the moment a review takes this lock —
+    # dirtying the working tree, and letting a `git add -A` commit a lock file
+    # that deadlocks every fresh clone until stale-reclaim kicks in. Same
+    # write-time reconcile the fn-134 create-first recovery records do.
+    # Best-effort: an unsafe/symlinked .flow/.gitignore makes this a no-op
+    # rather than failing the review — a stray lock file is a mess, not a
+    # correctness or disclosure break.
+    _ensure_flow_gitignore(flow_dir)
     with cross_process_lock(_review_sidecar_lock_path(flow_dir, spec_id)):
         yield
 
