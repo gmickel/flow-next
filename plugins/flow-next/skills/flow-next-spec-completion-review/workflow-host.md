@@ -33,18 +33,37 @@ fix the file, re-run; absent file exits 0 and costs nothing):
 "$FLOWCTL" criteria prompt-block > /dev/null || { echo "invalid .flow/criteria.md - fix before re-running (see: flowctl criteria list)" >&2; exit 1; }
 ```
 
-Then, before **every** host dispatch, including the first, reserve the shared
-spec-scoped completion-review round:
+Then, after the complete reviewer input and final diff are composed but before
+**every** host dispatch (including the first), build the completion artifact and
+reserve one shared spec-scoped round:
 
 ```bash
-ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
+DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.diff"
+git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.blob"
+"$FLOWCTL" review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" \
+  --output "$ARTIFACT_FILE" --json
+ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+  --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
 ROUND_EXIT=$?
 if [[ "$ROUND_EXIT" -ne 0 ]]; then
   printf '%s\n' "$ROUND_JSON"
+  if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
+    # Human-action terminal: edit artifact / human reset / human --force only.
+    # Never refund, force, reset, or redispatch autonomously.
+    exit 1
+  fi
   exit "$ROUND_EXIT"
+fi
+if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
+  # A delivered verdict was recovered. Apply NEEDS_HUMAN > NEEDS_WORK >
+  # all-SHIP and do not dispatch another reviewer.
+  printf '%s\n' "$ROUND_JSON"
+  exit 0
 fi
 REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
 REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
+RESERVATION_ID="$(printf '%s' "$ROUND_JSON" | jq -er '.reservation_id')"
 ```
 
 Exit 4 / `ESCALATE:` before a reviewer runs means no completion verdict was
@@ -83,26 +102,18 @@ Give the subagent:
 
 Wait for the subagent result (blocking — do not background).
 
-Write the exact reviewer result to a spec-scoped temporary response file, then
-finalize the reservation through the shared attempt recorder:
+Write the exact reviewer result to a spec-scoped temporary response file. Do
+not finalize yet: Step 3 must first assemble the receipt payload and status
+target that `record` journals before consuming this reservation.
 
 ```bash
 RESPONSE_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.md"
 # Write the exact reviewer output to RESPONSE_FILE; do not reinterpret it.
-RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
-  --review-type completion --backend host --output-file "$RESPONSE_FILE" --json)"
-RECORD_EXIT=$?
-printf '%s\n' "$RECORD_JSON"
-if [[ "$RECORD_EXIT" -ne 0 ]]; then
-  exit "$RECORD_EXIT"
-fi
 ```
 
-A malformed/missing verdict is a transport failure: the recorder refunds the
-reservation and may stop with exit 5 / `TRANSPORT_UNHEALTHY`. Never turn it into
-`NEEDS_WORK`, and never write completion status for that path.
-Only continue after `RECORD_EXIT=0`: that successful finalize appends this
-dispatch as the latest durable completion attempt consumed by the shared owner.
+A malformed/missing verdict is a transport failure when Step 3's recorder runs:
+it refunds this reservation and may stop with exit 5 / `TRANSPORT_UNHEALTHY`.
+Never turn it into `NEEDS_WORK`, and never write completion status for that path.
 
 ## Step 3: Receipt
 
@@ -129,18 +140,21 @@ Build this payload once:
 }
 ```
 
-Write that base payload and the full reviewer output to temporary files. Build
-the recovery receipt and advance the terminal pointer through one shared
-deterministic attachment transaction:
+Write that base payload and the full reviewer output to temporary files BEFORE
+the record fence above. After its successful journaled finalization, validate
+and publish that payload by reservation id (never re-derive it):
 
 ```bash
+RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+  --review-type completion --backend host --output-file "$RESPONSE_FILE" \
+  --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
+  --receipt-payload-file "$RECEIPT_INPUT" --status-target completion --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+[[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
 "$FLOWCTL" review-findings attach \
-  --input "$RECEIPT_INPUT" \
+  --reservation-id "$RESERVATION_ID" \
   --receipt "$RECEIPT_PATH" \
-  --recovery "$RECEIPT_RECOVERY" \
-  --review-file "$REVIEW_OUTPUT_FILE" \
-  --base "$REVIEW_BASE_SHA" \
-  --head "$REVIEW_HEAD_SHA" \
   --json
 ```
 
@@ -179,9 +193,9 @@ call. This host workflow never writes terminal completion status.
   (`REVIEW_ROUND == REVIEW_CAP`), do not start another fix/re-review cycle:
   continue immediately to SKILL.md Step 3, write terminal `needs_work` there
   exactly once, then emit `ESCALATE:` and exit 4.
-- After `SHIP`, reset the shared plan counter, then continue immediately to
-  SKILL.md Step 3 for the sole `ship` status write:
-  `$FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json`.
+- After `SHIP`, `record` already atomically reset the shared plan counter and
+  advanced its hash epoch; continue immediately to SKILL.md Step 3 for the
+  sole `ship` status write. Never issue `review-rounds reset` autonomously.
 - `NEEDS_HUMAN`, dispatch failure, malformed verdict, receipt failure, or retry
   outcome: stop without writing completion status. Dispatch/transport failures
   output `<promise>RETRY</promise>`; never self-issue a verdict or switch

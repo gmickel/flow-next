@@ -25,7 +25,7 @@ Wire the artifact-hash dispatch guard onto the .1 foundation: domain-separated b
 - `plugins/flow-next/scripts/flowctl.py:36160-36230` — cursor fitting path
 
 **Optional:**
-- `plugins/flow-next/scripts/flowctl.py:9429-9510` — enforce entry
+- `plugins/flow-next/scripts/flowctl.py:10104-10250` — enforce entry, now `_enforce_and_increment_review_cap_locked` (was :9429-9510 pre-.1; the file grew ~788 lines in this region). The sidecar-exists check landed at :10117-10120; the cap branch (`if current >= cap:`) is at :10245 — the hash guard goes between them, per the spec's "after the sidecar-exists check, before the cap branch" placement. <!-- Updated by plan-sync: fn-159-convergence-aware-review-terminals-and.1 shifted this region; anchor corrected -->
 - `_backend_completion_review` diff assembly (grep)
 
 ### Key context

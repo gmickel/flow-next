@@ -1394,9 +1394,10 @@ class _JournalReplayBase(unittest.TestCase):
         )
 
     def _reserve(self) -> str:
+        artifact_sha256 = f"{len(self._data().get('review_attempts', [])):064x}"
         _, reservation_id = flowctl.enforce_and_increment_review_cap(
             self.spec_id, "plan", review_type="plan",
-            artifact_sha256="a" * 64, return_reservation=True,
+            artifact_sha256=artifact_sha256, return_reservation=True,
         )
         assert reservation_id is not None
         return reservation_id
@@ -1964,6 +1965,238 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         self.assertNotIn("plan", data.get("review_pending_rounds", {}))
 
 
+class TestArtifactHashDispatchGuard(unittest.TestCase):
+    """fn-159.7: domain identities and the no-repeat dispatch terminal."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        self._tmp.cleanup()
+
+    def _data(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+
+    def _reserve_and_record(
+        self,
+        artifact_sha256: str,
+        *,
+        review_type: str = "plan",
+        forced: bool = False,
+    ) -> str:
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id,
+            "plan",
+            artifact_sha256=artifact_sha256,
+            review_type=review_type,
+            forced=forced,
+            return_reservation=True,
+        )
+        self.assertIsNotNone(reservation_id)
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="host",
+            output="<verdict>NEEDS_WORK</verdict>",
+            verdict="NEEDS_WORK",
+            review_type=review_type,
+            reservation_id=reservation_id,
+        )
+        return reservation_id
+
+    def test_plan_impl_and_completion_blobs_are_normalized_and_domain_separated(self):
+        plan_lf = flowctl.build_plan_review_artifact_blob(
+            "# Spec\n", "### fn-1.1\n\nTask\n"
+        )
+        plan_crlf = flowctl.build_plan_review_artifact_blob(
+            "# Spec\r\n", "### fn-1.1\r\n\r\nTask\r\n"
+        )
+        completion = flowctl.build_completion_review_artifact_blob(
+            "# Spec\n", "### fn-1.1\n\nTask\n", "diff", ""
+        )
+        impl = flowctl.build_impl_review_artifact_blob("diff")
+        self.assertEqual(plan_lf, plan_crlf)
+        self.assertNotEqual(
+            flowctl._review_artifact_sha256(plan_lf),
+            flowctl._review_artifact_sha256(completion),
+        )
+        self.assertNotEqual(
+            flowctl._review_artifact_sha256(completion),
+            flowctl._review_artifact_sha256(impl),
+        )
+
+    def test_four_same_artifact_dispatches_yield_one_record_and_three_refusals(self):
+        artifact = flowctl._review_artifact_sha256(
+            flowctl.build_plan_review_artifact_blob("spec", "tasks")
+        )
+        self._reserve_and_record(artifact)
+        for _ in range(3):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                with self.assertRaises(SystemExit) as exc:
+                    flowctl.enforce_and_increment_review_cap(
+                        self.spec_id, "plan", artifact_sha256=artifact,
+                        review_type="plan", return_reservation=True,
+                    )
+            self.assertEqual(exc.exception.code, 1)
+            self.assertEqual(
+                err.getvalue().strip(),
+                "NOT_RETRYABLE: artifact unchanged since last verdict",
+            )
+        self.assertEqual(len(self._data()["review_attempts"]), 1)
+        self.assertEqual(self._data()["plan_review_rounds"], 1)
+
+    def test_reset_allows_clean_redispatch_without_force(self):
+        artifact = flowctl._review_artifact_sha256(
+            flowctl.build_plan_review_artifact_blob("spec", "tasks")
+        )
+        self._reserve_and_record(artifact)
+        flowctl.reset_review_cap(self.spec_id, "plan")
+        round_number, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", artifact_sha256=artifact,
+            review_type="plan", return_reservation=True,
+        )
+        self.assertEqual(round_number, 1)
+        self.assertIsNotNone(reservation_id)
+
+    def test_force_consumes_and_stamps_forced_provenance(self):
+        artifact = flowctl._review_artifact_sha256(
+            flowctl.build_plan_review_artifact_blob("spec", "tasks")
+        )
+        self._reserve_and_record(artifact)
+        self._reserve_and_record(artifact, forced=True)
+        self.assertTrue(self._data()["review_attempts"][-1]["forced"])
+
+    def test_absent_hash_and_hash_builder_failure_fail_open_with_warning(self):
+        artifact = flowctl._review_artifact_sha256(
+            flowctl.build_plan_review_artifact_blob("spec", "tasks")
+        )
+        self._reserve_and_record(artifact)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            round_number, _ = flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", review_type="plan", return_reservation=True
+            )
+        self.assertEqual(round_number, 2)
+        self.assertIn("guard is fail-open", err.getvalue())
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            failed_hash = flowctl._review_artifact_hash_or_warn(
+                lambda _text: (_ for _ in ()).throw(ValueError("hash read failed")),
+                "artifact",
+            )
+        self.assertIsNone(failed_hash)
+        self.assertIn("guard is fail-open", err.getvalue())
+
+    def test_completion_after_impl_only_fix_and_plan_completion_boundary_dispatch(self):
+        plan = flowctl._review_artifact_sha256(
+            flowctl.build_plan_review_artifact_blob("spec", "tasks")
+        )
+        completion_before = flowctl._review_artifact_sha256(
+            flowctl.build_completion_review_artifact_blob(
+                "spec", "tasks", "impl diff before", "criteria"
+            )
+        )
+        completion_after = flowctl._review_artifact_sha256(
+            flowctl.build_completion_review_artifact_blob(
+                "spec", "tasks", "impl diff after", "criteria"
+            )
+        )
+        self._reserve_and_record(plan, review_type="plan")
+        # Plan and completion share a counter but can never collide.
+        self._reserve_and_record(completion_before, review_type="completion")
+        # Completion NEEDS_WORK followed by an implementation-only change gets
+        # a fresh completion reservation without a human reset or --force.
+        round_number, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", artifact_sha256=completion_after,
+            review_type="completion", return_reservation=True,
+        )
+        self.assertEqual(round_number, 3)
+        self.assertIsNotNone(reservation_id)
+
+    def test_intervening_artifact_change_and_cursor_fitted_diff_bind_the_stored_hash(self):
+        original = flowctl._review_artifact_sha256(
+            flowctl.build_impl_review_artifact_blob("before")
+        )
+        fitted = flowctl.fit_cursor_diff_to_budget(
+            "prompt" * 6000, "after" * 10000
+        )
+        dispatched = flowctl._dispatched_diff_from_prompt(
+            f"<diff_content>\n{fitted}\n</diff_content>", "wrong"
+        )
+        changed = flowctl._review_artifact_sha256(
+            flowctl.build_impl_review_artifact_blob(dispatched)
+        )
+        self._reserve_and_record(original, review_type="impl")
+        self.assertNotEqual(original, changed)
+        self._reserve_and_record(changed, review_type="impl")
+        self.assertEqual(
+            self._data()["review_attempts"][-1]["artifact_sha256"], changed
+        )
+
+    def test_ce_setup_failure_refunds_only_its_reservation(self):
+        self._assert_transport_refund_is_reservation_scoped("ce")
+
+    def test_classic_setup_failure_refunds_only_its_reservation(self):
+        self._assert_transport_refund_is_reservation_scoped("classic")
+
+    def _assert_transport_refund_is_reservation_scoped(self, mode: str) -> None:
+        _, first = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        _, second = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output=f"{mode} setup failed", failure_class="nonzero_exit",
+            review_type="plan", reservation_id=first,
+        )
+        data = self._data()
+        self.assertIn(second, data["review_reservations"])
+        self.assertEqual(data["plan_review_rounds"], 1)
+
+    def test_mode_probe_only_checks_cli_availability(self):
+        for executable, expected in (("/tmp/rp-cli", "classic"), ("/tmp/rp", "ce")):
+            with self.subTest(executable=executable):
+                out = io.StringIO()
+                with mock.patch.object(flowctl, "require_rp_cli", return_value=executable), \
+                     mock.patch.object(flowctl, "bind_context_window") as bind, \
+                     contextlib.redirect_stdout(out):
+                    flowctl.cmd_rp_mode_probe(mock.Mock(json=True))
+                self.assertEqual(json.loads(out.getvalue())["mode"], expected)
+                bind.assert_not_called()
+
+    def test_host_finalize_uses_the_reserved_id(self):
+        artifact = flowctl._review_artifact_sha256(
+            flowctl.build_plan_review_artifact_blob("spec", "tasks")
+        )
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", artifact_sha256=artifact,
+            review_type="plan", return_reservation=True,
+        )
+        verdict = flowctl._finish_backend_exec(
+            backend="host",
+            reg={"has_sandbox": False, "cli_label": "host", "no_verdict_label": "Host"},
+            args=mock.Mock(json=False), receipt_path=None,
+            output="<verdict>NEEDS_WORK</verdict>", stderr="", exit_code=0,
+            spec_id=self.spec_id, review_kind="plan", review_type="plan",
+            reservation_id=reservation_id,
+        )
+        self.assertEqual(verdict, "NEEDS_WORK")
+        self.assertEqual(
+            self._data()["review_attempts"][-1]["reservation_id"], reservation_id
+        )
+
+
 class TestReplayAwareInProcessCallers(unittest.TestCase):
     """Round-1 review r1 P2: the in-process backend handlers must ABORT the
     dispatch on a typed replay result rather than paying for a second review
@@ -2245,6 +2478,10 @@ class TestRpRecorderFailureFences(unittest.TestCase):
             "#!/usr/bin/env bash\n"
             "if [[ \"$1 $2\" == \"rp chat-send\" ]]; then\n"
             "  printf '%s\\n' '<verdict>SHIP</verdict>'\n"
+            "elif [[ \"$1\" == \"review-artifact\" ]]; then\n"
+            "  printf '%s\\n' '{\"artifact_sha256\":\"a\"}'\n"
+            "elif [[ \"$1 $2 $3\" == \"review-rounds increment fn-1\" ]]; then\n"
+            "  printf '%s\\n' '{\"reservation_id\":\"reservation-test\",\"round\":1,\"cap\":8}'\n"
             "elif [[ \"$1 $2\" == \"review-rounds record\" ]]; then\n"
             "  printf '%s\\n' 'recorder failed'\n"
             "  exit 5\n"

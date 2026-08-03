@@ -18,6 +18,41 @@ subcommand and accepts no model/effort suffix.
 
 ## Resolve and dispatch
 
+## Convergence reservation fence (before every host dispatch)
+
+After composing the complete reviewer input, but immediately before spawning the
+host reviewer, build the plan artifact and reserve exactly one round. This fence
+is the host equivalent of the RP transport fence; never reserve earlier and
+never reserve again after a replay result.
+
+```bash
+ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-${SPEC_ID}.blob"
+"$FLOWCTL" review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
+ROUND_JSON="$("$FLOWCTL" review-rounds increment "$SPEC_ID" --kind plan \
+  --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
+ROUND_EXIT=$?
+if [[ "$ROUND_EXIT" -ne 0 ]]; then
+  printf '%s\n' "$ROUND_JSON"
+  if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
+    # Human-action terminal: edit the artifact, explicitly reset, or use
+    # human --force. Never refund, reset, force, or redispatch autonomously.
+    exit 1
+  fi
+  exit "$ROUND_EXIT"
+fi
+if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
+  # Record/attach recovery delivered the prior verdict. Apply terminal
+  # precedence NEEDS_HUMAN > NEEDS_WORK > all-SHIP; no new dispatch.
+  printf '%s\n' "$ROUND_JSON"
+  exit 0
+fi
+RESERVATION_ID="$(jq -er '.reservation_id' <<<"$ROUND_JSON")"
+```
+
+After the reviewer returns, continue to **Receipt and status**. Assemble its
+receipt input, receipt target, status target, and reviewer output file there
+BEFORE calling `record`; the reservation is not consumable until then.
+
 Read the AGENTS.md model-routing section, identify the writer family, and select
 a reviewer slug from another family.
 
@@ -69,37 +104,29 @@ Write:
 }
 ```
 
-Write the base JSON and full reviewer output to temporary files, then make the
-terminal receipt write through the shared deterministic attachment command:
+Write the base JSON and full reviewer output to temporary files. Then finalize
+the captured reservation with those complete inputs, and attach from the
+journaled payload (never re-derive it after `record`):
 
 ```bash
-"$FLOWCTL" review-findings attach \
-  --input "$RECEIPT_INPUT" \
+RECORD_JSON="$("$FLOWCTL" review-rounds record "$SPEC_ID" --kind plan \
+  --review-type plan --backend host --output-file "$REVIEW_OUTPUT_FILE" \
+  --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
+  --receipt-payload-file "$RECEIPT_INPUT" --status-target plan --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+[[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
+"$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
   --receipt "$RECEIPT_PATH" \
-  --review-file "$REVIEW_OUTPUT_FILE" \
-  --head "$REVIEW_HEAD_SHA" \
   --json
 ```
 
 It reads any prior receipt before atomic replacement, carries only valid
 same-backend plan lineage, and adds no reviewer/model/network call.
 
-After every verdict, including re-review, write latest status:
-
-```bash
-$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
-# or
-$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
-```
-
-Before each host re-review dispatch, call the deterministic cap:
-
-```bash
-$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json
-```
-
-Exit 4 / `ESCALATE:` means do not dispatch. On `SHIP`, reset plan rounds.
-Carry the verdict directly into SKILL.md's shared Fix Loop.
+`record` owns plan status and the SHIP counter reset. Carry the verdict directly
+into SKILL.md's shared Fix Loop; an `ESCALATE:` or `NOT_RETRYABLE:` fence exit
+never becomes a transport refund.
 
 ## Anti-patterns
 

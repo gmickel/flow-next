@@ -72,13 +72,28 @@ applicable. End with exactly one tag: <verdict>SHIP</verdict>,
 EOF
 [[ -n "$TASK_ID" ]] && $FLOWCTL show "$TASK_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
 
-if [[ -n "$TASK_ID" ]]; then
-  ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json)"
+RESERVATION_FILE="${TMPDIR:-/tmp}/flow-impl-review-reservation-<task-id-or-branch-slug>-<suffix>.json"
+ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-impl-review-artifact-<task-id-or-branch-slug>-<suffix>.blob"
+PROBED_RP_MODE="$($FLOWCTL rp mode-probe --json | jq -er '.mode')" || exit $?
+if [[ -n "$TASK_ID" && "$PROBED_RP_MODE" == "ce" ]]; then
+  DIFF_FILE="${TMPDIR:-/tmp}/flow-impl-review-dispatch-<task-id-or-branch-slug>-<suffix>.diff"
+  git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+  $FLOWCTL review-artifact impl "${TASK_ID%.*}" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" \
+    --review-type impl --artifact-file "$ARTIFACT_FILE" --json)"
   ROUND_EXIT=$?
   if [[ "$ROUND_EXIT" -ne 0 ]]; then
     printf '%s\n' "$ROUND_JSON"
+    # Exact NOT_RETRYABLE + exit 1: human-action terminal, never refund,
+    # force, reset, or redispatch from autonomous flow.
     exit "$ROUND_EXIT"
   fi
+  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+    # NEEDS_HUMAN > NEEDS_WORK > all-SHIP; recovered verdict means no dispatch.
+    printf '%s\n' "$ROUND_JSON"
+    exit 0
+  fi
+  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
 fi
 
 # CE: one context_builder review result, written directly to RESPONSE_FILE.
@@ -89,10 +104,11 @@ $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
 SETUP_EXIT=$?
 if [[ "$SETUP_EXIT" -ne 0 ]]; then
   : > "$RESPONSE_FILE"
-  if [[ -n "$TASK_ID" ]]; then
+  if [[ -n "$TASK_ID" && "$PROBED_RP_MODE" == "ce" ]]; then
     RECORD_JSON="$($FLOWCTL review-rounds record "${TASK_ID%.*}" --kind impl \
       --review-type impl --task "$TASK_ID" --backend rp \
-      --output-file "$RESPONSE_FILE" --exit-code "$SETUP_EXIT" --json)"
+      --output-file "$RESPONSE_FILE" --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+      --exit-code "$SETUP_EXIT" --json)"
     RECORD_EXIT=$?
     printf '%s\n' "$RECORD_JSON"
     if [[ "$RECORD_EXIT" -ne 0 ]]; then
@@ -285,6 +301,27 @@ SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suf
 source "$SETUP_FILE"
 
 if [[ "$RP_MODE" == "classic" ]]; then
+  if [[ -n "$TASK_ID" ]]; then
+    # The Classic prompt is final here: reserve immediately before chat-send.
+    DIFF_FILE="${TMPDIR:-/tmp}/flow-impl-review-dispatch-<task-id-or-branch-slug>-<suffix>.diff"
+    ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-impl-review-artifact-<task-id-or-branch-slug>-<suffix>.blob"
+    RESERVATION_FILE="${TMPDIR:-/tmp}/flow-impl-review-reservation-<task-id-or-branch-slug>-<suffix>.json"
+    git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+    $FLOWCTL review-artifact impl "${TASK_ID%.*}" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+    ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" \
+      --review-type impl --artifact-file "$ARTIFACT_FILE" --json)"
+    ROUND_EXIT=$?
+    if [[ "$ROUND_EXIT" -ne 0 ]]; then
+      printf '%s\n' "$ROUND_JSON"
+      # NOT_RETRYABLE means human action, never a refund or redispatch.
+      exit "$ROUND_EXIT"
+    fi
+    if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+      printf '%s\n' "$ROUND_JSON"
+      exit 0
+    fi
+    printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
+  fi
   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Impl Review: $BRANCH" > "$RESPONSE_FILE"
   RP_EXIT=$?
 else
@@ -300,7 +337,8 @@ VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
 if [[ -n "$TASK_ID" ]]; then
   RECORD_JSON="$($FLOWCTL review-rounds record "${TASK_ID%.*}" --kind impl \
     --review-type impl --task "$TASK_ID" --backend rp \
-    --output-file "$RESPONSE_FILE" --exit-code "$RP_EXIT" --json)"
+    --output-file "$RESPONSE_FILE" --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+    --exit-code "$RP_EXIT" --json)"
   RECORD_EXIT=$?
   printf '%s\n' "$RECORD_JSON"
   if [[ "$RECORD_EXIT" -ne 0 ]]; then
@@ -330,15 +368,11 @@ verdict, receipt, status, or fix-loop command may swallow its exit.
 
 ## Phase 4: Receipt + Status (RP)
 
-### Reset the cap counter on SHIP (fn-90 R5 convergence)
+### SHIP owns its cap reset
 
-Immediately after parsing a SHIP verdict (task-scoped reviews only):
-
-```bash
-if [[ "$VERDICT" == "SHIP" && -n "$TASK_ID" ]]; then
-  $FLOWCTL review-rounds reset "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json
-fi
-```
+`review-rounds record` atomically resets on SHIP. Do not call
+`review-rounds reset` from this autonomous workflow; direct reset and
+`--force` remain human-only recovery tools.
 
 ### Write receipt (if REVIEW_RECEIPT_PATH set)
 
@@ -533,12 +567,27 @@ If verdict is NEEDS_WORK:
 
    ```bash
    if [[ -n "$TASK_ID" ]]; then
-     ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" --json)"
+     # Resolve mode first. CE and Classic each reserve exactly once at their
+     # respective pre-dispatch point, using the final diff artifact and saving
+     # `.reservation_id` for the record fence; replayed results never dispatch.
+     PROBED_RP_MODE="$($FLOWCTL rp mode-probe --json | jq -er '.mode')" || exit $?
+     DIFF_FILE="${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.diff"
+     git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+     ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-impl-review-rereview-<task-id-or-branch-slug>-<suffix>.blob"
+     $FLOWCTL review-artifact impl "${TASK_ID%.*}" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+     ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" --kind impl --task "$TASK_ID" \
+       --review-type impl --artifact-file "$ARTIFACT_FILE" --json)"
      ROUND_EXIT=$?
      if [[ "$ROUND_EXIT" -ne 0 ]]; then
        printf '%s\n' "$ROUND_JSON"
        exit "$ROUND_EXIT"
      fi
+     if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+       # A delivered finalization replay is terminal; no refund or redispatch.
+       printf '%s\n' "$ROUND_JSON"
+       exit 0
+     fi
+     printf '%s' "$ROUND_JSON" > "${TMPDIR:-/tmp}/flow-impl-review-reservation-<task-id-or-branch-slug>-<suffix>.json"
    fi
    ```
 

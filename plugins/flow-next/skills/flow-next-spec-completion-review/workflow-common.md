@@ -1,5 +1,12 @@
 # Spec Completion Review Workflow — Common
 
+## Unchanged-artifact terminal
+
+`NOT_RETRYABLE: artifact unchanged since last verdict` plus exit `1` stops the
+completion autonomous path for human action. It is never a transport refund and
+must not trigger reset, `--force`, or redispatch. A human edits the exact
+artifact, explicitly resets, or deliberately uses `--force`.
+
 ## Philosophy
 
 Spec completion review verifies spec compliance, NOT code quality. impl-review handles code quality per-task. This review catches:

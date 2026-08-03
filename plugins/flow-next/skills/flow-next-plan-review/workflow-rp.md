@@ -55,11 +55,28 @@ for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
     && sed -n 'p' "$task_spec" >> "$REVIEW_INSTRUCTIONS_FILE"
 done
 
-ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
-ROUND_EXIT=$?
-if [[ "$ROUND_EXIT" -ne 0 ]]; then
-  printf '%s\n' "$ROUND_JSON"
-  exit "$ROUND_EXIT"
+RESERVATION_FILE="${TMPDIR:-/tmp}/flow-plan-review-reservation-<spec-id>-<suffix>.json"
+ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-<spec-id>-<suffix>.blob"
+# Probe is CLI-availability only: no window/tab mutation. CE reviews reserve
+# immediately before setup-review; Classic waits until its final prompt exists.
+PROBED_RP_MODE="$($FLOWCTL rp mode-probe --json | jq -er '.mode')" || exit $?
+if [[ "$PROBED_RP_MODE" == "ce" ]]; then
+  $FLOWCTL review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+    --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    # Exact NOT_RETRYABLE marker + exit 1 is a human-action terminal: edit the
+    # artifact, human reset, or human --force; never refund/force/reset/redispatch.
+    exit "$ROUND_EXIT"
+  fi
+  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+    # Recovery precedence NEEDS_HUMAN > NEEDS_WORK > all-SHIP; no dispatch.
+    printf '%s\n' "$ROUND_JSON"
+    exit 0
+  fi
+  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
 fi
 $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
   --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
@@ -67,13 +84,16 @@ $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
 SETUP_EXIT=$?
 if [[ "$SETUP_EXIT" -ne 0 ]]; then
   : > "$RESPONSE_FILE"
-  RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
-    --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
-    --exit-code "$SETUP_EXIT" --json)"
-  RECORD_EXIT=$?
-  printf '%s\n' "$RECORD_JSON"
-  if [[ "$RECORD_EXIT" -ne 0 ]]; then
-    exit "$RECORD_EXIT"
+  if [[ "$PROBED_RP_MODE" == "ce" ]]; then
+    RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+      --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
+      --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+      --exit-code "$SETUP_EXIT" --json)"
+    RECORD_EXIT=$?
+    printf '%s\n' "$RECORD_JSON"
+    if [[ "$RECORD_EXIT" -ne 0 ]]; then
+      exit "$RECORD_EXIT"
+    fi
   fi
   exit "$SETUP_EXIT"
 fi
@@ -204,6 +224,23 @@ RESPONSE_FILE="${TMPDIR:-/tmp}/flow-plan-review-response-<spec-id>-<suffix>.md"
 SETUP_FILE="${TMPDIR:-/tmp}/flow-plan-review-setup-<spec-id>-<suffix>.env"
 source "$SETUP_FILE"
 if [[ "$RP_MODE" == "classic" ]]; then
+  # Classic's final prompt now exists; reserve immediately before chat-send.
+  RESERVATION_FILE="${TMPDIR:-/tmp}/flow-plan-review-reservation-<spec-id>-<suffix>.json"
+  ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-<spec-id>-<suffix>.blob"
+  $FLOWCTL review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+    --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    # NOT_RETRYABLE is human-action terminal; never transport-refund or redispatch.
+    exit "$ROUND_EXIT"
+  fi
+  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    exit 0
+  fi
+  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Plan Review: <SPEC_ID>" > "$RESPONSE_FILE"
   RP_EXIT=$?
 else
@@ -214,6 +251,7 @@ VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
   | tail -n 1 | sed -E 's#</?verdict>##g')"
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
   --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
+  --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
   --exit-code "$RP_EXIT" --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
@@ -260,14 +298,8 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
 fi
 ```
 
-Write latest status after every verdict:
-
-```bash
-$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status ship --json
-$FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json
-# or
-$FLOWCTL spec set-plan-review-status "$SPEC_ID" --status needs_work --json
-```
+`review-rounds record` owns status and the SHIP reset. Do not issue an explicit
+`review-rounds reset` after SHIP; it is a human-only recovery command.
 
 Carry the verdict directly into SKILL.md's shared Fix Loop.
 

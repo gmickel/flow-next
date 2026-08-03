@@ -244,6 +244,44 @@ class DeadWeightTestCase(unittest.TestCase):
         self.assertIn("ralph_e2e_test.sh", text)
 
 
+class UnchangedArtifactDriverTerminalTestCase(unittest.TestCase):
+    """fn-159.7: autonomous drivers never spin a delivered hash refusal."""
+
+    MARKER = "NOT_RETRYABLE: artifact unchanged since last verdict"
+
+    def test_plan_flow_stops_without_refund_force_reset_or_redispatch(self) -> None:
+        text = (PLUGIN_DIR / "skills" / "flow-next-plan-review" / "workflow.md").read_text()
+        self.assertIn(self.MARKER, text)
+        for phrase in ("Do not refund", "dispatch again", "--force", "reset"):
+            self.assertIn(phrase, text)
+
+    def test_impl_flow_stops_without_refund_force_reset_or_redispatch(self) -> None:
+        common = (PLUGIN_DIR / "skills" / "flow-next-impl-review" / "workflow-common.md").read_text()
+        skill = (PLUGIN_DIR / "skills" / "flow-next-impl-review" / "SKILL.md").read_text()
+        self.assertIn(self.MARKER, common)
+        self.assertIn(self.MARKER, skill)
+        for phrase in ("never\nrefund", "reset", "--force", "redispatch"):
+            self.assertIn(phrase, common + skill)
+
+    def test_completion_flow_stops_without_refund_force_reset_or_redispatch(self) -> None:
+        common = (PLUGIN_DIR / "skills" / "flow-next-spec-completion-review" / "workflow-common.md").read_text()
+        skill = (PLUGIN_DIR / "skills" / "flow-next-spec-completion-review" / "SKILL.md").read_text()
+        self.assertIn(self.MARKER, common)
+        self.assertIn(self.MARKER, skill)
+        for phrase in ("refund", "reset", "--force", "redispatch"):
+            self.assertIn(phrase, common + skill)
+
+    def test_pilot_land_and_ralph_driver_map_marker_to_human_terminal(self) -> None:
+        pilot = (PLUGIN_DIR / "skills" / "flow-next-pilot" / "workflow.md").read_text()
+        land = (PLUGIN_DIR / "skills" / "flow-next-land" / "workflow.md").read_text()
+        ralph = (PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh").read_text()
+        for text in (pilot, land, ralph):
+            self.assertIn(self.MARKER, text)
+            self.assertIn("NEEDS_HUMAN", text)
+        self.assertIn("exit 1", ralph)
+        self.assertNotIn("force_retry=1", ralph[ralph.index(self.MARKER):ralph.index(self.MARKER) + 700])
+
+
 if __name__ == "__main__":
     unittest.main()
 

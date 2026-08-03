@@ -24,6 +24,43 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 
 ## Step 2: Dispatch read-only reviewer subagent
 
+### Convergence reservation and recovery fence
+
+After the exact reviewer input (including the final diff) is composed and
+immediately before every host dispatch, build the artifact blob and reserve one
+task-scoped round. Capture its id; it is the only id that may finalize or refund
+this dispatch.
+
+```bash
+DIFF_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.diff"
+git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.blob"
+"$FLOWCTL" review-artifact impl "${TASK_ID%.*}" --diff-file "$DIFF_FILE" \
+  --output "$ARTIFACT_FILE" --json
+ROUND_JSON="$("$FLOWCTL" review-rounds increment "${TASK_ID%.*}" --kind impl \
+  --task "$TASK_ID" --review-type impl --artifact-file "$ARTIFACT_FILE" --json)"
+ROUND_EXIT=$?
+if [[ "$ROUND_EXIT" -ne 0 ]]; then
+  printf '%s\n' "$ROUND_JSON"
+  if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
+    # Human-action terminal: edit artifact / human reset / human --force only.
+    # Never refund, force, reset, or redispatch from an autonomous loop.
+    exit 1
+  fi
+  exit "$ROUND_EXIT"
+fi
+if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
+  # Recovered verdict terminal precedence: NEEDS_HUMAN > NEEDS_WORK > all-SHIP.
+  printf '%s\n' "$ROUND_JSON"
+  exit 0
+fi
+RESERVATION_ID="$(jq -er '.reservation_id' <<<"$ROUND_JSON")"
+```
+
+After the reviewer returns, construct the receipt input and target in Step 3.
+Only then record the captured reservation and attach its journaled payload;
+receipt findings must never be constructed after `record`.
+
 Dispatch a **fresh** read-only reviewer subagent with the resolved pin:
 Immediately beforehand resolve `DIFF_BASE="${BASE_COMMIT:-main}"` (fall back
 to `master` only when `main` does not resolve), fail closed unless it resolves,
@@ -75,17 +112,20 @@ Write a receipt compatible with existing consumers:
 `session_id` is literal `null` — deliberate: host re-reviews are always fresh subagents, and `null` distinguishes "no resumable session by design" from an accidentally incomplete receipt. `review` carries the reviewer's full output — the re-review ratchet reads it to inject prior findings into the next fresh subagent (convergence), so it is REQUIRED, not optional.
 
 Write that base JSON to a temporary input file and persist the full reviewer
-output to a second temporary file. The terminal receipt write MUST use the
-shared deterministic attachment command so host receipts follow the same
+output to a second temporary file. Finalize the captured reservation first,
+then attach from that journaled payload so host receipts follow the same
 lineage/currentness contract as subprocess backends:
 
 ```bash
-"$FLOWCTL" review-findings attach \
-  --input "$RECEIPT_INPUT" \
+RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
+  --task "$TASK_ID" --review-type impl --backend host \
+  --output-file "$REVIEW_OUTPUT_FILE" --reservation-id "$RESERVATION_ID" \
+  --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --json)"
+RECORD_EXIT=$?
+printf '%s\n' "$RECORD_JSON"
+[[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
+"$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
   --receipt "$RECEIPT_PATH" \
-  --review-file "$REVIEW_OUTPUT_FILE" \
-  --base "$REVIEW_BASE_SHA" \
-  --head "$REVIEW_HEAD_SHA" \
   --json
 ```
 

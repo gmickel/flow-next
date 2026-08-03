@@ -697,8 +697,12 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertNotIn(
             'cp "$RECEIPT_RECOVERY" "$REVIEW_RECEIPT_PATH"', rp
         )
+        # fn-159.7: the host fence assembles receipt inputs BEFORE record
+        # (record journals them); attach only publishes by reservation id.
+        self.assertIn('--receipt-target "$RECEIPT_PATH"', host)
+        self.assertIn('--receipt-payload-file "$RECEIPT_INPUT"', host)
+        self.assertIn('--reservation-id "$RESERVATION_ID"', host)
         self.assertIn('--receipt "$RECEIPT_PATH"', host)
-        self.assertIn('--recovery "$RECEIPT_RECOVERY"', host)
         self.assertLess(
             completion.index("_write_backend_review_receipt("),
             completion.index("_self_write_review_status("),
@@ -759,7 +763,12 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
     def test_host_completion_uses_shared_cap_attempt_lifecycle(self) -> None:
         host = _read("flow-next-spec-completion-review/workflow-host.md")
         self.assertIn(
-            '$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json',
+            '$FLOWCTL review-rounds increment "$SPEC_ID" --kind plan',
+            host,
+        )
+        # fn-159.7: the reserve carries the completion artifact hash inputs.
+        self.assertIn(
+            '--review-type completion --artifact-file "$ARTIFACT_FILE" --json',
             host,
         )
         self.assertIn(
@@ -767,9 +776,15 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
             host,
         )
         self.assertIn("--review-type completion --backend host", host)
-        self.assertIn(
+        # fn-159 R9: SHIP reset is system-owned inside `record`; the explicit
+        # reset verb is a human-only recovery tool and must NOT appear as an
+        # autonomous host-fence command.
+        self.assertNotIn(
             '$FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json',
             host,
+        )
+        self.assertIn(
+            "Never issue `review-rounds reset` autonomously", host
         )
         self.assertIn("(`REVIEW_ROUND == REVIEW_CAP`)", host)
         self.assertIn("<verdict>SHIP</verdict>", host)

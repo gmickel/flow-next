@@ -10101,6 +10101,35 @@ def handle_replayed_review_cap(
     return True
 
 
+def _latest_consumed_artifact_sha256(
+    spec_data: dict,
+    review_kind: str,
+    task_id: Optional[str],
+    epoch: int,
+) -> Optional[str]:
+    """Return this counter scope's latest hash-bearing consumed verdict.
+
+    ``review_type`` is encoded into every blob.  Deliberately do not filter by
+    it here: plan and completion share a counter, and the domain-separated
+    identity is what makes their otherwise adjacent ledger rows incomparable.
+    """
+    attempts = spec_data.get("review_attempts")
+    if not isinstance(attempts, list):
+        return None
+    for row in reversed(attempts):
+        if not isinstance(row, dict):
+            continue
+        if (
+            row.get("counter_kind") == review_kind
+            and row.get("task") == task_id
+            and row.get("round_consumed") is True
+            and row.get("hash_epoch") == epoch
+            and isinstance(row.get("artifact_sha256"), str)
+        ):
+            return row["artifact_sha256"]
+    return None
+
+
 def _enforce_and_increment_review_cap_locked(
     spec_id: str,
     review_kind: str,
@@ -10241,6 +10270,35 @@ def _enforce_and_increment_review_cap_locked(
         # Zero dispatch: the delivered verdict(s) are the terminal for this
         # call. Callers apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP precedence.
         return {"replayed": True, "replays": replays}
+    if not isinstance(artifact_sha256, str) or not artifact_sha256:
+        # Compatibility and hash-I/O failures must never block a legitimate
+        # review.  Old callers reserve normally; new callers warn so a broken
+        # blob-builder is observable instead of silently defeating the guard.
+        print(
+            "warning: review artifact hash unavailable; unchanged-artifact "
+            "guard is fail-open for this dispatch",
+            file=sys.stderr,
+        )
+    elif not forced:
+        baseline = _latest_consumed_artifact_sha256(
+            spec_data, review_kind, task_id, epoch
+        )
+        if baseline == artifact_sha256:
+            marker = "NOT_RETRYABLE: artifact unchanged since last verdict"
+            if use_json:
+                json_output(
+                    {
+                        "error": marker,
+                        "not_retryable": True,
+                        "review_kind": review_kind,
+                        "spec": spec_id,
+                        "task": task_id,
+                    },
+                    success=False,
+                )
+            else:
+                print(marker, file=sys.stderr)
+            sys.exit(1)
     scope = task_id if (review_kind == "impl" and task_id) else spec_id
     if current >= cap:
         attempts = _review_attempt_summary(
@@ -11185,6 +11243,88 @@ def _file_sha256(path: Path) -> Optional[str]:
         return h.hexdigest()
     except OSError:
         return None
+
+
+def _normalize_review_artifact_text(text: str) -> str:
+    """Canonical text form for the artifact identity supplied to a reviewer."""
+    return text.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n") + "\n"
+
+
+def _build_review_artifact_blob(
+    review_type: str, sections: list[tuple[str, str]]
+) -> bytes:
+    """Build an unambiguous, domain-separated review artifact identity.
+
+    Hashes are intentionally over this blob rather than over an incidental
+    prompt.  The wire format length-prefixes every section, so markdown from
+    adjacent spec/task files cannot collide at a concatenation boundary.
+    """
+    if review_type not in {"plan", "impl", "completion"}:
+        raise ValueError(f"unsupported review artifact type: {review_type}")
+    chunks = [b"flow-next-review-artifact-v1\0", review_type.encode("utf-8"), b"\0"]
+    for name, content in sections:
+        normalized = _normalize_review_artifact_text(content).encode("utf-8")
+        label = name.encode("utf-8")
+        chunks.extend((
+            str(len(label)).encode("ascii"), b":", label,
+            b"=", str(len(normalized)).encode("ascii"), b":", normalized,
+        ))
+    return b"".join(chunks)
+
+
+def build_plan_review_artifact_blob(epic_spec: str, task_specs: str) -> bytes:
+    """Identity for a plan review: normalized spec plus sorted task markdown."""
+    return _build_review_artifact_blob(
+        "plan", [("spec", epic_spec), ("tasks", task_specs)]
+    )
+
+
+def build_impl_review_artifact_blob(diff_content: str) -> bytes:
+    """Identity for an implementation review: exact dispatched diff text."""
+    return _build_review_artifact_blob("impl", [("diff", diff_content)])
+
+
+def build_completion_review_artifact_blob(
+    epic_spec: str,
+    task_specs: str,
+    diff_content: str,
+    criteria_content: str,
+) -> bytes:
+    """Identity for completion: spec/tasks, dispatched diff, and criteria."""
+    return _build_review_artifact_blob(
+        "completion",
+        [
+            ("spec", epic_spec),
+            ("tasks", task_specs),
+            ("diff", diff_content),
+            ("criteria", criteria_content),
+        ],
+    )
+
+
+def _review_artifact_sha256(blob: bytes) -> str:
+    """Return the stable identity stored with a review reservation."""
+    return hashlib.sha256(blob).hexdigest()
+
+
+def _review_artifact_hash_or_warn(
+    builder: Any, *args: str
+) -> Optional[str]:
+    """Hash an assembled artifact, failing open when identity construction fails."""
+    try:
+        return _review_artifact_sha256(builder(*args))
+    except (OSError, UnicodeError, ValueError, TypeError) as exc:
+        print(
+            f"warning: cannot hash review artifact; guard is fail-open: {exc}",
+            file=sys.stderr,
+        )
+        return None
+
+
+def _dispatched_diff_from_prompt(prompt: str, fallback: str) -> str:
+    """Return the diff component that survived prompt fitting, if intact."""
+    matches = re.findall(r"<diff_content>\n?(.*?)\n?</diff_content>", prompt, re.S)
+    return matches[-1] if matches else fallback
 
 
 def _fsync_path(path: Path) -> None:
@@ -27788,6 +27928,68 @@ def cmd_review_rounds_attempts(args: argparse.Namespace) -> None:
         )
 
 
+def cmd_review_artifact_build(args: argparse.Namespace) -> None:
+    """Write the exact domain-separated blob consumed by an RP reserve fence."""
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+    flow_dir = get_flow_dir()
+    spec_id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    _, _, epic_spec, task_specs, _ = _load_epic_and_task_specs(
+        spec_id,
+        use_json=args.json,
+        missing_label="Spec markdown not found",
+    )
+    if args.kind == "plan":
+        blob = build_plan_review_artifact_blob(epic_spec, task_specs)
+    else:
+        if not args.diff_file:
+            error_exit(
+                f"review-artifact {args.kind} requires --diff-file",
+                use_json=args.json,
+                code=2,
+            )
+        try:
+            diff_content = Path(args.diff_file).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            error_exit(
+                f"Unable to read review diff {args.diff_file}: {exc}",
+                use_json=args.json,
+                code=2,
+            )
+        if args.kind == "impl":
+            blob = build_impl_review_artifact_blob(diff_content)
+        else:
+            criteria_path = get_criteria_path()
+            try:
+                criteria_content = (
+                    criteria_path.read_text(encoding="utf-8")
+                    if criteria_path.exists() else ""
+                )
+            except (OSError, UnicodeError) as exc:
+                error_exit(
+                    f"Unable to read global criteria: {exc}",
+                    use_json=args.json,
+                    code=2,
+                )
+            blob = build_completion_review_artifact_blob(
+                epic_spec, task_specs, diff_content, criteria_content
+            )
+    output_path = Path(args.output)
+    atomic_write(output_path, blob.decode("utf-8"))
+    result = {
+        "id": spec_id,
+        "review_type": args.kind,
+        "artifact_file": str(output_path),
+        "artifact_sha256": _review_artifact_sha256(blob),
+    }
+    if args.json:
+        json_output(result)
+    else:
+        print(result["artifact_sha256"])
+
+
 def _cmd_spec_set_ready(args: argparse.Namespace, *, target: bool) -> None:
     """Shared body for `spec ready` / `spec unready` (fn-58.1, R1/R2/R7).
 
@@ -31973,6 +32175,16 @@ def cmd_rp_prompt_export(args: argparse.Namespace) -> None:
     ]
     res = run_rp_cli(cmd)
     print(res.stdout, end="")
+
+
+def cmd_rp_mode_probe(args: argparse.Namespace) -> None:
+    """Report RP transport mode without selecting a window or opening a tab."""
+    rp_cli = require_rp_cli()
+    mode = "classic" if Path(rp_cli).name == "rp-cli" else "ce"
+    if args.json:
+        json_output({"mode": mode})
+    else:
+        print(f"RP_MODE={mode}")
 
 
 def cmd_rp_setup_review(args: argparse.Namespace) -> None:
@@ -37009,6 +37221,7 @@ def _dispatch_backend_review(
     review_type: str,
     task_id: Optional[str] = None,
     reviewed_head_sha: Optional[str] = None,
+    reservation_id: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
     """Run a backend and refund if dispatch itself terminates before a result."""
     try:
@@ -37033,6 +37246,7 @@ def _dispatch_backend_review(
                 reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
+                reservation_id=reservation_id,
             )
         _clear_stale_review_receipt(receipt_path)
         if attempt.get("transport_unhealthy"):
@@ -37060,6 +37274,7 @@ def _dispatch_backend_review(
                 reviewed_head_sha=reviewed_head_sha,
                 review_type=review_type,
                 use_json=args.json,
+                reservation_id=reservation_id,
             )
         _clear_stale_review_receipt(receipt_path)
         if attempt.get("transport_unhealthy"):
@@ -37184,10 +37399,21 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     else:
         repo_root = get_repo_root()
 
+    # The identity is calculated after Cursor's argv fit: this is the exact
+    # diff component delivered to that backend, not the pre-fit git diff.
+    artifact_sha256 = _review_artifact_hash_or_warn(
+        build_impl_review_artifact_blob,
+        _dispatched_diff_from_prompt(prompt, diff_content),
+    )
+
     # fn-90 R5: deterministic cap — enforce + increment BEFORE dispatch.
+    reservation_id: Optional[str] = None
     if not standalone:
         cap_result = enforce_and_increment_review_cap(
-            spec_id_from_task(task_id), "impl", task_id=task_id, use_json=args.json
+            spec_id_from_task(task_id), "impl", task_id=task_id,
+            use_json=args.json, artifact_sha256=artifact_sha256,
+            review_type="impl", forced=bool(getattr(args, "force", False)),
+            return_reservation=True,
         )
         # A recovered verdict is the terminal for this call — never dispatch.
         if handle_replayed_review_cap(
@@ -37197,6 +37423,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             use_json=args.json,
         ):
             return
+        _, reservation_id = cap_result
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -37214,6 +37441,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_type="impl",
         task_id=None if standalone else task_id,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -37230,6 +37458,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         task_id=None if standalone else task_id,
         reset_rounds_on_ship=not standalone,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     review_id = task_id if task_id else "branch"
@@ -37330,6 +37559,7 @@ def _finish_backend_exec(
     reset_rounds_on_ship: bool = False,
     attempt_out: Optional[dict] = None,
     reviewed_head_sha: Optional[str] = None,
+    reservation_id: Optional[str] = None,
 ) -> str:
     """Shared post-exec gates and verdict-aware round finalization.
 
@@ -37352,6 +37582,7 @@ def _finish_backend_exec(
                 finalize_status_kind=finalize_status_kind,
                 reset_rounds_on_ship=reset_rounds_on_ship,
                 reviewed_head_sha=reviewed_head_sha,
+                reservation_id=reservation_id,
             )
             if attempt_out is not None:
                 attempt_out.update(summary)
@@ -37384,6 +37615,7 @@ def _finish_backend_exec(
             reviewed_head_sha=reviewed_head_sha,
             review_type=review_type,
             use_json=args.json,
+            reservation_id=reservation_id,
         )
     if attempt.get("transport_unhealthy"):
         _clear_stale_review_receipt(receipt_path)
@@ -37522,8 +37754,13 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             task_ids=task_ids or None,
         )
 
+    artifact_sha256 = _review_artifact_hash_or_warn(
+        build_plan_review_artifact_blob, epic_spec, task_specs
+    )
     cap_result = enforce_and_increment_review_cap(
-        epic_id, "plan", use_json=args.json
+        epic_id, "plan", use_json=args.json,
+        artifact_sha256=artifact_sha256, review_type="plan",
+        forced=bool(getattr(args, "force", False)), return_reservation=True,
     )
     # A recovered verdict is the terminal for this call — never dispatch.
     if handle_replayed_review_cap(
@@ -37531,6 +37768,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         use_json=args.json,
     ):
         return
+    _, reservation_id = cap_result
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -37547,6 +37785,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         review_kind="plan",
         review_type="plan",
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -37565,6 +37804,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         reset_rounds_on_ship=True,
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     # issue #279: attempt row, plan_review_status, and the SHIP cap reset all
@@ -37714,9 +37954,34 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             )
             prompt = rereview_preamble + prompt
 
+    try:
+        criteria_path = get_criteria_path()
+        criteria_content = (
+            criteria_path.read_text(encoding="utf-8")
+            if criteria_path.exists() else ""
+        )
+    except (OSError, UnicodeError) as exc:
+        print(
+            f"warning: cannot hash review artifact; guard is fail-open: {exc}",
+            file=sys.stderr,
+        )
+        criteria_content = None
+    artifact_sha256 = (
+        _review_artifact_hash_or_warn(
+            build_completion_review_artifact_blob,
+            epic_spec,
+            task_specs,
+            _dispatched_diff_from_prompt(prompt, diff_content),
+            criteria_content,
+        )
+        if criteria_content is not None else None
+    )
+
     # Completion reviews reuse the spec-scoped plan-review counter.
     cap_result = enforce_and_increment_review_cap(
-        epic_id, "plan", use_json=args.json
+        epic_id, "plan", use_json=args.json,
+        artifact_sha256=artifact_sha256, review_type="completion",
+        forced=bool(getattr(args, "force", False)), return_reservation=True,
     )
     # A recovered verdict is the terminal for this call — never dispatch.
     if handle_replayed_review_cap(
@@ -37724,6 +37989,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         use_json=args.json,
     ):
         return
+    _, reservation_id = cap_result
 
     _resolution: dict = {}
     output, returned_session_id, exit_code, stderr = _dispatch_backend_review(
@@ -37740,6 +38006,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         review_kind="plan",
         review_type="completion",
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -37755,6 +38022,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         review_type="completion",
         reset_rounds_on_ship=True,
         reviewed_head_sha=reviewed_head_sha,
+        reservation_id=reservation_id,
     )
 
     # Preserve session_id for continuity (avoid clobbering on resumed sessions).
@@ -43024,6 +43292,11 @@ def _add_impl_review_parser(sub, backend: str):
     p.add_argument(
         "--receipt", help="Receipt file path for session continuity"
     )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Human-only override for an unchanged-artifact refusal",
+    )
     p.add_argument("--json", action="store_true", help="JSON output")
     if backend == "codex":
         _add_sandbox_arg(p)
@@ -43091,6 +43364,11 @@ def _add_plan_review_parser(sub, backend: str):
     )
     p.add_argument("--base", default="main", help="Base branch for context")
     p.add_argument("--receipt", help="Receipt file path for session continuity")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Human-only override for an unchanged-artifact refusal",
+    )
     p.add_argument("--json", action="store_true", help="JSON output")
     if backend == "codex":
         _add_sandbox_arg(p)
@@ -43113,6 +43391,11 @@ def _add_completion_review_parser(sub, backend: str):
     p.add_argument("epic", help="Spec ID (e.g., fn-1, fn-1-add-auth)")
     p.add_argument("--base", default="main", help="Base branch for diff")
     p.add_argument("--receipt", help="Receipt file path for session continuity")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Human-only override for an unchanged-artifact refusal",
+    )
     p.add_argument("--json", action="store_true", help="JSON output")
     if backend == "codex":
         _add_sandbox_arg(p)
@@ -44061,6 +44344,23 @@ def main() -> None:
     )
     p_rr_attempts.add_argument("--json", action="store_true", help="JSON output")
     p_rr_attempts.set_defaults(func=cmd_review_rounds_attempts)
+
+    p_review_artifact = subparsers.add_parser(
+        "review-artifact",
+        help="Build the exact domain-separated artifact blob for an RP review fence",
+    )
+    p_review_artifact.add_argument(
+        "kind", choices=["plan", "impl", "completion"],
+        help="Reviewed surface",
+    )
+    p_review_artifact.add_argument("id", help="Spec ID")
+    p_review_artifact.add_argument(
+        "--diff-file",
+        help="Exact dispatched diff (required for impl and completion)",
+    )
+    p_review_artifact.add_argument("--output", required=True, help="Blob output path")
+    p_review_artifact.add_argument("--json", action="store_true", help="JSON output")
+    p_review_artifact.set_defaults(func=cmd_review_artifact_build)
 
     # memory
     p_memory = subparsers.add_parser("memory", help="Memory commands")
@@ -45736,6 +46036,13 @@ def main() -> None:
     p_rp_export.add_argument("--tab", required=True, help="Tab id or name")
     p_rp_export.add_argument("--out", required=True, help="Output file")
     p_rp_export.set_defaults(func=cmd_rp_prompt_export)
+
+    p_rp_mode_probe = rp_sub.add_parser(
+        "mode-probe",
+        help="Report CE or Classic availability without mutating an RP window",
+    )
+    p_rp_mode_probe.add_argument("--json", action="store_true", help="JSON output")
+    p_rp_mode_probe.set_defaults(func=cmd_rp_mode_probe)
 
     p_rp_setup = rp_sub.add_parser(
         "setup-review", help="Atomic: resolve window + open builder tab"

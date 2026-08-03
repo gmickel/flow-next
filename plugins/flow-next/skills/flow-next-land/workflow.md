@@ -2,6 +2,13 @@
 
 Execute these phases in order. One invocation is one tick: discover authored PRs, classify each through the gate tree, take at most ONE action class per PR, and end with the terminal verdict line.
 
+## Review no-repeat terminal
+
+`NOT_RETRYABLE: artifact unchanged since last verdict` with exit `1` from any
+review is `LAND_VERDICT=NEEDS_HUMAN`. Stop; do not treat it as CI/transport,
+refund it, reset/force it, or redispatch. A human must edit the artifact,
+explicitly reset, or deliberately use `--force`.
+
 ## Preamble
 
 **CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail (expected). Define once; subsequent blocks use `$FLOWCTL`:

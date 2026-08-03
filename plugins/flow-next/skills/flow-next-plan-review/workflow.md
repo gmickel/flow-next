@@ -92,6 +92,10 @@ the same `ASK`/error behavior; never guess a backend.
 
 ## Common Terminal Contract
 
+- `NOT_RETRYABLE: artifact unchanged since last verdict` with exit `1` →
+  human-action terminal. Do not refund it, dispatch again, apply `--force`, or
+  run a reset in an autonomous flow. A human must edit the reviewed artifact,
+  explicitly reset its counter, or deliberately re-run with `--force`.
 - `SHIP` → latest status/receipt says ship; reset the cumulative counter where
   the backend does not already do so; continue into SKILL.md's shared Fix Loop,
   which completes on `SHIP`.

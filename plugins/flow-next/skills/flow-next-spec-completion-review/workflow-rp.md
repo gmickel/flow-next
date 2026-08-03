@@ -70,11 +70,28 @@ done
 printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE"
 $FLOWCTL criteria prompt-block >> "$REVIEW_INSTRUCTIONS_FILE" || exit 1
 
-ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
-ROUND_EXIT=$?
-if [[ "$ROUND_EXIT" -ne 0 ]]; then
-  printf '%s\n' "$ROUND_JSON"
-  exit "$ROUND_EXIT"
+RESERVATION_FILE="${TMPDIR:-/tmp}/flow-completion-review-reservation-<spec-id>-<suffix>.json"
+ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-artifact-<spec-id>-<suffix>.blob"
+DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-dispatch-<spec-id>-<suffix>.diff"
+PROBED_RP_MODE="$($FLOWCTL rp mode-probe --json | jq -er '.mode')" || exit $?
+if [[ "$PROBED_RP_MODE" == "ce" ]]; then
+  git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+  $FLOWCTL review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+    --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    # NOT_RETRYABLE + exit 1 is human action only: no refund, force, reset,
+    # or autonomous redispatch.
+    exit "$ROUND_EXIT"
+  fi
+  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+    # Apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP and stop with no dispatch.
+    printf '%s\n' "$ROUND_JSON"
+    exit 0
+  fi
+  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
 fi
 $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
   --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
@@ -82,13 +99,16 @@ $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
 SETUP_EXIT=$?
 if [[ "$SETUP_EXIT" -ne 0 ]]; then
   : > "$RESPONSE_FILE"
-  RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+  if [[ "$PROBED_RP_MODE" == "ce" ]]; then
+    RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
     --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
-    --exit-code "$SETUP_EXIT" --json)"
-  RECORD_EXIT=$?
-  printf '%s\n' "$RECORD_JSON"
-  if [[ "$RECORD_EXIT" -ne 0 ]]; then
-    exit "$RECORD_EXIT"
+      --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+      --exit-code "$SETUP_EXIT" --json)"
+    RECORD_EXIT=$?
+    printf '%s\n' "$RECORD_JSON"
+    if [[ "$RECORD_EXIT" -ne 0 ]]; then
+      exit "$RECORD_EXIT"
+    fi
   fi
   exit "$SETUP_EXIT"
 fi
@@ -406,6 +426,26 @@ SETUP_FILE="${TMPDIR:-/tmp}/flow-completion-review-setup-<spec-id>-<suffix>.env"
 source "$SETUP_FILE"
 
 if [[ "$RP_MODE" == "classic" ]]; then
+  # Final Classic prompt exists now: its one reservation is immediately before
+  # chat-send and its id travels to record.
+  DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-dispatch-<spec-id>-<suffix>.diff"
+  ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-artifact-<spec-id>-<suffix>.blob"
+  RESERVATION_FILE="${TMPDIR:-/tmp}/flow-completion-review-reservation-<spec-id>-<suffix>.json"
+  git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+  $FLOWCTL review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+    --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    # NOT_RETRYABLE is a human terminal, never a transport refund/retry.
+    exit "$ROUND_EXIT"
+  fi
+  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    exit 0
+  fi
+  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
   $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Spec Completion Review: $SPEC_ID" > "$RESPONSE_FILE"
   RP_EXIT=$?
 else
@@ -420,6 +460,7 @@ VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
 
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
   --review-type completion --backend rp --output-file "$RESPONSE_FILE" \
+  --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
   --exit-code "$RP_EXIT" --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
@@ -451,15 +492,11 @@ durable completion attempt consumed by the shared terminal owner.
 
 ## Phase 4: Receipt + Status (RP)
 
-### Reset the cap counter on SHIP (fn-90 R5 convergence)
+### SHIP owns its cap reset
 
-Immediately after parsing a SHIP verdict:
-
-```bash
-if [[ "$VERDICT" == "SHIP" ]]; then
-  $FLOWCTL review-rounds reset "$SPEC_ID" --kind plan --json
-fi
-```
+`review-rounds record` atomically resets the shared plan counter and advances
+its hash epoch on SHIP. Direct `review-rounds reset` and `--force` are
+human-only recovery tools; never issue either from the autonomous workflow.
 
 ### Write receipt (if REVIEW_RECEIPT_PATH set)
 
@@ -672,12 +709,25 @@ If verdict is NEEDS_WORK:
    the ESCALATE message and stop (never retry):
 
    ```bash
-   ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan --json)"
+   # Compose the re-review prompt first, then bind the exact final diff.
+   DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.diff"
+   ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-rereview-<spec-id>-<suffix>.blob"
+   RESERVATION_FILE="${TMPDIR:-/tmp}/flow-completion-review-reservation-<spec-id>-<suffix>.json"
+   git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE"
+   $FLOWCTL review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" --output "$ARTIFACT_FILE" --json
+   ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+     --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
    ROUND_EXIT=$?
    if [[ "$ROUND_EXIT" -ne 0 ]]; then
      printf '%s\n' "$ROUND_JSON"
      exit "$ROUND_EXIT"
    fi
+   if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+     # Prior delivery replay: terminal precedence, no second dispatch.
+     printf '%s\n' "$ROUND_JSON"
+     exit 0
+   fi
+   printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
    REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
    REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
    ```
