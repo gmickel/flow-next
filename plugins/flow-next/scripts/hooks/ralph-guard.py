@@ -708,6 +708,34 @@ _ARGV_EXPANSION_RE = re.compile(r"[$`]")
 # `flowctl show "$TASK_ID"` / `flowctl done "$ID"` must stay legal. So depth 2
 # is enforced exactly for the groups that OWN a guarded verb.
 _GUARDED_SUBCOMMAND_GROUPS = frozenset({"spec", "review-rounds"})
+# PR #290 bot r6: the literal-subcommand rule stopped at the subcommand slots,
+# so a composed FLAG still executed —
+# `flag=--for; flag="${flag}ce"; "$FLOWCTL" codex impl-review fn-1.1 "$flag"`.
+# For the GUARDED dispatches only (a review backend's `*-review`, and
+# `review-rounds increment`), an argument-position expansion is therefore held
+# to the two shapes every shipped fence actually uses: the value of a literal
+# value-taking flag, or the id positional that comes first. Anything else is
+# unknowable pre-expansion and fails closed.
+#
+# The value-taking long options of `{codex,copilot,cursor} {impl,plan,
+# completion}-review` and `review-rounds increment` (their store_true flags —
+# --force, --json, --help — deliberately absent: nothing may follow them).
+_GUARDED_DISPATCH_VALUE_FLAGS = frozenset({
+    "--base", "--files", "--focus", "--receipt", "--sandbox", "--spec",
+    "--kind", "--task", "--review-type", "--artifact-sha256", "--artifact-file",
+})
+# Raw-text floor for the same smuggle: an assignment whose VALUE starts a flag
+# (`flag=--for`, `f+='-'`). Fences build flags inside `args+=(--base …)` array
+# appends, never as a dash-leading scalar assignment, so this only fires on
+# composition — and only when the command also drives a launcher AND names a
+# guarded dispatch verb.
+_DASH_VALUE_ASSIGN_RE = re.compile(
+    r"(?:^|[\s;&|(])[A-Za-z_][A-Za-z0-9_]*\+?=['\"]?-{1,2}[A-Za-z]"
+)
+_GUARDED_DISPATCH_TEXT_RE = re.compile(
+    r"impl-review|plan-review|completion-review"
+    r"|review-rounds['\"]?\s+['\"]?increment\b"
+)
 _ARGV_WRAPPERS = frozenset({
     "env", "timeout", "nice", "xargs", "nohup", "stdbuf",
     # PR #290 bot r3: shell builtins that run their argv transparently. Without
@@ -869,6 +897,53 @@ def _command_has_recovery_markers(command: str) -> bool:
             command
         ):
             return True
+        # PR #290 bot r6: composed-flag smuggle (`flag=--for; flag+=ce`). No
+        # `--force` text ever appears, so the screen above cannot see it.
+        if _GUARDED_DISPATCH_TEXT_RE.search(command) and _DASH_VALUE_ASSIGN_RE.search(
+            command
+        ):
+            return True
+    return False
+
+
+def _guarded_dispatch_index(argv: list[str]) -> "int | None":
+    """Index of the guarded dispatch subcommand in a flowctl argv, else None."""
+    if len(argv) > 1 and argv[0] in _REVIEW_BACKENDS and argv[1] in _REVIEW_DISPATCHES:
+        return 1
+    if argv[:2] == ["review-rounds", "increment"]:
+        return 1
+    return None
+
+
+def _guarded_dispatch_smuggles_argument(argv: list[str], dispatch: int) -> bool:
+    """Whether a guarded dispatch carries an expansion in argument position.
+
+    Fail-closed but fence-compatible (PR #290 bot r6). A token carrying an
+    unexpanded expansion is allowed ONLY:
+
+      (a) as the value immediately after a literal value-taking flag
+          (`--task "$TASK_ID"`, `--receipt "$RECEIPT_PATH"`, also the
+          `--receipt=$P` spelling); or
+      (b) as the FIRST token after the dispatch subcommand — the spec/task id
+          every fence passes there (`"$SPEC_ID"`, `"${TASK_ID%.*}"`,
+          `"${args[@]}"`).
+
+    Everything else — a bare `"$flag"` later in the line, or a value trailing a
+    flag that takes none — is a composed flag as far as this guard can know.
+    """
+    rest = argv[dispatch + 1:]
+    for index, token in enumerate(rest):
+        if not _ARGV_EXPANSION_RE.search(token):
+            continue
+        if index == 0:
+            continue  # (b) the id positional
+        if rest[index - 1] in _GUARDED_DISPATCH_VALUE_FLAGS:
+            continue  # (a) the value of a literal value-taking flag
+        if token.startswith("-") and "=" in token:
+            name = token.split("=", 1)[0]
+            if name in _GUARDED_DISPATCH_VALUE_FLAGS:
+                continue  # (a), `--flag=$VALUE` spelling
+        return True
     return False
 
 
@@ -907,6 +982,10 @@ def _blocks_review_counter_recovery(command: str) -> bool:
                 return True
             if argv[0] in _REVIEW_BACKENDS and "--force" in argv:
                 return True
+        # Argument-position expansions on a guarded dispatch (composed flags).
+        dispatch = _guarded_dispatch_index(argv)
+        if dispatch is not None and _guarded_dispatch_smuggles_argument(argv, dispatch):
+            return True
         if argv[:2] == ["spec", "reset-review-rounds"]:
             return True
         if argv[:2] == ["review-rounds", "reset"]:
@@ -939,7 +1018,11 @@ def handle_pre_tool_use(data: dict) -> None:
             "the same screen - write the text with the file tool instead. "
             "flowctl SUBCOMMANDS must also be spelled literally: a variable or "
             "command substitution in either of the two tokens after the launcher "
-            "is blocked (variable ARGUMENTS - ids, paths, --reservation-id - are fine)."
+            "is blocked (variable ARGUMENTS - ids, paths, --reservation-id - are fine). "
+            "On a review dispatch (codex/copilot/cursor *-review, review-rounds "
+            "increment) a variable ARGUMENT is only allowed as the id right after "
+            "the subcommand or as the value of a literal value-taking flag - "
+            "spell every other flag out literally."
         )
 
     # Check for chat-send commands

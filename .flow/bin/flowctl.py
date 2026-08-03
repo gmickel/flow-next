@@ -6470,6 +6470,8 @@ def _attach_publish_from_journal(args: argparse.Namespace) -> None:
         matching[0]["finalized"] = dict(_journal_progress(journal))
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, spec_data)
+        # Sidecar durable: the journal is no longer anyone's repair source.
+        _cleanup_review_journal(journal_path, journal)
     result = {
         "success": True,
         "receipt": receipt_target,
@@ -9939,6 +9941,13 @@ def _complete_review_journal(
             )
             if existing == payload:
                 pass  # receipt-published/progress-unmarked boundary: no-op.
+            elif journal.get("superseded_by"):
+                # PR #290 bot r6: a concurrent SHIP superseded this
+                # reservation before it finalized. Its receipt describes the
+                # pre-SHIP artifact, so publishing it over the receipt that
+                # is already there would contradict the shipped sidecar —
+                # record-only, exactly like a PROVEN-newer receipt.
+                receipt_superseded = True
             elif _review_receipt_proven_newer(
                 journal, existing_reservation, spec_data
             ):
@@ -9986,17 +9995,41 @@ def _complete_review_journal(
             progress["status"] = "complete"
         atomic_write_json(journal_path, journal)
     if all(progress[leg] in _JOURNAL_LEG_TERMINAL for leg in progress):
-        # PR #290 bot r3: the recovery payload exists only to survive the gap
-        # between receipt publication and the terminal status write. Both legs
-        # are now complete, so drop it here — the direct handler's own cleanup
-        # never runs on the replay path.
-        _clear_completion_receipt_recovery(journal)
-        try:
-            journal_path.unlink()
-        except FileNotFoundError:
-            pass
+        # PR #290 bot r6: every leg is applied, but the caller's sidecar write
+        # (the attempt row's `finalized` legs, and on the publish path the
+        # deferred status itself) is NOT durable yet. Deleting the journal and
+        # the recovery payload here left a window where a crash produced a
+        # durable row with a pending leg and no journal to repair it from —
+        # every later increment then hit REPLAY_REQUIRED forever. So mark the
+        # journal cleanup-pending and RETAIN it; the caller calls
+        # `_cleanup_review_journal` once its atomic sidecar write has landed.
+        # Re-running this over a retained journal is an idempotent no-op: all
+        # legs are terminal, so no branch above executes and the identity
+        # table is never re-consulted.
+        if journal.get("cleanup") != "pending":
+            journal["cleanup"] = "pending"
+            atomic_write_json(journal_path, journal)
         return True
     return False
+
+
+def _cleanup_review_journal(journal_path: Path, journal: dict) -> None:
+    """Drop a fully applied journal once the caller's sidecar write is durable.
+
+    Only ever called AFTER the ``atomic_write_json`` that persists the attempt
+    row (and the folded status) the journal describes. Until then the journal
+    is the sole repair source for the pending legs on that row, so
+    ``_complete_review_journal`` retains it (PR #290 bot r6).
+    """
+    if journal.get("cleanup") != "pending":
+        return
+    # The recovery payload exists only to survive the gap between receipt
+    # publication and the terminal status write; both are durable now.
+    _clear_completion_receipt_recovery(journal)
+    try:
+        journal_path.unlink()
+    except FileNotFoundError:
+        pass
 
 
 def _clear_completion_receipt_recovery(journal: dict) -> None:
@@ -10045,8 +10078,12 @@ def _review_attempt_summary(
         ]
     return {
         "scope": scope,
+        # A superseded row (a concurrent SHIP reset the counter beneath its
+        # reservation) charged no round, so it is not a verdict attempt
+        # against the current budget either (PR #290 bot r6).
         "verdict_attempts": sum(
-            1 for row in scoped if row.get("outcome") == "verdict"
+            1 for row in scoped
+            if row.get("outcome") == "verdict" and not row.get("superseded_by")
         ),
         "refunded_attempts": sum(
             1 for row in scoped if row.get("outcome") == "transport_failure"
@@ -10270,6 +10307,23 @@ def _record_review_attempt_locked(
             use_json=use_json,
             code=2,
         )
+    # PR #290 bot r6: a CONCURRENT reservation on this counter already
+    # finalized SHIP, which reset the counter to 0 and advanced the hash
+    # epoch beneath this one. This verdict therefore describes the superseded
+    # artifact: it still records its evidence, but it charges no round against
+    # the fresh post-SHIP budget and cannot regress the terminal state the
+    # SHIP published. (The alternative — retaining the pending count through
+    # the reset — would charge the NEW budget for rounds spent reviewing the
+    # OLD artifact and still let a late needs_work overwrite the shipped
+    # terminal; supersession is the reading the epoch advance already takes.)
+    reservation_superseded = isinstance(metadata, dict) and bool(
+        metadata.get("superseded_by")
+    )
+    if reservation_superseded:
+        status_target = None
+        finalize_status_kind = None
+        deferred_status_target = None
+        reset_rounds_on_ship = False
     # fn-159 round 7/8: --status-target is the CLI spelling of the folded
     # status write; unify so the journaled operation and the sidecar write
     # share one code path (and one atomic transaction).
@@ -10370,6 +10424,9 @@ def _record_review_attempt_locked(
             "failure_class": failure_class,
             "outcome": outcome,
             "reset_rounds_on_ship": bool(reset_rounds_on_ship),
+            "superseded_by": (
+                metadata.get("superseded_by") if reservation_superseded else None
+            ),
             "metadata": metadata,
             "finalized": progress,
             "timestamp": now_iso(),
@@ -10468,10 +10525,13 @@ def _record_review_attempt_locked(
 
     refunded = outcome == "transport_failure"
     if refunded:
-        current = _read_review_rounds(spec_data, review_kind, task_id)
-        _write_review_rounds(
-            spec_data, review_kind, task_id, max(0, current - 1)
-        )
+        if not reservation_superseded:
+            # A superseded reservation charged nothing to the post-SHIP
+            # counter, so there is no round of its own to refund from it.
+            current = _read_review_rounds(spec_data, review_kind, task_id)
+            _write_review_rounds(
+                spec_data, review_kind, task_id, max(0, current - 1)
+            )
         consecutive = int(failures.get(scope, 0) or 0) + 1
         failures[scope] = consecutive
     else:
@@ -10489,7 +10549,10 @@ def _record_review_attempt_locked(
         "verdict": verdict,
         "failure_class": failure_class if refunded else None,
         "output_sha256": output_sha256,
-        "round_consumed": not refunded,
+        "round_consumed": not refunded and not reservation_superseded,
+        "superseded_by": (
+            metadata.get("superseded_by") if reservation_superseded else None
+        ),
         # The sha the review OBSERVED (pre-dispatch snapshot) when the caller
         # has it; finalize-time HEAD is only the fallback (rp/refund paths).
         "head_sha": reviewed_head_sha or _review_head_sha(),
@@ -10539,7 +10602,25 @@ def _record_review_attempt_locked(
         # Same counter mutation reset_review_cap performs; pending is
         # deliberately left alone (fn-134.7 / R22).
         _write_review_rounds(spec_data, review_kind, task_id, 0)
-        _advance_review_hash_epoch(spec_data, counter_scope)
+        ship_epoch = _advance_review_hash_epoch(spec_data, counter_scope)
+        # PR #290 bot r6: reservations still outstanding on this counter were
+        # issued against the PRE-SHIP artifact and epoch, and this reset just
+        # zeroed the counter beneath them. Letting one finalize normally later
+        # would consume its reservation and publish a needs_work terminal with
+        # zero charged rounds — a free fresh budget. Supersede them here
+        # (fn-134.7 / R22 still holds: the pending COUNT is untouched, so
+        # their finalization keeps balancing the reservation lifecycle) and
+        # let it record evidence without charging a round or regressing the
+        # shipped terminal.
+        for other in reservations.values():
+            if (
+                not isinstance(other, dict)
+                or other.get("counter_scope") != counter_scope
+                or other.get("superseded_by")
+            ):
+                continue
+            other["superseded_by"] = reservation_id or "ship"
+            other["superseded_epoch"] = ship_epoch
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
 
@@ -10556,7 +10637,12 @@ def _record_review_attempt_locked(
             # crash between here and attach replays deterministically.
             atomic_write_json(journal_path, journal)
         elif _complete_review_journal(flow_dir, journal_path, journal):
-            row["finalized"] = dict(progress)
+            if row["finalized"] != progress:
+                # Legs advanced past what the sidecar write above recorded:
+                # make the row durable BEFORE the journal is dropped.
+                row["finalized"] = dict(progress)
+                atomic_write_json(spec_json_path, spec_data)
+            _cleanup_review_journal(journal_path, journal)
         else:
             atomic_write_json(journal_path, journal)
 
@@ -10582,7 +10668,13 @@ def _record_review_attempt_locked(
     )
     if reservation_id:
         summary["reservation_id"] = reservation_id
-    if finalize_status_kind is not None:
+    if reservation_superseded:
+        # Say so explicitly: the verdict WAS recorded, but a concurrent SHIP
+        # had already reset this counter, so no round was charged and no
+        # terminal status was written (PR #290 bot r6).
+        summary["superseded_by"] = metadata.get("superseded_by")
+        summary["status_written"] = None
+    elif finalize_status_kind is not None:
         summary["status_written"] = status_written
     elif deferred_status:
         # PR #290 bot r4: the status leg is journaled, not written. Say so, so
@@ -10660,7 +10752,11 @@ def enforce_and_increment_review_cap(
 
 # Terminal precedence over replayed verdicts (fn-159 round 8): the worst
 # delivered verdict wins; SHIP is terminal only when every replay shipped.
-_REVIEW_REPLAY_PRECEDENCE = ("NEEDS_HUMAN", "NEEDS_WORK", "MAJOR_RETHINK", "SHIP")
+# PR #290 bot r6: MAJOR_RETHINK outranks NEEDS_WORK. It escalates to
+# `BLOCKED: DESIGN_CONFLICT` (a stop-and-rethink terminal), while NEEDS_WORK
+# is an ordinary fix-and-re-review loop — folding a delivered MAJOR_RETHINK
+# down to NEEDS_WORK silently dropped that escalation.
+_REVIEW_REPLAY_PRECEDENCE = ("NEEDS_HUMAN", "MAJOR_RETHINK", "NEEDS_WORK", "SHIP")
 
 
 def review_replay_terminal_verdict(replays: list) -> Optional[str]:
@@ -10926,6 +11022,9 @@ def _enforce_and_increment_review_cap_locked(
     replays: list[dict] = []
     sidecar_dirty = False
     skipped_unlocked = False
+    # Journals applied in this pass, dropped only after the batched sidecar
+    # write below lands (PR #290 bot r6).
+    completed_journals: list[tuple[Path, dict]] = []
     journals = []
     try:
         journals = sorted(_review_runs_dir(flow_dir).glob("*.json"))
@@ -11023,6 +11122,9 @@ def _enforce_and_increment_review_cap_locked(
                     ):
                         row["finalized"] = dict(_journal_progress(journal))
             sidecar_dirty = True
+            # Retained until the batched sidecar write below is durable
+            # (PR #290 bot r6).
+            completed_journals.append((journal_path, journal))
             if not any(r["reservation_id"] == reservation_id for r in replays):
                 replays.append({
                     "reservation_id": reservation_id,
@@ -11037,6 +11139,8 @@ def _enforce_and_increment_review_cap_locked(
     if sidecar_dirty:
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, spec_data)
+    for completed_path, completed_journal in completed_journals:
+        _cleanup_review_journal(completed_path, completed_journal)
     attempts = spec_data.get("review_attempts")
     if isinstance(attempts, list):
         incomplete = [
@@ -11057,7 +11161,7 @@ def _enforce_and_increment_review_cap_locked(
             )
     if replays:
         # Zero dispatch: the delivered verdict(s) are the terminal for this
-        # call. Callers apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP precedence.
+        # call. Callers apply NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP.
         return {"replayed": True, "replays": replays}
     if skipped_unlocked:
         # A receipt-bearing journal exists that this pass could not lock.
@@ -28636,7 +28740,7 @@ def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
     if isinstance(result, dict) and result.get("replayed"):
         # Typed recovery result (fn-159 rounds 7-8): delivered verdict(s)
         # were replayed; NO reservation was created and nothing may dispatch
-        # on this call. Callers apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP.
+        # on this call. Callers apply NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP.
         if args.json:
             json_output(result)
         else:
@@ -37981,6 +38085,9 @@ def _publish_review_receipt_from_journal(
                 row["finalized"] = dict(progress)
         spec_data["updated_at"] = now_iso()
         atomic_write_json(spec_json_path, spec_data)
+        # The row's legs (and the deferred status this call just wrote) are
+        # durable; only now is it safe to drop the journal (PR #290 bot r6).
+        _cleanup_review_journal(journal_path, journal)
     if result_out is not None:
         result_out["published"] = True
     return True

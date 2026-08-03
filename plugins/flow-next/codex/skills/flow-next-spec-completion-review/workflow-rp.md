@@ -124,7 +124,8 @@ if [[ "$PROBED_RP_MODE" == "ce" ]]; then
  exit "$ROUND_EXIT"
  fi
  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
- # Apply NEEDS_HUMAN > NEEDS_WORK > all-SHIP and stop with no dispatch.
+ # Apply NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP and stop
+ # with no dispatch.
  printf '%s\n' "$ROUND_JSON"
  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
  echo "ESCALATE: reviewer requested human review" >&2

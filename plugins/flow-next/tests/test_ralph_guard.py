@@ -360,6 +360,52 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
                 self.assertEqual(proc.returncode, 2, proc.stderr)
                 self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_composed_flag_in_argument_position(self) -> None:
+        # PR #290 bot r6: the literal-SUBCOMMAND rule stopped at the
+        # subcommand slots, so a composed --force still executed. On a guarded
+        # dispatch an expansion is now legal only as the id right after the
+        # subcommand or as the value of a literal value-taking flag.
+        for command in (
+            'flag=--for; flag="${flag}ce"; '
+            '"$FLOWCTL" codex impl-review fn-1.1 "$flag"',
+            'flag=--for; flag+=ce; "$FLOWCTL" review-rounds increment fn-1 '
+            '--kind plan "$flag"',
+            '"$FLOWCTL" codex impl-review fn-1.1 --json "$flag"',
+            '"$FLOWCTL" cursor plan-review fn-1 "$(printf %s -- --force)"',
+            '"$FLOWCTL" copilot completion-review fn-1 --receipt /tmp/r.json "$x"',
+            '"$FLOWCTL" codex impl-review "$TASK_ID" $EXTRA',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_shipped_dispatch_fence_shapes_stay_allowed(self) -> None:
+        # Every guarded-dispatch invocation flow-next actually ships. The rule
+        # is fail-closed, so any of these breaking means the rule is wrong.
+        for command in (
+            'ROUND_JSON="$($FLOWCTL review-rounds increment "${TASK_ID%.*}" '
+            '--kind impl --task "$TASK_ID" --review-type impl '
+            '--artifact-file "$ARTIFACT_FILE" --json)"',
+            'ROUND_JSON="$("$FLOWCTL" review-rounds increment "$SPEC_ID" '
+            '--kind plan --review-type completion '
+            '--artifact-file "$ARTIFACT_FILE" --json)"',
+            '$FLOWCTL codex impl-review "${args[@]}"',
+            '$FLOWCTL cursor impl-review "${args[@]}"',
+            'FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high $FLOWCTL cursor impl-review '
+            '"$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"',
+            '$FLOWCTL codex impl-review "$TASK_ID" --spec "codex:gpt-5.5:xhigh" '
+            '--receipt "$RECEIPT_PATH"',
+            '$FLOWCTL copilot plan-review "$SPEC_ID" --files "$CODE_FILES" '
+            '--receipt "$RECEIPT_PATH"',
+            '$FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"',
+            'scripts/flowctl codex impl-review "${EPIC3}.1" --base HEAD~1 '
+            '--receipt "$TEST_DIR/impl-receipt.json" --json',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_shipped_fence_shapes_stay_allowed(self) -> None:
         # Variable ARGUMENTS (ids, paths, --reservation-id) are legal; only the
         # two subcommand positions must be literal. These are the real shapes

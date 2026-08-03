@@ -1490,6 +1490,50 @@ class TestConvergenceReservationFoundation(unittest.TestCase):
         self.assertEqual(self._data()["review_hash_epoch"]["plan"], 3)
         self.assertIn("review_pending_rounds", self._data())
 
+    def test_ship_reset_supersedes_concurrent_reservation(self):
+        """PR #290 bot r6, the exact interleave: two reservations outstanding,
+        one finalizes SHIP (counter -> 0), the other finalizes NEEDS_WORK
+        afterwards. That late verdict reviewed the pre-SHIP artifact, so it
+        records evidence but charges no round and never regresses the shipped
+        terminal — otherwise it produced needs_work on a zero counter, i.e. a
+        free fresh budget."""
+        ship_id, late_id = self._reserve(), self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="<verdict>SHIP</verdict>",
+            verdict="SHIP", review_type="plan", reservation_id=ship_id,
+            status_target="plan", reset_rounds_on_ship=True,
+        )
+        data = self._data()
+        self.assertEqual(data["plan_review_rounds"], 0)
+        self.assertEqual(data["plan_review_status"], "ship")
+        # The outstanding reservation is superseded, its pending round intact
+        # (fn-134.7 / R22: reset never touches review_pending_rounds).
+        self.assertEqual(
+            data["review_reservations"][late_id]["superseded_by"], ship_id
+        )
+        self.assertEqual(data["review_pending_rounds"]["plan"], 1)
+
+        summary = flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            review_type="plan", reservation_id=late_id,
+            status_target="plan", reset_rounds_on_ship=True,
+        )
+        data = self._data()
+        self.assertEqual(data["plan_review_status"], "ship")  # no regression
+        self.assertEqual(data["plan_review_rounds"], 0)
+        row = data["review_attempts"][-1]
+        self.assertEqual(row["reservation_id"], late_id)
+        self.assertEqual(row["verdict"], "NEEDS_WORK")  # evidence recorded…
+        self.assertFalse(row["round_consumed"])  # …but no round charged
+        self.assertEqual(row["superseded_by"], ship_id)
+        self.assertIsNone(summary["status_written"])
+        self.assertEqual(summary["superseded_by"], ship_id)
+        # Only the SHIP counts against the budget; the lifecycle is balanced.
+        self.assertEqual(summary["verdict_attempts"], 1)
+        self.assertEqual(data.get("review_pending_rounds", {}).get("plan", 0), 0)
+        self.assertEqual(data.get("review_reservations", {}), {})
+
     def test_impl_bulk_reset_advances_every_impl_epoch_it_wipes(self):
         t1, t2 = f"{self.spec_id}.1", f"{self.spec_id}.2"
         for task in (t1, t2):
@@ -1730,6 +1774,86 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
             self.spec_id, "plan", return_reservation=True
         )
         self.assertIsInstance(follow_up, tuple)
+
+    def test_journal_retained_until_publisher_sidecar_write_is_durable(self):
+        """PR #290 bot r6 crash boundary: process exit between the receipt
+        publish and the publisher's sidecar write. The durable row still has a
+        pending leg, so the journal MUST survive as its repair source."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        journal_path = self._journal_path(reservation_id)
+        spec_path = (
+            self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        ).resolve()
+        real_write = flowctl.atomic_write_json
+
+        def crash_on_sidecar(path, data, *args, **kwargs):
+            if Path(path).resolve() == spec_path:
+                raise RuntimeError("process exit before the sidecar write")
+            return real_write(path, data, *args, **kwargs)
+
+        with mock.patch.object(flowctl, "atomic_write_json", crash_on_sidecar):
+            with self.assertRaises(RuntimeError):
+                flowctl._publish_review_receipt_from_journal(
+                    reservation_id, str(target)
+                )
+        # Receipt durable, row still pending — and the journal is still there.
+        self.assertTrue(target.exists())
+        self.assertEqual(
+            self._data()["review_attempts"][-1]["finalized"]["receipt"],
+            "pending",
+        )
+        self.assertTrue(journal_path.exists())
+        # The next invocation repairs from it: zero dispatch, row completed,
+        # journal finally dropped.
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(
+            self._data()["review_attempts"][-1]["finalized"]["receipt"],
+            "complete",
+        )
+        self.assertFalse(journal_path.exists())
+        # …and the round after that dispatches normally again.
+        self.assertIsInstance(
+            flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", return_reservation=True
+            ),
+            tuple,
+        )
+
+    def test_retained_completed_journal_replays_as_idempotent_noop(self):
+        """Crash between the sidecar write and the journal unlink: the
+        retained cleanup-pending journal re-applies as a pure no-op."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_with_receipt(reservation_id, target)
+        journal_path = self._journal_path(reservation_id)
+        journal = json.loads(journal_path.read_text())
+        self.assertTrue(
+            flowctl._publish_review_receipt_from_journal(
+                reservation_id, str(target)
+            )
+        )
+        self.assertFalse(journal_path.exists())
+        # Resurrect the journal exactly as the cleanup-pending crash leaves it.
+        journal["finalized"] = {
+            leg: "complete" if state == "pending" else state
+            for leg, state in journal["finalized"].items()
+        }
+        journal["cleanup"] = "pending"
+        journal_path.write_text(json.dumps(journal))
+        receipt_before = target.read_text()
+        rows_before = self._data()["review_attempts"]
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(isinstance(result, dict) and result["replayed"])
+        self.assertEqual(target.read_text(), receipt_before)
+        self.assertEqual(self._data()["review_attempts"], rows_before)
+        self.assertFalse(journal_path.exists())
 
     def test_receipt_published_progress_unmarked_replay_is_noop(self):
         reservation_id = self._reserve()
@@ -2689,6 +2813,34 @@ class TestReplayAwareInProcessCallers(unittest.TestCase):
             "NEEDS_HUMAN",
         )
         self.assertIsNone(flowctl.review_replay_terminal_verdict([]))
+
+    def test_major_rethink_outranks_needs_work_in_replay_fold(self):
+        """PR #290 bot r6: MAJOR_RETHINK escalates to BLOCKED:
+        DESIGN_CONFLICT, NEEDS_WORK is an ordinary fix loop. Folding a
+        delivered MAJOR_RETHINK down to NEEDS_WORK dropped the escalation."""
+        self.assertEqual(
+            flowctl.review_replay_terminal_verdict([
+                {"reservation_id": "a", "verdict": "MAJOR_RETHINK"},
+                {"reservation_id": "b", "verdict": "NEEDS_WORK"},
+            ]),
+            "MAJOR_RETHINK",
+        )
+        self.assertEqual(
+            flowctl.review_replay_terminal_verdict([
+                {"reservation_id": "a", "verdict": "SHIP"},
+                {"reservation_id": "b", "verdict": "MAJOR_RETHINK"},
+            ]),
+            "MAJOR_RETHINK",
+        )
+        # NEEDS_HUMAN still outranks everything.
+        self.assertEqual(
+            flowctl.review_replay_terminal_verdict([
+                {"reservation_id": "a", "verdict": "MAJOR_RETHINK"},
+                {"reservation_id": "b", "verdict": "NEEDS_HUMAN"},
+                {"reservation_id": "c", "verdict": "NEEDS_WORK"},
+            ]),
+            "NEEDS_HUMAN",
+        )
 
     def test_incomplete_journal_in_scope_aborts_handler_dispatch(self):
         """End-to-end shape: the gate returns a replay dict for an incomplete

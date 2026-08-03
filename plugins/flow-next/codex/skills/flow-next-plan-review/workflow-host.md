@@ -42,7 +42,8 @@ if [[ "$ROUND_EXIT" -ne 0 ]]; then
 fi
 if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
  # Record/attach recovery delivered the prior verdict. Apply terminal
- # precedence NEEDS_HUMAN > NEEDS_WORK > all-SHIP; no new dispatch.
+ # precedence NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP; no
+ # new dispatch.
  printf '%s\n' "$ROUND_JSON"
  if [[ "$(jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
  echo "ESCALATE: reviewer requested human review" >&2

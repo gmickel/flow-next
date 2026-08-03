@@ -79,7 +79,8 @@ if [[ "$ROUND_EXIT" -ne 0 ]]; then
  exit "$ROUND_EXIT"
 fi
 if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
- # Recovered verdict terminal precedence: NEEDS_HUMAN > NEEDS_WORK > all-SHIP.
+ # Recovered verdict terminal precedence:
+ # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP.
  printf '%s\n' "$ROUND_JSON"
  if [[ "$(jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
  echo "ESCALATE: reviewer requested human review" >&2

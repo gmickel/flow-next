@@ -85,7 +85,8 @@ if [[ "$ROUND_EXIT" -ne 0 ]]; then
  exit "$ROUND_EXIT"
 fi
 if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
- # A delivered verdict was recovered. Apply NEEDS_HUMAN > NEEDS_WORK >
+ # A delivered verdict was recovered. Apply
+ # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK >
  # all-SHIP and do not dispatch another reviewer.
  printf '%s\n' "$ROUND_JSON"
  if [[ "$(jq -r '[.replays[]?.verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
