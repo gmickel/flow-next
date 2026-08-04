@@ -269,7 +269,7 @@ Default to standard unless complexity demands more or less.
 
 **Calibration (read first):** before writing task specs, read [`examples.md`](examples.md) — good/bad task-spec shapes, investigation-target formats, T-shirt sizing, and coverage-table examples. It is the few-shot anchor that keeps task specs well-sized and well-shaped; skipping it is why plans drift toward vague or over-split tasks.
 
-**Efficiency note**: Use stdin (`--file -`) with heredocs to avoid temp files where a command accepts stdin. On the create path, `task create --description-file --acceptance-file --satisfies` writes the whole task spec (sections + frontmatter) in ONE call — no follow-up `task set-spec`. `task set-spec` remains the tool for editing tasks that already exist (Route A edits, interview write-backs, review fix loops).
+**Efficiency note**: Use stdin (`--file -`) with heredocs to avoid temp files where a command accepts stdin. Route B is the ceremony fast path (fn-163): `spec create --plan-file` creates the spec WITH its plan in one call, and ONE `task create --from-json` call materializes every task of the plan (all-or-nothing, one lock). Granular verbs (`spec set-plan`, per-task `task create`, `task set-spec`) remain the tools for editing what already exists (Route A edits, interview write-backs, review fix loops, adding a task later).
 
 **Route A - Input was an existing Flow ID**:
 
@@ -292,7 +292,20 @@ Default to standard unless complexity demands more or less.
 
 **Route B - Input was text (new idea)**:
 
-1. Create spec — **tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel agents stop colliding on `fn-N`. Route from the Step 0 root config snapshot (fn-110) — **no new `config get`**. Explicit user override in the invocation always wins.
+1. Compose the plan FIRST, then create spec + plan in ONE call — **tracker-first is the recommended team default** when a tracker is configured (`tracker.specIds=tracker`): the tracker is the distributed allocator, so parallel agents stop colliding on `fn-N`. Route from the Step 0 root config snapshot (fn-110) — **no new `config get`**. Explicit user override in the invocation always wins.
+
+   The plan markdown (step 2's scaffold) is fed to the creation call via `--plan-file` so create + set-plan collapse into one invocation (`--plan-file` validates before id allocation and composes unchanged with the tracker-first flags). **Same-block rule (vars die across tool calls):** the compose and the create run in ONE bash block — the block below OPENS with the plan heredoc written to a transient stdin-feed path, every creation line consumes it, and the block deletes it before exiting. The transient feed is not a plan artifact (the durable plan lives only in `.flow/` via the create call); composing it and creating in separate tool calls breaks the variable and is an error.
+
+   ```bash
+   # TOP of the SAME bash block that runs the routing + creation below:
+   PLAN_FILE="${TMPDIR:-/tmp}/flow-plan-body-<suffix>.md"   # literal agent-composed path
+   cat > "$PLAN_FILE" <<'PLAN_EOF'
+   <full plan markdown — step 2's scaffold>
+   PLAN_EOF
+   # ... routing + creation lines below run HERE, in this same block ...
+   # END of block:
+   rm -f "$PLAN_FILE"
+   ```
 
    ```bash
    # From the Step 0 root snapshot (literal path; no new config get).
@@ -301,7 +314,7 @@ Default to standard unless complexity demands more or less.
 
    if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
      # Named existing issue in the request → mint from that key, THEN attach + seed:
-     #   $FLOWCTL spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "<Short title>" --json
+     #   $FLOWCTL spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "<Short title>" --plan-file "$PLAN_FILE" --json
      #   Minting stores the identifier but NOT the durable tracker.id, so this
      #   branch MUST also run the fetch/attach/seed ceremony (tracker-sync
      #   steps.md Phase 2b). Skipping it leaves the spec effectively unlinked and
@@ -309,7 +322,7 @@ Default to standard unless complexity demands more or less.
      # Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
      #   skill: flow-next-tracker-sync (operation: create-first, title: "<Short title>", body: "<seed body>")
      #   → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below
-     #   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "<Short title>" --json
+     #   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "<Short title>" --plan-file "$PLAN_FILE" --json
      #   then attach + seed merge base per tracker-sync steps.md Phase 2d "Enabled caller sequence"
      # Network cost (honest, conditional): when tracker.perEvent.plan is already active,
      # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
@@ -329,12 +342,12 @@ Default to standard unless complexity demands more or less.
    # to flow-first would strand that issue as an orphan - surface
    # identifier + url + retryKey and STOP instead (the record makes it resumable).
    if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
-     SPEC_OUTPUT=$($FLOWCTL spec create --title "<Short title>" --json)
+     SPEC_OUTPUT=$($FLOWCTL spec create --title "<Short title>" --plan-file "$PLAN_FILE" --json)
    fi
    ```
-   This returns the spec ID (e.g., `wor-17-slug` under tracker-first, or `fn-1-add-oauth` under flow-first). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later). Do **not** add a runtime advisory/nag about the id scheme at this mint site (withdrawn R10) — setup owns the one-time question.
+   This returns the spec ID (e.g., `wor-17-slug` under tracker-first, or `fn-1-add-oauth` under flow-first). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --plan-file "$PLAN_FILE" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later). Do **not** add a runtime advisory/nag about the id scheme at this mint site (withdrawn R10) — setup owns the one-time question.
 
-2. Write spec (use stdin heredoc):
+2. The plan content (this scaffold is the heredoc body step 1's block writes to its transient `$PLAN_FILE` feed — same bash block as the create; `spec set-plan` is the Route A / editing path, not part of Route B creation):
 
    The canonical scaffold lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — section list, scope-owner annotations, and the `## Decision Context` flat-vs-H3 conditional. At runtime the template is resolved via the 4-tier discovery cascade (first match wins): `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. The full walker (case-insensitive FS probe, both-exist warning, plugin-root fallback) is single-sourced in [`plugins/flow-next/references/spec-template-discovery.md`](../../references/spec-template-discovery.md). Read the resolved template before authoring; never duplicate its section list inline. The plan skill extends that scaffold with the plan-specific sections shown below (Overview, Quick commands, Strategy Alignment, Strategy drift, Early proof point, Requirement coverage).
 
@@ -344,7 +357,8 @@ Default to standard unless complexity demands more or less.
    # Conditional sections: ## Strategy Alignment (when STRATEGY_PRESENT=true from Step 1),
    # ## Strategy drift flagged for review (when plan scope conflicts with an active track)
    # Add mermaid diagram if data model or architecture changes
-   $FLOWCTL spec set-plan <spec-id> --file - --json <<'EOF'
+   # Heredoc BODY for step 1's PLAN_FILE compose (shown standalone here):
+   cat > "$PLAN_FILE" <<'PLAN_EOF'   # runs inside step 1's single bash block
    # Spec Title
 
    ## Overview
@@ -397,7 +411,7 @@ Default to standard unless complexity demands more or less.
    | R1  | <criterion from Acceptance Criteria> | fn-N-slug.1, fn-N-slug.2 | — |
    | R2  | <another criterion> | fn-N-slug.3 | — |
    | R3  | <deferred item> | — | Deferred to fn-M-slug |
-   EOF
+   PLAN_EOF
    ```
 
    **`## Strategy Alignment` rules (active iff STRATEGY_PRESENT=true from Step 1):**
@@ -457,21 +471,20 @@ Default to standard unless complexity demands more or less.
    - fn-7-notify → fn-N-slug (Notifications): waits for the event system this plan adds   [reverse]
    ```
 
-4. Create child tasks — ONE `task create` call per task writes title, deps, description, acceptance, AND `satisfies:` frontmatter at create time (fn-110; zero follow-up `task set-spec` on the plan path):
+4. Create ALL child tasks in ONE `task create --from-json` call (fn-163; all-or-nothing under one lock — zero follow-up `task set-spec` on the plan path):
    ```bash
-   # For each task. Write description and acceptance to UNIQUE per-task temp files
-   # (path-persistence rule: literal agent-composed paths; write + consume in one
-   # bash block), then:
-   $FLOWCTL task create --spec <spec-id> --title "<Task title>" \
-     --deps <dep1>,<dep2> \
-     --description-file "${TMPDIR:-/tmp}/flow-plan-desc-<task-id>.md" \
-     --acceptance-file "${TMPDIR:-/tmp}/flow-plan-acc-<task-id>.md" \
-     --satisfies R1,R3 --json
+   # Compose the whole task set as ONE bare JSON array (literal agent-composed
+   # temp path), then a single call materializes every task:
+   cat > "${TMPDIR:-/tmp}/flow-plan-tasks-<suffix>.json" <<'EOF'
+   [
+     {"title": "<Task 1 title>", "description": "<## Description ...>", "acceptance": "<- [ ] ...>", "satisfies": ["R1", "R3"]},
+     {"title": "<Task 2 title>", "deps": [1], "description": "...", "acceptance": "...", "satisfies": ["R2"]}
+   ]
+   EOF
+   $FLOWCTL task create --spec <spec-id> --from-json "${TMPDIR:-/tmp}/flow-plan-tasks-<suffix>.json" --json
    ```
 
-   Omit `--deps` for tasks with no dependencies, and `--satisfies` for tasks that advance no specific R-IDs. `--satisfies` takes a comma list of bare R-ID tokens (`R1,R3` — grammar `R[1-9][0-9]*[a-z]?`; duplicates and malformed tokens error before anything is written) and renders the `satisfies:` YAML frontmatter block. `task set-spec` is NOT part of the create path — it is for editing tasks that already exist.
-
-   **TIP**: Use `--deps` to declare dependencies inline when creating tasks. Tasks must exist before being referenced, so create in dependency order.
+   Per object: `title` required non-empty; `description`/`acceptance` optional strings (full task-spec markdown — same content the granular `--description-file`/`--acceptance-file` flags take); `satisfies` an array of bare R-ID tokens (grammar `R[1-9][0-9]*[a-z]?`); `deps` an array of task-id strings or **1-based integer indexes of EARLIER entries in the same array** (so intra-plan dependencies need no pre-existing ids); `priority` optional int. Any invalid entry rejects the whole batch with zero writes; `--json` returns the created ids in input order. Omit `deps`/`satisfies` where they don't apply. Granular one-task `task create` (with `--description-file`/`--acceptance-file`/`--satisfies`) remains the tool for ADDING a task to an existing plan later; `task set-spec` is for editing tasks that already exist.
 
    **Task spec content** (remember: NO implementation code):
    ```markdown

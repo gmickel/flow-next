@@ -168,8 +168,10 @@ This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do N
 **Creating a spec:** write it directly - do NOT use `/flow-next:plan` (task breakdown only). Scaffold cascade (first match wins): `SPEC.md` -> `spec.md` -> `.flow/templates/spec.md` -> bundled template. To change the spec shape for a project, copy the bundled template to a repo-root `SPEC.md` and edit it - adding sections and rewriting the guidance prose is free; renaming `## Acceptance Criteria` / `## Boundaries` / `## Goal & Context` / `## Decision Context` silently degrades the features that parse them. Full guide: [`plugins/flow-next/docs/spec-template.md`](plugins/flow-next/docs/spec-template.md#customizing-the-scaffold-for-your-project). If the repo has a `.flow/criteria.md` (standing G-ID criteria), reference relevant G-IDs in spec prose - NEVER restate a standing criterion as an R-ID (a copy freezes while criteria.md evolves and gets judged twice).
 
 ```bash
-.flow/bin/flowctl spec create --title "Short title" --json
-.flow/bin/flowctl spec set-plan <spec-id> --file plan.md
+.flow/bin/flowctl spec create --title "Short title" --plan-file plan.md --json   # one-shot create+plan
+.flow/bin/flowctl task create --spec <spec-id> --from-json tasks.json --json     # bulk tasks, one call
+# tasks.json: [{"title": "...", "description": "...", "acceptance": "...", "deps": [1], "satisfies": ["R1"]}]
+# granular verbs (spec set-plan, per-task create) remain for edits
 ```
 
 Then `/flow-next:plan <spec-id>`.

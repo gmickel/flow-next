@@ -186,7 +186,7 @@ flowctl scope write-policy business|technical|both --current-sections-json <file
 Create new spec.
 
 ```bash
-flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--json]
+flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--plan-file plan.md | --plan -] [--json]
 
 # Tracker-first: key the spec by its tracker identifier (wor-17-slug) instead of fn-NN
 flowctl spec create --title "Spec title" --tracker-first --tracker-identifier WOR-17 [--json]
@@ -200,6 +200,8 @@ Output:
 `--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key — no fresh `fn-NN` is allocated; ids never rename. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
 
 Pass `--branch` at create time to set `branch_name` in the same call; [`spec set-branch`](#spec-set-branch) is for renaming the branch of an existing spec.
+
+`--plan-file` / `--plan -` (stdin) write the full plan at create time — one-shot create+set-plan; the plan is validated before the id is allocated and a failure rolls back leaving no spec on disk.
 
 ### spec set-plan
 
@@ -394,16 +396,66 @@ flowctl spec skeleton [--json]
 Create task under spec.
 
 ```bash
-flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] [--description-file desc.md] [--acceptance-file accept.md] [--satisfies R1,R3] [--priority 10] [--json]
+# Single-task (full-field)
+flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] \
+  [--description-file desc.md | --description "..."] \
+  [--acceptance-file accept.md | --acceptance "..."] \
+  [--satisfies R1,R3] [--priority 10] [--json]
+
+# Bulk (mutually exclusive with --title and single-task field flags)
+flowctl task create --spec fn-1 --from-json tasks.json [--json]
+flowctl task create --spec fn-1 --from-json - [--json]   # stdin
 ```
 
 Section content is normalized on write (here and in `task set-description` / `set-acceptance` / `set-spec`): a leading title-like H2 (e.g. `## Acceptance Criteria (…)`) is stripped, and any remaining `## ` headings in the content are demoted to `### ` (fenced code blocks untouched) so they never become section boundaries.
 
-`--description-file` writes the `## Description` section at create time through the same normalization pipeline as `task set-spec`'s description path. `--satisfies` writes the `satisfies:` YAML frontmatter block: a comma-separated list of spec R-IDs, whitespace-trimmed, each token matching `R[1-9][0-9]*[a-z]?` (`R1`, `R10`, `R4a`; `R0`, `R4A`, and `R4ab` are invalid); empty tokens and duplicates are rejected (error, not dedupe) and input order is preserved. All inputs are read and validated before any file is written; a malformed value leaves no partial task on disk. With these flags a freshly planned task is complete in one call; `task set-spec` remains the path for later edits to an existing task.
+`--description-file` / inline `--description` write the `## Description` section at create time through the same normalization pipeline as `task set-spec`'s description path (the pair is mutually exclusive). Same for `--acceptance-file` / `--acceptance`. `--satisfies` writes the `satisfies:` YAML frontmatter block: a comma-separated list of spec R-IDs, whitespace-trimmed, each token matching `R[1-9][0-9]*[a-z]?` (`R1`, `R10`, `R4a`; `R0`, `R4A`, and `R4ab` are invalid); empty tokens and duplicates are rejected (error, not dedupe) and input order is preserved. All inputs are read and validated before any file is written; a malformed value leaves no partial task on disk. With these flags a freshly planned task is complete in one call; `task set-spec` remains the path for later edits to an existing task.
 
-Output:
+Single-task output:
 ```json
 {"success": true, "id": "fn-1.4", "spec": "fn-1", "title": "Task title", "depends_on": ["fn-1.2", "fn-1.3"]}
+```
+
+#### `--from-json` bulk create
+
+`--from-json <path|->` creates N tasks in one call under one per-spec lock. Mutually exclusive with `--title` and all single-task field flags. Body is a bare, non-empty JSON array of task objects (no wrapper object). Whole file is validated up front; any invalid entry rejects the entire batch — no partial tasks written.
+
+Example (`tasks.json`):
+```json
+[
+  {
+    "title": "Wire auth middleware",
+    "description": "Add JWT verification to /api/*.",
+    "acceptance": "Unauthed requests get 401.",
+    "satisfies": ["R1", "R3"],
+    "priority": 10
+  },
+  {
+    "title": "Add login UI",
+    "description": "Login form + redirect.",
+    "acceptance": "Valid creds reach /dashboard.",
+    "deps": [1],
+    "satisfies": ["R2"]
+  },
+  {
+    "title": "Session smoke test",
+    "deps": ["fn-1.1", 2],
+    "priority": 20
+  }
+]
+```
+
+Field schema per object:
+- `title` (required, non-empty string)
+- `description?` (string)
+- `acceptance?` (string)
+- `satisfies?` (array of R-ID strings, e.g. `["R1","R3"]`)
+- `deps?` (array of either task-id strings or **1-based integer indexes** referring to **earlier** entries in the same array; indexes resolve after id allocation)
+- `priority?` (int)
+
+Unknown keys, nulls, wrong types, empty titles, or out-of-range/forward deps reject the batch. Ordered `--json` output:
+```json
+{"success": true, "tasks": [{"id": "fn-1.1", "title": "Wire auth middleware"}, {"id": "fn-1.2", "title": "Add login UI"}, {"id": "fn-1.3", "title": "Session smoke test"}]}
 ```
 
 ### task set-title

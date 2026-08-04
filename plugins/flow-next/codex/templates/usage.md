@@ -32,9 +32,10 @@ The typical flow. Everything else (deps, block/reset, memory, glossary, config, 
 .flow/bin/flowctl list                          # all specs + tasks grouped
 .flow/bin/flowctl show fn-1-add-oauth.2         # spec or task detail (cat for raw markdown)
 .flow/bin/flowctl ready --spec fn-1-add-oauth   # tasks ready to work on
-.flow/bin/flowctl spec create --title "..." --branch fn-1-add-oauth --json
-.flow/bin/flowctl spec set-plan fn-1-add-oauth --file plan.md
-.flow/bin/flowctl task create --spec fn-1-add-oauth --title "..." --deps fn-1-add-oauth.1 --description-file d.md --acceptance-file a.md --satisfies R1,R3
+.flow/bin/flowctl spec create --title "..." --plan-file plan.md --json
+.flow/bin/flowctl task create --spec fn-1-add-oauth --from-json tasks.json
+# tasks.json: [{"title":"...","satisfies":["R1"]},{"title":"...","deps":[1]}]
+# edit: set-description/set-acceptance/set-spec, set-plan
 .flow/bin/flowctl start fn-1-add-oauth.2        # claim task
 .flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
 .flow/bin/flowctl task reset fn-1-add-oauth.2   # back to todo

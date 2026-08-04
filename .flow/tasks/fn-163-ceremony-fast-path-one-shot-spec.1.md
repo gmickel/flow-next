@@ -44,9 +44,8 @@ Add one-shot spec authoring to flowctl: `spec create --plan-file <path>` and `sp
 - New fixture suite `test_spec_create_plan_file.py` covers equivalence, stdin form, pre-write error ordering, rollback (R6 subset)
 - No change to receipts/evidence/start/done (R4)
 ## Done summary
-TBD
-
+Implemented one-shot spec authoring: `spec create --plan-file <path>` / `--plan -` (stdin). Plan content fully read before id allocation (no id consumed on missing/unreadable file); plan applied via `_apply_spec_plan_writes`, a shared raising core also used by `cmd_spec_set_plan` (granular md-then-json order preserved, still not a rollback unit); one-shot path tracks created spec .json+.md and removes all on any plan-stage failure. Tracker-first flags compose unchanged. 14 fixture tests: byte-identity vs granular (frozen time, file+stdin), wire-form subprocess checks, pre-write error ordering, mutual exclusion, failure injection at all four publication points. Implemented by grok-4.5 bridge, host-verified.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3f733c65088a306af3ffc0f82af14fb720e34061
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_spec_create_plan_file test_task_create_files -q
 - PRs:

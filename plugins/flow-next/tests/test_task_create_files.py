@@ -93,7 +93,10 @@ class TaskCreateFilesTestCase(unittest.TestCase):
         title: str = "Task",
         acceptance_file: Optional[str] = None,
         description_file: Optional[str] = None,
+        acceptance: Optional[str] = None,
+        description: Optional[str] = None,
         satisfies: Optional[str] = None,
+        from_json: Optional[str] = None,
     ) -> dict:
         return self._call(
             func=self.flowctl.cmd_task_create,
@@ -104,7 +107,10 @@ class TaskCreateFilesTestCase(unittest.TestCase):
             deps=None,
             acceptance_file=acceptance_file,
             description_file=description_file,
+            acceptance=acceptance,
+            description=description,
             satisfies=satisfies,
+            from_json=from_json,
         )
 
     def _create_expect_error(
@@ -112,7 +118,10 @@ class TaskCreateFilesTestCase(unittest.TestCase):
         title: str = "Task",
         acceptance_file: Optional[str] = None,
         description_file: Optional[str] = None,
+        acceptance: Optional[str] = None,
+        description: Optional[str] = None,
         satisfies: Optional[str] = None,
+        from_json: Optional[str] = None,
     ) -> str:
         ns = argparse.Namespace(
             spec=self.spec_id,
@@ -122,7 +131,10 @@ class TaskCreateFilesTestCase(unittest.TestCase):
             deps=None,
             acceptance_file=acceptance_file,
             description_file=description_file,
+            acceptance=acceptance,
+            description=description,
             satisfies=satisfies,
+            from_json=from_json,
             json=True,
         )
         buf = io.StringIO()
@@ -430,6 +442,54 @@ class TaskCreateFilesTestCase(unittest.TestCase):
             markdown = (tasks / f"{task_id}.md").read_text(encoding="utf-8")
             self.assertEqual(data["title"], title)
             self.assertTrue(markdown.startswith(f"# {task_id} {title}\n"))
+
+    # --- inline --description / --acceptance (fn-163.2) -----------------------------
+
+    def test_inline_description_equivalent_to_file_twin(self) -> None:
+        body = "Do the thing.\n\nCarefully.\n"
+        desc_path = self._write("desc.md", body)
+        via_file = self._create(title="SameTitle", description_file=desc_path)
+        via_inline = self._create(title="SameTitle", description=body)
+
+        def _norm(task_id: str) -> str:
+            return self._task_md(task_id).replace(task_id, "TID")
+
+        self.assertEqual(_norm(via_file["id"]), _norm(via_inline["id"]))
+
+    def test_inline_acceptance_equivalent_to_file_twin(self) -> None:
+        body = "- [ ] real criterion\n"
+        acc_path = self._write("acc.md", body)
+        via_file = self._create(title="SameTitle", acceptance_file=acc_path)
+        via_inline = self._create(title="SameTitle", acceptance=body)
+
+        def _norm(task_id: str) -> str:
+            return self._task_md(task_id).replace(task_id, "TID")
+
+        self.assertEqual(_norm(via_file["id"]), _norm(via_inline["id"]))
+
+    def test_inline_description_and_file_mutually_exclusive(self) -> None:
+        desc_path = self._write("desc.md", "Body.\n")
+        err = self._create_expect_error(
+            title="Both", description="inline", description_file=desc_path
+        )
+        self.assertIn("mutually exclusive", err)
+        self._assert_no_orphan_writes()
+
+    def test_inline_acceptance_and_file_mutually_exclusive(self) -> None:
+        acc_path = self._write("acc.md", "- [ ] A\n")
+        err = self._create_expect_error(
+            title="Both", acceptance="inline", acceptance_file=acc_path
+        )
+        self.assertIn("mutually exclusive", err)
+        self._assert_no_orphan_writes()
+
+    def test_inline_description_normalization_h2_layering(self) -> None:
+        result = self._create(
+            title="Norm",
+            description="## Description\nBody text.\n\n## Rogue heading\nMore.\n",
+        )
+        md = self._task_md(result["id"])
+        self.assertIn("## Description\nBody text.\n\n### Rogue heading\nMore.", md)
 
     # --- partial flag combinations (each flag independent) -------------------------
 

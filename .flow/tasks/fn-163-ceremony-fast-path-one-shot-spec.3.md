@@ -43,9 +43,8 @@ Teach the fast path as the default everywhere the granular ceremony is currently
 - Repo CHANGELOG Unreleased entry; docs-site live reference pages updated (build green), site changelog/version fields deferred to batched release; downstream walk evidence recorded (R7)
 - Full propagation chain run; distribution and mirror guards green
 ## Done summary
-TBD
-
+Fast path taught as default everywhere the granular ceremony was taught: templates/usage.md Common Commands (spec create --plan-file + task create --from-json with example; granular verbs one editing line), the three setup snippets, root CLAUDE.md Flow-Next block, docs/flowctl.md (spec create one-shot flags + full --from-json schema with rejection semantics and ordered output, placed next to the evidence-json schema). Token budgets green (usage.md 2942/2950). Repo CHANGELOG Unreleased entry (user-outcome-first). Propagation complete: .flow/bin/flowctl.py + flowctl_tracker synced, tracker manifest regenerated, sync-codex.sh idempotent. Docs-site: cli-reference.mdx updated with fast-path commands + contract paragraph (host; commit follows spec landing). Downstream walk: docs-site UPDATED; microsite NO-CHANGE (no CLI-surface content); AIxSDLC guide NO-CHANGE (methodology level, revisit at release); vault NO-CHANGE (SlopCodeBench experiment note already captures the driver). Site changelog + version fields deferred to batched release. Implemented by grok-4.5 bridge; host wrote CHANGELOG/CLAUDE.md/docs-site and verified.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8dddf5e76fbef17a303694a257a92a6c8fb63077
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_token_budgets test_prompt_text_pinned -q
 - PRs:

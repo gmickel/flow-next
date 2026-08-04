@@ -25702,7 +25702,15 @@ def cmd_spec_skeleton(args: argparse.Namespace) -> None:
 
 
 def cmd_spec_create(args: argparse.Namespace) -> None:
-    """Create a new spec."""
+    """Create a new spec.
+
+    Optional one-shot plan authoring (fn-163.1): ``--plan-file <path>`` or
+    ``--plan -`` (stdin) apply the plan after the initial skeleton write via
+    the same raising core as ``spec set-plan``. Plan content is fully read
+    before id allocation so a missing/unreadable plan never consumes an id
+    or leaves orphan files. On any plan-stage failure the one-shot path
+    removes every path it created (json + md).
+    """
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
@@ -25711,6 +25719,30 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
     flow_dir = get_flow_dir()
     meta_path = flow_dir / META_FILE
     load_json_or_exit(meta_path, "meta.json", use_json=args.json)
+
+    # fn-163.1: fully read plan content BEFORE id allocation. Missing or
+    # unreadable plan file → error, zero writes, no id consumed.
+    plan_file = getattr(args, "plan_file", None)
+    plan_arg = getattr(args, "plan", None)
+    plan_content: Optional[str] = None
+    if plan_file is not None and plan_arg is not None:
+        # argparse mutual-exclusion is the primary guard; belt-and-suspenders
+        # for direct Namespace callers (tests).
+        error_exit(
+            "--plan-file and --plan are mutually exclusive",
+            use_json=args.json,
+        )
+    if plan_file is not None:
+        plan_content = read_text_or_exit(
+            Path(plan_file), "Plan file", use_json=args.json
+        )
+    elif plan_arg is not None:
+        if plan_arg != "-":
+            error_exit(
+                "--plan only accepts '-' (stdin); use --plan-file for a path",
+                use_json=args.json,
+            )
+        plan_content = read_file_or_stdin("-", "Plan", use_json=args.json)
 
     # fn-52.10 (R16): origin-branched id generator.
     #   - flow-first (default): native sequential `fn-NN-slug`, allocated from
@@ -25861,6 +25893,35 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
 
     # NOTE: We no longer update meta["next_spec"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
+
+    # fn-163.1: one-shot plan apply. Tracks every created path and removes ALL
+    # of them on ANY plan-stage failure (plan-md write OR updated_at json write)
+    # — never leave a plan-less skeleton or plan-md-with-stale-json.
+    if plan_content is not None:
+        created_json = spec_json_dir / f"{spec_id}.json"
+        created_md = spec_md_dir / f"{spec_id}.md"
+        created_paths = [created_json, created_md]
+        try:
+            # Mirror set-plan: load the on-disk JSON as the stamp base so the
+            # one-shot path is byte-identical to create-then-set-plan (R2).
+            disk_data = load_json(created_json)
+            _apply_spec_plan_writes(
+                spec_md_path=created_md,
+                content=plan_content,
+                spec_json_path=created_json,
+                spec_data=disk_data,
+            )
+            spec_data = disk_data
+        except (OSError, ValueError, TypeError) as e:
+            for published_path in reversed(created_paths):
+                try:
+                    published_path.unlink()
+                except OSError:
+                    pass
+            error_exit(
+                f"Failed to create spec {spec_id}: {e}",
+                use_json=args.json,
+            )
 
     if args.json:
         out = {
@@ -28272,59 +28333,440 @@ def _resolve_same_spec_deps(
     return resolved
 
 
+# Allowed keys on each --from-json item (fn-163.2). Unknown keys reject the batch.
+_TASK_BULK_ITEM_KEYS = frozenset(
+    {"title", "description", "acceptance", "satisfies", "deps", "priority"}
+)
+
+
+def _is_json_int(value: Any) -> bool:
+    """True for JSON integers only (bool is a subclass of int in Python)."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _parse_bulk_task_items(
+    raw: str,
+    *,
+    flow_dir: Path,
+    spec_id: str,
+    use_json: bool,
+) -> list[dict]:
+    """Parse + validate a --from-json body. No writes. Raises via error_exit.
+
+    Returns a list of dicts ready for publication, each with:
+      title, description, acceptance, satisfies, priority,
+      dep_refs: list of ("id", canonical_task_id) | ("index", 1-based_int)
+    """
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        error_exit(f"--from-json: malformed JSON: {e}", use_json=use_json)
+
+    if not isinstance(data, list):
+        error_exit(
+            "--from-json: expected a non-empty JSON array of objects",
+            use_json=use_json,
+        )
+    if len(data) == 0:
+        error_exit(
+            "--from-json: expected a non-empty JSON array of objects",
+            use_json=use_json,
+        )
+
+    items: list[dict] = []
+    for i, entry in enumerate(data):
+        label = f"item {i + 1}"
+        if not isinstance(entry, dict):
+            error_exit(
+                f"--from-json: {label}: expected object, got {type(entry).__name__}",
+                use_json=use_json,
+            )
+
+        unknown = sorted(set(entry.keys()) - _TASK_BULK_ITEM_KEYS)
+        if unknown:
+            error_exit(
+                f"--from-json: {label}: unknown key(s): {', '.join(unknown)}",
+                use_json=use_json,
+            )
+
+        # Reject JSON nulls on any present key (null is not a typed value).
+        for key, val in entry.items():
+            if val is None:
+                error_exit(
+                    f"--from-json: {label}: '{key}' must not be null",
+                    use_json=use_json,
+                )
+
+        if "title" not in entry:
+            error_exit(
+                f"--from-json: {label}: 'title' is required",
+                use_json=use_json,
+            )
+        title = entry["title"]
+        if not isinstance(title, str):
+            error_exit(
+                f"--from-json: {label}: 'title' must be a string",
+                use_json=use_json,
+            )
+        if not title.strip():
+            error_exit(
+                f"--from-json: {label}: 'title' must be a non-empty string",
+                use_json=use_json,
+            )
+        _reject_multiline_title(title, use_json=use_json)
+
+        description = None
+        if "description" in entry:
+            description = entry["description"]
+            if not isinstance(description, str):
+                error_exit(
+                    f"--from-json: {label}: 'description' must be a string",
+                    use_json=use_json,
+                )
+            description = normalize_section_content("## Description", description)
+
+        acceptance = None
+        if "acceptance" in entry:
+            acceptance = entry["acceptance"]
+            if not isinstance(acceptance, str):
+                error_exit(
+                    f"--from-json: {label}: 'acceptance' must be a string",
+                    use_json=use_json,
+                )
+            acceptance = normalize_section_content("## Acceptance", acceptance)
+
+        satisfies = None
+        if "satisfies" in entry:
+            sat = entry["satisfies"]
+            if not isinstance(sat, list):
+                error_exit(
+                    f"--from-json: {label}: 'satisfies' must be an array of R-ID strings",
+                    use_json=use_json,
+                )
+            for j, tok in enumerate(sat):
+                if not isinstance(tok, str):
+                    error_exit(
+                        f"--from-json: {label}: 'satisfies'[{j}] must be a string",
+                        use_json=use_json,
+                    )
+            if sat:
+                try:
+                    satisfies = parse_satisfies_tokens(",".join(sat))
+                except ValueError as e:
+                    error_exit(
+                        f"--from-json: {label}: {e}",
+                        use_json=use_json,
+                    )
+
+        priority = None
+        if "priority" in entry:
+            priority = entry["priority"]
+            if not _is_json_int(priority):
+                error_exit(
+                    f"--from-json: {label}: 'priority' must be an integer",
+                    use_json=use_json,
+                )
+
+        dep_refs: list[tuple[str, Any]] = []
+        if "deps" in entry:
+            deps_raw = entry["deps"]
+            if not isinstance(deps_raw, list):
+                error_exit(
+                    f"--from-json: {label}: 'deps' must be an array",
+                    use_json=use_json,
+                )
+            string_deps: list[str] = []
+            for j, dep in enumerate(deps_raw):
+                if dep is None:
+                    error_exit(
+                        f"--from-json: {label}: 'deps'[{j}] must not be null",
+                        use_json=use_json,
+                    )
+                if _is_json_int(dep):
+                    # 1-based index of an EARLIER entry (not self, not forward).
+                    if dep < 1 or dep > i:
+                        error_exit(
+                            f"--from-json: {label}: 'deps' index {dep} out of range "
+                            f"(must be 1-based index of an earlier entry)",
+                            use_json=use_json,
+                        )
+                    dep_refs.append(("index", dep))
+                elif isinstance(dep, str):
+                    string_deps.append(dep)
+                    dep_refs.append(("id", dep))  # placeholder; resolve below
+                else:
+                    error_exit(
+                        f"--from-json: {label}: 'deps'[{j}] must be a task-id string "
+                        f"or 1-based integer index",
+                        use_json=use_json,
+                    )
+            # Resolve string deps exactly like granular --deps (canonicalize +
+            # same-spec membership; no file-existence check).
+            if string_deps:
+                resolved = _resolve_same_spec_deps(
+                    flow_dir, spec_id, string_deps, use_json=use_json
+                )
+                # Rewrite id placeholders in order with resolved canonical ids.
+                resolved_iter = iter(resolved)
+                dep_refs = [
+                    ("id", next(resolved_iter)) if kind == "id" else (kind, val)
+                    for kind, val in dep_refs
+                ]
+
+        items.append(
+            {
+                "title": title,
+                "description": description,
+                "acceptance": acceptance,
+                "satisfies": satisfies,
+                "priority": priority,
+                "dep_refs": dep_refs,
+            }
+        )
+    return items
+
+
+def _task_create_rollback(published: list[Path]) -> list[str]:
+    """Remove every path created so far in a task-create transaction."""
+    cleanup_errors: list[str] = []
+    for published_path in reversed(published):
+        try:
+            published_path.unlink()
+        except OSError as cleanup_error:
+            cleanup_errors.append(str(cleanup_error))
+    return cleanup_errors
+
+
 def cmd_task_create(args: argparse.Namespace) -> None:
-    """Create a new task under a spec."""
+    """Create a new task under a spec.
+
+    Single-task path: ``--title`` plus optional field flags (fn-110.1), including
+    inline ``--description`` / ``--acceptance`` (fn-163.2).
+
+    Bulk path (fn-163.2): ``--from-json <path|->`` with a non-empty JSON array of
+    task objects. Whole array validated before any write; all N ids allocated
+    under one per-spec lock acquisition; all-or-nothing rollback on failure.
+    """
     if not ensure_flow_exists():
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
-    # Reject here too, not only in `set-title`: otherwise the bad state is
-    # simply reachable one command earlier.
-    _reject_multiline_title(getattr(args, "title", ""), use_json=args.json)
+    use_json = args.json
+    from_json = getattr(args, "from_json", None)
+
+    # --from-json is mutually exclusive with single-task field flags.
+    single_flags: list[str] = []
+    if getattr(args, "title", None) is not None:
+        single_flags.append("--title")
+    if getattr(args, "deps", None) is not None:
+        single_flags.append("--deps")
+    if getattr(args, "acceptance_file", None) is not None:
+        single_flags.append("--acceptance-file")
+    if getattr(args, "description_file", None) is not None:
+        single_flags.append("--description-file")
+    if getattr(args, "satisfies", None) is not None:
+        single_flags.append("--satisfies")
+    if getattr(args, "priority", None) is not None:
+        single_flags.append("--priority")
+    if getattr(args, "description", None) is not None:
+        single_flags.append("--description")
+    if getattr(args, "acceptance", None) is not None:
+        single_flags.append("--acceptance")
+
+    if from_json is not None and single_flags:
+        error_exit(
+            f"--from-json is mutually exclusive with {', '.join(single_flags)}",
+            use_json=use_json,
+        )
+
+    if from_json is None and getattr(args, "title", None) is None:
+        error_exit(
+            "--title is required (or use --from-json for bulk create)",
+            use_json=use_json,
+        )
+
+    # Inline vs -file mutual exclusion (argparse group is the primary guard;
+    # belt-and-suspenders for direct Namespace callers / tests).
+    if (
+        getattr(args, "description", None) is not None
+        and getattr(args, "description_file", None) is not None
+    ):
+        error_exit(
+            "--description and --description-file are mutually exclusive",
+            use_json=use_json,
+        )
+    if (
+        getattr(args, "acceptance", None) is not None
+        and getattr(args, "acceptance_file", None) is not None
+    ):
+        error_exit(
+            "--acceptance and --acceptance-file are mutually exclusive",
+            use_json=use_json,
+        )
+
+    if from_json is None:
+        # Reject here too, not only in `set-title`: otherwise the bad state is
+        # simply reachable one command earlier.
+        _reject_multiline_title(getattr(args, "title", "") or "", use_json=use_json)
 
     spec_id = resolve_spec_arg(args, get_flow_dir())
     if not spec_id or not is_spec_id(spec_id):
         error_exit(
-            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug (e.g., fn-1, fn-1-add-auth)", use_json=args.json
+            f"Invalid spec ID: {spec_id}. Expected format: fn-N or fn-N-slug (e.g., fn-1, fn-1-add-auth)",
+            use_json=use_json,
         )
 
     flow_dir = get_flow_dir()
     spec_path = find_spec_json_path(flow_dir, spec_id)
 
-    load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=args.json)
+    load_json_or_exit(spec_path, f"Spec {spec_id}", use_json=use_json)
 
+    # ── Bulk path (fn-163.2) ──────────────────────────────────────────────
+    if from_json is not None:
+        raw = read_file_or_stdin(from_json, "--from-json", use_json=use_json)
+        items = _parse_bulk_task_items(
+            raw, flow_dir=flow_dir, spec_id=spec_id, use_json=use_json
+        )
+
+        lock_hash = hashlib.sha256(spec_id.encode("utf-8")).hexdigest()[:16]
+        lock_path = flow_dir / "locks" / f"task-create-{lock_hash}.lock.d"
+        created_summaries: list[dict] = []
+        try:
+            with cross_process_lock(lock_path):
+                # One lock acquisition for the whole batch — never N separate
+                # scan+alloc cycles (R3).
+                base = scan_max_task_id(flow_dir, spec_id)
+                planned: list[dict] = []
+                for offset, item in enumerate(items):
+                    task_num = base + 1 + offset
+                    task_id = f"{spec_id}.{task_num}"
+                    task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
+                    task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+                    if task_json_path.exists() or task_spec_path.exists():
+                        error_exit(
+                            f"Refusing to overwrite existing task {task_id}. "
+                            f"This shouldn't happen - check for orphaned files.",
+                            use_json=use_json,
+                        )
+
+                    deps: list[str] = []
+                    for kind, val in item["dep_refs"]:
+                        if kind == "index":
+                            # 1-based index into this batch → already-allocated id.
+                            deps.append(planned[val - 1]["id"])
+                        else:
+                            deps.append(val)
+
+                    created_at = now_iso()
+                    task_data = {
+                        "id": task_id,
+                        "spec": spec_id,
+                        "title": item["title"],
+                        "status": "todo",
+                        "priority": item["priority"],
+                        "depends_on": deps,
+                        "assignee": None,
+                        "claimed_at": None,
+                        "claim_note": "",
+                        "spec_path": f"{FLOW_DIR}/{TASKS_DIR}/{task_id}.md",
+                        "created_at": created_at,
+                        "updated_at": created_at,
+                    }
+                    json_content = (
+                        json.dumps(task_data, indent=2, sort_keys=True) + "\n"
+                    )
+                    spec_content = create_task_spec(
+                        task_id,
+                        item["title"],
+                        item["acceptance"],
+                        description=item["description"],
+                        satisfies=item["satisfies"],
+                    )
+                    planned.append(
+                        {
+                            "id": task_id,
+                            "title": item["title"],
+                            "json_path": task_json_path,
+                            "md_path": task_spec_path,
+                            "json_content": json_content,
+                            "spec_content": spec_content,
+                        }
+                    )
+
+                published: list[Path] = []
+                try:
+                    for entry in planned:
+                        atomic_create(entry["json_path"], entry["json_content"])
+                        published.append(entry["json_path"])
+                        atomic_create(entry["md_path"], entry["spec_content"])
+                        published.append(entry["md_path"])
+                except (OSError, ValueError) as e:
+                    cleanup_errors = _task_create_rollback(published)
+                    detail = (
+                        f"; cleanup failed: {'; '.join(cleanup_errors)}"
+                        if cleanup_errors
+                        else ""
+                    )
+                    error_exit(
+                        f"Failed to create bulk tasks for {spec_id}: {e}{detail}",
+                        use_json=use_json,
+                    )
+                created_summaries = [
+                    {"id": e["id"], "title": e["title"]} for e in planned
+                ]
+        except CrossProcessLockError as e:
+            error_exit(
+                f"Task allocation lock unavailable for {spec_id}: {e}",
+                use_json=use_json,
+            )
+
+        if use_json:
+            json_output({"tasks": created_summaries})
+        else:
+            for summary in created_summaries:
+                print(f"Task {summary['id']} created: {summary['title']}")
+        return
+
+    # ── Single-task path ──────────────────────────────────────────────────
     # Parse dependencies (shared same-spec canonicalize helper).
     deps = []
     if args.deps:
         raw_deps = [d.strip() for d in args.deps.split(",") if d.strip()]
         deps = _resolve_same_spec_deps(
-            flow_dir, spec_id, raw_deps, use_json=args.json
+            flow_dir, spec_id, raw_deps, use_json=use_json
         )
 
     # fn-110.1: ALL inputs are read + validated BEFORE any write — a
     # malformed flag or unreadable file must never leave a half-created task.
 
-    # Read acceptance from file if provided
+    # Acceptance: --acceptance-file or inline --acceptance (fn-163.2).
     acceptance = None
-    if args.acceptance_file:
+    acceptance_file = getattr(args, "acceptance_file", None)
+    acceptance_inline = getattr(args, "acceptance", None)
+    if acceptance_file:
         acceptance = read_text_or_exit(
-            Path(args.acceptance_file), "Acceptance file", use_json=args.json
+            Path(acceptance_file), "Acceptance file", use_json=use_json
         )
         # fn-79: normalize before embedding — an input file starting with its
         # own `## Acceptance Criteria …` H2 must not plant a rogue sibling
         # section in the skeleton.
         acceptance = normalize_section_content("## Acceptance", acceptance)
+    elif acceptance_inline is not None:
+        acceptance = normalize_section_content("## Acceptance", acceptance_inline)
 
-    # Read description from file if provided (fn-110.1: create-time
-    # equivalent of set-spec's description path, same normalization).
+    # Description: --description-file or inline --description (fn-163.2).
+    # Same normalization pipeline either way so results are equivalent.
     description = None
     description_file = getattr(args, "description_file", None)
+    description_inline = getattr(args, "description", None)
     if description_file:
         description = read_text_or_exit(
-            Path(description_file), "Description file", use_json=args.json
+            Path(description_file), "Description file", use_json=use_json
         )
         description = normalize_section_content("## Description", description)
+    elif description_inline is not None:
+        description = normalize_section_content("## Description", description_inline)
 
     # Parse + validate --satisfies (fn-110.1) — errors before any write.
     satisfies = None
@@ -28333,7 +28775,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
         try:
             satisfies = parse_satisfies_tokens(satisfies_arg)
         except ValueError as e:
-            error_exit(str(e), use_json=args.json)
+            error_exit(str(e), use_json=use_json)
 
     # Allocation and the paired JSON/Markdown publication are one per-spec
     # transaction. A process reports success only after both complete files
@@ -28353,7 +28795,7 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 error_exit(
                     f"Refusing to overwrite existing task {task_id}. "
                     f"This shouldn't happen - check for orphaned files.",
-                    use_json=args.json,
+                    use_json=use_json,
                 )
 
             # fn-43.2: persisted task JSON uses canonical "spec" key only.
@@ -28381,31 +28823,32 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 satisfies=satisfies,
             )
 
-            published: list[Path] = []
+            published = []
             try:
                 atomic_create(task_json_path, json_content)
                 published.append(task_json_path)
                 atomic_create(task_spec_path, spec_content)
                 published.append(task_spec_path)
             except (OSError, ValueError) as e:
-                cleanup_errors = []
-                for published_path in reversed(published):
-                    try:
-                        published_path.unlink()
-                    except OSError as cleanup_error:
-                        cleanup_errors.append(str(cleanup_error))
-                detail = f"; cleanup failed: {'; '.join(cleanup_errors)}" if cleanup_errors else ""
+                cleanup_errors = _task_create_rollback(published)
+                detail = (
+                    f"; cleanup failed: {'; '.join(cleanup_errors)}"
+                    if cleanup_errors
+                    else ""
+                )
                 error_exit(
                     f"Failed to create task {task_id}: {e}{detail}",
-                    use_json=args.json,
+                    use_json=use_json,
                 )
     except CrossProcessLockError as e:
-        error_exit(f"Task allocation lock unavailable for {spec_id}: {e}", use_json=args.json)
+        error_exit(
+            f"Task allocation lock unavailable for {spec_id}: {e}", use_json=use_json
+        )
 
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
 
-    if args.json:
+    if use_json:
         json_output(
             {
                 "id": task_id,
@@ -28819,6 +29262,25 @@ def cmd_cat(args: argparse.Namespace) -> None:
     print(content)
 
 
+def _apply_spec_plan_writes(
+    *,
+    spec_md_path: Path,
+    content: str,
+    spec_json_path: Path,
+    spec_data: dict,
+) -> None:
+    """Write plan markdown then stamp ``updated_at`` on the JSON. Raises; never error_exit.
+
+    Shared raising core for ``cmd_spec_set_plan`` and one-shot ``cmd_spec_create``
+    (fn-163.1). Two independent writes — not a rollback unit for the granular
+    verb. One-shot create wraps this and removes all created paths on any raise.
+    Mutates ``spec_data`` in place (sets ``updated_at``).
+    """
+    atomic_write(spec_md_path, content)
+    spec_data["updated_at"] = now_iso()
+    atomic_write_json(spec_json_path, spec_data)
+
+
 def cmd_spec_set_plan(args: argparse.Namespace) -> None:
     """Set/overwrite entire spec markdown from file."""
     if not ensure_flow_exists():
@@ -28840,14 +29302,19 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
 
     # Write spec markdown (always under .flow/specs/<id>.md regardless of
     # legacy/canonical layout — the .md location was already there in 0.x).
+    # Granular set-plan: md then json as two independent writes (not a
+    # rollback unit) — behavior preserved via the shared raising core.
     spec_md_path = flow_dir / SPECS_DIR / f"{args.id}.md"
     spec_md_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write(spec_md_path, content)
-
-    # Update spec timestamp (write back to wherever the JSON lives).
+    # Load before the helper's md write only for the clean error surface on
+    # corrupt JSON; write order inside the helper remains md then json.
     spec_data = load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
-    spec_data["updated_at"] = now_iso()
-    atomic_write_json(spec_json_path, spec_data)
+    _apply_spec_plan_writes(
+        spec_md_path=spec_md_path,
+        content=content,
+        spec_json_path=spec_json_path,
+        spec_data=spec_data,
+    )
 
     if args.json:
         json_output(
@@ -47219,6 +47686,20 @@ def main() -> None:
             "--tracker-identifier",
             help="Tracker display identifier (e.g., WOR-17); required with --tracker-first",
         )
+        # fn-163.1: one-shot create+set-plan. Mutually exclusive; plan content
+        # is fully read before id allocation (pre-write validation ordering).
+        plan_src = p_create.add_mutually_exclusive_group()
+        plan_src.add_argument(
+            "--plan-file",
+            dest="plan_file",
+            help="Plan markdown file written at create time (one-shot create+set-plan)",
+        )
+        plan_src.add_argument(
+            "--plan",
+            dest="plan",
+            metavar="-",
+            help="Plan content from stdin when value is '-' (one-shot create+set-plan)",
+        )
         p_create.add_argument("--json", action="store_true", help="JSON output")
         p_create.set_defaults(func=cmd_spec_create)
 
@@ -47592,14 +48073,39 @@ def main() -> None:
 
     p_task_create = task_sub.add_parser("create", help="Create new task")
     p_task_create.add_argument("--spec", required=True, help="Spec ID (e.g., fn-1, fn-1-add-auth)")
-    p_task_create.add_argument("--title", required=True, help="Task title")
-    p_task_create.add_argument("--deps", help="Comma-separated dependency IDs")
+    # --title required for single-task path; optional when --from-json is used
+    # (validated in cmd_task_create). fn-163.2.
     p_task_create.add_argument(
-        "--acceptance-file", help="Markdown file with acceptance criteria"
+        "--title",
+        help="Task title (required unless --from-json)",
     )
     p_task_create.add_argument(
+        "--from-json",
+        dest="from_json",
+        help=(
+            "Bulk-create from a JSON array file (or '-' for stdin). "
+            "Mutually exclusive with --title and single-task field flags (fn-163.2)"
+        ),
+    )
+    p_task_create.add_argument("--deps", help="Comma-separated dependency IDs")
+    # Acceptance source: file or inline string (mutually exclusive).
+    acc_src = p_task_create.add_mutually_exclusive_group()
+    acc_src.add_argument(
+        "--acceptance-file", help="Markdown file with acceptance criteria"
+    )
+    acc_src.add_argument(
+        "--acceptance",
+        help="Inline acceptance criteria (mutually exclusive with --acceptance-file)",
+    )
+    # Description source: file or inline string (mutually exclusive).
+    desc_src = p_task_create.add_mutually_exclusive_group()
+    desc_src.add_argument(
         "--description-file",
         help="Markdown file with the task description (fn-110.1)",
+    )
+    desc_src.add_argument(
+        "--description",
+        help="Inline description (mutually exclusive with --description-file; fn-163.2)",
     )
     p_task_create.add_argument(
         "--satisfies",

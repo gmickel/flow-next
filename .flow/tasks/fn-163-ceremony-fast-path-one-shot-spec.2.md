@@ -50,9 +50,8 @@ Add bulk task creation (`task create --spec fn-N --from-json <path|->`) and inli
 - Invocation-count test demonstrates <=8 calls for the canonical flow (R1)
 - Receipts/evidence/start/done schemas untouched (R4)
 ## Done summary
-TBD
-
+Implemented bulk task creation (`task create --spec fn-N --from-json <path|->`) with the strict input contract (non-empty array; typed fields; unknown keys/nulls/wrong types/empty titles → whole-batch reject, zero writes), single per-spec lock acquisition for the whole batch, atomic_create publication with all-created-files rollback, intra-batch 1-based index deps resolved after allocation, ordered `--json` output of created ids, and inline `--description`/`--acceptance` string variants (mutually exclusive with -file twins). Granular dep semantics preserved verbatim (canonicalization + same-spec membership, no new existence check). R1 invocation-count test drives the canonical spec+3-tasks flow as real subprocess invocations and asserts <=8 (exactly 8). 72 tests green across bulk/create/plan-file suites; ruff clean. Implemented by grok-4.5 bridge, host-verified.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: eaa75b241269ffca714b66a6bfe7ed2836cb93ce
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_task_bulk_create test_task_create_files test_spec_create_plan_file -q
 - PRs:

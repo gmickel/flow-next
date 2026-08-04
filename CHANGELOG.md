@@ -4,6 +4,18 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Authoring a spec with its full task set now takes two flowctl calls instead of
+~eight. `spec create --plan-file plan.md` (or `--plan -`) creates the spec and
+applies the plan in one shot; `task create --from-json tasks.json` materializes
+every task of a plan — titles, descriptions, acceptance, satisfies, deps
+(including references between tasks in the same batch) — in a single call under
+one lock, all-or-nothing: any invalid item rejects the whole batch with zero
+writes. The canonical spec-plus-3-tasks flow drops from ~20 invocations to 8,
+verified by a test that counts real subprocess calls. Every teaching surface
+(plan skill, usage.md, setup snippets, CLI reference) now leads with the fast
+path; the granular verbs are unchanged and remain the editing path. Receipts,
+evidence, and start/done validation are untouched. (fn-163)
+
 The specs your agents write now enumerate their error cases up front. Every
 benchmark checkpoint the pipeline lost traced to a single untested error path
 that "all tests green" then entrenched forever — so the fix moved upstream to
