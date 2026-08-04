@@ -15,6 +15,8 @@ Use bounded per-test verbose Windows runs to bisect the hanging case. Capture ch
 
 Independently make runner cleanup unconditional: close stdin; use POSIX process groups and a Windows process-tree strategy; terminate descendants on timeout; bound post-kill collection. Add a synthetic runner regression whose grandchild holds stdout, asserting rc=124, timed-out filename, elapsed time, captured output, and descendant termination. Remove the last exclusion in the same commit as the backend/runner fix and focused Windows proof.
 
+<!-- Updated by plan-sync: fn-120.1's fresh windows-2025 characterization (930cd764, run 30902967690) shows test_backend_spec.py PASSING in 4.4s -- the 900s hang described above did NOT reproduce on the current runner image. Re-verify reproduction under this task's own bounded/verbose run before assuming a live hang to bisect; if it stays green, this task still owes the R11 runner process-tree cleanup + synthetic regression and should record that no hang recurred (do not skip the exclusion removal or cleanup work on that basis alone). Host review separately flagged scripts/run_tests_parallel.py:153 (child spawn uses universal_newlines=True with no encoding kwarg -> cp1252 pipes on Windows) as a candidate root cause worth checking alongside the cleanup work. -->
+
 ### Quick commands
 
 ```bash

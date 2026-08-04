@@ -15,6 +15,8 @@ Run each file independently with verbose/bounded output on `windows-latest`. For
 
 For normalize, test short-form and normal long-form paths, spaces, drive letters, and UTF-8 contents. Remove each exclusion atomically with the proven fix and green Windows run.
 
+<!-- Updated by plan-sync: fn-120.1's fresh windows-2025 characterization (930cd764, run 30902994209) confirms test_task_create_files fails on an unguarded os.geteuid() call -- no alternate/shared cause with normalize was found, so the "unless fresh characterization proves a different owner" branch above does not trigger; proceed with the independent guard. Host review also flagged scripts/run_tests_parallel.py:153 (child spawn uses universal_newlines=True with no encoding kwarg -> cp1252 pipes on Windows) as a candidate root cause for the encoding-failure class this task's short-path fixtures sit next to -- worth checking during this task's investigation. -->
+
 ### Quick commands
 
 ```bash
