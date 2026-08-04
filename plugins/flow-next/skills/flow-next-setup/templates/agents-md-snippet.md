@@ -1,7 +1,7 @@
 <!-- BEGIN FLOW-NEXT -->
 ## Flow-Next
 
-This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do NOT create markdown TODOs or use TodoWrite. Re-anchor (re-read spec + task status) before every task.
+This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do NOT create markdown TODOs or use TodoWrite. Cold session: `.flow/bin/flowctl brief` first — one bounded call (specs, ready tasks, memory); go deeper with `show`/`cat`/`anchor <task-id>`.
 
 ```bash
 .flow/bin/flowctl list                # specs + tasks

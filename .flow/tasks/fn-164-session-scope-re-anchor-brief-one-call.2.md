@@ -41,9 +41,9 @@ Teach brief-first re-anchor as the default cold-session step everywhere the list
 - Brief-first re-anchor taught in setup snippets, pilot/guide cold-session prose, glossary; worker task-scope anchor untouched; token budgets pass (R4)
 - CLI reference + CHANGELOG + docs-site staged; propagation and mirror regen complete (R6)
 ## Done summary
-TBD
-
+Brief-first re-anchor taught as the cold-session default: three setup snippets rewritten (brief first, show/cat/anchor as go-deeper; fn-163 fast-path content preserved; budgets 1046-1050/1200 chars), root CLAUDE.md block, GLOSSARY Re-anchoring session-scope sentence, docs/flowctl.md ### brief section cross-linked both ways with ### anchor, pilot tick-start + guide probe pointers; worker.md Phase 1 untouched (task-scope anchor). CHANGELOG Unreleased entry. Docs-site: cli-reference brief section + glossary Re-anchoring extension staged in flow-next.dev (commit after spec landing; versioned site changelog deferred to batched release). Downstream walk: docs-site UPDATED; microsite NO-CHANGE; AIxSDLC guide NO-CHANGE (revisit at release); vault NO-CHANGE. Propagation complete (flowctl.py + tracker + manifest + sync-codex x2 idempotent). Implemented by grok-4.5 bridge; host wrote CHANGELOG/CLAUDE.md/docs-site and verified.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9890a72ebc0870e7e771db72a3ea2ebb67642361
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_token_budgets test_prompt_text_pinned test_worker_anchor_prose -q
+- Docs-site build: `cd ~/work/flow-next.dev && pnpm build` → green post-edit (80 pages, 2026-08-04 04:54 local); site commit lands with spec landing (cli-reference.mdx brief section + glossary Re-anchoring extension)
 - PRs:

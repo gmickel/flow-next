@@ -4,6 +4,17 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+A cold session now orients with one call. `flowctl brief` gives a fresh agent —
+a new chat, a pilot tick, a benchmark checkpoint — the whole workspace picture
+in a single bounded read: open specs with one-line goals, actionable tasks with
+claim state, the last five completions with evidence flags, the memory index,
+and pointers for going deeper. Output is deterministic and capped at ~2k tokens
+no matter how big the repo gets (explicit truncation markers, `--full` to lift,
+`--json` for the machine form), so re-anchoring stops dragging full spec bodies
+into context every session. Task-scope `flowctl anchor` is unchanged — brief is
+the session-scope sibling, and the setup snippets now teach brief-first as the
+cold-session default. (fn-164)
+
 Authoring a spec with its full task set now takes two flowctl calls instead of
 ~eight. `spec create --plan-file plan.md` (or `--plan -`) creates the spec and
 applies the plan in one shot; `task create --from-json tasks.json` materializes

@@ -20,7 +20,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-No flowctl mutation. Optional read-only probes (`$FLOWCTL list`, `$FLOWCTL show`, file reads) may ground the recommendation when a handle or path is named. Never run create/write/claim/resolve.
+No flowctl mutation. Optional read-only probes (`$FLOWCTL brief` for cold-session orientation; `$FLOWCTL list` / `$FLOWCTL show`, file reads) may ground the recommendation when a handle or path is named. Never run create/write/claim/resolve.
 
 ## Output contract (every recommendation)
 

@@ -616,9 +616,23 @@ flowctl cat fn-1      # Spec markdown
 flowctl cat fn-1.2    # Task spec
 ```
 
+### brief
+
+Session-scope re-anchor — one budgeted, deterministic, pure-read orientation call for cold sessions. Prints a markdown `# Session brief`: repo path, counts (Open specs / Ready / In progress / Done / Memory on|off), then sections Open specs, Actionable tasks, Recent completions, Memory index lines, and Pointers (go-deeper: `cat`, `anchor <task-id> --md`, `memory search`, `ready` / `list`).
+
+```bash
+flowctl brief          # markdown render (default; 8000-char budget)
+flowctl brief --json   # machine form; same retained ids as markdown
+flowctl brief --full   # lift the 8000-char budget (all rows retained)
+```
+
+- **Budget / truncation:** 8000 chars on both markdown and `--json`. Over budget, whole tiers drop in priority order with an explicit marker per dropped tier, e.g. `[truncated: memory lines omitted — use --full]`.
+- **Guarantees:** no git subprocesses, no writes — deterministic and read-only. Git state is deliberately excluded (run `git status` yourself).
+- Task-scope counterpart: [`anchor`](#anchor) (`flowctl anchor <task-id>`) — verbatim worker Phase-1 bundle, floor-not-ceiling, no budget.
+
 ### anchor
 
-Single-call worker anchor bundle — the `/flow-next:work` worker's entire Phase-1 re-anchor in one deterministic, pure read.
+Single-call worker anchor bundle — the `/flow-next:work` worker's entire Phase-1 re-anchor in one deterministic, pure read. Session-scope budgeted counterpart: [`brief`](#brief).
 
 ```bash
 flowctl anchor fn-1.2          # Worker-facing markdown render (default)

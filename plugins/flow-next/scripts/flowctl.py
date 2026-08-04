@@ -18427,6 +18427,7 @@ class TaskInventory:
         spec_ids: Optional[set[str]] = None,
         collect_consistency_errors: bool = False,
         collect_load_errors: bool = False,
+        state_store: Optional["StateStore"] = None,
     ) -> "TaskInventory":
         task_files = list(iter_task_json_files(flow_dir, spec_id=spec_id))
         if spec_ids is not None:
@@ -18437,13 +18438,17 @@ class TaskInventory:
             ]
         if not task_files:
             return cls(ordered=[], by_id={}, by_spec={})
-        runtime_by_id = (
-            get_state_store().load_all_runtime(
+        # Optional injected store lets callers (e.g. brief) avoid get_state_dir's
+        # git subprocess while still merging runtime claim fields. Constructed
+        # only when merge_runtime is on — merge_runtime=False callers must not
+        # pay the git/state lookup.
+        if merge_runtime:
+            store = state_store if state_store is not None else get_state_store()
+            runtime_by_id = store.load_all_runtime(
                 {task_file.stem for task_file in task_files}
             )
-            if merge_runtime
-            else {}
-        )
+        else:
+            runtime_by_id = {}
         ordered = []
         by_id = {}
         by_spec: dict[str, list[dict]] = {}
@@ -34967,10 +34972,931 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     print("\n".join(lines))
 
 
+# --- Session brief (fn-164) ---
+#
+# Pure-read, token-bounded, deterministic session-orientation verb. NO git
+# invocations in this path. Budget default 8000 chars on BOTH markdown and
+# JSON forms (measure the larger); --full lifts. Selection is computed once
+# on a canonical dataset so both forms retain identical ids/omissions.
+
+BRIEF_BUDGET_CHARS = 8000
+BRIEF_TITLE_CAP = 80
+BRIEF_LINE_CAP = 120
+BRIEF_PATH_CAP = 120
+BRIEF_COMPLETIONS_CAP = 5
+
+# Closed/done/superseded statuses excluded from the open-specs section.
+_BRIEF_CLOSED_SPEC_STATUSES = frozenset({"done", "closed", "superseded"})
+
+_BRIEF_POINTERS = (
+    "Go deeper (not included in this brief):",
+    "- `flowctl cat <id>` — full spec or task markdown",
+    "- `flowctl anchor <task-id> --md` — task-scope re-anchor (verbatim, no budget)",
+    "- `flowctl memory search <q>` — search memory bodies",
+    "- `flowctl ready --spec <id>` / `flowctl list` — full task readiness",
+    "- Git state is NOT in brief — run `git status` yourself (determinism)",
+)
+
+
+def _brief_cap_end(text: str, limit: int) -> str:
+    """Hard-cap a scalar at *limit* chars with a trailing ellipsis."""
+    if text is None:
+        return ""
+    s = str(text)
+    if len(s) <= limit:
+        return s
+    if limit <= 1:
+        return "…"[:limit]
+    return s[: limit - 1] + "…"
+
+
+def _brief_cap_middle(text: str, limit: int) -> str:
+    """Hard-cap a path at *limit* chars with a middle ellipsis."""
+    if text is None:
+        return ""
+    s = str(text)
+    if len(s) <= limit:
+        return s
+    if limit <= 1:
+        return "…"[:limit]
+    # leave 1 char for the ellipsis glyph
+    keep = limit - 1
+    left = keep // 2
+    right = keep - left
+    return s[:left] + "…" + s[-right:]
+
+
+def _brief_repo_rel(path: Path, repo_root: Path) -> str:
+    """Render *path* repo-relative when possible, then path-cap."""
+    try:
+        rel = path.resolve().relative_to(repo_root.resolve())
+        return _brief_cap_middle(str(rel).replace("\\", "/"), BRIEF_PATH_CAP)
+    except (ValueError, OSError):
+        return _brief_cap_middle(str(path), BRIEF_PATH_CAP)
+
+
+def _brief_resolve_roots() -> tuple[Path, Path]:
+    """Locate (repo_root, flow_dir) by walking up for `.flow/` — no git."""
+    start = Path.cwd().resolve()
+    cur = start
+    for _ in range(128):
+        candidate = cur / FLOW_DIR
+        if candidate.is_dir():
+            return cur, candidate
+        parent = cur.parent
+        if parent == cur:
+            break
+        cur = parent
+    return start, start / FLOW_DIR
+
+
+def _brief_resolve_state_dir(repo_root: Path, flow_dir: Path) -> Path:
+    """Resolve runtime state dir without subprocess/git (brief no-git contract).
+
+    Mirrors ``get_state_dir()`` resolution order, but never shells out:
+      1. ``FLOW_STATE_DIR`` env override
+      2. Read ``.git`` directly — if a file, parse ``gitdir:`` then that dir's
+         ``commondir`` file (same resolution git performs); if a directory,
+         use it (and ``commondir`` when present) → ``<common>/flow-state``
+      3. Fallback to ``flow_dir / "state"`` when unreadable or non-git
+    """
+    env = os.environ.get("FLOW_STATE_DIR")
+    if env:
+        return Path(env).resolve()
+
+    try:
+        git_path = repo_root / ".git"
+        if git_path.is_file():
+            # Worktree pointer: "gitdir: <path>"
+            git_dir: Optional[Path] = None
+            text = git_path.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                stripped = line.strip()
+                if stripped.lower().startswith("gitdir:"):
+                    raw = stripped.split(":", 1)[1].strip()
+                    if not raw:
+                        break
+                    candidate = Path(raw)
+                    if not candidate.is_absolute():
+                        candidate = git_path.parent / candidate
+                    git_dir = candidate.resolve()
+                    break
+            if git_dir is None:
+                return flow_dir / "state"
+        elif git_path.is_dir():
+            git_dir = git_path.resolve()
+        else:
+            return flow_dir / "state"
+
+        # Resolve common dir the way git --git-common-dir does.
+        common_file = git_dir / "commondir"
+        if common_file.is_file():
+            common_raw = common_file.read_text(encoding="utf-8").strip()
+            if common_raw:
+                common = Path(common_raw)
+                if not common.is_absolute():
+                    common = (git_dir / common).resolve()
+                else:
+                    common = common.resolve()
+            else:
+                common = git_dir
+        else:
+            common = git_dir
+        return common / "flow-state"
+    except (OSError, UnicodeError, ValueError):
+        return flow_dir / "state"
+
+
+def _brief_extract_goal(md_text: str) -> str:
+    """First non-empty non-heading non-comment line after `## Goal & Context`.
+
+    Fallback: first such line in the whole body. Capped at BRIEF_LINE_CAP.
+    """
+    if not md_text:
+        return ""
+    lines = md_text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "## Goal & Context" or stripped.startswith(
+            "## Goal & Context "
+        ):
+            start = i + 1
+            break
+
+    def _first_prose(seq: list[str], *, stop_at_heading: bool) -> str:
+        for line in seq:
+            s = line.strip()
+            if not s:
+                continue
+            if s.startswith("#"):
+                if stop_at_heading:
+                    break
+                continue
+            # HTML comments (full-line or opener)
+            if s.startswith("<!--"):
+                continue
+            return _brief_cap_end(s, BRIEF_LINE_CAP)
+        return ""
+
+    if start is not None:
+        hit = _first_prose(lines[start:], stop_at_heading=True)
+        if hit:
+            return hit
+    return _first_prose(lines, stop_at_heading=False)
+
+
+def _brief_evidence_flag(task: dict) -> bool:
+    """True iff evidence dict has any non-empty commits/tests/prs list.
+
+    Default-empty dict and legacy tasks with no evidence dict → False.
+    Dict presence alone is NOT evidence (cmd_done always writes one).
+    Non-list values (string, dict, etc.) are never evidence.
+    """
+    evidence = task.get("evidence")
+    if not isinstance(evidence, dict):
+        return False
+
+    def _nonempty(val: Any) -> bool:
+        return isinstance(val, list) and len(val) > 0
+
+    return any(_nonempty(evidence.get(k)) for k in ("commits", "tests", "prs"))
+
+
+def _brief_done_summary_line(
+    flow_dir: Path,
+    task_id: str,
+    repo_root: Optional[Path] = None,
+    unreadable: Optional[list] = None,
+) -> str:
+    """First non-empty line of ## Done summary, capped.
+
+    A failed read appends the capped repo-relative path to ``unreadable``
+    (when provided) so the R1 inline diagnostic renders instead of a silent
+    empty summary.
+    """
+    md_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+    try:
+        text = md_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError, UnicodeDecodeError, ValueError):
+        if unreadable is not None and repo_root is not None:
+            unreadable.append(_brief_repo_rel(md_path, repo_root))
+        return ""
+    section = get_task_section(text, "## Done summary")
+    for line in section.splitlines():
+        s = line.strip()
+        if s:
+            return _brief_cap_end(s, BRIEF_LINE_CAP)
+    return ""
+
+
+def _brief_memory_enabled(flow_dir: Path) -> bool:
+    """Read memory.enabled from .flow/config.json without get_config/git."""
+    config_path = flow_dir / CONFIG_FILE
+    if not config_path.exists():
+        return False
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    memory = data.get("memory")
+    if not isinstance(memory, dict):
+        return False
+    return bool(memory.get("enabled", False))
+
+
+def _brief_spec_blocked_by(
+    flow_dir: Path, spec_id: str, spec_data: dict, specs_by_id: dict[str, dict]
+) -> list[str]:
+    """Spec-level dep gate: deps missing or not done (cmd_ready semantics)."""
+    blocked: list[str] = []
+    for dep in spec_data.get("depends_on_epics", []) or []:
+        if dep == spec_id:
+            continue
+        dep_data = specs_by_id.get(dep)
+        if dep_data is None:
+            # Try disk once for deps not in the open set (e.g. done deps ok).
+            dep_path = find_spec_json_path(flow_dir, dep)
+            if not dep_path.exists():
+                blocked.append(dep)
+                continue
+            try:
+                dep_data = normalize_epic(load_json(dep_path))
+            except Exception:
+                blocked.append(dep)
+                continue
+            specs_by_id[dep] = dep_data
+        if dep_data.get("status") != "done":
+            blocked.append(dep)
+    return blocked
+
+
+def _brief_collect(flow_dir: Path, repo_root: Path) -> dict[str, Any]:
+    """Build the full canonical brief dataset (pre-truncation)."""
+    # --- Specs (per-file tolerant) ---
+    open_specs: list[dict[str, Any]] = []
+    unreadable_specs: list[str] = []
+    specs_by_id: dict[str, dict] = {}
+    for spec_file in sorted(
+        iter_spec_json_files(flow_dir), key=lambda p: id_sort_key(p.stem)
+    ):
+        try:
+            raw = load_json(spec_file)
+            if not isinstance(raw, dict):
+                raise ValueError("spec JSON is not an object")
+            spec_data = normalize_epic(raw)
+        except Exception:
+            unreadable_specs.append(_brief_repo_rel(spec_file, repo_root))
+            continue
+        sid = spec_data.get("id") or spec_file.stem
+        specs_by_id[sid] = spec_data
+        status = str(spec_data.get("status") or "open")
+        if status in _BRIEF_CLOSED_SPEC_STATUSES:
+            continue
+        goal = ""
+        md_path = find_spec_md_path(flow_dir, sid)
+        if md_path.exists():
+            try:
+                goal = _brief_extract_goal(md_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, UnicodeDecodeError, ValueError):
+                unreadable_specs.append(_brief_repo_rel(md_path, repo_root))
+        open_specs.append(
+            {
+                "id": sid,
+                "title": _brief_cap_end(
+                    str(spec_data.get("title") or ""), BRIEF_TITLE_CAP
+                ),
+                "status": status,
+                "ready": bool(spec_data.get("ready", False)),
+                "goal": goal,
+                "goal_dropped": False,
+            }
+        )
+
+    # --- Tasks (error-collecting inventory + claim fields) ---
+    # Inject a no-subprocess state store so merge_runtime never reaches
+    # get_state_dir() → git rev-parse (brief's zero-git contract).
+    brief_state_store = LocalFileStateStore(
+        _brief_resolve_state_dir(repo_root, flow_dir)
+    )
+    inventory = TaskInventory.load(
+        flow_dir,
+        use_json=True,
+        collect_load_errors=True,
+        collect_consistency_errors=True,
+        merge_runtime=True,
+        state_store=brief_state_store,
+    )
+    unreadable_tasks: list[str] = []
+    for _spec, issues in sorted(inventory.issues_by_spec.items()):
+        for msg in issues:
+            # TaskInventory load-error messages:
+            #   "Task <id> invalid JSON: <path> (...)"
+            #   "Task <id> unreadable: <path> (...)"
+            # Consistency-error messages (no embedded path):
+            #   "Task definition <file_id>: invalid payload id ..."
+            #   "Task definition <file_id>: payload id is ..."
+            #   "Task definition <file_id>: owning spec is ..."
+            #   "Duplicate task definition id: <id>"
+            m = re.search(
+                r"Task (\S+) (?:invalid JSON|unreadable): (.+?) \(", msg
+            )
+            if m:
+                tid, path_s = m.group(1), m.group(2)
+                try:
+                    unreadable_tasks.append(
+                        _brief_repo_rel(Path(path_s), repo_root)
+                    )
+                except Exception:
+                    unreadable_tasks.append(
+                        _brief_cap_middle(
+                            f"{FLOW_DIR}/{TASKS_DIR}/{tid}.json", BRIEF_PATH_CAP
+                        )
+                    )
+                continue
+            m_def = re.search(r"Task definition (\S+):", msg)
+            if m_def:
+                file_id = m_def.group(1)
+                unreadable_tasks.append(
+                    _brief_repo_rel(
+                        flow_dir / TASKS_DIR / f"{file_id}.json", repo_root
+                    )
+                )
+                continue
+            m_dup = re.search(r"Duplicate task definition id: (\S+)", msg)
+            if m_dup:
+                file_id = m_dup.group(1)
+                unreadable_tasks.append(
+                    _brief_repo_rel(
+                        flow_dir / TASKS_DIR / f"{file_id}.json", repo_root
+                    )
+                )
+                continue
+            unreadable_tasks.append(
+                _brief_cap_middle(msg, BRIEF_PATH_CAP)
+            )
+    unreadable_tasks = sorted(set(unreadable_tasks))
+
+    # Parent-spec blocked-by map (for readiness gate).
+    parent_blocked: dict[str, list[str]] = {}
+    for sid, sdata in specs_by_id.items():
+        parent_blocked[sid] = _brief_spec_blocked_by(
+            flow_dir, sid, sdata, specs_by_id
+        )
+
+    tasks_by_id = inventory.by_id
+    ready_tasks: list[dict[str, Any]] = []
+    in_progress_tasks: list[dict[str, Any]] = []
+    done_tasks: list[dict[str, Any]] = []
+
+    for task in inventory.ordered:
+        status = task.get("status") or "todo"
+        if status == "done":
+            done_tasks.append(task)
+            continue
+        if status == "in_progress":
+            in_progress_tasks.append(task)
+            continue
+        if status == "blocked":
+            continue
+        if status != "todo":
+            continue
+        # Task-dep gate (within same inventory — cross-spec deps included
+        # when present in by_id; missing dep → not ready).
+        deps = task.get("depends_on") or []
+        deps_done = True
+        for dep in deps:
+            dep_t = tasks_by_id.get(dep)
+            if not dep_t or dep_t.get("status") != "done":
+                deps_done = False
+                break
+        if not deps_done:
+            continue
+        # Parent-spec-dep gate (cmd_ready): blocked parent ⇒ not ready.
+        # Closed-parent orphans still appear when task-deps clear (parent
+        # status in closed set ⇒ gate does not apply; orphans surface).
+        parent = task.get("spec") or task.get("epic") or ""
+        parent_data = specs_by_id.get(parent)
+        if parent_data is not None:
+            parent_status = str(parent_data.get("status") or "open")
+            if parent_status not in _BRIEF_CLOSED_SPEC_STATUSES:
+                if parent_blocked.get(parent):
+                    continue
+        # Missing parent entirely: still list if task-deps clear (orphan).
+        ready_tasks.append(task)
+
+    def _actionable_row(task: dict, kind: str) -> dict[str, Any]:
+        return {
+            "id": task["id"],
+            "title": _brief_cap_end(
+                str(task.get("title") or ""), BRIEF_TITLE_CAP
+            ),
+            "status": kind,
+            "assignee": task.get("assignee") or "",
+            "claimed_at": task.get("claimed_at") or "",
+            "claim_note": task.get("claim_note") or "",
+            "priority": task_priority(task),
+            "updated_at": task.get("updated_at") or "",
+        }
+
+    actionable: list[dict[str, Any]] = []
+    # Stable order: ready first (priority, id), then in_progress.
+    ready_sorted = sorted(
+        ready_tasks,
+        key=lambda t: (task_priority(t), id_sort_key(t["id"])),
+    )
+    ip_sorted = sorted(
+        in_progress_tasks,
+        key=lambda t: (task_priority(t), id_sort_key(t["id"])),
+    )
+    for t in ready_sorted:
+        actionable.append(_actionable_row(t, "ready"))
+    for t in ip_sorted:
+        actionable.append(_actionable_row(t, "in_progress"))
+
+    # Completions: all done, sort updated_at asc + id, take last N, keep asc.
+    def _completion_sort_key(t: dict) -> tuple:
+        return (str(t.get("updated_at") or ""), id_sort_key(t["id"]))
+
+    done_sorted = sorted(done_tasks, key=_completion_sort_key)
+    recent_pool = done_sorted[-BRIEF_COMPLETIONS_CAP:]
+    completions: list[dict[str, Any]] = []
+    late_unreadable: list[str] = []
+    for t in recent_pool:
+        completions.append(
+            {
+                "id": t["id"],
+                "summary": _brief_done_summary_line(
+                    flow_dir, t["id"], repo_root, late_unreadable
+                ),
+                "evidence": _brief_evidence_flag(t),
+                "updated_at": t.get("updated_at") or "",
+            }
+        )
+    if late_unreadable:
+        unreadable_tasks = sorted(set(unreadable_tasks) | set(late_unreadable))
+
+    # --- Memory (ACTIVE only; retain malformed paths) ---
+    memory_items: list[dict[str, Any]] = []
+    unreadable_memory: list[str] = []
+    memory_enabled = _brief_memory_enabled(flow_dir)
+    memory_dir = flow_dir / MEMORY_DIR
+    if memory_enabled and memory_dir.is_dir():
+        for track in MEMORY_TRACKS:
+            for cat in MEMORY_CATEGORIES.get(track, []):
+                cat_dir = memory_dir / track / cat
+                if not cat_dir.is_dir():
+                    continue
+                for entry_path in sorted(cat_dir.iterdir(), key=lambda p: p.name):
+                    if entry_path.name.startswith(".") or entry_path.suffix != ".md":
+                        continue
+                    slug, date = _memory_parse_entry_filename(entry_path)
+                    if not slug or not date:
+                        unreadable_memory.append(
+                            _brief_repo_rel(entry_path, repo_root)
+                        )
+                        continue
+                    try:
+                        desc = _memory_entry_descriptor(
+                            entry_path,
+                            track,
+                            cat,
+                            slug,
+                            date,
+                            include_body=False,
+                        )
+                    except (OSError, UnicodeError, UnicodeDecodeError, ValueError):
+                        unreadable_memory.append(
+                            _brief_repo_rel(entry_path, repo_root)
+                        )
+                        continue
+                    if desc is None:
+                        unreadable_memory.append(
+                            _brief_repo_rel(entry_path, repo_root)
+                        )
+                        continue
+                    status = str(desc.get("status") or "active")
+                    if status in ("stale", "hardened"):
+                        continue
+                    memory_items.append(
+                        {
+                            "entry_id": desc["entry_id"],
+                            "title": _brief_cap_end(
+                                str(desc.get("title") or ""), BRIEF_TITLE_CAP
+                            ),
+                            "date": date,
+                        }
+                    )
+        memory_items.sort(
+            key=lambda e: (e.get("date") or "", e.get("entry_id") or "")
+        )
+
+    header = {
+        "repo_root": _brief_cap_end(str(repo_root), BRIEF_PATH_CAP),
+        "open_specs": len(open_specs),
+        "ready_tasks": len(ready_tasks),
+        "in_progress_tasks": len(in_progress_tasks),
+        "done_tasks": len(done_tasks),
+        "memory_enabled": memory_enabled,
+        "memory_count": len(memory_items),
+        "actionable_count": len(actionable),
+    }
+
+    return {
+        "header": header,
+        "open_specs": open_specs,
+        "actionable": actionable,
+        "completions": completions,
+        "memory": memory_items,
+        "unreadable_specs": unreadable_specs,
+        "unreadable_tasks": unreadable_tasks,
+        "unreadable_memory": unreadable_memory,
+        # Truncation state (mutated by the budget pass)
+        "flags": {
+            "completions": False,
+            "memory": False,
+            "spec_goals": False,
+            "actionable": False,
+            "open_specs": False,
+            "unreadable": False,
+        },
+        "unreadable_aggregate": None,  # set when tier 6 collapses
+    }
+
+
+def _brief_render_md(data: dict[str, Any]) -> str:
+    """Render the brief as markdown from a (possibly truncated) dataset."""
+    h = data["header"]
+    flags = data["flags"]
+    lines: list[str] = [
+        "# Session brief",
+        "",
+        f"Repo: {h['repo_root']}",
+        (
+            f"Open specs: {h['open_specs']} | "
+            f"Ready: {h['ready_tasks']} | "
+            f"In progress: {h['in_progress_tasks']} | "
+            f"Done: {h['done_tasks']} | "
+            f"Memory: {'on' if h['memory_enabled'] else 'off'}"
+        ),
+        "",
+    ]
+
+    # --- Open specs ---
+    # Truncation markers fire whenever their tier ran, even if every row
+    # was dropped (empty residual list + flag still marks the tier).
+    specs = data["open_specs"]
+    lines.append(f"## Open specs ({h['open_specs']})")
+    open_truncated = bool(flags.get("open_specs") or flags.get("spec_goals"))
+    if not specs and not data["unreadable_specs"] and not open_truncated:
+        lines.append("(none)")
+    else:
+        for s in specs:
+            ready_badge = " ready" if s.get("ready") else ""
+            goal_part = ""
+            if s.get("goal") and not s.get("goal_dropped"):
+                goal_part = f" — {s['goal']}"
+            lines.append(
+                f"- {s['id']}: {s['title']} [{s['status']}]{ready_badge}"
+                f"{goal_part}"
+            )
+        if flags.get("open_specs"):
+            lines.append(
+                "[truncated: open-spec rows omitted — use --full]"
+            )
+        elif flags.get("spec_goals"):
+            lines.append(
+                "[truncated: open-spec goal lines omitted — use --full]"
+            )
+        for path in data["unreadable_specs"]:
+            lines.append(f"- [unreadable: {path}]")
+    lines.append("")
+
+    # --- Actionable ---
+    actionable = data["actionable"]
+    lines.append(f"## Actionable tasks ({h['actionable_count']})")
+    if (
+        not actionable
+        and not data["unreadable_tasks"]
+        and not flags.get("actionable")
+    ):
+        lines.append("(none)")
+    else:
+        for t in actionable:
+            claim = ""
+            if t.get("assignee") or t.get("claimed_at") or t.get("claim_note"):
+                parts = []
+                if t.get("assignee"):
+                    parts.append(f"@{t['assignee']}")
+                if t.get("claimed_at"):
+                    parts.append(f"claimed_at={t['claimed_at']}")
+                if t.get("claim_note"):
+                    parts.append(f"note={_brief_cap_end(t['claim_note'], 40)}")
+                claim = " (" + ", ".join(parts) + ")"
+            lines.append(
+                f"- [{t['status']}] {t['id']}: {t['title']}{claim}"
+            )
+        if flags.get("actionable"):
+            lines.append(
+                "[truncated: actionable-task rows omitted — use --full]"
+            )
+        for path in data["unreadable_tasks"]:
+            lines.append(f"- [unreadable: {path}]")
+    lines.append("")
+
+    # --- Completions ---
+    completions = data["completions"]
+    lines.append(f"## Recent completions ({len(completions)})")
+    if not completions and not flags.get("completions"):
+        lines.append("(none)")
+    else:
+        for c in completions:
+            evid = "yes" if c.get("evidence") else "no"
+            summary = c.get("summary") or "(no summary)"
+            lines.append(f"- {c['id']}: {summary} [evidence={evid}]")
+        if flags.get("completions"):
+            lines.append(
+                "[truncated: recent completions omitted — use --full]"
+            )
+    lines.append("")
+
+    # --- Memory ---
+    memory = data["memory"]
+    lines.append(f"## Memory ({h['memory_count']})")
+    if (
+        not memory
+        and not data["unreadable_memory"]
+        and not flags.get("memory")
+    ):
+        lines.append("(none)")
+    else:
+        for m in memory:
+            title = m.get("title") or "(no title)"
+            lines.append(f"- {m['entry_id']} — {title}")
+        if flags.get("memory"):
+            lines.append(
+                "[truncated: memory lines omitted — use --full]"
+            )
+        for path in data["unreadable_memory"]:
+            lines.append(f"- [unreadable: {path}]")
+    lines.append("")
+
+    # Aggregate unreadable collapse (tier 6)
+    if data.get("unreadable_aggregate") is not None:
+        n = data["unreadable_aggregate"]
+        lines.append(f"[{n} unreadable files — use --full]")
+        lines.append("")
+
+    # --- Pointers ---
+    lines.append("## Pointers")
+    lines.extend(_BRIEF_POINTERS)
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _brief_render_json(data: dict[str, Any]) -> str:
+    """Render the brief as JSON text (same retained ids as markdown)."""
+    h = data["header"]
+    flags = data["flags"]
+    payload = {
+        "success": True,
+        "header": {
+            "repo_root": h["repo_root"],
+            "open_specs": h["open_specs"],
+            "ready_tasks": h["ready_tasks"],
+            "in_progress_tasks": h["in_progress_tasks"],
+            "done_tasks": h["done_tasks"],
+            "memory_enabled": h["memory_enabled"],
+        },
+        "open_specs": {
+            "count": h["open_specs"],
+            "truncated": bool(flags.get("open_specs") or flags.get("spec_goals")),
+            "goals_truncated": bool(flags.get("spec_goals")),
+            "rows_truncated": bool(flags.get("open_specs")),
+            "items": [
+                {
+                    "id": s["id"],
+                    "title": s["title"],
+                    "status": s["status"],
+                    "ready": s["ready"],
+                    "goal": "" if s.get("goal_dropped") else s.get("goal", ""),
+                }
+                for s in data["open_specs"]
+            ],
+            "unreadable": list(data["unreadable_specs"]),
+        },
+        "actionable_tasks": {
+            "count": h["actionable_count"],
+            "truncated": bool(flags.get("actionable")),
+            "items": [
+                {
+                    "id": t["id"],
+                    "title": t["title"],
+                    "status": t["status"],
+                    "assignee": t.get("assignee") or "",
+                    "claimed_at": t.get("claimed_at") or "",
+                    "claim_note": t.get("claim_note") or "",
+                }
+                for t in data["actionable"]
+            ],
+            "unreadable": list(data["unreadable_tasks"]),
+        },
+        "recent_completions": {
+            "count": len(data["completions"]),
+            "truncated": bool(flags.get("completions")),
+            "items": [
+                {
+                    "id": c["id"],
+                    "summary": c.get("summary") or "",
+                    "evidence": bool(c.get("evidence")),
+                }
+                for c in data["completions"]
+            ],
+        },
+        "memory": {
+            "count": h["memory_count"],
+            "truncated": bool(flags.get("memory")),
+            "items": [
+                {"entry_id": m["entry_id"], "title": m.get("title") or ""}
+                for m in data["memory"]
+            ],
+            "unreadable": list(data["unreadable_memory"]),
+        },
+        "pointers": list(_BRIEF_POINTERS),
+        "unreadable_aggregate": data.get("unreadable_aggregate"),
+        "truncated": {
+            "completions": bool(flags.get("completions")),
+            "memory": bool(flags.get("memory")),
+            "spec_goals": bool(flags.get("spec_goals")),
+            "actionable": bool(flags.get("actionable")),
+            "open_specs": bool(flags.get("open_specs")),
+            "unreadable": bool(flags.get("unreadable")),
+        },
+    }
+    return json.dumps(payload, indent=2, default=str) + "\n"
+
+
+def _brief_measure(data: dict[str, Any]) -> int:
+    """Return the larger of markdown and JSON render lengths."""
+    return max(len(_brief_render_md(data)), len(_brief_render_json(data)))
+
+
+def _brief_trim_list_for_budget(
+    data: dict[str, Any],
+    key: str,
+    budget: int,
+    *,
+    flag: str,
+    keep_tail: bool,
+) -> bool:
+    """Binary-search the retained-item count for *key* until both renders fit.
+
+    Returns True if the dataset is under *budget* after this tier.
+
+    *keep_tail=True* drops from the front (keep last k) — completions,
+    memory, open_specs. *keep_tail=False* drops from the end (keep first k)
+    — actionable. Equivalent residual set to the linear pop loop, O(N log N)
+    dual-renders instead of O(N²). Flag is set whenever any item is dropped.
+    """
+    items = data[key]
+    if not items:
+        return _brief_measure(data) <= budget
+    if _brief_measure(data) <= budget:
+        return True
+
+    original = list(items)
+    n = len(original)
+    data["flags"][flag] = True
+
+    # Largest k in [0, n-1] such that measure(k items, flag=True) <= budget.
+    lo, hi = 0, n - 1
+    best = 0
+    fits = False
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if keep_tail:
+            data[key] = original[-mid:] if mid else []
+        else:
+            data[key] = original[:mid]
+        if _brief_measure(data) <= budget:
+            best = mid
+            fits = True
+            lo = mid + 1
+        else:
+            hi = mid - 1
+
+    if keep_tail:
+        data[key] = original[-best:] if best else []
+    else:
+        data[key] = original[:best]
+    return fits
+
+
+def _brief_apply_budget(data: dict[str, Any], budget: int) -> dict[str, Any]:
+    """Trim the canonical dataset until both renders fit *budget*.
+
+    Tiers (strict order):
+      1. oldest completions
+      2. memory lines (oldest first)
+      3. open-spec goal lines
+      4. whole actionable-task rows (keep count line)
+      5. whole open-spec rows (keep count line)
+      6. excess unreadable lines → aggregate count
+
+    Row-dropping tiers binary-search the retained count (O(N log N)
+    dual-renders). Final residual sets match the linear pop semantics.
+    """
+    if _brief_measure(data) <= budget:
+        return data
+
+    # Tier 1: drop oldest completions (keep newest = tail)
+    if _brief_trim_list_for_budget(
+        data, "completions", budget, flag="completions", keep_tail=True
+    ):
+        return data
+
+    # Tier 2: drop memory lines (oldest first — list is date-asc)
+    if _brief_trim_list_for_budget(
+        data, "memory", budget, flag="memory", keep_tail=True
+    ):
+        return data
+
+    # Tier 3: drop open-spec goal lines (all-or-nothing)
+    if any(s.get("goal") and not s.get("goal_dropped") for s in data["open_specs"]):
+        for s in data["open_specs"]:
+            if s.get("goal"):
+                s["goal_dropped"] = True
+        data["flags"]["spec_goals"] = True
+        if _brief_measure(data) <= budget:
+            return data
+
+    # Tier 4: drop whole actionable rows (lowest-priority from end).
+    # Sort key is (priority, id) ascending so high-priority comes first;
+    # drop from end keeps high-priority prefix.
+    if _brief_trim_list_for_budget(
+        data, "actionable", budget, flag="actionable", keep_tail=False
+    ):
+        return data
+
+    # Tier 5: drop whole open-spec rows (oldest first = list order = id sort)
+    if _brief_trim_list_for_budget(
+        data, "open_specs", budget, flag="open_specs", keep_tail=True
+    ):
+        return data
+
+    # Tier 6: collapse unreadable lines to an aggregate count
+    total_unreadable = (
+        len(data["unreadable_specs"])
+        + len(data["unreadable_tasks"])
+        + len(data["unreadable_memory"])
+    )
+    if total_unreadable:
+        # Drop individual lines, keep aggregate.
+        data["unreadable_specs"] = []
+        data["unreadable_tasks"] = []
+        data["unreadable_memory"] = []
+        data["unreadable_aggregate"] = total_unreadable
+        data["flags"]["unreadable"] = True
+
+    # If STILL over budget (pathological mandatory rows), nothing more to
+    # drop — the O(1) floor (header + counts + markers + pointers) is the
+    # irreducible minimum. Callers/tests cover this case.
+    return data
+
+
+def cmd_brief(args: argparse.Namespace) -> None:
+    """Session-scope re-anchor brief (fn-164). Pure read, budgeted, no git."""
+    use_json = bool(getattr(args, "json", False))
+    full = bool(getattr(args, "full", False))
+
+    repo_root, flow_dir = _brief_resolve_roots()
+    if not flow_dir.is_dir():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.",
+            use_json=use_json,
+        )
+
+    data = _brief_collect(flow_dir, repo_root)
+    if not full:
+        data = _brief_apply_budget(data, BRIEF_BUDGET_CHARS)
+
+    if use_json:
+        # Render includes success=; print raw (json_output would double-wrap).
+        sys.stdout.write(_brief_render_json(data))
+    else:
+        text = _brief_render_md(data)
+        if not text.endswith("\n"):
+            text += "\n"
+        sys.stdout.write(text)
+
+
 # --- Copilot Commands ---
 
 
 # --- Cursor Commands (fn-74) ---
+
 
 
 def build_standalone_review_prompt(
@@ -47476,6 +48402,27 @@ def main() -> None:
         help="Worker-facing markdown render (the default)",
     )
     p_anchor.set_defaults(func=cmd_anchor)
+
+    # brief (fn-164): session-scope budgeted re-anchor — separate verb so
+    # anchor's no-truncation contract stays intact.
+    p_brief = subparsers.add_parser(
+        "brief",
+        help=(
+            "Session-scope re-anchor brief — open specs, actionable tasks, "
+            "recent completions, memory index (token-bounded, deterministic)"
+        ),
+    )
+    p_brief.add_argument(
+        "--json",
+        action="store_true",
+        help="Machine form (same retained ids as markdown)",
+    )
+    p_brief.add_argument(
+        "--full",
+        action="store_true",
+        help="Lift the 8000-char budget (all rows retained)",
+    )
+    p_brief.set_defaults(func=cmd_brief)
 
     # repo-map list (fn-50.2)
     p_repo_map = subparsers.add_parser(

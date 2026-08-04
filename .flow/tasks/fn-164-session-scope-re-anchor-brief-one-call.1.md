@@ -51,9 +51,8 @@ Implement `flowctl brief`: a pure-read, token-bounded, deterministic session-ori
 - No-writes assertion passes for all three forms (R5)
 - Task-scope anchor and its superset test untouched
 ## Done summary
-TBD
-
+Implemented `flowctl brief`: pure-read session-orientation verb. Six fixed sections; open specs (closed/superseded excluded) with 120-char goal extraction; actionable tasks via cmd_ready semantics (task-dep + parent-spec-dep gates) over one TaskInventory load with claim fields, closed-parent orphans shown; last-5 completions (updated_at asc, id tie-break) with first Done-summary line + evidence flag (true iff commits/tests/prs any non-empty; default-empty and legacy no-dict false); memory index titles, active only; pointers. Budget: canonical dataset selected once, trimmed until BOTH renders <= 8000 chars (larger measured); tiers completions → memory → goal lines → task rows → spec rows → unreadable lines; scalars capped 80/120; per-tier truncation markers; --full lifts; --json identical retained ids + per-section truncated flags. Tolerant collectors degrade unreadable files to in-section [unreadable:] lines (repo-relative, 120-cap). No git invocations; no writes (tree-hash asserted). 42 tests green (brief + anchor untouched); ruff clean. Implemented by grok-4.5 bridge (2 runs; its own tests caught 2 contract bugs), host-verified.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e551b275032cc97eab55cd8485fe751e8f80b5c6
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_brief test_anchor_bundle -q
 - PRs:

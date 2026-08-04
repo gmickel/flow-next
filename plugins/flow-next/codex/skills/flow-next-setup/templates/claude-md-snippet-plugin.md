@@ -2,7 +2,7 @@
 <!-- flow-next:snippet:v1 -->
 ## Flow-Next
 
-This project uses Flow-Next for ALL task tracking. `flowctl` is on PATH via the plugin. Do NOT create markdown TODOs or use TodoWrite. Re-anchor (re-read spec + task status) before every task.
+This project uses Flow-Next for ALL task tracking. `flowctl` is on PATH via the plugin. Do NOT create markdown TODOs or use TodoWrite. Cold session: `flowctl brief` first — one bounded call (specs, ready tasks, memory); go deeper with `show`/`cat`/`anchor <task-id>`.
 
 - Lifecycle: `flowctl list` / `show fn-N.M` / `start fn-N.M` / `done fn-N.M --summary-file s.md --evidence-json e.json` (e.json: `{"commits": ["<sha>"], "tests": ["<cmd>"], "prs": []}`)
 - BEFORE any other flowctl operation, or when unsure of a flag: run `flowctl usage` (CLI cheatsheet + orchestration recipes).

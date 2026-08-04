@@ -155,9 +155,10 @@ Optional: `/flow-next:map` wraps [openclaw/clawpatch](https://github.com/opencla
 <!-- BEGIN FLOW-NEXT -->
 ## Flow-Next
 
-This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do NOT create markdown TODOs or use TodoWrite. Re-anchor (re-read spec + task status) before every task.
+This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do NOT create markdown TODOs or use TodoWrite. Cold session: run `.flow/bin/flowctl brief` FIRST (one bounded call — specs, actionable tasks, recent completions, memory index). Re-anchor (re-read spec + task status) before every task.
 
 ```bash
+.flow/bin/flowctl brief               # cold-session orientation (--full lifts the cap)
 .flow/bin/flowctl list                # specs + tasks
 .flow/bin/flowctl show fn-N.M         # view task
 .flow/bin/flowctl start fn-N.M        # claim -> implement -> commit

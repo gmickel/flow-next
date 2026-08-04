@@ -81,7 +81,7 @@ A named, reviewable artefact that carries context across a step in the agentic S
 
 ## Re-anchoring
 
-Re-reading the spec, the task, and `git log` since branch base before each task starts. Counters context drift in long-running agent sessions per Anthropic guidance. Worker subagents re-anchor on every iteration via a single `flowctl anchor <task-id>` call — one deterministic bundle carrying, verbatim, the same information the discrete reads delivered (task + spec records and bodies, git state, memory/glossary indices, dependency done-summaries); the bundle is a floor, not a ceiling. `/flow-next:work` re-anchors every loop turn.
+Re-reading the spec, the task, and `git log` since branch base before each task starts. Counters context drift in long-running agent sessions per Anthropic guidance. Session-scope: `flowctl brief` is the cold-session re-anchor (one budgeted call: open specs, ready tasks, recent completions, memory index). Task-scope: worker subagents re-anchor on every iteration via a single `flowctl anchor <task-id>` call — one deterministic bundle carrying, verbatim, the same information the discrete reads delivered (task + spec records and bodies, git state, memory/glossary indices, dependency done-summaries); the bundle is a floor, not a ceiling. `/flow-next:work` re-anchors every loop turn.
 
 ## Cross-model review
 

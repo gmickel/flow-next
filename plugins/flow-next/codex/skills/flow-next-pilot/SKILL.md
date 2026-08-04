@@ -26,6 +26,8 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
+Cold session / tick start: `$FLOWCTL brief` first for session-scope orientation (one budgeted call).
+
 ## Hard guards (before anything else)
 
 Run these guards before selection, ledger writes, branch changes, or skill dispatch.

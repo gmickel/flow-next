@@ -61,6 +61,7 @@ PLAN_INVOCATION_MANIFEST = (
 EXPECTED_LEAF_PATHS = frozenset(
     """anchor
 block
+brief
 cat
 chart abandon
 chart add-decision
