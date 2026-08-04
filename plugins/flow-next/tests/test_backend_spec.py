@@ -23,6 +23,7 @@ import unittest
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 
 def _load_flowctl() -> Any:
@@ -2197,3 +2198,139 @@ class TestPlanReviewSelectedBackendRouting(unittest.TestCase):
                 live[route]["metrics"]["reached_path_chars"],
             )
             self.assertEqual(row["reduction_chars"], live[route]["reduction_chars"])
+
+
+# --- Backend subprocesses never inherit interactive stdin (fn-120.3, R6) ---
+
+
+class TestBackendExecNeverInheritsStdin(unittest.TestCase):
+    """Every backend exec either PIPES a prompt or gets ``stdin=DEVNULL``.
+
+    A backend CLI launched with our stdin inherited can block forever on an
+    interactive read (a consent/trust prompt, a pager) that no automated caller
+    will ever answer — the shape of an unbounded review/backend hang, and the
+    class the fn-120 Windows corpus timeout had to rule out. There is no third
+    option: inheriting the parent's stdin is always a bug here.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="fn120-stdin-")
+        self.repo_root = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        self._env_snapshot = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+        self.addCleanup(self._restore_env)
+
+    def _restore_env(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env_snapshot)
+
+
+    def _assert_stdin_replaced(self, kwargs: dict, label: str) -> None:
+        import subprocess as _sp
+
+        if "input" in kwargs:
+            # A piped prompt already replaces stdin with a pipe that is closed
+            # after the write, so the child sees EOF.
+            return
+        self.assertIs(
+            kwargs.get("stdin"),
+            _sp.DEVNULL,
+            "{}: neither input= nor stdin=DEVNULL — the backend CLI inherits "
+            "our stdin and can block on an interactive read".format(label),
+        )
+
+    def test_codex_exec_pipes_the_prompt_on_stdin(self) -> None:
+        captured: list = []
+        with _stub_subprocess(
+            flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'
+        ):
+            flowctl.run_codex_exec(
+                "prompt", sandbox="read-only", spec=BackendSpec("codex", "gpt-5.2", "low")
+            )
+        self.assertTrue(captured)
+        for _argv, kwargs in captured:
+            self.assertEqual(kwargs.get("input"), "prompt")
+            self._assert_stdin_replaced(kwargs, "codex exec")
+
+    def test_codex_resume_pipes_the_prompt_on_stdin(self) -> None:
+        captured: list = []
+        with _stub_subprocess(
+            flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'
+        ):
+            flowctl.run_codex_exec(
+                "prompt",
+                session_id="sid-1",
+                sandbox="read-only",
+                spec=BackendSpec("codex", "gpt-5.2", "low"),
+            )
+        self.assertTrue(captured)
+        self.assertIn("resume", captured[0][0])
+        self._assert_stdin_replaced(captured[0][1], "codex exec resume")
+
+    def test_copilot_posix_argv_path_closes_stdin(self) -> None:
+        # POSIX: prompt rides argv, so NOTHING is piped — DEVNULL is the only
+        # thing standing between us and an inherited console stdin.
+        captured: list = []
+        with mock.patch.object(flowctl.sys, "platform", "linux"), _stub_subprocess(
+            flowctl, captured, stdout="verdict"
+        ):
+            flowctl.run_copilot_exec(
+                "prompt",
+                session_id="s1",
+                repo_root=self.repo_root,
+                spec=BackendSpec("copilot", "gpt-5.4", "medium"),
+            )
+        self.assertTrue(captured)
+        argv, kwargs = captured[0]
+        self.assertIn("-p", argv)  # argv delivery path, not the stdin path
+        self.assertNotIn("input", kwargs)
+        self._assert_stdin_replaced(kwargs, "copilot (POSIX argv path)")
+
+    def test_copilot_windows_stdin_path_pipes_the_prompt(self) -> None:
+        captured: list = []
+        with mock.patch.object(flowctl.sys, "platform", "win32"), _stub_subprocess(
+            flowctl, captured, stdout="verdict"
+        ):
+            flowctl.run_copilot_exec(
+                "prompt",
+                session_id="s1",
+                repo_root=self.repo_root,
+                spec=BackendSpec("copilot", "gpt-5.4", "medium"),
+            )
+        self.assertTrue(captured)
+        argv, kwargs = captured[0]
+        self.assertNotIn("-p", argv)  # stdin delivery path
+        self.assertEqual(kwargs.get("input"), "prompt")
+        self._assert_stdin_replaced(kwargs, "copilot (Windows stdin path)")
+
+    def test_cursor_positional_argv_path_closes_stdin(self) -> None:
+        import subprocess as _sp
+
+        result = _FakeCompleted(
+            stdout=json.dumps(
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "is_error": False,
+                    "result": "ok",
+                    "session_id": "aaaaaaaa-1111-2222-3333-444444444444",
+                }
+            )
+        )
+        with mock.patch.object(
+            flowctl, "require_cursor", return_value="/fake/bin/cursor-agent"
+        ), mock.patch.object(
+            flowctl.subprocess, "run", return_value=result
+        ) as m_run:
+            flowctl.run_cursor_exec(
+                prompt="review this",
+                repo_root=self.repo_root,
+                spec=BackendSpec("cursor", "gpt-5.6-sol-high"),
+            )
+        self.assertTrue(m_run.call_args_list)
+        kwargs = m_run.call_args.kwargs
+        self.assertNotIn("input", kwargs)
+        self.assertIs(kwargs.get("stdin"), _sp.DEVNULL)

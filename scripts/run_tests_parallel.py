@@ -26,6 +26,7 @@ import concurrent.futures
 import os
 import random
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -43,6 +44,14 @@ FAIL_SUMMARY_RE = re.compile(
     re.MULTILINE,
 )
 OK_SKIPPED_RE = re.compile(r"^OK \(skipped=(\d+)\)", re.MULTILINE)
+
+# Post-kill output collection is BOUNDED: after the process tree is killed the
+# pipe should hit EOF immediately, but an unreachable descendant must not be
+# able to stall the runner a second time. 15s is generous for draining a pipe
+# and still small next to any per-file timeout.
+POST_KILL_COLLECT_S = 15
+# Windows-only: how long the `taskkill /T` call itself may take.
+TREE_KILL_TIMEOUT_S = 30
 
 
 @dataclass
@@ -132,6 +141,67 @@ def _parse_unittest_output(text: str) -> Tuple[int, int, int, int]:
     return ran, failures, errors, skipped
 
 
+def _isolation_kwargs() -> dict:
+    """Popen kwargs that give each shard its own killable process tree.
+
+    POSIX: `start_new_session=True` puts the shard in a new session/process
+    group, so `killpg` reaches every descendant it spawned.
+    Windows: `CREATE_NEW_PROCESS_GROUP` detaches the shard from the parent's
+    console group (no inherited Ctrl events); `taskkill /T` walks the tree by
+    parent pid, which is the NT equivalent of a process-group kill.
+    """
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _terminate_tree(proc: "subprocess.Popen") -> str:
+    """Kill a timed-out shard AND its descendants. Returns a diagnostic line.
+
+    Killing only the direct child is what turns one hung test into a hung
+    suite: a surviving grandchild keeps the inherited stdout write handle open,
+    so the parent's output collection never sees EOF.
+    """
+    if proc.poll() is not None:
+        return "process-tree: shard already exited (rc={})".format(proc.returncode)
+    if os.name == "nt":
+        try:
+            killed = subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                timeout=TREE_KILL_TIMEOUT_S,
+            )
+            note = "process-tree: taskkill /F /T pid={} rc={}".format(
+                proc.pid, killed.returncode
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            note = "process-tree: taskkill pid={} unavailable ({})".format(
+                proc.pid, exc.__class__.__name__
+            )
+        # taskkill can miss a descendant that re-parented; the direct child is
+        # ours either way, so kill it unconditionally as a backstop.
+        try:
+            proc.kill()
+        except OSError:
+            pass
+        return note
+    try:
+        pgid = os.getpgid(proc.pid)
+        os.killpg(pgid, signal.SIGKILL)
+        return "process-tree: killpg pgid={} SIGKILL (shard + descendants)".format(pgid)
+    except (OSError, AttributeError) as exc:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+        return "process-tree: killpg pid={} failed ({}) - killed shard only".format(
+            proc.pid, exc.__class__.__name__
+        )
+
+
 def _run_one(tests_dir: Path, test_file: Path, verbose: bool, file_timeout: int) -> FileResult:
     """Run one test file via unittest discover (file-level shard)."""
     cmd = [
@@ -150,26 +220,58 @@ def _run_one(tests_dir: Path, test_file: Path, verbose: bool, file_timeout: int)
         cmd.append("-q")
 
     t0 = time.perf_counter()
+    # stdin=DEVNULL: a shard (or anything it spawns - git, a backend CLI, a
+    # pager) must never block reading the runner's inherited stdin. It gets
+    # immediate EOF instead of an interactive wait nothing will ever answer.
+    # universal_newlines with no `encoding=`: deliberate (fn-120.2/fn-120.3).
+    # Parent and child share the locale, so the transport is symmetric; forcing
+    # UTF-8 on children would hand all files a UTF-8 console and destroy the
+    # Windows leg's ability to catch the real cp1252 print-crash class
+    # (evidence: windows-latest run 30913423957).
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(REPO_ROOT),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        **_isolation_kwargs(),
+    )
     try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(REPO_ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-            timeout=file_timeout,
-        )
+        output = proc.communicate(timeout=file_timeout)[0] or ""
         returncode = proc.returncode
-        output = proc.stdout or ""
-    except subprocess.TimeoutExpired as exc:
+    except subprocess.TimeoutExpired:
         # A hung file must fail LOUDLY with its name, never stall the suite
         # (first seen: windows-latest CI hang on the first full-corpus run).
         returncode = 124
-        partial = exc.output or b""
-        if isinstance(partial, bytes):
-            partial = partial.decode("utf-8", errors="replace")
-        output = "TIMEOUT after {}s (per-file limit, --file-timeout)\n{}".format(
-            file_timeout, partial
+        kill_note = _terminate_tree(proc)
+        collect0 = time.perf_counter()
+        try:
+            partial = proc.communicate(timeout=POST_KILL_COLLECT_S)[0] or ""
+            collect_note = "post-kill collection: complete in {:.2f}s ({} chars)".format(
+                time.perf_counter() - collect0, len(partial)
+            )
+        except subprocess.TimeoutExpired:
+            # Bounded, unconditionally: a descendant we could not reach still
+            # holds the write handle. Abandon the pipe rather than hang the
+            # suite on it (the reader threads are daemons).
+            partial = ""
+            collect_note = (
+                "post-kill collection: ABANDONED after {}s - a surviving "
+                "descendant still holds this shard's stdout".format(POST_KILL_COLLECT_S)
+            )
+        output = (
+            "TIMEOUT {name}  rc=124  after {elapsed:.2f}s "
+            "(per-file limit {limit}s, --file-timeout)\n"
+            "{kill}\n{collect}\n"
+            "--- captured output before kill ---\n{partial}".format(
+                name=test_file.name,
+                elapsed=time.perf_counter() - t0,
+                limit=file_timeout,
+                kill=kill_note,
+                collect=collect_note,
+                partial=partial,
+            )
         )
     elapsed = time.perf_counter() - t0
     ran, failures, errors, skipped = _parse_unittest_output(output)
@@ -195,6 +297,13 @@ def _format_status(result: FileResult) -> str:
             ran=result.ran,
             extra=extra,
             elapsed=result.elapsed_s,
+        )
+    if result.returncode == 124:
+        # Timed-out file: name, exit code and elapsed time on the status line;
+        # the kill/collection diagnostics and captured output ride in
+        # result.output, which the FAILED FILES section always prints.
+        return "FAIL  {name}  rc=124 TIMEOUT  ran={ran}  {elapsed:.2f}s".format(
+            name=result.path.name, ran=result.ran, elapsed=result.elapsed_s
         )
     if result.returncode == 0 and result.ran == 0:
         return "FAIL  {name}  rc=0 ran=0 (no tests discovered - unittest cannot see pytest-style module functions)  {elapsed:.2f}s".format(

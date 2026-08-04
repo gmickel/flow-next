@@ -195,25 +195,15 @@ jobs:
             TIMEOUT_ARGS=(--file-timeout "$FILE_TIMEOUT")
             echo "Diagnostic mode: $SUITE_MODE; pattern=${TEST_PATTERN:-test_*.py}; timeout=${FILE_TIMEOUT}s"
           fi
-          EXCLUDES=()
-          # An explicit dispatch `pattern` is operator intent: focused diagnostic
-          # runs exist precisely to reach files on the Windows EXCLUDES list
-          # (fn-120 characterization), so a non-empty pattern skips the excludes.
-          if [ "$RUNNER_OS" = "Windows" ] && [ -z "$TEST_PATTERN" ]; then
-            # Windows-only exclusions (fn-119, being retired by fn-120): latent
-            # incompatibilities in files never exercised on windows CI before
-            # the parallel entrypoint. fn-120.1 characterization on this image
-            # (windows-2025, runs 30902967690..30902994209): backend_spec now
-            # PASSES in 4.4s (no hang - retirement owned by fn-120.3 with its
-            # cleanup regression). The gitignore encoding, gate-receipt
-            # shim/backslash and reveval stdout-encoding failures (fn-120.1),
-            # and normalize_section's cp1252 fixture writes plus
-            # task_create_files' unguarded os.geteuid() (fn-120.2) are fixed
-            # and those files run here. Remove entries with fn-120 task
-            # evidence, never silently here.
-            EXCLUDES+=(--exclude test_backend_spec.py)
-          fi
-          python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${MODE_ARGS[@]}" "${PATTERN_ARGS[@]}" "${VERBOSE_ARGS[@]}" "${TIMEOUT_ARGS[@]}" "${EXCLUDES[@]}"
+          # No Windows-only exclusions (fn-120, R8): every OS leg runs the SAME
+          # discovered corpus. fn-119 shipped a six-file Windows EXCLUDES list
+          # for latent incompatibilities in files that had never run on Windows
+          # CI; fn-120.1/.2 fixed the five deterministic ones and fn-120.3
+          # retired the last (test_backend_spec.py - no hang reproduced on
+          # windows-2025, and the runner now isolates + kills each shard's
+          # process tree). Never re-add a per-OS filter here: an exclusion is
+          # invisible debt. Bound a suspect file with --file-timeout instead.
+          python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${MODE_ARGS[@]}" "${PATTERN_ARGS[@]}" "${VERBOSE_ARGS[@]}" "${TIMEOUT_ARGS[@]}"
 
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})

@@ -8277,6 +8277,11 @@ def run_copilot_exec(
             cmd = [copilot, session_arg, *common_args]
             subprocess_kwargs["input"] = prompt
         else:
+            # fn-120.3: the argv path pipes nothing, so without this the CLI
+            # INHERITS our stdin and a prompt-on-stdin backend can block
+            # forever on input no automated caller will ever send. DEVNULL is
+            # immediate EOF. (The stdin path above already replaces stdin.)
+            subprocess_kwargs["stdin"] = subprocess.DEVNULL
             # POSIX argv path: -p + the marker-based session flag.
             prompt_for_argv = prompt
             if len(prompt) >= COPILOT_ARGV_PROMPT_MAX:
@@ -8815,6 +8820,11 @@ def run_cursor_exec(
                 check=False,  # Don't raise on non-zero exit; caller inspects
                 timeout=600,
                 cwd=str(repo_root),
+                # fn-120.3: prompt delivery is positional argv, so nothing is
+                # piped - without DEVNULL the CLI inherits our stdin and can
+                # block on an interactive read (a trust/consent prompt) that no
+                # automated caller answers. Immediate EOF instead.
+                stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired:
             return "", (session_id or ""), 2, "cursor-agent timed out (600s)"
