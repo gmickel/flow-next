@@ -413,7 +413,13 @@ class ProcessTreeCleanupTest(unittest.TestCase):
     that output under a bound, and leave no descendant running.
     """
 
-    FILE_TIMEOUT = 3
+    # Headroom, not impatience: the runner's clock starts at launch, so this
+    # budget covers interpreter startup + unittest discovery BEFORE the fixture
+    # can print its marker and spawn the grandchild. 3s was enough locally and
+    # too tight on a loaded macos-latest runner (run 30926718678), where the
+    # shard was killed before it printed anything and the marker assertion
+    # failed for a timing reason rather than a real regression.
+    FILE_TIMEOUT = 12
 
     def setUp(self):
         self.mod = _load_runner()
