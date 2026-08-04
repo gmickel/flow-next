@@ -173,6 +173,25 @@ into the PR body when it is `false`.
   all. Task 1 exists to resolve it before any code is written.
 - **Cursor version floor.** `/review` and `/review-bugbot` require Cursor 3.7+.
   Below that, treat as not-installed.
+- **Draft-PR interaction (load-bearing for autonomous runs).** Bugbot's account
+  setting "Review Draft PRs" is **off by default**, and `make-pr` **forces
+  `--draft` under `mode:autonomous`** (`DRAFT_FORCE`; pilot's terminus is
+  documented as "make-pr (draft)"). So on a default Bugbot account, the remote
+  reviewer never fires on a pilot-generated PR at all. Two consequences: the
+  dedup has nothing to dedup against on that path, and the **coverage** argument
+  becomes the primary justification for the stage rather than the cost argument
+  -- pre-push is the only way Bugbot ever sees autonomous output. The smoke test
+  must therefore exercise both a non-draft PR (to observe the dedup) and a draft
+  PR (to record the skip), and the docs must state the interaction.
+- **Autofix is incompatible with the dedup.** Bugbot's "Commit to Existing
+  Branch" autofix mode commits after the review, which changes the patch ID and
+  breaks invariant 1 by design. The docs must say to leave Autofix off (or use
+  "Create New Branch") when the stage is enabled. The stage never changes the
+  setting on the user's behalf.
+- **Bugbot enabled is not Bugbot running.** A repo can be toggled on in the
+  Automations tab and still produce zero reviews (usage exhausted, "run only when
+  mentioned", draft PRs, or Individual-tier "only PRs you author"). Detect the
+  absence of a review rather than assuming enablement means coverage.
 
 ## Acceptance Criteria
 <!-- scope: both -->
@@ -207,9 +226,15 @@ into the PR body when it is `false`.
 - **R8:** No fix loop ships in this spec, and the churn non-goal is recorded in
   both the spec and the user-facing docs. Errors: no error surface.
 - **R9:** Documentation covers the stage, the config flag, the Cursor-host-only
-  constraint, the usage-cost implication, and the recommended pairing (Bugbot
-  pre-push plus a different-family reviewer on the PR). The full downstream
-  property chain is walked, not just repo docs. Errors: no error surface.
+  constraint, the usage-cost implication, the draft-PR interaction, the Autofix
+  incompatibility, and the recommended pairing (Bugbot pre-push plus a
+  different-family reviewer on the PR). The full downstream property chain is
+  walked, not just repo docs. Errors: no error surface.
+- **R10:** The draft-PR interaction is characterised with evidence: what Bugbot
+  does on a pilot-forced draft PR with "Review Draft PRs" off, and whether the
+  dedup still applies when that draft is later marked ready-for-review. Errors:
+  if a draft PR never triggers a remote review at all, record that pre-push is
+  the sole coverage path for autonomous runs and reflect it in R9's docs.
 
 ## Boundaries
 <!-- scope: business -->
