@@ -34,8 +34,8 @@ Introduce the opt-in gate and the artifact filesystem layout, and wire the setup
 - [ ] With the key absent/false: no reference file loaded, no artifacts written, no Lavish session opened, no behavior-visible output anywhere (grep: no unconditional references to the artifacts dir)
 
 ## Done summary
-Added the opt-in HTML artifact config gate: artifacts.html.enabled=false seeded in get_default_config (fresh-repo get returns false, raw returns null), 9 regression tests mirroring test_land_config.py, setup-ceremony wiring (include-only-if-unset question, commit-vs-gitignore follow-up, verbatim lavish-axi offer with never-auto-install discipline), and docs for the key + .flow/artifacts/<spec-id>/ layout in flowctl.md and both usage.md copies. Codex mirror regenerated; dogfood flowctl.py synced. RP review: SHIP (first pass, R1/R9/R11 met).
+Retroactive tidy (2026-08-04): the feature this task describes shipped long ago but the task record was never closed when the parent spec closed — surfaced by the closed-parent orphan rule in `flowctl brief` (3.15.0). Evidence of existence: artifacts.html.enabled config gate + .flow/artifacts layout shipped in 2.0.0 (html-artifacts.md docs; gate checked by plan Step 8.5, probed this session). No new work performed; this receipt closes the stale record.
 ## Evidence
-- Commits: 5597dd124f44df6ce66950826098ef88a554d91d
-- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p 'test_*.py' (1071 tests OK), python3 -m unittest test_artifacts_config (9 tests OK)
+- Commits:
+- Tests:
 - PRs:

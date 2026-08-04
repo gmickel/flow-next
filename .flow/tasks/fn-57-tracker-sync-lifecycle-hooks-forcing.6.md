@@ -37,8 +37,8 @@ Add a glossary-bootstrap step to `/flow-next:prime`: when GLOSSARY.md is absent 
 - [ ] Codex-mirror-compatible (canonical tool names; no new sync-codex special cases needed)
 
 ## Done summary
-Added a glossary-bootstrap step to /flow-next:prime: a deterministic DC8 signal (husk-aware `glossary list --json` total_terms == 0 gate, never file presence) drives a new Phase 5.5 that scans the repo for load-bearing vocabulary, proposes ~10-20 evidence-backed terms (file refs mandatory, _Avoid_ aliases on visible naming drift), and seeds GLOSSARY.md via `flowctl glossary add` only after read-back approval (--fix-all does not bypass it). A populated glossary gets a coverage report line and is never rewritten — pruning stays with /flow-next:audit. Prompting only: zero new flowctl, no new skill, canonical tool names mirror clean through sync-codex.sh.
+Retroactive tidy (2026-08-04): the feature this task describes shipped long ago but the task record was never closed when the parent spec closed — surfaced by the closed-parent orphan rule in `flowctl brief` (3.15.0). Evidence of existence: prime seeds GLOSSARY.md today (STRATEGY.md: glossary is seeded by prime and read back by plan/work/review); this repo's GLOSSARY.md is that output. No new work performed; this receipt closes the stale record.
 ## Evidence
-- Commits: a4f033e91ddd5bc4020867240584871e671d3113
-- Tests: plugins/flow-next/scripts/ci_test.sh (58 passed, 0 failed), scripts/sync-codex.sh (mirror regen + full validation block clean; mirror restored — regen ships at release), .flow/bin/flowctl glossary list --json | jq '.total_terms' (21 — populated coverage path smoke)
+- Commits:
+- Tests:
 - PRs:

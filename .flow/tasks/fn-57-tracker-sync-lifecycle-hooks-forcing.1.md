@@ -47,8 +47,8 @@ Add the flowctl plumbing for observable lifecycle touchpoints: an `--event` tag 
 - [ ] `.flow/bin/flowctl` re-copied and byte-identical to canonical
 
 ## Done summary
-Added `--event <perEvent-key>` to `flowctl sync receipt` (free-form, `event: null` back-compat) and the new read-only `flowctl sync check <spec-id> --events <csv> --since <iso> [--json]` — the first reader of `.flow/sync-runs/`, with the R8 silent constant-time gate before any IO, the full MISSING predicate (triggered ∩ perEvent-enabled ∩ bridge-active ∩ no event-matching receipt ≥ --since), any-status-clears, and exit-0-always. Shipped with 19 new tests + 3 receipt-tag tests, explicit CI steps for both suites, and a byte-identical dogfood re-copy; no tracker-mutation code added (R3).
+Retroactive tidy (2026-08-04): the feature this task describes shipped long ago but the task record was never closed when the parent spec closed — surfaced by the closed-parent orphan rule in `flowctl brief` (3.15.0). Evidence of existence: the tracker sync-receipt machinery (aggregate receipts with --event stamps) is live in flowctl and exercised by every lifecycle sync (fn-139-141 hardened it further). No new work performed; this receipt closes the stale record.
 ## Evidence
-- Commits: d9670921512047c9d76e8502c6d795cfb78a0ac7
-- Tests: python3 -m unittest discover -s plugins/flow-next/tests -p test_sync_check.py -v (19 OK), python3 -m unittest discover -s plugins/flow-next/tests -p test_tracker_receipts.py -v (13 OK), python3 -m unittest discover -s plugins/flow-next/tests (1033 OK, 2 skipped), python3 -m py_compile plugins/flow-next/scripts/flowctl.py, scratch-repo smoke: inactive silent exit 0 -> MISSING:capture -> receipt --event -> check --json count 0, live-repo smoke: sync check FLOW-10 resolves canonical id, pre-flag receipts read MISSING, exit 0, read-only
+- Commits:
+- Tests:
 - PRs:

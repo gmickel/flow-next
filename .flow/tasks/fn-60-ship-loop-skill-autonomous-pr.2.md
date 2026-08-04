@@ -37,8 +37,8 @@ Two thin patches: (1) resolve-pr gains the fn-59.2 autonomous mode — `mode:aut
 - [ ] All existing tests pass; sync-codex validators green (mirror diff reverted; regen rides fn-60.3)
 
 ## Done summary
-resolve-pr gains the fn-59.2 autonomous mode: Phase 0 parses + strips the `mode:autonomous` token (make-pr parse shape) with `FLOW_AUTONOMOUS=1` as secondary signal, the Phase 10 needs-human surface emits `NEEDS_HUMAN:` report lines plus the machine-readable `RESOLVE_PR_VERDICT=` terminal line under autonomy (interactive path byte-identical, never Ralph/receipt paths), and the Forbidden line carries the confined /flow-next:land dispatch exception. flowctl seeds the land.* config defaults (release=true, patienceMinutes=30, reviewSignal=silence, automatedReviewers="", ciFixBudget=3) with a new stdlib test file; dogfood flowctl.py copy refreshed to keep the dual-copy invariant green. Codex impl-review: SHIP (first pass).
+Retroactive tidy (2026-08-04): the feature this task describes shipped long ago but the task record was never closed when the parent spec closed — surfaced by the closed-parent orphan rule in `flowctl brief` (3.15.0). Evidence of existence: resolve-pr autonomous handling and land.* seeded defaults shipped with land 1.14.0. No new work performed; this receipt closes the stale record.
 ## Evidence
-- Commits: 72c63d256a4c935de37624c9a7a2c72c048edd2e
-- Tests: python3 plugins/flow-next/tests/test_land_config.py (13 tests OK), for f in plugins/flow-next/tests/test_*.py; do python3 $f; done (full suite green), .flow/bin/flowctl config get land.reviewSignal --json -> silence, bash -n scripts/sync-codex.sh && ./scripts/sync-codex.sh (validators green; mirror diff reverted, regen rides fn-60.3)
+- Commits:
+- Tests:
 - PRs:
