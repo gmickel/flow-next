@@ -225,4 +225,4 @@ All plans go into `.flow/`:
 - Only create/update specs and tasks via flowctl
 - No code changes
 - No plan files outside `.flow/`
-- R-IDs are mandatory on new spec acceptance criteria — use `- **Rn:** ...` prose prefix format; never renumber after first review cycle (see `steps.md` R-ID rule)
+- R-IDs are mandatory on new spec acceptance criteria — use `- **Rn:** ...` prose prefix format; never renumber after first review cycle; each behavioral R-ID enumerates error/boundary cases or records "no error surface beyond X" (see `steps.md` R-ID rule)

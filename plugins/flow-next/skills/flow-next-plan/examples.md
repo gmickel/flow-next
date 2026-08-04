@@ -353,6 +353,34 @@ flowchart LR
 
 ---
 
+## Good vs Bad: Error-case enumeration
+
+### ❌ BAD: Criterion with no error cases
+
+```markdown
+## Acceptance Criteria
+- **R1:** Parse config file into typed settings
+- **R2:** Settings object is frozen after load
+```
+
+**Problems:**
+- Silence on malformed input, missing file, size limits — incomplete
+- Worker has no negative cases to test against
+
+### ✅ GOOD: Errors inside the R-ID bullet
+
+```markdown
+## Acceptance Criteria
+- **R1:** Parse config file into typed settings. Errors: malformed JSON → clear message + non-zero exit; missing file → same; over size limit → reject.
+- **R2:** Settings object is frozen after load (no error surface beyond R1).
+```
+
+**Why this is better:**
+- Each behavioral R-ID names its error/invalid/boundary handling, or records "no error surface beyond X"
+- One-line "none" is complete; silence is not
+
+---
+
 ## Good: Early Proof Point
 
 ```markdown

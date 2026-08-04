@@ -137,6 +137,22 @@ Rules:
 - Impl-review and spec-completion review emit a per-R-ID coverage table (met / partial / not-addressed / deferred).
 - Any unaddressed R-ID flips verdict to `NEEDS_WORK`; receipt carries an `unaddressed: ["R2", "R5"]` array so the fix loop has targeted work.
 
+### Error-case enumeration (negative-cases discipline)
+
+Every behavioral R-ID must make its failure surface visible — either by naming the error / invalid-input / boundary cases *inside that bullet*, or by an explicit one-liner that there is none beyond a named parent. Silence is incomplete; a declared "none" is complete.
+
+**What counts as an enumeration.** Per criterion, name the cases the implementation must handle (or deliberately refuse): malformed input, missing files/resources, conflicting state, limits (size, rate, concurrency), and any other boundary the criterion creates. Write them as sub-clauses or sub-bullets under the parent R-ID — **not** as new sub-R-IDs and **not** as a new coverage-table column. Letter-suffix siblings (`R4a`, `R4b`) remain for genuinely separable criteria, unchanged.
+
+```markdown
+- **R1:** Parse config file into typed settings. Errors: malformed JSON → clear
+  message + non-zero exit; missing file → same; over size limit → reject.
+- **R2:** Settings object is frozen after load (no error surface beyond R1).
+```
+
+**Why ("considered" vs "forgot").** A persisted regression suite entrenches blind spots as faithfully as knowledge — "all tests pass" every session actively signals nothing-to-fix for cases nobody enumerated. Plan-time enumeration is the cheap fix: plan-review's fresh eyes can see an R-ID with neither error clauses nor a no-error-surface line as incomplete, without new review-stage machinery. The discipline exists so a reader can tell *considered and ruled out* from *forgot*.
+
+**G-ID interplay.** Standing error-handling criteria in `.flow/criteria.md` (e.g. "every CLI exits non-zero on user error") are **referenced by G-ID, never restated** as R-ID prose. The error discipline applies only to what the spec *adds* — its own R-IDs — the same non-restatement rule as the rest of the G-ID system. Mid-flight specs written before this discipline exist with no enumerated error cases: the work-stage test-tie scopes to "error cases enumerated in the ACs", so an empty set triggers nothing (not retroactive).
+
 ### Global criteria (G-IDs) - the same grammar at project scope
 
 Some acceptance criteria are not about one spec - "every route change regenerates the API contract", "no new dependency without a health check". Those live in an optional, user-owned `.flow/criteria.md` as **G-IDs**: the R-ID grammar with a `G` prefix, one line-anchored bullet per criterion:

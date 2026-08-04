@@ -41,9 +41,14 @@ Propagate the error-case discipline into the three skill surfaces (plan AC-deriv
 - Plan/interview/worker prose carries the discipline; fixture walkthrough evidence recorded (R2, R3, R4)
 - CHANGELOG + docs-site staged; codex mirrors regenerated twice-idempotent (R5, R6)
 ## Done summary
-TBD
+Propagated the error-case discipline into the three skill surfaces: plan (scaffold R1 line shows the Errors: clause; R-ID rule block gains the enumeration bullet, G-ID-scoped; SKILL.md output-rule one-liner extended; examples.md good/bad pair matching the template wording), interview (AC-bucket probe firing when ACs lack negative cases, one-line "no error surface" accepted without escalation), worker (required tests cover every enumerated error case in satisfied R-IDs; done summary references them; non-retroactive). Codex mirrors regenerated, sync-codex.sh idempotent; pinning/budget suites green (26 tests OK). CHANGELOG Unreleased entry added. Docs-site writing-specs.mdx updated in flow-next.dev commit e3450315 (pnpm build green, 80 pages); versioned site changelog deferred to batched release. Downstream walk: docs-site UPDATED (e3450315); microsite NO-CHANGE (feature-level page set, no spec-template surface); AIxSDLC guide NO-CHANGE (methodology narrative predates template detail; revisit at release); vault NO-CHANGE (experiment note already records the benchmark lesson driving this spec).
 
+R2 fixture walkthrough ("parse a config file" — trivial happy path, non-trivial error surface): applying the updated AC-derivation guidance yields:
+- R1: Config file parses into typed settings. Errors: malformed JSON/TOML → clear parse error + non-zero exit; missing file → distinct not-found error; unreadable (permissions) → distinct error; file over size limit → reject before parse.
+- R2: Unknown keys are reported with their path. Errors: none beyond R1 (no error surface beyond parse failures).
+- R3: Defaults fill absent optional keys. No error surface beyond R1.
+The guidance produced enumerated negative cases for the criterion that has them and explicit no-error-surface lines where it doesn't — the discipline verifies on the fixture. Implemented by grok-4.5 bridge; host wrote CHANGELOG/docs-site and verified.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 93bc77f1e26907b3c2e4e270180eb39aae4caede
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_token_budgets test_template_canonical test_dogfood_template_parity -q
 - PRs:

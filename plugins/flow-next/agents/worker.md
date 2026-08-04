@@ -277,6 +277,7 @@ Rules:
 - Small, focused changes
 - Follow existing code style
 - Add tests if spec requires them
+- Required tests cover every error case enumerated in the ACs (R-IDs) the task satisfies; done summary references those tests. Specs with no enumerated error cases trigger nothing (not retroactive).
 - If you break something mid-implementation, fix it before continuing
 
 ## Phase 3: Commit

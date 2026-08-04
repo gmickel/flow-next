@@ -2,6 +2,19 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+The specs your agents write now enumerate their error cases up front. Every
+benchmark checkpoint the pipeline lost traced to a single untested error path
+that "all tests green" then entrenched forever — so the fix moved upstream to
+plan time. Each acceptance criterion now states its error/invalid-input/
+boundary handling inside the R-ID bullet (or records "no error surface beyond
+X" — a one-line declaration is complete, silence is not), the plan skill
+derives those cases during AC writing, the interview asks the error-surface
+probe when they're missing, and workers inherit every enumerated case as a
+required test before `done`. Existing specs are untouched; the discipline
+applies to new specs only. (fn-165)
+
 ## [flow-next 3.14.0] - 2026-08-04
 
 Review loops now end the way a human lead would end them: converging work gets

@@ -70,6 +70,7 @@ Ask NON-OBVIOUS questions only. Expect 40+ questions for complex specs.
 - How to verify correctness?
 - Performance benchmarks
 - Edge cases to explicitly test
+- When ACs drafted or appended in THIS pass lack negative cases: what happens on error/invalid-input/boundary conditions per criterion? A one-line "no error surface (beyond X)" answer is complete — accept without escalating or follow-up. Pre-existing criteria stay frozen (write-back rule); never retrofit them.
 
 ## Unknowns & Risks
 
