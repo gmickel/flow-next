@@ -2,41 +2,55 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.15.0] - 2026-08-04
 
-A cold session now orients with one call. `flowctl brief` gives a fresh agent —
-a new chat, a pilot tick, a benchmark checkpoint — the whole workspace picture
-in a single bounded read: open specs with one-line goals, actionable tasks with
-claim state, the last five completions with evidence flags, the memory index,
-and pointers for going deeper. Output is deterministic and capped at ~2k tokens
-no matter how big the repo gets (explicit truncation markers, `--full` to lift,
-`--json` for the machine form), so re-anchoring stops dragging full spec bodies
-into context every session. Task-scope `flowctl anchor` is unchanged — brief is
-the session-scope sibling, and the setup snippets now teach brief-first as the
-cold-session default. (fn-164)
+Flow-next got dramatically cheaper to carry. Benchmark evidence (SlopCodeBench,
+16 checkpoints against a no-flow control) showed exactly where the overhead
+lived: ceremony call count, re-anchor context, and one class of quality miss —
+untested error paths. This release attacks all three: authoring a spec with its
+full task set drops from ~20 flowctl calls to 8, a cold session orients in one
+bounded call instead of dragging full spec bodies into context, and the specs
+your agents write now enumerate their error cases up front so the work stage
+inherits them as required tests.
 
-Authoring a spec with its full task set now takes two flowctl calls instead of
-~eight. `spec create --plan-file plan.md` (or `--plan -`) creates the spec and
-applies the plan in one shot; `task create --from-json tasks.json` materializes
-every task of a plan — titles, descriptions, acceptance, satisfies, deps
-(including references between tasks in the same batch) — in a single call under
-one lock, all-or-nothing: any invalid item rejects the whole batch with zero
-writes. The canonical spec-plus-3-tasks flow drops from ~20 invocations to 8,
-verified by a test that counts real subprocess calls. Every teaching surface
-(plan skill, usage.md, setup snippets, CLI reference) now leads with the fast
-path; the granular verbs are unchanged and remain the editing path. Receipts,
-evidence, and start/done validation are untouched. (fn-163)
+### Added
 
-The specs your agents write now enumerate their error cases up front. Every
-benchmark checkpoint the pipeline lost traced to a single untested error path
-that "all tests green" then entrenched forever — so the fix moved upstream to
-plan time. Each acceptance criterion now states its error/invalid-input/
-boundary handling inside the R-ID bullet (or records "no error surface beyond
-X" — a one-line declaration is complete, silence is not), the plan skill
-derives those cases during AC writing, the interview asks the error-surface
-probe when they're missing, and workers inherit every enumerated case as a
-required test before `done`. Existing specs are untouched; the discipline
-applies to new specs only. (fn-165)
+- **Authoring a spec with its full task set now takes two flowctl calls instead
+  of ~eight.** `spec create --plan-file plan.md` (or `--plan -`) creates the
+  spec and applies the plan in one shot; `task create --from-json tasks.json`
+  materializes every task of a plan — titles, descriptions, acceptance,
+  satisfies, deps (including references between tasks in the same batch) — in a
+  single call under one lock, all-or-nothing: any invalid item rejects the
+  whole batch with zero writes. The canonical spec-plus-3-tasks flow drops from
+  ~20 invocations to 8, verified by a test that counts real subprocess calls.
+  Every teaching surface (plan skill, usage.md, setup snippets, CLI reference)
+  now leads with the fast path; the granular verbs are unchanged and remain the
+  editing path. Receipts, evidence, and start/done validation are untouched.
+  (fn-163)
+
+- **A cold session now orients with one call.** `flowctl brief` gives a fresh
+  agent — a new chat, a pilot tick, a benchmark checkpoint — the whole
+  workspace picture in a single bounded read: open specs with one-line goals,
+  actionable tasks with claim state, the last five completions with evidence
+  flags, the memory index, and pointers for going deeper. Output is
+  deterministic and capped at ~2k tokens no matter how big the repo gets
+  (explicit truncation markers, `--full` to lift, `--json` for the machine
+  form), so re-anchoring stops dragging full spec bodies into context every
+  session. Task-scope `flowctl anchor` is unchanged — brief is the
+  session-scope sibling, and the setup snippets now teach brief-first as the
+  cold-session default. Under the hood: no git subprocess and no writes —
+  identical `.flow/` state always renders identical bytes. (fn-164)
+
+- **The specs your agents write now enumerate their error cases up front.**
+  Every benchmark checkpoint the pipeline lost traced to a single untested
+  error path that "all tests green" then entrenched forever — so the fix moved
+  upstream to plan time. Each acceptance criterion now states its
+  error/invalid-input/boundary handling inside the R-ID bullet (or records "no
+  error surface beyond X" — a one-line declaration is complete, silence is
+  not), the plan skill derives those cases during AC writing, the interview
+  asks the error-surface probe when they're missing, and workers inherit every
+  enumerated case as a required test before `done`. Existing specs are
+  untouched; the discipline applies to new specs only. (fn-165)
 
 ## [flow-next 3.14.0] - 2026-08-04
 
