@@ -38,8 +38,8 @@ Documentation (repo + flow-next.dev), Codex mirror regeneration, and the 1.11.0 
 - [ ] No new pages → navbars untouched (verified both sources still list the edited pages)
 
 ## Done summary
-Shipped the fn-57 docs + release task: tracker-sync.md / flowctl.md / setup usage.md gained the sync check + --event surface (incl. the MISSING-after-retro-fire recovery subsection), CHANGELOG got the [flow-next 1.11.0] entry, bump.sh took all manifests 1.10.2 → 1.11.0, the sync-codex.sh SECTION3C heredoc was fixed to carry the fn-57.7 glossary re-anchor line before regenerating + auditing the Codex mirror, and flow-next.dev got the 1.11.0 changelog entry + tracker-sync/configuration doc updates + version bumps (committed separately, pnpm build green, navbars untouched/verified). Nothing pushed — orchestrator owns pushes.
+Retroactive tidy (2026-08-04): the feature this task describes shipped long ago but the task record was never closed when the parent spec closed — surfaced by the closed-parent orphan rule in `flowctl brief` (3.15.0). Evidence of existence: release 1.11.0 shipped with its docs + mirror (tracker forcing/observability is in the timeline + site changelog). No new work performed; this receipt closes the stale record.
 ## Evidence
-- Commits: 2f561b058ff337b13e10e52086dd1eb9017f6239, 9d63e42 (flow-next.dev)
-- Tests: python3 -m unittest discover -s tests -q (1033 tests OK, 2 pre-existing skips), ./scripts/sync-codex.sh validation (all checks green via bump.sh), smoke: sync check in tracker-less tmp dir -> empty output, exit 0 (R8), smoke: sync receipt --event capture + sync check --events capture -> missing:[], --events makePr (fresh --since) -> MISSING:makePr, mirror audit: codex/skills/flow-next-work/phases.md §3c/§3d splice anchors intact, glossary re-anchor line at :227, work Phase 5 / capture Phase 6 / make-pr §4.6b+§5.7 / prime 5.5 blocks present, scout+worker .toml glossary read path present, cd ~/work/flow-next.dev && pnpm build (58 pages, green)
+- Commits:
+- Tests:
 - PRs:

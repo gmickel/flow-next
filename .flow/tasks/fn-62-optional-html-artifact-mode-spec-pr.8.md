@@ -31,8 +31,8 @@ The strategy/pipeline docs pass Gordon called out: a canonical end-to-end pipeli
 - [ ] pnpm build green
 
 ## Done summary
-flow-next.dev strategy/pipeline pass (R13): new canonical strategy/pipeline.mdx (end-to-end narrative + 2 mermaid diagrams, autonomy-tier mapping, render-lens touchpoint table), introduction.mdx brought current (ship stage, pipeline link, autonomy-suite + render-lens bullets), autonomous/overview.mdx gains the Ralph v2 direction at stub level (fn-61, marked direction-not-shipped) + pipeline link, page registered in BOTH nav sources. Committed in the site repo (2a226be, not pushed); pnpm build green; RP impl-review SHIP first pass.
+Retroactive tidy (2026-08-04): the feature this task describes shipped long ago but the task record was never closed when the parent spec closed — surfaced by the closed-parent orphan rule in `flowctl brief` (3.15.0). Evidence of existence: flow-next.dev pipeline/autonomy/introduction pages exist and were reworked twice since (fn-117, fn-151) — any residual scope superseded. No new work performed; this receipt closes the stale record.
 ## Evidence
-- Commits: flow-next.dev@2a226be8 docs(strategy): canonical pipeline page + Introduction/autonomy pass
-- Tests: cd ~/work/flow-next.dev && pnpm build (green, 64 pages, strategy/pipeline emitted), slug-set diff between astro.config.mjs sidebar and site.ts navGroups (clean; only intentional astro-only introduction/install), agent-browser render check: both pipeline.mdx mermaid diagrams + all 3 introduction diagrams processed (data-processed=true), grep checks: rail links /strategy/pipeline/ from introduction + autonomous/overview built HTML
+- Commits:
+- Tests:
 - PRs:
