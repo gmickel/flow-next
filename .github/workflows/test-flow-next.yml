@@ -200,18 +200,19 @@ jobs:
           # runs exist precisely to reach files on the Windows EXCLUDES list
           # (fn-120 characterization), so a non-empty pattern skips the excludes.
           if [ "$RUNNER_OS" = "Windows" ] && [ -z "$TEST_PATTERN" ]; then
-            # Windows-only exclusions (fn-119): latent incompatibilities in files
-            # NEVER exercised on windows CI before the parallel entrypoint
-            # (pre-fn-119 windows unit coverage was 29/87 files; these keep it
-            # at 81/87 - strictly wider than before). Causes on the fn-119 PR:
-            # backend_spec hangs; flow_gitignore cp1252 read-back; gate_receipt
-            # POSIX sh shim + literal-backslash filename; normalize_section /
-            # reveval / task_create_files CLI e2e failures on 8.3 short paths.
-            # Windows-compat sweep tracked as fn-120 - remove entries
-            # there, never silently here.
+            # Windows-only exclusions (fn-119, being retired by fn-120): latent
+            # incompatibilities in files never exercised on windows CI before
+            # the parallel entrypoint. fn-120.1 characterization on this image
+            # (windows-2025, runs 30902967690..30902994209): backend_spec now
+            # PASSES in 4.4s (no hang - retirement owned by fn-120.3 with its
+            # cleanup regression); normalize_section fails on 8.3 short-path
+            # --file args; task_create_files fails import on unguarded
+            # os.geteuid() (fn-120.2). The deterministic gitignore encoding,
+            # gate-receipt shim/backslash, and reveval stdout-encoding failures
+            # are fixed and those files run here. Remove entries with fn-120
+            # task evidence, never silently here.
             EXCLUDES+=(--exclude test_backend_spec.py)
             EXCLUDES+=(--exclude test_normalize_section_content.py)
-            EXCLUDES+=(--exclude test_reveval_parse_guard.py)
             EXCLUDES+=(--exclude test_task_create_files.py)
           fi
           python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${MODE_ARGS[@]}" "${PATTERN_ARGS[@]}" "${VERBOSE_ARGS[@]}" "${TIMEOUT_ARGS[@]}" "${EXCLUDES[@]}"
