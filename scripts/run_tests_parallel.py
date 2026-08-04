@@ -164,6 +164,12 @@ def _run_one(tests_dir: Path, test_file: Path, verbose: bool, file_timeout: int)
             # destroying the diagnostic. errors="replace" matches the
             # TimeoutExpired branch below: this is diagnostic capture, never
             # an assertion surface.
+            # The child's OWN encoder is deliberately left alone (no
+            # PYTHONIOENCODING): tests that intentionally exercise a cp1252
+            # stdout — fn-120.1's reveval guard regression — must keep
+            # reproducing it. A Windows child's unittest stream can therefore
+            # still mangle non-ASCII before the pipe; that is the child's
+            # encoding under test, not the runner's transport.
             encoding="utf-8",
             errors="replace",
             timeout=file_timeout,

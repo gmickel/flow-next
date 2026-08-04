@@ -74,17 +74,23 @@ class Failing(unittest.TestCase):
         self.assertEqual(1, 2)
 """
 
-# fn-120.2: a child whose FAILURE MESSAGE is non-ASCII. The runner captured
-# child output with the parent's locale encoding (cp1252 on windows-latest),
-# which mojibaked or UnicodeDecodeError'd the diagnostic. The needle is written
-# as escapes so this harness file stays ASCII on any editor/locale.
+# fn-120.2: a failing child that emits non-ASCII diagnostics as raw UTF-8
+# BYTES. The runner used to decode captured child output with the PARENT's
+# locale encoding (cp1252 on windows-latest), which mojibaked the diagnostic.
+# Bytes are written directly because the child's own text encoder is a separate
+# variable — on Windows unittest's stream is cp1252 and mangles the message
+# before it ever reaches the pipe (verified: run 30913423957). What this
+# fixture measures is the parent's decode. Escapes keep this harness ASCII.
 NON_ASCII_FAILING_FILE = """\
+import sys
 import unittest
 
 
 class NonAsciiFailure(unittest.TestCase):
     def test_utf8_message(self):
-        self.fail("w\\u00f6rks \\u2014 \\u2713")
+        sys.stdout.buffer.write("w\\u00f6rks \\u2014 \\u2713\\n".encode("utf-8"))
+        sys.stdout.buffer.flush()
+        self.fail("non-ascii marker emitted on stdout above")
 """
 NON_ASCII_NEEDLE = "w\u00f6rks \u2014 \u2713"
 
@@ -311,9 +317,9 @@ class CorpusContractTest(unittest.TestCase):
     def test_non_ascii_child_output_survives_capture(self):
         """fn-120.2: child output is decoded as UTF-8, not the parent locale.
 
-        On windows-latest the parent's default is cp1252, so before the
-        explicit `encoding=` the captured diagnostic was mojibaked (or the
-        decode raised inside the runner) and the real failure was unreadable.
+        The child emits UTF-8 bytes; on windows-latest the parent's locale
+        default is cp1252, so before the explicit `encoding=` those bytes came
+        back mojibaked and the real failure text was unreadable in CI logs.
         """
         (self.corpus / "test_utf8.py").write_text(
             NON_ASCII_FAILING_FILE, encoding="utf-8"
