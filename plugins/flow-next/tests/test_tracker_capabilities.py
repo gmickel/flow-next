@@ -2716,3 +2716,42 @@ class LeafIsSafeDivergentResolve(unittest.TestCase):
         out = self.leaf_is_safe(self.base, leaf)
         self.assertIsInstance(out, TrackerError)
         self.assertIn("symlink", out.message)
+
+    def _tagged_lstat(self, tagged: Path, tag: int):
+        """Patch: os.lstat reports `tagged` the way Windows marks an NTFS
+        junction - a nonzero st_reparse_tag on a component whose mode is NOT
+        S_ISLNK (junctions are reparse points, not symlinks, so the symlink
+        check alone never sees them). POSIX-runnable stand-in."""
+        import os
+        import types
+
+        real_lstat = os.lstat
+
+        def fake_lstat(path, *args, **kwargs):
+            st = real_lstat(path, *args, **kwargs)
+            if Path(path) == tagged:
+                return types.SimpleNamespace(st_mode=st.st_mode,
+                                             st_reparse_tag=tag)
+            return st
+
+        return mock.patch("os.lstat", fake_lstat)
+
+    def test_reparse_point_component_is_refused(self) -> None:
+        junction = self.base / "junction"
+        junction.mkdir()
+        io_reparse_tag_mount_point = 0xA0000003  # NTFS junction/mount point
+        with self._tagged_lstat(junction, io_reparse_tag_mount_point):
+            out = self.leaf_is_safe(self.base, junction / "x.json")
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(out.subtype, "path")
+        self.assertIn("reparse", out.message)
+
+    def test_zero_reparse_tag_is_not_refused(self) -> None:
+        plain = self.base / "plain"
+        plain.mkdir()
+        with self._tagged_lstat(plain, 0):
+            self.assertIsNone(
+                self.leaf_is_safe(self.base, plain / "x.json"),
+                "st_reparse_tag == 0 (or absent, as on POSIX) must stay a "
+                "no-op - only a real reparse point may be refused")

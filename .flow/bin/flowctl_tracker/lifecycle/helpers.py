@@ -72,6 +72,17 @@ def leaf_is_safe(base_dir: Path, leaf: Path) -> Optional[TrackerError]:
                 return TrackerError(ErrorClass.INVALID_INPUT,
                                     f"{probe} is a symlink; refusing to write "
                                     "through it", subtype="path")
+            # Windows NTFS junctions/mount points are reparse points, NOT
+            # symlinks: lstat flags them via st_reparse_tag while S_ISLNK
+            # stays false, yet a write through them follows the redirect out
+            # of tree. Reject ANY nonzero tag fail-closed instead of adding a
+            # second resolve() - re-resolving the leaf is exactly the
+            # divergent-resolve flake this walk replaced. st_reparse_tag is
+            # Windows-only (getattr -> 0 elsewhere), so this is a POSIX no-op.
+            if getattr(st, "st_reparse_tag", 0):
+                return TrackerError(ErrorClass.INVALID_INPUT,
+                                    f"{probe} is a reparse point; refusing to "
+                                    "write through it", subtype="path")
         except FileNotFoundError:
             pass
         except OSError:
