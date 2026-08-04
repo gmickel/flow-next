@@ -32,8 +32,8 @@ flow-next.dev mainline surfacing of the feature. Site repo: ~/work/flow-next.dev
 - [ ] pnpm build green
 
 ## Done summary
-flow-next.dev feature pass for 2.0.0 HTML artifact mode (R12): two new pages (specs/visual-aids — spec render lens; review/visual-aids — PR review instrument) registered in BOTH navbars, landing feature card + "Render lenses" proof pillar, cross-page callouts in writing-specs/review-workflow/teams-collaboration/autonomous-overview (generate-never-poll), strict-format 2.0.0 changelog entry incl. planSync.crossEpic breaking-change line, FLOW_NEXT_VERSION + package.json bumped to 2.0.0. Committed in the site repo (1dd356d, not pushed); pnpm build green; RP impl-review SHIP first pass.
+Retroactive tidy (2026-08-04): the feature this task describes shipped long ago but the task record was never closed when the parent spec closed — surfaced by the closed-parent orphan rule in `flowctl brief` (3.15.0). Evidence of existence: flow-next.dev visual-aids pages exist (/review/visual-aids/, /specs/visual-aids/) with landing card + cross-links (2.0.0 render-lens release; fn-151 landing rework superseded the card design). No new work performed; this receipt closes the stale record.
 ## Evidence
-- Commits: flow-next.dev@1dd356d4 feat(visual-aids): surface HTML artifact mode as a mainline feature; 2.0.0
-- Tests: cd ~/work/flow-next.dev && pnpm build (green, 63 pages, both visual-aids pages emitted), slug-set diff between astro.config.mjs sidebar and site.ts navGroups (clean; only intentional introduction/install astro-only), grep checks: rail links to /specs/visual-aids/ and /review/visual-aids/ in built HTML; v2.0.0 on landing; 2.0.0 changelog entry rendered
+- Commits:
+- Tests:
 - PRs:
