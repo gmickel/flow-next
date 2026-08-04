@@ -210,7 +210,6 @@ jobs:
             # Windows-compat sweep tracked as fn-120 - remove entries
             # there, never silently here.
             EXCLUDES+=(--exclude test_backend_spec.py)
-            EXCLUDES+=(--exclude test_gate_receipt.py)
             EXCLUDES+=(--exclude test_normalize_section_content.py)
             EXCLUDES+=(--exclude test_reveval_parse_guard.py)
             EXCLUDES+=(--exclude test_task_create_files.py)
