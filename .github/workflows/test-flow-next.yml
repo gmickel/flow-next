@@ -46,11 +46,30 @@ on:
       - "agent_docs/**.py"
   workflow_dispatch:
     inputs:
-      shuffle:
-        description: "Ordering canary - run unit suite with --shuffle (manual/weekly; file-level only)"
+      suite_mode:
+        description: "Unit-suite mode for this exact ref"
+        required: true
+        type: choice
+        options:
+          - parallel
+          - serial
+          - shuffle
+        default: parallel
+      pattern:
+        description: "Optional single-file glob relative to plugins/flow-next/tests (for example test_gate_receipt.py)"
+        required: false
+        type: string
+        default: ""
+      verbose:
+        description: "Print per-test names and failing-file output"
         required: false
         type: boolean
         default: false
+      file_timeout:
+        description: "Per-file timeout in seconds (1-900)"
+        required: false
+        type: string
+        default: "900"
       legacy_baseline:
         description: "Measurement lever (fn-155) - run the unit suite at the pre-CI-detection job count, computed per runner"
         required: false
@@ -126,8 +145,8 @@ jobs:
       # Shards by FILE only (never within a file). Default jobs = the runner's
       # full core count on CI and cores-2 locally (fn-155; the job-count policy
       # lives in the runner, not here). --serial is the equivalence fallback.
-      # workflow_dispatch.inputs.shuffle is the ordering canary (manual /
-      # weekly; do not schedule a new workflow).
+      # workflow_dispatch suite_mode supports focused, serial, and shuffled
+      # exact-ref diagnostics without changing ordinary PR/push behavior.
       # workflow_dispatch.inputs.legacy_baseline is the fn-155 measurement
       # lever: it reproduces the pre-change job count from this same commit,
       # computed per runner because nothing establishes that all three OS legs
@@ -136,20 +155,51 @@ jobs:
       - name: Python unit tests - parallel suite (fn-119)
         env:
           LEGACY_BASELINE: ${{ github.event.inputs.legacy_baseline }}
+          SUITE_MODE: ${{ github.event.inputs.suite_mode }}
+          TEST_PATTERN: ${{ github.event.inputs.pattern }}
+          TEST_VERBOSE: ${{ github.event.inputs.verbose }}
+          FILE_TIMEOUT: ${{ github.event.inputs.file_timeout }}
         run: |
           JOBS_ARGS=()
           if [ "$LEGACY_BASELINE" = "true" ]; then
             JOBS_ARGS=(--jobs "$(python -c 'import os; print(max(1, (os.cpu_count() or 2) - 2))')")
             echo "Legacy baseline (fn-155): ${JOBS_ARGS[*]}"
           fi
-          SHUFFLE_ARGS=()
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] \
-            && [ "${{ github.event.inputs.shuffle }}" = "true" ]; then
-            SHUFFLE_ARGS=(--shuffle --seed "$GITHUB_RUN_ID")
-            echo "Ordering canary: --shuffle --seed $GITHUB_RUN_ID"
+          MODE_ARGS=()
+          PATTERN_ARGS=()
+          VERBOSE_ARGS=()
+          TIMEOUT_ARGS=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            case "$SUITE_MODE" in
+              parallel) ;;
+              serial) MODE_ARGS=(--serial) ;;
+              shuffle) MODE_ARGS=(--shuffle --seed "$GITHUB_RUN_ID") ;;
+              *) echo "Invalid suite_mode: $SUITE_MODE (expected parallel, serial, or shuffle)" >&2; exit 2 ;;
+            esac
+            if [ -n "$TEST_PATTERN" ]; then
+              case "$TEST_PATTERN" in
+                */*|*\\*) echo "pattern must be a filename glob relative to plugins/flow-next/tests" >&2; exit 2 ;;
+              esac
+              PATTERN_ARGS=(--pattern "$TEST_PATTERN")
+            fi
+            if [ "$TEST_VERBOSE" = "true" ]; then
+              VERBOSE_ARGS=(--verbose)
+            fi
+            case "$FILE_TIMEOUT" in
+              ''|*[!0-9]*) echo "file_timeout must be an integer from 1 to 900" >&2; exit 2 ;;
+            esac
+            if [ "$FILE_TIMEOUT" -lt 1 ] || [ "$FILE_TIMEOUT" -gt 900 ]; then
+              echo "file_timeout must be an integer from 1 to 900" >&2
+              exit 2
+            fi
+            TIMEOUT_ARGS=(--file-timeout "$FILE_TIMEOUT")
+            echo "Diagnostic mode: $SUITE_MODE; pattern=${TEST_PATTERN:-test_*.py}; timeout=${FILE_TIMEOUT}s"
           fi
           EXCLUDES=()
-          if [ "$RUNNER_OS" = "Windows" ]; then
+          # An explicit dispatch `pattern` is operator intent: focused diagnostic
+          # runs exist precisely to reach files on the Windows EXCLUDES list
+          # (fn-120 characterization), so a non-empty pattern skips the excludes.
+          if [ "$RUNNER_OS" = "Windows" ] && [ -z "$TEST_PATTERN" ]; then
             # Windows-only exclusions (fn-119): latent incompatibilities in files
             # NEVER exercised on windows CI before the parallel entrypoint
             # (pre-fn-119 windows unit coverage was 29/87 files; these keep it
@@ -157,7 +207,7 @@ jobs:
             # backend_spec hangs; flow_gitignore cp1252 read-back; gate_receipt
             # POSIX sh shim + literal-backslash filename; normalize_section /
             # reveval / task_create_files CLI e2e failures on 8.3 short paths.
-            # Windows-compat sweep tracked as a follow-up spec - remove entries
+            # Windows-compat sweep tracked as fn-120 - remove entries
             # there, never silently here.
             EXCLUDES+=(--exclude test_backend_spec.py)
             EXCLUDES+=(--exclude test_flow_gitignore.py)
@@ -166,7 +216,7 @@ jobs:
             EXCLUDES+=(--exclude test_reveval_parse_guard.py)
             EXCLUDES+=(--exclude test_task_create_files.py)
           fi
-          python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${SHUFFLE_ARGS[@]}" "${EXCLUDES[@]}"
+          python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${MODE_ARGS[@]}" "${PATTERN_ARGS[@]}" "${VERBOSE_ARGS[@]}" "${TIMEOUT_ARGS[@]}" "${EXCLUDES[@]}"
 
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
