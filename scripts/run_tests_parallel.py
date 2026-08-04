@@ -157,21 +157,6 @@ def _run_one(tests_dir: Path, test_file: Path, verbose: bool, file_timeout: int)
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
-            # fn-120.2: without this, the child's captured output is decoded
-            # with the parent's locale encoding — cp1252 on windows-latest —
-            # so any non-ASCII byte in a traceback or failure message either
-            # mojibakes or raises UnicodeDecodeError inside the RUNNER,
-            # destroying the diagnostic. errors="replace" matches the
-            # TimeoutExpired branch below: this is diagnostic capture, never
-            # an assertion surface.
-            # The child's OWN encoder is deliberately left alone (no
-            # PYTHONIOENCODING): tests that intentionally exercise a cp1252
-            # stdout — fn-120.1's reveval guard regression — must keep
-            # reproducing it. A Windows child's unittest stream can therefore
-            # still mangle non-ASCII before the pipe; that is the child's
-            # encoding under test, not the runner's transport.
-            encoding="utf-8",
-            errors="replace",
             timeout=file_timeout,
         )
         returncode = proc.returncode
