@@ -116,9 +116,46 @@ class GrandchildHoldsStdout(unittest.TestCase):
         time.sleep(1200)
 """
 
+# The nastier leak shape (codex review, P1): the shard EXITS IMMEDIATELY after
+# spawning the descendant. `proc.kill()` has nothing to kill and `taskkill /T`
+# has no live parent to walk from, yet the descendant still holds the shard's
+# stdout - so output collection blocks and the process is orphaned.
+GRANDCHILD_OUTLIVES_SHARD = """\
+import os
+import subprocess
+import sys
+import unittest
+
+GRANDCHILD = (
+    "import os, sys, time\\n"
+    "pid_path, beat_path = sys.argv[1], sys.argv[2]\\n"
+    "open(pid_path, 'w').write(str(os.getpid()))\\n"
+    "for _ in range(1200):\\n"
+    "    f = open(beat_path, 'a')\\n"
+    "    f.write('t')\\n"
+    "    f.close()\\n"
+    "    time.sleep(0.1)\\n"
+)
+
+
+class GrandchildOutlivesShard(unittest.TestCase):
+    def test_spawns_grandchild_and_returns(self):
+        print("SHARD-MARKER stdout before exiting", flush=True)
+        # Inherits this process's stdout, then the shard exits right away.
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                GRANDCHILD,
+                os.environ["FN120_PID_FILE"],
+                os.environ["FN120_BEAT_FILE"],
+            ]
+        )
+"""
+
 # Success-path counterpart: a shard that spawns a short-lived grandchild and
 # exits normally. Proves the hardened launch path (own process group/tree,
-# stdin=DEVNULL, explicit communicate) still completes and captures output.
+# stdin=DEVNULL, owned capture) still completes and captures output.
 GRANDCHILD_EXITS_FILE = """\
 import subprocess
 import sys
@@ -386,9 +423,6 @@ class ProcessTreeCleanupTest(unittest.TestCase):
         self.corpus.mkdir()
         self.pid_file = Path(self._tmp.name) / "grandchild.pid"
         self.beat_file = Path(self._tmp.name) / "grandchild.beat"
-        (self.corpus / "test_hang.py").write_text(
-            GRANDCHILD_HOLDS_STDOUT, encoding="utf-8"
-        )
         self._env = mock.patch.dict(
             os.environ,
             {
@@ -450,9 +484,12 @@ class ProcessTreeCleanupTest(unittest.TestCase):
         self.assertEqual(
             self._beats(),
             first,
-            "grandchild survived the timeout kill (heartbeat still advancing) - "
+            "grandchild survived the kill (heartbeat still advancing) - "
             "orphan descendant holding the shard's stdout",
         )
+
+    def _write_corpus(self, source):
+        (self.corpus / "test_hang.py").write_text(source, encoding="utf-8")
 
     def _run(self, extra_args=()):
         buf = io.StringIO()
@@ -472,6 +509,7 @@ class ProcessTreeCleanupTest(unittest.TestCase):
 
     # -- tests -----------------------------------------------------------
     def test_timeout_reports_file_elapsed_rc_and_captured_output(self):
+        self._write_corpus(GRANDCHILD_HOLDS_STDOUT)
         rc, out, wall = self._run()
         self.assertEqual(rc, 1, out)
         # Status line: file, exit code, elapsed.
@@ -495,32 +533,75 @@ class ProcessTreeCleanupTest(unittest.TestCase):
         self.assertIn("FAILED FILES (1):", out)
 
     def test_timeout_kills_the_descendant_and_collects_under_bound(self):
+        self._write_corpus(GRANDCHILD_HOLDS_STDOUT)
         rc, out, _wall = self._run()
         self.assertEqual(rc, 1, out)
         if os.name == "nt":
-            self.assertIn("process-tree: taskkill /F /T pid=", out)
+            self.assertRegex(out, r"process-tree: pid=\d+ .*shard alive")
+            self.assertIn("TerminateJobObject=", out)
         else:
             self.assertRegex(out, r"process-tree: killpg pgid=\d+ SIGKILL")
         # Killing the tree closes the inherited handle, so collection finishes
         # rather than hitting the abandonment bound.
-        self.assertIn("post-kill collection: complete in ", out)
-        self.assertNotIn("post-kill collection: ABANDONED", out)
+        self.assertIn("output collection: complete in ", out)
+        self.assertNotIn("ABANDONED", out)
         self._assert_grandchild_terminated()
 
-    def test_post_kill_collection_is_bounded_even_when_the_kill_fails(self):
+    def test_descendant_that_outlives_the_shard_is_still_killed(self):
+        """codex review P1: the shard exits, the descendant keeps stdout.
+
+        `proc.kill()` has nothing to kill and a `taskkill /T` tree walk has no
+        live parent, so the kill identity must be owned independently of the
+        shard (POSIX process group captured at launch; Windows Job Object). The
+        file itself PASSES - the leak is reported as a WARN, not swallowed.
+        """
+        self._write_corpus(GRANDCHILD_OUTLIVES_SHARD)
+        with mock.patch.object(self.mod, "POST_KILL_COLLECT_S", 2):
+            rc, out, wall = self._run()
+        self.assertEqual(rc, 0, out)
+        # `ran=1` is itself proof the shard's output was captured and parsed
+        # despite the descendant holding the pipe open.
+        self.assertIn("PASS  test_hang.py  ran=1", out)
+        self.assertIn("WARN  test_hang.py  descendant outlived the shard", out)
+        # Bounded: the leak is detected and killed, never waited out (the
+        # descendant would otherwise hold the pipe for 120s).
+        self.assertLess(wall, 60, "leak path was not bounded (wall={})".format(wall))
+        self._assert_grandchild_terminated()
+
+    def test_output_captured_before_a_leak_survives_in_the_result(self):
+        """Nothing captured is discarded on the leak path (codex review P2)."""
+        self._write_corpus(GRANDCHILD_OUTLIVES_SHARD)
+        with mock.patch.object(self.mod, "POST_KILL_COLLECT_S", 2):
+            result = self.mod._run_one(
+                self.corpus, self.corpus / "test_hang.py", False, self.FILE_TIMEOUT
+            )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("SHARD-MARKER stdout before exiting", result.output)
+        self.assertIn("descendant outlived the shard", result.note)
+        self._assert_grandchild_terminated()
+
+    def test_collection_is_bounded_and_keeps_output_when_the_kill_fails(self):
         """The bound is unconditional, not a side effect of a working kill.
 
-        `_terminate_tree` is neutered so the grandchild keeps the stdout write
-        handle open. The runner must still return - with an explicit
-        ABANDONED diagnostic - instead of blocking on a pipe it cannot drain.
+        `_ShardTree.terminate` is neutered so the grandchild keeps the stdout
+        write handle open. The runner must still return - with an explicit
+        ABANDONED diagnostic - and must NOT discard the output it already
+        captured (codex review P2: that is the failure path whose evidence
+        matters most).
         """
+        self._write_corpus(GRANDCHILD_HOLDS_STDOUT)
         with mock.patch.object(
-            self.mod, "_terminate_tree", return_value="process-tree: kill suppressed (test)"
+            self.mod._ShardTree,
+            "terminate",
+            lambda _self: "process-tree: kill suppressed (test)",
         ), mock.patch.object(self.mod, "POST_KILL_COLLECT_S", 2):
             rc, out, wall = self._run()
         self.assertEqual(rc, 1, out)
-        self.assertIn("post-kill collection: ABANDONED after 2s", out)
+        self.assertIn("output collection: ABANDONED after 2s", out)
         self.assertIn("surviving descendant still holds this shard's stdout", out)
+        self.assertIn("output captured so far is kept", out)
+        # The captured marker MUST survive the abandonment.
+        self.assertIn("SHARD-MARKER stdout before the hang", out)
         self.assertLess(
             wall, 60, "abandonment path was not bounded (wall={})".format(wall)
         )
@@ -544,12 +625,15 @@ class ShardLaunchContractTest(unittest.TestCase):
         def fake_popen(cmd, **kwargs):
             captured["cmd"] = list(cmd)
             captured["kwargs"] = kwargs
+            # Launch the stand-in in its OWN session too: a stray group kill
+            # must never be able to reach this test process's own group.
             return real_popen(
                 [sys.executable, "-c", "print('ok')"],
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
+                **self.mod._isolation_kwargs(),
             )
 
         (self.corpus / "test_alpha.py").write_text(PASSING_FILE, encoding="utf-8")
@@ -614,17 +698,37 @@ class ShardLaunchContractTest(unittest.TestCase):
         self.assertNotIn("TIMEOUT", out)
         self.assertLess(wall, 60, "success path stalled (wall={})".format(wall))
 
-    def test_terminate_tree_reports_an_already_exited_shard(self):
+    def test_terminate_without_an_attached_shard_is_a_no_op(self):
+        tree = self.mod._ShardTree()
+        self.addCleanup(tree.close)
+        self.assertEqual(tree.terminate(), "process-tree: nothing attached")
+
+    def test_terminate_still_names_the_group_after_the_shard_exited(self):
+        """The kill identity outlives the shard (codex review P1).
+
+        An exited shard must NOT short-circuit termination: its descendants are
+        exactly what needs killing. With an empty group the call reports that
+        explicitly instead of claiming there was nothing to do.
+        """
+        tree = self.mod._ShardTree()
+        self.addCleanup(tree.close)
         proc = self.mod.subprocess.Popen(
             [sys.executable, "-c", "pass"],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
+            **tree.popen_kwargs(),
         )
+        tree.attach(proc)
         proc.communicate(timeout=60)
-        note = self.mod._terminate_tree(proc)
-        self.assertEqual(note, "process-tree: shard already exited (rc=0)")
+        note = tree.terminate()
+        self.assertIn("already exited" if os.name == "nt" else "pgid=", note)
+        self.assertNotIn("nothing attached", note)
+        if os.name != "nt":
+            # Own session ⇒ the group id is the shard's pid, and it is the
+            # GROUP the runner kills, not just the (dead) shard.
+            self.assertIn("pgid={}".format(proc.pid), note)
 
 
 if __name__ == "__main__":
