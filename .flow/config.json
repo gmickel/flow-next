@@ -43,8 +43,8 @@
         "codex": "gpt-5.6-terra"
       }
     },
-    "verifiedAt": "2026-07-21",
-    "verifiedWith": "setup 3.0.0 re-run 2026-07-21: cursor-agent --list-models roster-verified (sol-high, composer-2.5, opus-4.8, fable-5); codex pins receipt-validated (plan-review SHIP on gpt-5.6-sol today); bare codex CLI mise-broken pending node@26.3.1; copilot roster probe inconclusive (pins knowledge-based)"
+    "verifiedAt": "2026-08-04",
+    "verifiedWith": "setup 3.15.0 re-run 2026-08-04: codex accept-probe clean on gpt-5.6-sol (bare CLI working again); cursor-agent --list-models roster-verified (sol-high/xhigh, composer-2.5, opus-4.8, opus-5, fable-5); copilot pins knowledge-based"
   },
   "pilot": {
     "autonomy": "ready",
@@ -135,6 +135,7 @@
         "destination.stateIds": "2026-07-30T16:44:33.165495Z"
       }
     },
+    "specIds": "tracker",
     "staleAfterHours": 24,
     "type": "linear",
     "version": 1

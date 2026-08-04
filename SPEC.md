@@ -49,6 +49,16 @@ Discovery cascade (first match wins):
   2. <repo_root>/spec.md           (lowercase honored when uppercase absent)
   3. .flow/templates/spec.md       (project-local copy from /flow-next:setup)
   4. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
+
+Customizing: adding sections and rewriting the guidance prose under any heading is
+free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
+`## Goal & Context` or `## Decision Context` does NOT error - it silently degrades
+the features that parse them (R-ID coverage, PR "Not in this PR", interview scope
+routing, Decision Context shape detection).
+
+Full guide, incl. the known limitation for custom sections under an interview pass:
+flow-next docs, "Customizing the scaffold for your project"
+(plugins/flow-next/docs/spec-template.md - https://flow-next.dev/docs/spec-template/).
 -->
 
 # <spec-id> <Title>
@@ -97,8 +107,19 @@ Sub-scoped sibling criteria use single-letter suffixes (`R4a`, `R4b`) when one
 logical parent splits during revision — siblings sort lexically (`R4a` before
 `R4b` before `R5`). Multi-letter suffixes (`R4ab`) are not supported.
 
-- **R1:** <Testable criterion>
-- **R2:** <Testable criterion>
+- **R1:** <Testable criterion>. Errors: <enumerated error/invalid-input/boundary cases, or "no error surface beyond X">
+- **R2:** <Testable criterion>. Errors: <cases, or "no error surface beyond X">
+
+**Error cases (negative-cases discipline):** each behavioral criterion states its
+error / invalid-input / boundary handling *inside* the R-ID bullet (sub-clauses
+or sub-bullets — not sub-R-IDs), **or** explicitly records
+"no error surface beyond X". A one-line "none" declaration is complete; silence
+is incomplete. Standing G-IDs in `.flow/criteria.md` are referenced, never restated.
+
+Example:
+- **R1:** Parse config file into typed settings. Errors: malformed JSON → clear
+  message + non-zero exit; missing file → same; over size limit → reject.
+- **R2:** Settings object is frozen after load (no error surface beyond R1).
 
 ## Boundaries
 <!-- scope: business -->
