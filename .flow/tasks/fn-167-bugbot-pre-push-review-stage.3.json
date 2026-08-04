@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-04T21:33:02.085472Z",
+  "depends_on": [
+    "fn-167-bugbot-pre-push-review-stage.2"
+  ],
+  "id": "fn-167-bugbot-pre-push-review-stage.3",
+  "priority": null,
+  "spec": "fn-167-bugbot-pre-push-review-stage",
+  "spec_path": ".flow/tasks/fn-167-bugbot-pre-push-review-stage.3.md",
+  "status": "todo",
+  "title": "Docs: repo, then the full downstream property chain",
+  "updated_at": "2026-08-04T21:33:02.085472Z"
+}
