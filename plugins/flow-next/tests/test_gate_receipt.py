@@ -19,11 +19,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+from unittest import mock
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -225,6 +227,31 @@ class GateReceiptHarness(unittest.TestCase):
     ) -> subprocess.CompletedProcess:
         return self._flowctl("check", "--gate", gate_id, "--command", command, env=env)
 
+    def _patched_git_status(self, side_effect):
+        """Injectable status-call seam: patch the production module's
+        subprocess.run so `git status` invocations hit `side_effect` while
+        every other command delegates to the real subprocess.run.
+
+        Returns (context_manager, invoked_list). A PATH shim cannot express
+        this on Windows: production resolves `git` via
+        `subprocess.run([...], shell=False)`, which CreateProcess maps to
+        `git.exe` — a PATH-preceding `git.cmd`/`#!/bin/sh` double is never
+        executed (fn-120 R2), so the seam is the cross-platform double and
+        `invoked` proves it actually ran.
+        """
+        real_run = subprocess.run
+        invoked: list = []
+
+        def dispatch(cmd, *args, **kwargs):
+            if isinstance(cmd, (list, tuple)) and list(cmd[:2]) == ["git", "status"]:
+                invoked.append(list(cmd))
+                return side_effect(real_run, cmd, *args, **kwargs)
+            return real_run(cmd, *args, **kwargs)
+
+        return mock.patch.object(
+            self.flowctl.subprocess, "run", side_effect=dispatch
+        ), invoked
+
     def _receipt_path(self, gate_id: str = GATE_ID) -> Path:
         return self.tmpdir / ".flow" / "tmp" / "green-receipts" / f"{self._git('rev-parse', 'HEAD')[:8]}-{gate_id}.json"
 
@@ -383,33 +410,26 @@ class GateReceiptTestCase(GateReceiptHarness):
         self.assertEqual(result.returncode, 1)
         self.assertNotIn("Traceback", result.stdout + result.stderr)
 
-    @unittest.skipUnless(os.name == "posix", "PATH shim requires a POSIX shell")
     def test_check_git_status_failure_is_error_exit_2(self) -> None:
         # A failing `git status` inside a resolvable repo is a real tooling
-        # error (exit 2+), not the ordinary run-the-full-gate exit 1.
+        # error (exit 2+), not the ordinary run-the-full-gate exit 1. The
+        # failing double is injected at the production seam (module
+        # subprocess.run) so the case runs on every OS — a PATH shim cannot
+        # intercept shell=False `git` lookups on Windows (fn-120 R2).
         self._receipt()
-        real_git = shutil.which("git")
-        assert real_git is not None
-        shim_dir = self.tmpdir / "shim-bin"
-        shim_dir.mkdir()
-        shim = shim_dir / "git"
-        shim.write_text(
-            "#!/bin/sh\n"
-            'for a in "$@"; do case "$a" in status) exit 128;; esac; done\n'
-            f'exec "{real_git}" "$@"\n',
-            encoding="utf-8",
-        )
-        shim.chmod(0o755)
-        env = dict(os.environ)
-        env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
-        result = subprocess.run(
-            [sys.executable, str(FLOWCTL_PY), "gate", "check", "--gate", GATE_ID, "--command", COMMAND],
-            cwd=self.tmpdir,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
+
+        def failing_status(real_run, cmd, *args, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, 128, stdout="", stderr="fatal: injected status failure"
+            )
+
+        patcher, invoked = self._patched_git_status(failing_status)
+        with patcher:
+            result = self._flowctl_inprocess(
+                "check", "--gate", GATE_ID, "--command", COMMAND, cwd=self.tmpdir
+            )
         self.assertEqual(result.returncode, 2, result.stderr or result.stdout)
+        self.assertTrue(invoked, "failing git status double was not invoked")
 
     def test_gate_id_validation_at_both_boundaries(self) -> None:
         # Batch in-process (fn-119.2): same `_gate_id_is_valid` the CLI uses;
@@ -598,26 +618,16 @@ class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
     def test_exact_receipt_ttl_evaluated_after_status(self) -> None:
         """A receipt that ages past 24h during a slow `git status` must reject.
 
-        The shim sleeps briefly on `git status`; the receipt is 24h minus half
-        that sleep old at launch, so it is fresh at the pre-status probe but
-        stale by the post-status verdict. Caching the pre-status age would
-        wrongly honor it. (Sleep kept short for suite wall time; race shape
-        unchanged.)
+        The delayed double sleeps briefly on `git status`; the receipt is 24h
+        minus half that sleep old at launch, so it is fresh at the pre-status
+        probe but stale by the post-status verdict. Caching the pre-status age
+        would wrongly honor it. The delay is injected at the production seam
+        (module subprocess.run) — cross-platform, and `invoked` proves the
+        double ran (fn-120 R2). (Sleep kept short for suite wall time; race
+        shape unchanged; in-process launch overhead is negligible, so the
+        half-sleep margin comfortably covers the pre-status probe.)
         """
-        real_git = shutil.which("git")
-        assert real_git is not None
-        shim_dir = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, shim_dir, ignore_errors=True)
-        shim = shim_dir / "git"
-        # Margin must exceed subprocess startup (python + flowctl load, ~0.3-0.5s):
-        # if the receipt is already stale at the pre-status probe, the test passes
-        # without exercising the pre/post-status race it exists to catch.
         sleep_s = 2.0
-        shim.write_text(
-            f'#!/bin/sh\n[ "$1" = "status" ] && sleep {sleep_s}\nexec "{real_git}" "$@"\n',
-            encoding="utf-8",
-        )
-        shim.chmod(0o755)
         head = self._git("rev-parse", "HEAD")
         almost_stale = (
             datetime.now(timezone.utc)
@@ -625,11 +635,19 @@ class GateReceiptAncestorWalkTestCase(GateReceiptHarness):
             + timedelta(seconds=sleep_s / 2)
         ).isoformat()
         self._write_receipt(head, timestamp=almost_stale)
-        env = dict(os.environ)
-        env["PATH"] = f"{shim_dir}{os.pathsep}{env.get('PATH', '')}"
-        result = self._check(env=env)
+
+        def slow_status(real_run, cmd, *args, **kwargs):
+            time.sleep(sleep_s)
+            return real_run(cmd, *args, **kwargs)
+
+        patcher, invoked = self._patched_git_status(slow_status)
+        with patcher:
+            result = self._flowctl_inprocess(
+                "check", "--gate", GATE_ID, "--command", COMMAND, cwd=self.tmpdir
+            )
         self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
         self.assertIn("stale", result.stdout + result.stderr)
+        self.assertTrue(invoked, "delayed git status double was not invoked")
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFOs")
     def test_walk_skips_fifo_candidate_without_hanging(self) -> None:
@@ -707,6 +725,10 @@ class GateReceiptCompletionRegressionsTestCase(GateReceiptHarness):
         result = self._check()
         self.assertEqual(result.returncode, 1, result.stderr or result.stdout)
 
+    @unittest.skipUnless(
+        os.name == "posix",
+        "literal backslash is a path separator on Windows, not a filename character",
+    )
     def test_check_counts_literal_backslash_path_as_dirty(self) -> None:
         # ".flow\tasks\x.md" on POSIX is a root-level FILE whose name contains
         # backslashes; normalization must not alias it into the .flow/ ignore set.

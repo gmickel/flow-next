@@ -12,6 +12,12 @@ sibling section (fn-78 damage shape). Covers:
   duplicate/missing error semantics.
 - CLI end-to-end: `task create --acceptance-file` with a leading-H2 file,
   `task set-acceptance` twice byte-idempotent.
+- CLI `--file` path/encoding portability (fn-120.2, R4): long paths with
+  spaces and a real Windows 8.3 short path (GetShortPathNameW) carrying UTF-8
+  content through the production CLI. Fixture files are written with an
+  explicit `encoding="utf-8"` because production reads them as strict UTF-8 —
+  a bare `write_text()` emits cp1252 on Windows and the CLI correctly exits 1
+  with "Acceptance file unreadable".
 
 Run:
     python3 -m unittest discover -s plugins/flow-next/tests -v
@@ -280,6 +286,40 @@ class PatchTaskSectionTestCase(unittest.TestCase):
 # ── CLI end-to-end (create --acceptance-file, set-acceptance twice) ───────
 
 
+def _ascii(text: str) -> str:
+    """ASCII-safe rendering for FAILURE MESSAGES only (never for assertions).
+
+    Windows CI pipes are cp1252, so a non-ASCII character inside a unittest
+    failure message raises UnicodeEncodeError and hides the real defect
+    (fn-120.1). Escaping the diagnostic keeps the assertion itself exact.
+    """
+    return text.encode("unicode_escape").decode("ascii")
+
+
+def _windows_short_path(path: Path) -> Path:
+    """The REAL 8.3 short form of `path` (Windows only), via GetShortPathNameW.
+
+    fn-120.2: the observed windows-latest failures ran with `--acceptance-file
+    C:\\Users\\RUNNER~1\\...`, so the short-path contract is exercised with the
+    filesystem's own short name — never a hand-built or slash-swapped string.
+    Returns the long path unchanged when the volume has 8.3 name generation
+    disabled (`GetShortPathNameW` is then an identity function).
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    get_short = ctypes.windll.kernel32.GetShortPathNameW
+    get_short.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+    get_short.restype = wintypes.DWORD
+    needed = get_short(str(path), None, 0)
+    if not needed:
+        raise ctypes.WinError()
+    buf = ctypes.create_unicode_buffer(needed)
+    if not get_short(str(path), buf, needed):
+        raise ctypes.WinError()
+    return Path(buf.value)
+
+
 class CliEndToEndTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.tmpdir = Path(tempfile.mkdtemp())
@@ -302,23 +342,46 @@ class CliEndToEndTestCase(unittest.TestCase):
             cwd=self.tmpdir,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
+        # fn-120.2: `--json` failures are reported as JSON on STDOUT, so a
+        # stderr-only message left the original windows-latest failure
+        # ("Acceptance file unreadable: ... 'utf-8' codec can't decode byte
+        # 0x96") completely invisible — the assertion read `failed: ` with an
+        # empty tail. Both streams are reported, ASCII-escaped so the failure
+        # text itself can never raise UnicodeEncodeError on a cp1252 stdout
+        # (fn-120.1's reveval failure shape).
         self.assertEqual(
-            proc.returncode, 0, f"flowctl {' '.join(argv)} failed: {proc.stderr}"
+            proc.returncode,
+            0,
+            "flowctl {} failed (rc={}):\nstdout: {}\nstderr: {}".format(
+                " ".join(argv),
+                proc.returncode,
+                _ascii(proc.stdout),
+                _ascii(proc.stderr),
+            ),
         )
         return proc.stdout
 
     def test_create_with_leading_h2_acceptance_file(self) -> None:
         acc = self.tmpdir / "acc.md"
+        # fn-120.2: `encoding="utf-8"` is load-bearing, not decoration. The en
+        # dash below is U+2013; a bare write_text() encodes it as cp1252 (0x96)
+        # on Windows, and production reads --acceptance-file as strict UTF-8,
+        # so the CLI exited 1 with "Acceptance file unreadable". Reverting this
+        # kwarg re-breaks the test on windows-latest.
         acc.write_text(
-            "## Acceptance Criteria (fn-79 R1–R3)\n- R1: works\n\n## Notes\nn1\n"
+            "## Acceptance Criteria (fn-79 R1–R3)\n- R1: works\n\n## Notes\nn1\n",
+            encoding="utf-8",
         )
         out = self._run(
             "task", "create", "--spec", self.spec_id,
             "--title", "T1", "--acceptance-file", str(acc), "--json",
         )
         task_id = json.loads(out)["id"]
-        md = (self.tmpdir / ".flow" / "tasks" / f"{task_id}.md").read_text()
+        md = (self.tmpdir / ".flow" / "tasks" / f"{task_id}.md").read_text(
+            encoding="utf-8"
+        )
         self.assertEqual(md.count("\n## Acceptance"), 1)
         self.assertNotIn("Acceptance Criteria", md)
         self.assertIn("### Notes", md)
@@ -332,14 +395,93 @@ class CliEndToEndTestCase(unittest.TestCase):
         )
         task_id = json.loads(out)["id"]
         acc = self.tmpdir / "acc2.md"
-        acc.write_text("## Acceptance Criteria — v2\n- R1: x\n\n## More\nm\n")
+        # Em dash U+2014 — same strict-UTF-8 contract as above (cp1252 0x97).
+        acc.write_text(
+            "## Acceptance Criteria — v2\n- R1: x\n\n## More\nm\n", encoding="utf-8"
+        )
         md_path = self.tmpdir / ".flow" / "tasks" / f"{task_id}.md"
         self._run("task", "set-acceptance", task_id, "--file", str(acc), "--json")
-        first = md_path.read_text()
+        first = md_path.read_text(encoding="utf-8")
         self.assertEqual(first.count("\n## Acceptance"), 1)
         self.assertIn("### More", first)
         self._run("task", "set-acceptance", task_id, "--file", str(acc), "--json")
-        self.assertEqual(md_path.read_text(), first)
+        self.assertEqual(md_path.read_text(encoding="utf-8"), first)
+
+    # ── fn-120.2 path/encoding regressions for the real `--file` contract ──
+
+    # Non-ASCII body of the fn-120.2 fixtures: en dash, em dash, umlaut, check
+    # mark. Kept as one constant so the assertion needle and the written bytes
+    # cannot drift apart.
+    UTF8_BODY = "- R1: wörks — ünicode ✓"
+
+    def _acceptance_fixture(self, directory: Path, name: str) -> Path:
+        """A UTF-8 acceptance fixture whose content is deliberately non-ASCII."""
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / name
+        path.write_text(
+            f"## Acceptance Criteria (fn-120 R4–R5)\n{self.UTF8_BODY}\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def _assert_acceptance_roundtrip(self, task_id: str) -> None:
+        md = (self.tmpdir / ".flow" / "tasks" / f"{task_id}.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(md.count("\n## Acceptance"), 1)
+        self.assertNotIn("Acceptance Criteria", md)
+        # assertTrue (not assertIn) so the failure message stays ASCII: see
+        # _ascii() — a cp1252 stdout cannot render the needle or the file body.
+        self.assertTrue(
+            self.UTF8_BODY in md,
+            "UTF-8 acceptance body missing from {}; needle={} md={}".format(
+                task_id, _ascii(self.UTF8_BODY), _ascii(md)
+            ),
+        )
+
+    def test_long_path_with_spaces_and_utf8_content(self) -> None:
+        """Valid LONG `--file`/`--acceptance-file` path: spaces + UTF-8 body."""
+        acc = self._acceptance_fixture(
+            self.tmpdir / "a dir with spaces", "acceptance criteria.md"
+        )
+        self.assertIn(" ", str(acc))
+        out = self._run(
+            "task", "create", "--spec", self.spec_id,
+            "--title", "Long", "--acceptance-file", str(acc), "--json",
+        )
+        task_id = json.loads(out)["id"]
+        self._assert_acceptance_roundtrip(task_id)
+        # …and the same path through `set-acceptance --file` (byte-idempotent).
+        self._run("task", "set-acceptance", task_id, "--file", str(acc), "--json")
+        self._assert_acceptance_roundtrip(task_id)
+
+    @unittest.skipUnless(
+        os.name == "nt", "8.3 short names are a Windows filesystem feature"
+    )
+    def test_real_windows_short_path_file_args(self) -> None:
+        """The observed `RUNNER~1` failure shape: a REAL 8.3 path + drive letter.
+
+        The path comes from GetShortPathNameW, so the fixture cannot degrade
+        into a mocked separator/string swap.
+        """
+        acc = self._acceptance_fixture(
+            self.tmpdir / "a dir with spaces", "acceptance criteria.md"
+        )
+        short = _windows_short_path(acc)
+        if "~" not in str(short):
+            self.skipTest(
+                f"volume has 8.3 name generation disabled (short form: {short})"
+            )
+        self.assertTrue(short.drive, f"short path lost its drive letter: {short}")
+        self.assertTrue(short.is_absolute())
+        out = self._run(
+            "task", "create", "--spec", self.spec_id,
+            "--title", "Short", "--acceptance-file", str(short), "--json",
+        )
+        task_id = json.loads(out)["id"]
+        self._assert_acceptance_roundtrip(task_id)
+        self._run("task", "set-acceptance", task_id, "--file", str(short), "--json")
+        self._assert_acceptance_roundtrip(task_id)
 
 
 if __name__ == "__main__":

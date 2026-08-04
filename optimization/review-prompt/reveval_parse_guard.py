@@ -127,8 +127,12 @@ def run_guard() -> bool:
     print("fn-90 convergence-ratchet guard:")
 
     # 3. Round 1 / legacy receipt (no prior findings) → fresh review (empty block).
+    # Printed labels stay ASCII: Windows CI pipes default to cp1252, where a
+    # non-ASCII label makes print() raise UnicodeEncodeError (fn-120 R3
+    # characterization). Assertions on non-ASCII CONTENT are unaffected -
+    # they never encode to stdout.
     ok &= _check(
-        "no prior findings → fresh review (empty ratchet block)",
+        "no prior findings -> fresh review (empty ratchet block)",
         flowctl.build_convergence_ratchet_block(None) == ""
         and flowctl.build_convergence_ratchet_block("") == "",
     )
@@ -140,7 +144,7 @@ def run_guard() -> bool:
         "<prior_findings>" in block and "build_rereview_preamble" in block,
     )
     ok &= _check(
-        "shrink-only contract present (MUST-SHIP + ≥Major-only-blocks)",
+        "shrink-only contract present (MUST-SHIP + >=Major-only-blocks)",
         "MUST be `<verdict>SHIP</verdict>`" in block
         and "≥ Major" in block
         and "convergence, not leniency" in block,

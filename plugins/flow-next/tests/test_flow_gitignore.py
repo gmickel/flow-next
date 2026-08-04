@@ -28,7 +28,7 @@ class TestEnsureFlowGitignore(unittest.TestCase):
             flow_dir = Path(tmp) / ".flow"
             flow_dir.mkdir()
             self.assertTrue(flowctl._ensure_flow_gitignore(flow_dir))
-            content = (flow_dir / ".gitignore").read_text()
+            content = (flow_dir / ".gitignore").read_text(encoding="utf-8")
             self.assertIn(flowctl.FLOW_GITIGNORE_AUTO_HEADER, content)
             self.assertIn(flowctl.FLOW_GITIGNORE_AUTO_FOOTER, content)
             for pattern in flowctl.FLOW_GITIGNORE_AUTO_PATTERNS:
@@ -51,12 +51,16 @@ class TestEnsureFlowGitignore(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             flow_dir = Path(tmp) / ".flow"
             flow_dir.mkdir()
-            (flow_dir / ".gitignore").write_text("user-pattern-A\n# user comment\n*.local\n")
+            (flow_dir / ".gitignore").write_text(
+                "user-pattern-A — UTF-8\n# user comment\n*.local\n",
+                encoding="utf-8",
+            )
             self.assertTrue(flowctl._ensure_flow_gitignore(flow_dir))
-            content = (flow_dir / ".gitignore").read_text()
+            content = (flow_dir / ".gitignore").read_text(encoding="utf-8")
             # Auto block sits at top; user content survives below.
             self.assertTrue(content.startswith(flowctl.FLOW_GITIGNORE_AUTO_HEADER))
             self.assertIn("user-pattern-A", content)
+            self.assertIn("user-pattern-A — UTF-8", content)
             self.assertIn("*.local", content)
             # And the auto-managed footer comes before user content.
             footer_idx = content.index(flowctl.FLOW_GITIGNORE_AUTO_FOOTER)
@@ -93,11 +97,14 @@ class TestEnsureFlowGitignore(unittest.TestCase):
                     flowctl.FLOW_GITIGNORE_AUTO_FOOTER,
                 ]
             )
-            (flow_dir / ".gitignore").write_text(stale_block + "\n\nuser-pattern-Z\n")
+            (flow_dir / ".gitignore").write_text(
+                stale_block + "\n\nuser-pattern-Z — UTF-8\n", encoding="utf-8"
+            )
             self.assertTrue(flowctl._ensure_flow_gitignore(flow_dir))
-            content = (flow_dir / ".gitignore").read_text()
+            content = (flow_dir / ".gitignore").read_text(encoding="utf-8")
             self.assertIn("sync-runs/", content)
             self.assertIn("user-pattern-Z", content)  # user content preserved
+            self.assertIn("user-pattern-Z — UTF-8", content)
             # Footer still precedes user content (block stays at top).
             self.assertLess(
                 content.index(flowctl.FLOW_GITIGNORE_AUTO_FOOTER),

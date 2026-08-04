@@ -40,12 +40,28 @@ def leaf_is_safe(base_dir: Path, leaf: Path) -> Optional[TrackerError]:
     redirected the write out of tree - reproduced)."""
     import stat as stat_mod
     try:
-        base_real = base_dir.resolve()
-        target_real = leaf.resolve()
+        base_dir.resolve()
     except OSError:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"unresolvable path {leaf}", subtype="path")
-    if base_real != target_real and base_real not in target_real.parents:
+    # Containment is derived from ONE resolve, not two. Resolving base and leaf
+    # INDEPENDENTLY was a Windows flake source (fn-120.4): non-strict
+    # `Path.resolve()` stops expanding on a transient error (ntpath's
+    # allowed-winerror list covers SHARING_VIOLATION / ACCESS_DENIED), so under
+    # concurrent writers one side could keep the 8.3 `RUNNER~1` prefix while the
+    # other expanded it - two spellings of the SAME path comparing unequal and
+    # producing a false "escapes" INVALID_INPUT (~50% on windows-latest: run
+    # 30921678923 RED, identical re-run 30923544649 GREEN). Normalize the leaf
+    # LEXICALLY against base_dir instead; `..` is the only way out, and the
+    # no-follow walk below is what keeps a symlink from redirecting the write.
+    try:
+        rel = os.path.relpath(os.path.abspath(str(leaf)),
+                              os.path.abspath(str(base_dir)))
+    except (OSError, ValueError):
+        # Windows raises ValueError across drives - a different drive is an escape.
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            f"{leaf} escapes {base_dir}", subtype="path")
+    if ".." in Path(rel).parts:
         return TrackerError(ErrorClass.INVALID_INPUT,
                             f"{leaf} escapes {base_dir}", subtype="path")
     probe = leaf
@@ -56,6 +72,17 @@ def leaf_is_safe(base_dir: Path, leaf: Path) -> Optional[TrackerError]:
                 return TrackerError(ErrorClass.INVALID_INPUT,
                                     f"{probe} is a symlink; refusing to write "
                                     "through it", subtype="path")
+            # Windows NTFS junctions/mount points are reparse points, NOT
+            # symlinks: lstat flags them via st_reparse_tag while S_ISLNK
+            # stays false, yet a write through them follows the redirect out
+            # of tree. Reject ANY nonzero tag fail-closed instead of adding a
+            # second resolve() - re-resolving the leaf is exactly the
+            # divergent-resolve flake this walk replaced. st_reparse_tag is
+            # Windows-only (getattr -> 0 elsewhere), so this is a POSIX no-op.
+            if getattr(st, "st_reparse_tag", 0):
+                return TrackerError(ErrorClass.INVALID_INPUT,
+                                    f"{probe} is a reparse point; refusing to "
+                                    "write through it", subtype="path")
         except FileNotFoundError:
             pass
         except OSError:

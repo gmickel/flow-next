@@ -2635,3 +2635,123 @@ class RelateRelinkCleanupFailure(unittest.TestCase):
             # Repair path: no mutation was performed by this run.
             self.assertNotIn("completed_steps", details)
             self._assert_pending_still_on_disk(flow)
+
+
+class LeafIsSafeDivergentResolve(unittest.TestCase):
+    """fn-120.4: `leaf_is_safe` used to resolve base and leaf INDEPENDENTLY.
+
+    On Windows a non-strict `Path.resolve()` may stop expanding on a transient
+    error (`ntpath._getfinalpathname_nonstrict` swallows SHARING_VIOLATION /
+    ACCESS_DENIED), so under concurrent writers one call could keep the 8.3
+    `RUNNER~1` spelling while the other expanded it. Two spellings of the SAME
+    path then compared unequal and a legitimate write was refused with
+    `INVALID_INPUT` "escapes" - a ~50% flake on `windows-latest`
+    (run 30921678923 RED, identical re-run 30923544649 GREEN). Containment is
+    now derived from ONE resolve; these tests keep the escape/symlink teeth.
+    """
+
+    def setUp(self) -> None:
+        from flowctl_tracker.lifecycle.helpers import leaf_is_safe
+        self.leaf_is_safe = leaf_is_safe
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        # A component that has a plausible 8.3 alias; the fake resolve below
+        # abbreviates it for the leaf only, exactly as the flake did.
+        self.root = Path(td.name) / "longdirname"
+        self.base = self.root / "create-first"
+        self.base.mkdir(parents=True)
+
+    def _divergent_resolve(self):
+        """Patch: the BASE resolves fully, the LEAF bails out unexpanded."""
+        real_resolve = Path.resolve
+
+        def fake_resolve(self, strict=False):
+            resolved = real_resolve(self, strict=strict)
+            if self.suffix == ".json":
+                return Path(str(resolved).replace("longdirname", "LONGDI~1"))
+            return resolved
+
+        return mock.patch.object(Path, "resolve", fake_resolve)
+
+    def test_divergent_resolve_does_not_fake_an_escape(self) -> None:
+        leaf = self.base / ("a" * 16 + ".json")
+        with self._divergent_resolve():
+            self.assertIsNone(self.leaf_is_safe(self.base, leaf),
+                              "a leaf INSIDE base must never be refused just "
+                              "because resolve() spelled it differently")
+
+    def test_real_escape_is_still_refused(self) -> None:
+        victim = self.root / "victim.json"
+        out = self.leaf_is_safe(self.base, self.base / ".." / "victim.json")
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(out.subtype, "path")
+        self.assertFalse(victim.exists())
+
+    def test_absolute_outside_leaf_is_still_refused(self) -> None:
+        out = self.leaf_is_safe(self.base, self.root / "victim.json")
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+
+    def test_symlinked_component_is_still_refused(self) -> None:
+        outside = self.root / "outside"
+        outside.mkdir()
+        try:
+            (self.base / "sub").symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable on this platform/user")
+        out = self.leaf_is_safe(self.base, self.base / "sub" / "x.json")
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+        self.assertIn("symlink", out.message)
+
+    def test_symlinked_leaf_is_still_refused(self) -> None:
+        victim = self.root / "victim.json"
+        victim.write_text("{}", encoding="utf-8")
+        leaf = self.base / ("b" * 16 + ".json")
+        try:
+            leaf.symlink_to(victim)
+        except (OSError, NotImplementedError):
+            self.skipTest("symlinks unavailable on this platform/user")
+        out = self.leaf_is_safe(self.base, leaf)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIn("symlink", out.message)
+
+    def _tagged_lstat(self, tagged: Path, tag: int):
+        """Patch: os.lstat reports `tagged` the way Windows marks an NTFS
+        junction - a nonzero st_reparse_tag on a component whose mode is NOT
+        S_ISLNK (junctions are reparse points, not symlinks, so the symlink
+        check alone never sees them). POSIX-runnable stand-in."""
+        import os
+        import types
+
+        real_lstat = os.lstat
+
+        def fake_lstat(path, *args, **kwargs):
+            st = real_lstat(path, *args, **kwargs)
+            if Path(path) == tagged:
+                return types.SimpleNamespace(st_mode=st.st_mode,
+                                             st_reparse_tag=tag)
+            return st
+
+        return mock.patch("os.lstat", fake_lstat)
+
+    def test_reparse_point_component_is_refused(self) -> None:
+        junction = self.base / "junction"
+        junction.mkdir()
+        io_reparse_tag_mount_point = 0xA0000003  # NTFS junction/mount point
+        with self._tagged_lstat(junction, io_reparse_tag_mount_point):
+            out = self.leaf_is_safe(self.base, junction / "x.json")
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.INVALID_INPUT)
+        self.assertEqual(out.subtype, "path")
+        self.assertIn("reparse", out.message)
+
+    def test_zero_reparse_tag_is_not_refused(self) -> None:
+        plain = self.base / "plain"
+        plain.mkdir()
+        with self._tagged_lstat(plain, 0):
+            self.assertIsNone(
+                self.leaf_is_safe(self.base, plain / "x.json"),
+                "st_reparse_tag == 0 (or absent, as on POSIX) must stay a "
+                "no-op - only a real reparse point may be refused")

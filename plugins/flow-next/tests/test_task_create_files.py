@@ -340,7 +340,20 @@ class TaskCreateFilesTestCase(unittest.TestCase):
         self.assertIn("Description file unreadable", err)
         self._assert_no_orphan_writes()
 
-    @unittest.skipIf(os.geteuid() == 0, "chmod 000 is not enforced for root")
+    # fn-120.2: `chmod 000` denying the OWNER a read is a POSIX permission
+    # premise. On NT, chmod only toggles the read-only bit, so the file stays
+    # readable and this fixture cannot express its own precondition; the
+    # unguarded `os.geteuid()` also does not exist there (AttributeError at
+    # class-body decoration time, which errored the whole module import on
+    # windows-latest). The "unreadable" production branch itself stays covered
+    # on every platform by test_directory_as_path_errors_before_write above.
+    @unittest.skipUnless(
+        os.name == "posix", "chmod 000 read-denial is a POSIX-only premise"
+    )
+    @unittest.skipIf(
+        getattr(os, "geteuid", lambda: -1)() == 0,
+        "chmod 000 is not enforced for root",
+    )
     def test_unreadable_file_errors_before_write(self) -> None:
         path = self.tmpdir / "locked.md"
         path.write_text("secret\n", encoding="utf-8")

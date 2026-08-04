@@ -2,6 +2,29 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Windows now runs the same test corpus as Linux and macOS — every file, no
+  exceptions.** A change can no longer pass on two OSes and quietly regress the
+  third: the CI workflow's Windows-only exclusion list is gone (fn-119 left six
+  files behind it; before that, 29 of 87), and `windows-latest` runs the full
+  discovered corpus green in parallel, serial, and shuffled order on the same
+  commit as the Linux/macOS gates. Nothing was weakened to get there — no
+  raised timeouts, no blanket platform skips, no broadened assertions; the one
+  remaining skip is a filename Windows cannot represent, with a Windows-valid
+  equivalent asserting the same behavior. The bugs the filter had been hiding
+  were real and are fixed: locale-dependent text reads, non-portable path
+  derivation, an unguarded POSIX-only permission check, backend subprocesses
+  that could block forever on an inherited stdin no automated caller answers,
+  and a test-runner timeout that killed only the direct child — so a grandchild
+  holding the pipe stalled the whole suite on every platform. Concurrent
+  tracker writes also stopped intermittently refusing a legitimate path on
+  Windows (`resolve()` can return two spellings of the same directory under
+  load; containment is now derived from a single resolve, with the symlink
+  refusal unchanged). (fn-120)
+
 ## [flow-next 3.15.0] - 2026-08-04
 
 Flow-next got dramatically cheaper to carry. Benchmark evidence (SlopCodeBench,
