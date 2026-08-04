@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-03T23:43:23.953670Z",
+  "depends_on": [
+    "fn-164-session-scope-re-anchor-brief-one-call.1"
+  ],
+  "id": "fn-164-session-scope-re-anchor-brief-one-call.2",
+  "priority": null,
+  "spec": "fn-164-session-scope-re-anchor-brief-one-call",
+  "spec_path": ".flow/tasks/fn-164-session-scope-re-anchor-brief-one-call.2.md",
+  "status": "todo",
+  "title": "Brief-first teaching: snippets, glossary, CLI docs, CHANGELOG, propagation",
+  "updated_at": "2026-08-04T00:07:32.232573Z"
+}

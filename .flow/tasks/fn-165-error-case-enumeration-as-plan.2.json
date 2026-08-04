@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-03T23:44:43.049550Z",
+  "depends_on": [
+    "fn-165-error-case-enumeration-as-plan.1"
+  ],
+  "id": "fn-165-error-case-enumeration-as-plan.2",
+  "priority": null,
+  "spec": "fn-165-error-case-enumeration-as-plan",
+  "spec_path": ".flow/tasks/fn-165-error-case-enumeration-as-plan.2.md",
+  "status": "todo",
+  "title": "Skill propagation: plan enumeration, interview probe, worker test-tie, CHANGELOG, mirrors",
+  "updated_at": "2026-08-04T00:27:37.448735Z"
+}

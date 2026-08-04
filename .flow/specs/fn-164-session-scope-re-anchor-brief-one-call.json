@@ -1,24 +1,219 @@
 {
   "branch_name": "fn-164-session-scope-re-anchor-brief-one-call",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-03T21:52:55.373790Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-164-session-scope-re-anchor-brief-one-call",
+  "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 0,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-04T00:17:48.092261Z",
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "b4f2abdb5d7ebfe29584f9ceb02107d9be55303b0ad48fc40b3ee48747906cb3",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-45d03daa56f18252fc5c9b8fd0632012",
+            "classification": "introduced",
+            "findingId": "finding-45d03daa56f18252fc5c9b8fd0632012",
+            "firstSeenThisRound": true,
+            "severity": "P0",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-0a96ed3929c24c8ca2a1d9df7df9ff21",
+            "classification": "introduced",
+            "findingId": "finding-0a96ed3929c24c8ca2a1d9df7df9ff21",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c5e9a3c7b9143a1de84d60fb78434e89",
+            "classification": "introduced",
+            "findingId": "finding-c5e9a3c7b9143a1de84d60fb78434e89",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-099f5504748215a05ac032f0791bb53f",
+            "classification": "introduced",
+            "findingId": "finding-099f5504748215a05ac032f0791bb53f",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-a4758c12750f0ddb1bfed50cbc2637a7",
+            "classification": "introduced",
+            "findingId": "finding-a4758c12750f0ddb1bfed50cbc2637a7",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-c78f0912e444f640539549774b8c20e5",
+            "classification": "introduced",
+            "findingId": "finding-c78f0912e444f640539549774b8c20e5",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "fece0daa3aa29f89e959c8ba8090be71f9823fc91bebcbe203de8d07494e722e",
+      "reservation_id": "22673905a1aa4b5982abba10f46aacd6",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-04T00:05:55.335356Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "a0883faf5b4cb0234405cc39634ffee6f597e0b23d7fc98a3a4c862240bd8426",
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "da4266d0da8881342fd8161db89c9745e927b9dec31d6ef35ac907d7174942dd",
+      "reservation_id": "5811594c0514416ea793f57c84684503",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-04T00:14:23.476325Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "a0883faf5b4cb0234405cc39634ffee6f597e0b23d7fc98a3a4c862240bd8426",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "2d27f37a5964639481c4f3bf2302811b9cfc174cd57c6a8836472126cab24c95",
+      "reservation_id": "5aaa2838e7674279b6c1b9f949d4d66f",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-04T00:15:10.715257Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "aca328c2732497c3b82dd4b5ac1d3727b317657a541744fc10cf94c8995613b3",
+      "backend": "rp",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "dbff07a6a6905b87de19812d035afb660b2b2560d233f337ef0ebe5dc3b22a5a",
+      "reservation_id": "de5d1a5e9e3e4e3594dc2e3c117f29cd",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-04T00:17:48.071239Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "aca328c2732497c3b82dd4b5ac1d3727b317657a541744fc10cf94c8995613b3",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "929a474712dd832b5d61ae4a45af007eda396985499d6d2cc00920a9ba8bc3e7",
+      "reservation_id": "9fcea04ca10e4437b07e50af7eda5aac",
+      "round_consumed": false,
+      "scope": "plan",
+      "superseded_by": "de5d1a5e9e3e4e3594dc2e3c117f29cd",
+      "task": null,
+      "timestamp": "2026-08-04T00:18:04.395038Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "plan": 1,
+    "plan#completion": 0
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-164-session-scope-re-anchor-brief-one-call.md",
   "status": "open",
   "title": "Session-scope re-anchor brief: one call, token-bounded",
   "tracker": {
-    "baseHashFlow": null,
-    "baseHashTracker": null,
+    "baseHashFlow": "a499df0f772f37eb58bd9fa16878d22c2aae04924e5259a6a5935a4b04c74af2",
+    "baseHashTracker": "0e8a8a1f9cc99317db0dde0ed72d053fa3fb1d2282e0f1cdc90576abb9a4ec55",
     "depRelations": [],
-    "id": null,
-    "identifier": null,
-    "lastSyncedAt": null,
-    "mergeBaseFlow": null,
-    "mergeBaseTracker": null,
-    "url": null
+    "id": "9e0c61f4-8906-46f6-b897-a859171277e6",
+    "identifier": "FLOW-92",
+    "lastSyncedAt": "2026-08-03T23:45:43.214814Z",
+    "linkState": "linked",
+    "mergeBaseFlow": "# Session-scope re-anchor brief: one call, token-bounded\n\n## Goal & Context\n<!-- scope: business -->\n\nBenchmark evidence (SlopCodeBench lite-opus5, 2026-08-03, gmickel/scb-flow-next; vault: \"flow-next - SlopCodeBench Experiment\"): a fresh agent session re-anchoring on `.flow/` state costs ~5+ tool calls (`flowctl list`, then reading spec bodies, receipts, memory files) and drags full spec markdown into context every session. Measured: 3.81x cache-read tokens vs a no-flow control across 16 checkpoints \u2014 the carried `.flow/` context is the biggest cost multiplier after ceremony call count, and it recurs every session in every flow-next repo.\n\n`flowctl anchor` (task scope, `cmd_anchor` at `flowctl.py:34413`) already solves this for TASK scope. The gap is SESSION scope: an agent arriving cold (benchmark checkpoint, fresh pilot tick, new chat session) has no task id yet and today reconstructs the workspace picture by hand.\n\nGoal: one flowctl call that gives a cold session everything it needs to orient \u2014 token-bounded, deterministic, teachable as THE re-anchor step in the always-loaded block.\n\n## Overview\n<!-- scope: technical -->\n\nNew verb: **`flowctl brief`** (decision: a separate verb, NOT `anchor --session` \u2014 task-scope `anchor` is deliberately no-truncation \"floor not ceiling\" (`flowctl.py:34462-34465`); putting a budgeted view under the same verb would mean two contradictory truncation philosophies under one name). Pure read, no LLM, no writes.\n\nVerified current state (HEAD): reusable task-agnostic building blocks exist \u2014 `cmd_specs` (:28563), `cmd_tasks`/`cmd_list` (:28640/:28700, runtime claim state merged via `TaskInventory.load`), `cmd_memory_list` (:22262, returns entry_id/title/track/category/status), `cmd_glossary_list`, `cmd_config_get`; the `_anchor_capture` fail-open capture pattern (:34260-34277) is the composition template. Done summaries live in task `.md` `## Done summary` sections (read via `get_task_section`) \u2014 there is no separate receipts store. No CLI reader exists for `.flow/locks/` or sync-runs/pilot-runs.\n\n## Architecture & Data Models\n<!-- scope: technical -->\n\n**Contents** (fixed section order, pinned by test):\n1. **Header**: repo/flow root, counts (open specs, ready/in-progress/done tasks), memory enabled flag.\n2. **Open specs**: id, title, status, ready flag, one-line goal. Closed/done/superseded specs excluded by default.\n3. **Actionable tasks**: ready + in-progress tasks with claim state (from the existing runtime merge in `cmd_list` \u2014 no new lock reader).\n4. **Recent completions**: last N=5 done tasks \u2014 id + first line of `## Done summary` + evidence-present flag.\n5. **Memory index**: entry_id + title one-liners from `cmd_memory_list` frontmatter (no bodies), active entries only.\n6. **Pointers**: how to go deeper (`flowctl cat <id>`, `flowctl anchor <task-id> --md`, `flowctl memory search <q>`).\n\n**Deterministic extraction rules**:\n- One-line goal = first non-empty, non-heading, non-comment prose line after `## Goal & Context` (fallback: first such line in the body), hard-truncated at 120 chars.\n- Memory one-liner = frontmatter title (already surfaced by `cmd_memory_list`) \u2014 never body content.\n- \"Oldest receipts first\" ordering = ascending by task `updated_at` (tie-break: id sort key), so the newest 5 survive truncation.\n\n**Budget**: default output <= 8000 chars (2k tokens x 4 chars/token, measured on the final rendered string). Deterministic truncation order when over: (1) drop oldest recent-completions beyond the newest, (2) drop memory one-liners (oldest first), (3) drop open-spec goal lines (keep id/title/status). Each dropped tier appends one explicit `[truncated: N receipts / M memory entries / goal lines omitted \u2014 use --full]` marker line. `--full` lifts the budget (same sections, no drops). `--json` carries the same data machine-readably with `truncated` flags per section; `--json` applies the same default budget by item count so both forms describe the same state, `--json --full` lifts it.\n\n**Derivation**: compose the existing read-only `cmd_*` functions via the `_anchor_capture` fail-open pattern where they fit; direct store reads where a section needs structured data. No new state, no writes, no git invocation (see Decision context).\n\n## Edge Cases & Constraints\n<!-- scope: technical -->\n\n- Error surface, enumerated: empty/fresh `.flow/` \u2192 useful short brief with \"(none)\" sections, exit 0 (the benchmark checkpoint-1 case); a spec/task/memory file that fails to parse \u2192 that item degrades to an inline `[unreadable: <path>]` note, never a crash (fail-open per section like anchor); `.flow/` absent entirely \u2192 the existing not-initialized error, unchanged; orphan tasks whose spec is closed \u2192 still listed under Actionable tasks.\n- Large repos (100+ specs): budget must hold; fixture with 20 specs / 50 tasks / 30 memory entries pins the truncated output.\n- Determinism: byte-identical output across two consecutive runs on identical `.flow/` state (test pins it). This is why git status/log are EXCLUDED (see Decision context).\n- No writes: test snapshots the `.flow/` tree (paths + content hashes) before/after and asserts equality \u2014 new assertion pattern, no precedent in `test_anchor_bundle.py`.\n- Distribution: `.flow/bin` propagation + tracker manifest + sync-codex.sh twice; teaching prose changes hit the token-budget-pinned snippets (`test_token_budgets.py` pins `claude-md-snippet*.md` + `usage.md`).\n- Overlap: fn-163 and fn-160 touch the same setup snippets/usage.md \u2014 second lander rebases.\n\n## Decision context\n<!-- scope: technical -->\n\n- **Verb = `brief`**, not `anchor --session`: anchor's contract is verbatim-no-truncation (pinned by the superset test in `test_anchor_bundle.py`); brief's contract is budgeted-deterministic. Two verbs, two clean contracts; docs cross-link them.\n- **Git sections excluded**: the spec's determinism requirement (\"stable across runs given identical state\") and pinned fixtures are incompatible with live git output; a cold session gets git state from its own `git status` call (one the agent makes anyway). Brief is `.flow/`-state only; the Pointers section says so.\n- **Locks/runs sections cut from v1**: no CLI reader exists for `.flow/locks/` or sync-runs/pilot-runs (all gitignored scratch); claim state \u2014 the actually useful signal \u2014 already rides the `cmd_list` runtime merge into Actionable tasks. Building new readers for low-orientation-value scratch dirs fails YAGNI; revisit only on demonstrated need.\n- Budget formula fixed as chars/4 on the rendered default output (8000 chars), matching the spec's \"~2k tokens-equivalent\"; precedent is char-budget + explicit marker (`fit_cursor_*_to_budget`) and item-cap + flag (`_FINDINGS_DIGEST_MAX_ITEMS`) \u2014 brief combines both.\n\n## Strategy Alignment\n\nActive tracks served by this plan:\n- **Ralph autonomous mode** \u2014 every pilot tick and Ralph iteration starts a cold session; brief-first re-anchor turns ~5+ orientation calls into one bounded call, directly cutting the per-tick overhead the decision log measures.\n\n## Quick commands\n```bash\ncd plugins/flow-next/tests && python3 -m unittest test_brief test_anchor_bundle -q\n```\n(Final gate: full parallel suite + `uvx ruff@0.16.0 check .` + flowctl propagation + sync-codex.sh twice, per repo CLAUDE.md.)\n\n## Acceptance Criteria\n<!-- scope: both -->\n\n- **R1:** One flowctl invocation (`flowctl brief`) yields the session brief; fixture test pins content and section order for a populated repo and an empty repo; unparseable individual files degrade to inline notes, never a crash.\n- **R2:** Default output <= 8000 chars (2k tokens-equivalent) on a fixture with 20 specs / 50 tasks / 30 memory entries; truncation markers appear and the truncation order is deterministic (byte-identical across runs on identical state).\n- **R3:** `--json` carries the same data machine-readably (with per-section `truncated` flags); `--full` lifts the budget on both forms.\n- **R4:** Setup snippets + relevant skills (pilot/guide cold-session entry points) teach brief-first re-anchor as the default cold-session step; GLOSSARY.md Re-anchoring entry covers session scope; snippet token budgets still pass.\n- **R5:** No writes: test asserts `.flow/` byte-identical (paths + hashes) before/after `brief`, `brief --json`, `brief --full`.\n- **R6:** CHANGELOG `## Unreleased` entry; docs-site staged per downstream conventions; `docs/flowctl.md` gains a `### brief` section cross-linked with `### anchor`; no version bump (batched releases).\n\n## Early proof point\nTask fn-164-session-scope-re-anchor-brief-one-call.1 validates the core approach (deterministic budgeted brief composed from existing read paths, pinned by fixture). If deterministic pinning proves brittle (extraction rules too fragile), re-evaluate the extraction rules before writing the teaching prose.\n\n## Requirement coverage\n\n| Req | Description | Task(s) | Gap justification |\n|-----|-------------|---------|-------------------|\n| R1  | One-call brief, pinned fixtures, fail-open | .1 | \u2014 |\n| R2  | 8000-char budget + deterministic truncation | .1 | \u2014 |\n| R3  | --json / --full parity | .1 | \u2014 |\n| R4  | Brief-first teaching + glossary | .2 | \u2014 |\n| R5  | No-writes assertion | .1 | \u2014 |\n| R6  | CHANGELOG + docs-site + CLI reference | .2 | \u2014 |\n\n## Boundaries\n<!-- scope: business -->\n\n- NOT changing task-scope `anchor` semantics (its no-truncation superset test stays untouched).\n- NOT summarizing via LLM \u2014 deterministic extraction only.\n- NOT building locks/runs readers (cut from v1; claim state comes from the existing runtime merge).\n- NOT the ceremony/write-path work (fn-163).\n- Benchmark prompt adoption happens in gmickel/scb-flow-next after revendor, not here.\n",
+    "mergeBaseTracker": "# Session-scope re-anchor brief: one call, token-bounded\n\n## Goal & Context\n\n<!-- scope: business -->\n\nBenchmark evidence (SlopCodeBench lite-opus5, 2026-08-03, gmickel/scb-flow-next; vault: \"flow-next - SlopCodeBench Experiment\"): a fresh agent session re-anchoring on `.flow/` state costs ~5+ tool calls (`flowctl list`, then reading spec bodies, receipts, memory files) and drags full spec markdown into context every session. Measured: 3.81x cache-read tokens vs a no-flow control across 16 checkpoints \u2014 the carried `.flow/` context is the biggest cost multiplier after ceremony call count, and it recurs every session in every flow-next repo.\n\n`flowctl anchor` (task scope, `cmd_anchor` at `flowctl.py:34413`) already solves this for TASK scope. The gap is SESSION scope: an agent arriving cold (benchmark checkpoint, fresh pilot tick, new chat session) has no task id yet and today reconstructs the workspace picture by hand.\n\nGoal: one flowctl call that gives a cold session everything it needs to orient \u2014 token-bounded, deterministic, teachable as THE re-anchor step in the always-loaded block.\n\n## Overview\n\n<!-- scope: technical -->\n\nNew verb: `flowctl brief` (decision: a separate verb, NOT `anchor --session` \u2014 task-scope `anchor` is deliberately no-truncation \"floor not ceiling\" (`flowctl.py:34462-34465`); putting a budgeted view under the same verb would mean two contradictory truncation philosophies under one name). Pure read, no LLM, no writes.\n\nVerified current state (HEAD): reusable task-agnostic building blocks exist \u2014 `cmd_specs` (:28563), `cmd_tasks`/`cmd_list` (:28640/:28700, runtime claim state merged via `TaskInventory.load`), `cmd_memory_list` (:22262, returns entry_id/title/track/category/status), `cmd_glossary_list`, `cmd_config_get`; the `_anchor_capture` fail-open capture pattern (:34260-34277) is the composition template. Done summaries live in task `.md` `## Done summary` sections (read via `get_task_section`) \u2014 there is no separate receipts store. No CLI reader exists for `.flow/locks/` or sync-runs/pilot-runs.\n\n## Architecture & Data Models\n\n<!-- scope: technical -->\n\n**Contents** (fixed section order, pinned by test):\n\n1. **Header**: repo/flow root, counts (open specs, ready/in-progress/done tasks), memory enabled flag.\n2. **Open specs**: id, title, status, ready flag, one-line goal. Closed/done/superseded specs excluded by default.\n3. **Actionable tasks**: ready + in-progress tasks with claim state (from the existing runtime merge in `cmd_list` \u2014 no new lock reader).\n4. **Recent completions**: last N=5 done tasks \u2014 id + first line of `## Done summary` + evidence-present flag.\n5. **Memory index**: entry_id + title one-liners from `cmd_memory_list` frontmatter (no bodies), active entries only.\n6. **Pointers**: how to go deeper (`flowctl cat <id>`, `flowctl anchor <task-id> --md`, `flowctl memory search <q>`).\n\n**Deterministic extraction rules**:\n\n* One-line goal = first non-empty, non-heading, non-comment prose line after `## Goal & Context` (fallback: first such line in the body), hard-truncated at 120 chars.\n* Memory one-liner = frontmatter title (already surfaced by `cmd_memory_list`) \u2014 never body content.\n* \"Oldest receipts first\" ordering = ascending by task `updated_at` (tie-break: id sort key), so the newest 5 survive truncation.\n\n**Budget**: default output <= 8000 chars (2k tokens x 4 chars/token, measured on the final rendered string). Deterministic truncation order when over: (1) drop oldest recent-completions beyond the newest, (2) drop memory one-liners (oldest first), (3) drop open-spec goal lines (keep id/title/status). Each dropped tier appends one explicit `[truncated: N receipts / M memory entries / goal lines omitted \u2014 use --full]` marker line. `--full` lifts the budget (same sections, no drops). `--json` carries the same data machine-readably with `truncated` flags per section; `--json` applies the same default budget by item count so both forms describe the same state, `--json --full` lifts it.\n\n**Derivation**: compose the existing read-only `cmd_*` functions via the `_anchor_capture` fail-open pattern where they fit; direct store reads where a section needs structured data. No new state, no writes, no git invocation (see Decision context).\n\n## Edge Cases & Constraints\n\n<!-- scope: technical -->\n\n* Error surface, enumerated: empty/fresh `.flow/` \u2192 useful short brief with \"(none)\" sections, exit 0 (the benchmark checkpoint-1 case); a spec/task/memory file that fails to parse \u2192 that item degrades to an inline `[unreadable: <path>]` note, never a crash (fail-open per section like anchor); `.flow/` absent entirely \u2192 the existing not-initialized error, unchanged; orphan tasks whose spec is closed \u2192 still listed under Actionable tasks.\n* Large repos (100+ specs): budget must hold; fixture with 20 specs / 50 tasks / 30 memory entries pins the truncated output.\n* Determinism: byte-identical output across two consecutive runs on identical `.flow/` state (test pins it). This is why git status/log are EXCLUDED (see Decision context).\n* No writes: test snapshots the `.flow/` tree (paths + content hashes) before/after and asserts equality \u2014 new assertion pattern, no precedent in `test_anchor_bundle.py`.\n* Distribution: `.flow/bin` propagation + tracker manifest + [sync-codex.sh](<http://sync-codex.sh>) twice; teaching prose changes hit the token-budget-pinned snippets (`test_token_budgets.py` pins `claude-md-snippet*.md` + `usage.md`).\n* Overlap: fn-163 and fn-160 touch the same setup snippets/usage.md \u2014 second lander rebases.\n\n## Decision context\n\n<!-- scope: technical -->\n\n* **Verb =** `brief`, not `anchor --session`: anchor's contract is verbatim-no-truncation (pinned by the superset test in `test_anchor_bundle.py`); brief's contract is budgeted-deterministic. Two verbs, two clean contracts; docs cross-link them.\n* **Git sections excluded**: the spec's determinism requirement (\"stable across runs given identical state\") and pinned fixtures are incompatible with live git output; a cold session gets git state from its own `git status` call (one the agent makes anyway). Brief is `.flow/`-state only; the Pointers section says so.\n* **Locks/runs sections cut from v1**: no CLI reader exists for `.flow/locks/` or sync-runs/pilot-runs (all gitignored scratch); claim state \u2014 the actually useful signal \u2014 already rides the `cmd_list` runtime merge into Actionable tasks. Building new readers for low-orientation-value scratch dirs fails YAGNI; revisit only on demonstrated need.\n* Budget formula fixed as chars/4 on the rendered default output (8000 chars), matching the spec's \"~2k tokens-equivalent\"; precedent is char-budget + explicit marker (`fit_cursor_*_to_budget`) and item-cap + flag (`_FINDINGS_DIGEST_MAX_ITEMS`) \u2014 brief combines both.\n\n## Strategy Alignment\n\nActive tracks served by this plan:\n\n* **Ralph autonomous mode** \u2014 every pilot tick and Ralph iteration starts a cold session; brief-first re-anchor turns ~5+ orientation calls into one bounded call, directly cutting the per-tick overhead the decision log measures.\n\n## Quick commands\n\n```bash\ncd plugins/flow-next/tests && python3 -m unittest test_brief test_anchor_bundle -q\n```\n\n(Final gate: full parallel suite + `uvx ruff@0.16.0 check .` + flowctl propagation + [sync-codex.sh](<http://sync-codex.sh>) twice, per repo CLAUDE.md.)\n\n## Acceptance Criteria\n\n<!-- scope: both -->\n\n* **R1:** One flowctl invocation (`flowctl brief`) yields the session brief; fixture test pins content and section order for a populated repo and an empty repo; unparseable individual files degrade to inline notes, never a crash.\n* **R2:** Default output <= 8000 chars (2k tokens-equivalent) on a fixture with 20 specs / 50 tasks / 30 memory entries; truncation markers appear and the truncation order is deterministic (byte-identical across runs on identical state).\n* **R3:** `--json` carries the same data machine-readably (with per-section `truncated` flags); `--full` lifts the budget on both forms.\n* **R4:** Setup snippets + relevant skills (pilot/guide cold-session entry points) teach brief-first re-anchor as the default cold-session step; GLOSSARY.md Re-anchoring entry covers session scope; snippet token budgets still pass.\n* **R5:** No writes: test asserts `.flow/` byte-identical (paths + hashes) before/after `brief`, `brief --json`, `brief --full`.\n* **R6:** CHANGELOG `## Unreleased` entry; docs-site staged per downstream conventions; `docs/flowctl.md` gains a `### brief` section cross-linked with `### anchor`; no version bump (batched releases).\n\n## Early proof point\n\nTask fn-164-session-scope-re-anchor-brief-one-call.1 validates the core approach (deterministic budgeted brief composed from existing read paths, pinned by fixture). If deterministic pinning proves brittle (extraction rules too fragile), re-evaluate the extraction rules before writing the teaching prose.\n\n## Requirement coverage\n\n| Req | Description | Task(s) | Gap justification |\n| -- | -- | -- | -- |\n| R1 | One-call brief, pinned fixtures, fail-open | .1 | \u2014 |\n| R2 | 8000-char budget + deterministic truncation | .1 | \u2014 |\n| R3 | --json / --full parity | .1 | \u2014 |\n| R4 | Brief-first teaching + glossary | .2 | \u2014 |\n| R5 | No-writes assertion | .1 | \u2014 |\n| R6 | CHANGELOG + docs-site + CLI reference | .2 | \u2014 |\n\n## Boundaries\n\n<!-- scope: business -->\n\n* NOT changing task-scope `anchor` semantics (its no-truncation superset test stays untouched).\n* NOT summarizing via LLM \u2014 deterministic extraction only.\n* NOT building locks/runs readers (cut from v1; claim state comes from the existing runtime merge).\n* NOT the ceremony/write-path work (fn-163).\n* Benchmark prompt adoption happens in gmickel/scb-flow-next after revendor, not here.",
+    "url": "https://linear.app/gmickel/issue/FLOW-92"
   },
-  "updated_at": "2026-08-03T21:53:01.340698Z"
+  "updated_at": "2026-08-04T00:29:03.513379Z"
 }

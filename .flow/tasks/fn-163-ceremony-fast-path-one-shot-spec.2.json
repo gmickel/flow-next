@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-03T23:41:38.663610Z",
+  "depends_on": [
+    "fn-163-ceremony-fast-path-one-shot-spec.1"
+  ],
+  "id": "fn-163-ceremony-fast-path-one-shot-spec.2",
+  "priority": null,
+  "spec": "fn-163-ceremony-fast-path-one-shot-spec",
+  "spec_path": ".flow/tasks/fn-163-ceremony-fast-path-one-shot-spec.2.md",
+  "status": "todo",
+  "title": "Bulk task create --from-json + inline field variants + invocation-count test",
+  "updated_at": "2026-08-03T23:58:02.333340Z"
+}

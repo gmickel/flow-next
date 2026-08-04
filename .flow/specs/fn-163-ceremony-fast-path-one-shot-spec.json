@@ -1,24 +1,187 @@
 {
   "branch_name": "fn-163-ceremony-fast-path-one-shot-spec",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-03T21:52:54.967392Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-163-ceremony-fast-path-one-shot-spec",
+  "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 0,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-04T00:00:43.871604Z",
+  "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "501e41ca16479270841dd155e02e7f51a0c764530b1eb8276391c57ff591044f",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "complete",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "transport_failure",
+      "output_sha256": "356f08cd71fe18b7b7220fb5682e2565bb45ab2277285221cb4b88a7ac1ff0f3",
+      "reservation_id": "ad18378d211f4ca29a136d506d5840dc",
+      "round_consumed": false,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-03T23:49:36.729620Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "501e41ca16479270841dd155e02e7f51a0c764530b1eb8276391c57ff591044f",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-fa56a5d19ed5748b53c8dc9855ec0bac",
+            "classification": "introduced",
+            "findingId": "finding-fa56a5d19ed5748b53c8dc9855ec0bac",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-db4f689f5875fe136dbc4598650be625",
+            "classification": "introduced",
+            "findingId": "finding-db4f689f5875fe136dbc4598650be625",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-03b88a268f6447116a00538c2ccd568c",
+            "classification": "introduced",
+            "findingId": "finding-03b88a268f6447116a00538c2ccd568c",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-3abc66a978db71a0c5b2ceafb46d0ee6",
+            "classification": "introduced",
+            "findingId": "finding-3abc66a978db71a0c5b2ceafb46d0ee6",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-9ac784396fa2bec60eef11738d8e8238",
+            "classification": "introduced",
+            "findingId": "finding-9ac784396fa2bec60eef11738d8e8238",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "3a5ed51467bc62e3d00f0a5feac656fc2b2699c69a8f5d5182cf330074fd6321",
+      "reservation_id": "5a6b347bc4474fb8b0b7621c4c9e17c5",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-03T23:56:15.402995Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "5e602cdcd440661c684e2fabcfcde878518b9eb5ea3b85310d6c1e354bbdab2d",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "f64392c61620641ff12c3d442dfdf982860ac5a18c806daf76a92b4481422657",
+      "reservation_id": "ac3278a6ac7e4a1c82ad9c721b99e0ba",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-03T23:59:24.202147Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "bd598eb3bb02afd67f0aad705b27e056e282358ad8b852413fc897515b22b4a9",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "7ffc3a09f99cd75c94ce4fe87085aae521cba79c",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "af6afdc1547d3176554074b708e40a4c879044c15ec026a61fef8fd236e0dfca",
+      "reservation_id": "b721b006972d42d7b3ca24211f0f1d62",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-04T00:00:43.869810Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "plan": 1,
+    "plan#completion": 0
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-163-ceremony-fast-path-one-shot-spec.md",
   "status": "open",
   "title": "Ceremony fast path: one-shot spec authoring and batched task lifecycle",
   "tracker": {
-    "baseHashFlow": null,
-    "baseHashTracker": null,
+    "baseHashFlow": "b6729ef618ed2541d49d9a3d41bfc20f273e789fd755a728f75c7b22815b86a7",
+    "baseHashTracker": "d3d2fb239366bdadd4f4f1320d0408ec2085fe407056d6c6f39464d16c65c28b",
     "depRelations": [],
-    "id": null,
-    "identifier": null,
-    "lastSyncedAt": null,
-    "mergeBaseFlow": null,
-    "mergeBaseTracker": null,
-    "url": null
+    "id": "9b5d811d-627b-40dc-8303-b8f7099b83c5",
+    "identifier": "FLOW-91",
+    "lastSyncedAt": "2026-08-03T23:45:41.007300Z",
+    "linkState": "linked",
+    "mergeBaseFlow": "# Ceremony fast path: one-shot spec authoring and batched task lifecycle\n\n## Goal & Context\n<!-- scope: business -->\n\nBenchmark evidence (SlopCodeBench lite-opus5 run, 2026-08-03, gmickel/scb-flow-next; vault: \"flow-next - SlopCodeBench Experiment\"): the flow-next lite pipeline costs ~18 flowctl invocations per benchmark checkpoint, and each invocation is a full agent tool round-trip (API latency + container exec). Tool-call diff vs a stock claude_code control on the identical checkpoint: 25 vs 81 calls, with flowctl ceremony the single largest block (18). Aggregate overhead of the lite pipeline: 2.37x wall-clock, 2.68x steps. The overhead is fixed per checkpoint (+40-60 calls), so it dominates small work items and amortizes on big ones \u2014 the exact wrong shape for \"flow on every task\" adoption.\n\nThe per-task lifecycle is the driver. Call count \u2248 wall-clock for agent users; every call we remove is latency and tokens saved in every flow-next session everywhere, not just benchmarks.\n\nGoal: cut the canonical spec-plus-3-tasks flow from ~20 flowctl invocations to <=8, with zero loss of receipt fidelity or state-machine safety.\n\n## Overview\n<!-- scope: technical -->\n\nVerified current state (HEAD, post-#290 / fn-159):\n\n- **Full-field task creation ALREADY LANDED** (fn-110.1): `task create --spec --title --deps --description-file --acceptance-file --satisfies --priority` writes the whole task in one call (`cmd_task_create`, `plugins/flow-next/scripts/flowctl.py:28275`, parser `:47593-47615`). The original candidate #2 is done; only inline `--description`/`--acceptance` string variants are missing.\n- `spec create` (`cmd_spec_create`, `flowctl.py:25704`, parser `:47206-47223`) has NO plan flag; `spec set-plan` is a separate command/lock cycle (`cmd_spec_set_plan`, `:28822`).\n- `start` (`:32975`) and `done` (`:33089`) write NO receipts \u2014 `start` only writes runtime claim state under `store.lock_task`. The original stretch candidate #4 (\"fold start receipt into done\") has nothing to fold and is **dropped** (see Decision context).\n\nNet-new work: (1) `spec create --plan-file/--plan -`, (2) `task create --from-json` bulk mode + inline string variants, (3) teach the fast path everywhere the granular sequence is taught.\n\nFast-path arithmetic for the canonical flow: `spec create --plan-file` (1) + `task create --from-json` (1) + `start` x3 + `done` x3 = **8 invocations** (from ~20).\n\n## Architecture & Data Models\n<!-- scope: technical -->\n\n1. **One-shot spec authoring**: `spec create --title X --plan-file plan.md` (or `--plan -` for stdin). Implementation reuses the existing write paths in sequence inside one command: create (id alloc under `cross_process_lock(native_fn_alloc_lock_path)`, `atomic_create` json+md with rollback, `:25789-25860`) then the same plan-write logic `cmd_spec_set_plan` uses, in-process. Plan file is validated readable BEFORE id allocation (pre-write validation ordering, same shape as `test_missing_*_errors_before_write` in `tests/test_task_create_files.py`). Stdin form (`--plan -`) shares the same path (content read fully up front).\n2. **Inline task fields**: `task create --description \"...\" --acceptance \"...\"` string variants, mutually exclusive with their `-file` twins.\n3. **Bulk task creation**: `task create --spec fn-N --from-json tasks.json` (or `-` for stdin). JSON: array of objects `{title, description?, acceptance?, satisfies?, deps?, priority?}`. Whole array is parsed and validated before ANY write; N ids allocated under ONE held per-spec lock (`scan_max_task_id` + the sha256-keyed task-create lock, `:28342-28403` \u2014 one acquisition for the batch, not N); files written via `atomic_create` with all-or-nothing rollback (track created paths, remove all created files on any failure \u2014 same rollback shape `test_second_publication_failure_rolls_back_first_file` pins for the single-task path). `deps` entries may be existing task ids OR 1-based integer indexes into the same array (earlier entries only) \u2014 resolved to allocated ids at write time. Schema documented in `docs/flowctl.md` next to the evidence-json schema.\n4. Existing granular verbs stay untouched (skills, hooks, humans use them); the fast path is additive.\n\n## Edge Cases & Constraints\n<!-- scope: technical -->\n\n- State-machine safety is non-negotiable: bulk/one-shot paths run the same validation as the granular verbs (dependency checks, id allocation, satisfies grammar via `parse_satisfies_tokens`) and fail atomically \u2014 a half-created task set is worse than slow ceremony.\n- Error surface, enumerated: missing/unreadable `--plan-file` \u2192 error BEFORE id allocation, no files created; malformed `--from-json` (bad JSON, non-array, unknown keys, missing title) \u2192 error before any write; intra-batch `deps` index out of range or forward-referencing \u2192 whole batch rejected; duplicate titles within a batch \u2192 allowed (granular `task create` allows duplicates today; fixture asserts distinct ids); `--description` given with `--description-file` \u2192 argparse mutual-exclusion error.\n- Byte-identity (R2): the one-shot path reuses the set-plan write logic, so state differs from the two-call flow only by wall-clock timestamps; the equivalence test freezes time (monkeypatch `now_iso`) and asserts byte-identical `.json` + `.md`.\n- Receipt fidelity: `done` evidence schema unchanged; fast-path-created tasks flow through `start`/`done` identically.\n- Windows twin `flowctl.cmd` forwards args generically (no per-flag mirroring); codex mirror + `.flow/bin` propagation via the existing sync path (`cp` flowctl.py, rsync flowctl_tracker, gen_tracker_manifest, sync-codex.sh twice) \u2014 `test_tracker_distribution` guards it.\n- `tests/test_token_budgets.py` pins `claude-md-snippet*.md` and `usage.md` budgets \u2014 the teaching rewrite must stay inside budget (tighten, don't append).\n- Overlap: fn-164 and fn-160 touch the same setup snippets/usage.md; fn-166 extracts a different flowctl.py region (~9300-11500, no collision with :25704/:28275). Second lander rebases.\n\n## Decision context\n<!-- scope: technical -->\n\n- Stretch candidate #4 (fold start into done) is **dropped**: verified `start` writes no receipt \u2014 there is nothing to fold, and weakening claim/dependency checks is explicitly out of bounds. The spec's own \"if it can't be done safely, drop it\" clause resolves to drop.\n- Intra-batch deps use 1-based array indexes (earlier entries only) because batch task ids are unknown to the caller before allocation; index resolution happens after allocation, inside the same lock.\n- Duplicate titles in a batch are allowed for consistency with the granular verb \u2014 divergent bulk-vs-granular semantics would break R3's state-equivalence claim.\n- R1's invocation-count test drives the production CLI dispatch (`main([...])` / two-token wire form per memory `test-production-path-not-parallel-construction`) and counts the scripted calls: the test performs the canonical flow through the fast path and asserts <=8 dispatches. New, simple test infra \u2014 no mocking of internals.\n\n## Strategy Alignment\n\nActive tracks served by this plan:\n- **Ralph autonomous mode** \u2014 call count \u2248 wall-clock for pilot/Ralph ticks; cutting ceremony to <=8 calls per spec+3-tasks flow directly cheapens every autonomous iteration (the factory-efficiency readout the pilot decision log measures).\n\n## Quick commands\n```bash\ncd plugins/flow-next/tests && python3 -m unittest test_task_create_files test_spec_create_plan_file test_task_bulk_create -q\n```\n(Final gate: full parallel suite + `uvx ruff@0.16.0 check .` + flowctl propagation + sync-codex.sh twice, per repo CLAUDE.md.)\n\n## Acceptance Criteria\n<!-- scope: both -->\n\n- **R1:** Canonical flow \"author spec with plan + create 3 tasks + work them to done\" completes in <=8 flowctl invocations (from ~20), demonstrated in a test that counts production CLI dispatches.\n- **R2:** `spec create --plan-file` (and `--plan -`) produces byte-identical .flow state to `spec create` + `spec set-plan` (timestamps frozen in the test); plan-file validation errors occur before id allocation, with no writes.\n- **R3:** Bulk/full-field task creation produces identical state to the granular sequence, validates the whole batch atomically under one lock acquisition, and rejects partial input (malformed JSON, missing title, bad dep index) with no writes.\n- **R4:** No change to receipt/evidence schemas; `done` validation unchanged; `start` claim/dependency checks untouched (fold-into-done dropped).\n- **R5:** worker.md, usage.md, and the setup snippets teach the fast path as default; granular verbs remain documented; snippet/usage token budgets (`test_token_budgets.py`) still pass.\n- **R6:** Fixture tests cover: bulk create happy path, malformed JSON (no writes), duplicate titles (allowed, distinct ids), dependency-carrying tasks incl. intra-batch index deps, plan-file-vs-set-plan and bulk-vs-granular state equivalence, pre-write error ordering, rollback on partial publication failure.\n- **R7:** CHANGELOG `## Unreleased` entry; docs-site staged per downstream conventions; no version bump (batched releases).\n\n## Early proof point\nTask fn-163-ceremony-fast-path-one-shot-spec.1 validates the core approach (one-shot spec create reusing the set-plan write path yields frozen-time byte-identical state). If byte-identity can't be achieved by composing the existing write paths, re-evaluate before building the bulk path on the same pattern.\n\n## Requirement coverage\n\n| Req | Description | Task(s) | Gap justification |\n|-----|-------------|---------|-------------------|\n| R1  | <=8 invocations, counted by test | .2 | \u2014 |\n| R2  | One-shot spec create byte-identical, pre-alloc validation | .1 | \u2014 |\n| R3  | Bulk create atomic, state-equivalent | .2 | \u2014 |\n| R4  | Receipts/start/done untouched | .1, .2 (asserted by equivalence tests) | \u2014 |\n| R5  | Teaching surfaces default to fast path | .3 | \u2014 |\n| R6  | Fixture matrix | .1, .2 | \u2014 |\n| R7  | CHANGELOG + docs-site | .3 | \u2014 |\n\n## Boundaries\n<!-- scope: business -->\n\n- NOT removing or deprecating any existing verb.\n- NOT redesigning receipts, evidence, or the task state machine (fold-start-into-done dropped, not deferred).\n- NOT the re-anchor/context work (fn-164) \u2014 this spec is write-path call count only.\n- NOT benchmark-harness changes (gmickel/scb-flow-next consumes the result via revendor).\n",
+    "mergeBaseTracker": "# Ceremony fast path: one-shot spec authoring and batched task lifecycle\n\n## Goal & Context\n\n<!-- scope: business -->\n\nBenchmark evidence (SlopCodeBench lite-opus5 run, 2026-08-03, gmickel/scb-flow-next; vault: \"flow-next - SlopCodeBench Experiment\"): the flow-next lite pipeline costs ~18 flowctl invocations per benchmark checkpoint, and each invocation is a full agent tool round-trip (API latency + container exec). Tool-call diff vs a stock claude_code control on the identical checkpoint: 25 vs 81 calls, with flowctl ceremony the single largest block (18). Aggregate overhead of the lite pipeline: 2.37x wall-clock, 2.68x steps. The overhead is fixed per checkpoint (+40-60 calls), so it dominates small work items and amortizes on big ones \u2014 the exact wrong shape for \"flow on every task\" adoption.\n\nThe per-task lifecycle is the driver. Call count \u2248 wall-clock for agent users; every call we remove is latency and tokens saved in every flow-next session everywhere, not just benchmarks.\n\nGoal: cut the canonical spec-plus-3-tasks flow from ~20 flowctl invocations to <=8, with zero loss of receipt fidelity or state-machine safety.\n\n## Overview\n\n<!-- scope: technical -->\n\nVerified current state (HEAD, post-#290 / fn-159):\n\n* **Full-field task creation ALREADY LANDED** (fn-110.1): `task create --spec --title --deps --description-file --acceptance-file --satisfies --priority` writes the whole task in one call (`cmd_task_create`, `plugins/flow-next/scripts/flowctl.py:28275`, parser `:47593-47615`). The original candidate #2 is done; only inline `--description`/`--acceptance` string variants are missing.\n* `spec create` (`cmd_spec_create`, `flowctl.py:25704`, parser `:47206-47223`) has NO plan flag; `spec set-plan` is a separate command/lock cycle (`cmd_spec_set_plan`, `:28822`).\n* `start` (`:32975`) and `done` (`:33089`) write NO receipts \u2014 `start` only writes runtime claim state under `store.lock_task`. The original stretch candidate #4 (\"fold start receipt into done\") has nothing to fold and is **dropped** (see Decision context).\n\nNet-new work: (1) `spec create --plan-file/--plan -`, (2) `task create --from-json` bulk mode + inline string variants, (3) teach the fast path everywhere the granular sequence is taught.\n\nFast-path arithmetic for the canonical flow: `spec create --plan-file` (1) + `task create --from-json` (1) + `start` x3 + `done` x3 = **8 invocations** (from ~20).\n\n## Architecture & Data Models\n\n<!-- scope: technical -->\n\n1. **One-shot spec authoring**: `spec create --title X --plan-file plan.md` (or `--plan -` for stdin). Implementation reuses the existing write paths in sequence inside one command: create (id alloc under `cross_process_lock(native_fn_alloc_lock_path)`, `atomic_create` json+md with rollback, `:25789-25860`) then the same plan-write logic `cmd_spec_set_plan` uses, in-process. Plan file is validated readable BEFORE id allocation (pre-write validation ordering, same shape as `test_missing_*_errors_before_write` in `tests/test_task_create_files.py`). Stdin form (`--plan -`) shares the same path (content read fully up front).\n2. **Inline task fields**: `task create --description \"...\" --acceptance \"...\"` string variants, mutually exclusive with their `-file` twins.\n3. **Bulk task creation**: `task create --spec fn-N --from-json tasks.json` (or `-` for stdin). JSON: array of objects `{title, description?, acceptance?, satisfies?, deps?, priority?}`. Whole array is parsed and validated before ANY write; N ids allocated under ONE held per-spec lock (`scan_max_task_id` + the sha256-keyed task-create lock, `:28342-28403` \u2014 one acquisition for the batch, not N); files written via `atomic_create` with all-or-nothing rollback (track created paths, remove all created files on any failure \u2014 same rollback shape `test_second_publication_failure_rolls_back_first_file` pins for the single-task path). `deps` entries may be existing task ids OR 1-based integer indexes into the same array (earlier entries only) \u2014 resolved to allocated ids at write time. Schema documented in `docs/flowctl.md` next to the evidence-json schema.\n4. Existing granular verbs stay untouched (skills, hooks, humans use them); the fast path is additive.\n\n## Edge Cases & Constraints\n\n<!-- scope: technical -->\n\n* State-machine safety is non-negotiable: bulk/one-shot paths run the same validation as the granular verbs (dependency checks, id allocation, satisfies grammar via `parse_satisfies_tokens`) and fail atomically \u2014 a half-created task set is worse than slow ceremony.\n* Error surface, enumerated: missing/unreadable `--plan-file` \u2192 error BEFORE id allocation, no files created; malformed `--from-json` (bad JSON, non-array, unknown keys, missing title) \u2192 error before any write; intra-batch `deps` index out of range or forward-referencing \u2192 whole batch rejected; duplicate titles within a batch \u2192 allowed (granular `task create` allows duplicates today; fixture asserts distinct ids); `--description` given with `--description-file` \u2192 argparse mutual-exclusion error.\n* Byte-identity (R2): the one-shot path reuses the set-plan write logic, so state differs from the two-call flow only by wall-clock timestamps; the equivalence test freezes time (monkeypatch `now_iso`) and asserts byte-identical `.json` + `.md`.\n* Receipt fidelity: `done` evidence schema unchanged; fast-path-created tasks flow through `start`/`done` identically.\n* Windows twin `flowctl.cmd` forwards args generically (no per-flag mirroring); codex mirror + `.flow/bin` propagation via the existing sync path (`cp` [flowctl.py](<http://flowctl.py>), rsync flowctl_tracker, gen_tracker_manifest, [sync-codex.sh](<http://sync-codex.sh>) twice) \u2014 `test_tracker_distribution` guards it.\n* `tests/test_token_budgets.py` pins `claude-md-snippet*.md` and `usage.md` budgets \u2014 the teaching rewrite must stay inside budget (tighten, don't append).\n* Overlap: fn-164 and fn-160 touch the same setup snippets/usage.md; fn-166 extracts a different [flowctl.py](<http://flowctl.py>) region (~9300-11500, no collision with :25704/:28275). Second lander rebases.\n\n## Decision context\n\n<!-- scope: technical -->\n\n* Stretch candidate #4 (fold start into done) is **dropped**: verified `start` writes no receipt \u2014 there is nothing to fold, and weakening claim/dependency checks is explicitly out of bounds. The spec's own \"if it can't be done safely, drop it\" clause resolves to drop.\n* Intra-batch deps use 1-based array indexes (earlier entries only) because batch task ids are unknown to the caller before allocation; index resolution happens after allocation, inside the same lock.\n* Duplicate titles in a batch are allowed for consistency with the granular verb \u2014 divergent bulk-vs-granular semantics would break R3's state-equivalence claim.\n* R1's invocation-count test drives the production CLI dispatch (`main([...])` / two-token wire form per memory `test-production-path-not-parallel-construction`) and counts the scripted calls: the test performs the canonical flow through the fast path and asserts <=8 dispatches. New, simple test infra \u2014 no mocking of internals.\n\n## Strategy Alignment\n\nActive tracks served by this plan:\n\n* **Ralph autonomous mode** \u2014 call count \u2248 wall-clock for pilot/Ralph ticks; cutting ceremony to <=8 calls per spec+3-tasks flow directly cheapens every autonomous iteration (the factory-efficiency readout the pilot decision log measures).\n\n## Quick commands\n\n```bash\ncd plugins/flow-next/tests && python3 -m unittest test_task_create_files test_spec_create_plan_file test_task_bulk_create -q\n```\n\n(Final gate: full parallel suite + `uvx ruff@0.16.0 check .` + flowctl propagation + [sync-codex.sh](<http://sync-codex.sh>) twice, per repo CLAUDE.md.)\n\n## Acceptance Criteria\n\n<!-- scope: both -->\n\n* **R1:** Canonical flow \"author spec with plan + create 3 tasks + work them to done\" completes in <=8 flowctl invocations (from ~20), demonstrated in a test that counts production CLI dispatches.\n* **R2:** `spec create --plan-file` (and `--plan -`) produces byte-identical .flow state to `spec create` + `spec set-plan` (timestamps frozen in the test); plan-file validation errors occur before id allocation, with no writes.\n* **R3:** Bulk/full-field task creation produces identical state to the granular sequence, validates the whole batch atomically under one lock acquisition, and rejects partial input (malformed JSON, missing title, bad dep index) with no writes.\n* **R4:** No change to receipt/evidence schemas; `done` validation unchanged; `start` claim/dependency checks untouched (fold-into-done dropped).\n* **R5:** worker.md, usage.md, and the setup snippets teach the fast path as default; granular verbs remain documented; snippet/usage token budgets (`test_token_budgets.py`) still pass.\n* **R6:** Fixture tests cover: bulk create happy path, malformed JSON (no writes), duplicate titles (allowed, distinct ids), dependency-carrying tasks incl. intra-batch index deps, plan-file-vs-set-plan and bulk-vs-granular state equivalence, pre-write error ordering, rollback on partial publication failure.\n* **R7:** CHANGELOG `## Unreleased` entry; docs-site staged per downstream conventions; no version bump (batched releases).\n\n## Early proof point\n\nTask fn-163-ceremony-fast-path-one-shot-spec.1 validates the core approach (one-shot spec create reusing the set-plan write path yields frozen-time byte-identical state). If byte-identity can't be achieved by composing the existing write paths, re-evaluate before building the bulk path on the same pattern.\n\n## Requirement coverage\n\n| Req | Description | Task(s) | Gap justification |\n| -- | -- | -- | -- |\n| R1 | <=8 invocations, counted by test | .2 | \u2014 |\n| R2 | One-shot spec create byte-identical, pre-alloc validation | .1 | \u2014 |\n| R3 | Bulk create atomic, state-equivalent | .2 | \u2014 |\n| R4 | Receipts/start/done untouched | .1, .2 (asserted by equivalence tests) | \u2014 |\n| R5 | Teaching surfaces default to fast path | .3 | \u2014 |\n| R6 | Fixture matrix | .1, .2 | \u2014 |\n| R7 | CHANGELOG + docs-site | .3 | \u2014 |\n\n## Boundaries\n\n<!-- scope: business -->\n\n* NOT removing or deprecating any existing verb.\n* NOT redesigning receipts, evidence, or the task state machine (fold-start-into-done dropped, not deferred).\n* NOT the re-anchor/context work (fn-164) \u2014 this spec is write-path call count only.\n* NOT benchmark-harness changes (gmickel/scb-flow-next consumes the result via revendor).",
+    "url": "https://linear.app/gmickel/issue/FLOW-91"
   },
-  "updated_at": "2026-08-03T21:53:00.992311Z"
+  "updated_at": "2026-08-04T00:29:03.103572Z"
 }
