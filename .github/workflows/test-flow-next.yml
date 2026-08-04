@@ -205,15 +205,13 @@ jobs:
             # the parallel entrypoint. fn-120.1 characterization on this image
             # (windows-2025, runs 30902967690..30902994209): backend_spec now
             # PASSES in 4.4s (no hang - retirement owned by fn-120.3 with its
-            # cleanup regression); normalize_section fails on 8.3 short-path
-            # --file args; task_create_files fails import on unguarded
-            # os.geteuid() (fn-120.2). The deterministic gitignore encoding,
-            # gate-receipt shim/backslash, and reveval stdout-encoding failures
-            # are fixed and those files run here. Remove entries with fn-120
-            # task evidence, never silently here.
+            # cleanup regression). The gitignore encoding, gate-receipt
+            # shim/backslash and reveval stdout-encoding failures (fn-120.1),
+            # and normalize_section's cp1252 fixture writes plus
+            # task_create_files' unguarded os.geteuid() (fn-120.2) are fixed
+            # and those files run here. Remove entries with fn-120 task
+            # evidence, never silently here.
             EXCLUDES+=(--exclude test_backend_spec.py)
-            EXCLUDES+=(--exclude test_normalize_section_content.py)
-            EXCLUDES+=(--exclude test_task_create_files.py)
           fi
           python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${MODE_ARGS[@]}" "${PATTERN_ARGS[@]}" "${VERBOSE_ARGS[@]}" "${TIMEOUT_ARGS[@]}" "${EXCLUDES[@]}"
 

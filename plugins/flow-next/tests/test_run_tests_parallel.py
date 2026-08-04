@@ -74,6 +74,20 @@ class Failing(unittest.TestCase):
         self.assertEqual(1, 2)
 """
 
+# fn-120.2: a child whose FAILURE MESSAGE is non-ASCII. The runner captured
+# child output with the parent's locale encoding (cp1252 on windows-latest),
+# which mojibaked or UnicodeDecodeError'd the diagnostic. The needle is written
+# as escapes so this harness file stays ASCII on any editor/locale.
+NON_ASCII_FAILING_FILE = """\
+import unittest
+
+
+class NonAsciiFailure(unittest.TestCase):
+    def test_utf8_message(self):
+        self.fail("w\\u00f6rks \\u2014 \\u2713")
+"""
+NON_ASCII_NEEDLE = "w\u00f6rks \u2014 \u2713"
+
 
 class DefaultJobsTest(unittest.TestCase):
     """R1/R5: the CI vs local split and the `CI` value semantics."""
@@ -293,6 +307,48 @@ class CorpusContractTest(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(self._line_starting(out, "FAILED FILES"), "FAILED FILES (1):")
         self.assertIn("- test_delta.py", out)
+
+    def test_non_ascii_child_output_survives_capture(self):
+        """fn-120.2: child output is decoded as UTF-8, not the parent locale.
+
+        On windows-latest the parent's default is cp1252, so before the
+        explicit `encoding=` the captured diagnostic was mojibaked (or the
+        decode raised inside the runner) and the real failure was unreadable.
+        """
+        (self.corpus / "test_utf8.py").write_text(
+            NON_ASCII_FAILING_FILE, encoding="utf-8"
+        )
+        rc, out = self._run(["--serial"])
+        self.assertEqual(rc, 1)
+        self.assertTrue(
+            NON_ASCII_NEEDLE in out,
+            "non-ASCII child failure text was not captured verbatim; "
+            "needle={} out={}".format(
+                NON_ASCII_NEEDLE.encode("unicode_escape").decode("ascii"),
+                out.encode("unicode_escape").decode("ascii"),
+            ),
+        )
+
+    def test_child_capture_pins_utf8_decoding(self):
+        """The decode is pinned at the SPAWN, not inferred from the platform.
+
+        The verbatim-capture test above cannot fail on a POSIX runner (PEP 538
+        coerces even `LC_ALL=C` to a UTF-8 locale), so the kwargs the runner
+        hands `subprocess.run` are asserted directly - that is the thing that
+        was wrong on windows-latest.
+        """
+        real_run = self.mod.subprocess.run
+        seen = {}
+
+        def capture(cmd, **kwargs):
+            seen.update(kwargs)
+            return real_run(cmd, **kwargs)
+
+        with mock.patch.object(self.mod.subprocess, "run", side_effect=capture):
+            rc, _ = self._run(["--serial", "--pattern", "test_alpha.py"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(seen.get("encoding"), "utf-8")
+        self.assertEqual(seen.get("errors"), "replace")
 
 
 if __name__ == "__main__":
