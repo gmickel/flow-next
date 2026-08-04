@@ -18,6 +18,7 @@ Three groups:
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import importlib.util
 import io
 import os
@@ -735,6 +736,53 @@ class ShardLaunchContractTest(unittest.TestCase):
             # Own session ⇒ the group id is the shard's pid, and it is the
             # GROUP the runner kills, not just the (dead) shard.
             self.assertIn("pgid={}".format(proc.pid), note)
+
+
+class WindowsJobSignatureTest(unittest.TestCase):
+    """Win32 signature declarations in `_WindowsJob` (codex review P2).
+
+    ctypes defaults every foreign function to a 32-bit c_int result; on 64-bit
+    Windows a HANDLE is pointer-sized, so an undeclared restype can truncate a
+    job/process handle and make Assign/Terminate act on garbage. Runs on POSIX
+    by faking `WinDLL` — the declarations themselves are what's under test.
+    """
+
+    def test_init_declares_pointer_safe_signatures_before_first_call(self):
+        from ctypes import wintypes  # noqa: PLC0415 - keep the Win-only import local
+
+        mod = _load_runner()
+        restype_at_call = []
+        kernel32 = mock.MagicMock()
+        kernel32.CreateJobObjectW.side_effect = (
+            lambda *a: restype_at_call.append(kernel32.CreateJobObjectW.restype) or 4242
+        )
+        with mock.patch.object(mod.os, "name", "nt"), \
+                mock.patch("ctypes.WinDLL", return_value=kernel32, create=True):
+            job = mod._WindowsJob()
+        self.assertTrue(job.usable)
+        # The restype was already HANDLE when CreateJobObjectW ran (not after).
+        self.assertEqual(restype_at_call, [wintypes.HANDLE])
+        # HANDLE must be pointer-sized — the whole point of the declarations.
+        self.assertEqual(ctypes.sizeof(wintypes.HANDLE), ctypes.sizeof(ctypes.c_void_p))
+        self.assertEqual(
+            kernel32.CreateJobObjectW.argtypes, (wintypes.LPVOID, wintypes.LPCWSTR)
+        )
+        self.assertIs(kernel32.OpenProcess.restype, wintypes.HANDLE)
+        self.assertEqual(
+            kernel32.OpenProcess.argtypes,
+            (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD),
+        )
+        self.assertIs(kernel32.AssignProcessToJobObject.restype, wintypes.BOOL)
+        self.assertEqual(
+            kernel32.AssignProcessToJobObject.argtypes,
+            (wintypes.HANDLE, wintypes.HANDLE),
+        )
+        self.assertIs(kernel32.TerminateJobObject.restype, wintypes.BOOL)
+        self.assertEqual(
+            kernel32.TerminateJobObject.argtypes, (wintypes.HANDLE, wintypes.UINT)
+        )
+        self.assertIs(kernel32.CloseHandle.restype, wintypes.BOOL)
+        self.assertEqual(kernel32.CloseHandle.argtypes, (wintypes.HANDLE,))
 
 
 if __name__ == "__main__":

@@ -181,8 +181,23 @@ class _WindowsJob:
             return
         try:
             import ctypes  # noqa: PLC0415 - Windows-only, never imported on POSIX
+            from ctypes import wintypes  # noqa: PLC0415 - Windows-only, see above
 
             kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            # Declare signatures BEFORE any call: ctypes defaults every foreign
+            # function to c_int, which truncates pointer-sized HANDLEs on
+            # 64-bit Windows — a truncated job/process handle makes Assign/
+            # Terminate silently operate on garbage.
+            kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+            kernel32.CreateJobObjectW.argtypes = (wintypes.LPVOID, wintypes.LPCWSTR)
+            kernel32.OpenProcess.restype = wintypes.HANDLE
+            kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+            kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+            kernel32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+            kernel32.TerminateJobObject.restype = wintypes.BOOL
+            kernel32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+            kernel32.CloseHandle.restype = wintypes.BOOL
+            kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
             handle = kernel32.CreateJobObjectW(None, None)
             if handle:
                 self._kernel32 = kernel32
