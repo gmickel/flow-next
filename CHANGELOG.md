@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.15.1] - 2026-08-05
 
 ### Fixed
 
@@ -24,6 +24,14 @@ All notable changes to the flow-next.
   Windows (`resolve()` can return two spellings of the same directory under
   load; containment is now derived from a single resolve, with the symlink
   refusal unchanged). (fn-120)
+- **Two Windows edge cases hardened during review of the above.** The test
+  runner's Job Object handles are now declared pointer-width via
+  `ctypes.wintypes` (an unannotated handle can silently truncate on 64-bit
+  Windows, invalidating the process-tree kill exactly when it's needed), and
+  tracker path containment now rejects NTFS junctions and all other
+  reparse points during its no-follow walk — junctions aren't symlinks, so the
+  symlink check alone couldn't see a write escaping `.flow/` through one.
+  Both carry POSIX-runnable regression tests. (fn-120, PR #291 review)
 
 ## [flow-next 3.15.0] - 2026-08-04
 

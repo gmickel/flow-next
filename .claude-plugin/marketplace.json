@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Plan-first workflows for Claude Code and Factory Droid. Ships flow-next: zero-dep, spec-driven, Ralph autonomous mode.",
-    "version": "3.15.0"
+    "version": "3.15.1"
   },
   "plugins": [
     {
       "name": "flow-next",
       "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts. Includes 21 subagents, 25 commands, 30 skills.",
-      "version": "3.15.0",
+      "version": "3.15.1",
       "author": {
         "name": "Gordon Mickel",
         "email": "gordon@mickel.tech",

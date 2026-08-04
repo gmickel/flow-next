@@ -1,0 +1,828 @@
+{
+  "artifactId": "fn-120-windows-test-corpus-compatibility-sweep-pr-aid-f844e783-1",
+  "baseSha": "019dca913302c5ebbf18a761f41ad2a4afb3a8e4",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [
+          "R13"
+        ],
+        "sourceRefs": [
+          "src-spec",
+          "src-task-1",
+          "src-rid-R13"
+        ],
+        "summary": "The CI workflow excluded six test files on windows-latest only — visible debt against the three-OS promise: a change could pass Linux/macOS and regress behavior hidden behind the filter. Fresh characterization showed every recorded failure signature was stale or wrong.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.1"
+        ],
+        "title": "Six files hidden behind a Windows-only exclusion list"
+      },
+      {
+        "files": [
+          {
+            "additions": 65,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 28,
+            "path": ".github/workflows/test-flow-next.yml",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dispatch inputs added (bounded, validated); EXCLUDES array deleted; ordinary push/PR path byte-identical",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R8",
+          "R11"
+        ],
+        "sourceRefs": [
+          "src-task-1",
+          "src-task-3",
+          "src-rid-R8",
+          "src-rid-R11",
+          "src-diff"
+        ],
+        "summary": "workflow_dispatch gains validated suite_mode/pattern/verbose/file_timeout inputs (push/PR behavior unchanged); across the tasks the Windows EXCLUDES array shrank and was finally deleted entirely — all three OS legs now run the same discovered corpus.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.1",
+          "fn-120-windows-test-corpus-compatibility-sweep.3"
+        ],
+        "title": "Permanent CI dispatch diagnostics; exclusion list retired"
+      },
+      {
+        "files": [
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "optimization/review-prompt/reveval_parse_guard.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Eval-harness guard: ASCII-by-construction check labels; no prompt text touched",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/tests/test_flow_gitignore.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Explicit UTF-8 test reads/writes + non-ASCII roundtrip assertions",
+            "taskIds": []
+          },
+          {
+            "additions": 66,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 44,
+            "path": "plugins/flow-next/tests/test_gate_receipt.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Asserted git-status seam at production call site; narrow POSIX backslash skip",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/tests/test_reveval_parse_guard.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Portable path derivation + standalone-subprocess e2e",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R1",
+          "R2",
+          "R3"
+        ],
+        "sourceRefs": [
+          "src-task-1",
+          "src-rid-R1",
+          "src-rid-R2",
+          "src-rid-R3",
+          "src-diff"
+        ],
+        "summary": "test_flow_gitignore: explicit UTF-8 test I/O + non-ASCII roundtrip. test_gate_receipt: injectable asserted git-status seam at the production subprocess.run call site; narrow POSIX skip only for the NT-impossible literal-backslash filename. test_reveval_parse_guard: portable pathlib derivation + standalone subprocess e2e; the real failure was cp1252 stdout encoding, not paths.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.1"
+        ],
+        "title": "Deterministic encoding, shim, and path fixes"
+      },
+      {
+        "files": [
+          {
+            "additions": 148,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/tests/test_normalize_section_content.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "UTF-8 fixture writes; long-path + real 8.3-name regression cases; dual-stream error reporting",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_task_create_files.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Import-time geteuid guarded: skipUnless(posix) + getattr fallback",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R4",
+          "R5"
+        ],
+        "sourceRefs": [
+          "src-task-2",
+          "src-rid-R4",
+          "src-rid-R5",
+          "src-diff"
+        ],
+        "summary": "test_normalize_section_content: fixtures written with bare write_text() emitted cp1252 while production reads strict UTF-8 — fixed with explicit encoding, dual-stream error reporting, and NEW portable long-path + Windows-only real 8.3-name (GetShortPathNameW) regression cases. test_task_create_files: os.geteuid() inside a skipIf decorator ran at import time and does not exist on NT.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.2"
+        ],
+        "title": "The two “8.3 short-path” failures were not path bugs"
+      },
+      {
+        "files": [
+          {
+            "additions": 323,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "scripts/run_tests_parallel.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Process-tree kill identity, reader-thread capture, leak detection, stdin=DEVNULL, bounded diagnostics",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "copilot POSIX argv + cursor-agent spawns: stdin=subprocess.DEVNULL",
+            "taskIds": []
+          },
+          {
+            "additions": 442,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_run_tests_parallel.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "29 new runner tests: tree-kill, capture, leak WARN, timeout paths",
+            "taskIds": []
+          },
+          {
+            "additions": 137,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_backend_spec.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Backend stdin-contract regression class",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy propagation of the flowctl.py stdin fix",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "src-task-3",
+          "src-rid-R6",
+          "src-diff"
+        ],
+        "summary": "subprocess.run(timeout=) kills only the direct child then drains pipes unbounded — a grandchild holding the shard's stdout stalls the suite forever (proven with a failing test first). Fix: _ShardTree kill identity (POSIX killpg / Windows Job Object via ctypes), reader-thread capture, descendant-leak WARN, stdin=DEVNULL, bounded timeout diagnostics. flowctl's copilot/cursor spawns also no longer inherit stdin.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.3"
+        ],
+        "title": "The real hang: runner killed the child, not the tree"
+      },
+      {
+        "files": [
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/lifecycle/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Leaf containment derived from the already-resolved base (one resolve)",
+            "taskIds": []
+          },
+          {
+            "additions": 81,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_tracker_capabilities.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "LeafIsSafeDivergentResolve regression class (5 cases)",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Regenerated manifest (hashes flowctl.py + package)",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy manifest propagation",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Dual-copy package propagation",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 6,
+        "rIds": [
+          "R9"
+        ],
+        "sourceRefs": [
+          "src-task-4",
+          "src-rid-R9",
+          "src-commit-final",
+          "src-diff"
+        ],
+        "summary": "leaf_is_safe resolved base and leaf independently; Windows non-strict Path.resolve() can stop expanding on transient errors (short RUNNER~1 vs expanded runneradmin), faking an escape ~50% of the time under concurrency. Leaf containment is now derived from ONE resolve; 5-case regression class added; manifest regenerated and dual copies propagated.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.4"
+        ],
+        "title": "Tracker path-containment flake fixed at the root"
+      },
+      {
+        "files": [
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unreleased entry: Windows runs the same corpus as Linux/macOS, nothing weakened",
+            "taskIds": []
+          },
+          {
+            "additions": 37,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/test-failures/test-runner-timeout-must-kill-a-process-2026-08-04.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Memory: process-tree kill class",
+            "taskIds": []
+          },
+          {
+            "additions": 54,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/test-failures/two-independent-resolve-calls-faked-a-2026-08-04.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Memory: divergent-resolve containment class",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/bug/test-failures/windows-83-path-test-failures-were-2026-08-04.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Memory: the 8.3 signatures were encoding/import-time bugs",
+            "taskIds": []
+          },
+          {
+            "additions": 329,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/specs/fn-120-windows-test-corpus-compatibility-sweep.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Spec state: task claims, reviews, completion review ship",
+            "taskIds": []
+          },
+          {
+            "additions": 168,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": ".flow/specs/fn-166-flowctl-module-split-importable.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 80,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 14,
+            "path": ".flow/specs/fn-166-flowctl-module-split-importable.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 plan body (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 37,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-120-windows-test-corpus-compatibility-sweep.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Task record incl. R13 characterization addendum",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-120-windows-test-corpus-compatibility-sweep.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Task record + done evidence",
+            "taskIds": []
+          },
+          {
+            "additions": 26,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-120-windows-test-corpus-compatibility-sweep.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Task record + done evidence",
+            "taskIds": []
+          },
+          {
+            "additions": 47,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-120-windows-test-corpus-compatibility-sweep.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Task record + matrix-proof evidence",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 46,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 54,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 50,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.4.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 44,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.5.json",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          },
+          {
+            "additions": 50,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-166-flowctl-module-split-importable.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "src-diff"
+            ],
+            "summary": "Unrelated fn-166 planning record (pre-work, same branch)",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 7,
+        "rIds": [
+          "R12",
+          "R13"
+        ],
+        "sourceRefs": [
+          "src-task-4",
+          "src-task-1",
+          "src-rid-R12",
+          "src-rid-R13",
+          "src-diff"
+        ],
+        "summary": "CHANGELOG gains the single user-facing Unreleased entry for the whole sweep. The .flow records carry task evidence (including the R13 characterization addendum), three new memory entries, and the fn-166 spec/task records — fn-166 planning happened on this branch before work started and is unrelated to the sweep itself.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.4",
+          "fn-120-windows-test-corpus-compatibility-sweep.1"
+        ],
+        "title": "Records: CHANGELOG, flow state, memory, and unrelated fn-166 planning"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 8,
+        "rIds": [
+          "R10"
+        ],
+        "sourceRefs": [
+          "src-rid-R10",
+          "src-task-2"
+        ],
+        "summary": "No assertion deleted or broadened, no timeout inflated, no blanket platform skips; the one remaining skip is an NT-impossible filename with a Windows-valid equivalent test. The runner keeps locale-faithful child decoding (an explicit recorded decision — forcing UTF-8 pipes would mask the real cp1252 print-crash class).",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.2"
+        ],
+        "title": "Nothing was weakened"
+      },
+      {
+        "files": [],
+        "kind": "verify",
+        "ordinal": 9,
+        "rIds": [
+          "R9"
+        ],
+        "sourceRefs": [
+          "src-task-4",
+          "src-rid-R9",
+          "src-commit-final",
+          "src-review-completion"
+        ],
+        "summary": "At a58d5165: parallel run 30934798637, serial run 30934815997, shuffled run 30934833655 — all legs green, windows-latest 182 files / ran=4170 / 0 failures / zero exclusions. Local full suite green; ruff 0.16.0 clean. Four impl reviews SHIP; completion review SHIP with R1-R13 all met.",
+        "taskIds": [
+          "fn-120-windows-test-corpus-compatibility-sweep.4"
+        ],
+        "title": "Three-mode matrix proof at the exact candidate SHA"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Windows matrix @ a58d5165",
+        "sourceRefs": [
+          "src-task-4",
+          "src-commit-final"
+        ],
+        "value": "parallel 30934798637 / serial 30934815997 / shuffle 30934833655 — all legs green"
+      },
+      {
+        "label": "Windows corpus",
+        "sourceRefs": [
+          "src-task-4"
+        ],
+        "value": "182 files, ran=4170, 0 failures, zero exclusions"
+      },
+      {
+        "label": "Local gate",
+        "sourceRefs": [
+          "src-task-4"
+        ],
+        "value": "full suite green (182 files / 4170 tests); uvx ruff@0.16.0 clean"
+      },
+      {
+        "label": "Reviews",
+        "sourceRefs": [
+          "src-review-completion"
+        ],
+        "value": "4 impl reviews SHIP; completion review SHIP, R1-R13 met, 0 unaddressed"
+      }
+    ],
+    "thesis": "The Windows-only test exclusion list is gone: all three OSes run the same 182-file corpus, proven in parallel, serial, and shuffled order at one SHA. The six excluded files were hiding five real bugs — locale-dependent text I/O, an import-time geteuid(), a runner that could not kill process trees on timeout (the actual '900s hang'), backend subprocesses inheriting stdin, and a tracker path-containment check faked out by Windows short names — each fixed at the narrowest truthful layer with nothing weakened."
+  },
+  "generatedAt": "2026-08-04T21:28:42Z",
+  "headSha": "f844e7830f91480b7077a78c7e61b87ee4b1c02e",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "src-spec",
+      "kind": "spec",
+      "ref": "fn-120-windows-test-corpus-compatibility-sweep"
+    },
+    {
+      "id": "src-diff",
+      "kind": "diff_metadata",
+      "ref": "019dca913302c5ebbf18a761f41ad2a4afb3a8e4..f844e7830f91480b7077a78c7e61b87ee4b1c02e"
+    },
+    {
+      "id": "src-task-1",
+      "kind": "task",
+      "ref": "fn-120-windows-test-corpus-compatibility-sweep.1"
+    },
+    {
+      "id": "src-task-2",
+      "kind": "task",
+      "ref": "fn-120-windows-test-corpus-compatibility-sweep.2"
+    },
+    {
+      "id": "src-task-3",
+      "kind": "task",
+      "ref": "fn-120-windows-test-corpus-compatibility-sweep.3"
+    },
+    {
+      "id": "src-task-4",
+      "kind": "task",
+      "ref": "fn-120-windows-test-corpus-compatibility-sweep.4"
+    },
+    {
+      "id": "src-rid-R1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "src-rid-R2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "src-rid-R3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "src-rid-R4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "src-rid-R5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "src-rid-R6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "src-rid-R7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "src-rid-R8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "src-rid-R9",
+      "kind": "rid",
+      "ref": "R9"
+    },
+    {
+      "id": "src-rid-R10",
+      "kind": "rid",
+      "ref": "R10"
+    },
+    {
+      "id": "src-rid-R11",
+      "kind": "rid",
+      "ref": "R11"
+    },
+    {
+      "id": "src-rid-R12",
+      "kind": "rid",
+      "ref": "R12"
+    },
+    {
+      "id": "src-rid-R13",
+      "kind": "rid",
+      "ref": "R13"
+    },
+    {
+      "id": "src-commit-final",
+      "kind": "commit",
+      "ref": "a58d516552e5f17b237e287f9be5aae08c56d4f4"
+    },
+    {
+      "id": "src-review-completion",
+      "kind": "review_receipt",
+      "ref": "/tmp/completion-review-receipt-fn-120-windows-test-corpus-compatibility-sweep.json"
+    }
+  ],
+  "specId": "fn-120-windows-test-corpus-compatibility-sweep"
+}
