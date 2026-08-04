@@ -1,10 +1,10 @@
 usage: flowctl.py [-h]
-                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,review-findings,models,review-rounds,memory,prospect,chart,anchor,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
+                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,review-findings,models,review-rounds,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
 
 flowctl - CLI for .flow/ task tracking
 
 positional arguments:
-  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,review-findings,models,review-rounds,memory,prospect,chart,anchor,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
+  {init,setup-block,detect,status,config,tracker,sync,pilot-log,review-backend,review-findings,models,review-rounds,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
     init                Initialize .flow/ directory
     setup-block         Apply or resolve the tracked Flow-Next docs block
     detect              Check if .flow/ exists
@@ -21,6 +21,8 @@ positional arguments:
                         judgment)
     review-rounds       Deterministic review-round cap counter (rp workflows:
                         increment before dispatch, reset on SHIP)
+    review-artifact     Build the exact domain-separated artifact blob for an
+                        RP review fence
     memory              Memory commands
     prospect            Prospect artifact commands
     chart               Chart commands (decision-map discovery; fn-135)
@@ -28,6 +30,9 @@ positional arguments:
                         re-anchor reads (task+spec show/cat, git state, memory
                         flag, glossary, memory index, dependencies) in one
                         deterministic payload
+    brief               Session-scope re-anchor brief — open specs, actionable
+                        tasks, recent completions, memory index (token-
+                        bounded, deterministic)
     repo-map            Read clawpatch's `.clawpatch/features/*.json` feature
                         index. Bypasses .flow/ guard — gates on .clawpatch/
                         presence.

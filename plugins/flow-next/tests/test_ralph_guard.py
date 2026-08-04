@@ -802,31 +802,31 @@ class UnchangedArtifactDriverTerminalTestCase(unittest.TestCase):
     MARKER = "NOT_RETRYABLE: artifact unchanged since last verdict"
 
     def test_plan_flow_stops_without_refund_force_reset_or_redispatch(self) -> None:
-        text = (PLUGIN_DIR / "skills" / "flow-next-plan-review" / "workflow.md").read_text()
+        text = (PLUGIN_DIR / "skills" / "flow-next-plan-review" / "workflow.md").read_text(encoding="utf-8")
         self.assertIn(self.MARKER, text)
         for phrase in ("Do not refund", "dispatch again", "--force", "reset"):
             self.assertIn(phrase, text)
 
     def test_impl_flow_stops_without_refund_force_reset_or_redispatch(self) -> None:
-        common = (PLUGIN_DIR / "skills" / "flow-next-impl-review" / "workflow-common.md").read_text()
-        skill = (PLUGIN_DIR / "skills" / "flow-next-impl-review" / "SKILL.md").read_text()
+        common = (PLUGIN_DIR / "skills" / "flow-next-impl-review" / "workflow-common.md").read_text(encoding="utf-8")
+        skill = (PLUGIN_DIR / "skills" / "flow-next-impl-review" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn(self.MARKER, common)
         self.assertIn(self.MARKER, skill)
         for phrase in ("never\nrefund", "reset", "--force", "redispatch"):
             self.assertIn(phrase, common + skill)
 
     def test_completion_flow_stops_without_refund_force_reset_or_redispatch(self) -> None:
-        common = (PLUGIN_DIR / "skills" / "flow-next-spec-completion-review" / "workflow-common.md").read_text()
-        skill = (PLUGIN_DIR / "skills" / "flow-next-spec-completion-review" / "SKILL.md").read_text()
+        common = (PLUGIN_DIR / "skills" / "flow-next-spec-completion-review" / "workflow-common.md").read_text(encoding="utf-8")
+        skill = (PLUGIN_DIR / "skills" / "flow-next-spec-completion-review" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn(self.MARKER, common)
         self.assertIn(self.MARKER, skill)
         for phrase in ("refund", "reset", "--force", "redispatch"):
             self.assertIn(phrase, common + skill)
 
     def test_pilot_land_and_ralph_driver_map_marker_to_human_terminal(self) -> None:
-        pilot = (PLUGIN_DIR / "skills" / "flow-next-pilot" / "workflow.md").read_text()
-        land = (PLUGIN_DIR / "skills" / "flow-next-land" / "workflow.md").read_text()
-        ralph = (PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh").read_text()
+        pilot = (PLUGIN_DIR / "skills" / "flow-next-pilot" / "workflow.md").read_text(encoding="utf-8")
+        land = (PLUGIN_DIR / "skills" / "flow-next-land" / "workflow.md").read_text(encoding="utf-8")
+        ralph = (PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh").read_text(encoding="utf-8")
         for text in (pilot, land, ralph):
             self.assertIn(self.MARKER, text)
             self.assertIn("NEEDS_HUMAN", text)
@@ -838,7 +838,7 @@ class UnchangedArtifactDriverTerminalTestCase(unittest.TestCase):
         exits 0, so an rc conjunct would never fire on the common case."""
         ralph = (
             PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         gate_at = ralph.index(self.MARKER)
         line_start = ralph.rindex("\n", 0, gate_at) + 1
         gate_line = ralph[line_start:ralph.index("\n", gate_at)]

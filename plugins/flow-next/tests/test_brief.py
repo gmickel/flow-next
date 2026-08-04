@@ -215,6 +215,7 @@ class BriefRepoTestCase(unittest.TestCase):
             cwd=str(self.tmpdir),
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
     def _brief(self, *flags: str) -> subprocess.CompletedProcess[str]:
@@ -673,6 +674,7 @@ class ManyCorruptAndLongRootTest(unittest.TestCase):
             cwd=str(cwd),
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
     def test_many_corrupt_aggregate_under_budget(self) -> None:

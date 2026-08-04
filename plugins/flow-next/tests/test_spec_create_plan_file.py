@@ -285,7 +285,8 @@ class SpecCreatePlanFileTestCase(unittest.TestCase):
         self.assertIn("Plan file unreadable", err)
         self.assertEqual(self._spec_names(), before)
 
-    @unittest.skipIf(os.geteuid() == 0, "chmod 000 is not enforced for root")
+    @unittest.skipIf(sys.platform == "win32", "chmod 000 is not enforced on Windows")
+    @unittest.skipIf(getattr(os, "geteuid", lambda: -1)() == 0, "chmod 000 is not enforced for root")
     def test_unreadable_plan_file_errors_before_write(self) -> None:
         path = self.tmpdir / "locked-plan.md"
         path.write_text(PLAN_BODY, encoding="utf-8")
