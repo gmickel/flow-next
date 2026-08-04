@@ -34,6 +34,43 @@ python3 scripts/run_tests_parallel.py --shuffle --seed 120
 - [ ] CHANGELOG contains an `## Unreleased` Windows corpus parity entry; no version manifest or public docs change.
 
 
+## R9 matrix proof (final candidate a58d5165)
+
+Final CODE candidate SHA: `a58d516552e5f17b237e287f9be5aae08c56d4f4` (`a58d5165`, the
+`leaf_is_safe` flake fix owed by the fn-120.3 handover). Every leg below ran
+`workflow_dispatch` on `--ref fn-120-windows-test-corpus-compatibility-sweep` with
+`headSha == a58d5165` — verified per run, not inferred. Each dispatch runs the WHOLE
+OS matrix, so Windows/Linux/macOS in a row are the same commit by construction.
+fn-120.3's `deceb99a` parallel proof is superseded (SHA moved), not cited.
+
+| Mode | Run ID | URL | headSha | windows-latest | ubuntu 3.11 / 3.x | macos-latest |
+|---|---|---|---|---|---|---|
+| parallel | 30934798637 | https://github.com/gmickel/flow-next/actions/runs/30934798637 | a58d5165 | success — `files=182 ran=4170 failures=0 errors=0 skipped=82 wall=611.48s jobs=4` | success / success | success |
+| serial | 30934815997 | https://github.com/gmickel/flow-next/actions/runs/30934815997 | a58d5165 | success — `files=182 ran=4170 failures=0 errors=0 skipped=82 wall=1339.49s jobs=1` | success / success | success |
+| shuffle | 30934833655 | https://github.com/gmickel/flow-next/actions/runs/30934833655 | a58d5165 | success — `shuffle: on (seed=30934833655)`, `files=182 ran=4170 failures=0 errors=0 skipped=82 wall=615.13s jobs=4` | success / success | success |
+
+All three runs: `conclusion == success` for the whole matrix (including the Python
+3.12/3.13 compatibility smokes and `windows-python3-stub`).
+
+Zero workflow-filtered files: the workflow has no Windows `EXCLUDES` block (the
+`run_tests_parallel.py` invocation takes no per-OS filter — see the standing
+"never re-add a per-OS filter here" comment), and `files=182` on the Windows leg
+equals the complete discovered corpus — `run_tests_parallel.py --list-only` emits
+182 files locally, matching `ls plugins/flow-next/tests/test_*.py | wc -l` = 182.
+`skipped=82` are in-test `skipUnless` skips (the Windows-invalid-filename case and
+POSIX-only assertions), not corpus exclusions; the same 182 files execute on
+every OS.
+
+Temporary diagnostics: none left. The workflow retains only the PERMANENT
+`workflow_dispatch` inputs (`suite_mode` parallel|serial|shuffle, `pattern`,
+`verbose`, `file_timeout` 1-900, `legacy_baseline`) and the permanent 9009-stub /
+`pick_python_test.sh` probe regressions; all are inert on push/pull_request.
+
+Records-commit note: the flow-record commit that carries this proof touches only
+`.flow/` task/spec records — no path in the workflow's `push`/`pull_request`
+filters and no file the suite reads — so it cannot invalidate the proof above.
+`a58d5165` remains the final code candidate.
+
 ## Done summary
 TBD
 
