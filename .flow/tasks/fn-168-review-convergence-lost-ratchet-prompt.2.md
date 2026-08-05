@@ -59,9 +59,29 @@ Implement the aggregate all-clear record's *semantics* — the scoped sweep of c
 - [ ] Propagation done (cp flowctl.py to .flow/bin)
 
 ## Done summary
-TBD
+Implemented the aggregate all-clear's sweep semantics (R2) and the carried-status reset (R8), both inside the single existing parse pass.
 
+**Precondition re-verified before starting:** `.1`'s vocabulary landed — `Prior findings: all fixed` produces no RECORD/PRIOR count mismatch, confirmed by running the compiled regexes before touching the sweep.
+
+**R2 — aggregate semantics.** An aggregate record marks every carried prior at `open`/`not_fixed` as `fixed`. Scope rules, all enforced rather than documented:
+- **Explicit beats implicit by ORDER:** the sweep runs only when there are zero per-ordinal matches, so a contradicting `Prior finding #N: not-fixed` beside the aggregate resolves to `not_fixed`.
+- **`withdrawn` is never swept** — a resolved-differently terminal; re-stamping it would corrupt lineage.
+- **Never fires on an empty prior set,** and an aggregate with no prior container is *inert* (returns `[]`) rather than invalid, so a stray line cannot discard the round's own findings.
+- **A malformed line beside the aggregate still returns whole-container `None`** — a round the parser did not understand can never read as a clean all-clear (the fn-136 memory contract: recognized-but-invalid selects the invalid sentinel, never absence).
+- **The record must consume the whole line** (found by impl-review round 1, P0). `Prior findings: all fixed except finding #2` matched the regex and the sweep then marked the very finding the reviewer had just excluded as fixed — erasing real evidence, strictly worse than the false stall this spec removes. Only trailing sentence punctuation and closing emphasis are tolerated now; `except` / `but` / `pending` qualifiers fall through to recognized-but-invalid.
+
+**Fixed a presence-detection gap the sweep would otherwise never have reached:** `has_prior_records` keyed only off the per-ordinal regex, so an aggregate-only reply parsed as "no structured findings here" and returned `None` — for 5 of the 6 backends (codex passed only because its fixture also tripped the explicit-empty phrase). The gate now names both regexes. Same memory contract, other direction.
+
+**R8 — carried `not_fixed` resets to `open`** before this round's records apply. The deep-copy propagated it verbatim, so one `not-fixed` in round 2 followed by a round 3 that merely omitted the finding left it `not_fixed` in *both* digests and `same-not-fixed-lineage` escalated a round that had said nothing — the exact silent false stall this spec deleted the trend heuristics for, reappearing inside the one rule that survived them. The reset makes the survivor's premise literally true. `fixed` and `withdrawn` are preserved as resolved terminals.
+
+**`unaddressed: []` is negative-tested at both levels** and never marks a prior fixed. Its docstring records the two observed transcript tails (a round-1 plan review emitting `"unaddressed":["R1","R3","R6"]` before any prior existed, and a round-3 SHIP emitting `[]` with zero discussion of priors) — the evidence that it is ambient, not a statement.
+
+**Tests.** Table cases for sweep / withdrawn / precedence / empty-set / malformed / qualified-aggregate, plus the R8 reset, repeat, and resolved-terminal cases. On impl-review round 1's P2 the boundary and R8 cases were additionally driven through `parse_review_findings` with a round-1 container the **production parser** built (memory `test-production-path-not-parallel-construction-2026-05-21`), including a three-round R8 chain. Writing that chain corrected one of my own assertions: at the `parse` level a fully silent round yields **no** container at all (prose plus an ambient JSON key is not evidence and must not advance the lineage), so the R8 reset only matters when the round *does* parse while omitting that prior — the test now uses that shape, which is exactly the fn-158 field case.
+
+**Corpus:** new `ratchet-aggregate` case registered in `CASES` **and** `INDEX.json` for all 6 backends (codex, copilot, cursor, host, rp, export) with per-backend expectations, plus a corpus-driven parser test that sweeps priors through the production path on every backend and a manifest test pinning that the fixtures carry the plain line-start form the parser actually accepts.
+
+No new receipt-schema fields; digest shape unchanged (R8 changes carried status *values* only).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4bed73c7, 0f7452c2
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_review_findings_parser test_review_findings_fixture_corpus test_review_findings_receipts test_review_json_tallies test_prompt_text_pinned -q  (321 tests, OK), uvx ruff@0.16.0 check .  (All checks passed), ./scripts/sync-codex.sh twice  (no second-run diff), flowctl codex impl-review fn-168-review-convergence-lost-ratchet-prompt.2  (r1 NEEDS_WORK 1xP0 qualified-aggregate sweep + 1xP2 production-path coverage; r2 VERDICT=SHIP, receipt /tmp/impl-review-fn-168-2.json, gpt-5.6-sol)
 - PRs:
