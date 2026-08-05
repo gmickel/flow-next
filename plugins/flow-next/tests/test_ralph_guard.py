@@ -265,6 +265,26 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_blocks_cap_raise_via_composed_config_subcommand(self) -> None:
+        """A composed `set` verb must not skip the cap screen entirely.
+
+        `verb=set; $FLOWCTL config "$verb" review '{"max\\u0049terations":99}'`
+        leaves no `config set` text for the raw-text floor and no literal `set`
+        token for the argv screen, so `config` joins the guarded subcommand groups
+        and an expansion in that slot fails closed.
+        """
+        proc = self._hook(
+            'verb=set; $FLOWCTL config "$verb" review '
+            '\'{"max\\u0049terations":99}\''
+        )
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_allows_literal_config_read_with_variable_key(self) -> None:
+        """Only the SUBCOMMAND slot is literal-only; arguments stay variable."""
+        proc = self._hook('$FLOWCTL config get "$SOME_KEY"')
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_blocks_cap_raise_via_env_assignment(self) -> None:
         """fn-168 R7 route 3: the HIGHER-precedence rung, a pre-existing hole."""
         proc = self._hook(

@@ -729,7 +729,12 @@ _ARGV_EXPANSION_RE = re.compile(r"[$`]")
 # `codex impl-review`); under a leaf verb it is an ARGUMENT, and
 # `flowctl show "$TASK_ID"` / `flowctl done "$ID"` must stay legal. So depth 2
 # is enforced exactly for the groups that OWN a guarded verb.
-_GUARDED_SUBCOMMAND_GROUPS = frozenset({"spec", "review-rounds"})
+# fn-168 R7 adds `config`: `config set` can write the review-round cap, so a
+# composed subcommand (`verb=set; "$FLOWCTL" config "$verb" review '{…}'`) would
+# otherwise never reach `_config_set_touches_review_cap`. The second token under
+# a group is a SUBCOMMAND, so holding it to a literal costs nothing —
+# `config get "$KEY"` spells `get` literally and stays legal.
+_GUARDED_SUBCOMMAND_GROUPS = frozenset({"spec", "review-rounds", "config"})
 # PR #290 bot r6: the literal-subcommand rule stopped at the subcommand slots,
 # so a composed FLAG still executed —
 # `flag=--for; flag="${flag}ce"; "$FLOWCTL" codex impl-review fn-1.1 "$flag"`.
