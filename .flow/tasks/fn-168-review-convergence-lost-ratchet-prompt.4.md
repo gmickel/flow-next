@@ -63,9 +63,24 @@ Prove the whole seam through the production reservation path (three required cas
 - [ ] Propagation verified: `.flow/bin/flowctl.py` current, `./scripts/sync-codex.sh` run twice with no second-run diff, `test_prompt_text_pinned` green
 
 ## Done summary
-TBD
+Proved the whole seam on the production reservation path, then landed docs, the decision record, the CHANGELOG entry, and the full gate.
 
+**Four e2e cases**, each driving reserve → `record_review_attempt` → findings attach for every round, so the digests the stall rule reads are built by the real parser from real reviewer text (`.3`'s direct-digest tests prove the classifier; these prove the seam end to end):
+1. **The fn-158 field pair** — round 1 raises 6 freshly introduced P1s; round 2 resolves them with the aggregate all-clear the prompt now states and raises one more P1 → a normal round-3 reservation, **no stall of any class**. Asserts the intermediate digest too (6 `fixed` + 1 `open`, exactly one `firstSeenThisRound`).
+2. **Churn counter-case** — the same finding explicitly `not-fixed` in two consecutive rounds still ESCALATEs on `same-not-fixed-lineage`.
+3. **No-grammar case** — a reviewer that never uses the grammar runs **every** round the cap allows without an early stall, and the next reservation is asserted to exit `REVIEW_CAP_EXIT_CODE` with the `MAX_REVIEW_ITERATIONS=<cap>` message and **not** a stall marker. (Strengthened on impl-review round 1: it originally stopped at "still reservable", which did not actually prove the loop ends on the cap — my commit message had overclaimed that.)
+4. **R8 asymmetric case** — one `not-fixed` in round 2, then a round that raises something new while omitting the prior → carried status resets to `open`, round 4 reserves normally.
+
+**Docs.** `review-findings.md` gains a "prior-finding reply grammar" subsection under Identity and lineage: the literal per-ordinal lines, the accepted statuses and aliases, the single-item shorthand, the aggregate record with its whole-line requirement and explicit-beats-implicit rule, the `unaddressed: []` non-signal, the unrepeated-`not_fixed` reset, and the fact that prose resolutions are invisible to the parser. `docs/README.md` gains a Notable-updates bullet. `docs/troubleshooting.md` gains the missing-grammar root cause plus a new note that **running to the cap is now the expected shape for a non-compliant reviewer, not a bug**, with the "lower the cap, do not re-add trend inference" instruction. `docs/flowctl.md` (~:2000) was already rewritten by `.3`.
+
+**Decision record** — `knowledge/decisions/review-stall-detection-reads-resolution-2026-08-05.md`, all seven required elements in order: the failure-direction flip as a table; `get_max_review_iterations()`'s docstring quoted verbatim as the historical hinge, closing on *"the answer was better evidence, not better inference"*; both observed `unaddressed` transcript tails (round 1 with priors that did not exist, round 3 SHIP with no discussion of priors); the 3-false-positives-vs-0-true-positives record with the full causal chain, plus the **required caveat** that churn is real in the PR channel bounded by `land.ciFixBudget` and that deleting the rules is not deciding churn is a myth; the same-defect-class argument; accepted consequences (a)–(e); and the explicit **fn-159 R2 supersession**. It closes with a triage list for the predictable future reader who finds a runaway loop and wants to reinvent a trend rule.
+
+**CHANGELOG** `## Unreleased`, outcome-first. Added the mandatory unheaded user-outcome paragraph on impl-review round 1 — `agent_docs/releasing.md` requires it for any release whose value spans more than one bullet, and this one spans five across Fixed/Changed/Added. No version bump (batched).
+
+**One unplanned artifact update, worth flagging:** the required host-workflow grammar grew the plan-review `host` route from 17069 to 18017 chars, so fn-130's tracked reduction for that single route drops 64.8% → 62.8% in `optimization/reached-path/runs/plan-review-candidate.json`. Recomputed from the live measurement rather than left stale; the other five routes are unchanged. `test_backend_spec` pins tracked-vs-live equality, which is what surfaced it.
+
+**Full gate:** `python3 scripts/run_tests_parallel.py` → 182 files, **4219 tests, 0 failures, 0 errors**, 5 skipped. `uvx ruff@0.16.0 check .` clean. `test_prompt_text_pinned` green with no hash change (the ratchet strings are function-local, so nothing pinned them — R6 is the drift guard instead). Propagation verified: `.flow/bin/flowctl.py` byte-identical, tracker manifest regenerated, `sync-codex.sh` run twice with no second-run diff. `grep -rn "flat-trajectory\|fresh-introduced-critical"` returns nothing across `flowctl.py`, `.flow/bin/`, live tests, and docs.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c5025123, e1f0a9c5
+- Tests: python3 scripts/run_tests_parallel.py  (182 files, 4219 tests, 0 failures, 0 errors, 5 skipped), uvx ruff@0.16.0 check .  (All checks passed), grep -rn 'flat-trajectory|fresh-introduced-critical' scripts/ .flow/bin/flowctl.py tests/ docs/  (no hits), cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py  (identical), ./scripts/sync-codex.sh twice  (no second-run diff), flowctl codex impl-review fn-168-review-convergence-lost-ratchet-prompt.4  (r1 NEEDS_WORK 1xP1 cap terminal unasserted + 1xP2 changelog outcome paragraph; r2 VERDICT=SHIP, receipt /tmp/impl-review-fn-168-4.json, gpt-5.6-sol)
 - PRs:
