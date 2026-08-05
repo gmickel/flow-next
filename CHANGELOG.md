@@ -4,6 +4,19 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Review loops that were converging no longer get cut off and handed to a human to
+verify by hand. Three specs in a row hit that in the field — each one escalated at
+round 2 of 8 with a shrinking finding set — because the loop was guessing at
+convergence from finding counts and severity trends instead of reading what the
+reviewer actually said. It now reads resolutions: the re-review prompt states the
+exact format for reporting prior findings, the parser accepts every token that
+prompt advertises, and the guessing rules are gone. A reviewer that follows the
+format gets its resolutions recorded and the loop ends when it should; one that
+ignores it simply runs out of rounds instead of being misjudged. Because rounds
+are now the only bound in that case, the cap is a project setting rather than an
+environment variable, so the cost ceiling is yours to set — and, under an
+autonomous loop, only yours to raise.
+
 ### Fixed
 
 - **Review loops stop escalating while they are converging.** Three specs in a

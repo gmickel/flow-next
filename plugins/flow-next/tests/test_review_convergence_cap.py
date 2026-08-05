@@ -4965,9 +4965,10 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         fn-168 Boundaries: non-compliance now costs money (bounded by the cap)
         instead of producing a wrong answer. It must NOT stall early.
         """
-        # Six full rounds. `_e2e_round` reserves internally, so an early stall
-        # would raise inside the loop rather than at the assertion below.
-        for round_number in range(1, 7):
+        # Every round the cap allows. `_e2e_round` reserves internally, so an
+        # early stall of any class would raise inside the loop.
+        cap = flowctl.get_max_review_iterations()
+        for round_number in range(1, cap + 1):
             self._e2e_round(
                 "All prior findings were addressed in prose.\n\n"
                 + self._finding_block(round_number)
@@ -4979,10 +4980,14 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
                     for item in self._last_digest()["items"]
                 )
             )
-        # Still reservable: only the cap (8) stops this loop.
-        self.assertEqual(
-            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 7
-        )
+        # The loop ends on the CAP, not on a stall rule — assert the terminal
+        # rather than inferring cap-only behavior from the absence of a stall.
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        self.assertEqual(exc.exception.code, flowctl.REVIEW_CAP_EXIT_CODE)
+        self.assertIn(f"MAX_REVIEW_ITERATIONS={cap}", err.getvalue())
+        self.assertNotIn("review loop stalled", err.getvalue())
 
     def test_e2e_unrepeated_not_fixed_does_not_escalate(self):
         """R4 case 4 / R8 — one `not-fixed` then silence is not a stall.
