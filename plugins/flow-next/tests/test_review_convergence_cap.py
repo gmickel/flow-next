@@ -285,6 +285,40 @@ class TestConvergenceRatchet(unittest.TestCase):
             )
         )
 
+    def test_qualified_all_clear_is_not_an_aggregate(self):
+        """fn-168 R2: a trailing qualifier must not sweep a still-open finding.
+
+        `Prior findings: all fixed except finding #2` used to match the aggregate
+        regex, and the sweep then marked the very finding the reviewer had just
+        excluded as fixed — erasing real evidence, which is strictly worse than
+        the false stall this spec removes. The line is now recognized-but-invalid.
+        """
+        for line in (
+            "Prior findings: all fixed except finding #1",
+            "Prior findings: all fixed but one remains",
+            "Prior findings: all fixed pending verification",
+        ):
+            with self.subTest(line=line):
+                self.assertFalse(
+                    flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line), line
+                )
+                self.assertIsNone(
+                    flowctl._review_finding_prior_items(
+                        line, _ratchet_prior_container(), "receipt-2"
+                    )
+                )
+
+    def test_plain_all_clear_tolerates_only_trailing_punctuation(self):
+        for line in (
+            "Prior findings: all fixed",
+            "Prior findings: all fixed.",
+            "Prior findings — all fixed",
+        ):
+            with self.subTest(line=line):
+                self.assertTrue(
+                    flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line), line
+                )
+
     def test_unaddressed_empty_array_is_not_a_prior_findings_signal(self):
         """fn-168 R2, the load-bearing negative.
 

@@ -259,6 +259,147 @@ Problem: The R1 behavior regressed.
                     self.assertEqual(new["id"], old["id"])
                     self.assertEqual(new["lastSeenReceiptId"], "receipt-round-2")
 
+    def _codex_prior(self) -> dict:
+        """Round-1 prior container built by the PRODUCTION parser, not by hand."""
+        prior = parse(self.fixture("codex", "catalog-sample"), "codex")
+        self.assertIsNotNone(prior)
+        return prior
+
+    def _next_round(self, output: str, prior: dict, receipt: str, round_number: int):
+        return parse(
+            output,
+            "codex",
+            receipt=receipt,
+            round_number=round_number,
+            prior=prior,
+            supersedes=prior["sourceReceiptId"],
+        )
+
+    def test_aggregate_boundaries_through_the_production_parser(self) -> None:
+        """fn-168 R2 boundaries, end to end rather than helper-level."""
+        prior = self._codex_prior()
+        ordinal = prior["items"][0]["ordinal"]
+
+        # An explicit per-ordinal record wins over the aggregate.
+        contradiction = self._next_round(
+            f"Prior findings: all fixed\nPrior finding #{ordinal}: not-fixed\n"
+            "<verdict>NEEDS_WORK</verdict>",
+            prior,
+            "receipt-round-2",
+            2,
+        )
+        self.assertIsNotNone(contradiction)
+        self.assertEqual(
+            [item["status"] for item in contradiction["items"]], ["not_fixed"]
+        )
+
+        # A malformed line beside the aggregate must never read as an all-clear.
+        self.assertIsNone(
+            self._next_round(
+                f"Prior findings: all fixed\nPrior finding #{ordinal}: pending\n"
+                "<verdict>NEEDS_WORK</verdict>",
+                prior,
+                "receipt-round-2",
+                2,
+            )
+        )
+
+        # A qualified all-clear is recognized-but-invalid, never a sweep.
+        self.assertIsNone(
+            self._next_round(
+                "Prior findings: all fixed except the unsafe path\n"
+                "<verdict>NEEDS_WORK</verdict>",
+                prior,
+                "receipt-round-2",
+                2,
+            )
+        )
+
+    def test_unaddressed_empty_array_never_sweeps_through_the_real_parser(self) -> None:
+        """fn-168 R2's load-bearing negative, driven end to end.
+
+        `unaddressed` is ambient — it rides in the closing JSON tail of every
+        review, including rounds that say nothing about priors. If it swept, it
+        would erase the only evidence `same-not-fixed-lineage` reads.
+        """
+        prior = self._codex_prior()
+        current = self._next_round(
+            "All prior findings have been addressed.\n\n"
+            "```json\n"
+            '{"classification_counts":{"introduced":0,"pre_existing":0},'
+            '"unaddressed":[]}\n'
+            "```\n"
+            "<verdict>SHIP</verdict>",
+            prior,
+            "receipt-round-2",
+            2,
+        )
+        # No parseable prior record at all: prose + an ambient key is not
+        # evidence, so the round does not advance the structured lineage.
+        self.assertIsNone(current)
+
+    def test_r8_three_round_chain_through_the_production_parser(self) -> None:
+        """fn-168 R8 across CONSECUTIVE rounds, the shape the stall rule reads.
+
+        Round 2 states `not-fixed`, so the status stands. Round 3 omits the
+        finding entirely — before R8 the carried `not_fixed` survived and
+        `same-not-fixed-lineage` escalated a round that had said nothing.
+        """
+        prior = self._codex_prior()
+        ordinal = prior["items"][0]["ordinal"]
+
+        round_two = self._next_round(
+            f"Prior finding #{ordinal}: not-fixed\nStill reachable.\n"
+            "<verdict>NEEDS_WORK</verdict>",
+            prior,
+            "receipt-round-2",
+            2,
+        )
+        self.assertIsNotNone(round_two)
+        self.assertEqual([item["status"] for item in round_two["items"]], ["not_fixed"])
+
+        # Restating it keeps the churn signal alive.
+        repeated = self._next_round(
+            f"Prior finding #{ordinal}: not-fixed\n<verdict>NEEDS_WORK</verdict>",
+            round_two,
+            "receipt-round-3",
+            3,
+        )
+        self.assertIsNotNone(repeated)
+        self.assertEqual([item["status"] for item in repeated["items"]], ["not_fixed"])
+
+        # THE R8 CASE. Round 3 parses — it raises a new finding — but says
+        # nothing about the prior. Before R8 the carried `not_fixed` survived,
+        # both digests held it, and `same-not-fixed-lineage` escalated a round
+        # that never restated the claim. This is the fn-158 field shape: the
+        # reviewer moves on, and silence must not read as "still broken".
+        omitted = self._next_round(
+            "## Finding\n"
+            "- **Severity**: P2\n"
+            "- **Confidence**: 100\n"
+            "- **Classification**: introduced\n"
+            "- **File:Line**: `src/other.py:7`\n"
+            "- **Problem**: A newly surfaced nit.\n"
+            "- **Suggestion**: Rename it.\n"
+            "<verdict>NEEDS_WORK</verdict>",
+            round_two,
+            "receipt-round-3",
+            3,
+        )
+        self.assertIsNotNone(omitted)
+        carried = [item for item in omitted["items"] if item["ordinal"] == ordinal]
+        self.assertEqual([item["status"] for item in carried], ["open"])
+
+        # An aggregate all-clear resolves it outright.
+        swept = self._next_round(
+            "Prior findings: all fixed\n<verdict>SHIP</verdict>",
+            round_two,
+            "receipt-round-3",
+            3,
+        )
+        self.assertIsNotNone(swept)
+        self.assertEqual([item["status"] for item in swept["items"]], ["fixed"])
+
     def test_new_round_finding_gets_new_identity(self) -> None:
         text = self.fixture("codex", "catalog-sample")
         prior = parse(text, "codex")

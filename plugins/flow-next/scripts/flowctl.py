@@ -4672,7 +4672,15 @@ _FINDINGS_PRIOR_AGGREGATE_RE = re.compile(
     (?:\*\*)?
     all[ \t]+fixed
     (?:\*\*)?
-    (?![A-Za-z0-9_-])
+    # Must consume the WHOLE line. Without this,
+    # `Prior findings: all fixed except finding #2` matched and the sweep marked
+    # finding #2 fixed — erasing a genuinely open finding, which is strictly
+    # worse than the false stall this spec exists to remove. Only trailing
+    # sentence punctuation and closing emphasis are tolerated; a qualifier
+    # ("except", "but", "pending") no longer matches, and the count check then
+    # treats the line as recognized-but-invalid (whole-container `None`) rather
+    # than as a clean all-clear.
+    [ \t]*[.!]?[ \t]*$
     """
 )
 _FINDINGS_PRIOR_RECORD_RE = re.compile(
