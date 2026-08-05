@@ -120,6 +120,54 @@ Every non-root generation is a complete snapshot of the lineage:
 omitting a previously known finding makes the chain invalid rather than
 silently resolving it.
 
+### The prior-finding reply grammar
+
+The ratchet prompt states one machine-read line per prior finding, at the start
+of a line, echoing the ordinal the finding was rendered with:
+
+```
+Prior finding #1: fixed
+Prior finding #2: not-fixed
+Prior finding #3: withdrawn
+```
+
+Accepted statuses are `fixed`, `not-fixed`, and `withdrawn` (with the usual
+aliases — `resolved`, `not fixed`, `not_fixed`, `remains open`, `unresolved`,
+`fixed in review`). Nothing else parses. With exactly one prior finding the
+ordinal may be omitted (`Prior finding: fixed`).
+
+When every prior finding is fixed, one **aggregate all-clear** record may replace
+the per-finding lines:
+
+```
+Prior findings: all fixed
+```
+
+The aggregate must consume its whole line — a qualified variant
+(`… all fixed except finding #2`) is recognized-but-invalid rather than a sweep,
+because sweeping there would mark the very finding the reviewer excluded as
+fixed. Any per-finding record present **disables** the aggregate entirely
+(explicit beats implicit, enforced by parse order). It never fires on an empty
+prior set, and it never touches a `withdrawn` item.
+
+**`unaddressed: []` in the closing JSON tail is NOT a prior-findings signal.**
+That key answers which spec R-IDs the review left uncovered; it is emitted by
+every review, including round 1 where no prior findings exist, and a prior
+finding is not an R-ID. Treating it as an all-clear would mark real open findings
+resolved, which is why the aggregate record is a dedicated line-family record
+instead.
+
+**An unrepeated `not_fixed` does not survive the round.** A carried item at
+`not_fixed` reverts to `open` before the round's own records apply, so a
+`not-fixed` stated once and then not restated cannot look like a repeat.
+`fixed` and `withdrawn` are preserved — they are resolved terminals. This is what
+makes the surviving stall rule (`same-not-fixed-lineage`) a statement about two
+consecutive rounds rather than an echo of one.
+
+Prose resolutions are invisible to the parser: a reviewer that answers the
+ratchet in prose only leaves every prior carried forward, and the loop is then
+bounded by the round cap alone.
+
 Repeated writes preserve the former latest receipt in the latest pointer's
 sibling history directory:
 

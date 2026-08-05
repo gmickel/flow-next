@@ -2,6 +2,60 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Review loops stop escalating while they are converging.** Three specs in a
+  row hit `ESCALATE: review loop stalled` at round 2 of 8 with a visibly
+  shrinking finding set, and each time a human had to hand-verify the loop and
+  record a basis in evidence before it could ship. The cause was a prompt that
+  asked reviewers to report which prior findings were fixed without ever stating
+  the format the parser reads: the reviewer answered in prose, nothing parsed,
+  every prior finding carried forward as still-open, and a trend rule concluded
+  the loop was flat. The re-review prompt now states the exact line grammar with
+  an example (`Prior finding #2: not-fixed`, or one `Prior findings: all fixed`
+  line when everything is resolved), and the same wording reaches host-backend
+  reviewers. A reviewer that follows it gets its resolutions recorded; a reviewer
+  that ignores it simply runs out of rounds instead of being misjudged. (fn-168)
+- **The prompt had been advertising a status the parser rejected.** It asked for
+  "fixed or **not-fixed**", but the hyphenated spelling failed the canonical
+  matcher while matching the loose one — so a reviewer that complied *exactly*
+  had its entire round of structured findings silently discarded. The hyphen is
+  accepted now, and a test extracts every status token and example line from the
+  live prompt and proves each one parses, so the two cannot drift apart again.
+  (fn-168)
+- **A finding the reviewer called unfixed once no longer escalates a later round
+  that says nothing about it.** Statuses were carried forward verbatim, so a
+  single "not-fixed" persisted through silent rounds and read as a repeat. The
+  loop now only ends early when the reviewer explicitly calls the *same* finding
+  unfixed in two consecutive rounds. (fn-168)
+
+### Changed
+
+- **Stall detection reads what the reviewer said instead of guessing from
+  trends.** The two rules that inferred non-convergence — one from the open-count
+  and severity trend, one from "each of the last two rounds raised a new
+  blocker", which is what a healthy thorough review looks like — are **removed**.
+  They produced three false escalations and no true ones. What remains is the
+  reviewer explicitly marking the same finding unfixed twice, plus the round cap.
+  The trade is deliberate: a loop that churns without repeating a finding is now
+  bounded by the cap rather than detected early, which costs rounds instead of
+  producing a wrong verdict. Reach for the cap, not a new trend rule — the
+  reasoning is recorded in `.flow/memory/knowledge/decisions/`. (fn-168)
+
+### Added
+
+- **`review.maxIterations` — the review-round cap is now a project setting.**
+  It was environment-only, so tuning it meant threading a variable through every
+  pilot tick, land run, and manual invocation with nothing persisted. Set it once
+  with `flowctl config set review.maxIterations <n>`; the `MAX_REVIEW_ITERATIONS`
+  environment variable still wins, the minimum is 1 on both paths, and the cap
+  can never be disabled. Under Ralph, raising it is human-only: the guard blocks
+  the config write (including the parent-key JSON form), file-tool edits to
+  `.flow/config.json`, and the environment assignment — closing a self-grant
+  route that predated the setting. (fn-168)
+
 ## [flow-next 3.15.1] - 2026-08-05
 
 ### Fixed

@@ -4863,6 +4863,148 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self._assert_stalls("same-not-fixed-lineage")
 
+    # ---- fn-168 R4: end to end on the PRODUCTION reservation path ----------
+    #
+    # These four drive reserve -> record_review_attempt -> findings attach for
+    # every round, so the digests the stall rule reads are built by the real
+    # parser from real reviewer text. `.3`'s direct-digest tests prove the
+    # classifier; these prove the whole seam, including the grammar `.1` states
+    # and the sweep `.2` implements.
+
+    def _finding_block(self, ordinal: int, *, severity: str = "P1") -> str:
+        return (
+            f"## Issue {ordinal}\n"
+            f"- **Severity**: {severity}\n"
+            "- **Confidence**: 100\n"
+            "- **Classification**: introduced\n"
+            f"- **File:Line**: `src/mod{ordinal}.py:{ordinal}`\n"
+            f"- **Problem**: Problem {ordinal}.\n"
+            f"- **Suggestion**: Fix {ordinal}.\n"
+        )
+
+    def _e2e_round(self, output: str, verdict: str = "NEEDS_WORK") -> None:
+        """One full production round: reserve, record, attach findings."""
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        assert reservation_id is not None
+        target = self.root / "e2e-receipt.json"
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="rp",
+            output=output,
+            verdict=verdict,
+            review_type="plan",
+            reservation_id=reservation_id,
+            receipt_target=str(target),
+            receipt_payload={
+                "type": "plan_review",
+                "id": self.spec_id,
+                "mode": "rp",
+                "head": "a" * 40,
+            },
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            flowctl.cmd_review_findings_attach(
+                mock.Mock(
+                    reservation_id=reservation_id, receipt=str(target), json=True
+                )
+            )
+
+    def _last_digest(self) -> dict:
+        return self._data()["review_attempts"][-1]["findings_digest"]
+
+    def test_e2e_fn158_pair_reaches_round_three_with_no_stall(self):
+        """R4 case 1 — the field escalation, resolved through the real parser.
+
+        Round 1 raises six freshly introduced P1s. Round 2 resolves them with the
+        aggregate all-clear the prompt now states and raises one more P1. Before
+        fn-168 this pair escalated at round 2 of 8, one round from SHIP: the six
+        priors carried at `open` because the reviewer had answered in prose, the
+        open count read 6 -> 7, and the trend rule called it flat. Filtering that
+        only moved the escalation to the presence-twice rule.
+        """
+        self._e2e_round("".join(self._finding_block(n) for n in range(1, 7)))
+        first = self._last_digest()
+        self.assertEqual(len(first["items"]), 6)
+        self.assertTrue(all(item["firstSeenThisRound"] for item in first["items"]))
+
+        self._e2e_round(
+            "Prior findings: all fixed\n\n" + self._finding_block(7)
+        )
+        second = self._last_digest()
+        statuses = sorted(item["status"] for item in second["items"])
+        self.assertEqual(statuses, ["fixed"] * 6 + ["open"])
+        self.assertEqual(
+            [item["firstSeenThisRound"] for item in second["items"]].count(True), 1
+        )
+
+        # The whole point: round 3 is reserved normally, no stall of any class.
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+        )
+
+    def test_e2e_repeated_not_fixed_still_escalates(self):
+        """R4 case 2 — genuine churn still terminates early.
+
+        The reviewer states `not-fixed` for the same finding in two consecutive
+        rounds. That is a statement, not a trend, and it is the one signal left.
+        """
+        self._e2e_round(self._finding_block(1))
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        self.assertEqual(self._last_digest()["items"][0]["status"], "not_fixed")
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        self._assert_stalls("same-not-fixed-lineage")
+
+    def test_e2e_zero_resolution_evidence_never_stalls_early(self):
+        """R4 case 3 — a non-compliant reviewer is cap-bounded, not mis-judged.
+
+        The reviewer never uses the grammar, so no round produces `not_fixed` and
+        the only terminal cannot fire. This is the accepted trade recorded in the
+        fn-168 Boundaries: non-compliance now costs money (bounded by the cap)
+        instead of producing a wrong answer. It must NOT stall early.
+        """
+        # Six full rounds. `_e2e_round` reserves internally, so an early stall
+        # would raise inside the loop rather than at the assertion below.
+        for round_number in range(1, 7):
+            self._e2e_round(
+                "All prior findings were addressed in prose.\n\n"
+                + self._finding_block(round_number)
+            )
+            self.assertEqual(self._data()["plan_review_rounds"], round_number)
+            self.assertTrue(
+                all(
+                    item["status"] != "not_fixed"
+                    for item in self._last_digest()["items"]
+                )
+            )
+        # Still reservable: only the cap (8) stops this loop.
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 7
+        )
+
+    def test_e2e_unrepeated_not_fixed_does_not_escalate(self):
+        """R4 case 4 / R8 — one `not-fixed` then silence is not a stall.
+
+        Round 2 states `not-fixed`; round 3 raises something new and says nothing
+        about the prior. Without R8's carry-forward reset the status persisted,
+        both digests held it, and the surviving rule escalated a round that had
+        made no claim — the deleted false stall reappearing inside the survivor.
+        """
+        self._e2e_round(self._finding_block(1))
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        self.assertEqual(self._last_digest()["items"][0]["status"], "not_fixed")
+        self._e2e_round(self._finding_block(2))
+        carried = [
+            item for item in self._last_digest()["items"]
+            if not item["firstSeenThisRound"]
+        ]
+        self.assertEqual([item["status"] for item in carried], ["open"])
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 4
+        )
+
     def test_multi_hop_supersession_uses_the_original_chain_root(self):
         def item(source: str, ordinal: int, *, prior: str | None = None) -> dict:
             value = {
