@@ -61,9 +61,24 @@ State the machine grammar in the ratchet prompt (per-ordinal lines + the dedicat
 - [ ] Propagation done (cp flowctl.py to .flow/bin)
 
 ## Done summary
-TBD
+Stated the machine grammar in the ratchet prompt and made the parser accept every token it advertises.
 
+**Parser vocabulary (this task owned it — `.2` depends on it):**
+- `_FINDINGS_PRIOR_RE` now accepts a hyphen in the negative status (`not[\s_-]fixed`), and the per-ordinal status key collapses `[-_\s]+` so `not-fixed` normalizes onto the existing `not fixed` alias. The shipped prompt had advertised the hyphen all along while the regex rejected it — a live bug that would have dropped the whole findings container for any compliant reviewer.
+- New `_FINDINGS_PRIOR_AGGREGATE_RE` recognizes `Prior findings: all fixed` and is counted in the same pass, so the aggregate no longer forces a RECORD/PRIOR mismatch. Deliberately a SEPARATE regex from the canonical one: canonical matches drive per-ordinal status writes and an aggregate has no ordinal, so folding it in would look like an omitted-ordinal record and drop every multi-item container. Recognition only — the sweep semantics are `.2`.
+- It rejects a leading `**`, because `_FINDINGS_PRIOR_RECORD_RE` does too; recognizing a bolded aggregate would invert the mismatch (aggregate 1, record 0) and discard an otherwise-clean container. A bolded line is inert instead, which is the safe direction.
+- Negative cases verified: `pending`, `not-fixedish`, and a bare `not-` all stay recognized-but-invalid (whole-container `None`), never a silent absence.
+
+**Prompt:** rule 1 of the shrink-only contract now states the exact format with a fenced example echoing the rendered ordinal (a stored per-item field, uniqueness-enforced — not positional, so `#2` cannot re-bind), documents the single-item no-ordinal shorthand, names the aggregate line with `only if every prior is fixed` plus explicit-per-finding-line-wins precedence (added after impl-review round 1), and warns that the JSON tail's `unaddressed` array is R-ID coverage and does not vouch for priors.
+
+**Host:** the same grammar landed by hand in all 3 `workflow-host.md` files (host never passes through the builder). Codex mirror regenerated with `sync-codex.sh` run twice, no second-run diff.
+
+**R6 drift guard** (`test_every_advertised_prior_finding_token_parses`): extracts every advertised status token and example line from the **production builder's output** — fenced lines and inline backticked ones, so the aggregate is covered — and asserts each is accepted by `_FINDINGS_PRIOR_RE` or the aggregate regex, counted without a RECORD mismatch, normalized by `_FINDINGS_STATUS_ALIASES`, and round-trips through the real `_review_finding_prior_items`. Its docstring states that it protects the only surviving stall terminal. Confirmed it has teeth: re-run against the pre-fix regex, it fails on `Prior finding #2: not-fixed`.
+
+**Pinned-constant promotion: DECLINED.** The prefix/suffix are function-local and R6 covers the drift risk directly; promoting them to module-level constants would churn `PROMPT_HASHES` on every future wording tweak for no added coverage.
+
+Live validation: the codex re-review of this very task replied `Prior finding #1: fixed` — the new grammar parsed on the first real use.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: dae22f86, 356734ef
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_prompt_text_pinned test_review_findings_parser test_review_findings_receipts test_review_findings_fixture_corpus -q  (288 tests, OK), cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_prompt_text_pinned -q  (211 tests, OK, after the precedence fix), uvx ruff@0.16.0 check .  (All checks passed), ./scripts/sync-codex.sh twice  (no second-run diff), R6 teeth check: guard re-run against the pre-fix not[\s_]fixed regex rejects 'Prior finding #2: not-fixed', flowctl codex impl-review fn-168-review-convergence-lost-ratchet-prompt.1  (r1 NEEDS_WORK 1xP2 precedence wording -> fixed; r2 VERDICT=SHIP, receipt /tmp/impl-review-fn-168-1.json, gpt-5.6-sol)
 - PRs:
