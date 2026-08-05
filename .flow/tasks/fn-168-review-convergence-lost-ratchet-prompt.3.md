@@ -53,9 +53,21 @@ Delete both inference-based stall classes — `flat-trajectory` and `fresh-intro
 - [ ] Propagation done (cp flowctl.py to .flow/bin)
 
 ## Done summary
-TBD
+Deleted both inference-based stall classes from `_review_stall_rule`, leaving `same-not-fixed-lineage` and the deterministic round cap as the only review-loop terminals.
 
+- Removed the open-count/worst-severity trend branch **including** the evidence-bearing filter committed as `9417ba9b` and its `evidence_bearing_open()` helper (unreachable once the class went) plus the now-orphaned `open_statuses` local.
+- Removed the `has_fresh_critical()` presence-twice branch. It reads only fresh items and never checks resolution, so filtering the trend rule could not reach it — that is why the first fix attempt did not stop the escalations.
+- Kept `same-not-fixed-lineage` byte-for-byte, `same_identity` gate included, and documented at the call site why it survived (reads a stated resolution, not a derived aggregate) plus an explicit do-not-reintroduce note pointing at the decision record. The comment deliberately avoids the deleted class names so R3's grep criterion stays clean.
+- `_FINDINGS_SEVERITY_ORDER` still has 3 live consumers; no other symbol was orphaned.
+- `_review_stall_rule` otherwise untouched: the unrepeated-`not_fixed` hole is closed parser-side by R8 in `.2`, not here (the surviving rule's comment names that dependency).
+- Cap, reservation/refund, transport-health, and `NEEDS_HUMAN` paths untouched.
+
+Tests: `test_review_convergence_cap.py` reworked — 2 trend-only tests deleted, the mixed evidence-filter test split (lineage half kept as `test_same_not_fixed_lineage_fires_on_a_carried_re_affirmation`), and the symmetry test replaced by `test_three_healthy_rounds_never_stall` (the accepted regression vector, asserted as inert). Early proof point is `test_fn158_shape_classifies_no_stall_of_any_class`: the real field shape (6 fresh introduced P1 → 6 carried + 1 fresh P1) reserves a normal round 3 in **both** carried variants (`open` and `fixed`), written via direct digest rows so it holds without `.1`/`.2`.
+
+Docs: `docs/flowctl.md`'s early-terminal paragraph rewritten for one rule (was "Early terminals", plural, enumerating all three) and states that the cap is now the sole aggregate bound.
+
+Verified: `grep -rn "flat-trajectory\|fresh-introduced-critical"` is empty across `flowctl.py`, `.flow/bin/flowctl.py`, tests, and docs. Propagation to `.flow/bin/flowctl.py` done.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 08c0baf3
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_review_findings_receipts test_review_findings_parser -q  (271 tests, OK), uvx ruff@0.16.0 check .  (All checks passed), grep -rn 'flat-trajectory|fresh-introduced-critical' flowctl.py .flow/bin/flowctl.py tests/ docs/  (no hits), flowctl codex impl-review fn-168-review-convergence-lost-ratchet-prompt.3 --base ad69c51e  (VERDICT=SHIP, receipt /tmp/impl-review-fn-168-3.json, gpt-5.6-sol)
 - PRs:
