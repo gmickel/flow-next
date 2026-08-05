@@ -11249,12 +11249,32 @@ def _review_stall_rule(
             return "same-not-fixed-lineage"
 
     open_statuses = {"open", "not_fixed"}
-    previous_open = [
-        item for item in previous_items if item["status"] in open_statuses
-    ]
-    current_open = [
-        item for item in current_items if item["status"] in open_statuses
-    ]
+
+    def evidence_bearing_open(items: list[dict]) -> list[dict]:
+        """Open items this round's reviewer actually vouched for.
+
+        ``status == "open"`` is written only when a finding is first raised;
+        carry-forward deep-copies the row untouched and only an explicit
+        per-ordinal ratchet line writes ``fixed``/``not_fixed``/``withdrawn``.
+        So ``open`` + ``firstSeenThisRound == False`` means "carried and never
+        mentioned by any reviewer since it was raised" — no evidence either way,
+        and no evidence of a stall.  A reviewer that resolves priors in prose
+        only (fn-158) would otherwise make a shrinking loop read as flat.
+
+        Applied to BOTH digests: filtering only the current side would compare
+        a filtered current count against an unfiltered previous one, so a
+        genuinely flat trajectory (one fresh finding per round, forever) would
+        read as decreasing every round and the stall class would never fire.
+        """
+        return [
+            item
+            for item in items
+            if item["status"] in open_statuses
+            and (item["firstSeenThisRound"] or item["status"] == "not_fixed")
+        ]
+
+    previous_open = evidence_bearing_open(previous_items)
+    current_open = evidence_bearing_open(current_items)
     # An empty open set has converged.  In particular, do not let the
     # otherwise tempting ``min(..., default=...)`` turn it into a false stall.
     if previous_open and current_open:

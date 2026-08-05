@@ -4382,6 +4382,95 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
 
+    def _carried(self, root: str, *, severity: str = "P2", status: str = "open") -> dict:
+        return self._item(root, severity=severity, status=status, first_seen=False)
+
+    def test_carried_unverified_priors_alone_never_read_as_flat(self):
+        """fn-168 R3: the fn-158 shape — six priors carried unverified + one new.
+
+        The reviewer resolved all six in prose, so they stay ``open`` with
+        ``firstSeenThisRound == False``.  Counting them would make 6 -> 7 read
+        as flat while the loop was one round from SHIP.
+        """
+        six = [f"prior-{index}" for index in range(6)]
+        self._write_attempts(
+            self._digest(*(self._item(root, severity="P2") for root in six)),
+            self._digest(
+                *(self._carried(root) for root in six),
+                self._item("fresh", severity="P2"),
+            ),
+        )
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+        )
+
+    def test_evidence_bearing_filter_is_symmetric_across_the_pair(self):
+        """fn-168 R3(b): three rounds, 6 -> 6+1 -> 7+1.
+
+        Round 3 must be reservable, and the pair that follows it must still
+        stall: fresh findings are flat at 1 -> 1.  A filter applied only to the
+        current digest would compare 1 against an unfiltered 7 and never fire.
+        """
+        six = [f"prior-{index}" for index in range(6)]
+        round_one = self._digest(*(self._item(root, severity="P2") for root in six))
+        round_two = self._digest(
+            *(self._carried(root) for root in six),
+            self._item("fresh-two", severity="P2"),
+        )
+        self._write_attempts(round_one, round_two)
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+        )
+        round_three = self._digest(
+            *(self._carried(root) for root in [*six, "fresh-two"]),
+            self._item("fresh-three", severity="P2"),
+        )
+        self._write_attempts(round_one, round_two, round_three)
+        self._assert_stalls("flat-trajectory")
+
+    def test_re_affirmed_and_growing_fresh_sets_still_stall(self):
+        # An explicitly re-affirmed prior is evidence, carried or not: distinct
+        # lineages keep same-not-fixed-lineage out of the way, so this is the
+        # flat-trajectory branch reading not_fixed carried items.
+        self._write_attempts(
+            self._digest(self._carried("left", status="not_fixed")),
+            self._digest(self._carried("right", status="not_fixed")),
+        )
+        self._assert_stalls("flat-trajectory")
+        # A growing fresh open set is a stall even though every prior is
+        # carried-unverified and filtered out.
+        self._write_attempts(
+            self._digest(self._item("one", severity="P2")),
+            self._digest(
+                self._carried("one"),
+                self._item("two", severity="P2"),
+                self._item("three", severity="P2"),
+            ),
+        )
+        self._assert_stalls("flat-trajectory")
+
+    def test_other_stall_classes_ignore_the_evidence_bearing_filter(self):
+        # same-not-fixed-lineage fires on carried items the flat branch keeps.
+        self._write_attempts(
+            self._digest(self._item("root", status="not_fixed")),
+            self._digest(self._carried("root", severity="P1", status="not_fixed")),
+        )
+        self._assert_stalls("same-not-fixed-lineage")
+        # fresh-introduced-critical is unchanged: it already reads only fresh
+        # items, so the real fn-158 completion shape (fresh introduced P1 in
+        # both rounds) still classifies once flat-trajectory steps aside.
+        # NOTE (fn-168): that means the field escalation this spec was raised
+        # from is not fully removed by R3 alone — surfaced, out of R3's scope.
+        six = [f"prior-{index}" for index in range(6)]
+        self._write_attempts(
+            self._digest(*(self._item(root, severity="P1") for root in six)),
+            self._digest(
+                *(self._carried(root, severity="P1") for root in six),
+                self._item("fresh", severity="P1"),
+            ),
+        )
+        self._assert_stalls("fresh-introduced-critical")
+
     def test_multi_hop_supersession_uses_the_original_chain_root(self):
         def item(source: str, ordinal: int, *, prior: str | None = None) -> dict:
             value = {
