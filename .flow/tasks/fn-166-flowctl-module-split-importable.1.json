@@ -1,7 +1,4 @@
 {
-  "assignee": null,
-  "claim_note": "",
-  "claimed_at": null,
   "created_at": "2026-08-04T09:34:33.379552Z",
   "depends_on": [],
   "id": "fn-166-flowctl-module-split-importable.1",
@@ -10,5 +7,5 @@
   "spec_path": ".flow/tasks/fn-166-flowctl-module-split-importable.1.md",
   "status": "todo",
   "title": "Unify verdict\u2192status mapping at the canonical helper",
-  "updated_at": "2026-08-04T09:34:33.379552Z"
+  "updated_at": "2026-08-05T08:19:24.271812Z"
 }
