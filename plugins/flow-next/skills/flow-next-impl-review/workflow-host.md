@@ -116,6 +116,23 @@ Give the subagent:
 - Prior findings for convergence as structured `findings.items` (on re-review; render
   ordinal, severity, classification, status, title, and file:line; use legacy
   review prose only when the structured field is absent)
+- **The prior-finding reply grammar, stated verbatim** (on re-review). These lines are
+  machine-read, and prose resolutions are invisible to the parser — a reviewer that
+  resolves priors in prose only leaves them carried forward and the loop cannot
+  converge. Require one line per prior finding, at the start of a line, echoing the
+  ordinal it was rendered with:
+
+  ```
+  Prior finding #1: fixed
+  Prior finding #2: not-fixed
+  Prior finding #3: withdrawn
+  ```
+
+  Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With
+  exactly one prior finding the number may be omitted (`Prior finding: fixed`). When
+  every prior finding is fixed, the single line `Prior findings: all fixed` may replace
+  the per-finding lines. The `unaddressed` array in the JSON tail is about spec R-ID
+  coverage and does **not** vouch for prior findings.
 - Required verdict tags: `SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK` / `NEEDS_HUMAN`
 
 Wait for the subagent result (blocking — do not background).

@@ -88,6 +88,24 @@ plan-review rubric from
 exactly one `SHIP`, `NEEDS_WORK`, `MAJOR_RETHINK`, or `NEEDS_HUMAN` verdict tag. Wait
 blocking for the result.
 
+On re-review, also state the **prior-finding reply grammar verbatim**. These lines are
+machine-read, and prose resolutions are invisible to the parser — a reviewer that
+resolves priors in prose only leaves them carried forward and the loop cannot converge.
+Require one line per prior finding, at the start of a line, echoing the ordinal it was
+rendered with:
+
+```
+Prior finding #1: fixed
+Prior finding #2: not-fixed
+Prior finding #3: withdrawn
+```
+
+Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With exactly
+one prior finding the number may be omitted (`Prior finding: fixed`). When every prior
+finding is fixed, the single line `Prior findings: all fixed` may replace the per-finding
+lines. The `unaddressed` array in the JSON tail is about spec R-ID coverage and does
+**not** vouch for prior findings.
+
 ## Receipt and status
 
 Use:

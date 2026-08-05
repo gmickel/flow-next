@@ -28,6 +28,7 @@ import inspect
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -83,7 +84,154 @@ def _bash_executable() -> str:
 # ------------------------- R4: convergence ratchet -------------------------
 
 
+
+def _ratchet_prior_container(*, status: str = "open") -> dict:
+    """One minimal, strictly-valid v1 prior container (fn-168 R6 fixtures).
+
+    Built to the production validator's contract so the tests exercise the real
+    `_review_finding_prior_items` path rather than a parallel construction.
+    """
+    return {
+        "schemaVersion": 1,
+        "sourceReceiptId": "receipt-1",
+        "reviewKind": "implementation",
+        "backend": "codex",
+        "round": 1,
+        "headSha": "a" * 40,
+        "items": [
+            {
+                "id": flowctl._review_finding_lineage_id("receipt-1", 1),
+                "ordinal": 1,
+                "severity": "P1",
+                "confidence": 100,
+                "classification": "introduced",
+                "status": status,
+                "title": "Prior thing",
+                "body": "Body.",
+                "rIds": [],
+                "firstSeenReceiptId": "receipt-1",
+                "lastSeenReceiptId": "receipt-1",
+            }
+        ],
+    }
+
+
 class TestConvergenceRatchet(unittest.TestCase):
+    def test_every_advertised_prior_finding_token_parses(self):
+        """fn-168 R6: the prompt and the parser can never diverge unnoticed.
+
+        This guard is load-bearing rather than cosmetic. ``same-not-fixed-lineage``
+        is the only stall class left, and it reads ``not_fixed`` — a status only
+        an explicit parsed resolution line can write. So a prompt that advertises
+        a token the parser rejects does not merely degrade a heuristic: the
+        record/canonical counts diverge, `_review_finding_prior_items` returns
+        ``None``, the whole round's findings container is discarded, and stall
+        detection silently stops existing.
+
+        It caught exactly that: the shipped prompt said "state whether it is now
+        fixed or **not-fixed**" while `_FINDINGS_PRIOR_RE` spelled the negative
+        ``not[\\s_]fixed`` and rejected the hyphen.
+
+        Every token and example line is EXTRACTED from the production builder's
+        output — never hand-copied here, or the guard would drift with the thing
+        it guards.
+        """
+        block = flowctl.build_convergence_ratchet_block(
+            prior_findings="1. P1 | introduced | open | Prior thing | a.py:1"
+        )
+        # Fenced example lines AND inline backticked ones (the aggregate record
+        # is advertised in prose, so a line-start-only sweep would miss it).
+        example_lines = [
+            line.strip()
+            for line in block.splitlines()
+            if re.match(r"^\s*Prior finding", line)
+        ] + [
+            snippet
+            for snippet in re.findall(r"`([^`\n]+)`", block)
+            if snippet.startswith("Prior finding")
+        ]
+        self.assertTrue(example_lines, "prompt advertises no prior-finding lines")
+        self.assertTrue(
+            any(
+                flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line)
+                for line in example_lines
+            ),
+            "prompt advertises no aggregate all-clear record",
+        )
+
+        allowed = re.search(r"Allowed statuses:(.+)", block)
+        self.assertIsNotNone(allowed, "prompt states no allowed-status list")
+        tokens = re.findall(r"`([^`\n]+)`", allowed.group(1))
+        self.assertTrue(tokens, "allowed-status list names no tokens")
+
+        for token in tokens:
+            with self.subTest(token=token):
+                key = re.sub(r"[-_\s]+", " ", token.lower()).strip()
+                self.assertIn(
+                    key, flowctl._FINDINGS_STATUS_ALIASES,
+                    f"prompt advertises status {token!r} the alias table lacks",
+                )
+                self.assertIn(
+                    flowctl._FINDINGS_STATUS_ALIASES[key], flowctl._FINDINGS_STATUSES
+                )
+
+        for line in example_lines:
+            with self.subTest(line=line):
+                canonical = flowctl._FINDINGS_PRIOR_RE.findall(line)
+                aggregate = flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line)
+                record = flowctl._FINDINGS_PRIOR_RECORD_RE.findall(line)
+                self.assertTrue(
+                    canonical or aggregate,
+                    f"example line {line!r} is not accepted by the parser",
+                )
+                # The count the container's validity hinges on.
+                self.assertEqual(
+                    len(record), len(canonical) + len(aggregate),
+                    f"example line {line!r} forces a record/canonical mismatch, "
+                    "which discards the whole round's findings container",
+                )
+
+        # Each advertised status must also survive the full per-ordinal path.
+        for token in tokens:
+            with self.subTest(round_trip=token):
+                items = flowctl._review_finding_prior_items(
+                    f"Prior finding #1: {token}",
+                    _ratchet_prior_container(),
+                    "receipt-2",
+                )
+                self.assertIsNotNone(
+                    items, f"status {token!r} drops the findings container"
+                )
+                self.assertEqual(
+                    items[0]["status"],
+                    flowctl._FINDINGS_STATUS_ALIASES[
+                        re.sub(r"[-_\s]+", " ", token.lower()).strip()
+                    ],
+                )
+
+    def test_aggregate_all_clear_line_keeps_the_container(self):
+        """fn-168 R6/R2 recognition half: the aggregate record must not drop it.
+
+        `Prior findings: all fixed` matches the broad presence detector, so
+        before this spec it forced a record/canonical mismatch and discarded the
+        container. Recognition lands here; the sweep semantics are task .2's.
+        """
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed", _ratchet_prior_container(), "receipt-2"
+        )
+        self.assertIsNotNone(items)
+        self.assertEqual(len(items), 1)
+
+    def test_out_of_vocabulary_status_stays_recognized_but_invalid(self):
+        """An unknown status must select the INVALID sentinel, never absence."""
+        for line in ("Prior finding #1: pending", "Prior finding #1: not-fixedish"):
+            with self.subTest(line=line):
+                self.assertIsNone(
+                    flowctl._review_finding_prior_items(
+                        line, _ratchet_prior_container(), "receipt-2"
+                    )
+                )
+
     def test_no_prior_findings_falls_back_to_fresh_preamble(self):
         """Round 1 / legacy receipt (no prior findings) → original fresh-review
         preamble, no ratchet block, back-compatible."""
