@@ -81,6 +81,6 @@ Proved the whole seam on the production reservation path, then landed docs, the 
 
 **Full gate:** `python3 scripts/run_tests_parallel.py` → 182 files, **4219 tests, 0 failures, 0 errors**, 5 skipped. `uvx ruff@0.16.0 check .` clean. `test_prompt_text_pinned` green with no hash change (the ratchet strings are function-local, so nothing pinned them — R6 is the drift guard instead). Propagation verified: `.flow/bin/flowctl.py` byte-identical, tracker manifest regenerated, `sync-codex.sh` run twice with no second-run diff. `grep -rn "flat-trajectory\|fresh-introduced-critical"` returns nothing across `flowctl.py`, `.flow/bin/`, live tests, and docs.
 ## Evidence
-- Commits: c5025123, e1f0a9c5
+- Commits: c5025123, 064a5e10
 - Tests: python3 scripts/run_tests_parallel.py  (182 files, 4219 tests, 0 failures, 0 errors, 5 skipped), uvx ruff@0.16.0 check .  (All checks passed), grep -rn 'flat-trajectory|fresh-introduced-critical' scripts/ .flow/bin/flowctl.py tests/ docs/  (no hits), cmp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py  (identical), ./scripts/sync-codex.sh twice  (no second-run diff), flowctl codex impl-review fn-168-review-convergence-lost-ratchet-prompt.4  (r1 NEEDS_WORK 1xP1 cap terminal unasserted + 1xP2 changelog outcome paragraph; r2 VERDICT=SHIP, receipt /tmp/impl-review-fn-168-4.json, gpt-5.6-sol)
 - PRs:

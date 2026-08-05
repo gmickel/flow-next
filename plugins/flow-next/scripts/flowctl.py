@@ -9668,9 +9668,11 @@ def get_max_review_iterations() -> int:
     """Resolve the cumulative review-round cap (default 8).
 
     Precedence: env ``MAX_REVIEW_ITERATIONS`` > config ``review.maxIterations``
-    > default. A non-positive or non-integer value on EITHER path falls back to
-    the next rung — the cap can never be disabled or made zero (that would
-    reopen the runaway). Raising it is a human act: ralph-guard blocks the
+    > default. An ABSENT (unset or empty) env var proceeds to the config rung; a
+    PRESENT-but-invalid one stops at the default rather than handing control to
+    the value the caller was trying to override. An invalid config value also
+    falls back to the default. The cap can never be disabled or made zero (that
+    would reopen the runaway). Raising it is a human act: ralph-guard blocks the
     config write, the config file, and the env assignment (fn-159's invariant is
     that the implementing agent can never reset or extend its own gate).
 
@@ -9680,9 +9682,16 @@ def get_max_review_iterations() -> int:
     single session three specs hit the cap at 4, and in every case the findings
     remaining were trivial residue - two were reset by a human and shipped
     almost immediately after. 8 buys headroom for that convergence pattern
-    without removing the runaway stop the counter exists for. The real fix is a
-    convergence-aware terminal (severity trend, new-vs-residue classification,
-    an explicit escalate-to-human verdict) rather than a bigger number.
+    without removing the runaway stop the counter exists for.
+
+    That observation asked for a convergence-aware terminal rather than a bigger
+    number, and fn-159 built three. Two of them inferred convergence from a
+    severity/count trend and from "a new blocker appeared twice"; both were
+    DELETED in fn-168 after escalating three healthy converging loops and zero
+    stuck ones. What remains is the reviewer explicitly marking the same finding
+    chain `not-fixed` in two consecutive rounds, plus this cap as the aggregate
+    bound. The answer was better evidence, not better inference — see
+    `.flow/memory/knowledge/decisions/review-stall-detection-reads-resolution-2026-08-05.md`.
     """
     raw_env = os.environ.get("MAX_REVIEW_ITERATIONS")
     if raw_env is not None and raw_env != "":
