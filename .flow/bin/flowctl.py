@@ -1272,7 +1272,13 @@ def get_default_config() -> dict:
         # was removed from the shipped CLI. Plan-sync spawns unconditionally
         # whenever `enabled` is true. Do not re-add gate config.
         "planSync": {"enabled": True, "crossSpec": False},
-        "review": {"backend": None},
+        # fn-168 R7 — `maxIterations` is the review-round cap's persistent rung
+        # (env MAX_REVIEW_ITERATIONS still wins). Defaulted here, like the
+        # work.delegate* block, so `config get review.maxIterations` answers 8
+        # rather than null on a fresh repo. Raising it is a HUMAN act: ralph-guard
+        # blocks the `config set`, a file-tool write to .flow/config.json, and the
+        # env assignment, so an autonomous agent cannot extend its own gate.
+        "review": {"backend": None, "maxIterations": DEFAULT_MAX_REVIEW_ITERATIONS},
         "scouts": {"github": False},
         "tracker": get_default_tracker_config(),
         # fn-55.1 — Codex implementation-delegation defaults ("the law,
@@ -9596,11 +9602,26 @@ def build_review_prompt(
 
     return "\n\n".join(parts)
 
-def get_max_review_iterations() -> int:
-    """Resolve the cumulative review-round cap (``MAX_REVIEW_ITERATIONS``, default 8).
+DEFAULT_MAX_REVIEW_ITERATIONS = 8
+# fn-168 R7: the CONFIG rung is memoized per config path — ``get_max_review_iterations``
+# has seven call sites, and reading + parsing .flow/config.json at each would add
+# seven round trips to every review dispatch, exactly what fn-110 (round-trip
+# diet) and fn-109 (memoized repo root) exist to prevent. Only the config read is
+# cached: the env rung stays live (it is a dict lookup, and callers legitimately
+# set it per-invocation). Keyed by path so a process that moves between repos —
+# the test suite does — never reads a neighbour's cap.
+_MAX_REVIEW_ITERATIONS_CONFIG_MEMO: dict[str, Optional[int]] = {}
 
-    A non-positive or non-integer env value falls back to the default — the
-    cap can never be disabled or made zero (that would reopen the runaway).
+
+def get_max_review_iterations() -> int:
+    """Resolve the cumulative review-round cap (default 8).
+
+    Precedence: env ``MAX_REVIEW_ITERATIONS`` > config ``review.maxIterations``
+    > default. A non-positive or non-integer value on EITHER path falls back to
+    the next rung — the cap can never be disabled or made zero (that would
+    reopen the runaway). Raising it is a human act: ralph-guard blocks the
+    config write, the config file, and the env assignment (fn-159's invariant is
+    that the implementing agent can never reset or extend its own gate).
 
     Raised 4 -> 8 as an interim measure. The cap counts *dispatches*, which
     cannot distinguish a loop that is genuinely stuck from one converging in
@@ -9612,15 +9633,50 @@ def get_max_review_iterations() -> int:
     convergence-aware terminal (severity trend, new-vs-residue classification,
     an explicit escalate-to-human verdict) rather than a bigger number.
     """
-    raw = os.environ.get("MAX_REVIEW_ITERATIONS")
-    if raw:
-        try:
-            val = int(raw)
-            if val >= 1:
-                return val
-        except ValueError:
-            pass
-    return 8
+    env_value = _clamped_review_iterations(os.environ.get("MAX_REVIEW_ITERATIONS"))
+    if env_value is not None:
+        return env_value
+    config_value = _max_review_iterations_from_config()
+    if config_value is not None:
+        return config_value
+    return DEFAULT_MAX_REVIEW_ITERATIONS
+
+
+def _clamped_review_iterations(raw) -> Optional[int]:
+    """One clamp for BOTH rungs: a positive int, or None to fall through.
+
+    Before fn-168 the clamp lived only in the env branch; a config rung with its
+    own (or no) validation is how a `0` reaches the counter and disables it.
+    """
+    if isinstance(raw, bool) or raw is None:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value >= 1 else None
+
+
+def _max_review_iterations_from_config() -> Optional[int]:
+    """Clamped ``review.maxIterations``, read at most once per config path."""
+    try:
+        key = str(get_flow_dir() / CONFIG_FILE)
+    except SystemExit:
+        raise
+    except Exception:
+        # No resolvable .flow/ (a bare `flowctl --help`, a non-repo cwd): the
+        # cap still has its default; never let this rung raise.
+        return None
+    if key in _MAX_REVIEW_ITERATIONS_CONFIG_MEMO:
+        return _MAX_REVIEW_ITERATIONS_CONFIG_MEMO[key]
+    try:
+        value = _clamped_review_iterations(get_config("review.maxIterations"))
+    except SystemExit:
+        raise
+    except Exception:
+        value = None
+    _MAX_REVIEW_ITERATIONS_CONFIG_MEMO[key] = value
+    return value
 
 
 # Exit code the review commands use when the deterministic cap is hit. Distinct

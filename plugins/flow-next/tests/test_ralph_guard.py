@@ -208,6 +208,49 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_cap_raise_via_config_set_leaf_key(self) -> None:
+        """fn-168 R7 route 1: extending the gate is the same self-grant as resetting it."""
+        proc = self._hook("$FLOWCTL config set review.maxIterations 99")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_cap_raise_via_config_set_parent_key_json(self) -> None:
+        """fn-168 R7 route 1b: the parent-key form writes the same value.
+
+        `_set_config_locked` json.loads-coerces a `{`-leading value and its nested
+        walk replaces whole subtrees, so `config set review '{"maxIterations":99}'`
+        raises the cap without ever naming the leaf key. A leaf-only screen would
+        be security theatre.
+        """
+        proc = self._hook(
+            "$FLOWCTL config set review '{\"maxIterations\": 99}'"
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_cap_raise_via_env_assignment(self) -> None:
+        """fn-168 R7 route 3: the HIGHER-precedence rung, a pre-existing hole."""
+        proc = self._hook(
+            "MAX_REVIEW_ITERATIONS=99 $FLOWCTL codex impl-review fn-168.5 --base main"
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_allows_unrelated_config_set_writes(self) -> None:
+        """The cap block is scoped to the cap, NOT to `config set`.
+
+        Tracker resolve transactions and setup legitimately write config under
+        Ralph; a blanket block would break them.
+        """
+        for command in (
+            "$FLOWCTL config set review.backend codex",
+            "$FLOWCTL config set tracker.type linear",
+            "$FLOWCTL config get review.maxIterations",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_blocks_quoted_and_spaced_reset_bypass(self) -> None:
         proc = self._hook('FLOWCTL=.flow/bin/flowctl "$FLOWCTL" spec "reset-review-rounds" fn-159')
         self.assertEqual(proc.returncode, 2)
@@ -878,3 +921,12 @@ class TestProtectedRegistrationFiles(unittest.TestCase):
 
     def test_allows_ordinary_file(self) -> None:
         self.assertFalse(self._blocks("/repo/src/app.py"))
+
+    def test_blocks_flow_config_json(self) -> None:
+        """fn-168 R7 route 2: the cap has a persistent rung in .flow/config.json.
+
+        Without this, an agent could raise `review.maxIterations` with a file tool
+        and never go near `flowctl config set`. File tools only — flowctl's own
+        writers (`config set`, tracker resolve) do not pass through here.
+        """
+        self.assertTrue(self._blocks("/repo/.flow/config.json"))

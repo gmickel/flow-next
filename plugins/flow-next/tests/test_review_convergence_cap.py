@@ -590,6 +590,80 @@ class TestDeterministicCap(unittest.TestCase):
             with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": bad}):
                 self.assertEqual(flowctl.get_max_review_iterations(), 8)
 
+    def _set_cap_config(self, value) -> None:
+        """Write review.maxIterations into this temp repo's real config file."""
+        config_path = self.root / ".flow" / "config.json"
+        config = (
+            json.loads(config_path.read_text()) if config_path.exists() else {}
+        )
+        config.setdefault("review", {})["maxIterations"] = value
+        config_path.write_text(json.dumps(config))
+        flowctl._MAX_REVIEW_ITERATIONS_CONFIG_MEMO.pop(str(config_path), None)
+
+    def test_config_rung_sets_the_cap(self):
+        """fn-168 R7: the persistent rung — the valve consequence (a) advertises."""
+        self._set_cap_config(4)
+        self.assertEqual(flowctl.get_max_review_iterations(), 4)
+
+    def test_env_wins_over_config(self):
+        self._set_cap_config(4)
+        with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": "6"}):
+            self.assertEqual(flowctl.get_max_review_iterations(), 6)
+
+    def test_config_rung_is_clamped_on_its_own_path(self):
+        """Before fn-168 the >= 1 clamp existed ONLY in the env branch.
+
+        A config rung with no clamp is how a `0` reaches the counter and disables
+        the runaway stop — fn-159's invariant. Every rejected value must fall
+        through to the default, never to "no cap".
+        """
+        for bad in (0, -1, "abc", "", None, True, 1.5, [8], {}):
+            with self.subTest(bad=bad):
+                self._set_cap_config(bad)
+                self.assertEqual(flowctl.get_max_review_iterations(), 8)
+
+    def test_env_zero_falls_through_to_the_config_rung(self):
+        """A rejected env value must not shadow a valid config value."""
+        self._set_cap_config(3)
+        with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": "0"}):
+            self.assertEqual(flowctl.get_max_review_iterations(), 3)
+
+    def test_config_rung_is_read_at_most_once_per_config_path(self):
+        """Seven call sites must not become seven config round trips (fn-110)."""
+        self._set_cap_config(5)
+        real = flowctl.get_config
+        calls = []
+
+        def counting_get_config(key, default=None):
+            calls.append(key)
+            return real(key, default)
+
+        with mock.patch.object(flowctl, "get_config", counting_get_config):
+            for _ in range(7):
+                self.assertEqual(flowctl.get_max_review_iterations(), 5)
+        self.assertEqual(
+            [key for key in calls if key == "review.maxIterations"],
+            ["review.maxIterations"],
+        )
+
+    def test_published_schema_knows_the_key(self):
+        """fn-138 contract: a reader-accepted key must exist in the artifact."""
+        schema = json.loads(
+            (
+                Path(flowctl.__file__).resolve().parent.parent
+                / "schema"
+                / "flow-config.schema.json"
+            ).read_text()
+        )
+        review = schema["properties"]["review"]["properties"]
+        self.assertIn("maxIterations", review)
+        self.assertEqual(review["maxIterations"]["type"], "integer")
+
+    def test_default_config_answers_the_cap(self):
+        self.assertEqual(
+            flowctl.get_default_config()["review"]["maxIterations"], 8
+        )
+
     def test_increment_persists_across_fresh_calls(self):
         """Each enforce call increments and persists — cap survives fresh
         invocations (the runaway root cause was a per-invocation reset)."""

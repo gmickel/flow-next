@@ -613,6 +613,12 @@ PROTECTED_FILE_PATTERNS = [
     "flowctl.py",
     "flowctl",
     "/hooks/hooks.json",
+    # fn-168 R7: the review-round cap has a persistent rung (review.maxIterations),
+    # so the config file is now a self-grant path — an agent could raise its own
+    # gate with a file tool and never touch `flowctl config set`. Screens FILE
+    # TOOLS only, so flowctl's own writers (`config set`, tracker resolve
+    # transactions) are unaffected.
+    ".flow/config.json",
 ]
 
 
@@ -1199,6 +1205,24 @@ def _command_has_recovery_markers(command: str) -> bool:
     command = _collapse_line_continuations(command)
     if re.search(r"reset-review-rounds", command):
         return True
+    # fn-168 R7: extending the cap is the same self-grant as resetting it. Three
+    # routes, all screened here as the raw-text floor (each also has an argv
+    # screen below where argv is parseable):
+    #   1. `flowctl config set review.maxIterations 99`
+    #   1b. the parent-key form `flowctl config set review '{"maxIterations":99}'`
+    #       — `_set_config_locked` JSON-coerces a `{`-leading value and replaces
+    #       whole subtrees, so a leaf-key-only screen would be no screen at all.
+    #   2. `MAX_REVIEW_ITERATIONS=99 <anything>` — the HIGHER-precedence rung,
+    #       and a hole that predates the config key.
+    # Matching the key NAME (not the whole invocation) keeps this scoped to the
+    # cap: `config set review.backend codex`, tracker resolve transactions, and
+    # setup's config writes all still pass.
+    if re.search(r"MAX_REVIEW_ITERATIONS['\"]?\s*=", command):
+        return True
+    if re.search(r"config['\"]?\s+['\"]?set\b", command) and re.search(
+        r"maxIterations", command
+    ):
+        return True
     # Quotes are stripped on BOTH sides of the gap (PR #290 bot r3): a
     # per-token-quoted `"review-rounds" "reset"` closes its quote before the
     # whitespace, which the old one-sided screen never matched.
@@ -1358,6 +1382,12 @@ def _blocks_review_counter_recovery(command: str) -> bool:
             return True
         if argv[:2] == ["review-rounds", "reset"]:
             return True
+        # fn-168 R7: the cap write, in BOTH the leaf and parent-key forms. Token
+        # comparison, never a substring: `config set review.backend` must pass.
+        if argv[:2] == ["config", "set"] and any(
+            "maxIterations" in token for token in argv[2:]
+        ):
+            return True
         if "--force" not in argv:
             continue
         if argv[:2] == ["review-rounds", "increment"]:
@@ -1380,7 +1410,9 @@ def handle_pre_tool_use(data: dict) -> None:
     # argv tokens, not raw substrings, so quoting/spacing cannot evade the gate.
     if _blocks_review_counter_recovery(command):
         output_block(
-            "BLOCKED: review-counter reset and --force review dispatch/increment are "
+            "BLOCKED: review-counter reset, raising the review-round cap "
+            "(review.maxIterations / MAX_REVIEW_ITERATIONS), and --force review "
+            "dispatch/increment are "
             "human-only recovery tools. Ralph must surface the terminal instead. "
             "A shell command that merely mentions those verbs (prose, heredoc) trips "
             "the same screen - write the text with the file tool instead. "

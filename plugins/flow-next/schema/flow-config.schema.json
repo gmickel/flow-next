@@ -78,6 +78,11 @@
             }
           ],
           "default": null
+        },
+        "maxIterations": {
+          "description": "Cumulative review-round cap per scope (default 8, minimum 1 - the cap can never be disabled). The env var MAX_REVIEW_ITERATIONS takes precedence over this key. Raising it is a human act: ralph-guard blocks the config write, the config file, and the env assignment so an autonomous agent cannot extend its own review gate.",
+          "type": "integer",
+          "default": 8
         }
       }
     },
