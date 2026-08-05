@@ -13,6 +13,10 @@ BACKENDS = {"codex", "copilot", "cursor", "host", "rp", "export"}
 CASES = {
     "no-findings-ship",
     "ratchet-only",
+    # fn-168: the aggregate all-clear record. Every backend may answer the
+    # ratchet with one `Prior findings: all fixed` line instead of per-ordinal
+    # records, so the shape is part of the corpus contract.
+    "ratchet-aggregate",
     "no-anchor",
     "unparseable",
     "catalog-sample",
@@ -55,11 +59,31 @@ class ReviewFindingsFixtureCorpusTest(unittest.TestCase):
 
     def test_ratchet_controls_only_describe_prior_findings(self) -> None:
         for backend in BACKENDS:
-            text = (CORPUS / backend / "ratchet-only.md").read_text(
+            for case in ("ratchet-only", "ratchet-aggregate"):
+                text = (CORPUS / backend / f"{case}.md").read_text(
+                    encoding="utf-8"
+                )
+                self.assertRegex(text, r"(?i)prior finding")
+                self.assertNotRegex(
+                    text, r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?severity"
+                )
+
+    def test_aggregate_controls_use_the_parseable_all_clear_grammar(self) -> None:
+        """fn-168: the corpus records the line the parser actually accepts.
+
+        A bolded or reworded all-clear is NOT recognized (deliberately — the
+        broad presence detector does not match it either, and recognizing it
+        alone would invert the count check and discard the container), so the
+        fixtures must carry the plain line-start form the prompt advertises.
+        """
+        for backend in BACKENDS:
+            text = (CORPUS / backend / "ratchet-aggregate.md").read_text(
                 encoding="utf-8"
             )
-            self.assertRegex(text, r"(?i)prior finding")
-            self.assertNotRegex(text, r"(?im)^\s*(?:[-*]\s*)?(?:\*\*)?severity")
+            self.assertRegex(text, r"(?m)^Prior findings: all fixed$", backend)
+            self.assertNotRegex(
+                text, r"(?im)^\s*(?:[-*]\s*)?prior finding\s*#?\d", backend
+            )
 
     def test_no_anchor_controls_never_guess_a_file_or_line(self) -> None:
         for backend in BACKENDS:
@@ -129,7 +153,7 @@ class ReviewFindingsFixtureCorpusTest(unittest.TestCase):
                 if not expected["structured"]:
                     self.assertEqual(expected, {"structured": False})
                     continue
-                if case == "ratchet-only":
+                if case in ("ratchet-only", "ratchet-aggregate"):
                     self.assertEqual(expected["new_item_count"], 0)
                     self.assertTrue(expected["ordered_prior_statuses"])
                     self.assertTrue(

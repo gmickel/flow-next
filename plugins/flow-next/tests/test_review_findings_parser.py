@@ -221,6 +221,44 @@ Problem: The R1 behavior regressed.
                     )
                     self.assertEqual(new["lastSeenReceiptId"], "receipt-round-2")
 
+    def test_aggregate_all_clear_sweeps_priors_on_every_backend(self) -> None:
+        """fn-168 R2, driven through the PRODUCTION parser on all 6 backends.
+
+        The `Prior findings: all fixed` line must (a) not be discarded as a
+        record/canonical count mismatch — before this change it matched the broad
+        presence detector and not the canonical one, which dropped the whole
+        round's container — and (b) mark every carried prior `fixed`.
+        """
+        for backend in BACKENDS:
+            expected_statuses = self.index["expectations"][backend][
+                "ratchet-aggregate"
+            ]["ordered_prior_statuses"]
+            prior = parse(self.fixture(backend, "catalog-sample"), backend)
+            while len(prior["items"]) < len(expected_statuses):
+                extra = dict(prior["items"][0])
+                extra["ordinal"] = len(prior["items"]) + 1
+                extra["id"] = FLOWCTL._review_finding_lineage_id(
+                    prior["sourceReceiptId"], extra["ordinal"]
+                )
+                prior["items"].append(extra)
+            with self.subTest(backend=backend):
+                current = parse(
+                    self.fixture(backend, "ratchet-aggregate"),
+                    backend,
+                    receipt="receipt-round-2",
+                    round_number=2,
+                    prior=prior,
+                    supersedes=prior["sourceReceiptId"],
+                )
+                self.assertIsNotNone(current, backend)
+                self.assertEqual(
+                    [item["status"] for item in current["items"]],
+                    expected_statuses,
+                )
+                for old, new in zip(prior["items"], current["items"], strict=True):
+                    self.assertEqual(new["id"], old["id"])
+                    self.assertEqual(new["lastSeenReceiptId"], "receipt-round-2")
+
     def test_new_round_finding_gets_new_identity(self) -> None:
         text = self.fixture("codex", "catalog-sample")
         prior = parse(text, "codex")

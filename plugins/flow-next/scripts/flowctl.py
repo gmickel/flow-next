@@ -5198,7 +5198,10 @@ def _review_finding_prior_items(
         # status parsing. Otherwise an unknown status such as "pending" can
         # disappear into an explicit-empty SHIP response.
         return None
-    if not matches and not aggregate_count and prior_findings is None:
+    if not matches and prior_findings is None:
+        # No prior set: nothing to carry, and an aggregate all-clear has nothing
+        # to sweep. Inert rather than invalid — a stray all-clear on a round with
+        # no priors must not discard the round's own findings.
         return []
     if not isinstance(prior_findings, dict):
         return None
@@ -5235,6 +5238,38 @@ def _review_finding_prior_items(
         # Every generation is a complete snapshot. An omitted prior finding
         # remains current until the reviewer explicitly fixes or withdraws it.
         item["lastSeenReceiptId"] = source_receipt_id
+        # fn-168 R8: an UNREPEATED ``not_fixed`` does not survive the round.
+        #
+        # ``not_fixed`` is only ever written by an explicit resolution line, but
+        # this deep-copy used to propagate it verbatim — so one `not-fixed` in
+        # round 2 followed by a round 3 that merely omitted the finding left it
+        # ``not_fixed`` in BOTH digests, and ``same-not-fixed-lineage`` escalated
+        # a loop that had said nothing. That is the silent false stall fn-168
+        # deleted the trend heuristics for, reappearing inside the one rule that
+        # survived them.
+        #
+        # Reverting to ``open`` (unverified) makes the surviving rule's premise
+        # literally true: an intersection means the reviewer stated "still
+        # broken" about the same lineage in two consecutive rounds. A match below
+        # re-writes the status when this round DID speak.
+        #
+        # ``fixed`` and ``withdrawn`` are preserved — they are resolved
+        # terminals, and re-opening them would resurrect findings the reviewer
+        # already closed and corrupt lineage.
+        if item["status"] == "not_fixed":
+            item["status"] = "open"
+    # An aggregate all-clear sweeps the priors this round did not name
+    # individually. Explicit beats implicit, so ANY per-ordinal record disables
+    # it entirely — enforced here by ORDER (the sweep runs before the per-ordinal
+    # writes and only when there are none), not merely documented.
+    if aggregate_count and not matches:
+        for item in carried:
+            # Never re-stamp a resolved terminal: ``withdrawn`` was resolved
+            # differently, and calling it ``fixed`` would corrupt lineage. The
+            # reset above means everything still open reads ``open`` here.
+            if item["status"] == "open":
+                item["status"] = "fixed"
+                item["lastSeenReceiptId"] = source_receipt_id
     for match in matches:
         ordinal = (
             int(match.group("ordinal"))
@@ -5637,7 +5672,15 @@ def _parse_review_findings_v1(
         )
         and re.search(r"<verdict>\s*SHIP\s*</verdict>", output, re.IGNORECASE)
     )
-    has_prior_records = _FINDINGS_PRIOR_RE.search(output) is not None
+    # fn-168: an aggregate all-clear IS a prior-finding record for PRESENCE
+    # purposes. It is matched separately from the canonical per-ordinal regex
+    # (that one drives status writes and an aggregate has no ordinal), so this
+    # gate has to name both — otherwise an aggregate-only round parses as "no
+    # structured findings here", returns None, and the sweep never runs.
+    has_prior_records = (
+        _FINDINGS_PRIOR_RE.search(output) is not None
+        or _FINDINGS_PRIOR_AGGREGATE_RE.search(output) is not None
+    )
     if not rows and not has_prior_records and not explicit_empty:
         # Prior state is context, not evidence that this generation parsed.
         # Arbitrary re-review prose must not advance the structured lineage.
