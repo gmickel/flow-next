@@ -1,48 +1,56 @@
 ---
 satisfies: [R1, R2]
 ---
-# fn-168-review-convergence-lost-ratchet-prompt.2 Parser: dedicated aggregate all-clear, scoped; production-path fixtures for both paths
+# fn-168-review-convergence-lost-ratchet-prompt.2 Aggregate all-clear record semantics + production-path fixtures
 
 ## Description
-Teach the parser the dedicated aggregate all-clear record, correctly scoped, and prove both the per-ordinal path (R1's test half) and the aggregate path (R2) against the production parser plus the 6-backend fixture corpus.
+Implement the aggregate all-clear record's *semantics* — the scoped sweep of carried priors — in the same single parse pass as the per-ordinal records, and pin the behavior with production-parser fixtures plus the `unaddressed: []` negative test.
 
 **Size:** M
-**Files:** `plugins/flow-next/scripts/flowctl.py` (`_FINDINGS_PRIOR_RE`, `_FINDINGS_STATUS_ALIASES`, `_review_finding_prior_items`), `plugins/flow-next/tests/test_review_findings_parser.py`, `optimization/reached-path/fixtures/review-findings/v1/<backend>/*.md` + `optimization/reached-path/fixtures/review-findings/v1/INDEX.json` (**repo root — NOT under `plugins/flow-next/`**; all 6 backends), `plugins/flow-next/tests/test_review_findings_fixture_corpus.py`, `.flow/bin/flowctl.py` (propagation)
+**Files:** `plugins/flow-next/scripts/flowctl.py` (`_review_finding_prior_items`), `plugins/flow-next/tests/test_review_findings_parser.py`, `plugins/flow-next/tests/test_review_findings_fixture_corpus.py`, `optimization/reached-path/fixtures/review-findings/v1/<backend>/*.md` + `INDEX.json` (repo root, all 6 backends), `.flow/bin/flowctl.py` (propagation)
 
 ### Approach
-- **Vocabulary + line recognition are a PRECONDITION delivered by task .1** (hyphenated `not-fixed` accepted, aggregate line recognized without a count mismatch). Re-verify that precondition holds before starting; this task adds the aggregate's SEMANTICS on top of it.
-- Implement the aggregate's effect: a recognized `Prior findings: all fixed` with zero per-ordinal records marks the carried priors fixed, evaluated in the SAME one pass as the per-ordinal records so a malformed stray line stays a recognized-but-invalid signal (whole-container `None`) and can never be mistaken for a clean aggregate round.
-- Scoping rules, all required: fires only when the prior set is non-empty; sweeps only items currently `open` or `not_fixed`; **never** touches `withdrawn`; any per-ordinal record present disables the aggregate entirely (explicit beats implicit — make the parse order enforce this, not just document it).
-- `unaddressed: []` must NOT become a prior-findings signal — add the negative test that pins this (a response with `unaddressed: []` and no prior-finding line carries forward unchanged).
-- Fixture corpus: add the new case(s) to `CASES` in the test AND `INDEX.json` `cases`/`expectations` for ALL 6 backends (codex, copilot, cursor, host, rp, export) in the same change, or the matrix test hard-fails. Match the existing fn-136 fixture format exactly.
-- Tests drive the production parser end to end (memory `test-production-path-not-parallel-construction`): no hand-built container dicts standing in for parser output. Table-test R2's matrix: aggregate-only / aggregate+contradicting-explicit / per-ordinal-only / neither / withdrawn-present / empty-prior-set.
+- **Precondition: `.1`'s vocabulary/recognition work must already be in the tree.** Re-verify before starting — run the aggregate line through `_FINDINGS_PRIOR_RE` and `_FINDINGS_PRIOR_RECORD_RE` and confirm counts match. If it still mismatches, stop: implementing sweep semantics on top of a container that gets dropped to `None` proves nothing.
+- Implement the sweep in `_review_finding_prior_items`: an aggregate `Prior findings: all fixed` record marks every carried prior currently `open`/`not_fixed` as `fixed`. Scope rules, all required:
+  - fires **only** when the prior set is non-empty (round 1 never activates it);
+  - sweeps **only** items currently `open` or `not_fixed`;
+  - **never** `withdrawn` — that is a resolved-differently terminal, and re-stamping it `fixed` would corrupt lineage;
+  - **any** explicit per-ordinal record disables the aggregate path entirely (explicit beats implicit) — **enforced by parse order, not just documented**.
+- Evaluate the aggregate record in the **SAME single pass** as the per-ordinal records over the same line family, so a malformed stray line stays recognized-but-invalid (whole-container `None`) and can never read as a clean aggregate round. This is the fn-136 memory contract (`structured-review-parsers-must-2026-07-30`): separate presence detection from canonical parsing; recognized-but-invalid must select the invalid sentinel, never the absent sentinel.
+- **Negative test pinning that `unaddressed: []` alone is NOT a prior-findings signal.** This is not a stylistic preference — it is the load-bearing invariant of the whole spec. `unaddressed` rides in the canonical closing JSON tail of *every* review (observed live: a round-1 plan review emitted `"unaddressed":["R1","R3","R6"]` before any prior finding existed, and a round-3 SHIP emitted `"unaddressed":[]` with zero discussion of priors). Since `.3` leaves `same-not-fixed-lineage` as the only stall class and it reads exclusively `not_fixed`, an ambient signal sweeping priors to `fixed` would erase the only evidence stall detection has left.
+- Table-test the contradiction cases: aggregate + a contradicting per-ordinal `not-fixed` → the explicit line wins; malformed stray line + aggregate → recognized-but-invalid, never a silent all-clear.
+- **Fixture corpus lives at REPO ROOT**: `optimization/reached-path/fixtures/review-findings/v1/<backend>/*.md` + `INDEX.json` — **not** under `plugins/flow-next/`. A new case must land in `CASES` (in `test_review_findings_fixture_corpus.py`) **AND** `INDEX.json` for **all 6 backends** (codex, copilot, cursor, host, rp, export) or the matrix test hard-fails.
+- Tests drive the **production parser** end to end, never hand-built container dicts (memory `test-production-path-not-parallel-construction-2026-05-21`).
 - Propagation: `cp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py`.
 
 ### Investigation targets
 **Required** (read before coding):
-- `plugins/flow-next/scripts/flowctl.py` — `_review_finding_prior_items` (~:5134-5207) incl. the RECORD/PRIOR count-mismatch `None` branch and the carry-forward comment; call site ~:5476 for what `None` costs
-- `plugins/flow-next/scripts/flowctl.py` — the regex family + `_FINDINGS_STATUS_ALIASES` (~:4577-4648)
-- `plugins/flow-next/tests/test_review_findings_parser.py` (~:368-437) — the existing accept/reject grammar tests to sit beside
-- `plugins/flow-next/tests/test_review_findings_fixture_corpus.py` (~:11, matrix ~:37) + `INDEX.json` — the corpus contract
+- `plugins/flow-next/scripts/flowctl.py` — `_review_finding_prior_items` (~:5134-5207): the record/canonical counting, the carry-forward deep-copy, the single-item no-ordinal special case (~:5171), and the `None` return; sole call site ~:5476
+- `plugins/flow-next/scripts/flowctl.py` — `_FINDINGS_STATUS_ALIASES` (~:4577) / `_FINDINGS_PRIOR_RE` (~:4625) / `_FINDINGS_PRIOR_RECORD_RE` (~:4639) as `.1` left them
+- `plugins/flow-next/tests/test_review_findings_fixture_corpus.py` (matrix ~:37) and `optimization/reached-path/fixtures/review-findings/v1/INDEX.json` — the 6-backend contract before adding any case
+- `plugins/flow-next/tests/test_review_findings_parser.py` (grammar accept/reject ~:368-437) — the table-test style to follow
 
 **Optional** (reference as needed):
-- `plugins/flow-next/scripts/flowctl.py` — `extract_review_json_block` / `_unaddressed_from_json` (~:6626-6731), only to confirm the `unaddressed` path stays untouched
-- `plugins/flow-next/tests/test_review_findings_receipts.py` — if an end-to-end receipt assertion is cheap to add
+- `plugins/flow-next/scripts/flowctl.py` — `extract_review_json_block` (~:6626-6657), `_unaddressed_from_json` (~:6719-6731): what the `unaddressed` key actually is, for the negative test's docstring
+- `plugins/flow-next/scripts/flowctl.py` — `build_review_findings_digest` (~:5954-5984) for the row shape the swept statuses feed
 
 ### Key context
-- The aggregate signal is NOT `unaddressed: []` — the spec's original trigger was replaced at plan time because R-ID coverage and finding resolution are orthogonal (see the spec's R2 amendment). Do not re-derive; do not wire the JSON tail into this parser.
-- Status vocabulary is fixed by `_FINDINGS_STATUS_ALIASES`; an out-of-vocabulary word must keep failing closed rather than silently vanishing (fn-136 memory class).
-- Depends on .1 having settled the exact prompt wording so fixtures assert the real contract.
+- `status: "open"` is written ONLY at creation (~:4920, :5540, :5123). Carry-forward deep-copies untouched and only an explicit resolution writes `fixed`/`not_fixed`/`withdrawn`. The aggregate sweep is the one new writer of `fixed` on carried items — keep that property true and stated, because `.3`'s surviving stall class depends on `not_fixed` being explicit-only.
+- No new receipt-schema fields and no digest-shape change.
+- Round-1 reviews and legacy receipts (no container, or a pre-change container) keep today's behavior — regression-test it.
+
 ## Acceptance
-- [ ] Task .1's vocabulary precondition re-verified at start; a compliant aggregate-only response produces no count mismatch AND sweeps (regression-tested)
-- [ ] `Prior findings: all fixed` parsed in the same line-start family; per-ordinal records present disable it (enforced by parse order, table-tested)
-- [ ] Aggregate sweeps only `open`/`not_fixed`; `withdrawn` untouched; no activation on an empty prior set
-- [ ] Negative test pins that `unaddressed: []` alone is NOT a prior-findings signal
-- [ ] Malformed stray prior-finding line still fails closed (recognized-but-invalid), never a silent all-clear
-- [ ] R1 test half: a codex-style compliant response yields correct `fixed`/`not_fixed` statuses through the PRODUCTION parser
-- [ ] Fixture corpus case(s) added under the REPO-ROOT `optimization/reached-path/fixtures/review-findings/v1/` (`CASES` + `INDEX.json`) for all 6 backends; matrix test green
-- [ ] Focused suites green: `python3 -m unittest test_review_findings_parser test_review_findings_fixture_corpus test_review_findings_receipts test_review_json_tallies -q`
+- [ ] `.1`'s vocabulary precondition re-verified before implementation (aggregate line produces no RECORD/PRIOR count mismatch); noted in the done summary
+- [ ] Aggregate `Prior findings: all fixed` marks carried priors at `open`/`not_fixed` as `fixed`, evaluated in the SAME pass as per-ordinal records
+- [ ] `withdrawn` items are never swept; the path never fires on an empty prior set; any per-ordinal record disables it, enforced by parse order
+- [ ] Malformed stray line + aggregate → recognized-but-invalid (whole-container `None`), never a silent all-clear; aggregate + contradicting per-ordinal `not-fixed` → the explicit line wins
+- [ ] Negative test: `unaddressed: []` alone does NOT mark any prior finding `fixed`, with a docstring stating why (ambient JSON-tail key, emitted even in round 1)
+- [ ] A codex-style compliant response yields correct `fixed` / `not_fixed` statuses in the receipt findings container **via the production parser** (R1's fixture half)
+- [ ] New fixture cases registered in `CASES` **and** `INDEX.json` for all 6 backends; `test_review_findings_fixture_corpus` green
+- [ ] Round-1 / legacy-receipt behavior unchanged, regression-tested
+- [ ] Focused suites green: `python3 -m unittest test_review_findings_parser test_review_findings_receipts test_review_findings_fixture_corpus test_review_convergence_cap -q`
 - [ ] Propagation done (cp flowctl.py to .flow/bin)
+
 ## Done summary
 TBD
 

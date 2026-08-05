@@ -11,6 +11,6 @@
   "spec": "fn-168-review-convergence-lost-ratchet-prompt",
   "spec_path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.2.md",
   "status": "todo",
-  "title": "Parser: dedicated aggregate all-clear, scoped; production-path fixtures for both paths",
-  "updated_at": "2026-08-05T15:58:59.069190Z"
+  "title": "Aggregate all-clear record semantics + production-path fixtures",
+  "updated_at": "2026-08-05T19:25:13.072218Z"
 }

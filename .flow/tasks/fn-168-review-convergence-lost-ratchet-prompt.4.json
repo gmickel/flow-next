@@ -12,6 +12,6 @@
   "spec": "fn-168-review-convergence-lost-ratchet-prompt",
   "spec_path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.4.md",
   "status": "todo",
-  "title": "End-to-end two-round proof, docs, CHANGELOG + full final gate",
-  "updated_at": "2026-08-05T15:59:04.370997Z"
+  "title": "Parser-path e2e proof + docs + decision record + CHANGELOG + full gate",
+  "updated_at": "2026-08-05T19:25:20.035220Z"
 }

@@ -9,6 +9,6 @@
   "spec": "fn-168-review-convergence-lost-ratchet-prompt",
   "spec_path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.1.md",
   "status": "todo",
-  "title": "Ratchet prompt states the line grammar + aggregate record (incl. host wording, drift guard)",
-  "updated_at": "2026-08-05T15:58:57.018490Z"
+  "title": "Prompt states the line grammar + parser vocabulary + host wording + drift guard",
+  "updated_at": "2026-08-05T19:25:10.246588Z"
 }
