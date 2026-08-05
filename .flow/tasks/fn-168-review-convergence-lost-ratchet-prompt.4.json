@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-05T15:35:41.339401Z",
+  "depends_on": [
+    "fn-168-review-convergence-lost-ratchet-prompt.2",
+    "fn-168-review-convergence-lost-ratchet-prompt.3"
+  ],
+  "id": "fn-168-review-convergence-lost-ratchet-prompt.4",
+  "priority": null,
+  "spec": "fn-168-review-convergence-lost-ratchet-prompt",
+  "spec_path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.4.md",
+  "status": "todo",
+  "title": "End-to-end two-round proof, docs, CHANGELOG + full final gate",
+  "updated_at": "2026-08-05T15:35:41.339401Z"
+}
