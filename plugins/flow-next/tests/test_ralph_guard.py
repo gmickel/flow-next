@@ -293,6 +293,56 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_composed_env_var_name_for_the_cap(self) -> None:
+        """PR #295 bot r1: the literal name never appears, the override still lands.
+
+        `n=MAX_REVIEW_; n="${n}ITERATIONS"; export "$n=99"` reaches the review
+        process as MAX_REVIEW_ITERATIONS=99 while a whole-name regex sees nothing.
+        The screen keys on the distinctive prefix, and an export whose NAME is an
+        expansion fails closed beside a launcher.
+        """
+        for command in (
+            'name=MAX_REVIEW_; name="${name}ITERATIONS"; export "$name=99"; '
+            "$FLOWCTL codex impl-review fn-168.5 --base main",
+            'v=99; export "$v"; $FLOWCTL review-rounds increment fn-168 --kind plan',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_shell_writes_to_the_protected_config(self) -> None:
+        """PR #295 bot r1: PROTECTED_FILE_PATTERNS screens FILE TOOLS only.
+
+        A Bash write to `.flow/config.json` — redirect, mv-into-place, an
+        interpreter opening it for writing, or `sed -i` — never reached
+        `handle_protected_file_check`, so the durable cap was settable from the
+        shell despite the new invariant.
+        """
+        for command in (
+            "jq '.review.maxIterations=99' .flow/config.json > /tmp/c "
+            "&& mv /tmp/c .flow/config.json",
+            "python3 -c \"import json;d=json.load(open('.flow/config.json'));"
+            "d['review']['maxIterations']=99;json.dump(d,open('.flow/config.json','w'))\"",
+            "echo '{\"review\":{\"maxIterations\":99}}' > .flow/config.json",
+            "sed -i.bak 's/8/99/' .flow/config.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_allows_shell_reads_of_the_protected_config(self) -> None:
+        """Reads carry no write signal and must stay legal."""
+        for command in (
+            "cat .flow/config.json",
+            "jq -r .review.backend .flow/config.json",
+            "grep maxIterations .flow/config.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_allows_unrelated_config_set_writes(self) -> None:
         """The cap block is scoped to the cap, NOT to `config set`.
 

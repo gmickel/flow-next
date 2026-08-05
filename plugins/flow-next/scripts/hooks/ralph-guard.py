@@ -697,6 +697,25 @@ _FLOWCTL_PATH_RE = re.compile(r"(?:.*/)?flowctl(?:\.py)?$")
 _REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor"})
 _REVIEW_DISPATCHES = frozenset({"impl-review", "plan-review", "completion-review"})
 _ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+# fn-168 / PR #295 bot r1: an export|declare|typeset|readonly|env whose NAME is an
+# expansion (`export "$name=99"`, `declare "${n}=99"`). The value of the name is
+# unknowable pre-expansion, so a command that also drives a flowctl launcher
+# fails closed rather than guessing.
+_EXPANDED_ENV_NAME_RE = re.compile(
+    r"\b(?:export|declare|typeset|readonly|env)\s+[\"\']?\$\{?[A-Za-z_]"
+)
+# The project config file, in any spelling a shell command can reach it by.
+_FLOW_CONFIG_PATH_RE = re.compile(r"\.flow/config\.json")
+# A write signal beside that path. Reads (`cat`, `jq .`, `grep`) carry none of
+# these, so they stay legal; every mutation route does.
+_CONFIG_WRITE_INTENT_RE = re.compile(
+    r">>?\s*\S*\.flow/config\.json"          # redirect INTO the config
+    r"|\b(?:mv|cp|install|tee|truncate|dd|ln|rsync|patch)\b"
+    r"|\bsed\b[^|;&]*\s-\S*i"                 # sed -i / -i.bak
+    r"|--in-place"
+    r"|\bopen\s*\([^)]*['\"](?:w|a|x)"        # python open(..., 'w'|'a'|'x')
+    r"|\bwrite_text\b|\bwriteFileSync\b|\bdump\s*\("
+)
 _DURATION_RE = re.compile(r"\d+(?:\.\d+)?[smhd]?")
 # PR #290 bot r4: raw-text launcher reference — `$FLOWCTL`/`${FLOWCTL}`, a bare
 # or path-qualified `flowctl` / `flowctl.py`. Used only by the raw floor, where
@@ -1222,7 +1241,25 @@ def _command_has_recovery_markers(command: str) -> bool:
     # Matching the key NAME (not the whole invocation) keeps this scoped to the
     # cap: `config set review.backend codex`, tracker resolve transactions, and
     # setup's config writes all still pass.
-    if re.search(r"MAX_REVIEW_ITERATIONS['\"]?\s*=", command):
+    # The distinctive PREFIX, not the whole name: a composed assignment
+    # (`n=MAX_REVIEW_; n="${n}ITERATIONS"; export "$n=99"`) never spells the full
+    # variable anywhere, and the review process still receives the override
+    # (PR #295 bot r1). Any command that mentions this prefix is either setting
+    # the cap or building the name that sets it.
+    if "MAX_REVIEW_" in command:
+        return True
+    # An export/declare whose NAME is itself an expansion is unknowable before
+    # the shell runs it, so on a command that also drives a launcher it fails
+    # closed — the same literal-only contract the argv subcommand slots use.
+    if _FLOWCTL_TEXT_RE.search(command) and _EXPANDED_ENV_NAME_RE.search(command):
+        return True
+    # A shell write to the config file is the same self-grant as `config set`:
+    # `handle_protected_file_check` screens FILE TOOLS only, so
+    # `jq … > /tmp/c && mv /tmp/c .flow/config.json` or an interpreter writing
+    # the path sails past it (PR #295 bot r1). Ralph has no legitimate reason to
+    # write this file by any route; READS stay allowed, so the screen requires a
+    # write signal rather than the mere mention of the path.
+    if _FLOW_CONFIG_PATH_RE.search(command) and _CONFIG_WRITE_INTENT_RE.search(command):
         return True
     if re.search(r"config['\"]?\s+['\"]?set\b", command):
         if re.search(r"maxIterations", command):
