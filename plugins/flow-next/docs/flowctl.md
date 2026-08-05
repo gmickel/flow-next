@@ -1992,14 +1992,17 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   `spec reset-review-rounds`) advance the hash epoch — a post-reset re-review of
   an unchanged artifact dispatches cleanly without `--force`; `--force` bypasses
   the guard, stamps the attempt as forced, and is blocked in Ralph.
-- **Early terminals:** before reserving, flowctl compares the last two
+- **Early terminal:** before reserving, flowctl compares the last two
   non-truncated structured-findings digests in the current epoch. It exits `4`
-  with `ESCALATE: review loop stalled (<rule>)` when an open finding chain stays
-  unresolved, open severity and count both fail to improve, or each round adds
-  a newly introduced P0/P1. The lineage and fresh-critical rules require the
-  same backend and review kind across both rounds; the flat-trajectory rule
-  does not. Missing, malformed, legacy, truncated, or insufficient findings
-  are inert. A reviewer-emitted `NEEDS_HUMAN` is the
+  with `ESCALATE: review loop stalled (same-not-fixed-lineage)` when the
+  reviewer explicitly marked the same finding chain `not-fixed` in **both**
+  rounds — the one signal grounded in a stated resolution rather than an
+  inferred trend. It requires the same backend and review kind across both
+  rounds, so a backend switch is bounded by the round cap alone. fn-168 removed
+  the two trend/presence heuristics that used to sit beside it (they escalated
+  healthy converging loops three specs in a row); the round cap is now the sole
+  aggregate bound, deliberately. Missing, malformed, legacy, truncated, or
+  insufficient findings are inert. A reviewer-emitted `NEEDS_HUMAN` is the
   other exit-4 terminal: receipt, attempt, and status persist before
   `ESCALATE: reviewer requested human review` returns control to a human.
 - **Cap enforcement:** each backend reserves a round BEFORE running the reviewer

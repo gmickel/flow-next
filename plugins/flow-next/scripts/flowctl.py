@@ -11235,6 +11235,26 @@ def _review_stall_rule(
     previous_items = previous_digest["items"]
     current_items = current_digest["items"]
     if same_identity:
+        # fn-168: the ONE surviving stall class, and it survived because it
+        # reads a STATEMENT rather than a derived aggregate. ``not_fixed`` is
+        # written only by an explicit parsed per-ordinal ratchet line, and
+        # ``_review_finding_prior_items`` resets an unrepeated carried
+        # ``not_fixed`` back to ``open`` (fn-168 R8) — so an intersection here
+        # means the reviewer said "still broken" about the same lineage in BOTH
+        # consecutive rounds. That reset is the parser-side half of this
+        # guarantee: without it a single ``not-fixed`` line would persist
+        # through silent rounds and escalate a loop that said nothing.
+        #
+        # fn-168 DELETED its two siblings — an open-count/worst-severity trend
+        # rule, and a "a freshly introduced blocker appeared in both rounds"
+        # rule. Both were round-local snapshots INFERRING convergence from data
+        # the parser never reliably captured, and the second fires on what every
+        # healthy thorough review loop looks like. Field record: 3 false
+        # positives (fn-156/157/158), 0 true positives. Do NOT reintroduce a
+        # trend or presence-twice rule for symmetry — the aggregate bound is the
+        # round cap, deliberately. The named rationale, the accepted
+        # consequences, and the fn-159 R2 supersession live in the fn-168
+        # decision record under `.flow/memory/knowledge/decisions/`.
         previous_not_fixed = {
             item["chainRoot"]
             for item in previous_items
@@ -11247,60 +11267,6 @@ def _review_stall_rule(
         }
         if previous_not_fixed & current_not_fixed:
             return "same-not-fixed-lineage"
-
-    open_statuses = {"open", "not_fixed"}
-
-    def evidence_bearing_open(items: list[dict]) -> list[dict]:
-        """Open items this round's reviewer actually vouched for.
-
-        ``status == "open"`` is written only when a finding is first raised;
-        carry-forward deep-copies the row untouched and only an explicit
-        per-ordinal ratchet line writes ``fixed``/``not_fixed``/``withdrawn``.
-        So ``open`` + ``firstSeenThisRound == False`` means "carried and never
-        mentioned by any reviewer since it was raised" — no evidence either way,
-        and no evidence of a stall.  A reviewer that resolves priors in prose
-        only (fn-158) would otherwise make a shrinking loop read as flat.
-
-        Applied to BOTH digests: filtering only the current side would compare
-        a filtered current count against an unfiltered previous one, so a
-        genuinely flat trajectory (one fresh finding per round, forever) would
-        read as decreasing every round and the stall class would never fire.
-        """
-        return [
-            item
-            for item in items
-            if item["status"] in open_statuses
-            and (item["firstSeenThisRound"] or item["status"] == "not_fixed")
-        ]
-
-    previous_open = evidence_bearing_open(previous_items)
-    current_open = evidence_bearing_open(current_items)
-    # An empty open set has converged.  In particular, do not let the
-    # otherwise tempting ``min(..., default=...)`` turn it into a false stall.
-    if previous_open and current_open:
-        previous_worst = min(
-            _FINDINGS_SEVERITY_ORDER[item["severity"]] for item in previous_open
-        )
-        current_worst = min(
-            _FINDINGS_SEVERITY_ORDER[item["severity"]] for item in current_open
-        )
-        severity_improved = current_worst > previous_worst
-        count_decreased = len(current_open) < len(previous_open)
-        if not severity_improved and not count_decreased:
-            return "flat-trajectory"
-
-    if same_identity:
-        def has_fresh_critical(items: list[dict]) -> bool:
-            return any(
-                item["firstSeenThisRound"]
-                and item["classification"] == "introduced"
-                and item["status"] in open_statuses
-                and _FINDINGS_SEVERITY_ORDER[item["severity"]] <= 1
-                for item in items
-            )
-
-        if has_fresh_critical(previous_items) and has_fresh_critical(current_items):
-            return "fresh-introduced-critical"
     return None
 
 

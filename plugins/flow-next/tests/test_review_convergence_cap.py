@@ -4294,19 +4294,39 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self._assert_stalls("same-not-fixed-lineage")
 
-    def test_flat_trajectory_stalls(self):
-        self._write_attempts(
-            self._digest(self._item("one", severity="P2")),
-            self._digest(self._item("two", severity="P2")),
-        )
-        self._assert_stalls("flat-trajectory")
+    def test_trend_and_presence_twice_shapes_no_longer_stall(self):
+        """fn-168 R3: the two deleted classes leave no successor.
 
-    def test_fresh_introduced_critical_stalls(self):
+        Both shapes escalated before this spec: an open set that neither shrank
+        nor improved in severity, and two consecutive rounds that each raised a
+        freshly introduced blocker.  The second is what every healthy thorough
+        review loop looks like.  Neither is a stall now — the round cap is the
+        only aggregate bound.
+        """
+        for previous, current in (("P2", "P2"), ("P0", "P1"), ("P1", "P1")):
+            with self.subTest(previous=previous, current=current):
+                self._write_attempts(
+                    self._digest(self._item("one", severity=previous)),
+                    self._digest(self._item("two", severity=current)),
+                )
+                self.assertEqual(
+                    flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+                )
+
+    def test_distinct_not_fixed_lineages_do_not_stall(self):
+        """The surviving rule needs the SAME chain re-affirmed, not any two.
+
+        Two different findings each explicitly ``not-fixed`` in consecutive
+        rounds is progress-shaped, not a repeat, so the lineage intersection is
+        empty.  The deleted trend rule used to escalate this pair.
+        """
         self._write_attempts(
-            self._digest(self._item("one", severity="P0")),
-            self._digest(self._item("two", severity="P1")),
+            self._digest(self._item("left", status="not_fixed", first_seen=False)),
+            self._digest(self._item("right", status="not_fixed", first_seen=False)),
         )
-        self._assert_stalls("fresh-introduced-critical")
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+        )
 
     def test_epoch_boundary_and_digestless_round_are_inert(self):
         self._write_attempts(
@@ -4332,13 +4352,8 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
 
-    def test_three_round_newness_and_carried_introduced_distinguish_round_newness(self):
-        self._write_attempts(
-            self._digest(self._item("first", severity="P2")),
-            self._digest(self._item("second", severity="P0")),
-            self._digest(self._item("third", severity="P1")),
-        )
-        self._assert_stalls("fresh-introduced-critical")
+    def test_carried_introduced_prior_is_not_round_newness(self):
+        """A carried finding is never "raised this round", whatever its severity."""
         self._write_attempts(
             self._digest(self._item("root", severity="P0")),
             self._digest(
@@ -4347,12 +4362,14 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
 
-    def test_severity_trajectory_uses_minimum_rank_and_empty_open_converges(self):
-        transitions = (
-            ("P0", "P1", False), ("P1", "P2", False),
-            ("P2", "P1", True),
-        )
-        for previous, current, stalled in transitions:
+    def test_severity_trend_and_all_fixed_rounds_are_inert(self):
+        """fn-168 R3: no severity/count trend is a terminal any more.
+
+        Worsening severity (P2 -> P1) used to escalate; an all-``fixed`` pair
+        never did.  Both are inert now — only a repeated explicit ``not-fixed``
+        lineage, or the round cap, ends a loop.
+        """
+        for previous, current in (("P0", "P1"), ("P1", "P2"), ("P2", "P1")):
             with self.subTest(previous=previous, current=current):
                 self._write_attempts(
                     self._digest(
@@ -4366,12 +4383,9 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
                         )
                     ),
                 )
-                if stalled:
-                    self._assert_stalls("flat-trajectory")
-                else:
-                    self.assertEqual(
-                        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
-                    )
+                self.assertEqual(
+                    flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+                )
         self._write_attempts(
             self._digest(
                 self._item("one", status="fixed", classification="pre_existing")
@@ -4385,31 +4399,45 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
     def _carried(self, root: str, *, severity: str = "P2", status: str = "open") -> dict:
         return self._item(root, severity=severity, status=status, first_seen=False)
 
-    def test_carried_unverified_priors_alone_never_read_as_flat(self):
-        """fn-168 R3: the fn-158 shape — six priors carried unverified + one new.
+    def test_fn158_shape_classifies_no_stall_of_any_class(self):
+        """fn-168 R3 early proof point — the field escalation, both variants.
 
-        The reviewer resolved all six in prose, so they stay ``open`` with
-        ``firstSeenThisRound == False``.  Counting them would make 6 -> 7 read
-        as flat while the loop was one round from SHIP.
+        Round 1 raises six freshly introduced P1s; round 2 carries all six and
+        raises one more P1.  Before this spec the pair escalated twice over: on
+        the open-count trend when the reviewer resolved the six in prose (they
+        stayed ``open``), and — once that was filtered — on "a fresh introduced
+        blocker in both rounds", which reads only fresh items and so no amount
+        of evidence-filtering could reach.  Both variants must now reserve a
+        normal round 3.
+
+        This test writes digest rows directly, so it holds without the prompt
+        grammar (.1) or the parser semantics (.2) having landed.
         """
         six = [f"prior-{index}" for index in range(6)]
-        self._write_attempts(
-            self._digest(*(self._item(root, severity="P2") for root in six)),
-            self._digest(
-                *(self._carried(root) for root in six),
-                self._item("fresh", severity="P2"),
-            ),
-        )
-        self.assertEqual(
-            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
-        )
+        round_one = self._digest(*(self._item(root, severity="P1") for root in six))
+        for carried_status in ("open", "fixed"):
+            with self.subTest(carried=carried_status):
+                self._write_attempts(
+                    round_one,
+                    self._digest(
+                        *(
+                            self._carried(root, severity="P1", status=carried_status)
+                            for root in six
+                        ),
+                        self._item("fresh", severity="P1"),
+                    ),
+                )
+                self.assertEqual(
+                    flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+                )
 
-    def test_evidence_bearing_filter_is_symmetric_across_the_pair(self):
-        """fn-168 R3(b): three rounds, 6 -> 6+1 -> 7+1.
+    def test_three_healthy_rounds_never_stall(self):
+        """One fresh finding per round, forever, is not a terminal any more.
 
-        Round 3 must be reservable, and the pair that follows it must still
-        stall: fresh findings are flat at 1 -> 1.  A filter applied only to the
-        current digest would compare 1 against an unfiltered 7 and never fire.
+        The deleted trend rule fired here (fresh findings flat at 1 -> 1).  A
+        loop that keeps surfacing genuinely new work is now bounded by the round
+        cap alone — the accepted regression vector recorded in the fn-168
+        Boundaries, deliberately not re-detected.
         """
         six = [f"prior-{index}" for index in range(6)]
         round_one = self._digest(*(self._item(root, severity="P2") for root in six))
@@ -4417,59 +4445,26 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
             *(self._carried(root) for root in six),
             self._item("fresh-two", severity="P2"),
         )
-        self._write_attempts(round_one, round_two)
-        self.assertEqual(
-            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
-        )
         round_three = self._digest(
             *(self._carried(root) for root in [*six, "fresh-two"]),
             self._item("fresh-three", severity="P2"),
         )
         self._write_attempts(round_one, round_two, round_three)
-        self._assert_stalls("flat-trajectory")
-
-    def test_re_affirmed_and_growing_fresh_sets_still_stall(self):
-        # An explicitly re-affirmed prior is evidence, carried or not: distinct
-        # lineages keep same-not-fixed-lineage out of the way, so this is the
-        # flat-trajectory branch reading not_fixed carried items.
-        self._write_attempts(
-            self._digest(self._carried("left", status="not_fixed")),
-            self._digest(self._carried("right", status="not_fixed")),
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 4
         )
-        self._assert_stalls("flat-trajectory")
-        # A growing fresh open set is a stall even though every prior is
-        # carried-unverified and filtered out.
-        self._write_attempts(
-            self._digest(self._item("one", severity="P2")),
-            self._digest(
-                self._carried("one"),
-                self._item("two", severity="P2"),
-                self._item("three", severity="P2"),
-            ),
-        )
-        self._assert_stalls("flat-trajectory")
 
-    def test_other_stall_classes_ignore_the_evidence_bearing_filter(self):
-        # same-not-fixed-lineage fires on carried items the flat branch keeps.
+    def test_same_not_fixed_lineage_fires_on_a_carried_re_affirmation(self):
+        """The survivor still classifies genuine churn.
+
+        The same chain explicitly ``not-fixed`` in both rounds is the one signal
+        left, and it reads a stated resolution rather than an inferred trend.
+        """
         self._write_attempts(
             self._digest(self._item("root", status="not_fixed")),
             self._digest(self._carried("root", severity="P1", status="not_fixed")),
         )
         self._assert_stalls("same-not-fixed-lineage")
-        # fresh-introduced-critical is unchanged: it already reads only fresh
-        # items, so the real fn-158 completion shape (fresh introduced P1 in
-        # both rounds) still classifies once flat-trajectory steps aside.
-        # NOTE (fn-168): that means the field escalation this spec was raised
-        # from is not fully removed by R3 alone — surfaced, out of R3's scope.
-        six = [f"prior-{index}" for index in range(6)]
-        self._write_attempts(
-            self._digest(*(self._item(root, severity="P1") for root in six)),
-            self._digest(
-                *(self._carried(root, severity="P1") for root in six),
-                self._item("fresh", severity="P1"),
-            ),
-        )
-        self._assert_stalls("fresh-introduced-critical")
 
     def test_multi_hop_supersession_uses_the_original_chain_root(self):
         def item(source: str, ordinal: int, *, prior: str | None = None) -> dict:
