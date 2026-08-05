@@ -102,8 +102,9 @@ Prior finding #3: withdrawn
 
 Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With exactly
 one prior finding the number may be omitted (`Prior finding: fixed`). When every prior
-finding is fixed, the single line `Prior findings: all fixed` may replace the per-finding
-lines. The `unaddressed` array in the JSON tail is about spec R-ID coverage and does
+finding is fixed — and only then — the single line `Prior findings: all fixed` may
+replace the per-finding lines; the two must not be mixed, because any per-finding line
+present wins and disables the aggregate. The `unaddressed` array in the JSON tail is about spec R-ID coverage and does
 **not** vouch for prior findings.
 
 ## Receipt and status
