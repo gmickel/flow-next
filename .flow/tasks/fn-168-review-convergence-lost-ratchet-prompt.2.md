@@ -1,10 +1,10 @@
 ---
-satisfies: [R1, R2]
+satisfies: [R1, R2, R8]
 ---
 # fn-168-review-convergence-lost-ratchet-prompt.2 Aggregate all-clear record semantics + production-path fixtures
 
 ## Description
-Implement the aggregate all-clear record's *semantics* — the scoped sweep of carried priors — in the same single parse pass as the per-ordinal records, and pin the behavior with production-parser fixtures plus the `unaddressed: []` negative test.
+Implement the aggregate all-clear record's *semantics* — the scoped sweep of carried priors — plus the R8 carried-status reset, both in the same single parse pass as the per-ordinal records, and pin the behavior with production-parser fixtures plus the `unaddressed: []` negative test.
 
 **Size:** M
 **Files:** `plugins/flow-next/scripts/flowctl.py` (`_review_finding_prior_items`), `plugins/flow-next/tests/test_review_findings_parser.py`, `plugins/flow-next/tests/test_review_findings_fixture_corpus.py`, `optimization/reached-path/fixtures/review-findings/v1/<backend>/*.md` + `INDEX.json` (repo root, all 6 backends), `.flow/bin/flowctl.py` (propagation)
@@ -17,6 +17,11 @@ Implement the aggregate all-clear record's *semantics* — the scoped sweep of c
   - **never** `withdrawn` — that is a resolved-differently terminal, and re-stamping it `fixed` would corrupt lineage;
   - **any** explicit per-ordinal record disables the aggregate path entirely (explicit beats implicit) — **enforced by parse order, not just documented**.
 - Evaluate the aggregate record in the **SAME single pass** as the per-ordinal records over the same line family, so a malformed stray line stays recognized-but-invalid (whole-container `None`) and can never read as a clean aggregate round. This is the fn-136 memory contract (`structured-review-parsers-must-2026-07-30`): separate presence detection from canonical parsing; recognized-but-invalid must select the invalid sentinel, never the absent sentinel.
+- **R8 — reset carried `not_fixed` to `open` before applying this round's records (plan-review round 1, P0).** Verified: the carry-forward deep-copy in `_review_finding_prior_items` copies `status` **verbatim**, and only ordinals matched *this* round get overwritten. So a prior explicitly marked `not-fixed` in round 2 and then merely omitted in round 3 sits at `not_fixed` in BOTH digests, and `same-not-fixed-lineage` escalates on a round that said nothing — the exact silent false-stall this spec deletes, surviving inside the survivor. The reset makes the spec's central claim literally true: the lineage intersection now requires an explicit `not-fixed` in **both** consecutive rounds.
+  - Scope: `not_fixed` → `open` only. **Preserve `fixed` and `withdrawn`** — they are resolved terminals, and re-opening them would corrupt lineage and re-raise findings the reviewer already closed.
+  - Ordering: reset first, then apply the round's per-ordinal records and the aggregate sweep, all inside the existing single pass. A count mismatch must still return whole-container `None` exactly as today.
+  - Round 1 has no carried items, so the reset is a no-op there.
+  - Accepted cost (spec Boundaries (e)): the ratchet prompt then renders such an item as `open` rather than `not_fixed`, losing the "you called this unfixed last round" nuance in the status column. That is prompt copy, not evidence; do NOT add a per-round-verification digest field to recover it.
 - **Negative test pinning that `unaddressed: []` alone is NOT a prior-findings signal.** This is not a stylistic preference — it is the load-bearing invariant of the whole spec. `unaddressed` rides in the canonical closing JSON tail of *every* review (observed live: a round-1 plan review emitted `"unaddressed":["R1","R3","R6"]` before any prior finding existed, and a round-3 SHIP emitted `"unaddressed":[]` with zero discussion of priors). Since `.3` leaves `same-not-fixed-lineage` as the only stall class and it reads exclusively `not_fixed`, an ambient signal sweeping priors to `fixed` would erase the only evidence stall detection has left.
 - Table-test the contradiction cases: aggregate + a contradicting per-ordinal `not-fixed` → the explicit line wins; malformed stray line + aggregate → recognized-but-invalid, never a silent all-clear.
 - **Fixture corpus lives at REPO ROOT**: `optimization/reached-path/fixtures/review-findings/v1/<backend>/*.md` + `INDEX.json` — **not** under `plugins/flow-next/`. A new case must land in `CASES` (in `test_review_findings_fixture_corpus.py`) **AND** `INDEX.json` for **all 6 backends** (codex, copilot, cursor, host, rp, export) or the matrix test hard-fails.
@@ -47,6 +52,8 @@ Implement the aggregate all-clear record's *semantics* — the scoped sweep of c
 - [ ] Negative test: `unaddressed: []` alone does NOT mark any prior finding `fixed`, with a docstring stating why (ambient JSON-tail key, emitted even in round 1)
 - [ ] A codex-style compliant response yields correct `fixed` / `not_fixed` statuses in the receipt findings container **via the production parser** (R1's fixture half)
 - [ ] New fixture cases registered in `CASES` **and** `INDEX.json` for all 6 backends; `test_review_findings_fixture_corpus` green
+- [ ] R8: a carried item at `not_fixed` is reset to `open` before this round's records are applied; `fixed` and `withdrawn` are never re-opened; round 1 is a no-op
+- [ ] R8 tested via the production parser: explicit `not-fixed` in two consecutive rounds keeps both digests at `not_fixed`; explicit in round 2 then omitted in round 3 leaves round 3 at `open`
 - [ ] Round-1 / legacy-receipt behavior unchanged, regression-tested
 - [ ] Focused suites green: `python3 -m unittest test_review_findings_parser test_review_findings_receipts test_review_findings_fixture_corpus test_review_convergence_cap -q`
 - [ ] Propagation done (cp flowctl.py to .flow/bin)

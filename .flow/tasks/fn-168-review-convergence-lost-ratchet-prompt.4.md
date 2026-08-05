@@ -1,5 +1,5 @@
 ---
-satisfies: [R4, R5]
+satisfies: [R4, R5, R8]
 ---
 # fn-168-review-convergence-lost-ratchet-prompt.4 Parser-path e2e proof + docs + decision record + CHANGELOG + full gate
 
@@ -10,10 +10,11 @@ Prove the whole seam through the production reservation path (three required cas
 **Files:** `plugins/flow-next/tests/test_review_convergence_cap.py`, `plugins/flow-next/docs/review-findings.md`, `plugins/flow-next/docs/README.md`, `plugins/flow-next/docs/troubleshooting.md`, `CHANGELOG.md`, `.flow/memory/knowledge/decisions/<new-entry>.md`
 
 ### Approach
-- **Three required e2e cases, all driving the production reservation path** (`enforce_and_increment_review_cap`), not `_review_stall_rule` in isolation and not hand-built containers:
+- **Four required e2e cases, all driving the production reservation path** (`enforce_and_increment_review_cap`), not `_review_stall_rule` in isolation and not hand-built containers:
   1. **the real fn-158 pair** — round 1: 6 fresh introduced P1; round 2: those 6 resolved via the aggregate record + 1 fresh P1 → a normal round-3 reservation with **no stall of any class**. Unlike `.3`'s direct-digest proof, this one must produce the `fixed` statuses by running reviewer text through the parser that `.1`/`.2` fixed;
-  2. **churn counter-case** — the same `chainRoot` at `not_fixed` in both rounds → still ESCALATEs (`same-not-fixed-lineage`);
-  3. **no-grammar case** — rounds with zero resolution evidence never stall early; they are bounded only by the cap.
+  2. **churn counter-case** — the same `chainRoot` explicitly marked `not-fixed` in **both** rounds → still ESCALATEs (`same-not-fixed-lineage`);
+  3. **no-grammar case** — rounds with zero resolution evidence never stall early; they are bounded only by the cap;
+  4. **R8 asymmetric case** — one explicit `not-fixed` in round 2, then a round 3 that omits it entirely (or resolves it in prose) → **no stall**. This is the case that would escalate without R8's carried-status reset, and it is the reason the survivor's "reads a statement" claim is now literally true.
 - **Docs** (`plugins/flow-next/docs/`):
   - `review-findings.md` (~100-121, "Identity and lineage") — state the literal per-ordinal grammar, the aggregate record, and that `unaddressed: []` is **not** a prior-findings signal;
   - `README.md` "Notable updates" — one bullet (precedent: the 3.14.0 convergence bullet ~:65);
@@ -44,7 +45,7 @@ Prove the whole seam through the production reservation path (three required cas
 - `plugins/flow-next/scripts/flowctl.py` ~:9556 — the docstring to quote verbatim
 
 ### Key context
-- Deps: `.2` (real `fixed` statuses from the parser path) and `.3` (the deletions). Re-anchor on both before starting — case 1 is meaningless if either is missing.
+- Deps: `.2` (real `fixed` statuses from the parser path + the R8 reset), `.3` (the deletions), and `.5` (added at plan-review round 1 — `.5` changes `flowctl.py`, the schema, the guard, and docs, so a full gate that ran before it would not be the promised final gate). Re-anchor on all three before starting.
 - Tests drive production paths, never parallel constructions (memory `test-production-path-not-parallel-construction-2026-05-21`).
 - The old "three-round symmetry regression" wording from the pre-re-plan spec is **dead** — the symmetry concept died with the branch. Do not resurrect it.
 - Both changelogs are user-facing release surfaces; write user-outcome-first, machinery last.
@@ -53,6 +54,7 @@ Prove the whole seam through the production reservation path (three required cas
 - [ ] Case 1: the real fn-158 pair (r1 6 fresh introduced P1; r2 those 6 resolved via the aggregate record + 1 fresh P1) reaches a normal round-3 reservation with **no stall of any class**, with the `fixed` statuses produced by the production parser (not injected)
 - [ ] Case 2: churn counter-case (same `chainRoot` `not_fixed` in both rounds) still ESCALATEs via the production reservation path
 - [ ] Case 3: rounds with zero resolution evidence never stall early and are bounded only by the cap
+- [ ] Case 4 (R8): one explicit `not-fixed` in round 2 followed by a round 3 that omits it does **not** stall, via the production reservation path
 - [ ] `docs/review-findings.md` states the literal grammar, the aggregate record, and the `unaddressed: []` non-signal note
 - [ ] `docs/README.md` "Notable updates" bullet added; `docs/troubleshooting.md` root-cause list updated; no stall-class name survives anywhere in docs
 - [ ] `knowledge/decisions/` entry written with all 7 required elements in order, including the verbatim docstring quote, the churn-is-real caveat, and the explicit fn-159 R2 supersession
