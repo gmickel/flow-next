@@ -228,6 +228,43 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_cap_raise_via_encoded_json_key(self) -> None:
+        """An escaped member name must not slip past a substring check.
+
+        `config set` json.loads-coerces the value, which resolves `\u006d` — so
+        the guard decodes before comparing member names rather than grepping.
+        """
+        proc = self._hook(
+            '$FLOWCTL config set review \'{"\\u006daxIterations": 99}\''
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_cap_raise_via_composed_key_or_value(self) -> None:
+        """Composition leaves no token reading `maxIterations`."""
+        for command in (
+            'k=maxIter; k="${k}ations"; $FLOWCTL config set "review.$k" 99',
+            'v=\'{"maxIter\'; $FLOWCTL config set review "${v}ations\": 99}"',
+            'PAYLOAD=99; $FLOWCTL config set review.maxIterations "$PAYLOAD"',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_expansion_in_a_review_namespace_config_value(self) -> None:
+        """Under `review.*` an unexpanded value is unknowable, so it fails closed."""
+        proc = self._hook('$FLOWCTL config set review "$PAYLOAD"')
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_allows_variable_values_outside_the_review_namespace(self) -> None:
+        """The literal-only contract is scoped: other namespaces keep expansions."""
+        proc = self._hook(
+            '$FLOWCTL config set tracker.perTracker.teamId "$TEAM_ID"'
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_blocks_cap_raise_via_env_assignment(self) -> None:
         """fn-168 R7 route 3: the HIGHER-precedence rung, a pre-existing hole."""
         proc = self._hook(

@@ -9633,26 +9633,46 @@ def get_max_review_iterations() -> int:
     convergence-aware terminal (severity trend, new-vs-residue classification,
     an explicit escalate-to-human verdict) rather than a bigger number.
     """
-    env_value = _clamped_review_iterations(os.environ.get("MAX_REVIEW_ITERATIONS"))
-    if env_value is not None:
-        return env_value
+    raw_env = os.environ.get("MAX_REVIEW_ITERATIONS")
+    if raw_env is not None and raw_env != "":
+        # PRESENT-but-invalid is not the same as absent. An unparseable or
+        # non-positive env value falls back to the DEFAULT and stops there: it
+        # must not quietly hand control to a config value the caller was trying
+        # to override, which would make a typo look like it worked.
+        env_value = _clamped_review_iterations(raw_env)
+        return env_value if env_value is not None else DEFAULT_MAX_REVIEW_ITERATIONS
     config_value = _max_review_iterations_from_config()
     if config_value is not None:
         return config_value
     return DEFAULT_MAX_REVIEW_ITERATIONS
 
 
+_REVIEW_ITERATIONS_INT_RE = re.compile(r"^[+-]?\d+$")
+
+
 def _clamped_review_iterations(raw) -> Optional[int]:
-    """One clamp for BOTH rungs: a positive int, or None to fall through.
+    """One clamp for BOTH rungs: a positive integer, or None (invalid/absent).
 
     Before fn-168 the clamp lived only in the env branch; a config rung with its
-    own (or no) validation is how a `0` reaches the counter and disables it.
+    own (or no) validation is how a `0` reaches the counter and disables the
+    runaway stop.
+
+    A float is REJECTED rather than coerced: `int(1.5)` is 1, so coercion would
+    silently turn a fat-fingered `1.5` into the tightest possible cap. Strings
+    are validated lexically for the same reason — only an exact integer form is
+    accepted, never `int()`'s wider tolerance. Bools are ints in Python and are
+    excluded explicitly.
     """
     if isinstance(raw, bool) or raw is None:
         return None
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
+    if isinstance(raw, int):
+        value = raw
+    elif isinstance(raw, str):
+        candidate = raw.strip()
+        if not _REVIEW_ITERATIONS_INT_RE.match(candidate):
+            return None
+        value = int(candidate)
+    else:
         return None
     return value if value >= 1 else None
 

@@ -598,7 +598,11 @@ class TestDeterministicCap(unittest.TestCase):
         )
         config.setdefault("review", {})["maxIterations"] = value
         config_path.write_text(json.dumps(config))
-        flowctl._MAX_REVIEW_ITERATIONS_CONFIG_MEMO.pop(str(config_path), None)
+        # Clear the WHOLE memo, not this path's entry: `get_flow_dir()` resolves
+        # symlinks (on macOS a temp dir under /var resolves to /private/var), so a
+        # keyed pop can miss and leave a stale value that makes these assertions
+        # pass vacuously. Caught by impl-review, and it had.
+        flowctl._MAX_REVIEW_ITERATIONS_CONFIG_MEMO.clear()
 
     def test_config_rung_sets_the_cap(self):
         """fn-168 R7: the persistent rung — the valve consequence (a) advertises."""
@@ -617,15 +621,32 @@ class TestDeterministicCap(unittest.TestCase):
         the runaway stop — fn-159's invariant. Every rejected value must fall
         through to the default, never to "no cap".
         """
-        for bad in (0, -1, "abc", "", None, True, 1.5, [8], {}):
+        for bad in (0, -1, "abc", "", None, True, False, 1.5, "1.5", "8x", [8], {}):
             with self.subTest(bad=bad):
                 self._set_cap_config(bad)
                 self.assertEqual(flowctl.get_max_review_iterations(), 8)
 
-    def test_env_zero_falls_through_to_the_config_rung(self):
-        """A rejected env value must not shadow a valid config value."""
+    def test_float_is_rejected_not_truncated(self):
+        """`int(1.5)` is 1 — coercing would turn a typo into the tightest cap."""
+        self.assertIsNone(flowctl._clamped_review_iterations(1.5))
+        self.assertIsNone(flowctl._clamped_review_iterations("1.5"))
+        self.assertEqual(flowctl._clamped_review_iterations(4), 4)
+        self.assertEqual(flowctl._clamped_review_iterations(" 4 "), 4)
+
+    def test_present_but_invalid_env_falls_back_to_the_default(self):
+        """A typo'd env override must not silently hand control to config.
+
+        R7's contract: an invalid / zero / negative value on EITHER path falls
+        back to the default. Absent is different from present-but-invalid — an
+        unset env var proceeds to the config rung (covered by the config tests).
+        """
         self._set_cap_config(3)
-        with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": "0"}):
+        for bad in ("0", "-1", "abc", "1.5"):
+            with self.subTest(bad=bad):
+                with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": bad}):
+                    self.assertEqual(flowctl.get_max_review_iterations(), 8)
+        # Empty means unset, so the config rung still answers.
+        with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": ""}):
             self.assertEqual(flowctl.get_max_review_iterations(), 3)
 
     def test_config_rung_is_read_at_most_once_per_config_path(self):

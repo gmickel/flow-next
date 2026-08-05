@@ -1219,10 +1219,20 @@ def _command_has_recovery_markers(command: str) -> bool:
     # setup's config writes all still pass.
     if re.search(r"MAX_REVIEW_ITERATIONS['\"]?\s*=", command):
         return True
-    if re.search(r"config['\"]?\s+['\"]?set\b", command) and re.search(
-        r"maxIterations", command
-    ):
-        return True
+    if re.search(r"config['\"]?\s+['\"]?set\b", command):
+        if re.search(r"maxIterations", command):
+            return True
+        # Composition floor, mirroring `_RECOVERY_ASSIGN_RE`: the key or value can
+        # be built in assignments (`k=maxIter; k+=ations`) so no single token ever
+        # reads `maxIterations`. Only fires when the command also drives a
+        # launcher AND targets the `review` namespace, so ordinary variable-valued
+        # writes in other namespaces stay legal.
+        if (
+            _FLOWCTL_TEXT_RE.search(command)
+            and re.search(r"set['\"]?\s+['\"]?review\b", command)
+            and re.search(r"[A-Za-z_][A-Za-z0-9_]*\+?=", command)
+        ):
+            return True
     # Quotes are stripped on BOTH sides of the gap (PR #290 bot r3): a
     # per-token-quoted `"review-rounds" "reset"` closes its quote before the
     # whitespace, which the old one-sided screen never matched.
@@ -1261,6 +1271,65 @@ def _command_has_recovery_markers(command: str) -> bool:
         ):
             return True
     return False
+
+
+def _json_mentions_review_cap(value: str) -> bool:
+    """True when a `config set` VALUE carries a `maxIterations` member.
+
+    Decoded rather than substring-matched, so an escaped key
+    (`{"\\u006daxIterations": 99}`) cannot slip past: `json.loads` resolves the
+    escape and the member name is compared literally. A value that is not valid
+    JSON falls back to the raw text — an unparseable blob naming the key is
+    still suspicious, and `config set` itself keeps a malformed `{`-leading
+    value as a literal string, so nothing is lost by being strict here.
+    """
+    try:
+        decoded = json.loads(value)
+    except (ValueError, TypeError):
+        return "maxIterations" in value
+
+    def walk(node: object) -> bool:
+        if isinstance(node, dict):
+            return any(
+                key == "maxIterations" or walk(child) for key, child in node.items()
+            )
+        if isinstance(node, list):
+            return any(walk(child) for child in node)
+        return False
+
+    return walk(decoded)
+
+
+def _config_set_touches_review_cap(argv: list[str]) -> bool:
+    """Does this `flowctl config set` argv write the review-round cap?
+
+    Three shapes reach the same on-disk value, so all three are screened:
+      * the leaf key `review.maxIterations`;
+      * the parent key `review` with a JSON value carrying a `maxIterations`
+        member — `_set_config_locked` json.loads-coerces a `{`-leading value and
+        its nested walk REPLACES whole subtrees, so a leaf-only screen would be
+        no screen at all;
+      * either of the above assembled at expansion time. Under the `review`
+        namespace an unexpanded key or value is unknowable pre-expansion, so it
+        fails closed — the same literal-only contract the guarded subcommand
+        slots already use. Other namespaces keep their variable values legal
+        (`config set tracker.perTracker.teamId "$TEAM_ID"` must still run).
+    """
+    rest = argv[2:]
+    if not rest:
+        return False
+    key = rest[0]
+    values = rest[1:]
+    if _ARGV_EXPANSION_RE.search(key):
+        # An unknowable key could expand to review.maxIterations.
+        return True
+    if key == "review.maxIterations":
+        return True
+    if key == "review" or key.startswith("review."):
+        if any(_ARGV_EXPANSION_RE.search(value) for value in values):
+            return True
+        return any(_json_mentions_review_cap(value) for value in values)
+    return any("maxIterations" in value for value in values)
 
 
 def _guarded_dispatch_index(argv: list[str]) -> "int | None":
@@ -1382,11 +1451,9 @@ def _blocks_review_counter_recovery(command: str) -> bool:
             return True
         if argv[:2] == ["review-rounds", "reset"]:
             return True
-        # fn-168 R7: the cap write, in BOTH the leaf and parent-key forms. Token
-        # comparison, never a substring: `config set review.backend` must pass.
-        if argv[:2] == ["config", "set"] and any(
-            "maxIterations" in token for token in argv[2:]
-        ):
+        # fn-168 R7: the cap write. Token comparison, never a substring —
+        # `config set review.backend codex` must pass.
+        if argv[:2] == ["config", "set"] and _config_set_touches_review_cap(argv):
             return True
         if "--force" not in argv:
             continue

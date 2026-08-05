@@ -2008,9 +2008,12 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   `ESCALATE: reviewer requested human review` returns control to a human.
 - **Cap enforcement:** each backend reserves a round BEFORE running the reviewer
   (codex/copilot/cursor inside their wrapper; rp via `review-rounds increment`).
-  At `${MAX_REVIEW_ITERATIONS:-8}` delivered-verdict rounds it refuses before
-  dispatch, prints `ESCALATE:`, and exits `4`. The message includes live verdict
-  rounds and refunded transport attempts.
+  At the resolved cap in delivered-verdict rounds it refuses before dispatch,
+  prints `ESCALATE:`, and exits `4`. The message includes live verdict rounds and
+  refunded transport attempts. The cap resolves **env `MAX_REVIEW_ITERATIONS` >
+  config [`review.maxIterations`](#flowctl-config) > 8**, clamped to `>= 1` on
+  both rungs so it can never be disabled; raising it is a human act (ralph-guard
+  blocks the config write, the config file, and the env assignment).
 - **Round-counting:** a round is consumed only when reviewer output contains
   SHIP, NEEDS_WORK, MAJOR_RETHINK, or NEEDS_HUMAN. Empty output, missing tags, timeout,
   sandbox denial, and other no-verdict exits refund the pre-dispatch reservation
