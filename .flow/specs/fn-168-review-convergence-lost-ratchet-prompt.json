@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-168-review-convergence-lost-ratchet-prompt",
+  "created_at": "2026-08-05T14:39:47.771440Z",
+  "depends_on_epics": [],
+  "id": "fn-168-review-convergence-lost-ratchet-prompt",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-168-review-convergence-lost-ratchet-prompt.md",
+  "status": "open",
+  "title": "Review convergence lost: ratchet prompt never states the prior-finding line grammar",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-05T14:40:55.426014Z"
+}
