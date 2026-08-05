@@ -64,9 +64,30 @@ Make the review cap settable from config — `review.maxIterations` with env > c
 - [ ] Propagation done (cp flowctl.py to .flow/bin)
 
 ## Done summary
-TBD
+Added `review.maxIterations` as the review-round cap's persistent rung and blocked every route an autonomous agent could use to raise its own gate.
 
+**Resolution:** env `MAX_REVIEW_ITERATIONS` > config `review.maxIterations` > default 8, with the `>= 1` clamp on **both** rungs (it previously lived only in the env branch — an unclamped config rung is how a `0` reaches the counter and disables fn-159's runaway stop). Floats are **rejected, not coerced**: `int(1.5)` is 1, so coercion would silently turn a typo into the tightest possible cap. Strings are validated lexically rather than trusting `int()`'s tolerance. A **present-but-invalid** env value stops at the default rather than falling through to config, so a typo'd override cannot silently hand control to the value the caller was overriding; an absent or empty env var is a different thing and does proceed to config. Defaulted in `get_default_config()` like the `work.delegate*` block, so `config get review.maxIterations` answers 8 on a fresh repo.
+
+**Perf:** only the CONFIG read is memoized, keyed by config path. The seven call sites must not become seven read+parse round trips (fn-110 round-trip diet, fn-109 memoized repo root), while the env rung stays live and per-repo isolation is preserved. Bound is pinned by a test that counts `get_config` calls across 7 invocations.
+
+**fn-138 contract:** TABLE entry + description in `scripts/gen_flow_config_schema.py`, artifact regenerated in the same change, drift test green. Used `type: integer` rather than `minimum: 1` because the repo's committed-artifact checker is a deliberately minimal draft-2020-12 subset with no `minimum` support — the clamp is enforced and tested in code and stated in the key's description. **The checker was not widened to make this diff pass.**
+
+**The guard is the load-bearing half.** A persistent cap is a self-grant path, and leaving any route open would have made this spec a net regression against fn-159's *"the implementing agent can never reset or extend its own gate."* Blocked, all tokenized, all with tests:
+1. `flowctl config set review.maxIterations <n>` — the leaf form.
+2. `flowctl config set review '{"maxIterations":99}'` — the parent-key form. `_set_config_locked` JSON-coerces a `{`-leading value and its nested walk replaces whole subtrees, so a leaf-only screen would have been theatre. Values are **JSON-decoded** and member names compared literally, so `{"maxIterations":99}` cannot slip past a substring check.
+3. Composed keys/values (`k=maxIter; k+="ations"`) — the `review.*` namespace is held to a literal-only contract: an unexpanded key, or an unexpanded value under `review.*`, fails closed. Scoped, so `config set tracker.perTracker.teamId "$TEAM_ID"` still runs.
+4. A composed `set` subcommand (`verb=set; flowctl config "$verb" review …`) — `config` joins `_GUARDED_SUBCOMMAND_GROUPS`, so an expansion in that slot fails closed. Argument-position variables stay legal (`config get "$KEY"`, positively tested).
+5. A file-tool write to `.flow/config.json` — added to `PROTECTED_FILE_PATTERNS`. File tools only, so flowctl's own writers are unaffected.
+6. A `MAX_REVIEW_ITERATIONS=` assignment — the **higher-precedence** rung, and a hole that predates this key.
+
+Scoping is deliberate: the block targets the cap, never `config set` wholesale, because tracker resolve transactions and setup legitimately write config under Ralph. A positive test pins that `review.backend` / `tracker.type` writes and `config get` still pass. Stated caveat: the guard does not fire on Cursor (different hook events), degrading to prose only — exactly as the existing counter-reset block does.
+
+**Docs:** the config-key table plus the detailed cap section in `docs/flowctl.md`, `docs/ralph.md` (loop bound, the fn-159 paragraph — which also still described the now-deleted trend rule — and the env-var table), and `docs/orchestration.md`'s machinery-config block all state env > config > 8 and the human-only rule.
+
+`DEFAULT_MAX_REVIEW_TRANSPORT_FAILURES` left untouched, as scoped.
+
+Live validation: the round-3 re-review of this task replied `Prior findings: all fixed` — task `.1`'s aggregate record parsing on a real reviewer response.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3775486f, e204a914, e1102866
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_ralph_guard test_flow_config_schema_drift test_tracker_distribution test_prompt_text_pinned test_ralph_docs_truth -q  (352 tests, OK), cd plugins/flow-next/tests && python3 -m unittest test_ralph_guard test_ralph_guard_codex_delegation test_ralphctl -q  (161 tests, OK), uvx ruff@0.16.0 check .  (All checks passed), python3 scripts/gen_flow_config_schema.py  (artifact regenerated, drift test green), propagation: cp flowctl.py -> .flow/bin, rsync flowctl_tracker, gen_tracker_manifest.py, sync-codex.sh twice (no second-run diff), flowctl codex impl-review fn-168-review-convergence-lost-ratchet-prompt.5  (r1 NEEDS_WORK 2xP1+2xP2; r2 NEEDS_WORK 1xP0 composed-subcommand route; r3 VERDICT=SHIP, receipt /tmp/impl-review-fn-168-5.json, gpt-5.6-sol)
 - PRs:
