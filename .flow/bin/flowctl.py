@@ -4350,8 +4350,21 @@ def run_codex_exec(
     effective_effort = spec.effort or "high"
 
     if session_id:
-        # Try resume first - use stdin for prompt (model already set in original session)
-        cmd = [codex, "exec", "resume", session_id, "-"]
+        # Resume argv must mirror the fresh dispatch's sandbox / effort /
+        # --skip-git-repo-check guarantees (but NOT --model or --json): a
+        # resumed reviewer must not silently gain write access or lose
+        # configured effort. Re-pinning --model is wrong — the session keeps
+        # the model from its original dispatch (see resolution_out["resumed"]).
+        # `codex exec resume` has NO `--sandbox` flag (verified against codex
+        # 0.146.1 `exec resume --help`) — passing one makes resume exit non-zero,
+        # which silently degraded every re-review into a fresh blind session. The
+        # sandbox therefore rides the config override, which resume DOES accept.
+        cmd = [
+            codex, "exec", "resume", session_id,
+            "-c", f'model_reasoning_effort="{effective_effort}"',
+            "-c", f'sandbox_mode="{sandbox}"',
+            "--skip-git-repo-check", "-",
+        ]
         try:
             result = subprocess.run(
                 cmd,
@@ -4375,11 +4388,25 @@ def run_codex_exec(
             # For resumed sessions, thread_id stays the same
             return output, session_id, 0, result.stderr
         except subprocess.CalledProcessError:
-            # Resume failed - fall through to new session
-            pass
+            # Resume failed - fall through to new session (loud so caller sees it)
+            if resolution_out is not None:
+                resolution_out["resume_failed"] = True
+                resolution_out["resume_failure_reason"] = "resume exited non-zero"
+            print(
+                f"warning: resume of session {session_id} failed; "
+                "starting a fresh session",
+                file=sys.stderr,
+            )
         except subprocess.TimeoutExpired:
-            # Resume failed - fall through to new session
-            pass
+            # Resume failed - fall through to new session (loud so caller sees it)
+            if resolution_out is not None:
+                resolution_out["resume_failed"] = True
+                resolution_out["resume_failure_reason"] = "resume timed out"
+            print(
+                f"warning: resume of session {session_id} failed; "
+                "starting a fresh session",
+                file=sys.stderr,
+            )
 
     # New session with model + reasoning effort from resolved spec.
     # fn-76: dispatch goes through the strongest-available fallback driver.

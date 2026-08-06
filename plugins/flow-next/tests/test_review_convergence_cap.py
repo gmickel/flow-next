@@ -6155,5 +6155,116 @@ class TestSingleLockedCompletionStatusWrite(_InProcessBackendReviewBase):
         self.assertEqual(self._data()["completion_review_status"], "needs_work")
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestCodexResumeArgvParity(unittest.TestCase):
+    """fn-169.1: a resumed dispatch must carry the same guarantees as a fresh one.
+
+    Measured before the fix: resumed reviews ran `sandbox: danger-full-access` at
+    `reasoning effort: medium`, against the read-only reviewer contract and the
+    configured effort, because the resume argv passed neither. Resume also omitted
+    `--skip-git-repo-check`, so outside a git repo it failed into a SILENT fresh
+    session.
+
+    These assertions are pinned to the flags `codex exec resume` actually accepts
+    (verified against codex 0.146.1 `exec resume --help`): `-c key=value`,
+    `--skip-git-repo-check`, `-m/--model`, `--json`. There is **no `--sandbox`** on
+    the resume subcommand — passing one makes resume exit non-zero, which is how the
+    first draft of this fix silently broke every re-review. The sandbox therefore
+    rides `-c sandbox_mode=`, and this test asserts that spelling specifically so a
+    future edit cannot reintroduce a flag the CLI rejects.
+    """
+
+    def _capture_resume_argv(self, **kwargs):
+        seen = {}
+
+        def fake_run(cmd, **rk):
+            seen["cmd"] = list(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+        with mock.patch.object(flowctl.subprocess, "run", side_effect=fake_run):
+            flowctl.run_codex_exec("p", session_id="sid-1", repo_root=Path("."), **kwargs)
+        return seen["cmd"]
+
+    def test_resume_argv_carries_sandbox_effort_and_git_check(self):
+        cmd = self._capture_resume_argv(sandbox="read-only")
+        self.assertEqual(cmd[1:4], ["exec", "resume", "sid-1"])
+        joined = " ".join(cmd)
+        # sandbox via the CONFIG override — `exec resume` has no --sandbox flag
+        self.assertIn('sandbox_mode="read-only"', joined)
+        self.assertNotIn("--sandbox", cmd)
+        self.assertRegex(joined, r'model_reasoning_effort="[a-z]+"')
+        self.assertIn("--skip-git-repo-check", cmd)
+        # the resumed session keeps its ORIGINAL model — re-pinning it is wrong
+        self.assertNotIn("--model", cmd)
+        self.assertNotIn("-m", cmd)
+
+    def test_resume_argv_uses_only_flags_the_resume_subcommand_accepts(self):
+        """The guard that would have caught the first draft.
+
+        Every `--flag` in the resume argv must be one `codex exec resume` documents.
+        """
+        accepted = {"--skip-git-repo-check", "--json", "--model", "--last", "--all",
+                    "--ephemeral", "--ignore-user-config", "--ignore-rules",
+                    "--output-schema", "--strict-config", "--enable", "--disable",
+                    "--image", "--output-last-message",
+                    "--dangerously-bypass-approvals-and-sandbox",
+                    "--dangerously-bypass-hook-trust"}
+        cmd = self._capture_resume_argv(sandbox="read-only")
+        for token in cmd:
+            if token.startswith("--"):
+                self.assertIn(token, accepted, f"{token} is not accepted by `codex exec resume`")
+
+    def test_cursor_resume_drops_no_flags(self):
+        """fn-169.1 audit: only codex had the resume-parity defect.
+
+        cursor and copilot build ONE flat argv where the session flag is just
+        another entry, so nothing can be dropped on the resume path. codex is the
+        outlier because `exec resume` is a separate subcommand with its own flag
+        set — which is exactly how it lost --sandbox, the effort override, and
+        --skip-git-repo-check. This pins cursor's property so a future refactor
+        cannot introduce the codex shape.
+        """
+        def flags(**kw):
+            got = []
+
+            def fake(cmd, **rk):
+                got.append(list(cmd))
+                return subprocess.CompletedProcess(cmd, 0, stdout='{"result":"x"}', stderr="")
+
+            with mock.patch.object(flowctl.subprocess, "run", side_effect=fake):
+                try:
+                    flowctl.run_cursor_exec(prompt="p", repo_root=Path("."), **kw)
+                except Exception:
+                    pass
+            for cmd in got:
+                if "cursor" in str(cmd[0]):
+                    return {tok.split("=")[0] for tok in cmd if tok.startswith("--")}
+            return set()
+
+        fresh = flags()
+        resumed = flags(session_id="sid-1")
+        self.assertTrue(fresh, "no cursor invocation captured")
+        self.assertEqual(fresh - resumed, set(), "resume dropped flags the fresh path passes")
+        self.assertIn("--resume", resumed)
+        self.assertIn("--mode", resumed)      # read-only posture preserved
+        self.assertIn("--model", resumed)
+
+    def test_resume_failure_is_surfaced(self):
+        calls = {"n": 0}
+
+        def fake_run(cmd, **rk):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise subprocess.CalledProcessError(1, cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="fresh-ok", stderr="")
+
+        res = {}
+        with mock.patch.object(flowctl.subprocess, "run", side_effect=fake_run):
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                out, sid, rc, _ = flowctl.run_codex_exec(
+                    "p", session_id="sid-1", repo_root=Path("."), resolution_out=res
+                )
+        self.assertTrue(res.get("resume_failed"))
+        self.assertTrue(res.get("resume_failure_reason"))
+        self.assertNotIn("resumed", res)
+        self.assertIn("resume", err.getvalue().lower())
+        self.assertIn("fresh-ok", out)   # fallthrough preserved
