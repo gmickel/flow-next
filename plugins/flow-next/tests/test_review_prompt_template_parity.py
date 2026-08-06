@@ -52,7 +52,7 @@ HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent  # plugins/flow-next
 REPO_ROOT = PLUGIN_DIR.parent.parent
 FIXTURES = HERE.parent / "fixtures" / "review_prompts"
-PRE_CHANGE_COMMIT = "dc74a6c717377f73f689be6c9bcd68bed40ad4c2"
+PRE_CHANGE_COMMIT = "511a23eea8b867d13857fbbd79c46fc2536c6098"
 TOKEN_EVIDENCE = (
     REPO_ROOT
     / "optimization/reached-path/evidence/fn136/review-output-format-token-delta.json"
@@ -92,6 +92,11 @@ _DDIFF = "diff --git a/x.py b/x.py\n+print(1)\n"
 _TASKS = "TASK1\nTASK2"
 _BASE = "main"
 _FOCUS = "auth and sessions"
+# fn-169 R4: prompts carry identities. These mirror the generator's constants —
+# the two must agree or the frozen fixtures cannot reproduce.
+_SPEC_PATH = ".flow/specs/fn-parity.md"
+_TASK_PATHS = (".flow/tasks/fn-parity.1.md", ".flow/tasks/fn-parity.2.md")
+_RANGE = "aaaaaaa..bbbbbbb"
 
 
 def _normalize(text: str) -> str:
@@ -145,7 +150,8 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self._assert_fixture(
             "impl",
             flowctl.build_review_prompt(
-                "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
+                "impl", context_hints=_HINTS, review_scope=_DSUM,
+                diff_range=_RANGE, spec_path=_SPEC_PATH
             ),
         )
 
@@ -153,7 +159,7 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self._assert_fixture(
             "impl_empty_optional",
             flowctl.build_review_prompt(
-                "impl", _SPEC, "", diff_summary="", diff_content=""
+                "impl", spec_path=_SPEC_PATH
             ),
         )
 
@@ -161,44 +167,45 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self._assert_fixture(
             "plan",
             flowctl.build_review_prompt(
-                "plan", _SPEC, _HINTS, task_specs=_TASKS
+                "plan", context_hints=_HINTS, spec_path=_SPEC_PATH,
+                task_spec_paths=_TASK_PATHS
             ),
         )
 
     def test_plan_review_prompt_no_tasks(self) -> None:
         self._assert_fixture(
             "plan_no_tasks",
-            flowctl.build_review_prompt("plan", _SPEC, _HINTS),
+            flowctl.build_review_prompt("plan", context_hints=_HINTS, spec_path=_SPEC_PATH),
         )
 
     def test_standalone_review_prompt(self) -> None:
         self._assert_fixture(
             "standalone",
-            flowctl.build_standalone_review_prompt(_BASE, _FOCUS, _DSUM),
+            flowctl.build_standalone_review_prompt(_BASE, _FOCUS, _DSUM, _RANGE),
         )
 
     def test_standalone_review_prompt_no_focus(self) -> None:
         self._assert_fixture(
             "standalone_no_focus",
-            flowctl.build_standalone_review_prompt(_BASE, None, _DSUM),
+            flowctl.build_standalone_review_prompt(_BASE, None, _DSUM, _RANGE),
         )
 
     def test_completion_review_prompt(self) -> None:
         self._assert_fixture(
             "completion",
-            flowctl.build_completion_review_prompt(_SPEC, _TASKS, _DSUM, _DDIFF),
+            flowctl.build_completion_review_prompt(_SPEC_PATH, _TASK_PATHS, _DSUM, _RANGE),
         )
 
     def test_completion_review_prompt_no_tasks(self) -> None:
         self._assert_fixture(
             "completion_no_tasks",
-            flowctl.build_completion_review_prompt(_SPEC, "", _DSUM, _DDIFF),
+            flowctl.build_completion_review_prompt(_SPEC_PATH, (), _DSUM, _RANGE),
         )
 
     def test_completion_review_prompt_starts_with_terminal_reviewer_override(self) -> None:
         """All subprocess backends share this builder: Codex, Copilot, Cursor."""
         prompt = flowctl.build_completion_review_prompt(
-            _SPEC, _TASKS, _DSUM, _DDIFF
+            _SPEC_PATH, _TASK_PATHS, _DSUM, _RANGE
         )
         self.assertTrue(prompt.startswith("## TERMINAL REVIEWER ROLE"))
         self.assertIn("not a workflow coordinator", prompt)
@@ -213,52 +220,40 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
     def rendered_prompts(self) -> dict[str, str]:
         prompts = {
             "impl": flowctl.build_review_prompt(
-                "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
+                "impl", context_hints=_HINTS, review_scope=_DSUM,
+                diff_range=_RANGE, spec_path=_SPEC_PATH
             ),
             "impl_empty_optional": flowctl.build_review_prompt(
-                "impl", _SPEC, "", diff_summary="", diff_content=""
+                "impl", spec_path=_SPEC_PATH
             ),
             "plan": flowctl.build_review_prompt(
-                "plan", _SPEC, _HINTS, task_specs=_TASKS
+                "plan", context_hints=_HINTS, spec_path=_SPEC_PATH,
+                task_spec_paths=_TASK_PATHS
             ),
-            "plan_no_tasks": flowctl.build_review_prompt("plan", _SPEC, _HINTS),
+            "plan_no_tasks": flowctl.build_review_prompt("plan", context_hints=_HINTS, spec_path=_SPEC_PATH),
             "standalone": flowctl.build_standalone_review_prompt(
-                _BASE, _FOCUS, _DSUM
+                _BASE, _FOCUS, _DSUM, _RANGE
             ),
             "standalone_no_focus": flowctl.build_standalone_review_prompt(
-                _BASE, None, _DSUM
+                _BASE, None, _DSUM, _RANGE
             ),
             "completion": flowctl.build_completion_review_prompt(
-                _SPEC, _TASKS, _DSUM, _DDIFF
+                _SPEC_PATH, _TASK_PATHS, _DSUM, _RANGE
             ),
             "completion_no_tasks": flowctl.build_completion_review_prompt(
-                _SPEC, "", _DSUM, _DDIFF
+                _SPEC_PATH, (), _DSUM, _RANGE
             ),
         }
-        corpus_root = REPO_ROOT / "optimization" / "review-prompt"
-        corpus = {
-            "plan_corpus_risky": (corpus_root / "spec_corpus.md").read_text(
-                encoding="utf-8"
-            ),
-            "plan_corpus_clean": (corpus_root / "spec_clean.md").read_text(
-                encoding="utf-8"
-            ),
-            "plan_corpus_user_edited": (
-                "# User-edited plan\n\n"
-                "## Acceptance\n"
-                "- Preserve operator-authored batch size 37; do not restore generated 50.\n"
-                "## Test strategy\n"
-                "- Verify batches of exactly 37 and malformed-row rollback.\n"
-            ),
-        }
-        for name, spec in corpus.items():
+        # fn-169 R4: the corpus bodies differ on DISK; the prompt names which
+        # spec to read. Must mirror the generator's corpus paths exactly.
+        for name in (
+            "plan_corpus_risky", "plan_corpus_clean", "plan_corpus_user_edited",
+        ):
             prompts[name] = flowctl.build_review_prompt(
                 "plan",
-                spec,
-                "Production Plan Review context hints.",
-                task_specs=(
-                    "Current task specs are supplied from persisted .flow/task files."
-                ),
+                context_hints="Production Plan Review context hints.",
+                spec_path=f".flow/specs/fn-corpus-{name}.md",
+                task_spec_paths=(".flow/tasks/fn-corpus.1.md",),
             )
         return prompts
 
@@ -315,7 +310,8 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
 
 class TestReviewPromptCalibration(unittest.TestCase):
     def test_plan_severities_are_outcome_anchored(self) -> None:
-        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        prompt = flowctl.build_review_prompt("plan", context_hints=_HINTS, spec_path=_SPEC_PATH,
+                task_spec_paths=_TASK_PATHS)
         for severity in (
             "P0** — following the plan produces a wrong or impossible implementation.",
             "P1** — material ambiguity likely to mislead a competent implementer.",
@@ -325,7 +321,8 @@ class TestReviewPromptCalibration(unittest.TestCase):
                 self.assertIn(severity, prompt)
 
     def test_plan_confidence_gate_precedes_ratchet_blockers(self) -> None:
-        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        prompt = flowctl.build_review_prompt("plan", context_hints=_HINTS, spec_path=_SPEC_PATH,
+                task_spec_paths=_TASK_PATHS)
         self.assertIn(flowctl.CONFIDENCE_RUBRIC_BLOCK, prompt)
         self.assertIn(
             "Suppression gate: drop findings below 75, EXCEPT P0 at 50+", prompt
@@ -340,11 +337,13 @@ class TestReviewPromptCalibration(unittest.TestCase):
         self.assertIn("concrete bad downstream implementation outcome", ratchet)
 
     def test_fn_153_impossible_plan_blocks(self) -> None:
-        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        prompt = flowctl.build_review_prompt("plan", context_hints=_HINTS, spec_path=_SPEC_PATH,
+                task_spec_paths=_TASK_PATHS)
         self.assertIn("a task made impossible by the plan blocks (fn-153)", prompt)
 
     def test_fn_156_consequence_free_contradiction_is_fyi(self) -> None:
-        prompt = flowctl.build_review_prompt("plan", _SPEC, _HINTS, task_specs=_TASKS)
+        prompt = flowctl.build_review_prompt("plan", context_hints=_HINTS, spec_path=_SPEC_PATH,
+                task_spec_paths=_TASK_PATHS)
         self.assertIn(
             "self-contradiction with no downstream consequence is FYI, not blocking (fn-156)",
             prompt,
@@ -352,7 +351,8 @@ class TestReviewPromptCalibration(unittest.TestCase):
 
     def test_impl_settled_plan_findings_are_fyi(self) -> None:
         prompt = flowctl.build_review_prompt(
-            "impl", _SPEC, _HINTS, diff_summary=_DSUM, diff_content=_DDIFF
+            "impl", context_hints=_HINTS, review_scope=_DSUM,
+                diff_range=_RANGE, spec_path=_SPEC_PATH
         )
         self.assertIn("Decision Context decision", prompt)
         self.assertIn("`knowledge/decisions` entry is FYI, never blocking", prompt)

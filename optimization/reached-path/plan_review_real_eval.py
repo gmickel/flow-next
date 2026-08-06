@@ -12,6 +12,15 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Any
+import sys
+import pathlib
+# fn-169 R4: review prompts carry identities; this harness has no repo for a
+# reviewer to read, so it appends its own payload. One shared helper, see its
+# module docstring for why the carve-out is confined to optimization/.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from eval_prompt_payload import embed_payload as _embed_payload  # noqa: E402
+
+
 
 REPO = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -68,10 +77,10 @@ def corpus() -> dict[str, str]:
 
 
 def build_prompt(spec: str) -> str:
-    return FLOWCTL.build_review_prompt(
-        "plan",
-        spec,
-        "Production Plan Review context hints.",
+    return _embed_payload(
+        FLOWCTL.build_review_prompt(
+            "plan", context_hints="Production Plan Review context hints."),
+        spec=spec,
         task_specs="Current persisted task specs; respect operator-authored values.",
     )
 

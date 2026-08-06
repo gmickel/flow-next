@@ -6,6 +6,14 @@ import sys, os, re, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import reveval as R  # noqa: E402
 import flowctl  # noqa: E402
+import pathlib
+# fn-169 R4: review prompts carry identities; this harness has no repo for a
+# reviewer to read, so it appends its own payload. One shared helper, see its
+# module docstring for why the carve-out is confined to optimization/.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from eval_prompt_payload import embed_payload as _embed_payload  # noqa: E402
+
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CLEAN = open(os.path.join(HERE, "orders_clean.py")).read()
@@ -17,14 +25,18 @@ SMELL_WORDS = ["feature envy", "data clump", "primitive obsession", "long method
 
 def _prompt(code, fowler_trim):
     if not fowler_trim:
-        return flowctl.build_review_prompt("impl", R.BASE_SPEC, "orders.py — a new single-file module.",
-                                           diff_summary="1 file changed, +80", diff_content=code)
+        return _embed_payload(
+            flowctl.build_review_prompt(
+                "impl", context_hints="orders.py — a new single-file module."),
+            spec=R.BASE_SPEC, diff_summary="1 file changed, +80", diff_content=code)
     saved = {k: getattr(flowctl, k) for k in R.TRIM}
     try:
         for k, v in R.TRIM.items():
             setattr(flowctl, k, v)
-        p = flowctl.build_review_prompt("impl", R.BASE_SPEC, "orders.py — a new single-file module.",
-                                        diff_summary="1 file changed, +80", diff_content=code)
+        p = _embed_payload(
+            flowctl.build_review_prompt(
+                "impl", context_hints="orders.py — a new single-file module."),
+            spec=R.BASE_SPEC, diff_summary="1 file changed, +80", diff_content=code)
     finally:
         for k, v in saved.items():
             setattr(flowctl, k, v)

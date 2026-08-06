@@ -12,6 +12,25 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 4. Receipt records actual reviewer model + `"mode": "host"`
 5. Fail closed when no cross-family pin is available (never silent same-family self-review)
 
+
+**fn-169 — host is the documented always-inject exception.** The `codex` backend
+resumes the reviewer's own session on a re-review and therefore sends the
+shrink-only contract WITHOUT re-rendering prior findings; `cursor` and `copilot`
+keep injecting unconditionally until their resume semantics are measured the way
+codex's were (copilot's `--resume` is create-or-resume via a marker, so "resumed"
+and "created" are not separable there). `host` cannot resume at all: rule 3
+above makes each re-review a fresh subagent with `session_id: null`, so the
+reviewer holds nothing from the previous round. The prior findings must travel in
+the prompt here, and the reply grammar below is what makes them machine-readable.
+This is a deliberate exception, tested (`test_review_prompt_no_embed_ratchet`
+asserts `host` has no flowctl dispatch, and the capability set is asserted
+exactly), not an oversight to be "simplified" later.
+
+Everything else on the identities side still applies: point the subagent at the
+`base..head` range and the changed-path list and let it read the diff and the
+spec from the checkout itself. Do not paste diff hunks or spec bodies into the
+subagent prompt — it has the same repository you do.
+
 ## Step 1: Resolve cross-family pin
 
 1. Read the AGENTS.md model-routing section (caller routing instructions) for the review role / cross-family pairing.
@@ -26,9 +45,13 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 
 ### Convergence reservation and recovery fence
 
-After the exact reviewer input (including the final diff) is composed and
-immediately before every host dispatch, bind the reviewed range, build the
-artifact blob, and reserve one task-scoped round. Capture its id; it is the only
+After the exact reviewer input is composed and immediately before every host
+dispatch, bind the reviewed range, build the artifact blob, and reserve one
+task-scoped round. The full diff is materialized **for the artifact hash only** —
+it is the identity that must move when the code moves. It does not go into the
+subagent prompt: give the subagent `$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA`, the
+`git diff --numstat --no-renames` path list for that range, and the task-spec
+PATH, and let it read the spec and the hunks itself. Capture its id; it is the only
 id that may finalize or refund this dispatch.
 
 The snapshot anchors are bound **in this same block, above the diff** — an

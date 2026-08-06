@@ -454,84 +454,20 @@ class CursorSpecBackendGuard(unittest.TestCase):
             self.assertFalse(receipt.exists())
 
 
-class CursorPromptArgvCap(unittest.TestCase):
-    """Every cursor review prompt stays under CURSOR_ARGV_PROMPT_MAX regardless of
-    spec/task/diff size — the general backstop guard (fit_cursor_prompt_to_budget).
+class CursorOversizedSpecNoLongerAffectsPromptSize(unittest.TestCase):
+    """fn-169 R4 — a huge spec cannot overflow cursor's argv limit any more.
 
-    Reviewer-bot argv-overflow class: the diff overflowed (fixed by
-    fit_cursor_diff_to_budget), the re-review preamble (fixed), and a large
-    spec/task body (fixed here). cursor reads the full sources from disk.
+    This class used to guard three fitters that trimmed the embedded diff, the
+    prior findings, and the spec body to make a payload fit. Nothing is embedded
+    now: the prompt carries the spec PATH, so its size is independent of the
+    spec's. The two surviving cases assert exactly that, end to end — a 70 KB
+    spec still reaches `run_cursor_exec` under the transport boundary, and the
+    path it must read is named in the prompt.
+
+    `CURSOR_ARGV_TRANSPORT_MAX` remains a real boundary (Windows
+    `CreateProcessW`), enforced by `run_cursor_exec` — see test_cursor_run_exec.
     """
 
-    CAP = flowctl.CURSOR_ARGV_PROMPT_MAX
-
-    def test_dropped_diff_yields_disk_read_pointer_never_empty(self):
-        # Retest finding: when a huge spec/template leaves no budget for the diff,
-        # fit_cursor_diff_to_budget must emit a read-from-disk pointer (never ""),
-        # so <diff_content> always cues the reviewer to read the changed files.
-        near_cap = "x" * (self.CAP - 100)  # budget goes negative → diff dropped
-        out = flowctl.fit_cursor_diff_to_budget(near_cap, "A" * 5000)
-        self.assertNotEqual(out, "")
-        self.assertIn("disk", out.lower())
-
-    def test_under_cap_returned_unchanged(self):
-        small = "tiny prompt <review_instructions>x</review_instructions>"
-        out = flowctl.fit_cursor_prompt_to_budget(
-            small, repo_root=Path("/tmp"), spec_id="fn-1-demo"
-        )
-        self.assertEqual(out, small)
-
-    def test_exactly_at_cap_is_trimmed(self):
-        # Off-by-one: run_cursor_exec rejects len >= CAP, so a prompt of EXACTLY
-        # the cap must be trimmed to STRICTLY under (not passed through).
-        rubric = (
-            "<review_instructions>\n<verdict>SHIP</verdict>\n"
-            "</review_instructions>"
-        )
-        prompt = ("B" * (self.CAP - len(rubric))) + rubric
-        self.assertEqual(len(prompt), self.CAP)  # sanity: exactly at the cap
-        out = flowctl.fit_cursor_prompt_to_budget(
-            prompt, repo_root=Path("/tmp"), spec_id="fn-1-demo"
-        )
-        self.assertLess(len(out), self.CAP)
-        self.assertIn("<verdict>SHIP</verdict>", out)
-
-    def test_over_cap_truncates_under_cap_and_keeps_rubric(self):
-        # Huge embedded spec body + a trailing rubric carrying the verdict tag.
-        rubric = (
-            "<review_instructions>\nReview this.\n"
-            "<verdict>SHIP</verdict>\n</review_instructions>"
-        )
-        body = "<spec>\n" + ("S" * (self.CAP + 5000)) + "\n</spec>\n\n"
-        prompt = body + rubric
-        self.assertGreater(len(prompt), self.CAP)
-        out = flowctl.fit_cursor_prompt_to_budget(
-            prompt, repo_root=Path("/tmp"),
-            spec_id="fn-1-demo", task_ids=["fn-1-demo.1", "fn-1-demo.2"],
-        )
-        self.assertLess(len(out), self.CAP)
-        # Read-from-disk header naming real on-disk sources is prepended.
-        self.assertIn("Read full context from disk", out)
-        self.assertIn(".flow/specs/fn-1-demo.md", out)
-        self.assertIn(".flow/tasks/fn-1-demo.1.md", out)
-        self.assertIn(".flow/tasks/fn-1-demo.2.md", out)
-        # Trailing rubric / verdict grammar preserved verbatim.
-        self.assertTrue(out.rstrip().endswith("</review_instructions>"))
-        self.assertIn("<verdict>SHIP</verdict>", out)
-        # Truncation marker present.
-        self.assertIn("truncated to fit cursor's argv limit", out)
-
-    def test_standalone_head_truncation_keeps_verdict(self):
-        # No <review_instructions> tag (standalone shape): rubric/verdict is at the
-        # top, diff appended last → head-truncation must keep the verdict tags.
-        rubric_top = (
-            "# Implementation Review\n...criteria...\n"
-            "<verdict>SHIP</verdict>\n<verdict>NEEDS_WORK</verdict>\n\n"
-        )
-        prompt = rubric_top + "<diff_content>\n" + ("D" * (self.CAP + 2000)) + "\n</diff_content>"
-        out = flowctl.fit_cursor_prompt_to_budget(prompt, repo_root=Path("/tmp"))
-        self.assertLess(len(out), self.CAP)
-        self.assertIn("<verdict>SHIP</verdict>", out)
 
     def test_plan_review_caps_oversized_spec(self):
         # End-to-end: a large epic spec must reach run_cursor_exec UNDER the cap
@@ -552,7 +488,7 @@ class CursorPromptArgvCap(unittest.TestCase):
                     flowctl.cmd_cursor_plan_review(args)
             self.assertEqual(len(runner.calls), 1)
             sent = runner.calls[0]["prompt"]
-            self.assertLess(len(sent), flowctl.CURSOR_ARGV_PROMPT_MAX)
+            self.assertLess(len(sent), flowctl.CURSOR_ARGV_TRANSPORT_MAX)
             self.assertIn(f".flow/specs/{EPIC_ID}.md", sent)
             self.assertEqual(_read_receipt(receipt)["verdict"], "NEEDS_WORK")
 
@@ -573,7 +509,7 @@ class CursorPromptArgvCap(unittest.TestCase):
                     flowctl.cmd_cursor_completion_review(args)
             self.assertEqual(len(runner.calls), 1)
             sent = runner.calls[0]["prompt"]
-            self.assertLess(len(sent), flowctl.CURSOR_ARGV_PROMPT_MAX)
+            self.assertLess(len(sent), flowctl.CURSOR_ARGV_TRANSPORT_MAX)
             self.assertIn(f".flow/specs/{EPIC_ID}.md", sent)
             self.assertEqual(_read_receipt(receipt)["verdict"], "NEEDS_WORK")
 

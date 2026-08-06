@@ -56,6 +56,9 @@ Symptoms suggesting deterministic when you should build skill-based:
 - Parsing structured-verdict YAML from an LLM response → host agent's own structured output
 - Building a deterministic "fallback" engine for when LLM unavailable → host agent is always available
 - Weighted scoring math substituting for "is this still relevant?" → host agent answers directly
+- **Embedding content into a prompt that the agent could fetch itself** → pass an identity (a SHA range, a path), not a payload
+- **Writing a fitter / truncator / budget constant for a prompt payload** → the payload is the bug; a fitter is the symptom. Genuine *transport* limits (an argv cap) stay, and are named as transport
+- **Enumerating the ways something could be done wrong** (writer APIs, path spellings, command shapes) → an enumeration is a race against the next spelling; put the invariant where it is true by construction
 
 If three or more apply, stop and convert to a skill. The deterministic path is harder to maintain, more brittle, and produces worse output.
 

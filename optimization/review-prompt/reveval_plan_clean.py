@@ -7,6 +7,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import reveval as R  # noqa
 import reveval_plan as P  # noqa
 import flowctl  # noqa
+import pathlib
+# fn-169 R4: review prompts carry identities; this harness has no repo for a
+# reviewer to read, so it appends its own payload. One shared helper, see its
+# module docstring for why the carve-out is confined to optimization/.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from eval_prompt_payload import embed_payload as _embed_payload  # noqa: E402
+
+
 
 CLEAN = open(os.path.join(R.HERE, "spec_clean.md")).read()
 RUNS = int(os.environ.get("REVEVAL_RUNS", "3"))
@@ -20,8 +28,10 @@ FALSE_MISSING = {
 
 
 def _prompt(lean):
-    p = flowctl.build_review_prompt("plan", CLEAN, "Contacts CRM; existing single-add UI.",
-                                    task_specs="(tasks inline in the spec)")
+    p = _embed_payload(
+        flowctl.build_review_prompt(
+            "plan", context_hints="Contacts CRM; existing single-add UI."),
+        spec=CLEAN, task_specs="(tasks inline in the spec)")
     return p.replace(P.INTRO, P.INTRO + P.PLAN_LEAN, 1) if lean else p
 
 

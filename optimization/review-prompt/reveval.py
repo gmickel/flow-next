@@ -20,6 +20,14 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, os.path.join(REPO, "plugins/flow-next/scripts"))
 os.chdir(REPO)
 import flowctl  # noqa: E402
+import pathlib
+# fn-169 R4: review prompts carry identities; this harness has no repo for a
+# reviewer to read, so it appends its own payload. One shared helper, see its
+# module docstring for why the carve-out is confined to optimization/.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from eval_prompt_payload import embed_payload as _embed_payload  # noqa: E402
+
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CODE = open(os.path.join(HERE, "orders.py")).read()
@@ -108,9 +116,10 @@ BASE_SPEC = ("Order-fulfilment + pricing module. Acceptance: "
 
 
 def _base_prompt():
-    return flowctl.build_review_prompt(
-        "impl", BASE_SPEC, "orders.py — a new single-file module.",
-        diff_summary="1 file changed, +117", diff_content=CODE)
+    return _embed_payload(
+        flowctl.build_review_prompt(
+            "impl", context_hints="orders.py — a new single-file module."),
+        spec=BASE_SPEC, diff_summary="1 file changed, +117", diff_content=CODE)
 
 
 # The experimental Fowler smell baseline (Fowler, _Refactoring_ ch.3). Terse:

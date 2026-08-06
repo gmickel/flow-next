@@ -4,6 +4,32 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Cross-model review now sees the whole change, and stops being cut off while it is
+working.
+
+Reviewers used to be handed a copy of the diff inside the prompt — capped at 50 KB,
+so on a large change they received about a tenth of the evidence their verdict
+rested on, then read the rest off disk anyway. That copy is gone. A review now
+receives the commit range, the exact list of changed files, and the paths to the
+spec and tasks, and the reviewer fetches what it needs at the depth each part
+warrants. Nothing is shortened to fit, nothing is summarised on your behalf, and
+the file list is complete — no elided paths, no `{old => new}` rename shorthand, no
+mangled non-ASCII filenames. On a re-review the reviewer continues its own session
+instead of being re-briefed, so it compares against findings it actually remembers
+making; if a session cannot be resumed, the findings travel in the prompt as before
+rather than a blind review being dispatched.
+
+One expectation to set honestly: this makes reviews *better informed*, not
+provably cheaper. The prompt itself shrank by 83% on this release's own largest
+review, but a fetching reviewer spends turns on tool calls instead, and total
+input tokens for those rounds came out above the pre-change measurements — mostly
+cached, so billable cost does not track the raw number, but not a demonstrated
+saving either. A fetching reviewer is also slower in wall-clock on a big diff, and
+hit the fixed 600-second backend timeout on 3 of 10 review
+dispatches; every one was recorded as a transport failure with the review round
+refunded, exactly as intended. The measurements are
+in `optimization/reached-path/evidence/fn169/`.
+
 Review loops that were converging no longer get cut off and handed to a human to
 verify by hand. Three specs in a row hit that in the field — each one escalated at
 round 2 of 8 with a shrinking finding set — because the loop was guessing at
@@ -46,15 +72,50 @@ autonomous loop, only yours to raise.
 
 ### Changed
 
-- **The aggregate all-clear is not trusted on a backend that can truncate its own
-  prompt.** `Prior findings: all fixed` is a real shortcut when the reviewer saw
-  every prior finding — but the cursor backend fits its prompt to a hard argv
-  budget and can show a reviewer only *some* of them, at which point an honest
-  all-clear would have marked findings it never saw as fixed. On cursor the line
-  is still recognized (nothing is discarded) but no longer sweeps, so those
-  priors stay open; per-finding lines keep working everywhere, since they name
-  the finding they resolve. Interim: the follow-up spec removes the truncation
-  itself, and this exception goes with it. (fn-168)
+- **Reviewers see the whole change instead of the first 50 KB of it.** The diff
+  body, the spec text, and the task specs are no longer copied into the review
+  prompt. A review is dispatched with the `base..head` range, `git diff --numstat
+  --no-renames` as the exact scope map, and repo-relative spec/task paths; the
+  reviewer runs in your checkout and reads what it needs. Measured on this repo's
+  own history: the embedded body was 641,784 bytes against a 50 KB cap, so
+  reviewers were shown ~10% of it and fetched the rest regardless. The file list
+  matters as much as the deletion, and git abbreviates in three separate ways that
+  all had to be turned off: `--stat` elided 51 of 65 paths on that same change,
+  plain `--numstat` collapses renames into `{old => new}` so neither real path
+  appears, and without `-z` any non-ASCII path comes back C-quoted. A scope map you
+  cannot resolve to paths cannot bound a review. What changes for the reviewer is
+  completeness, not kind — it reads the same code, from disk, in full. What changes
+  for you is wall-clock: a fetching reviewer spends turns on tool calls, so a large
+  diff takes longer and can reach the backend's fixed timeout, which is recorded as
+  a transport failure and refunds the round. (fn-169)
+
+- **Re-reviews continue the same conversation instead of being re-briefed.** The
+  reviewer's session is resumed, so it verifies against findings it remembers
+  making rather than a re-rendered list, and it re-reads the changed files from
+  disk to check them. If a resume fails, flow-next rebuilds the prompt with the
+  findings included and dispatches fresh — the fallback is loud and the ordering
+  is deliberate, because a lean prompt reaching a context-free reviewer would be a
+  fresh blind review with the prior findings silently dropped. Enabled for the
+  codex backend, whose resume is verified across processes and after long gaps;
+  copilot and cursor include the findings unconditionally, and the host backend
+  always does, since every host re-review is a fresh subagent by design. (fn-169)
+
+- **A review that cannot read its own evidence fails instead of running.** When the
+  `git` read behind the scope map or the artifact identity fails, flow-next now
+  stops with git's own error before reserving a review round. Previously it
+  returned an empty result, which — with nothing embedded alongside — would
+  dispatch a paid round with no evidence and leave the repeat-review guard reading
+  "nothing changed" for every round after it. A range that genuinely contains no
+  changes is still just empty. (fn-169)
+
+- **The aggregate all-clear is trustworthy on every backend.** `Prior findings:
+  all fixed` is a real shortcut, but it is only honest if the reviewer saw every
+  prior finding — and the cursor backend used to fit its prompt to a hard argv
+  budget, so it could show a reviewer only *some* of them and then sweep findings
+  it never saw. fn-168 withheld the sweep on that backend as an interim measure;
+  this release removes the truncation instead, so every reviewer sees its whole
+  prior set and the shortcut is sound everywhere. Per-finding lines keep working
+  as before, since they name the finding they resolve. (fn-168, fn-169)
 
 - **Stall detection reads what the reviewer said instead of guessing from
   trends.** The two rules that inferred non-convergence — one from the open-count

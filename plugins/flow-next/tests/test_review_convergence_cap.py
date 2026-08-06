@@ -319,53 +319,6 @@ class TestConvergenceRatchet(unittest.TestCase):
                     flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line), line
                 )
 
-    def test_aggregate_is_not_honored_on_a_truncating_backend(self):
-        """fn-168 interim gate (deleted by fn-169): cursor can show a SUBSET.
-
-        `build_convergence_ratchet_block` renders only the prior items that fit
-        the cursor argv budget — its docstring notes a near-full prompt "can
-        retain the surrounding paired delimiters while omitting every whole
-        item". A reviewer shown a subset can truthfully answer the aggregate
-        all-clear for what it saw, and sweeping the untruncated container would
-        mark omitted, unverified findings `fixed`: a false SHIP.
-
-        The line stays RECOGNIZED (so the container is never dropped) — only the
-        sweep is withheld, leaving the prior carried at `open`, which is the
-        conservative default.
-        """
-        items = flowctl._review_finding_prior_items(
-            "Prior findings: all fixed",
-            _ratchet_prior_container(),
-            "receipt-2",
-            allow_aggregate=False,
-        )
-        self.assertIsNotNone(items, "the container must NOT be dropped")
-        self.assertEqual([item["status"] for item in items], ["open"])
-
-    def test_per_ordinal_records_are_honored_on_a_truncating_backend(self):
-        """A partial view can only UNDER-report, never mis-attribute.
-
-        Each per-ordinal record names the ordinal it resolves, so a reviewer that
-        saw a subset simply says less — it cannot mark an item it never saw. Only
-        the ordinal-less aggregate is unsafe, so per-ordinal stays honored.
-        """
-        items = flowctl._review_finding_prior_items(
-            "Prior finding #1: not-fixed",
-            _ratchet_prior_container(),
-            "receipt-2",
-            allow_aggregate=False,
-        )
-        self.assertEqual([item["status"] for item in items], ["not_fixed"])
-
-    def test_only_cursor_is_gated(self):
-        """The gate is scoped to backends that actually truncate.
-
-        Only cursor passes `max_total_chars` (via
-        `fit_cursor_rereview_prompt_to_budget`), so only cursor can render a
-        partial prior set. Gating codex would cost the aggregate for no reason.
-        """
-        self.assertEqual(flowctl._FINDINGS_TRUNCATING_BACKENDS, frozenset({"cursor"}))
-
     def test_unaddressed_empty_array_is_not_a_prior_findings_signal(self):
         """fn-168 R2, the load-bearing negative.
 
@@ -513,11 +466,19 @@ class TestConvergenceRatchet(unittest.TestCase):
         # No dangling empty bullet section.
         self.assertNotIn("**Updated files:**\n\n", out)
 
-    def test_prior_findings_truncated_when_huge(self):
+    def test_legacy_prose_priors_are_no_longer_truncated(self):
+        """fn-169 R4 — the 8000-char prose cap is gone with the argv budgets.
+
+        It only ever existed to fit a payload into cursor's positional argv. A
+        reviewer handed a head-truncated account of its own prior findings can
+        answer the aggregate all-clear for the part it saw, so the cap traded
+        bytes for exactly the false-SHIP class fn-168 chased. Nothing sizes a
+        prompt to a transport any more, so nothing shortens the evidence.
+        """
         prior = "X" * 20000
         out = flowctl.build_convergence_ratchet_block(prior)
-        self.assertIn("[prior review truncated]", out)
-        self.assertLess(len(out), 20000)
+        self.assertNotIn("[prior review truncated]", out)
+        self.assertIn(prior, out)
 
     def test_read_prior_findings_from_receipt(self):
         with tempfile.TemporaryDirectory() as d:
@@ -567,157 +528,6 @@ class TestConvergenceRatchet(unittest.TestCase):
         self.assertEqual(out.count("</prior_findings>"), 1)
         self.assertIn("[/prior_findings]", out)
         self.assertIn("[prior_findings]/x.py", out)
-
-    def test_cursor_structured_ratchet_keeps_whole_items_and_paired_delimiters(self):
-        item = self._structured_item(title="T" * flowctl._FINDINGS_MAX_TITLE)
-        item["anchor"] = {
-            **item["anchor"],
-            "path": "a" * (flowctl._FINDINGS_MAX_PATH - 3) + ".py",
-        }
-        scaffold = flowctl.build_convergence_ratchet_block(scaffold_only=True)
-        preamble = flowctl.build_rereview_preamble(
-            ["src/review.py"], "implementation", prior_items=[item]
-        )
-        nearly_full = "P" * (
-            flowctl.CURSOR_ARGV_PROMPT_MAX - len(scaffold) - 50
-        )
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            nearly_full,
-            rereview_preamble=preamble,
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-        )
-        self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
-        self.assertEqual(out.count("<prior_findings>"), out.count("</prior_findings>"))
-        self.assertIn(out.count("<prior_findings>"), (0, 1))
-        rendered = flowctl._render_structured_prior_finding(item)
-        self.assertTrue(rendered not in out or out.count(rendered) == 1)
-
-    def test_cursor_structured_path_keeps_full_rereview_preamble(self):
-        """fn-159.2 r1: the structured Cursor path used to return
-        ``ratchet + prompt``, silently dropping everything else the re-review
-        preamble carries (header, updated-files list, re-read-from-disk
-        instruction, closing contract)."""
-        item = self._structured_item()
-        preamble = flowctl.build_rereview_preamble(
-            ["src/review.py", "src/other.py"],
-            "implementation",
-            prior_items=[item],
-        )
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=preamble,
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-        )
-        # Non-ratchet preamble survives.
-        self.assertIn("## IMPORTANT: Re-review After Fixes", out)
-        self.assertIn("- src/review.py", out)
-        self.assertIn("- src/other.py", out)
-        self.assertIn("do NOT rely on cached content", out)
-        self.assertIn("CONVERGENCE RATCHET contract above", out)
-        # Ratchet items + paired delimiters survive.
-        self.assertIn(flowctl._render_structured_prior_finding(item), out)
-        self.assertEqual(out.count("<prior_findings>"), 1)
-        self.assertEqual(out.count("</prior_findings>"), 1)
-        self.assertIn("BODY", out)
-        self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
-
-    def test_cursor_plan_structured_path_keeps_task_spec_sync_section(self):
-        item = self._structured_item()
-        preamble = flowctl.build_rereview_preamble(
-            [".flow/specs/fn-1.md"], "plan", prior_items=[item]
-        )
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=preamble,
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-            spec_id="fn-1",
-        )
-        self.assertIn("## Task Spec Sync Required", out)
-        self.assertIn("flowctl task set-spec", out)
-
-    def test_cursor_persona_override_stays_first_on_both_branches(self):
-        """fn-90 R7: the override only supersedes the ambient persona if the
-        model reads it FIRST — never after a ratchet block."""
-        persona = flowctl.build_cursor_persona_override()
-        item = self._structured_item()
-        structured = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=flowctl.build_rereview_preamble(
-                ["src/review.py"], "implementation", prior_items=[item]
-            ),
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-            persona=persona,
-        )
-        legacy = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=flowctl.build_rereview_preamble(
-                ["src/review.py"], "implementation", prior_findings="old text"
-            ),
-            prior_findings="old text",
-            prior_items=None,
-            repo_root=REPO,
-            persona=persona,
-        )
-        fresh = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble="",
-            prior_findings=None,
-            prior_items=None,
-            repo_root=REPO,
-            persona=persona,
-        )
-        for name, out in (
-            ("structured", structured), ("legacy", legacy), ("fresh", fresh),
-        ):
-            with self.subTest(branch=name):
-                self.assertTrue(out.startswith(persona))
-                self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
-        self.assertLess(
-            structured.index("PERSONA OVERRIDE"),
-            structured.index("CONVERGENCE RATCHET"),
-        )
-        self.assertLess(
-            legacy.index("PERSONA OVERRIDE"),
-            legacy.index("CONVERGENCE RATCHET"),
-        )
-
-    def test_zero_item_container_never_renders_empty_structured_block(self):
-        """An empty v1 item list is not "structured findings" — it would emit
-        an empty <prior_findings> block plus a shrink-only contract over
-        nothing. It must degrade to prose / fresh-review instead."""
-        self.assertEqual(flowctl.build_convergence_ratchet_block(prior_items=[]), "")
-        prose = flowctl.build_convergence_ratchet_block(
-            "old review text", prior_items=[]
-        )
-        self.assertIn("[legacy prose fallback]", prose)
-        self.assertIn("old review text", prose)
-        fresh = flowctl.build_rereview_preamble(
-            ["src/x.py"], "implementation", prior_items=[]
-        )
-        self.assertNotIn("CONVERGENCE RATCHET", fresh)
-        self.assertNotIn("<prior_findings>", fresh)
-        self.assertIn("conduct a fresh implementation review", fresh)
-        # Scaffold measurement is the one place [] still renders the shell.
-        scaffold = flowctl.build_convergence_ratchet_block(scaffold_only=True)
-        self.assertIn("<prior_findings>", scaffold)
-        # Cursor path with a zero-item container: no empty structured block.
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=fresh,
-            prior_findings=None,
-            prior_items=[],
-            repo_root=REPO,
-        )
-        self.assertNotIn("<prior_findings>", out)
-        self.assertIn("## IMPORTANT: Re-review After Fixes", out)
 
     def test_host_workflows_name_structured_ratchet_fields(self):
         for relative in (
@@ -3276,83 +3086,6 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         )
         self.assertEqual(round_number, 3)
         self.assertIsNotNone(reservation_id)
-
-    def test_intervening_artifact_change_and_cursor_fitted_diff_bind_the_stored_hash(self):
-        original = flowctl._review_artifact_sha256(
-            flowctl.build_impl_review_artifact_blob("before")
-        )
-        fitted = flowctl.fit_cursor_diff_to_budget(
-            "prompt" * 6000, "after" * 10000
-        )
-        dispatched = flowctl._dispatched_diff_from_prompt(
-            f"<diff_content>\n{fitted}\n</diff_content>", fitted
-        )
-        self.assertEqual(dispatched, fitted)
-        changed = flowctl._review_artifact_sha256(
-            flowctl.build_impl_review_artifact_blob(dispatched)
-        )
-        self._reserve_and_record(original, review_type="impl")
-        self.assertNotEqual(original, changed)
-        self._reserve_and_record(changed, review_type="impl")
-        self.assertEqual(
-            self._data()["review_attempts"][-1]["artifact_sha256"], changed
-        )
-
-    def test_diff_containing_the_closing_tag_round_trips_to_the_exact_hash(self):
-        """PR #290 bot r9: the old non-greedy tag regex stopped at the first
-        INNER `</diff_content>` — realistic in this repo, whose diffs edit
-        prompt templates — so the hashed identity was silently truncated."""
-        diff = (
-            "+--- a/prompt.py\n"
-            "+    parts.append(f\"<diff_content>\\n{diff}\\n</diff_content>\")\n"
-            "+tail that the old regex dropped\n"
-        )
-        prompt = f"head\n<diff_content>\n{diff}\n</diff_content>\n<review_instructions>x"
-        self.assertEqual(flowctl._dispatched_diff_from_prompt(prompt, diff), diff)
-        self.assertEqual(
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(
-                    flowctl._dispatched_diff_from_prompt(prompt, diff)
-                )
-            ),
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(diff)
-            ),
-        )
-
-    def test_diffs_sharing_the_truncated_prefix_hash_differently(self):
-        """Two diffs identical up to the embedded closing tag used to collide:
-        both extracted to the same prefix, so the unchanged-artifact guard read
-        the second review as 'nothing changed' and refused to dispatch."""
-        prefix = "+wrote f\"</diff_content>\"\n"
-        hashes = set()
-        for tail in ("+first variant\n", "+second variant\n"):
-            diff = prefix + tail
-            prompt = f"<diff_content>\n{diff}\n</diff_content>"
-            dispatched = flowctl._dispatched_diff_from_prompt(prompt, diff)
-            self.assertEqual(dispatched, diff)
-            hashes.add(
-                flowctl._review_artifact_sha256(
-                    flowctl.build_impl_review_artifact_blob(dispatched)
-                )
-            )
-        self.assertEqual(len(hashes), 2)
-
-    def test_whole_prompt_truncation_binds_the_delivered_prefix(self):
-        """Whole-prompt fitting can still head-truncate the blob the prompt was
-        built with; identity binds what was DELIVERED, confirmed by content."""
-        diff = "".join(f"+line {i}\n" for i in range(200))
-        prompt = f"<diff_content>\n{diff[:300]}"  # fitter cut mid-diff
-        dispatched = flowctl._dispatched_diff_from_prompt(prompt, diff)
-        self.assertEqual(dispatched, diff[:300])
-        self.assertNotEqual(
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(dispatched)
-            ),
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(diff)
-            ),
-        )
 
     def test_ce_setup_failure_refunds_only_its_reservation(self):
         self._assert_transport_refund_is_reservation_scoped("ce")
@@ -6155,5 +5888,894 @@ class TestSingleLockedCompletionStatusWrite(_InProcessBackendReviewBase):
         self.assertEqual(self._data()["completion_review_status"], "needs_work")
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestCodexResumeArgvParity(unittest.TestCase):
+    """fn-169.1: a resumed dispatch must carry the same guarantees as a fresh one.
+
+    Measured before the fix: resumed reviews ran `sandbox: danger-full-access` at
+    `reasoning effort: medium`, against the read-only reviewer contract and the
+    configured effort, because the resume argv passed neither. Resume also omitted
+    `--skip-git-repo-check`, so outside a git repo it failed into a SILENT fresh
+    session.
+
+    `require_codex` / `require_cursor` are mocked so these run on any host without
+    the CLIs installed (CI installs neither) — same pattern as
+    `test_cursor_run_exec.py`.
+
+    These assert the argv this implementation must build. The complementary claim —
+    that codex ACTUALLY applies those overrides — cannot live in a portable gate
+    because it needs a real codex install, so it is recorded as a live measurement in
+    `optimization/reached-path/evidence/fn169/resume-parity-live.json`: resumed
+    session reporting `sandbox: read-only` and `reasoning effort: xhigh` (against
+    `danger-full-access` / `medium` before the fix), from a separate process, more
+    than ten minutes after the session was created, with recall intact.
+    """
+
+    def _capture_resume_argv(self, **kwargs):
+        seen = []
+
+        def fake_run(cmd, **rk):
+            seen.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+        with mock.patch.object(flowctl, "require_codex", return_value="/usr/local/bin/codex"), \
+                mock.patch.object(flowctl.subprocess, "run", side_effect=fake_run):
+            flowctl.run_codex_exec("p", session_id="sid-1", repo_root=Path("."), **kwargs)
+        for cmd in seen:
+            if len(cmd) > 2 and cmd[1] == "exec" and cmd[2] == "resume":
+                return cmd
+        self.fail("no `codex exec resume` invocation captured")
+
+    def test_resume_argv_restores_the_fresh_dispatch_guarantees(self):
+        """The invariant, not a copy of codex's option surface.
+
+        An earlier draft asserted against an allowlist of every flag
+        `codex exec resume` documents — the enumeration anti-pattern this spec just
+        added to CLAUDE.md, and already incomplete (it omitted `--config`). Assert
+        what THIS implementation must do instead.
+        """
+        cmd = self._capture_resume_argv(sandbox="read-only")
+        self.assertEqual(cmd[1:4], ["exec", "resume", "sid-1"])
+        joined = " ".join(cmd)
+        # sandbox rides the config override: `exec resume` has NO --sandbox flag, and
+        # passing one makes resume exit non-zero (verified against codex 0.146.1).
+        self.assertIn('sandbox_mode="read-only"', joined)
+        self.assertNotIn("--sandbox", cmd)
+        self.assertRegex(joined, r'model_reasoning_effort="[a-z]+"')
+        self.assertIn("--skip-git-repo-check", cmd)
+        # a resumed session keeps its ORIGINAL model — re-pinning it is wrong
+        self.assertNotIn("--model", cmd)
+        self.assertNotIn("-m", cmd)
+
+    def test_resume_failure_is_surfaced(self):
+        calls = {"n": 0}
+
+        def fake_run(cmd, **rk):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise subprocess.CalledProcessError(1, cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="fresh-ok", stderr="")
+
+        res = {}
+        with mock.patch.object(flowctl, "require_codex", return_value="/usr/local/bin/codex"), \
+                mock.patch.object(flowctl.subprocess, "run", side_effect=fake_run):
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                out, sid, rc, _ = flowctl.run_codex_exec(
+                    "p", session_id="sid-1", repo_root=Path("."), resolution_out=res
+                )
+        self.assertTrue(res.get("resume_failed"))
+        self.assertTrue(res.get("resume_failure_reason"))
+        self.assertNotIn("resumed", res)
+        self.assertIn("resume", err.getvalue().lower())
+        self.assertIn("fresh-ok", out)   # fallthrough preserved
+
+    def test_cursor_resume_drops_no_flags(self):
+        """fn-169.1 audit: only codex had the resume-parity defect.
+
+        cursor and copilot build ONE flat argv where the session flag is just
+        another entry, so nothing can be dropped. codex was the outlier because
+        `exec resume` is a separate subcommand with its own flag set.
+        """
+        def flags(**kw):
+            got = []
+
+            def fake(cmd, **rk):
+                got.append(list(cmd))
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout='{"type":"result","result":"x"}', stderr=""
+                )
+
+            with mock.patch.object(flowctl, "require_cursor",
+                                   return_value="/usr/local/bin/cursor-agent"), \
+                    mock.patch.object(flowctl.subprocess, "run", side_effect=fake):
+                try:
+                    flowctl.run_cursor_exec(prompt="p", repo_root=Path("."), **kw)
+                except Exception:
+                    pass
+            for cmd in got:
+                if "cursor-agent" in str(cmd[0]):
+                    return {tok.split("=")[0] for tok in cmd if tok.startswith("--")}
+            return set()
+
+        fresh = flags()
+        resumed = flags(session_id="sid-1")
+        self.assertTrue(fresh, "no cursor-agent invocation captured")
+        self.assertEqual(fresh - resumed, set(), "resume dropped flags the fresh path passes")
+        self.assertIn("--resume", resumed)
+        self.assertIn("--mode", resumed)      # read-only posture preserved
+        self.assertIn("--model", resumed)
+
+
+class TestTwoPhaseResumeDispatch(unittest.TestCase):
+    """fn-169 R2 — resume carries the lean prompt; only a failed resume injects.
+
+    The invariant these tests protect is an ORDER, not a string: the reviewer may
+    only be given a lean prompt while its session is alive, and a prompt that
+    dropped the prior findings must never reach a FRESH session. fn-90's runaway
+    is exactly that combination, and `run_codex_exec`'s old silent
+    resume-then-fresh fallthrough produced it.
+    """
+
+    def _dispatch(self, *, resume_fails: bool, two_phase: bool = True,
+                  injected: str | None = "INJECTED"):
+        calls: list[dict] = []
+
+        def fake_run_exec(prompt, *, session_id, repo_root, spec, resolution_out,
+                          args, resume_only=False):
+            calls.append(
+                {"prompt": prompt, "session_id": session_id, "resume_only": resume_only}
+            )
+            if resume_only and resume_fails:
+                resolution_out["resume_failed"] = True
+                resolution_out["resume_failure_reason"] = "exit 1"
+                return "", None, 1, "resume failed"
+            return "VERDICT=SHIP", session_id or "minted", 0, ""
+
+        reg: dict[str, Any] = {"run_exec": fake_run_exec}
+        if two_phase:
+            reg["two_phase_resume"] = True
+        result = flowctl._dispatch_backend_review(
+            backend="codex", reg=reg, args=argparse.Namespace(json=False),
+            prompt="LEAN", session_id="sess-1", repo_root=Path("."),
+            resolved_spec=None, resolution_out={}, receipt_path=None,
+            spec_id=None, review_kind=None, review_type="impl", task_id=None,
+            injected_prompt=injected,
+        )
+        return calls, result
+
+    def test_live_resume_sends_only_the_lean_prompt(self):
+        calls, (output, _sid, rc, _err) = self._dispatch(resume_fails=False)
+        self.assertEqual(len(calls), 1, "a working resume must not dispatch twice")
+        self.assertEqual(calls[0]["prompt"], "LEAN")
+        self.assertEqual(calls[0]["session_id"], "sess-1")
+        self.assertTrue(calls[0]["resume_only"],
+                        "phase 1 must be terminal — a silent fresh fallthrough "
+                        "would send the lean prompt to a context-free reviewer")
+        self.assertEqual((output, rc), ("VERDICT=SHIP", 0))
+
+    def test_failed_resume_injects_and_dispatches_fresh(self):
+        calls, (output, _sid, rc, _err) = self._dispatch(resume_fails=True)
+        self.assertEqual(len(calls), 2, "a failed resume must fall back to injection")
+        self.assertEqual(calls[0]["prompt"], "LEAN")
+        # The fresh dispatch is the ONLY one allowed to be session-free, and it
+        # is the one carrying the findings.
+        self.assertEqual(calls[1]["prompt"], "INJECTED")
+        self.assertIsNone(calls[1]["session_id"])
+        self.assertFalse(calls[1]["resume_only"])
+        self.assertEqual((output, rc), ("VERDICT=SHIP", 0))
+
+    def test_no_fresh_dispatch_ever_receives_the_lean_prompt(self):
+        """The structural property, stated once, over both outcomes."""
+        for resume_fails in (False, True):
+            calls, _ = self._dispatch(resume_fails=resume_fails)
+            for call in calls:
+                if call["session_id"] is None:
+                    self.assertNotEqual(
+                        call["prompt"], "LEAN",
+                        f"resume_fails={resume_fails}: a fresh session was handed "
+                        "the prompt that omits the prior findings",
+                    )
+
+    def test_backends_without_the_capability_are_untouched(self):
+        """cursor/copilot/host keep unconditional injection and one dispatch."""
+        for kwargs in ({"two_phase": False}, {"injected": None}):
+            calls, _ = self._dispatch(resume_fails=True, **kwargs)
+            self.assertEqual(len(calls), 1, kwargs)
+            self.assertEqual(calls[0]["prompt"], "LEAN", kwargs)
+            self.assertEqual(calls[0]["session_id"], "sess-1", kwargs)
+            self.assertFalse(calls[0]["resume_only"], kwargs)
+
+
+class TestResumedRatchetBlock(unittest.TestCase):
+    """fn-169 R2 — the lean block drops the payload, never the grammar."""
+
+    def test_resumed_block_omits_rendered_priors(self):
+        container = _ratchet_prior_container()
+        full = flowctl.build_convergence_ratchet_block(
+            "Prior finding #1: something", prior_items=container["items"],
+            review_type="implementation",
+        )
+        lean = flowctl.build_convergence_ratchet_block(
+            "Prior finding #1: something", prior_items=container["items"],
+            review_type="implementation", resumed=True,
+        )
+        self.assertIn("<prior_findings>", full)
+        self.assertNotIn("<prior_findings>", lean)
+        self.assertLess(len(lean), len(full))
+
+    def test_resumed_round_still_parses_per_ordinal_statuses(self):
+        """A reply written against the LEAN block's grammar must parse.
+
+        This is the failure mode that matters: dropping the payload is only safe
+        if the reply contract survives. So the assertion runs the real parser
+        over the real advertised grammar, not a hand-written sample.
+        """
+        lean = flowctl.build_convergence_ratchet_block(
+            "Prior finding #1: x\nPrior finding #2: y",
+            prior_items=_ratchet_prior_container()["items"],
+            review_type="implementation", resumed=True,
+        )
+        tokens = re.findall(
+            r"^\s*Prior finding #\d+: (?:fixed|not-fixed|withdrawn)\s*$",
+            lean, re.MULTILINE,
+        )
+        self.assertTrue(tokens, "lean block advertises no parseable prior-finding line")
+
+        container = _ratchet_prior_container()
+        template = container["items"][0]
+        container["items"] = [
+            dict(template, ordinal=n,
+                 id=flowctl._review_finding_lineage_id("receipt-1", n))
+            for n in (1, 2)
+        ]
+        reply = (
+            "Prior finding #1: fixed\n"
+            "Prior finding #2: not-fixed\n\n"
+            "VERDICT=NEEDS_WORK\n"
+        )
+        items = flowctl._review_finding_prior_items(reply, container, "receipt-2")
+        by_ordinal = {item["ordinal"]: item["status"] for item in items}
+        self.assertEqual(by_ordinal, {1: "fixed", 2: "not_fixed"})
+
+    def test_only_codex_opts_into_two_phase(self):
+        """Host's exception, and copilot/cursor's, stated as an assertion.
+
+        Host has no session by design ("every re-review is a fresh subagent"), so
+        it must always inject. Copilot's `--resume` is create-or-resume via a
+        marker and cursor's resume-only path is unmeasured. A later
+        "simplification" that flips any of them on would silently ship blind
+        re-reviews, which is what this asserts against.
+        """
+        flowctl._wire_backend_review_hooks()
+        opted_in = {
+            name for name, reg in flowctl.BACKEND_REGISTRY.items()
+            if reg.get("two_phase_resume")
+        }
+        self.assertEqual(opted_in, {"codex"})
+
+    def test_resumed_preamble_keeps_the_refetch_instruction(self):
+        """Dropping the payload must not drop "re-read from disk".
+
+        A resumed reviewer holds the findings, not the post-fix file contents —
+        RP's "reviewer sees your changes automatically" is an RP auto-refresh
+        property and false for every CLI backend.
+        """
+        preamble = flowctl.build_rereview_preamble(
+            ["a.py", "b.py"], "implementation",
+            prior_findings="Prior finding #1: x", resumed=True,
+        )
+        self.assertIn("Re-read these files from the repository", preamble)
+        self.assertIn("do NOT rely on cached content", preamble)
+        self.assertNotIn("<prior_findings>", preamble)
+        for rp_ism in ("automatically", "auto-refresh"):
+            self.assertNotIn(rp_ism, preamble)
+
+
+class TestRereviewPromptPair(unittest.TestCase):
+    """fn-169 R2 — the resume/injection contract belongs to the ROUND.
+
+    Implementation, plan, and completion reviews all ratchet, all resume, and all
+    used to re-render the priors on a successful resume. These assert the shared
+    builder over all three, plus the structural guarantee that no dispatch site
+    can quietly opt out.
+    """
+
+    REVIEW_TYPES = ("implementation", "plan", "completion")
+
+    def _pair(self, review_type: str, *, two_phase: bool):
+        return flowctl._rereview_prompt_pair(
+            "BODY",
+            files=["a.py"],
+            review_type=review_type,
+            prior_findings="Prior finding #1: something",
+            prior_items=_ratchet_prior_container()["items"],
+            two_phase=two_phase,
+        )
+
+    def test_single_phase_is_byte_identical_to_the_old_behavior(self):
+        for review_type in self.REVIEW_TYPES:
+            dispatch, injected, preamble = self._pair(review_type, two_phase=False)
+            self.assertIsNone(injected, review_type)
+            self.assertEqual(dispatch, preamble + "BODY", review_type)
+            self.assertIn("<prior_findings>", dispatch, review_type)
+
+    def test_two_phase_drops_priors_from_the_dispatch_prompt_only(self):
+        for review_type in self.REVIEW_TYPES:
+            dispatch, injected, preamble = self._pair(review_type, two_phase=True)
+            self.assertNotIn("<prior_findings>", dispatch, review_type)
+            self.assertIn("<prior_findings>", injected, review_type)
+            self.assertEqual(dispatch, preamble + "BODY", review_type)
+            self.assertTrue(dispatch.endswith("BODY"), review_type)
+            self.assertLess(len(dispatch), len(injected), review_type)
+
+    def test_two_phase_keeps_the_machine_read_grammar_in_every_review_type(self):
+        for review_type in self.REVIEW_TYPES:
+            dispatch, _injected, _preamble = self._pair(review_type, two_phase=True)
+            self.assertRegex(
+                dispatch,
+                r"(?m)^\s*Prior finding #\d+: (?:fixed|not-fixed|withdrawn)\s*$",
+                f"{review_type}: lean prompt dropped the reply grammar along with "
+                "the payload — resolutions would become invisible",
+            )
+
+    def test_every_dispatch_site_forwards_injected_prompt(self):
+        """A handler that forgets the kwarg silently keeps re-rendering priors.
+
+        Parsed from the AST rather than grepped, and enumerating OUR call sites
+        (which is a closed set we own) rather than any external tool's options.
+        """
+        import ast as _ast
+
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        tree = _ast.parse(source)
+        missing = []
+        found = 0
+        for node in _ast.walk(tree):
+            if not isinstance(node, _ast.Call):
+                continue
+            func = node.func
+            name = getattr(func, "id", None) or getattr(func, "attr", None)
+            if name != "_dispatch_backend_review":
+                continue
+            found += 1
+            kwargs = {kw.arg for kw in node.keywords}
+            if "injected_prompt" not in kwargs:
+                missing.append(node.lineno)
+        self.assertGreaterEqual(found, 3, "dispatch call sites not located")
+        self.assertEqual(missing, [], f"dispatch sites missing injected_prompt: {missing}")
+
+
+class TestReviewScopeIsResolvable(unittest.TestCase):
+    """fn-169 R3 — every path in `<changed_files>` must resolve to a real file.
+
+    The whole no-embed model rests on this block being the complete, exact scope:
+    the reviewer decides what to fetch from it, so a path it cannot resolve is
+    evidence it will never read. Two git features abbreviate and both were caught
+    the same way — by running the real command over real history rather than a
+    synthetic fixture.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = Path(__file__).resolve().parents[3]
+
+    def _rename_range(self) -> tuple[str, str]:
+        """Find a commit in this repo's own history that renamed a file."""
+        out = subprocess.run(
+            ["git", "log", "--diff-filter=R", "--format=%H", "-1"],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        if not out:
+            self.skipTest("no rename commit in history")
+        return f"{out}~1", out
+
+    def test_renames_are_not_abbreviated_to_brace_notation(self):
+        """Plain --numstat writes `{old => new}`, naming neither real path."""
+        base, head = self._rename_range()
+        with mock.patch.object(flowctl, "get_repo_root", return_value=self.repo):
+            scope = flowctl._gather_review_scope(base, head)
+        self.assertTrue(scope, "no scope gathered for a known rename commit")
+        self.assertNotIn("=>", scope, "rename abbreviated — neither path resolves")
+        self.assertNotIn("{", scope)
+
+    def test_every_scope_path_exists_at_the_reviewed_head(self):
+        """The paths are resolvable, not merely unabbreviated.
+
+        Added paths must exist at head; deleted ones must not. Both are checked
+        against git rather than the working tree, so the assertion is about the
+        reviewed snapshot the reviewer is told to read.
+        """
+        base, head = self._rename_range()
+        with mock.patch.object(flowctl, "get_repo_root", return_value=self.repo):
+            scope = flowctl._gather_review_scope(base, head)
+        tracked = subprocess.run(
+            ["git", "ls-tree", "-r", "--name-only", head],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.split("\n")
+        at_head = set(tracked)
+        checked = 0
+        for line in scope.split("\n"):
+            parts = line.split("\t")
+            if len(parts) != 3:
+                continue
+            added, _deleted, path = parts
+            if added == "0":
+                continue  # a pure deletion is correctly absent at head
+            self.assertIn(
+                path, at_head,
+                f"scope names {path!r}, which does not exist at the reviewed "
+                "head — the reviewer would be told to read a path it cannot open",
+            )
+            checked += 1
+        self.assertGreater(checked, 0, "no added/modified paths to verify")
+
+    def test_a_wide_diff_lists_every_path_in_full(self):
+        """The >50-file case the acceptance criterion names, on real history."""
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        base = None
+        for depth in ("~20", "~40", "~80"):
+            candidate = f"{head}{depth}"
+            names = subprocess.run(
+                ["git", "diff", "--name-only", "--no-renames",
+                 f"{candidate}..{head}"],
+                cwd=self.repo, capture_output=True, text=True,
+            )
+            if names.returncode == 0 and len(
+                [n for n in names.stdout.split("\n") if n]
+            ) > 50:
+                base = candidate
+                break
+        if base is None:
+            self.skipTest("no >50-file range available in shallow history")
+        with mock.patch.object(flowctl, "get_repo_root", return_value=self.repo):
+            scope = flowctl._gather_review_scope(base, head)
+        expected = {
+            n for n in subprocess.run(
+                ["git", "diff", "--name-only", "--no-renames", f"{base}..{head}"],
+                cwd=self.repo, capture_output=True, text=True, check=True,
+            ).stdout.split("\n") if n
+        }
+        got = {
+            line.split("\t")[2] for line in scope.split("\n")
+            if len(line.split("\t")) == 3
+        }
+        self.assertEqual(
+            got, expected,
+            "scope is not the exact changed-path set on a >50-file diff",
+        )
+        self.assertNotIn("...", scope, "a path was elided")
+
+
+class TestEvidenceFailureIsLoud(unittest.TestCase):
+    """fn-169 R3 — a failed evidence read must never become an empty review.
+
+    Before fn-169 both git reads returned "" on failure and the prompt embedded a
+    diff body alongside, so a swallowed failure degraded the review. Nothing is
+    embedded now: the scope map IS the reviewer's evidence and the full diff IS
+    the artifact identity, so returning "" would dispatch a paid round with no
+    evidence AND leave the artifact-unchanged guard reading "nothing changed" for
+    every subsequent round. The distinction under test is failure vs. genuine
+    emptiness — collapsing them is the defect.
+    """
+
+    def _fake_git(self, *, returncode: int, stdout: str = "", stderr: str = ""):
+        def run(cmd, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, returncode, stdout=stdout, stderr=stderr
+            )
+        return run
+
+    def test_failed_scope_read_raises_instead_of_returning_empty(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=self._fake_git(
+                        returncode=128,
+                        stderr="fatal: bad revision 'deadbee..HEAD'",
+                    )):
+            with self.assertRaises(flowctl.ReviewEvidenceError) as ctx:
+                flowctl._gather_review_scope("deadbee", "HEAD")
+        # The operator needs git's own reason, not a generic failure.
+        self.assertIn("bad revision", str(ctx.exception))
+
+    def test_failed_identity_read_raises(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=self._fake_git(returncode=1, stderr="boom")):
+            with self.assertRaises(flowctl.ReviewEvidenceError):
+                flowctl._gather_review_identity_diff("aaa", "bbb")
+
+    def test_oserror_is_also_loud(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=OSError("git not found")):
+            with self.assertRaises(flowctl.ReviewEvidenceError):
+                flowctl._gather_review_scope("aaa", "bbb")
+
+    def test_a_genuinely_empty_range_is_not_an_error(self):
+        """Success with no output stays the caller's judgement, not a failure.
+
+        The two reads take different paths — the scope map is a captured run, the
+        artifact identity is streamed under a ceiling — so both are exercised
+        through the mechanism each actually uses.
+        """
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=self._fake_git(returncode=0, stdout="")):
+            self.assertEqual(flowctl._gather_review_scope("aaa", "aaa"), "")
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=TestIdentityDiffIsBoundedNeverTruncated()
+                    ._fake_popen(b"")):
+            self.assertEqual(
+                flowctl._gather_review_identity_diff("aaa", "aaa"), ""
+            )
+
+    def test_handlers_abort_before_reserving_a_round(self):
+        """The abort must precede the reservation, or a round is burned.
+
+        Asserted structurally: in each diff-bearing handler the guarded gather
+        appears before the cap enforcement it protects. A reordering that put the
+        reservation first would spend a round to discover the evidence is missing.
+        """
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        for handler in ("_backend_impl_review", "_backend_completion_review"):
+            with self.subTest(handler=handler):
+                start = source.index(f"def {handler}(")
+                nxt = source.find("\ndef ", start + 1)
+                body = source[start:nxt if nxt != -1 else len(source)]
+                guard = body.index("except ReviewEvidenceError")
+                reserve = body.index("enforce_and_increment_review_cap")
+                self.assertLess(
+                    guard, reserve,
+                    f"{handler} reserves a review round before verifying it can "
+                    "read the evidence that review depends on",
+                )
+
+
+class TestIdentityDiffIsBoundedNeverTruncated(unittest.TestCase):
+    """fn-169 (impl-review r3) — the identity read has a ceiling, not a budget.
+
+    The pre-fn-169 read was capped at 50 KB because it was EMBEDDED; the identity
+    read replaced it and is uncapped in intent, which made it an unbounded read
+    whose result is then copied twice by hashing. So it is bounded — and the bound
+    RAISES rather than trimming. A truncated identity is strictly worse than none:
+    two diffs sharing a prefix would hash identically, and the unchanged-artifact
+    guard reads that as "nothing changed", which is the false-SHIP hole this spec
+    closed.
+    """
+
+    def _fake_popen(self, payload: bytes, *, returncode: int = 0, stderr: bytes = b""):
+        class FakePipe:
+            def __init__(self, data: bytes):
+                self._data = data
+                self.pos = 0
+
+            def read(self, n=-1):
+                if n is None or n < 0:
+                    out, self.pos = self._data[self.pos:], len(self._data)
+                    return out
+                out = self._data[self.pos:self.pos + n]
+                self.pos += len(out)
+                return out
+
+            def close(self):
+                pass
+
+        class FakeProc:
+            """Mirrors the real call shape: stdout is a pipe, stderr is a FILE.
+
+            fn-169 (impl-review r7) moved stderr to a temp file so there is no
+            second pipe to deadlock on, so the fake writes the stderr bytes into
+            whatever file object the caller passed as ``stderr``.
+            """
+
+            def __init__(self, stderr_file):
+                self.stdout = FakePipe(payload)
+                self.killed = False
+                if stderr_file is not None and stderr:
+                    stderr_file.write(stderr)
+
+            def kill(self):
+                self.killed = True
+
+            def wait(self, timeout=None):
+                return -9 if self.killed else returncode
+
+        return lambda *a, **k: FakeProc(k.get("stderr"))
+
+    def test_a_diff_over_the_ceiling_raises_and_names_the_bound(self):
+        limit = flowctl.REVIEW_IDENTITY_DIFF_MAX_BYTES
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=self._fake_popen(b"x" * (limit + 1))):
+            with self.assertRaises(flowctl.ReviewEvidenceError) as ctx:
+                flowctl._gather_review_identity_diff("aaa", "bbb")
+        message = str(ctx.exception)
+        self.assertIn(str(limit), message)
+        # The message must explain WHY it refuses rather than trimming.
+        self.assertIn("never truncated", message)
+
+    def test_a_large_but_in_bounds_diff_is_returned_whole(self):
+        payload = b"d" * 3_000_000
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=self._fake_popen(payload)):
+            out = flowctl._gather_review_identity_diff("aaa", "bbb")
+        self.assertEqual(len(out), len(payload), "an in-bounds diff was shortened")
+
+    def test_nonzero_exit_still_raises_with_gits_reason(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=self._fake_popen(
+                        b"", returncode=128, stderr=b"fatal: bad object")):
+            with self.assertRaises(flowctl.ReviewEvidenceError) as ctx:
+                flowctl._gather_review_identity_diff("aaa", "bbb")
+        self.assertIn("bad object", str(ctx.exception))
+
+    def test_standalone_reviews_never_read_the_identity_diff(self):
+        """No reservation means no consumer; the read would be pure cost.
+
+        Asserted structurally in the handler, because the wasted read is the whole
+        point: a standalone branch review has no spec-scoped counter to guard.
+        """
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        start = source.index("def _backend_impl_review(")
+        body = source[start:source.index("\ndef ", start + 1)]
+        self.assertIn('"" if standalone', body)
+        self.assertIn("None if standalone", body)
+
+
+class TestScopePathsSurviveUnusualFilenames(unittest.TestCase):
+    """fn-169 R3 (impl-review r5) — the third abbreviation git applies.
+
+    `--stat` elides with an ellipsis, plain `--numstat` collapses renames into
+    `{old => new}`, and without `-z` git C-quotes any path outside plain ASCII.
+    All three break the same contract: the block claims to be the complete,
+    resolvable scope, and a reviewer that cannot open a path cannot review it.
+    Exercised over a real git repository, because every one of these was found by
+    running the real command rather than by reasoning about it.
+    """
+
+    @contextlib.contextmanager
+    def _repo_with(self, filename: str):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            run = lambda *a: subprocess.run(  # noqa: E731
+                a, cwd=repo, check=True, capture_output=True
+            )
+            run("git", "init", "-q", ".")
+            run("git", "config", "user.email", "t@example.com")
+            run("git", "config", "user.name", "t")
+            target = repo / filename
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("a\n", encoding="utf-8")
+            run("git", "add", "-A")
+            run("git", "commit", "-qm", "one")
+            target.write_text("a\nb\n", encoding="utf-8")
+            run("git", "add", "-A")
+            run("git", "commit", "-qm", "two")
+            yield repo
+
+    def _scope(self, repo: Path) -> str:
+        with mock.patch.object(flowctl, "get_repo_root", return_value=repo):
+            return flowctl._gather_review_scope("HEAD~1", "HEAD")
+
+    def test_non_ascii_path_appears_literally(self):
+        name = "src/wéird ñame.py"
+        with self._repo_with(name) as repo:
+            scope = self._scope(repo)
+        self.assertIn(name, scope, "path was not emitted literally")
+        # git's C-quoting escape for é is \303\251; its presence means -z is gone.
+        self.assertNotIn("\\303", scope)
+        self.assertFalse(scope.startswith('"'))
+
+    def test_every_scope_path_opens(self):
+        """The property, not the encoding: the reviewer can open what it is told."""
+        name = "src/ünïcode dir/файл.py"
+        with self._repo_with(name) as repo:
+            scope = self._scope(repo)
+            for line in scope.split("\n"):
+                parts = line.split("\t")
+                if len(parts) != 3:
+                    continue
+                self.assertTrue(
+                    (repo / parts[2]).exists(),
+                    f"scope names {parts[2]!r}, which does not open",
+                )
+
+    def test_quotes_in_a_filename_are_not_re_escaped(self):
+        # NTFS forbids `"` in a filename outright (Errno 22), so this case is
+        # unrepresentable on Windows rather than merely awkward. Probe the real
+        # filesystem instead of keying off sys.platform: the constraint belongs to
+        # the filesystem, and a POSIX checkout mounted on a Windows runner would
+        # fail the same way.
+        name = 'src/has"quote.py'
+        try:
+            with tempfile.TemporaryDirectory() as probe:
+                target = Path(probe) / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("x", encoding="utf-8")
+        except OSError:
+            self.skipTest(f"filesystem rejects {name!r}; nothing to assert here")
+        with self._repo_with(name) as repo:
+            scope = self._scope(repo)
+        self.assertIn(name, scope)
+        self.assertNotIn('\\"', scope)
+
+    def test_a_newline_bearing_path_is_flagged_not_silently_split(self):
+        """Unrepresentable in a line-oriented block, so it says so.
+
+        A path containing a newline cannot appear literally without reading as two
+        entries. Rendering it quoted WITH an explanation is the only honest option;
+        emitting it raw would silently corrupt the list.
+        """
+        raw = "1\t0\tsrc/ok.py\x001\t0\tsrc/we\nird.py\x00"
+        rendered = flowctl._render_numstat_z(raw)
+        lines = rendered.split("\n")
+        self.assertIn("1\t0\tsrc/ok.py", lines)
+        self.assertIn("quoted", rendered)
+        self.assertIn("newline or tab", rendered)
+        # Exactly two records in, exactly two lines out.
+        self.assertEqual(len(lines), 2, rendered)
+
+    def test_unexpected_records_are_kept_not_dropped(self):
+        """A shorter scope map is the defect; never silently discard a record."""
+        rendered = flowctl._render_numstat_z("1\t0\tsrc/a.py\x00weird-record\x00")
+        self.assertIn("weird-record", rendered)
+
+
+class TestEveryCanonicalTaskMustBeVisible(unittest.TestCase):
+    """fn-169 R3 (impl-review r5) — a task with no readable spec aborts the review.
+
+    The handlers used to enumerate task specs by globbing `*.md`. A task whose
+    markdown was missing was therefore absent from the prompt AND from the artifact
+    hash, so a completion review could return SHIP without ever seeing it. That was
+    survivable while the specs were embedded — the prompt was merely shorter — but
+    the prompt now carries PATHS, so an unresolvable path is an invisible gap in
+    the evidence rather than a visible omission.
+    """
+
+    @contextlib.contextmanager
+    def _flow_repo(self, *, task_ids: list[str], write_markdown_for: list[str]):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            flow = repo / ".flow"
+            (flow / "specs").mkdir(parents=True)
+            (flow / "tasks").mkdir(parents=True)
+            spec_id = "fn-9-demo"
+            (flow / "specs" / f"{spec_id}.md").write_text(
+                "# Demo\n\n## Acceptance Criteria\n- **R1:** thing\n", encoding="utf-8"
+            )
+            for task_id in task_ids:
+                (flow / "tasks" / f"{task_id}.json").write_text(
+                    json.dumps({"id": task_id, "title": "t", "status": "done"}),
+                    encoding="utf-8",
+                )
+                if task_id in write_markdown_for:
+                    (flow / "tasks" / f"{task_id}.md").write_text(
+                        f"# {task_id}\n", encoding="utf-8"
+                    )
+            yield repo, flow, spec_id
+
+    def _load(self, flow: Path, spec_id: str):
+        with mock.patch.object(flowctl, "get_flow_dir", return_value=flow):
+            return flowctl._load_epic_and_task_specs(
+                spec_id, use_json=False, missing_label="Epic spec not found"
+            )
+
+    def test_all_markdown_present_enumerates_every_task(self):
+        ids = ["fn-9-demo.1", "fn-9-demo.2"]
+        with self._flow_repo(task_ids=ids, write_markdown_for=ids) as (_r, flow, sid):
+            *_rest, task_ids = self._load(flow, sid)
+        self.assertEqual(task_ids, ids)
+
+    def test_a_task_without_markdown_aborts_and_names_it(self):
+        ids = ["fn-9-demo.1", "fn-9-demo.2"]
+        with self._flow_repo(
+            task_ids=ids, write_markdown_for=["fn-9-demo.1"]
+        ) as (_r, flow, sid):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as ctx:
+                    self._load(flow, sid)
+        self.assertNotEqual(ctx.exception.code, 0)
+        message = err.getvalue()
+        self.assertIn("fn-9-demo.2.md", message)
+        # It must say WHY silence would be worse than failing.
+        self.assertIn("silently omit", message)
+
+    def test_the_abort_precedes_any_reservation(self):
+        """Structural: the spec load runs before the cap is touched.
+
+        A review that discovers a missing task after reserving a round has already
+        spent it, and the round accounting is the thing that bounds cost.
+        """
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        for handler in ("_backend_plan_review", "_backend_completion_review"):
+            with self.subTest(handler=handler):
+                start = source.index(f"def {handler}(")
+                body = source[start:source.index("\ndef ", start + 1)]
+                self.assertLess(
+                    body.index("_load_epic_and_task_specs"),
+                    body.index("enforce_and_increment_review_cap"),
+                    f"{handler} reserves a round before verifying every task spec "
+                    "can be read",
+                )
+
+
+class TestReviewExecTimeout(unittest.TestCase):
+    """fn-169 — one liveness bound, env-overridable, applied to every backend.
+
+    Raised 600 -> 1800 because the fetch-not-embed model moved work INTO the
+    reviewer's session: it reads the diff and specs itself now instead of being
+    handed a truncated copy, so a large change costs tool-call turns. At 600s, 3 of
+    10 dispatches on this spec's own diff were killed mid-review — reviewers that
+    were working, stopped for being slow.
+    """
+
+    def _resolve(self, value):
+        env = {} if value is None else {"FLOW_REVIEW_EXEC_TIMEOUT": value}
+        with mock.patch.dict(os.environ, env, clear=False):
+            if value is None:
+                os.environ.pop("FLOW_REVIEW_EXEC_TIMEOUT", None)
+            return flowctl.get_review_exec_timeout()
+
+    def test_default_and_override(self):
+        self.assertEqual(self._resolve(None), 1800)
+        self.assertEqual(self._resolve("3600"), 3600)
+
+    def test_present_but_invalid_falls_back_to_the_default(self):
+        """A typo must not silently remove the bound."""
+        for bad in ("", "abc", "0", "-5", "12.5"):
+            with self.subTest(value=bad):
+                self.assertEqual(self._resolve(bad), 1800)
+
+    def test_every_backend_spawn_uses_the_resolved_value(self):
+        """No spawn may keep a literal seconds number.
+
+        Parsed from the AST over OUR spawning functions — a closed set we own —
+        rather than grepped, so a fourth backend cannot quietly hardcode one.
+        """
+        import ast as _ast
+
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        tree = _ast.parse(source)
+        spawners = {"run_codex_exec", "run_copilot_exec", "run_cursor_exec"}
+        seen = set()
+        for node in _ast.walk(tree):
+            if not isinstance(node, _ast.FunctionDef) or node.name not in spawners:
+                continue
+            seen.add(node.name)
+            for call in _ast.walk(node):
+                if not isinstance(call, _ast.Call):
+                    continue
+                func = call.func
+                name = getattr(func, "attr", None) or getattr(func, "id", None)
+                if name not in ("run", "Popen"):
+                    continue
+                for kw in call.keywords:
+                    if kw.arg != "timeout":
+                        continue
+                    self.assertIsInstance(
+                        kw.value, _ast.Name,
+                        f"{node.name} passes a literal timeout; it must use the "
+                        "resolved review_exec_timeout so the bound is one knob",
+                    )
+                    self.assertEqual(kw.value.id, "review_exec_timeout")
+        self.assertEqual(seen, spawners, "a backend spawn function was not found")

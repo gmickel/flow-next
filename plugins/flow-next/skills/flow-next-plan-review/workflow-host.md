@@ -16,6 +16,25 @@ subcommand and accepts no model/effort suffix.
    `session_id` is literal `null`.
 5. Missing cross-family pin fails closed.
 
+
+**fn-169 — host is the documented always-inject exception.** The `codex` backend
+resumes the reviewer's own session on a re-review and therefore sends the
+shrink-only contract WITHOUT re-rendering prior findings; `cursor` and `copilot`
+keep injecting unconditionally until their resume semantics are measured the way
+codex's were (copilot's `--resume` is create-or-resume via a marker, so "resumed"
+and "created" are not separable there). `host` cannot resume at all: rule 3
+above makes each re-review a fresh subagent with `session_id: null`, so the
+reviewer holds nothing from the previous round. The prior findings must travel in
+the prompt here, and the reply grammar below is what makes them machine-readable.
+This is a deliberate exception, tested (`test_review_prompt_no_embed_ratchet`
+asserts `host` has no flowctl dispatch, and the capability set is asserted
+exactly), not an oversight to be "simplified" later.
+
+Everything else on the identities side still applies: point the subagent at the
+`base..head` range and the changed-path list and let it read the diff and the
+spec from the checkout itself. Do not paste diff hunks or spec bodies into the
+subagent prompt — it has the same repository you do.
+
 ## Resolve and dispatch
 
 ## Convergence reservation fence (before every host dispatch)
@@ -80,7 +99,10 @@ retain that literal through receipt writing.
 | Grok | host pin + tool-enforced read-only; same-family writer fails closed |
 | Other | fresh context; record that pin enforcement is host-dependent |
 
-Give it the current spec, all task specs, and on re-review the receipt's
+Give it the repo-relative PATHS to the current spec and every task spec — not
+their contents (fn-169: the subagent has the same checkout you do, and a plan
+review is judged against the spec on disk, so a pasted copy can only go stale).
+On re-review give it the receipt's
 structured `findings.items` (ordinal, severity, classification, status, title,
 and file:line) rather than the legacy review prose. Include focus areas and the
 plan-review rubric from

@@ -9,11 +9,13 @@ diff and the repository yourself and produce the verdict in this session.
 
 Review all changes on the current branch compared to main.
 
-**Context:** You have full access to read files from the repository. Use `<diff_content>` to
-identify what changed, then explore the codebase as needed to understand context and verify
-implementations.
+**Context:** You have full access to read files from the repository. The changed
+paths below are the complete, exact scope of this review. Read the change with `git diff aaaaaaa..bbbbbbb`.
+Explore the
+codebase as needed to understand context and verify implementations. Nothing is
+pre-truncated for you — fetch what you need.
 
-## Diff Summary
+## Changed Files (`git diff --numstat`)
 ```
  3 files changed, 10 insertions(+), 2 deletions(-)
 ```

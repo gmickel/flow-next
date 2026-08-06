@@ -241,16 +241,13 @@ Problem: The R1 behavior regressed.
                     prior["sourceReceiptId"], extra["ordinal"]
                 )
                 prior["items"].append(extra)
-            # fn-168 interim gate (fn-169 deletes it): a backend whose prompt has
-            # a hard size budget may have shown the reviewer only SOME priors, so
-            # its aggregate all-clear is not trusted to sweep. The corpus oracle
-            # stays a statement about reviewer OUTPUT shape; the expectation here
-            # is derived from the gate so the two never drift.
-            gated = backend in FLOWCTL._FINDINGS_TRUNCATING_BACKENDS
-            expected = (
-                ["open"] * len(expected_statuses) if gated else expected_statuses
-            )
-            with self.subTest(backend=backend, gated=gated):
+            # fn-169 R4 deleted fn-168's interim gate. That gate withheld the
+            # sweep on cursor because its argv budget could show the reviewer only
+            # SOME priors, making an aggregate all-clear cover findings it never
+            # saw. Nothing truncates a prompt now, so every backend shows the
+            # reviewer its whole prior set and every aggregate sweeps.
+            expected = expected_statuses
+            with self.subTest(backend=backend):
                 current = parse(
                     self.fixture(backend, "ratchet-aggregate"),
                     backend,

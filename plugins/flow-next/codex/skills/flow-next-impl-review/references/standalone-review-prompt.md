@@ -1,4 +1,4 @@
-<!-- placeholders: base_branch, context_guidance, focus_section, diff_summary, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+<!-- placeholders: base_branch, context_guidance, focus_section, changed_files, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
 
 **You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
 `flowctl <backend>` review command, or a nested agent/backend to perform this
@@ -10,9 +10,9 @@ diff and the repository yourself and produce the verdict in this session.
 
 Review all changes on the current branch compared to {base_branch}.
 {context_guidance}{focus_section}
-## Diff Summary
+## Changed Files (`git diff --numstat`)
 ```
-{diff_summary}
+{changed_files}
 ```
 
 ## Review Criteria (Carmack-level)

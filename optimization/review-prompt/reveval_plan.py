@@ -6,6 +6,14 @@ import sys, os, re, json, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import reveval as R  # noqa: E402  (run_codex, verdict_of, HERE)
 import flowctl  # noqa: E402
+import pathlib
+# fn-169 R4: review prompts carry identities; this harness has no repo for a
+# reviewer to read, so it appends its own payload. One shared helper, see its
+# module docstring for why the carve-out is confined to optimization/.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from eval_prompt_payload import embed_payload as _embed_payload  # noqa: E402
+
+
 
 SPEC = open(os.path.join(R.HERE, "spec_corpus.md")).read()
 RUNS = int(os.environ.get("REVEVAL_RUNS", "2"))
@@ -59,8 +67,10 @@ Untestable/unmeasurable acceptance criteria · Missing error/failure handling ·
 
 
 def _plan_prompt():
-    return flowctl.build_review_prompt("plan", SPEC, "Contacts CRM; existing single-add UI.",
-                                       task_specs="(tasks are inline in the spec above)")
+    return _embed_payload(
+        flowctl.build_review_prompt(
+            "plan", context_hints="Contacts CRM; existing single-add UI."),
+        spec=SPEC, task_specs="(tasks are inline in the spec above)")
 
 
 def v_plan_baseline():

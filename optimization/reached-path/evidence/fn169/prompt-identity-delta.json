@@ -1,0 +1,211 @@
+{
+  "spec": "fn-169-review-subsystem-agentic-first-pass",
+  "what": "Prompt-size and scope-completeness measurement for this spec's OWN implementation review, rendered through the pre-identity builder (commit 511a23ee) and the shipped one over the identical commit range. Not a recalled figure: both prompts are assembled here from the same git reads the production handler performs.",
+  "range": "55e1352dfdb2622bf6621ca36624d688b9f32259..755e5e1c44fc54f7bf7625cf853374369763d21a",
+  "baseline_commit": "511a23eea8b867d13857fbbd79c46fc2536c6098",
+  "diff": {
+    "body_bytes": 331399,
+    "embedded_cap_bytes": 50000,
+    "fraction_of_body_delivered_under_cap": 0.1509
+  },
+  "scope_signal": {
+    "stat_bytes": 2769,
+    "stat_lines_with_elided_path": 28,
+    "stat_path_lines": 43,
+    "numstat_no_renames_bytes": 2823,
+    "numstat_paths": 43,
+    "numstat_elided": 0
+  },
+  "impl_review_prompt_bytes": {
+    "before_identities": 70243,
+    "after_identities": 11824,
+    "reduction_bytes": 58419,
+    "reduction_pct": 83.17
+  },
+  "verdicts_on_this_spec": {
+    "note": "Rounds run through the shipped fetch-not-embed path during this spec's own implementation. Every finding cited a resolvable repo path, which is the property the scope map exists to enable.",
+    "task_3": {
+      "rounds": 2,
+      "terminal": "SHIP",
+      "r_ids": [
+        "R2"
+      ],
+      "findings_on_ship": 0
+    },
+    "task_4": {
+      "rounds_so_far": 2,
+      "findings": [
+        "r1: two-phase missing on plan/completion handlers (P1, valid, fixed)",
+        "r1: --numstat abbreviates renames to {old => new} (P1, valid, fixed)",
+        "r2: smoke_test.sh on the removed signature (P1, valid, fixed)",
+        "r2: failed git read became silent empty evidence (P1, valid, fixed)",
+        "r2: _embed_payload duplicated x5 (P3, valid, fixed)"
+      ]
+    }
+  },
+  "review_telemetry": {
+    "what": "EVERY dispatch of this spec's own reviews - verdict rounds and transport failures alike - taken from the `usage` object each codex-exec run emits, not estimated. A timed-out attempt emits no usage and is recorded with null fields rather than omitted, so the counts below and the CHANGELOG agree. All of them ran through the shipped fetch-not-embed path.",
+    "backend": "codex / gpt-5.6-sol",
+    "rounds": [
+      {
+        "task": "fn-169.4",
+        "round": 1,
+        "verdict": "NEEDS_WORK",
+        "findings": 1,
+        "input_tokens": 5394876,
+        "cached_input_tokens": 5187840,
+        "uncached_input_tokens": 207036,
+        "cached_fraction": 0.9616,
+        "output_tokens": 17414,
+        "reasoning_output_tokens": 10119,
+        "stream": "rr4.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 2,
+        "verdict": "NEEDS_WORK",
+        "findings": 3,
+        "input_tokens": 4134565,
+        "cached_input_tokens": 3914496,
+        "uncached_input_tokens": 220069,
+        "cached_fraction": 0.9468,
+        "output_tokens": 20635,
+        "reasoning_output_tokens": 10166,
+        "stream": "rr4b.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": null,
+        "verdict": "TRANSPORT_FAILURE (600s exec timeout, round refunded)",
+        "findings": 0,
+        "input_tokens": null,
+        "cached_input_tokens": null,
+        "uncached_input_tokens": null,
+        "cached_fraction": null,
+        "output_tokens": null,
+        "reasoning_output_tokens": null,
+        "stream": "rr4c.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 3,
+        "verdict": "NEEDS_WORK",
+        "findings": 3,
+        "input_tokens": 5554695,
+        "cached_input_tokens": 5341696,
+        "uncached_input_tokens": 212999,
+        "cached_fraction": 0.9617,
+        "output_tokens": 14655,
+        "reasoning_output_tokens": 8461,
+        "stream": "rr4d.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 4,
+        "verdict": "NEEDS_WORK",
+        "findings": 5,
+        "input_tokens": 3487600,
+        "cached_input_tokens": 3181568,
+        "uncached_input_tokens": 306032,
+        "cached_fraction": 0.9123,
+        "output_tokens": 18041,
+        "reasoning_output_tokens": 11932,
+        "stream": "rr4e.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 5,
+        "verdict": "NEEDS_WORK",
+        "findings": 2,
+        "input_tokens": 3784123,
+        "cached_input_tokens": 3587072,
+        "uncached_input_tokens": 197051,
+        "cached_fraction": 0.9479,
+        "output_tokens": 15616,
+        "reasoning_output_tokens": 8766,
+        "stream": "rr4f.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 6,
+        "verdict": "SHIP",
+        "findings": 0,
+        "input_tokens": 5421814,
+        "cached_input_tokens": 5181440,
+        "uncached_input_tokens": 240374,
+        "cached_fraction": 0.9557,
+        "output_tokens": 13979,
+        "reasoning_output_tokens": 8551,
+        "stream": "rr4g.jsonl"
+      },
+      {
+        "task": "fn-169.6",
+        "round": null,
+        "verdict": "TRANSPORT_FAILURE (600s exec timeout, round refunded)",
+        "findings": 0,
+        "input_tokens": null,
+        "cached_input_tokens": null,
+        "uncached_input_tokens": null,
+        "cached_fraction": null,
+        "output_tokens": null,
+        "reasoning_output_tokens": null,
+        "stream": "rr6a.jsonl",
+        "note": "No usage emitted: the process was killed at the timeout before a turn completed."
+      },
+      {
+        "task": "fn-169.6",
+        "round": 1,
+        "verdict": "NEEDS_WORK",
+        "findings": 3,
+        "input_tokens": 4174894,
+        "cached_input_tokens": 3969280,
+        "uncached_input_tokens": 205614,
+        "cached_fraction": 0.9507,
+        "output_tokens": 15898,
+        "reasoning_output_tokens": 8859,
+        "stream": "rr6b.jsonl"
+      },
+      {
+        "task": "fn-169.6",
+        "round": null,
+        "verdict": "TRANSPORT_FAILURE (600s exec timeout, round refunded)",
+        "findings": 0,
+        "input_tokens": null,
+        "cached_input_tokens": null,
+        "uncached_input_tokens": null,
+        "cached_fraction": null,
+        "output_tokens": null,
+        "reasoning_output_tokens": null,
+        "stream": "rr6c.jsonl",
+        "note": "No usage emitted: the process was killed at the timeout before a turn completed."
+      }
+    ],
+    "input_tokens_range": [
+      3487600,
+      5554695
+    ],
+    "cached_fraction_range": [
+      0.9123,
+      0.9617
+    ],
+    "attempt_counts": {
+      "total_dispatches": 10,
+      "verdict_rounds": 7,
+      "transport_failures_refunded": 3
+    }
+  },
+  "honest_reading": {
+    "demonstrated": [
+      "The dispatched prompt is 83.17% smaller on this spec's own review range (70,243 -> 11,824 bytes), measured by assembling both prompt shapes from the same git reads.",
+      "The scope map is complete and resolvable where it previously was not: `--stat` elided 28 of 43 paths here; `--numstat --no-renames -z` elides 0 at effectively the same byte cost (2,769 vs 2,823).",
+      "The reviewer now works from 100% of the diff instead of the ~10% that fit under the old 50 KB embed cap.",
+      "Every finding across 7 verdict rounds cited a resolvable repository path, which is the property the scope map exists to enable.",
+      "3 of 10 dispatches hit the fixed 600s exec timeout and every one was recorded as a transport failure with its round refunded, so the cap accounting survived the slower fetch pattern intact."
+    ],
+    "NOT_demonstrated": [
+      "A reduction in TOTAL review token cost. Input tokens for these rounds ran 3,487,600-5,554,695, ABOVE the 544k-1.12M recorded for fn-168's pre-identity impl reviews. The fetch model moves cost off the prompt and onto conversation turns: the reviewer makes many tool calls and each turn resends the accumulated context. 91-96% of that input is CACHED, so billable cost does not scale with the raw number, but this measurement does not establish a cheaper review and no doc may claim one.",
+      "The comparison is also confounded: this spec's diff is larger than fn-168's, it took more rounds, and the reviewer was asked to verify deletions across ~2,000 lines. A clean cost comparison needs the same diff reviewed both ways, which this spec did not run."
+    ],
+    "operational_note": "The exec timeout was 600s hardcoded and was reached 3 times across 10 dispatches on this spec's large diff, because a fetching reviewer spends wall-clock on tool calls that an embedded prompt spent on nothing. Each was correctly recorded as a transport failure with the round refunded, and narrowing the review base made the retry succeed. fn-169 raised the bound to 1800s and made it env-overridable (FLOW_REVIEW_EXEC_TIMEOUT); that buys headroom but does not fix the SHAPE - a wall-clock bound cannot tell a reviewer that is working from a process that is wedged. An idle deadline can, because `codex exec --json` streams events. Captured as .flow/tmp/fn-170-idle-liveness-CAPTURE.md."
+  }
+}
