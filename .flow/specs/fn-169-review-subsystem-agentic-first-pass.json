@@ -11,7 +11,7 @@
   ],
   "id": "fn-169-review-subsystem-agentic-first-pass",
   "impl_review_rounds": {
-    "fn-169-review-subsystem-agentic-first-pass.1": 2
+    "fn-169-review-subsystem-agentic-first-pass.1": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -278,9 +278,73 @@
       "task": "fn-169-review-subsystem-agentic-first-pass.1",
       "timestamp": "2026-08-06T07:47:29.718145Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "6655cf60bafa552f29545e8302045d803b850d11488a429c527371c8bb8f2297",
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-e7d4b379ccd2927dfccf6599bae8d252",
+            "classification": "introduced",
+            "findingId": "finding-e7d4b379ccd2927dfccf6599bae8d252",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-28e3c052c523780768839dfbba00169f",
+            "classification": "introduced",
+            "findingId": "finding-28e3c052c523780768839dfbba00169f",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-7d1def3c1b3afe0e3eeacba3712a83e5",
+            "classification": "introduced",
+            "findingId": "finding-7d1def3c1b3afe0e3eeacba3712a83e5",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-eed51ecfadb2887fbe5dc990e43eaf68",
+            "classification": "introduced",
+            "findingId": "finding-eed51ecfadb2887fbe5dc990e43eaf68",
+            "firstSeenThisRound": false,
+            "severity": "P3",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "fd494188b3db6fd3da72d89933adecbd5b9ee924",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "ceb259353be763606c3790931511d781f3caf5b45b8f61919e7ddfdb587f7859",
+      "reservation_id": "5cef964c0bda46658895f89699b673ca",
+      "round_consumed": true,
+      "scope": "impl:fn-169-review-subsystem-agentic-first-pass.1",
+      "superseded_by": null,
+      "task": "fn-169-review-subsystem-agentic-first-pass.1",
+      "timestamp": "2026-08-06T07:54:32.846163Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
+    "impl:fn-169-review-subsystem-agentic-first-pass.1": 1,
     "plan": 1,
     "plan#completion": 0
   },
@@ -304,5 +368,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-06T07:47:29.720993Z"
+  "updated_at": "2026-08-06T07:54:32.849834Z"
 }
