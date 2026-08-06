@@ -1332,9 +1332,20 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
                 def __init__(self, *args, **kwargs):
                     self.stdout = io.BytesIO(b"")
                     self.stderr = io.BytesIO(b"")
+                    self.returncode = 0
 
                 def wait(self):
                     return 0
+
+                def communicate(self, timeout=None):
+                    # fn-169: the bounded identity reader reaps with communicate()
+                    # so a child that fills stderr cannot deadlock a sequential
+                    # stdout read.
+                    self.returncode = 0
+                    return b"", b""
+
+                def kill(self):
+                    self.returncode = -9
 
             module.get_repo_root = lambda: fixture_dir
             module.get_changed_files = lambda base: []
@@ -1717,15 +1728,41 @@ class NoEmbedRegression(unittest.TestCase):
         # its return is a regression signal.
         self.assertFalse(hasattr(flowctl, "get_embedded_file_contents"))
 
-    def test_builders_reject_embed_kwargs(self) -> None:
-        # The dead files_embedded / embedded_files params must not come back.
-        for name in ("build_review_prompt", "build_standalone_review_prompt",
-                     "build_completion_review_prompt", "build_rereview_preamble"):
-            params = inspect.signature(getattr(flowctl, name)).parameters
-            self.assertNotIn("files_embedded", params,
-                             f"{name} regained files_embedded")
-            self.assertNotIn("embedded_files", params,
-                             f"{name} regained embedded_files")
+    # fn-169 R6 (impl-review r6): the builders' parameter sets are PINNED, not
+    # screened against a list of known-bad names. A name list is a race against the
+    # next spelling - `files_embedded` and `embedded_files` were banned, and fn-90
+    # then re-added the payload as `diff_content` and sailed past. Pinning the exact
+    # set makes ANY new parameter fail, which is the property that cannot be
+    # outrun. Adding an identity argument on purpose means updating this set in the
+    # same commit and saying why.
+    PINNED_BUILDER_SIGNATURES = {
+        "build_review_prompt": {
+            "review_type", "context_hints", "review_scope", "diff_range",
+            "spec_path", "task_spec_paths",
+        },
+        "build_standalone_review_prompt": {
+            "base_branch", "focus", "review_scope", "diff_range",
+        },
+        "build_completion_review_prompt": {
+            "spec_path", "task_spec_paths", "review_scope", "diff_range",
+        },
+        "build_rereview_preamble": {
+            "changed_files", "review_type", "prior_findings", "prior_items",
+            "resumed",
+        },
+    }
+
+    def test_builder_signatures_are_pinned_against_any_new_payload(self) -> None:
+        for name, expected in self.PINNED_BUILDER_SIGNATURES.items():
+            params = set(inspect.signature(getattr(flowctl, name)).parameters)
+            with self.subTest(builder=name):
+                self.assertEqual(
+                    params, expected,
+                    f"{name}'s parameters changed. If you ADDED one, it must carry "
+                    "an identity (a path, a SHA range) and never content the "
+                    "reviewer can fetch itself - see STRATEGY.md 'identities, not "
+                    "payloads'. Update this pin in the same commit with the reason.",
+                )
 
 
 class TestReviewBackendTaskAware(unittest.TestCase):

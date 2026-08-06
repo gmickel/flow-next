@@ -6474,9 +6474,21 @@ class TestIdentityDiffIsBoundedNeverTruncated(unittest.TestCase):
             def __init__(self):
                 self.stdout = FakePipe(payload)
                 self.stderr = FakePipe(stderr)
+                self.returncode = None
+                self.killed = False
+
+            def communicate(self, timeout=None):
+                # Mirrors Popen: reaps the child and returns whatever is left on
+                # both pipes. A killed child reports its signal, which is why the
+                # reader checks overflow BEFORE the exit code.
+                self.returncode = -9 if self.killed else returncode
+                return b"", self.stderr.read()
+
+            def kill(self):
+                self.killed = True
 
             def wait(self):
-                return returncode
+                return self.returncode if self.returncode is not None else returncode
 
         return lambda *a, **k: FakeProc()
 

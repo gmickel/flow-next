@@ -25,11 +25,20 @@ Run:
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import importlib.util
+import io
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
+
+
+class _StopDispatch(Exception):
+    """Halt the handler at the dispatch boundary, before it reserves a round."""
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -121,6 +130,88 @@ class TestNoEmbedRatchet(unittest.TestCase):
                         "STRATEGY.md 'identities, not payloads' and the fn-74 -> "
                         "fn-90 -> fn-159 re-accretion history.",
                     )
+
+    def test_the_dispatched_prompt_carries_no_body_end_to_end(self):
+        """The ratchet that actually catches a re-embed (impl-review r6, P1).
+
+        The assertions below build prompts from identity arguments, so they can
+        only prove that identity-built prompts do not coincidentally contain a
+        sentinel — re-adding a `diff_content=` parameter and passing a body from a
+        handler would leave them green, which is exactly the fn-74 -> fn-90
+        regression. So this one drives the real handler: the git reads and the spec
+        file are mocked to return sentinel-bearing content, the dispatch is
+        intercepted, and the prompt that WOULD have crossed the process boundary is
+        inspected.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            flow = repo / ".flow"
+            (flow / "tasks").mkdir(parents=True)
+            (flow / "specs").mkdir(parents=True)
+            task_id = "fn-9-demo.1"
+            (flow / "tasks" / f"{task_id}.md").write_text(
+                "# task\n\nEMBEDDED_SPEC_BODY_SENTINEL\n", encoding="utf-8"
+            )
+            captured: dict = {}
+
+            def fake_dispatch(**kwargs):
+                captured["prompt"] = kwargs.get("prompt")
+                captured["injected"] = kwargs.get("injected_prompt")
+                # Stop the handler before it reserves or writes anything.
+                raise _StopDispatch
+
+            with mock.patch.object(flowctl, "get_flow_dir", return_value=flow), \
+                    mock.patch.object(flowctl, "get_repo_root", return_value=repo), \
+                    mock.patch.object(
+                        flowctl, "_capture_review_snapshot",
+                        return_value=("1" * 40, "2" * 40)), \
+                    mock.patch.object(
+                        flowctl, "_gather_review_scope",
+                        return_value="12\t3\tsrc/alpha.py"), \
+                    mock.patch.object(
+                        flowctl, "_gather_review_identity_diff",
+                        return_value=DIFF_BODY), \
+                    mock.patch.object(
+                        flowctl, "gather_context_hints", return_value="hints"), \
+                    mock.patch.object(flowctl, "resolve_task_arg",
+                                      return_value=task_id), \
+                    mock.patch.object(flowctl, "_dispatch_backend_review",
+                                      side_effect=fake_dispatch), \
+                    mock.patch.object(flowctl, "ensure_flow_exists",
+                                      return_value=True):
+                args = argparse.Namespace(
+                    task=task_id, base="main", focus=None, json=False,
+                    receipt=None, spec=None, sandbox="auto", force=False,
+                )
+                with contextlib.suppress(_StopDispatch), \
+                        contextlib.redirect_stdout(io.StringIO()), \
+                        contextlib.redirect_stderr(io.StringIO()):
+                    flowctl.cmd_backend_review(args, backend="codex", kind="impl")
+
+        prompt = captured.get("prompt")
+        self.assertIsInstance(
+            prompt, str, "dispatch was never reached - the ratchet proved nothing"
+        )
+        # The bodies were available to the handler and must not have travelled.
+        self.assertNotIn("EMBEDDED_DIFF_BODY_SENTINEL", prompt)
+        self.assertNotIn("EMBEDDED_SPEC_BODY_SENTINEL", prompt)
+        for tag in FORBIDDEN_TAGS:
+            self.assertNotIn(tag, prompt)
+        # And the identities DID travel, so this is not passing by being empty.
+        self.assertIn("1" * 40, prompt)
+        self.assertIn("2" * 40, prompt)
+        self.assertIn(f"{task_id}.md", prompt)
+        self.assertIn("src/alpha.py", prompt)
+
+    def test_every_scope_entry_reaches_the_prompt(self):
+        """A scope map that arrives partially is a scope map that lies."""
+        scope = "\n".join(f"{n}\t0\tsrc/f{n}.py" for n in range(1, 60))
+        prompt = flowctl.build_review_prompt(
+            "impl", review_scope=scope, diff_range=RANGE, spec_path=SPEC_PATH,
+        )
+        for line in scope.split("\n"):
+            path = line.split("\t")[2]
+            self.assertIn(path, prompt, f"{path} was dropped from the prompt")
 
     def test_no_production_prompt_carries_a_body(self):
         """Size, not just framing: an unframed body is the same regression."""

@@ -39503,41 +39503,47 @@ def _read_review_git_bounded(
     chunks: list[bytes] = []
     total = 0
     overflow = False
+    stderr_bytes = b""
     try:
-        assert proc.stdout is not None and proc.stderr is not None
+        assert proc.stdout is not None
         while True:
             block = proc.stdout.read(1 << 20)
             if not block:
                 break
             total += len(block)
             if total > max_bytes:
-                # Drain so git is never left writing into a full pipe, but keep
-                # nothing: the value is unusable and must not be salvaged.
+                # KILL rather than drain (impl-review r6, P2). Draining a
+                # pathological diff to EOF would do unbounded I/O to produce a
+                # value we are about to discard - the ceiling has to bound the
+                # WORK, not just the return. `communicate()` afterwards reaps the
+                # child and clears both pipes concurrently, so a child that fills
+                # stderr cannot deadlock against a sequential read of stdout.
                 overflow = True
                 chunks.clear()
-                while proc.stdout.read(1 << 20):
-                    pass
+                proc.kill()
                 break
             chunks.append(block)
-        stderr_bytes = proc.stderr.read()
     finally:
-        if proc.stdout is not None:
-            proc.stdout.close()
-        if proc.stderr is not None:
-            proc.stderr.close()
-        returncode = proc.wait()
-    if returncode != 0:
-        detail = stderr_bytes.decode("utf-8", errors="replace").strip() or (
-            f"exit {returncode}"
-        )
-        raise ReviewEvidenceError(f"cannot read {what}: {detail}")
+        try:
+            _, stderr_bytes = proc.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            _, stderr_bytes = proc.communicate()
+        returncode = proc.returncode
     if overflow:
+        # Checked BEFORE the exit code: we killed the child, so its non-zero
+        # status is our doing and "exceeds the ceiling" is the real reason.
         raise ReviewEvidenceError(
             f"cannot read {what}: exceeds {max_bytes} bytes. This read is the "
             "review artifact identity and is never truncated - a truncated "
             "identity collides with any diff sharing its prefix, which the "
             "unchanged-artifact guard reads as 'nothing changed'."
         )
+    if returncode != 0:
+        detail = stderr_bytes.decode("utf-8", errors="replace").strip() or (
+            f"exit {returncode}"
+        )
+        raise ReviewEvidenceError(f"cannot read {what}: {detail}")
     return b"".join(chunks).decode("utf-8", errors="replace").strip()
 
 

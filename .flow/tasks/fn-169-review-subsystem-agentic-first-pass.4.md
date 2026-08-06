@@ -54,9 +54,22 @@ Stop shipping the reviewer content it fetches anyway, and delete the machinery t
 - [ ] Focused suites green; propagation done (cp + sync-codex twice, no second-run diff)
 
 ## Done summary
-TBD
+Review prompts now carry identities, and the layer that existed to make payloads fit is gone.
 
+**The swap.** `<diff_content>` → `<diff_range>` (a `base..head` range plus the command to read it); `<spec>` / `<task_specs>` → repo-relative paths; `--stat` → `--numstat --no-renames -z`. `<changed_files>` and `<context_hints>` stay — they are what keeps fetching targeted. The reviewer runs in the checkout with a shell and reads what it needs at whatever depth each hunk warrants.
+
+**Why the scope signal mattered most.** The whole model rests on `<changed_files>` being complete and resolvable, and git abbreviates in three independent ways — each found by running the real command, not by reasoning: `--stat` elides with an ellipsis (51 of 65 paths on the fn-168 diff; 28 of 43 on this spec's own), plain `--numstat` collapses renames into `{old => new}` so neither real path appears, and without `-z` any non-ASCII path is C-quoted (`"w\303\251ird na me.txt"`). All three are the same defect: a path the reviewer cannot open is evidence it will never read.
+
+**What got deleted** (~695 lines): the three cursor fitters, `_cursor_disk_read_header`, the ratchet's per-item char budget, the legacy prose 8000-char cap, the 50 KB diff cap, eight argv content constants, the three reviewer-facing "truncated to fit" markers, both impl prompt builders (their only difference was fitting), `_dispatched_diff_from_prompt`, and fn-168's interim cursor sweep gate — the last retired by construction rather than gated, since every backend now renders every prior item.
+
+**What deliberately survived.** `CURSOR_ARGV_PROMPT_MAX` → `CURSOR_ARGV_TRANSPORT_MAX`: it was doing double duty as content budget and as `run_cursor_exec`'s fail-closed boundary, and the Windows `CreateProcessW` limit does not disappear because we stopped embedding. It refuses loudly; it never trims. `_render_structured_prior_finding` also survived, against the task's original plan: a reviewer's own prior findings live in the receipt, not the tree, so there is nothing to fetch — they are the one payload with no identity, and `.3` made injection a live fallback that deleting the renderer would have blinded.
+
+**Fail loudly, never quietly.** A failed `git` read raises `ReviewEvidenceError` with git's own stderr and aborts before a round is reserved; a genuinely empty range still returns empty, because failure and "nothing changed" must not collapse. The artifact identity is the complete diff at the frozen range, streamed under a 64 MiB ceiling that RAISES rather than truncating — a truncated identity collides with any diff sharing its prefix, which the unchanged-artifact guard reads as "nothing changed". Task enumeration comes from the canonical JSON, so a task with no readable markdown aborts instead of being invisible to both prompt and hash.
+
+**Measured** (`optimization/reached-path/evidence/fn169/prompt-identity-delta.json`, this spec's own review range): impl-review prompt 70,243 → 11,824 bytes, −83.17%.
+
+**Six review rounds, twelve findings, all real.** Two-phase dispatch was wired to only one of three handlers; `--numstat` abbreviated renames; `smoke_test.sh` was left on the removed signature; a failed git read was still silent; the helper was duplicated five times; the identity read had become unbounded; the eval payload landed after the rubric and changed recency; the host workflows contradicted their own new paragraph; the impl rubric stopped telling the reviewer to read the spec; docs overclaimed "all review kinds"; C-quoting; and the task glob. One finding was disputed and withdrawn — "identity targets are mutable mid-review" was classified `introduced`, but the plan/completion hashes read spec contents at dispatch exactly as they did before (`git show 511a23ee`), reviewers already read mutable current state, and the impl identity actually got *stronger* by becoming snapshot-addressed. Terminal round: SHIP, 0 findings, R3 and R4 met.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d2c76a44, e06c076c, 755e5e1c, cc3b4e57, e8b7f8d1, 387bbd7a
+- Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., bash plugins/flow-next/scripts/smoke_test.sh (135 pass; 1 pre-existing copilot re-review failure, identical on origin/main)
 - PRs:

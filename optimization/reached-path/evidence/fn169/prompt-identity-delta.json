@@ -42,5 +42,137 @@
         "r2: _embed_payload duplicated x5 (P3, valid, fixed)"
       ]
     }
+  },
+  "review_telemetry": {
+    "what": "Per-round codex-exec usage for this spec's OWN reviews, taken from the `usage` object each run emits - not estimated. Every round ran through the shipped fetch-not-embed path.",
+    "backend": "codex / gpt-5.6-sol",
+    "rounds": [
+      {
+        "task": "fn-169.4",
+        "round": 1,
+        "verdict": "NEEDS_WORK",
+        "findings": 1,
+        "input_tokens": 5394876,
+        "cached_input_tokens": 5187840,
+        "uncached_input_tokens": 207036,
+        "cached_fraction": 0.9616,
+        "output_tokens": 17414,
+        "reasoning_output_tokens": 10119,
+        "stream": "rr4.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 2,
+        "verdict": "NEEDS_WORK",
+        "findings": 3,
+        "input_tokens": 4134565,
+        "cached_input_tokens": 3914496,
+        "uncached_input_tokens": 220069,
+        "cached_fraction": 0.9468,
+        "output_tokens": 20635,
+        "reasoning_output_tokens": 10166,
+        "stream": "rr4b.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": null,
+        "verdict": "TRANSPORT_FAILURE (600s exec timeout, round refunded)",
+        "findings": 0,
+        "input_tokens": null,
+        "cached_input_tokens": null,
+        "uncached_input_tokens": null,
+        "cached_fraction": null,
+        "output_tokens": null,
+        "reasoning_output_tokens": null,
+        "stream": "rr4c.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 3,
+        "verdict": "NEEDS_WORK",
+        "findings": 3,
+        "input_tokens": 5554695,
+        "cached_input_tokens": 5341696,
+        "uncached_input_tokens": 212999,
+        "cached_fraction": 0.9617,
+        "output_tokens": 14655,
+        "reasoning_output_tokens": 8461,
+        "stream": "rr4d.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 4,
+        "verdict": "NEEDS_WORK",
+        "findings": 5,
+        "input_tokens": 3487600,
+        "cached_input_tokens": 3181568,
+        "uncached_input_tokens": 306032,
+        "cached_fraction": 0.9123,
+        "output_tokens": 18041,
+        "reasoning_output_tokens": 11932,
+        "stream": "rr4e.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 5,
+        "verdict": "NEEDS_WORK",
+        "findings": 2,
+        "input_tokens": 3784123,
+        "cached_input_tokens": 3587072,
+        "uncached_input_tokens": 197051,
+        "cached_fraction": 0.9479,
+        "output_tokens": 15616,
+        "reasoning_output_tokens": 8766,
+        "stream": "rr4f.jsonl"
+      },
+      {
+        "task": "fn-169.4",
+        "round": 6,
+        "verdict": "SHIP",
+        "findings": 0,
+        "input_tokens": 5421814,
+        "cached_input_tokens": 5181440,
+        "uncached_input_tokens": 240374,
+        "cached_fraction": 0.9557,
+        "output_tokens": 13979,
+        "reasoning_output_tokens": 8551,
+        "stream": "rr4g.jsonl"
+      },
+      {
+        "task": "fn-169.6",
+        "round": 1,
+        "verdict": "NEEDS_WORK",
+        "findings": 3,
+        "input_tokens": 4174894,
+        "cached_input_tokens": 3969280,
+        "uncached_input_tokens": 205614,
+        "cached_fraction": 0.9507,
+        "output_tokens": 15898,
+        "reasoning_output_tokens": 8859,
+        "stream": "rr6b.jsonl"
+      }
+    ],
+    "input_tokens_range": [
+      3487600,
+      5554695
+    ],
+    "cached_fraction_range": [
+      0.9123,
+      0.9617
+    ]
+  },
+  "honest_reading": {
+    "demonstrated": [
+      "The dispatched prompt is 83.17% smaller on this spec's own review range (70,243 -> 11,824 bytes), measured by assembling both prompt shapes from the same git reads.",
+      "The scope map is complete and resolvable where it previously was not: `--stat` elided 28 of 43 paths here; `--numstat --no-renames -z` elides 0 at effectively the same byte cost (2,769 vs 2,823).",
+      "The reviewer now works from 100% of the diff instead of the ~10% that fit under the old 50 KB embed cap.",
+      "Every finding across 7 verdict rounds cited a resolvable repository path, which is the property the scope map exists to enable.",
+      "A transport failure (600s exec timeout) was recorded and its round refunded, so the cap accounting survived the slower fetch pattern."
+    ],
+    "NOT_demonstrated": [
+      "A reduction in TOTAL review token cost. Input tokens for these rounds ran 3,487,600-5,554,695, ABOVE the 544k-1.12M recorded for fn-168's pre-identity impl reviews. The fetch model moves cost off the prompt and onto conversation turns: the reviewer makes many tool calls and each turn resends the accumulated context. 91-96% of that input is CACHED, so billable cost does not scale with the raw number, but this measurement does not establish a cheaper review and no doc may claim one.",
+      "The comparison is also confounded: this spec's diff is larger than fn-168's, it took more rounds, and the reviewer was asked to verify deletions across ~2,000 lines. A clean cost comparison needs the same diff reviewed both ways, which this spec did not run."
+    ],
+    "operational_note": "The 600s `codex exec` timeout is hardcoded and was reached twice on this spec's large diff, because a fetching reviewer spends wall-clock on tool calls that an embedded prompt spent on nothing. Both attempts were correctly recorded as transport failures with the round refunded. Making that timeout configurable is a follow-up, not part of this spec."
   }
 }

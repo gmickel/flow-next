@@ -4,8 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
-Cross-model review gets cheaper, sees the whole change, and stops being cut off
-while it is working.
+Cross-model review now sees the whole change, and stops being cut off while it is
+working.
 
 Reviewers used to be handed a copy of the diff inside the prompt — capped at 50 KB,
 so on a large change they received about a tenth of the evidence their verdict
@@ -13,12 +13,21 @@ rested on, then read the rest off disk anyway. That copy is gone. A review now
 receives the commit range, the exact list of changed files, and the paths to the
 spec and tasks, and the reviewer fetches what it needs at the depth each part
 warrants. Nothing is shortened to fit, nothing is summarised on your behalf, and
-the file list is complete — no elided paths, no `{old => new}` rename shorthand.
-On a re-review the reviewer continues its own session instead of being re-briefed,
-so it compares against findings it actually remembers making. You pay for a much
-smaller prompt and the reviewer works from complete evidence; if a session cannot
-be resumed, the findings travel in the prompt as before rather than a blind review
-being dispatched.
+the file list is complete — no elided paths, no `{old => new}` rename shorthand, no
+mangled non-ASCII filenames. On a re-review the reviewer continues its own session
+instead of being re-briefed, so it compares against findings it actually remembers
+making; if a session cannot be resumed, the findings travel in the prompt as before
+rather than a blind review being dispatched.
+
+One expectation to set honestly: this makes reviews *better informed*, not
+provably cheaper. The prompt itself shrank by 83% on this release's own largest
+review, but a fetching reviewer spends turns on tool calls instead, and total
+input tokens for those rounds came out above the pre-change measurements — mostly
+cached, so billable cost does not track the raw number, but not a demonstrated
+saving either. A fetching reviewer is also slower in wall-clock on a big diff, and
+twice hit the fixed 600-second backend timeout; both were recorded as transport
+failures with the review round refunded, exactly as intended. The measurements are
+in `optimization/reached-path/evidence/fn169/`.
 
 Review loops that were converging no longer get cut off and handed to a human to
 verify by hand. Three specs in a row hit that in the field — each one escalated at
@@ -68,13 +77,16 @@ autonomous loop, only yours to raise.
   --no-renames` as the exact scope map, and repo-relative spec/task paths; the
   reviewer runs in your checkout and reads what it needs. Measured on this repo's
   own history: the embedded body was 641,784 bytes against a 50 KB cap, so
-  reviewers were shown ~10% of it and fetched the rest regardless — the round-trip
-  cost was already being paid, and removing the payload deletes overhead rather
-  than adding latency. The file list matters as much as the deletion: `--stat`
-  abbreviated 51 of 65 paths on that same change and plain `--numstat` collapses
-  renames into `{old => new}`, and a scope map you cannot resolve to paths cannot
-  bound a review. Verdict quality is unchanged in kind — the reviewer reads the
-  same code, from disk, in full. (fn-169)
+  reviewers were shown ~10% of it and fetched the rest regardless. The file list
+  matters as much as the deletion, and git abbreviates in three separate ways that
+  all had to be turned off: `--stat` elided 51 of 65 paths on that same change,
+  plain `--numstat` collapses renames into `{old => new}` so neither real path
+  appears, and without `-z` any non-ASCII path comes back C-quoted. A scope map you
+  cannot resolve to paths cannot bound a review. What changes for the reviewer is
+  completeness, not kind — it reads the same code, from disk, in full. What changes
+  for you is wall-clock: a fetching reviewer spends turns on tool calls, so a large
+  diff takes longer and can reach the backend's fixed timeout, which is recorded as
+  a transport failure and refunds the round. (fn-169)
 
 - **Re-reviews continue the same conversation instead of being re-briefed.** The
   reviewer's session is resumed, so it verifies against findings it remembers
