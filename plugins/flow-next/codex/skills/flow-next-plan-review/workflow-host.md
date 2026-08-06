@@ -16,6 +16,21 @@ subcommand and accepts no model/effort suffix.
  `session_id` is literal `null`.
 5. Missing cross-family pin fails closed.
 
+**fn-169 — host is the documented always-inject exception.** Every other backend
+resumes the reviewer's own session on a re-review and therefore sends the
+shrink-only contract WITHOUT re-rendering prior findings. `host` cannot: rule 3
+above makes each re-review a fresh subagent with `session_id: null`, so the
+reviewer holds nothing from the previous round. The prior findings must travel in
+the prompt here, and the reply grammar below is what makes them machine-readable.
+This is a deliberate exception, tested (`test_review_prompt_no_embed_ratchet`
+asserts `host` has no flowctl dispatch, and the capability set is asserted
+exactly), not an oversight to be "simplified" later.
+
+Everything else on the identities side still applies: point the subagent at the
+`base..head` range and the changed-path list and let it read the diff and the
+spec from the checkout itself. Do not paste diff hunks or spec bodies into the
+subagent prompt — it has the same repository you do.
+
 ## Resolve and dispatch
 
 ## Convergence reservation fence (before every host dispatch)

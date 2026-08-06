@@ -262,6 +262,23 @@ Limits are rejection boundaries, not truncation targets. Oversize input,
 overflowing output, duplicates, unsafe paths, invalid lineage, unknown enums,
 or unsupported schema versions produce no usable structured container.
 
+**Nothing shortens a prompt to fit a transport (fn-169).** Earlier releases sized
+the rendered prior-finding block to `cursor-agent`'s argv cap and stopped emitting
+items once the budget ran out. A reviewer shown a SUBSET of its own prior findings
+can truthfully answer `Prior findings: all fixed` for everything it saw, and
+sweeping the untruncated container then marked omitted, unverified findings
+`fixed` — a false SHIP. The interim guard that withheld the aggregate sweep on
+truncating backends is gone with the truncation itself: every backend now renders
+every prior item, so the aggregate is sound by construction on all of them. The
+bounds above remain *rejection* boundaries, which is a different thing entirely.
+
+A resumed re-review carries no rendered items at all — the reviewer holds them in
+its own session and answers the same per-ordinal grammar from memory of its own
+findings, verified against the current code on disk. Prior findings are the one
+payload with no identity to pass instead: they live in the receipt, not the tree,
+so there is nothing for a reviewer to fetch. That is why the renderer still exists
+and why the injected fallback keeps using it.
+
 ## Fallback behavior
 
 The `findings` field is additive and optional:

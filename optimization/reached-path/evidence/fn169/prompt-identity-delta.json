@@ -1,0 +1,46 @@
+{
+  "spec": "fn-169-review-subsystem-agentic-first-pass",
+  "what": "Prompt-size and scope-completeness measurement for this spec's OWN implementation review, rendered through the pre-identity builder (commit 511a23ee) and the shipped one over the identical commit range. Not a recalled figure: both prompts are assembled here from the same git reads the production handler performs.",
+  "range": "55e1352dfdb2622bf6621ca36624d688b9f32259..755e5e1c44fc54f7bf7625cf853374369763d21a",
+  "baseline_commit": "511a23eea8b867d13857fbbd79c46fc2536c6098",
+  "diff": {
+    "body_bytes": 331399,
+    "embedded_cap_bytes": 50000,
+    "fraction_of_body_delivered_under_cap": 0.1509
+  },
+  "scope_signal": {
+    "stat_bytes": 2769,
+    "stat_lines_with_elided_path": 28,
+    "stat_path_lines": 43,
+    "numstat_no_renames_bytes": 2823,
+    "numstat_paths": 43,
+    "numstat_elided": 0
+  },
+  "impl_review_prompt_bytes": {
+    "before_identities": 70243,
+    "after_identities": 11824,
+    "reduction_bytes": 58419,
+    "reduction_pct": 83.17
+  },
+  "verdicts_on_this_spec": {
+    "note": "Rounds run through the shipped fetch-not-embed path during this spec's own implementation. Every finding cited a resolvable repo path, which is the property the scope map exists to enable.",
+    "task_3": {
+      "rounds": 2,
+      "terminal": "SHIP",
+      "r_ids": [
+        "R2"
+      ],
+      "findings_on_ship": 0
+    },
+    "task_4": {
+      "rounds_so_far": 2,
+      "findings": [
+        "r1: two-phase missing on plan/completion handlers (P1, valid, fixed)",
+        "r1: --numstat abbreviates renames to {old => new} (P1, valid, fixed)",
+        "r2: smoke_test.sh on the removed signature (P1, valid, fixed)",
+        "r2: failed git read became silent empty evidence (P1, valid, fixed)",
+        "r2: _embed_payload duplicated x5 (P3, valid, fixed)"
+      ]
+    }
+  }
+}

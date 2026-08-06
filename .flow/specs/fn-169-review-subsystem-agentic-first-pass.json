@@ -13,7 +13,7 @@
   "impl_review_rounds": {
     "fn-169-review-subsystem-agentic-first-pass.1": 0,
     "fn-169-review-subsystem-agentic-first-pass.3": 0,
-    "fn-169-review-subsystem-agentic-first-pass.4": 2
+    "fn-169-review-subsystem-agentic-first-pass.4": 3
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -508,6 +508,30 @@
       "task": "fn-169-review-subsystem-agentic-first-pass.4",
       "timestamp": "2026-08-06T10:58:46.932858Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "89932f28bdb0d227cb53075899a69c54a04b20d529a885f9e8e7848abd4eb44c",
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": "timeout",
+      "finalized": {
+        "digest": "complete",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "755e5e1c44fc54f7bf7625cf853374369763d21a",
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "reservation_id": "47d12feb03ab4884bb1a23b61362147b",
+      "round_consumed": false,
+      "scope": "impl:fn-169-review-subsystem-agentic-first-pass.4",
+      "superseded_by": null,
+      "task": "fn-169-review-subsystem-agentic-first-pass.4",
+      "timestamp": "2026-08-06T12:02:27.334820Z",
+      "verdict": null
     }
   ],
   "review_hash_epoch": {
@@ -516,12 +540,22 @@
     "plan": 1,
     "plan#completion": 0
   },
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-169-review-subsystem-agentic-first-pass.4": 1
+  },
+  "review_reservations": {
+    "59041e5cfe3d48f7821f8f6caaeb29d9": {
+      "artifact_sha256": "89932f28bdb0d227cb53075899a69c54a04b20d529a885f9e8e7848abd4eb44c",
+      "counter_scope": "impl:fn-169-review-subsystem-agentic-first-pass.4",
+      "epoch": 0,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "impl:fn-169-review-subsystem-agentic-first-pass.1": 0,
     "impl:fn-169-review-subsystem-agentic-first-pass.3": 0,
-    "impl:fn-169-review-subsystem-agentic-first-pass.4": 0,
+    "impl:fn-169-review-subsystem-agentic-first-pass.4": 1,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.md",
@@ -538,5 +572,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-06T10:58:46.935690Z"
+  "updated_at": "2026-08-06T12:02:27.335471Z"
 }

@@ -87,6 +87,40 @@ flowctl config set review.maxIterations 6                 # review-round cap (en
 
 Precedence (highest wins): per-task `review:` / per-spec `default_review` → `FLOW_REVIEW_BACKEND` → `.flow/config.json` `review.backend` → backend-specific env → registry default. A single task can pin a different reviewer than the project default and the override routes end-to-end. The `cursor` backend unlocks reviewer models the others can't reach in one place (`gpt-5.6-sol-high` at 1M context — the default, `gpt-5.6-terra`/`-luna`, `grok-4.5-high` (fast cross-family pass), `composer-2.5`, the `gpt-5.3-codex` family, `claude-opus-5-thinking-high`, `claude-opus-4-8-thinking-high`) on your existing Cursor subscription. Full grammar + registry: [`flowctl.md`](flowctl.md#review-backend).
 
+**The review prompt carries identities, not payloads (fn-169).** A reviewer runs
+in your checkout with a shell, so it is an executor like any other agent: flow-next
+hands it the rubric, a `<base-sha>..<head-sha>` range, `git diff --numstat --no-renames`
+as the exact scope map, and repo-relative spec/task paths — then the reviewer fetches
+what it needs at whatever depth each hunk warrants. It does **not** ship the diff
+body, the spec text, or the task specs. That is not a size optimisation with a
+quality cost; the payload was the quality cost. The diff body used to be capped at
+50 KB, so on a 495 KB change the reviewer received ~10% of the evidence its verdict
+rested on and fetched the rest anyway. `--numstat --no-renames` matters more than it
+looks: plain `--stat` abbreviates paths (`.../pr-cognitive-aid/.write.lock`) and
+plain `--numstat` collapses renames into `{old => new}`, and a scope map you cannot
+resolve to paths is not a scope map.
+
+Two consequences are load-bearing rather than incidental. First, **a prompt-payload
+fitter or truncator is evidence the payload is wrong** — flow-next kept exactly one
+size guard, `CURSOR_ARGV_TRANSPORT_MAX`, and it is named as *transport* because
+`cursor-agent` takes its prompt as a positional argv argument and Windows
+`CreateProcessW` has a hard limit. It refuses loudly; it never trims. Second, an
+evidence read that FAILS aborts before a review round is reserved, because with
+nothing embedded an empty scope map is not a degraded review, it is no review.
+
+**Prior findings ride the session, not the prompt (fn-169).** Re-reviews resume the
+reviewer's own session, so it already holds the findings it made — the round sends
+the shrink-only contract and the reply grammar, and re-renders nothing. Injection is
+the fallback: if the resume fails, flow-next rebuilds the prompt *with* the findings
+and dispatches fresh. The order is deliberate — a lean prompt reaching a
+context-free session would be a fresh blind review with the priors dropped, which is
+the runaway this machinery exists to stop. Two-phase resume is enabled for `codex`,
+whose resume is measured; `copilot` (whose `--resume` is create-or-resume via a
+marker) and `cursor` inject unconditionally. `host` always injects — it has no
+session by design, every re-review being a fresh subagent. Injecting when it was
+unnecessary costs bytes; not injecting after a silent resume failure costs a blind
+review, so injection is the default everywhere it is not provably unnecessary.
+
 **Rule of thumb: the model that writes is never the model that reviews.** Route the reviewer to a different family than your session model and blind spots stop being correlated.
 
 **Cursor backend — ambient-injection caveat + persona override (fn-90).** `cursor-agent` has **no system-prompt mechanism**: the flow-next reviewer rubric travels as a plain user prompt *on top of* Cursor's own built-in persona (which carries its OWN review rubric and an end-to-end-thoroughness bias), and `cursor-agent` auto-attaches the workspace `AGENTS.md` / `CLAUDE.md`, skill catalogs, and MCP instruction blocks into the reviewer's context. That ambient guidance dilutes the in-scope anchor and biases the reviewer toward always-produce-findings — a real contributor to review-loop non-convergence (it *amplifies*, it is not the root cause). There is no CLI knob to suppress the auto-attach, so flow-next prepends an explicit **persona-override preamble** on every cursor review path: it declares that any ambient rubric/persona/severity-ordering from the environment is *superseded* and the ONLY rubric + verdict contract is the flow-next one that follows. This is documented, not configurable — nothing to set; it rides automatically on `review.backend cursor:*`. The structured-findings ratchet and deterministic convergence terminals (unchanged-artifact refusal, early escalation when the reviewer explicitly marks the same finding `not-fixed` in two consecutive rounds, the round cap, and reviewer-emitted `NEEDS_HUMAN`) apply to every backend — see [`flowctl.md`](flowctl.md#codex-impl-review).
