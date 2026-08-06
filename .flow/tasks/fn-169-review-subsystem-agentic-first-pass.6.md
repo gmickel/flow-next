@@ -1,5 +1,5 @@
 ---
-satisfies: [R6, R7]
+satisfies: [R5, R6, R7]
 ---
 # fn-169-review-subsystem-agentic-first-pass.6 Enforcement (strategy + planning trip-wires + executable ratchet), docs, CHANGELOG, full gate
 
@@ -30,7 +30,7 @@ Make the decision stick this time, then document and gate.
 - 2.5.0 CHANGELOG — what fn-74 wrote, and why writing it there was not enough
 
 ### Key context
-- Deps `.5`: do not claim the outcome in docs or CHANGELOG before the eval gate passes.
+- Deps `.4` (the eval tasks `.2`/`.5` were removed — see the spec's no-eval decision). Do not claim an outcome in docs or CHANGELOG that this spec's own PR review has not demonstrated.
 - The no-embed test is the artifact fn-74 omitted. A CHANGELOG entry is not a constraint; a failing test is.
 - Host and `export` exceptions must be documented as deliberate and tested, or they read as oversights to the next reader.
 
@@ -42,6 +42,7 @@ Make the decision stick this time, then document and gate.
 - [ ] `plugins/flow-next/docs/{orchestration,flowctl,review-findings}.md` and the three `workflow-host.md` files updated; codex mirror regenerated twice with no second-run diff
 - [ ] CHANGELOG `## Unreleased`, outcome-first, with the mandatory unheaded user-outcome paragraph; no version bump
 - [ ] Release note recorded: no release until fn-168 and fn-169 have both landed
+- [ ] **Dogfood evidence recorded**: this spec's own PR was reviewed through the new fetch-not-embed path — verdict delivered, findings citing resolvable paths, and the prompt-token delta taken from the review receipts against the known baseline (impl-reviews 544k-1.12M, completion review 3.45M input tokens)
 - [ ] Full gate green: `python3 scripts/run_tests_parallel.py` + `uvx ruff@0.16.0 check .`; `test_prompt_text_pinned` green; propagation verified
 
 ## Done summary

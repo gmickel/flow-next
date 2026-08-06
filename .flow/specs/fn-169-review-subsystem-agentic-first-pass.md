@@ -98,7 +98,7 @@ Cursor's default model is quota-blocked on this account; `grok-4.5` / `composer-
 | `<spec>` (always embedded) | `.flow/specs/<id>.md` |
 | `<task_specs>` | the task md paths |
 | rendered prior findings + fitter | session resume; receipt path on fallback |
-| `<diff_summary>` | **keep** — bounded `--stat`, the cheap scope map |
+| `<diff_summary>` | **keep, but `--stat` → `--numstat`** — `--stat` abbreviates paths and cannot carry the file set |
 | `<context_hints>` | **keep** — bounded at 15, genuine starting points |
 
 ### Deletion surface (top-level defs, before tests)
@@ -131,10 +131,10 @@ cd optimization/review-prompt && REVEVAL_RUNS=3 python3 reveval.py
 
 - **R1:** The codex resume dispatch passes the same guarantees as a fresh dispatch: `--sandbox <resolved>`, the configured reasoning effort, and `--skip-git-repo-check`. Verified by asserting the resumed CLI header reports the intended sandbox and effort (measured today: `danger-full-access` / `medium`). Errors: a resume that still fails must **surface** — set an explicit signal, log it, and fall back to injection deliberately; never silently start a fresh session. Copilot and cursor resume paths audited for the same three defect classes and fixed where present.
 - **R2:** Prior-finding **injection happens only when the session did not resume**, via a **two-phase dispatch** — resume is attempted with the lean prompt, and on failure the prompt is **rebuilt with injection** before the fresh dispatch. This is load-bearing: `run_codex_exec` today resumes internally and, on `CalledProcessError`, falls through to a fresh session **reusing the same prompt string** — so stripping priors without restructuring would leave the fallback blind, and `resume_failed` arrives too late to help. The runner therefore takes a prompt **factory** (or the caller owns both phases); a fixed string cannot express this. Copilot and cursor get the same contract or are explicitly excluded with a reason. Host always injects (no session by design). codex/copilot/cursor inject only on a surfaced resume failure. A resumed re-review contains no rendered prior items. Errors: resume-failure fallback is exercised by a test that forces failure and asserts injection returns; a resumed round with no injection still parses per-ordinal statuses through the production parser.
-- **R3:** Payloads become identities. `<diff_content>` → `<base-sha>..<head-sha>`; `<spec>` → the spec path; `<task_specs>` → task paths. `<diff_summary>` and `<context_hints>` are retained. `export` keeps embedding; the artifact hash is unchanged and still binds spec+tasks+diff bytes. Errors: a reviewer given an unresolvable range fails loudly rather than reviewing an empty diff; an absent spec/task path is an error, not a silent omission.
+- **R3:** Payloads become identities. `<diff_content>` → `<base-sha>..<head-sha>`; `<spec>` → the spec path; `<task_specs>` → task paths. `<context_hints>` is retained. `<diff_summary>` is retained **but rebuilt with `git diff --numstat`** instead of `--stat`: measured on the fn-168 diff, `--stat` abbreviated **51 of 65 paths** (`.../pr-cognitive-aid/.write.lock`), making it a human-readable summary that cannot serve as the file set. `--numstat` gives 65 exact paths with per-file counts in **4,315 bytes** against the diff body's **641,784** — 150x smaller and complete. This one line is what makes the identity model work; without it fetch-not-embed ships a degraded scope signal. `export` keeps embedding; the artifact hash is unchanged and still binds spec+tasks+diff bytes. Errors: a reviewer given an unresolvable range fails loudly rather than reviewing an empty diff; an absent spec/task path is an error, not a silent omission.
 - **R4:** The **content-fitting** layer is deleted — all three cursor fitters, `_cursor_disk_read_header`, the ratchet's item renderer, and the 50 KB diff cap for non-`export` paths. **A transport-only guard is RETAINED**, renamed `CURSOR_ARGV_TRANSPORT_MAX` and documented as such: `CURSOR_ARGV_PROMPT_MAX` is currently doing double duty as `run_cursor_exec`'s fail-closed boundary before it invokes positional argv, and Cursor's Windows `CreateProcessW` limit does not disappear because we stopped embedding. Deleting it outright would trade an explicit non-zero error for a platform-dependent process-launch failure, for every caller of the shared runner including the validator and deep-pass paths. `grep` for the *content-fitting* constants returns hits only in the `export` path and history. Errors: no remaining code path silently shortens reviewer-visible evidence.
-- **R5 (eval-gated):** The eval harness gains a **git-fixture corpus with scope traps** — planted issues across several files, a decoy changed *before* base, a decoy changed *after* head, a bug in an unchanged region of a changed file, and a rename — plus metrics the current corpus cannot express: `verdict_delivered`, `range_correct` (read from the reviewer's own `command_execution` stream), turns-to-verdict, scope precision, and resumed re-review per-ordinal grammar compliance scored through the production parser. **Every trap carries an expected disposition, and classification is scored** — `scope precision` only catches an out-of-range *file*, so the unchanged-region bug (which lives inside an in-range changed file) would otherwise pass unscored, and the keyword scorer might even reward reporting it. So: an unchanged-region finding is admissible **only** as `pre_existing` and must never block; a pre-base or post-head decoy is forbidden outright; an in-hunk planted bug must be `introduced`. Misclassification fails the gate exactly like a missed finding. **Baseline is measured post-`.1`** (see below) and re-measured after, both recorded in `agent_docs/optimization-log.md`. **Pre-registered gate:** ship only if `verdict_delivered` = 100%, `range_correct` = 100%, scope precision = 1.0, correctness-class detection ≥ baseline, prior-ordinal compliance ≥ baseline, and prompt tokens down. Wall-clock is recorded, not gated. Any missed verdict or decoy finding blocks the ship regardless of token win.
-- **R6 (the ratchet fn-74 omitted):** Three enforcement layers, because prose alone already failed twice. (a) `STRATEGY.md` records the principle — pass identities, not payloads; the reviewer is an agent with tools. (b) `CLAUDE.md`'s "How to spot a mistake" list gains the planning-time trip-wires: *embedding content the reviewer could fetch itself*, *writing a fitter/truncator for a prompt payload*, *adding a budget constant to a prompt path*. (c) An **executable test** asserts the built review prompt (non-`export`) contains no diff body, no spec body, and no rendered prior items. Errors: the test names the offending tag so a future regression is self-explaining.
+- **R5:** Live dogfood evidence instead of a synthetic study. fn-169's own PR is reviewed through the new fetch-not-embed path on a real diff; record that a verdict was delivered, that findings cite resolvable paths, and the prompt-token delta read off the review receipts (baseline already known: impl-reviews 544k-1.12M input tokens, completion review 3.45M). Errors: a reviewer that cannot resolve the range or the file set fails loudly, never reviews an empty diff.
+- **R6 (the ratchet fn-74 omitted):** Three enforcement layers, because prose alone already failed twice. (a) `STRATEGY.md` records the principle — pass identities, not payloads; the reviewer is an agent with tools. (b) `CLAUDE.md`'s "How to spot a mistake" list gains the planning-time trip-wires: *embedding content the reviewer could fetch itself*, *writing a fitter/truncator for a prompt payload*, *adding a budget constant to a prompt path*. (c) **Executable tests**: the built review prompt (non-`export`) contains no diff body, no spec body and no rendered prior items — AND carries the exact `base..head` SHAs plus a **complete, unabbreviated** file list. That second assertion is the one that would have caught the `--stat` path abbreviation. Errors: the test names the offending tag so a future regression is self-explaining.
 - **R7:** Docs + CHANGELOG. `plugins/flow-next/docs/orchestration.md`, `plugins/flow-next/docs/flowctl.md`, `plugins/flow-next/docs/review-findings.md`, and the three `workflow-host.md` files reflect fetch-not-embed and the host exception; the codex mirror is regenerated (`sync-codex.sh` twice, no second-run diff). CHANGELOG `## Unreleased`, outcome-first. **No release until this spec AND fn-168 have both landed** — the two entries ship together. No version bump inside the spec.
 
 ## Boundaries
@@ -145,7 +145,7 @@ cd optimization/review-prompt && REVEVAL_RUNS=3 python3 reveval.py
 - Not a change to the artifact-unchanged guard, the round cap, reservation/refund, the findings container/lineage schema, the digest, or the stall rule — fn-168 owns those and they are unaffected.
 - Not a rewrite of the review rubric content. The rubric is eval-optimized (fn-74); only the payload/pointer sections change.
 - Not an attempt to reduce round *counts*. Expect less re-derivation but possibly more legitimate findings once reviewers see the whole diff at full effort. Round count is a measured outcome, never a promise.
-- Not a change to `<diff_summary>` or `<context_hints>` — both are bounded and earn their place.
+- Not a change to `<context_hints>`, and `<diff_summary>` changes only its generator (`--stat` → `--numstat`) — both stay, bounded, and earn their place.
 - Not tuning finding volume via the impl-review prompt; that is a follow-up eval.
 
 ## Strategy Alignment
@@ -162,31 +162,49 @@ Active tracks served:
 
 **Why speed is expected to improve, not regress.** The turn cost of fetching is already being paid — reviewers fetch today *because* the diff is truncated to 10%. Removing the payload deletes overhead from a path that fetches regardless. The only case that could add round-trips is a diff that fits entirely under 50 KB; fn-74's "~64 file-reads for a verdict on a 49-file diff" was recorded as a pass in the no-embed world, not a warning.
 
-**Why an eval at all, given fn-74 already proved no-embed.** fn-74 proved it for file *contents*. The diff is the **scope** signal, and embedding was originally introduced to prevent a "114 turns / no verdict" failure — a scope-bounding failure. The existing corpus is a single file with no git history, so it structurally cannot fail that way and would pass while the real risk went unmeasured. Hence the fixture with decoys.
+**Why NO synthetic eval (decided 2026-08-06).** An earlier draft carried a two-task eval — git fixture, four trap
+classes, fresh metrics, measured baseline, pre-registered gate, ~36 dispatches. Dropped, and the reasoning matters
+more than the tasks did:
+
+- fn-74 **already ran** the controlled study for this direction (planted-bug corpus, cross-backend,
+  `QUALITY=PRESERVED`) and recorded cursor no longer tripping its argv limit.
+- Reviewers **already fetch today**: the diff is capped at 50 KB and fn-168's was 495 KB, so every reviewer there
+  worked from ~10% plus its own `git diff` / `rg` / `sed`. This deletes a redundant partial payload; it does not
+  introduce a new mode.
+- The resume half is a **bug fix** restoring documented intent. The conditional-injection half was
+  **smoke-tested directly** — resumed session, zero injection, exact per-ordinal grammar scored by the production
+  parser.
+- Building a fixture harness to justify deleting 594 lines of harness is the same over-building this spec exists to
+  remove.
+
+**If review quality degrades, the lever is the impl-review PROMPT, not a measurement apparatus.** That is the
+agentic position: give the agent the right inputs, judge the output, tune the prompt when it disappoints. Retained
+instead: R6's executable assertions and R5's live dogfood evidence. Accepted risk: no controlled measurement against
+deliberate scope decoys — a reviewer that mis-derived the range produces visibly wrong findings, not silent ones.
+
+**What fn-74's eval did and did not prove.** fn-74 proved it for file *contents*. The diff is the **scope** signal, and embedding was originally introduced to prevent a "114 turns / no verdict" failure — a scope-bounding failure. The existing corpus is a single file with no git history, so it structurally cannot fail that way and would pass while the real risk went unmeasured. Hence the fixture with decoys.
 
 **Why three enforcement layers.** fn-74 made this exact decision, validated it, deleted the code, and wrote it in a CHANGELOG. It was reversed twice by specs that each had a good local reason. A CHANGELOG entry is not a constraint; a failing test is.
-
-### Experiment baseline is measured POST-`.1`
-
-`.1` changes resume reliability, sandbox, and reasoning effort — all direct inputs to `verdict_delivered` and
-prior-ordinal compliance. A baseline taken before it would be a baseline of *broken* resume, confounding the
-variable actually under test (payload delivery). So `.2` depends on `.1`, and both arms share identical
-resume/sandbox/effort behavior; the only difference between them is embed-vs-fetch. `.1` still ships first as
-the security fix — it simply lands before the measurement rather than beside it.
 
 ## Early proof point
 
 Task `.1` (resume argv fix) is independently valuable and independently shippable: it closes a live read-only-contract violation and can be verified by asserting the resumed CLI header. If resume turns out to be unreliable across processes or after a gap (the unverified cases above), that is discovered here — before any work depends on resume being the primary continuity mechanism, and while injection is still unconditional.
+
+## Task numbering
+
+Tasks are `.1`, `.3`, `.4`, `.6`. `.2` (eval fixture + baseline) and `.5` (re-measure against the gate) were
+**removed** after the no-eval decision above. The remaining ids were deliberately not renumbered, so every
+reference in this spec, its commits, and its plan-review history keeps pointing at the same work.
 
 ## Requirement coverage
 
 | Req | Description | Task(s) | Gap justification |
 |-----|-------------|---------|-------------------|
 | R1 | Resume argv parity + loud failure; copilot/cursor audited | .1 | — |
-| R2 | Injection only when resume did not happen; host always | .3 | — |
-| R3 | Payloads → identities; export + hash preserved | .4 | — |
+| R2 | Two-phase dispatch; injection only when resume did not happen; host always | .3 | — |
+| R3 | Payloads → identities incl. the `--numstat` scope signal; export + hash preserved | .4 | — |
 | R4 | Truncation layer deleted | .4 | — |
-| R5 | Eval fixture, metrics, baseline + post measurement, pre-registered gate | .2 (harness + baseline), .5 (re-measure + gate) | split so the baseline exists before the change |
+| R5 | Live dogfood evidence + docs | .6 | no synthetic eval — see Decision Context |
 | R6 | STRATEGY.md + CLAUDE.md symptoms + executable no-embed test | .6 | — |
 | R7 | Docs + CHANGELOG + mirror + full gate | .6 | — |
 

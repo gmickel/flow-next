@@ -4,7 +4,7 @@
   "claimed_at": null,
   "created_at": "2026-08-06T00:46:18.167183Z",
   "depends_on": [
-    "fn-169-review-subsystem-agentic-first-pass.5"
+    "fn-169-review-subsystem-agentic-first-pass.4"
   ],
   "id": "fn-169-review-subsystem-agentic-first-pass.6",
   "priority": null,
