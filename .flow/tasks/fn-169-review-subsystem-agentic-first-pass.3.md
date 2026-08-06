@@ -19,7 +19,8 @@ Make session resume the primary continuity mechanism and injection the fallback 
 - **Host always injects** — no session by design (`session_id: null`, "Every re-review is a fresh subagent"), and `workflow-host.md:165` states the receipt's `review` field is REQUIRED for exactly this. Make it an explicit, tested exception so a later "simplification" cannot silently break host convergence.
 - The re-review prompt for the resumed path is ALREADY WRITTEN — `build_rereview_preamble` emits "This is a RE-REVIEW... **Updated files:** {files_list}... Re-read these files from the repository - do NOT rely on cached content." Keep that; drop only the prepended ratchet. Do NOT adopt RP's "reviewer sees your changes automatically" wording: that is an RP-specific auto-refresh property and false for CLI backends, which fetch on demand.
 - Validated shape (measured): resumed session + zero injection + the grammar instruction produced `Prior finding #1: fixed / #2: not-fixed / #3: fixed`, scored exactly by the production parser.
-- This is what removes the PR #295 false-SHIP class at the root: a resumed reviewer saw the full prior set, so its aggregate all-clear is trustworthy and the interim cursor sweep gate can be **deleted** in this task.
+- This removes the PR #295 false-SHIP class on the RESUMED path: a resumed reviewer saw the full prior set in its own context, so its aggregate all-clear is trustworthy there.
+- **Do NOT delete fn-168's interim cursor sweep gate in this task** (corrected during implementation). On the resume-FAILURE path cursor still receives rendered prior items, and those can still be truncated by the argv fitter — so the hazard survives until `.4` removes truncation itself. The gate is deleted in `.4`, together with the fitters that make it necessary.
 - Propagation: `cp` to `.flow/bin/flowctl.py`.
 
 ### Investigation targets
@@ -43,7 +44,7 @@ Make session resume the primary continuity mechanism and injection the fallback 
 - [ ] Host always injects, as an explicit tested exception
 - [ ] Forced-resume-failure test asserts injection returns and the round still converges
 - [ ] A resumed round with zero injection yields correct per-ordinal statuses through the production `_review_finding_prior_items`
-- [ ] fn-168's interim cursor sweep gate is DELETED, and the aggregate sweep is sound without it on a resumed round
+- [ ] The aggregate sweep is sound on a RESUMED round without the interim gate; the gate itself stays until `.4` (resume-failure rounds on cursor still carry truncatable rendered items)
 - [ ] `build_rereview_preamble`'s minimal core is preserved; RP's auto-refresh wording is NOT propagated to CLI backends
 - [ ] Focused suites green; propagation done
 
