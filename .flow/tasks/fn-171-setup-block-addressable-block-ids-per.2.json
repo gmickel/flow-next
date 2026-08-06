@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-06T23:52:11.020234Z",
+  "depends_on": [
+    "fn-171-setup-block-addressable-block-ids-per.1"
+  ],
+  "id": "fn-171-setup-block-addressable-block-ids-per.2",
+  "priority": null,
+  "spec": "fn-171-setup-block-addressable-block-ids-per",
+  "spec_path": ".flow/tasks/fn-171-setup-block-addressable-block-ids-per.2.md",
+  "status": "todo",
+  "title": "setup-block check: read-only verdict verb with exit-code contract",
+  "updated_at": "2026-08-06T23:52:11.020234Z"
+}

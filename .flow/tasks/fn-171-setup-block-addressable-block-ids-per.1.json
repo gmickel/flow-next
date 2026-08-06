@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-06T23:52:11.018883Z",
+  "depends_on": [],
+  "id": "fn-171-setup-block-addressable-block-ids-per.1",
+  "priority": null,
+  "spec": "fn-171-setup-block-addressable-block-ids-per",
+  "spec_path": ".flow/tasks/fn-171-setup-block-addressable-block-ids-per.1.md",
+  "status": "todo",
+  "title": "setup-block --id: derived markers, per-id span scoping, nested (path,id) state",
+  "updated_at": "2026-08-06T23:52:11.018883Z"
+}

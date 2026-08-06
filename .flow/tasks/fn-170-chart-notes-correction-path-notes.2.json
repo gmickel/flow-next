@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-06T23:49:43.898032Z",
+  "depends_on": [
+    "fn-170-chart-notes-correction-path-notes.1"
+  ],
+  "id": "fn-170-chart-notes-correction-path-notes.2",
+  "priority": null,
+  "spec": "fn-170-chart-notes-correction-path-notes",
+  "spec_path": ".flow/tasks/fn-170-chart-notes-correction-path-notes.2.md",
+  "status": "todo",
+  "title": "chart briefing: render corrections + post-transition status",
+  "updated_at": "2026-08-06T23:49:43.898032Z"
+}
