@@ -149,6 +149,29 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
     return any(re.search(pattern, command, re.I) for pattern in patterns)
 
 
+def _collapse_path_noise(text: str) -> str:
+    """Collapse redundant path syntax so equivalent spellings match one pattern.
+
+    `.flow//config.json`, `.flow/./config.json` and `.flow/x/../config.json` are
+    all the same destination to the shell, but not to a literal regex (PR #295
+    bot r5). This is a TEXT-level normalization over the whole command — no
+    filesystem resolve, no tokenization — applied only before the protected-path
+    screen, so a false collapse can widen the screen but never narrow it.
+    """
+    out = text.replace("\\", "/")
+    while "//" in out:
+        out = out.replace("//", "/")
+    while "/./" in out:
+        out = out.replace("/./", "/")
+    # `a/b/../c` -> `a/c`, repeatedly, so chained traversal also folds.
+    pattern = re.compile(r"[^/\s'\"|&;=]+/\.\./")
+    while True:
+        collapsed = pattern.sub("", out, count=1)
+        if collapsed == out:
+            return collapsed
+        out = collapsed
+
+
 def _normalize_path_for_match(path: str) -> str:
     """Normalize a path string for receipt equality checks (no filesystem resolve)."""
     if not path:
@@ -1268,7 +1291,7 @@ def _command_has_recovery_markers(command: str) -> bool:
     # next writer API someone thinks of, so the polarity is inverted — a shell
     # command that so much as NAMES the protected config is refused, and reads go
     # through `flowctl config get` (which never spells the path).
-    if _FLOW_CONFIG_PATH_RE.search(command):
+    if _FLOW_CONFIG_PATH_RE.search(_collapse_path_noise(command)):
         return True
     if re.search(r"config['\"]?\s+['\"]?set\b", command):
         if re.search(r"maxIterations", command):

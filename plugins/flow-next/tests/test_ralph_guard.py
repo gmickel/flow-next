@@ -376,6 +376,33 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
                 proc = self._hook(command)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_blocks_equivalent_spellings_of_the_protected_config(self) -> None:
+        """PR #295 bot r5: the shell resolves these; a literal regex did not.
+
+        `.flow//config.json`, `.flow/./config.json` and `.flow/x/../config.json`
+        are the same destination. Path noise is collapsed at the text level before
+        the protected-path screen — no filesystem resolve, so a false collapse can
+        only widen the screen, never narrow it.
+        """
+        for command in (
+            "printf '{}' > .flow//config.json",
+            "cp /tmp/c .flow/./config.json",
+            "cp /tmp/c .flow/tmp/../config.json",
+            "cp /tmp/c .flow/a/b/../../config.json",
+            "cp /tmp/c ./.flow/config.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_path_collapse_does_not_over_block_neighbours(self) -> None:
+        """A different file that merely shares a name or a directory stays legal."""
+        for command in ("cat .flow/meta.json", "cat docs/config.json"):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_allows_setups_shipped_review_backend_write(self) -> None:
         """PR #295 bot r4: a LITERAL leaf key cannot reach the cap.
 
