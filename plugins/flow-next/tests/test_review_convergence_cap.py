@@ -319,6 +319,53 @@ class TestConvergenceRatchet(unittest.TestCase):
                     flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line), line
                 )
 
+    def test_aggregate_is_not_honored_on_a_truncating_backend(self):
+        """fn-168 interim gate (deleted by fn-169): cursor can show a SUBSET.
+
+        `build_convergence_ratchet_block` renders only the prior items that fit
+        the cursor argv budget — its docstring notes a near-full prompt "can
+        retain the surrounding paired delimiters while omitting every whole
+        item". A reviewer shown a subset can truthfully answer the aggregate
+        all-clear for what it saw, and sweeping the untruncated container would
+        mark omitted, unverified findings `fixed`: a false SHIP.
+
+        The line stays RECOGNIZED (so the container is never dropped) — only the
+        sweep is withheld, leaving the prior carried at `open`, which is the
+        conservative default.
+        """
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed",
+            _ratchet_prior_container(),
+            "receipt-2",
+            allow_aggregate=False,
+        )
+        self.assertIsNotNone(items, "the container must NOT be dropped")
+        self.assertEqual([item["status"] for item in items], ["open"])
+
+    def test_per_ordinal_records_are_honored_on_a_truncating_backend(self):
+        """A partial view can only UNDER-report, never mis-attribute.
+
+        Each per-ordinal record names the ordinal it resolves, so a reviewer that
+        saw a subset simply says less — it cannot mark an item it never saw. Only
+        the ordinal-less aggregate is unsafe, so per-ordinal stays honored.
+        """
+        items = flowctl._review_finding_prior_items(
+            "Prior finding #1: not-fixed",
+            _ratchet_prior_container(),
+            "receipt-2",
+            allow_aggregate=False,
+        )
+        self.assertEqual([item["status"] for item in items], ["not_fixed"])
+
+    def test_only_cursor_is_gated(self):
+        """The gate is scoped to backends that actually truncate.
+
+        Only cursor passes `max_total_chars` (via
+        `fit_cursor_rereview_prompt_to_budget`), so only cursor can render a
+        partial prior set. Gating codex would cost the aggregate for no reason.
+        """
+        self.assertEqual(flowctl._FINDINGS_TRUNCATING_BACKENDS, frozenset({"cursor"}))
+
     def test_unaddressed_empty_array_is_not_a_prior_findings_signal(self):
         """fn-168 R2, the load-bearing negative.
 

@@ -4663,6 +4663,23 @@ _FINDINGS_PRIOR_RE = re.compile(
 # mismatch (aggregate 1, record 0) and discard an otherwise-clean container. An
 # unrecognized bolded line leaves both counts at 0 — inert, priors just carry
 # forward — which is the safe direction. The prompt advertises the plain form.
+# fn-168 INTERIM GATE (deleted by fn-169 R2/R4). A backend whose prompt has a hard
+# size budget can render only the prior items that FIT — `build_convergence_ratchet_block`
+# breaks out of its render loop, and its own docstring notes a near-full Cursor
+# prompt "can retain the surrounding paired delimiters while omitting every whole
+# item". A reviewer shown a SUBSET can then truthfully answer the aggregate
+# all-clear for everything it saw, and sweeping the untruncated container would
+# mark omitted, unverified findings `fixed` — a false SHIP.
+#
+# Only cursor passes `max_total_chars` (via `fit_cursor_rereview_prompt_to_budget`),
+# so only cursor can truncate. Per-ordinal records stay honored on every backend:
+# they name the ordinal they resolve, so a partial view can only under-report.
+#
+# fn-169 removes the truncation entirely (prior findings come from session resume,
+# or a receipt PATH on fallback) — at which point this set is empty and the
+# parameter goes with it.
+_FINDINGS_TRUNCATING_BACKENDS = frozenset({"cursor"})
+
 _FINDINGS_PRIOR_AGGREGATE_RE = re.compile(
     r"""(?imx)
     ^[ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?
@@ -5182,6 +5199,8 @@ def _review_finding_prior_items(
     output: str,
     prior_findings: Optional[dict],
     source_receipt_id: str,
+    *,
+    allow_aggregate: bool = True,
 ) -> Optional[list[dict]]:
     record_count = 0
     for _match in _FINDINGS_PRIOR_RECORD_RE.finditer(output):
@@ -5270,7 +5289,7 @@ def _review_finding_prior_items(
     # individually. Explicit beats implicit, so ANY per-ordinal record disables
     # it entirely — enforced here by ORDER (the sweep runs before the per-ordinal
     # writes and only when there are none), not merely documented.
-    if aggregate_count and not matches:
+    if aggregate_count and not matches and allow_aggregate:
         for item in carried:
             # Never re-stamp a resolved terminal: ``withdrawn`` was resolved
             # differently, and calling it ``fixed`` would corrupt lineage. The
@@ -5566,7 +5585,10 @@ def _parse_review_findings_v1(
         return None
 
     prior_items = _review_finding_prior_items(
-        output, prior_findings, source_receipt_id
+        output,
+        prior_findings,
+        source_receipt_id,
+        allow_aggregate=backend not in _FINDINGS_TRUNCATING_BACKENDS,
     )
     if prior_items is None:
         return None

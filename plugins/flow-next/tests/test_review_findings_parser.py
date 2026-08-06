@@ -241,7 +241,16 @@ Problem: The R1 behavior regressed.
                     prior["sourceReceiptId"], extra["ordinal"]
                 )
                 prior["items"].append(extra)
-            with self.subTest(backend=backend):
+            # fn-168 interim gate (fn-169 deletes it): a backend whose prompt has
+            # a hard size budget may have shown the reviewer only SOME priors, so
+            # its aggregate all-clear is not trusted to sweep. The corpus oracle
+            # stays a statement about reviewer OUTPUT shape; the expectation here
+            # is derived from the gate so the two never drift.
+            gated = backend in FLOWCTL._FINDINGS_TRUNCATING_BACKENDS
+            expected = (
+                ["open"] * len(expected_statuses) if gated else expected_statuses
+            )
+            with self.subTest(backend=backend, gated=gated):
                 current = parse(
                     self.fixture(backend, "ratchet-aggregate"),
                     backend,
@@ -252,8 +261,7 @@ Problem: The R1 behavior regressed.
                 )
                 self.assertIsNotNone(current, backend)
                 self.assertEqual(
-                    [item["status"] for item in current["items"]],
-                    expected_statuses,
+                    [item["status"] for item in current["items"]], expected
                 )
                 for old, new in zip(prior["items"], current["items"], strict=True):
                     self.assertEqual(new["id"], old["id"])

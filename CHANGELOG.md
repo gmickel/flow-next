@@ -46,6 +46,16 @@ autonomous loop, only yours to raise.
 
 ### Changed
 
+- **The aggregate all-clear is not trusted on a backend that can truncate its own
+  prompt.** `Prior findings: all fixed` is a real shortcut when the reviewer saw
+  every prior finding — but the cursor backend fits its prompt to a hard argv
+  budget and can show a reviewer only *some* of them, at which point an honest
+  all-clear would have marked findings it never saw as fixed. On cursor the line
+  is still recognized (nothing is discarded) but no longer sweeps, so those
+  priors stay open; per-finding lines keep working everywhere, since they name
+  the finding they resolve. Interim: the follow-up spec removes the truncation
+  itself, and this exception goes with it. (fn-168)
+
 - **Stall detection reads what the reviewer said instead of guessing from
   trends.** The two rules that inferred non-convergence — one from the open-count
   and severity trend, one from "each of the last two rounds raised a new
