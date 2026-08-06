@@ -4335,6 +4335,7 @@ def run_codex_exec(
         - exit_code is 0 for success, non-zero for failure
         - stderr contains error output from the process
     """
+    review_exec_timeout = get_review_exec_timeout()
     codex = require_codex()
     # Resolve spec so model+effort are populated. Defensive: older call sites
     # (or tests) may pass spec=None; treat that as bare-codex resolution.
@@ -4380,7 +4381,7 @@ def run_codex_exec(
                 capture_output=True,
                 text=True, encoding="utf-8",
                 check=True,
-                timeout=600,
+                timeout=review_exec_timeout,
                 # cwd=repo_root so codex resolves repo-relative changed-file paths
                 # when launched from a subdir (mirrors run_cursor_exec). repo_root
                 # is computed by the handler; --skip-git-repo-check still allows /tmp.
@@ -4443,14 +4444,14 @@ def run_codex_exec(
                 capture_output=True,
                 text=True, encoding="utf-8",
                 check=False,  # Don't raise on non-zero exit
-                timeout=600,
+                timeout=review_exec_timeout,
                 # cwd=repo_root so codex resolves repo-relative changed-file paths
                 # when launched from a subdir (mirrors run_cursor_exec). repo_root
                 # is computed by the handler; --skip-git-repo-check still allows /tmp.
                 cwd=str(repo_root) if repo_root is not None else None,
             )
         except subprocess.TimeoutExpired:
-            return "", None, 2, "codex exec timed out (600s)"
+            return "", None, 2, f"codex exec timed out ({review_exec_timeout}s)"
         return (
             result.stdout,
             parse_codex_thread_id(result.stdout),
@@ -8358,8 +8359,10 @@ def run_copilot_exec(
     Returns:
         tuple: (stdout, session_id, exit_code, stderr)
         - exit_code 0 = success; non-zero = failure
-        - On timeout (600s) returns ("", session_id, 2, "<msg>")
+        - On timeout (`get_review_exec_timeout()`) returns
+          ("", session_id, 2, "<msg>")
     """
+    review_exec_timeout = get_review_exec_timeout()
     copilot = require_copilot()
 
     # fn-76: capture explicitness before the defensive resolve fills the default.
@@ -8442,12 +8445,12 @@ def run_copilot_exec(
                     capture_output=True,
                     text=True, encoding="utf-8",
                     check=False,  # Don't raise on non-zero exit; caller inspects
-                    timeout=600,
+                    timeout=review_exec_timeout,
                     cwd=str(repo_root),
                     **subprocess_kwargs,
                 )
             except subprocess.TimeoutExpired:
-                return "", session_id, 2, "copilot timed out (600s)"
+                return "", session_id, 2, f"copilot timed out ({review_exec_timeout}s)"
             # Record first-call success so subsequent invocations switch from
             # --session-id to --resume. Touch is idempotent; failures never touch.
             if result.returncode == 0:
@@ -8616,7 +8619,7 @@ def run_cursor_exec(
     run with **``cwd=repo_root``** (Cursor scopes to the workspace dir — a review
     launched from a subdir reads the wrong tree without this), ``--mode ask``
     (read-only; the CLI refuses to edit), ``--trust`` (mandatory headless or the
-    CLI blocks on a trust prompt), ``timeout=600``.
+    CLI blocks on a trust prompt), bounded by `get_review_exec_timeout()`.
 
     Session = **resume-only**: ``session_id=None`` (first call) omits ``--resume``
     and lets Cursor generate the id, which we parse from the result and return.
@@ -8636,8 +8639,10 @@ def run_cursor_exec(
     Returns:
         tuple: (result_text, returned_session_id, exit_code, stderr)
         - exit_code 0 = success; non-zero on ``is_error`` / CLI failure / timeout.
-        - On timeout (600s) returns ("", session_id or "", 2, "<msg>").
+        - On timeout (`get_review_exec_timeout()`) returns
+          ("", session_id or "", 2, "<msg>").
     """
+    review_exec_timeout = get_review_exec_timeout()
     # Positional-argv size guard — fail closed BEFORE shelling out (no safe
     # oversized path; see CURSOR_ARGV_TRANSPORT_MAX; never silently read back into
     # argv). Return a non-zero result tuple (NOT a raised exception) so the
@@ -8700,7 +8705,7 @@ def run_cursor_exec(
                 capture_output=True,
                 text=True, encoding="utf-8",
                 check=False,  # Don't raise on non-zero exit; caller inspects
-                timeout=600,
+                timeout=review_exec_timeout,
                 cwd=str(repo_root),
                 # fn-120.3: prompt delivery is positional argv, so nothing is
                 # piped - without DEVNULL the CLI inherits our stdin and can
@@ -8709,7 +8714,7 @@ def run_cursor_exec(
                 stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired:
-            return "", (session_id or ""), 2, "cursor-agent timed out (600s)"
+            return "", (session_id or ""), 2, f"cursor-agent timed out ({review_exec_timeout}s)"
 
         result_text, returned_session_id, is_error = _parse_cursor_result(
             result.stdout
@@ -9467,6 +9472,43 @@ def build_review_prompt(
     parts.append(f"<review_instructions>\n{instruction}\n</review_instructions>")
 
     return "\n\n".join(parts)
+
+
+# fn-169: wall-clock ceiling for one backend review dispatch. Raised 600 -> 1800
+# because the fetch-not-embed model moved work INTO the reviewer's session: it now
+# reads the diff and the specs itself instead of being handed a truncated copy, so
+# a large change costs tool-call turns that an embedded prompt spent on nothing. At
+# 600s, 3 of 10 dispatches on this spec's own diff were killed mid-review and
+# refunded — a reviewer that was working, stopped for being slow.
+#
+# This is a WALL-CLOCK bound, which is the wrong shape and is known to be: it
+# cannot tell a reviewer that is working from a process that is wedged. The right
+# bound is an IDLE deadline — `codex exec --json` streams events, so "no event for
+# N seconds" identifies a hang precisely and never kills progress. That needs the
+# codex spawn switched from `subprocess.run` to `Popen` with incremental reads and
+# is captured as its own spec; copilot and cursor buffer to completion and give no
+# progress signal at all, so they keep a wall-clock bound regardless.
+DEFAULT_REVIEW_EXEC_TIMEOUT = 1800
+
+
+def get_review_exec_timeout() -> int:
+    """Seconds one backend review dispatch may run. Env > default.
+
+    ``FLOW_REVIEW_EXEC_TIMEOUT`` overrides; a present-but-invalid value falls back
+    to the default rather than being treated as absent, so a typo cannot silently
+    remove the bound. Unlike the review-round cap this is not a cost gate — it is a
+    liveness bound — so it is deliberately NOT ralph-guarded: an autonomous loop
+    raising it cannot review more, only wait longer for the one review it already
+    reserved.
+    """
+    raw = os.environ.get("FLOW_REVIEW_EXEC_TIMEOUT")
+    if raw is None or raw == "":
+        return DEFAULT_REVIEW_EXEC_TIMEOUT
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_REVIEW_EXEC_TIMEOUT
+    return value if value > 0 else DEFAULT_REVIEW_EXEC_TIMEOUT
 
 
 DEFAULT_MAX_REVIEW_ITERATIONS = 8

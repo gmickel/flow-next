@@ -6703,3 +6703,66 @@ class TestEveryCanonicalTaskMustBeVisible(unittest.TestCase):
                     f"{handler} reserves a round before verifying every task spec "
                     "can be read",
                 )
+
+
+class TestReviewExecTimeout(unittest.TestCase):
+    """fn-169 — one liveness bound, env-overridable, applied to every backend.
+
+    Raised 600 -> 1800 because the fetch-not-embed model moved work INTO the
+    reviewer's session: it reads the diff and specs itself now instead of being
+    handed a truncated copy, so a large change costs tool-call turns. At 600s, 3 of
+    10 dispatches on this spec's own diff were killed mid-review — reviewers that
+    were working, stopped for being slow.
+    """
+
+    def _resolve(self, value):
+        env = {} if value is None else {"FLOW_REVIEW_EXEC_TIMEOUT": value}
+        with mock.patch.dict(os.environ, env, clear=False):
+            if value is None:
+                os.environ.pop("FLOW_REVIEW_EXEC_TIMEOUT", None)
+            return flowctl.get_review_exec_timeout()
+
+    def test_default_and_override(self):
+        self.assertEqual(self._resolve(None), 1800)
+        self.assertEqual(self._resolve("3600"), 3600)
+
+    def test_present_but_invalid_falls_back_to_the_default(self):
+        """A typo must not silently remove the bound."""
+        for bad in ("", "abc", "0", "-5", "12.5"):
+            with self.subTest(value=bad):
+                self.assertEqual(self._resolve(bad), 1800)
+
+    def test_every_backend_spawn_uses_the_resolved_value(self):
+        """No spawn may keep a literal seconds number.
+
+        Parsed from the AST over OUR spawning functions — a closed set we own —
+        rather than grepped, so a fourth backend cannot quietly hardcode one.
+        """
+        import ast as _ast
+
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        tree = _ast.parse(source)
+        spawners = {"run_codex_exec", "run_copilot_exec", "run_cursor_exec"}
+        seen = set()
+        for node in _ast.walk(tree):
+            if not isinstance(node, _ast.FunctionDef) or node.name not in spawners:
+                continue
+            seen.add(node.name)
+            for call in _ast.walk(node):
+                if not isinstance(call, _ast.Call):
+                    continue
+                func = call.func
+                name = getattr(func, "attr", None) or getattr(func, "id", None)
+                if name not in ("run", "Popen"):
+                    continue
+                for kw in call.keywords:
+                    if kw.arg != "timeout":
+                        continue
+                    self.assertIsInstance(
+                        kw.value, _ast.Name,
+                        f"{node.name} passes a literal timeout; it must use the "
+                        "resolved review_exec_timeout so the bound is one knob",
+                    )
+                    self.assertEqual(kw.value.id, "review_exec_timeout")
+        self.assertEqual(seen, spawners, "a backend spawn function was not found")
