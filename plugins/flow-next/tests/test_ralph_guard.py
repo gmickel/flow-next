@@ -332,12 +332,45 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
                 self.assertEqual(proc.returncode, 2, proc.stdout)
                 self.assertIn("human-only", proc.stderr)
 
-    def test_allows_shell_reads_of_the_protected_config(self) -> None:
-        """Reads carry no write signal and must stay legal."""
+    def test_blocks_every_shell_reference_to_the_protected_config(self) -> None:
+        """PR #295 bot r3: enumerate writer APIs and the list always leaks.
+
+        The first version listed mutation tokens; `Path(...).write_bytes(...)`,
+        `os.replace('/tmp/c', <path>)` and `... | sponge <path>` all walked
+        straight through, and each is enough to install a larger
+        `review.maxIterations`. Any such list is a race against the next writer
+        API someone thinks of, so the polarity is inverted: a shell command that
+        NAMES the protected config is refused outright.
+
+        Reads are refused too, deliberately. Ralph has no need to shell-read the
+        file — `flowctl config get <key>` is the sanctioned path and never spells
+        it — and "read-only" is not decidable from a command line.
+        """
         for command in (
+            # writes the old allowlist missed
+            "python3 -c \"from pathlib import Path; "
+            "Path('.flow/config.json').write_bytes(b'{}')\"",
+            "python3 -c \"import os; os.replace('/tmp/c', '.flow/config.json')\"",
+            "jq '.review.maxIterations=99' .flow/config.json | sponge .flow/config.json",
+            "install -m644 /tmp/c .flow/config.json",
+            # writes it did catch, still caught
+            "echo '{}' > .flow/config.json",
+            "sed -i.bak 's/8/99/' .flow/config.json",
+            # reads: refused under the inverted policy
             "cat .flow/config.json",
             "jq -r .review.backend .flow/config.json",
-            "grep maxIterations .flow/config.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_allows_the_sanctioned_config_read_path(self) -> None:
+        """`flowctl config get` never spells the path, so it stays legal."""
+        for command in (
+            "$FLOWCTL config get review.maxIterations --json",
+            "$FLOWCTL config get tracker.type --json",
+            "cat .flow/meta.json",
         ):
             with self.subTest(command=command):
                 proc = self._hook(command)

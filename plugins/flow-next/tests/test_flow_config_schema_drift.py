@@ -88,6 +88,12 @@ _ANNOTATION_KEYS = {"$schema", "$id", "title", "description", "default"}
 _VALIDATION_KEYS = {
     "type",
     "enum",
+    # fn-168 (PR #295 bot r3): the review-round cap's runtime contract is >= 1,
+    # and a schema that accepts 0 lets an editor bless a value flowctl then
+    # silently replaces with the default. The published artifact has to carry the
+    # bound, so the checker learns the keyword rather than the artifact dropping
+    # a real constraint.
+    "minimum",
     "properties",
     "additionalProperties",
     "patternProperties",
@@ -196,6 +202,19 @@ def validate(instance: Any, schema: Any, path: str = "$") -> list[str]:
         )
         if not ok:
             errors.append(f"{path}: value not in enum")
+
+    if "minimum" in schema:
+        bound = schema["minimum"]
+        if isinstance(bound, bool) or not isinstance(bound, (int, float)):
+            raise SchemaError(f"malformed minimum at {path}")
+        # bools are ints in Python; a bool instance is a type error, not a bound
+        # comparison, and `type` already reported it.
+        if (
+            isinstance(instance, (int, float))
+            and not isinstance(instance, bool)
+            and instance < bound
+        ):
+            errors.append(f"{path}: {instance} is below minimum {bound}")
 
     if "pattern" in schema and isinstance(instance, str):
         if not re.search(schema["pattern"], instance):

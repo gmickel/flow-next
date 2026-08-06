@@ -576,7 +576,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("planSync.crossSpec", {"type": "boolean"}),
         ("review", {"kind": "object", "open": False}),
         ("review.backend", _review_backend_fragment()),
-        ("review.maxIterations", {"type": "integer"}),
+        ("review.maxIterations", {"type": "integer", "minimum": 1}),
         ("scouts", {"kind": "object", "open": False}),
         ("scouts.github", {"type": "boolean"}),
         ("tracker", {"kind": "object", "open": False}),

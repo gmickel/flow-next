@@ -706,16 +706,6 @@ _EXPANDED_ENV_NAME_RE = re.compile(
 )
 # The project config file, in any spelling a shell command can reach it by.
 _FLOW_CONFIG_PATH_RE = re.compile(r"\.flow/config\.json")
-# A write signal beside that path. Reads (`cat`, `jq .`, `grep`) carry none of
-# these, so they stay legal; every mutation route does.
-_CONFIG_WRITE_INTENT_RE = re.compile(
-    r">>?\s*\S*\.flow/config\.json"          # redirect INTO the config
-    r"|\b(?:mv|cp|install|tee|truncate|dd|ln|rsync|patch)\b"
-    r"|\bsed\b[^|;&]*\s-\S*i"                 # sed -i / -i.bak
-    r"|--in-place"
-    r"|\bopen\s*\([^)]*['\"](?:w|a|x)"        # python open(..., 'w'|'a'|'x')
-    r"|\bwrite_text\b|\bwriteFileSync\b|\bdump\s*\("
-)
 _DURATION_RE = re.compile(r"\d+(?:\.\d+)?[smhd]?")
 # PR #290 bot r4: raw-text launcher reference — `$FLOWCTL`/`${FLOWCTL}`, a bare
 # or path-qualified `flowctl` / `flowctl.py`. Used only by the raw floor, where
@@ -1259,7 +1249,14 @@ def _command_has_recovery_markers(command: str) -> bool:
     # the path sails past it (PR #295 bot r1). Ralph has no legitimate reason to
     # write this file by any route; READS stay allowed, so the screen requires a
     # write signal rather than the mere mention of the path.
-    if _FLOW_CONFIG_PATH_RE.search(command) and _CONFIG_WRITE_INTENT_RE.search(command):
+    # FAIL CLOSED on the path, not on an enumeration of writer APIs (PR #295 bot
+    # r3). The previous version listed mutation tokens, and the list leaked:
+    # `Path(...).write_bytes(...)`, `os.replace('/tmp/c', ...)` and `... | sponge
+    # <path>` all walked straight through. Every such list is a race against the
+    # next writer API someone thinks of, so the polarity is inverted — a shell
+    # command that so much as NAMES the protected config is refused, and reads go
+    # through `flowctl config get` (which never spells the path).
+    if _FLOW_CONFIG_PATH_RE.search(command):
         return True
     if re.search(r"config['\"]?\s+['\"]?set\b", command):
         if re.search(r"maxIterations", command):
@@ -1525,6 +1522,8 @@ def handle_pre_tool_use(data: dict) -> None:
             "human-only recovery tools. Ralph must surface the terminal instead. "
             "A shell command that merely mentions those verbs (prose, heredoc) trips "
             "the same screen - write the text with the file tool instead. "
+            "A shell command naming .flow/config.json is refused outright (the cap has a "
+            "durable rung there) - read it with `flowctl config get <key>` instead. "
             "flowctl SUBCOMMANDS must also be spelled literally: a variable or "
             "command substitution in either of the two tokens after the launcher "
             "is blocked (variable ARGUMENTS - ids, paths, --reservation-id - are fine). "
