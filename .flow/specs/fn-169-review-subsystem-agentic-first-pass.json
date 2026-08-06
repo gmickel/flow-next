@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-169-review-subsystem-agentic-first-pass",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-06T17:17:20.658780Z",
   "created_at": "2026-08-06T00:44:12.174011Z",
   "default_impl": null,
   "default_review": null,
@@ -857,6 +857,30 @@
       "task": "fn-169-review-subsystem-agentic-first-pass.6",
       "timestamp": "2026-08-06T15:19:03.933563Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "9dfd569939823b5f40d216bc8881f19e3703f1664c4beb222c361053584ecc39",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "d36f9b0fb47ee0894da56d39cea05e8805549d62",
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_sha256": "f1fdc3722221891c20bd3d230dd1de8a8d337c31da95f6d5d21359f8d1966d12",
+      "reservation_id": "f10b6fef6fe54563884a3e42e0f01d20",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-06T17:17:20.651031Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
@@ -864,7 +888,7 @@
     "impl:fn-169-review-subsystem-agentic-first-pass.3": 1,
     "impl:fn-169-review-subsystem-agentic-first-pass.4": 1,
     "plan": 1,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {
     "impl:fn-169-review-subsystem-agentic-first-pass.4": 1
@@ -881,6 +905,7 @@
     }
   },
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-169-review-subsystem-agentic-first-pass.1": 0,
     "impl:fn-169-review-subsystem-agentic-first-pass.3": 0,
     "impl:fn-169-review-subsystem-agentic-first-pass.4": 0,
@@ -901,5 +926,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-06T15:19:03.935020Z"
+  "updated_at": "2026-08-06T17:17:20.662159Z"
 }

@@ -154,6 +154,28 @@ Active tracks served:
 - **Agentic-first architecture** — CLAUDE.md's rule is *"the host agent IS the intelligence"* and its symptom list already flags deterministic scaffolding that substitutes for agent capability. Review is the subsystem where flow-next still does not act like it: it hands an agent-with-a-shell a truncated copy of what the agent can read. This spec closes the last big gap and, via R6, makes the principle enforceable rather than advisory.
 - **Ralph autonomous mode** — resume defects mean autonomous re-reviews run at the wrong sandbox, the wrong effort, and sometimes with no memory. Fixing them makes unattended review loops trustworthy.
 
+
+### In-flight addition, authorized mid-spec: the review exec timeout (not an R-ID)
+
+The completion review flagged this correctly as outside R1-R7, so it is recorded here
+rather than retro-fitted into a requirement.
+
+Moving the prompt from payloads to identities moved work INTO the reviewer's session:
+it reads the diff and the specs itself now instead of being handed a truncated copy,
+so a large change costs tool-call turns that an embedded prompt spent on nothing.
+Against the previously hardcoded 600s bound, **3 of 10 review dispatches on this
+spec's own diff were killed mid-review** and refunded. The accounting behaved
+correctly every time; the reviews were still lost. The bound was raised to 1800s and
+made env-overridable (`FLOW_REVIEW_EXEC_TIMEOUT`) after the maintainer authorized it
+mid-spec, on the explicit condition that a numerical change needs no re-review.
+
+It raises the number without fixing the shape, and the code says so: a wall-clock
+bound cannot distinguish a reviewer that is working from a process that is wedged.
+The correct bound is an IDLE deadline over the event stream `codex exec --json`
+already emits. Captured as `.flow/tmp/fn-170-idle-liveness-CAPTURE.md`, including why
+copilot and cursor must keep a wall-clock bound (both buffer to completion; cursor
+emits a single result object at the end, so neither offers a progress signal).
+
 ## Decision Context
 
 **Why identities rather than a better fitter.** The rendered-ordinal plumbing considered for PR #295 was machinery to prop up the payload model; it is ~the same effort as deleting the model and it would need unwinding afterwards. Under identities the false-SHIP class disappears rather than being managed: prior findings are the reviewer's own memory (or a receipt path), so nothing competes for argv space.
