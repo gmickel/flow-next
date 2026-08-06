@@ -49,9 +49,22 @@ Make session resume the primary continuity mechanism and injection the fallback 
 - [ ] Focused suites green; propagation done
 
 ## Done summary
-TBD
+Session resume is now the primary continuity mechanism for re-reviews; injection is the fallback it was always meant to be.
 
+**Two-phase dispatch** in `_dispatch_backend_review`. Phase 1 resumes with a prompt that carries the contract and the machine-read reply grammar but re-renders no prior findings — the resumed reviewer already holds them. Phase 2 fires only on a surfaced resume failure, rebuilding the prompt *with* the findings and dispatching fresh.
+
+The order is the finding, not a detail. `run_codex_exec` used to resume and, on failure, silently re-send the *same* prompt as a fresh session; with a lean prompt that is a fresh blind review with the priors dropped — fn-90's runaway reintroduced. Phase 1 therefore runs `resume_only=True` (terminal on failure) and phase 2 rebuilds from scratch. A failed resume returns no verdict, so the reservation is refunded and no round is double-consumed.
+
+**Applies to all three review types.** The first review round found two-phase wired only into the implementation handler while plan and completion rounds also ratchet, resume, and re-rendered priors. Fixed by collapsing the construction into one shared `_rereview_prompt_pair(...) -> (dispatch, injected, preamble)` used by all three: the resume/injection contract is a property of the round, not of a review type.
+
+**Codex only, asserted as an exact set.** Host has no session by design and always injects; copilot's `--resume` is create-or-resume via a marker so "resumed" and "created" are not separable; cursor's resume-only path is unmeasured. Injecting when it was unnecessary costs bytes — not injecting after a silent resume failure costs a blind review — so injection stays the default and `two_phase=False` is byte-identical to the pre-fn-169 prompt.
+
+**fn-168's interim cursor sweep gate deliberately survives** this task: on the resume-failure path cursor still receives rendered prior items that the argv fitter can truncate. `.4` deletes the gate together with the truncation that makes it necessary.
+
+Prompt text changed on purpose (`_build_resumed_ratchet_block`): same contract, same grammar, no `<prior_findings>` payload. The "re-read from disk / do NOT rely on cached content" instruction is retained and tested — a resumed reviewer holds the findings, not the post-fix file contents, and RP's "reviewer sees your changes automatically" is an RP auto-refresh property that is false for every CLI backend.
+
+**Live evidence:** this task's own impl-review round 2 ran resumed with zero injection and replied `Prior finding #1: fixed` — the lean grammar, scored by the production parser, on the real dispatch path. Verdict SHIP, R2 met, 0 findings.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: a8a8bdc8, a72483b4
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_prompt_text_pinned test_review_findings_parser test_review_findings_receipts test_review_prompt_constraints test_review_prompt_template_parity test_cursor_run_exec test_copilot_run_exec test_backend_spec test_tracker_distribution -q, uvx ruff@0.16.0 check .
 - PRs:
