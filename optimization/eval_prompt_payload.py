@@ -16,9 +16,11 @@ Two rules keep the carve-out from leaking:
 
   1. This helper lives under `optimization/`, never in `flowctl.py`. A production
      path that wanted it would be re-adding embedding.
-  2. The block ORDER matches the pre-fn-169 production builder, so a variant-to-
-     variant delta in an eval stays attributable to the wording under test rather
-     than to a prompt-layout change.
+  2. The blocks are INSERTED BEFORE `<review_instructions>`, exactly where the
+     pre-fn-169 builder put them. Appending them after the rubric would move the
+     experimental content to the end of the prompt and change recency alongside
+     the variable under test, silently invalidating comparisons against earlier
+     eval results (impl-review r3, P2).
 
 `plugins/flow-next/tests/test_eval_harness_prompt_api.py` executes the harness
 entrypoints and asserts both rules.
@@ -47,4 +49,11 @@ def embed_payload(
         blocks.append(f"<task_specs>\n{task_specs}\n</task_specs>")
     if not blocks:
         return prompt
-    return prompt + "\n\n" + "\n\n".join(blocks)
+    payload = "\n\n".join(blocks)
+    marker = "<review_instructions>"
+    idx = prompt.find(marker)
+    if idx == -1:
+        # Standalone-shaped prompts have no instructions tag; the rubric is at the
+        # top, so appending is already payload-before-nothing.
+        return prompt + "\n\n" + payload
+    return prompt[:idx] + payload + "\n\n" + prompt[idx:]

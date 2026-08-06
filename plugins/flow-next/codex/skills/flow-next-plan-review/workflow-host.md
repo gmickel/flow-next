@@ -16,9 +16,12 @@ subcommand and accepts no model/effort suffix.
  `session_id` is literal `null`.
 5. Missing cross-family pin fails closed.
 
-**fn-169 — host is the documented always-inject exception.** Every other backend
+**fn-169 — host is the documented always-inject exception.** The `codex` backend
 resumes the reviewer's own session on a re-review and therefore sends the
-shrink-only contract WITHOUT re-rendering prior findings. `host` cannot: rule 3
+shrink-only contract WITHOUT re-rendering prior findings; `cursor` and `copilot`
+keep injecting unconditionally until their resume semantics are measured the way
+codex's were (copilot's `--resume` is create-or-resume via a marker, so "resumed"
+and "created" are not separable there). `host` cannot resume at all: rule 3
 above makes each re-review a fresh subagent with `session_id: null`, so the
 reviewer holds nothing from the previous round. The prior findings must travel in
 the prompt here, and the reply grammar below is what makes them machine-readable.

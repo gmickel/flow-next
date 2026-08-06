@@ -39475,6 +39475,70 @@ def _run_review_git(cmd: list[str], *, what: str) -> str:
     return result.stdout.strip()
 
 
+# fn-169 (impl-review r3): a ceiling on the artifact-identity read, not a budget
+# to trim to. 64 MiB is ~100x the largest diff measured in this repo, so reaching
+# it means something pathological (a vendored blob, a generated tree) rather than a
+# big honest change. Crossing it raises; nothing downstream shortens the identity,
+# because a truncated identity collides.
+REVIEW_IDENTITY_DIFF_MAX_BYTES = 64 * 1024 * 1024
+
+
+def _read_review_git_bounded(
+    cmd: list[str], *, what: str, max_bytes: int
+) -> str:
+    """Stream a git read with a hard ceiling; raise on failure OR overflow.
+
+    Streaming is the point: `capture_output=True` would materialize the whole diff
+    before any size check could run, so the check has to happen while reading.
+    """
+    try:
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=get_repo_root(),
+        )
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise ReviewEvidenceError(f"cannot read {what}: {exc}") from exc
+    chunks: list[bytes] = []
+    total = 0
+    overflow = False
+    try:
+        assert proc.stdout is not None and proc.stderr is not None
+        while True:
+            block = proc.stdout.read(1 << 20)
+            if not block:
+                break
+            total += len(block)
+            if total > max_bytes:
+                # Drain so git is never left writing into a full pipe, but keep
+                # nothing: the value is unusable and must not be salvaged.
+                overflow = True
+                chunks.clear()
+                while proc.stdout.read(1 << 20):
+                    pass
+                break
+            chunks.append(block)
+        stderr_bytes = proc.stderr.read()
+    finally:
+        if proc.stdout is not None:
+            proc.stdout.close()
+        if proc.stderr is not None:
+            proc.stderr.close()
+        returncode = proc.wait()
+    if returncode != 0:
+        detail = stderr_bytes.decode("utf-8", errors="replace").strip() or (
+            f"exit {returncode}"
+        )
+        raise ReviewEvidenceError(f"cannot read {what}: {detail}")
+    if overflow:
+        raise ReviewEvidenceError(
+            f"cannot read {what}: exceeds {max_bytes} bytes. This read is the "
+            "review artifact identity and is never truncated - a truncated "
+            "identity collides with any diff sharing its prefix, which the "
+            "unchanged-artifact guard reads as 'nothing changed'."
+        )
+    return b"".join(chunks).decode("utf-8", errors="replace").strip()
+
+
 def _gather_review_scope(base_sha: str, head_sha: str = "HEAD") -> str:
     """Return `git diff --numstat` for the reviewed range: the scope signal.
 
@@ -39528,10 +39592,18 @@ def _gather_review_identity_diff(base_sha: str, head_sha: str = "HEAD") -> str:
     ``_gather_review_scope``: an empty identity makes the artifact-unchanged guard
     read "nothing changed" for every subsequent round, so a failure that returned
     "" would disable the guard silently rather than loudly.
+
+    Bounded by ``REVIEW_IDENTITY_DIFF_MAX_BYTES`` and streamed, so the read cannot
+    grow without limit (impl-review r3, P1: this replaced a 50 KB capped read, and
+    hashing then makes two more copies). Exceeding the bound RAISES — it must never
+    truncate. A truncated identity is worse than no identity: two different diffs
+    sharing a prefix would hash the same, and the unchanged-artifact guard reads
+    that as "nothing changed", which is the false-SHIP hole this spec closed.
     """
-    return _run_review_git(
+    return _read_review_git_bounded(
         ["git", "diff", f"{base_sha}..{head_sha}"],
         what=f"review diff for {base_sha}..{head_sha}",
+        max_bytes=REVIEW_IDENTITY_DIFF_MAX_BYTES,
     )
 
 
@@ -40453,12 +40525,16 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
     except ValueError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
-    # fn-169 R3: abort BEFORE the round is reserved. With nothing embedded these
-    # two reads ARE the review's evidence, so a failure here has no degraded mode.
+    # fn-169 R3: abort BEFORE the round is reserved. With nothing embedded the
+    # scope map IS the review's evidence, so a failure here has no degraded mode.
+    # The identity diff is read only when something will USE it: a standalone
+    # branch review reserves no round, so its hash has no consumer and the read
+    # would be pure cost (impl-review r3).
     try:
         review_scope = _gather_review_scope(reviewed_base_sha, reviewed_head_sha)
-        identity_diff = _gather_review_identity_diff(
-            reviewed_base_sha, reviewed_head_sha
+        identity_diff = (
+            "" if standalone
+            else _gather_review_identity_diff(reviewed_base_sha, reviewed_head_sha)
         )
     except ReviewEvidenceError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
@@ -40522,8 +40598,11 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     # previously the blob actually delivered inside the prompt, recovered by
     # content because argv fitting could head-truncate it; nothing is embedded or
     # fitted now, so the exact range is both stronger and simpler.
-    artifact_sha256 = _review_artifact_hash_or_warn(
-        build_impl_review_artifact_blob, identity_diff,
+    artifact_sha256 = (
+        None if standalone
+        else _review_artifact_hash_or_warn(
+            build_impl_review_artifact_blob, identity_diff,
+        )
     )
 
     # fn-90 R5: deterministic cap — enforce + increment BEFORE dispatch.

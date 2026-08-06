@@ -208,6 +208,10 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 # with a streaming Popen because the body was capped at 50 KB
                 # before being EMBEDDED; nothing is embedded, so no stream.
                 ("subprocess.run", "_run_review_git"): 1,
+                # The artifact-identity read STREAMS (impl-review r3): a captured
+                # run would materialize the whole diff before any size check could
+                # run, so the ceiling has to be enforced while reading.
+                ("subprocess.Popen", "_read_review_git_bounded"): 1,
                 ("subprocess.run", "_resolve_review_sha"): 1,
                 ("subprocess.run", "_capture_review_snapshot"): 1,
                 ("subprocess.run", "_triage_chore_is_version_only"): 1,

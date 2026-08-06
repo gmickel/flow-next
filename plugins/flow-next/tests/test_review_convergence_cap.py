@@ -6398,12 +6398,22 @@ class TestEvidenceFailureIsLoud(unittest.TestCase):
                 flowctl._gather_review_scope("aaa", "bbb")
 
     def test_a_genuinely_empty_range_is_not_an_error(self):
-        """Success with no output stays the caller's judgement, not a failure."""
+        """Success with no output stays the caller's judgement, not a failure.
+
+        The two reads take different paths — the scope map is a captured run, the
+        artifact identity is streamed under a ceiling — so both are exercised
+        through the mechanism each actually uses.
+        """
         with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
                 mock.patch.object(
                     flowctl.subprocess, "run",
                     side_effect=self._fake_git(returncode=0, stdout="")):
             self.assertEqual(flowctl._gather_review_scope("aaa", "aaa"), "")
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=TestIdentityDiffIsBoundedNeverTruncated()
+                    ._fake_popen(b"")):
             self.assertEqual(
                 flowctl._gather_review_identity_diff("aaa", "aaa"), ""
             )
@@ -6429,3 +6439,88 @@ class TestEvidenceFailureIsLoud(unittest.TestCase):
                     f"{handler} reserves a review round before verifying it can "
                     "read the evidence that review depends on",
                 )
+
+
+class TestIdentityDiffIsBoundedNeverTruncated(unittest.TestCase):
+    """fn-169 (impl-review r3) — the identity read has a ceiling, not a budget.
+
+    The pre-fn-169 read was capped at 50 KB because it was EMBEDDED; the identity
+    read replaced it and is uncapped in intent, which made it an unbounded read
+    whose result is then copied twice by hashing. So it is bounded — and the bound
+    RAISES rather than trimming. A truncated identity is strictly worse than none:
+    two diffs sharing a prefix would hash identically, and the unchanged-artifact
+    guard reads that as "nothing changed", which is the false-SHIP hole this spec
+    closed.
+    """
+
+    def _fake_popen(self, payload: bytes, *, returncode: int = 0, stderr: bytes = b""):
+        class FakePipe:
+            def __init__(self, data: bytes):
+                self._data = data
+                self.pos = 0
+
+            def read(self, n=-1):
+                if n is None or n < 0:
+                    out, self.pos = self._data[self.pos:], len(self._data)
+                    return out
+                out = self._data[self.pos:self.pos + n]
+                self.pos += len(out)
+                return out
+
+            def close(self):
+                pass
+
+        class FakeProc:
+            def __init__(self):
+                self.stdout = FakePipe(payload)
+                self.stderr = FakePipe(stderr)
+
+            def wait(self):
+                return returncode
+
+        return lambda *a, **k: FakeProc()
+
+    def test_a_diff_over_the_ceiling_raises_and_names_the_bound(self):
+        limit = flowctl.REVIEW_IDENTITY_DIFF_MAX_BYTES
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=self._fake_popen(b"x" * (limit + 1))):
+            with self.assertRaises(flowctl.ReviewEvidenceError) as ctx:
+                flowctl._gather_review_identity_diff("aaa", "bbb")
+        message = str(ctx.exception)
+        self.assertIn(str(limit), message)
+        # The message must explain WHY it refuses rather than trimming.
+        self.assertIn("never truncated", message)
+
+    def test_a_large_but_in_bounds_diff_is_returned_whole(self):
+        payload = b"d" * 3_000_000
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=self._fake_popen(payload)):
+            out = flowctl._gather_review_identity_diff("aaa", "bbb")
+        self.assertEqual(len(out), len(payload), "an in-bounds diff was shortened")
+
+    def test_nonzero_exit_still_raises_with_gits_reason(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "Popen",
+                    side_effect=self._fake_popen(
+                        b"", returncode=128, stderr=b"fatal: bad object")):
+            with self.assertRaises(flowctl.ReviewEvidenceError) as ctx:
+                flowctl._gather_review_identity_diff("aaa", "bbb")
+        self.assertIn("bad object", str(ctx.exception))
+
+    def test_standalone_reviews_never_read_the_identity_diff(self):
+        """No reservation means no consumer; the read would be pure cost.
+
+        Asserted structurally in the handler, because the wasted read is the whole
+        point: a standalone branch review has no spec-scoped counter to guard.
+        """
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        start = source.index("def _backend_impl_review(")
+        body = source[start:source.index("\ndef ", start + 1)]
+        self.assertIn('"" if standalone', body)
+        self.assertIn("None if standalone", body)

@@ -100,3 +100,56 @@ class TestEvalHarnessesBuildPrompts(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEvalPayloadPositionMatchesTheOldBuilder(unittest.TestCase):
+    """fn-169 (impl-review r3, P2) — position is part of the prompt.
+
+    The harnesses exist to compare WORDING across arms. Appending the payload
+    after `<review_instructions>` would move the experimental spec/code to the end
+    of the prompt and change recency at the same time as the variable under test,
+    so deltas against earlier eval results would no longer be attributable. The
+    pre-fn-169 builder put the payload BEFORE the rubric; so does the helper.
+    """
+
+    def _helper(self):
+        import importlib.util as iu
+        path = REPO_ROOT / "optimization/eval_prompt_payload.py"
+        spec = iu.spec_from_file_location("_eval_payload_under_test", path)
+        module = iu.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def test_payload_precedes_the_review_instructions_block(self):
+        embed = self._helper().embed_payload
+        prompt = "HEAD\n\n<review_instructions>\nRUBRIC\n</review_instructions>"
+        out = embed(prompt, spec="SPEC_BODY", diff_content="DIFF_BODY")
+        self.assertLess(
+            out.index("DIFF_BODY"), out.index("<review_instructions>"),
+            "payload landed after the rubric — recency changed alongside the "
+            "variable under test",
+        )
+        self.assertLess(out.index("SPEC_BODY"), out.index("<review_instructions>"))
+        # The old builder's block order: summary, diff, spec, tasks.
+        out2 = embed(
+            prompt, spec="SPEC_TOKEN", diff_summary="SUMMARY_TOKEN",
+            diff_content="DIFF_TOKEN", task_specs="TASKS_TOKEN",
+        )
+        self.assertLess(out2.index("SUMMARY_TOKEN"), out2.index("DIFF_TOKEN"))
+        self.assertLess(out2.index("DIFF_TOKEN"), out2.index("SPEC_TOKEN"))
+        self.assertLess(out2.index("SPEC_TOKEN"), out2.index("TASKS_TOKEN"))
+        self.assertLess(
+            out2.index("TASKS_TOKEN"), out2.index("<review_instructions>")
+        )
+
+    def test_a_prompt_without_the_tag_appends(self):
+        """Standalone-shaped prompts keep the rubric at the top, so append is fine."""
+        embed = self._helper().embed_payload
+        out = embed("RUBRIC AT TOP", diff_content="D")
+        self.assertTrue(out.startswith("RUBRIC AT TOP"))
+        self.assertIn("D", out)
+
+    def test_no_payload_is_a_no_op(self):
+        embed = self._helper().embed_payload
+        self.assertEqual(embed("PROMPT"), "PROMPT")
