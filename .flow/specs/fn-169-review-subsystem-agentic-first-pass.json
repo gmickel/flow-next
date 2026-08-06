@@ -1,13 +1,21 @@
 {
   "branch_name": "fn-169-review-subsystem-agentic-first-pass",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-06T00:44:12.174011Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-168-review-convergence-lost-ratchet-prompt"
   ],
   "id": "fn-169-review-subsystem-agentic-first-pass",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.md",
   "status": "open",
   "title": "Review subsystem: agentic-first \u2014 pass identities, not payloads",
@@ -22,5 +30,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-06T00:46:37.484261Z"
+  "updated_at": "2026-08-06T05:43:16.642468Z"
 }
