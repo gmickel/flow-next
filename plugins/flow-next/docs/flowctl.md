@@ -956,11 +956,18 @@ DELEGATE_MODEL="$($FLOWCTL models resolve delegate --json | jq -r '.model')"
 
 Resolve the active review backend spec (used by skills + Ralph). With an optional **task/spec id**, a per-task `review:` / per-spec `default_review` override wins **above env/config** (the id is canonicalized first, so short/tracker handles like `fn-74.1` / `fn-74` resolve to the slugged id). Precedence: per-task / per-epic override > `FLOW_REVIEW_BACKEND` > `.flow/config.json` `review.backend` > backend-specific env > registry default. Without an id it reads env/config only. The review skills pass the review-target id so a task's own backend override actually routes.
 
-**Prompt contents (all review kinds).** flowctl builds review prompts from
-identities: `<changed_files>` (`git diff --numstat --no-renames` for the reviewed
-range — every path exact and complete), `<diff_range>` (the `base..head` range plus
-the command to read it), `<spec>` / `<task_specs>` (repo-relative paths), and
-`<context_hints>`. The diff body, spec text, and task-spec text are **not** sent;
+**Prompt contents.** flowctl builds review prompts from identities, and which
+identities depends on the review kind:
+
+| Review kind | Carries |
+|---|---|
+| implementation | `<spec>` (task-spec path), `<diff_range>`, `<changed_files>`, `<context_hints>` |
+| completion | `<spec>` + `<task_specs>` (paths), `<diff_range>`, `<changed_files>` |
+| plan | `<spec>` + `<task_specs>` (paths), `<context_hints>` — a plan review has no diff |
+
+`<changed_files>` is `git diff --numstat --no-renames` for the reviewed range (every
+path exact and complete); `<diff_range>` is the `base..head` range plus the command
+to read it. The diff body, spec text, and task-spec text are **not** sent;
 the reviewer reads them from your checkout. A failed `git` read aborts with the
 underlying git error *before* a review round is reserved, rather than dispatching a
 review with no evidence. The only remaining size guard is

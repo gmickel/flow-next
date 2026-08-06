@@ -153,3 +153,47 @@ class TestEvalPayloadPositionMatchesTheOldBuilder(unittest.TestCase):
     def test_no_payload_is_a_no_op(self):
         embed = self._helper().embed_payload
         self.assertEqual(embed("PROMPT"), "PROMPT")
+
+
+class TestHarnessPromptIsInternallyTruthful(unittest.TestCase):
+    """fn-169 (impl-review r4, P2) — a prompt must not lie about its own inputs.
+
+    The identity rubric declares `<diff_range>` and `<changed_files>` and describes
+    `<spec>` as a path to read. In an offline harness none of those hold, so the
+    embedded-payload runs must correct the contract explicitly rather than shipping
+    a rubric that describes inputs the reviewer never received.
+    """
+
+    def _helper(self):
+        import importlib.util as iu
+        path = REPO_ROOT / "optimization/eval_prompt_payload.py"
+        spec = iu.spec_from_file_location("_eval_payload_truthful", path)
+        module = iu.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    def test_embedded_runs_override_the_identity_contract(self):
+        embed = self._helper().embed_payload
+        out = embed(
+            "HEAD\n\n<review_instructions>\nContext Gathering\n</review_instructions>",
+            spec="SPEC TEXT", diff_content="DIFF TEXT",
+        )
+        self.assertIn("HARNESS INPUT OVERRIDE", out)
+        # It must name the specific slots the rubric wrongly promises.
+        for slot in ("<diff_range>", "<changed_files>"):
+            self.assertIn(slot, out)
+        self.assertIn("does not apply", out)
+        # And it must precede the rubric it is correcting.
+        self.assertLess(
+            out.index("HARNESS INPUT OVERRIDE"), out.index("<review_instructions>")
+        )
+
+    def test_the_override_never_reaches_a_production_prompt(self):
+        for rel in (
+            "plugins/flow-next/scripts/flowctl.py",
+            "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md",
+        ):
+            src = (REPO_ROOT / rel).read_text(encoding="utf-8")
+            with self.subTest(path=rel):
+                self.assertNotIn("HARNESS INPUT OVERRIDE", src)

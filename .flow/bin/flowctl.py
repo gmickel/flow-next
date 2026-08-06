@@ -8887,12 +8887,14 @@ diff and the repository yourself and produce the verdict in this session.
 ## Context Gathering
 
 This review includes:
+- `<spec>`: Path to the task specification — **read it first**; its acceptance criteria are the contract this change is judged against
 - `<diff_range>`: The reviewed commit range. Run `git diff <range>` yourself to read the change.
-- `<changed_files>`: `git diff --numstat` for that range — every changed path, exact and complete
+- `<changed_files>`: `git diff --numstat --no-renames` for that range — every changed path, exact and complete
 - `<context_hints>`: Starting points for understanding related code
 
-**Primary sources:** You have full repository access, and reading the change is your first
-step. Use `<changed_files>` as the authoritative scope map — it is the complete list of what
+**Primary sources:** You have full repository access. Read the spec at `<spec>` first
+so you know what this change is supposed to do, then read the change itself. Use
+`<changed_files>` as the authoritative scope map — it is the complete list of what
 changed, so a path absent from it is out of scope — then run `git diff` over the range, or over
 individual paths, to read the hunks at whatever depth each one warrants. Read files at their
 current state to verify implementations, and use the context hints for deeper exploration.

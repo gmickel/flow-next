@@ -89,7 +89,7 @@ PROMPT_HASHES = {
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     "IMPL_REVIEW_PROMPT_FALLBACK":
-        "c056ec2629361f8e93d10d87eef686a6151668c064d3651affc1935bf8d29adb",
+        "251417e73a43bc11130e25cd8c6f6c52516331ec7706ad1d0a605261074c3a3f",
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
@@ -161,7 +161,7 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":
         "41f7aa18ca28c48ec6ab27fac0c3fd18224232a76e1fbc6cef631435370dfc58",
     "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md":
-        "c056ec2629361f8e93d10d87eef686a6151668c064d3651affc1935bf8d29adb",
+        "251417e73a43bc11130e25cd8c6f6c52516331ec7706ad1d0a605261074c3a3f",
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
         "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":

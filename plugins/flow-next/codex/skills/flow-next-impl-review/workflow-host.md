@@ -44,9 +44,13 @@ subagent prompt — it has the same repository you do.
 
 ### Convergence reservation and recovery fence
 
-After the exact reviewer input (including the final diff) is composed and
-immediately before every host dispatch, bind the reviewed range, build the
-artifact blob, and reserve one task-scoped round. Capture its id; it is the only
+After the exact reviewer input is composed and immediately before every host
+dispatch, bind the reviewed range, build the artifact blob, and reserve one
+task-scoped round. The full diff is materialized **for the artifact hash only** —
+it is the identity that must move when the code moves. It does not go into the
+subagent prompt: give the subagent `$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA`, the
+`git diff --numstat --no-renames` path list for that range, and the task-spec
+PATH, and let it read the spec and the hunks itself. Capture its id; it is the only
 id that may finalize or refund this dispatch.
 
 The snapshot anchors are bound **in this same block, above the diff** — an

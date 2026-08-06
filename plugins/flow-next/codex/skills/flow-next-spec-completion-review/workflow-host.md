@@ -51,9 +51,12 @@ fix the file, re-run; absent file exits 0 and costs nothing):
 "$FLOWCTL" criteria prompt-block > /dev/null || { echo "invalid .flow/criteria.md - fix before re-running (see: flowctl criteria list)" >&2; exit 1; }
 ```
 
-Then, after the complete reviewer input and final diff are composed but before
-**every** host dispatch (including the first), bind the reviewed range, build
-the completion artifact, and reserve one shared spec-scoped round.
+Then, after the complete reviewer input is composed but before **every** host
+dispatch (including the first), bind the reviewed range, build the completion
+artifact, and reserve one shared spec-scoped round. The full diff is materialized
+**for the artifact hash only**; the subagent gets
+`$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA`, the `git diff --numstat --no-renames` path
+list, and the spec/task PATHS, and reads the rest from the checkout itself.
 
 The snapshot anchors are bound **in this same block, above the diff** — an
 unbound `$REVIEW_BASE_SHA`/`$REVIEW_HEAD_SHA` makes `git diff ..` fail, hashes

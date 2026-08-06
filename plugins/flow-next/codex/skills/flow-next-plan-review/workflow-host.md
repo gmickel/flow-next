@@ -98,7 +98,10 @@ retain that literal through receipt writing.
 | Grok | host pin + tool-enforced read-only; same-family writer fails closed |
 | Other | fresh context; record that pin enforcement is host-dependent |
 
-Give it the current spec, all task specs, and on re-review the receipt's
+Give it the repo-relative PATHS to the current spec and every task spec — not
+their contents (fn-169: the subagent has the same checkout you do, and a plan
+review is judged against the spec on disk, so a pasted copy can only go stale).
+On re-review give it the receipt's
 structured `findings.items` (ordinal, severity, classification, status, title,
 and file:line) rather than the legacy review prose. Include focus areas and the
 plan-review rubric from

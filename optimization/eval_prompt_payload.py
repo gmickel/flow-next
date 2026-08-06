@@ -49,7 +49,21 @@ def embed_payload(
         blocks.append(f"<task_specs>\n{task_specs}\n</task_specs>")
     if not blocks:
         return prompt
-    payload = "\n\n".join(blocks)
+    # impl-review r4 (P2): the identity rubric DECLARES `<diff_range>` and
+    # `<changed_files>` and calls `<spec>` a path. In a harness none of that is
+    # true — there is no repo and `<spec>` holds prose — so the prompt would tell
+    # the reviewer it received things it did not. Correct the contract explicitly
+    # rather than leaving the rubric lying about its own inputs.
+    override = (
+        "## HARNESS INPUT OVERRIDE — read first\n\n"
+        "This is an offline evaluation run with NO repository access. The "
+        "`Context Gathering` section below describes the production input shape; "
+        "for this run it does not apply. You did NOT receive `<diff_range>` or "
+        "`<changed_files>`, and `<spec>` holds the spec TEXT, not a path. "
+        "Everything you need is embedded verbatim in the blocks that follow. Do "
+        "not attempt to read files, run `git`, or resolve any path.\n\n---\n"
+    )
+    payload = override + "\n" + "\n\n".join(blocks)
     marker = "<review_instructions>"
     idx = prompt.find(marker)
     if idx == -1:
