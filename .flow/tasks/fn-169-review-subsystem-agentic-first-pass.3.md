@@ -67,4 +67,4 @@ Prompt text changed on purpose (`_build_resumed_ratchet_block`): same contract, 
 ## Evidence
 - Commits: a8a8bdc8, a72483b4
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_prompt_text_pinned test_review_findings_parser test_review_findings_receipts test_review_prompt_constraints test_review_prompt_template_parity test_cursor_run_exec test_copilot_run_exec test_backend_spec test_tracker_distribution -q, uvx ruff@0.16.0 check .
-- PRs:
+- PRs: https://github.com/gmickel/flow-next/pull/296

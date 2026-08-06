@@ -72,4 +72,4 @@ Review prompts now carry identities, and the layer that existed to make payloads
 ## Evidence
 - Commits: d2c76a44, e06c076c, 755e5e1c, cc3b4e57, e8b7f8d1, 387bbd7a
 - Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., bash plugins/flow-next/scripts/smoke_test.sh (135 pass; 1 pre-existing copilot re-review failure, identical on origin/main)
-- PRs:
+- PRs: https://github.com/gmickel/flow-next/pull/296

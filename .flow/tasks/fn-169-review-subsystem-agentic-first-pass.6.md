@@ -62,4 +62,4 @@ Three layers of enforcement, docs, and a CHANGELOG that no longer claims more th
 ## Evidence
 - Commits: faa3979f, 5c3e8d9b, 6be85422, 5dc024fe
 - Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_no_embed_ratchet test_eval_harness_prompt_api test_prompt_text_pinned test_review_prompt_template_parity -v
-- PRs:
+- PRs: https://github.com/gmickel/flow-next/pull/296

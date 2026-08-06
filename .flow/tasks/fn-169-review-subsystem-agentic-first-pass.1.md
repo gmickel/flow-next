@@ -74,4 +74,4 @@ Implementation note: the code half of this task was first drafted by grok-4.5 vi
 ## Evidence
 - Commits: c9733dac, fac6e98e, fd494188
 - Tests: python3 scripts/run_tests_parallel.py  (182 files, 4236 tests, 0 failures, 0 errors, 5 skipped), uvx ruff@0.16.0 check .  (All checks passed), portability: codex + cursor-agent hidden from PATH, same interpreter -> TestCodexResumeArgvParity 3/3 OK, live evidence: optimization/reached-path/evidence/fn169/resume-parity-live.json — resumed header sandbox=read-only effort=xhigh (was danger-full-access/medium), same session, recall intact, separate process, >10min after creation, sibling audit: test_cursor_resume_drops_no_flags — cursor resume drops no flags, flowctl codex impl-review fn-169-review-subsystem-agentic-first-pass.1  (r1 NEEDS_WORK 2xP1+1xP3; r2 NEEDS_WORK 1xP1 evidence-not-in-repo; r3 VERDICT=SHIP, receipt /tmp/impl-review-fn-169-1.json, gpt-5.6-sol)
-- PRs:
+- PRs: https://github.com/gmickel/flow-next/pull/296
