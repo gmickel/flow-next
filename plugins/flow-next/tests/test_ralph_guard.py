@@ -376,6 +376,43 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
                 proc = self._hook(command)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_allows_setups_shipped_review_backend_write(self) -> None:
+        """PR #295 bot r4: a LITERAL leaf key cannot reach the cap.
+
+        `/flow-next:setup` ships `config set review.backend "$REVIEW_BACKEND"`.
+        Holding every `review.*` key to a literal value blocked it, even though
+        the key is already `review.backend` — its value cannot become
+        `review.maxIterations`. Only the PARENT `review` form takes a value that
+        replaces the subtree, so only that form fails closed on an expansion.
+        """
+        for command in (
+            '$FLOWCTL config set review.backend "$REVIEW_BACKEND" --json',
+            "$FLOWCTL config set review.backend codex",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_allows_the_sibling_transport_failure_knob(self) -> None:
+        """PR #295 bot r4: `MAX_REVIEW_` as a prefix swept up a documented knob.
+
+        `MAX_REVIEW_TRANSPORT_FAILURES=12` tunes transport retries and does not
+        touch the round cap. The screen now matches the cap's full name, plus a
+        bare `MAX_REVIEW_` FRAGMENT as an assignment value — which is
+        name-composition (`n=MAX_REVIEW_; n="${n}ITERATIONS"`), not a complete
+        sibling name.
+        """
+        proc = self._hook(
+            "MAX_REVIEW_TRANSPORT_FAILURES=12 $FLOWCTL codex impl-review fn-1.1 --base main"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        # the composed-fragment shape must still fail closed
+        blocked = self._hook(
+            'n=MAX_REVIEW_; n="${n}ITERATIONS"; export "$n=99"; '
+            "$FLOWCTL codex impl-review fn-1.1 --base main"
+        )
+        self.assertEqual(blocked.returncode, 2, blocked.stdout)
+
     def test_allows_unrelated_config_set_writes(self) -> None:
         """The cap block is scoped to the cap, NOT to `config set`.
 

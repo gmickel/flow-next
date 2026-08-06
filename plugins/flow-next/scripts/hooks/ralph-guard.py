@@ -704,6 +704,12 @@ _ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 _EXPANDED_ENV_NAME_RE = re.compile(
     r"\b(?:export|declare|typeset|readonly|env)\s+[\"\']?\$\{?[A-Za-z_]"
 )
+# An assignment whose VALUE is the bare `MAX_REVIEW_` prefix — i.e. the first half
+# of a composed variable NAME, not a complete env var. Anchored at the value's end
+# so `MAX_REVIEW_TRANSPORT_FAILURES=12` (a full, different name) never matches.
+_COMPOSED_CAP_NAME_RE = re.compile(
+    r"=['\"]?MAX_REVIEW_['\"]?(?=[\s;&|)]|$)"
+)
 # The project config file, in any spelling a shell command can reach it by.
 _FLOW_CONFIG_PATH_RE = re.compile(r"\.flow/config\.json")
 _DURATION_RE = re.compile(r"\d+(?:\.\d+)?[smhd]?")
@@ -1236,7 +1242,13 @@ def _command_has_recovery_markers(command: str) -> bool:
     # variable anywhere, and the review process still receives the override
     # (PR #295 bot r1). Any command that mentions this prefix is either setting
     # the cap or building the name that sets it.
-    if "MAX_REVIEW_" in command:
+    if "MAX_REVIEW_ITERATIONS" in command:
+        return True
+    # A `MAX_REVIEW_` FRAGMENT as an assignment value is name-composition
+    # (`n=MAX_REVIEW_; n="${n}ITERATIONS"`). A complete sibling name is not:
+    # `MAX_REVIEW_TRANSPORT_FAILURES=12` is the documented transport knob and must
+    # keep working in a hooked session (PR #295 bot r4).
+    if _COMPOSED_CAP_NAME_RE.search(command):
         return True
     # An export/declare whose NAME is itself an expansion is unknowable before
     # the shell runs it, so on a command that also drives a launcher it fails
@@ -1268,7 +1280,7 @@ def _command_has_recovery_markers(command: str) -> bool:
         # writes in other namespaces stay legal.
         if (
             _FLOWCTL_TEXT_RE.search(command)
-            and re.search(r"set['\"]?\s+['\"]?review\b", command)
+            and re.search(r"set['\"]?\s+['\"]?review['\"]?(?=[\s;&|)]|$)", command)
             and re.search(r"[A-Za-z_][A-Za-z0-9_]*\+?=", command)
         ):
             return True
@@ -1364,10 +1376,19 @@ def _config_set_touches_review_cap(argv: list[str]) -> bool:
         return True
     if key == "review.maxIterations":
         return True
-    if key == "review" or key.startswith("review."):
+    if key == "review":
+        # PARENT form only: `config set review <JSON>` replaces the whole subtree,
+        # so its value can carry `maxIterations`. An unexpanded value here is
+        # unknowable pre-expansion and fails closed.
         if any(_ARGV_EXPANSION_RE.search(value) for value in values):
             return True
         return any(_json_mentions_review_cap(value) for value in values)
+    if key.startswith("review."):
+        # A LITERAL leaf key that is not the cap cannot reach the cap whatever its
+        # value is — `config set review.backend "$REVIEW_BACKEND"` is exactly what
+        # /flow-next:setup ships (PR #295 bot r4). The cap's own leaf key already
+        # returned True above.
+        return False
     return any("maxIterations" in value for value in values)
 
 
