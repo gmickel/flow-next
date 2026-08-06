@@ -39541,6 +39541,34 @@ def _read_review_git_bounded(
     return b"".join(chunks).decode("utf-8", errors="replace").strip()
 
 
+def _render_numstat_z(raw: str) -> str:
+    """Turn `--numstat -z` records into one `added\tdeleted\tpath` line each.
+
+    `-z` is what keeps the path literal; this puts the stream back into the
+    line-oriented shape the prompt block needs. A record is
+    `added\tdeleted\tpath` terminated by NUL, so the path is exactly what follows
+    the second tab — no unquoting and no guessing.
+    """
+    lines: list[str] = []
+    for record in raw.split("\0"):
+        if not record:
+            continue
+        parts = record.split("\t", 2)
+        if len(parts) != 3:
+            # Not a numstat record. Keep it rather than drop it: a silently
+            # shorter scope map is the defect this function exists to prevent.
+            lines.append(record)
+            continue
+        added, deleted, path = parts
+        if "\n" in path or "\t" in path:
+            path = (
+                f"{path!r} [quoted: contains a newline or tab, so it cannot appear "
+                "literally in a line-oriented list]"
+            )
+        lines.append(f"{added}\t{deleted}\t{path}")
+    return "\n".join(lines)
+
+
 def _gather_review_scope(base_sha: str, head_sha: str = "HEAD") -> str:
     """Return `git diff --numstat` for the reviewed range: the scope signal.
 
@@ -39561,6 +39589,15 @@ def _gather_review_scope(base_sha: str, head_sha: str = "HEAD") -> str:
     delete and an exact add. Same failure class as `--stat`'s ellipsis, one level
     down; a scope map that cannot be resolved to paths is not a scope map.
 
+    `-z` is the same defect a third time (impl-review r5, P1): without it git
+    C-QUOTES any path outside plain ASCII — `"w\303\251ird na me.txt"` instead of
+    the literal bytes — so the path again does not resolve. `-z` emits
+    `added\tdeleted\tpath\0` records with paths verbatim, and
+    ``_render_numstat_z`` turns them back into the line-oriented block the prompt
+    carries. Only a path that would break that block itself — one containing a
+    newline or tab — is re-quoted, and it says so inline; such a path cannot be
+    represented unambiguously in a prompt at all. All other non-ASCII is literal.
+
     Raises ``ReviewEvidenceError`` when the command FAILS, and returns "" only for
     a range that genuinely contains no changes (impl-review r2, P1). The two must
     not collapse: with nothing embedded beside it this block is the reviewer's
@@ -39569,10 +39606,11 @@ def _gather_review_scope(base_sha: str, head_sha: str = "HEAD") -> str:
     exactly what R3 forbids. An empty-but-successful range stays the caller's
     judgement, because "nothing changed" means different things per review type.
     """
-    return _run_review_git(
-        ["git", "diff", "--numstat", "--no-renames", f"{base_sha}..{head_sha}"],
+    return _render_numstat_z(_run_review_git(
+        ["git", "diff", "--numstat", "--no-renames", "-z",
+         f"{base_sha}..{head_sha}"],
         what=f"changed-file scope for {base_sha}..{head_sha}",
-    )
+    ))
 
 
 def _gather_review_identity_diff(base_sha: str, head_sha: str = "HEAD") -> str:
@@ -40238,13 +40276,36 @@ def _load_epic_and_task_specs(
         error_exit(f"{missing_label}: {epic_spec_path}", use_json=use_json)
     epic_spec = epic_spec_path.read_text(encoding="utf-8")
     tasks_dir = flow_dir / TASKS_DIR
+
+    # fn-169 R3 (impl-review r5, P1): enumerate from the CANONICAL task
+    # definitions, not from whatever markdown happens to be on disk. Globbing
+    # `*.md` meant a task whose markdown was missing was silently absent from both
+    # the prompt and the artifact hash, so a completion review could SHIP without
+    # ever seeing that task. The JSON is the source of truth now, and a missing or
+    # unreadable `.md` aborts before any round is reserved. This matters more since
+    # the prompt stopped embedding specs: the path IS the evidence, so a path that
+    # does not resolve is an invisible gap rather than merely a shorter prompt.
     task_specs_parts: list[str] = []
     task_ids: list[str] = []
-    for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
-        task_id = task_file.stem
+    missing: list[str] = []
+    for task_file_json in iter_task_json_files(flow_dir, epic_id):
+        task_id = task_file_json.stem
+        task_file = tasks_dir / f"{task_id}.md"
+        try:
+            task_content = task_file.read_text(encoding="utf-8")
+        except OSError as exc:
+            missing.append(f"{task_file} ({exc.strerror or exc})")
+            continue
         task_ids.append(task_id)
-        task_content = task_file.read_text(encoding="utf-8")
         task_specs_parts.append(f"### {task_id}\n\n{task_content}")
+    if missing:
+        error_exit(
+            f"cannot review {epic_id}: {len(missing)} task(s) have a canonical "
+            "definition but no readable markdown spec, so the review would "
+            "silently omit them: " + "; ".join(missing),
+            use_json=use_json,
+            code=2,
+        )
     task_specs = "\n\n---\n\n".join(task_specs_parts) if task_specs_parts else ""
     return epic_spec_path, tasks_dir, epic_spec, task_specs, task_ids
 

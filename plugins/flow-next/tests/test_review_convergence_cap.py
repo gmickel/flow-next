@@ -6524,3 +6524,170 @@ class TestIdentityDiffIsBoundedNeverTruncated(unittest.TestCase):
         body = source[start:source.index("\ndef ", start + 1)]
         self.assertIn('"" if standalone', body)
         self.assertIn("None if standalone", body)
+
+
+class TestScopePathsSurviveUnusualFilenames(unittest.TestCase):
+    """fn-169 R3 (impl-review r5) — the third abbreviation git applies.
+
+    `--stat` elides with an ellipsis, plain `--numstat` collapses renames into
+    `{old => new}`, and without `-z` git C-quotes any path outside plain ASCII.
+    All three break the same contract: the block claims to be the complete,
+    resolvable scope, and a reviewer that cannot open a path cannot review it.
+    Exercised over a real git repository, because every one of these was found by
+    running the real command rather than by reasoning about it.
+    """
+
+    @contextlib.contextmanager
+    def _repo_with(self, filename: str):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            run = lambda *a: subprocess.run(  # noqa: E731
+                a, cwd=repo, check=True, capture_output=True
+            )
+            run("git", "init", "-q", ".")
+            run("git", "config", "user.email", "t@example.com")
+            run("git", "config", "user.name", "t")
+            target = repo / filename
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("a\n", encoding="utf-8")
+            run("git", "add", "-A")
+            run("git", "commit", "-qm", "one")
+            target.write_text("a\nb\n", encoding="utf-8")
+            run("git", "add", "-A")
+            run("git", "commit", "-qm", "two")
+            yield repo
+
+    def _scope(self, repo: Path) -> str:
+        with mock.patch.object(flowctl, "get_repo_root", return_value=repo):
+            return flowctl._gather_review_scope("HEAD~1", "HEAD")
+
+    def test_non_ascii_path_appears_literally(self):
+        name = "src/wéird ñame.py"
+        with self._repo_with(name) as repo:
+            scope = self._scope(repo)
+        self.assertIn(name, scope, "path was not emitted literally")
+        # git's C-quoting escape for é is \303\251; its presence means -z is gone.
+        self.assertNotIn("\\303", scope)
+        self.assertFalse(scope.startswith('"'))
+
+    def test_every_scope_path_opens(self):
+        """The property, not the encoding: the reviewer can open what it is told."""
+        name = "src/ünïcode dir/файл.py"
+        with self._repo_with(name) as repo:
+            scope = self._scope(repo)
+            for line in scope.split("\n"):
+                parts = line.split("\t")
+                if len(parts) != 3:
+                    continue
+                self.assertTrue(
+                    (repo / parts[2]).exists(),
+                    f"scope names {parts[2]!r}, which does not open",
+                )
+
+    def test_quotes_in_a_filename_are_not_re_escaped(self):
+        with self._repo_with('src/has"quote.py') as repo:
+            scope = self._scope(repo)
+        self.assertIn('src/has"quote.py', scope)
+        self.assertNotIn('\\"', scope)
+
+    def test_a_newline_bearing_path_is_flagged_not_silently_split(self):
+        """Unrepresentable in a line-oriented block, so it says so.
+
+        A path containing a newline cannot appear literally without reading as two
+        entries. Rendering it quoted WITH an explanation is the only honest option;
+        emitting it raw would silently corrupt the list.
+        """
+        raw = "1\t0\tsrc/ok.py\x001\t0\tsrc/we\nird.py\x00"
+        rendered = flowctl._render_numstat_z(raw)
+        lines = rendered.split("\n")
+        self.assertIn("1\t0\tsrc/ok.py", lines)
+        self.assertIn("quoted", rendered)
+        self.assertIn("newline or tab", rendered)
+        # Exactly two records in, exactly two lines out.
+        self.assertEqual(len(lines), 2, rendered)
+
+    def test_unexpected_records_are_kept_not_dropped(self):
+        """A shorter scope map is the defect; never silently discard a record."""
+        rendered = flowctl._render_numstat_z("1\t0\tsrc/a.py\x00weird-record\x00")
+        self.assertIn("weird-record", rendered)
+
+
+class TestEveryCanonicalTaskMustBeVisible(unittest.TestCase):
+    """fn-169 R3 (impl-review r5) — a task with no readable spec aborts the review.
+
+    The handlers used to enumerate task specs by globbing `*.md`. A task whose
+    markdown was missing was therefore absent from the prompt AND from the artifact
+    hash, so a completion review could return SHIP without ever seeing it. That was
+    survivable while the specs were embedded — the prompt was merely shorter — but
+    the prompt now carries PATHS, so an unresolvable path is an invisible gap in
+    the evidence rather than a visible omission.
+    """
+
+    @contextlib.contextmanager
+    def _flow_repo(self, *, task_ids: list[str], write_markdown_for: list[str]):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            flow = repo / ".flow"
+            (flow / "specs").mkdir(parents=True)
+            (flow / "tasks").mkdir(parents=True)
+            spec_id = "fn-9-demo"
+            (flow / "specs" / f"{spec_id}.md").write_text(
+                "# Demo\n\n## Acceptance Criteria\n- **R1:** thing\n", encoding="utf-8"
+            )
+            for task_id in task_ids:
+                (flow / "tasks" / f"{task_id}.json").write_text(
+                    json.dumps({"id": task_id, "title": "t", "status": "done"}),
+                    encoding="utf-8",
+                )
+                if task_id in write_markdown_for:
+                    (flow / "tasks" / f"{task_id}.md").write_text(
+                        f"# {task_id}\n", encoding="utf-8"
+                    )
+            yield repo, flow, spec_id
+
+    def _load(self, flow: Path, spec_id: str):
+        with mock.patch.object(flowctl, "get_flow_dir", return_value=flow):
+            return flowctl._load_epic_and_task_specs(
+                spec_id, use_json=False, missing_label="Epic spec not found"
+            )
+
+    def test_all_markdown_present_enumerates_every_task(self):
+        ids = ["fn-9-demo.1", "fn-9-demo.2"]
+        with self._flow_repo(task_ids=ids, write_markdown_for=ids) as (_r, flow, sid):
+            *_rest, task_ids = self._load(flow, sid)
+        self.assertEqual(task_ids, ids)
+
+    def test_a_task_without_markdown_aborts_and_names_it(self):
+        ids = ["fn-9-demo.1", "fn-9-demo.2"]
+        with self._flow_repo(
+            task_ids=ids, write_markdown_for=["fn-9-demo.1"]
+        ) as (_r, flow, sid):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as ctx:
+                    self._load(flow, sid)
+        self.assertNotEqual(ctx.exception.code, 0)
+        message = err.getvalue()
+        self.assertIn("fn-9-demo.2.md", message)
+        # It must say WHY silence would be worse than failing.
+        self.assertIn("silently omit", message)
+
+    def test_the_abort_precedes_any_reservation(self):
+        """Structural: the spec load runs before the cap is touched.
+
+        A review that discovers a missing task after reserving a round has already
+        spent it, and the round accounting is the thing that bounds cost.
+        """
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        for handler in ("_backend_plan_review", "_backend_completion_review"):
+            with self.subTest(handler=handler):
+                start = source.index(f"def {handler}(")
+                body = source[start:source.index("\ndef ", start + 1)]
+                self.assertLess(
+                    body.index("_load_epic_and_task_specs"),
+                    body.index("enforce_and_increment_review_cap"),
+                    f"{handler} reserves a round before verifying every task spec "
+                    "can be read",
+                )
