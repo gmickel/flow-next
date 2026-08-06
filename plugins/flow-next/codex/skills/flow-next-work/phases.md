@@ -423,11 +423,13 @@ $FLOWCTL tasks --spec <spec-id> --status todo --json
 
 Skip if empty (no downstream tasks to update).
 
-Extract downstream task IDs:
+Extract downstream task IDs (the JSON is an envelope object - the list lives under `.tasks`):
 
 ```bash
-DOWNSTREAM=$($FLOWCTL tasks --spec <spec-id> --status todo --json | jq -r '[.[].id] | join(",")')
+DOWNSTREAM=$($FLOWCTL tasks --spec <spec-id> --status todo --json | jq -r '[.tasks[].id] | join(",")') || DOWNSTREAM=EXTRACT_FAILED
 ```
+
+If `DOWNSTREAM` is `EXTRACT_FAILED`, the jq extraction itself broke (shape mismatch) - report the error and re-derive the IDs from the raw JSON above; do NOT treat it as "nothing to do". Skip plan-sync only when `DOWNSTREAM` is genuinely empty.
 
 Note: Only sync to `todo` tasks. `in_progress` tasks are already being worked on - updating them mid-flight could cause confusion.
 

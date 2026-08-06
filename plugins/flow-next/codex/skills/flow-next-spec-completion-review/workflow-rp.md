@@ -185,7 +185,7 @@ source "$SETUP_FILE"
 if [[ "$RP_MODE" == "classic" ]]; then
  $FLOWCTL rp select-get --window "$W" --tab "$T"
  $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/$SPEC_ID.md"
- for task_id in $(echo "$TASKS_JSON" | jq -r '.[].id'); do
+ for task_id in $(echo "$TASKS_JSON" | jq -r '.tasks[].id'); do
  $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/tasks/$task_id.md"
  done
  for f in $CHANGED_FILES; do
