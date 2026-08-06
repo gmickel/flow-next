@@ -6471,26 +6471,26 @@ class TestIdentityDiffIsBoundedNeverTruncated(unittest.TestCase):
                 pass
 
         class FakeProc:
-            def __init__(self):
-                self.stdout = FakePipe(payload)
-                self.stderr = FakePipe(stderr)
-                self.returncode = None
-                self.killed = False
+            """Mirrors the real call shape: stdout is a pipe, stderr is a FILE.
 
-            def communicate(self, timeout=None):
-                # Mirrors Popen: reaps the child and returns whatever is left on
-                # both pipes. A killed child reports its signal, which is why the
-                # reader checks overflow BEFORE the exit code.
-                self.returncode = -9 if self.killed else returncode
-                return b"", self.stderr.read()
+            fn-169 (impl-review r7) moved stderr to a temp file so there is no
+            second pipe to deadlock on, so the fake writes the stderr bytes into
+            whatever file object the caller passed as ``stderr``.
+            """
+
+            def __init__(self, stderr_file):
+                self.stdout = FakePipe(payload)
+                self.killed = False
+                if stderr_file is not None and stderr:
+                    stderr_file.write(stderr)
 
             def kill(self):
                 self.killed = True
 
-            def wait(self):
-                return self.returncode if self.returncode is not None else returncode
+            def wait(self, timeout=None):
+                return -9 if self.killed else returncode
 
-        return lambda *a, **k: FakeProc()
+        return lambda *a, **k: FakeProc(k.get("stderr"))
 
     def test_a_diff_over_the_ceiling_raises_and_names_the_bound(self):
         limit = flowctl.REVIEW_IDENTITY_DIFF_MAX_BYTES

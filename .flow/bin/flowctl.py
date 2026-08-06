@@ -39493,43 +39493,51 @@ def _read_review_git_bounded(
     Streaming is the point: `capture_output=True` would materialize the whole diff
     before any size check could run, so the check has to happen while reading.
     """
+    # stderr goes to a TEMP FILE, not a pipe (impl-review r7). Streaming stdout to
+    # EOF while stderr sits in an undrained pipe is a deadlock whenever the child
+    # writes more than the pipe buffer holds, and the usual fix - drain both
+    # concurrently - needs a thread or a selector for a value we read once. A file
+    # has no buffer to fill, so the failure mode is removed rather than managed.
     try:
-        proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            cwd=get_repo_root(),
-        )
-    except (subprocess.SubprocessError, OSError) as exc:
+        with tempfile.TemporaryFile() as stderr_file:
+            try:
+                proc = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=stderr_file,
+                    cwd=get_repo_root(),
+                )
+            except (subprocess.SubprocessError, OSError) as exc:
+                raise ReviewEvidenceError(f"cannot read {what}: {exc}") from exc
+            chunks: list[bytes] = []
+            total = 0
+            overflow = False
+            try:
+                assert proc.stdout is not None
+                while True:
+                    block = proc.stdout.read(1 << 20)
+                    if not block:
+                        break
+                    total += len(block)
+                    if total > max_bytes:
+                        # KILL rather than drain (impl-review r6, P2). Draining a
+                        # pathological diff to EOF would do unbounded I/O to
+                        # produce a value we are about to discard - the ceiling
+                        # has to bound the WORK, not just the return value.
+                        overflow = True
+                        chunks.clear()
+                        proc.kill()
+                        break
+                    chunks.append(block)
+            finally:
+                proc.stdout.close()
+                try:
+                    returncode = proc.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    returncode = proc.wait()
+            stderr_file.seek(0)
+            stderr_bytes = stderr_file.read()
+    except OSError as exc:
         raise ReviewEvidenceError(f"cannot read {what}: {exc}") from exc
-    chunks: list[bytes] = []
-    total = 0
-    overflow = False
-    stderr_bytes = b""
-    try:
-        assert proc.stdout is not None
-        while True:
-            block = proc.stdout.read(1 << 20)
-            if not block:
-                break
-            total += len(block)
-            if total > max_bytes:
-                # KILL rather than drain (impl-review r6, P2). Draining a
-                # pathological diff to EOF would do unbounded I/O to produce a
-                # value we are about to discard - the ceiling has to bound the
-                # WORK, not just the return. `communicate()` afterwards reaps the
-                # child and clears both pipes concurrently, so a child that fills
-                # stderr cannot deadlock against a sequential read of stdout.
-                overflow = True
-                chunks.clear()
-                proc.kill()
-                break
-            chunks.append(block)
-    finally:
-        try:
-            _, stderr_bytes = proc.communicate(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            _, stderr_bytes = proc.communicate()
-        returncode = proc.returncode
     if overflow:
         # Checked BEFORE the exit code: we killed the child, so its non-zero
         # status is our doing and "exceeds the ceiling" is the real reason.

@@ -1331,18 +1331,13 @@ class TestPerTaskReviewSpecIntegration(unittest.TestCase):
             class _FakePopen:
                 def __init__(self, *args, **kwargs):
                     self.stdout = io.BytesIO(b"")
-                    self.stderr = io.BytesIO(b"")
+                    # fn-169 (impl-review r7): the bounded identity reader passes a
+                    # temp FILE as stderr, so there is no stderr pipe to drain.
+                    self.stderr = kwargs.get("stderr")
                     self.returncode = 0
 
-                def wait(self):
+                def wait(self, timeout=None):
                     return 0
-
-                def communicate(self, timeout=None):
-                    # fn-169: the bounded identity reader reaps with communicate()
-                    # so a child that fills stderr cannot deadlock a sequential
-                    # stdout read.
-                    self.returncode = 0
-                    return b"", b""
 
                 def kill(self):
                     self.returncode = -9

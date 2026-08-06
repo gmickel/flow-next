@@ -25,8 +25,9 @@ review, but a fetching reviewer spends turns on tool calls instead, and total
 input tokens for those rounds came out above the pre-change measurements — mostly
 cached, so billable cost does not track the raw number, but not a demonstrated
 saving either. A fetching reviewer is also slower in wall-clock on a big diff, and
-twice hit the fixed 600-second backend timeout; both were recorded as transport
-failures with the review round refunded, exactly as intended. The measurements are
+hit the fixed 600-second backend timeout on 3 of 10 review
+dispatches; every one was recorded as a transport failure with the review round
+refunded, exactly as intended. The measurements are
 in `optimization/reached-path/evidence/fn169/`.
 
 Review loops that were converging no longer get cut off and handed to a human to
