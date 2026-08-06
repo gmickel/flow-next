@@ -1,0 +1,1196 @@
+{
+  "artifactId": "pca-1232d338b3b0491890368cc87cfc94ae",
+  "baseSha": "853aa5df9870d126aa0f4d9b57a594194ca68c07",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R3"
+        ],
+        "summary": "The prompt embedded the diff body under a 50 KB cap. On this repo's own fn-168 change that body was 641,784 bytes, so the reviewer received ~10% of the evidence its verdict rested on and read the rest off disk anyway. fn-74 removed this and validated the removal; fn-90 and fn-159 each put it back for a good local reason, the second time with a fitter that truncated correctness-bearing evidence.",
+        "taskIds": [],
+        "title": "Reviewers were judging code they had seen a tenth of"
+      },
+      {
+        "files": [
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "STRATEGY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Records identities-not-payloads as a standing principle.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CLAUDE.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Three planning-time trip-wires in the symptom list.",
+            "taskIds": []
+          }
+        ],
+        "kind": "principle",
+        "ordinal": 2,
+        "rIds": [
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R3",
+          "rid-R4"
+        ],
+        "summary": "It runs in the checkout with a shell. Give it the rubric, a base..head range, the exact changed-path list, and spec/task paths, and it fetches what it needs at whatever depth each hunk warrants. Two corollaries are load-bearing: a prompt-payload fitter is evidence the payload is wrong, and prior findings come from session continuity rather than a re-render.",
+        "taskIds": [],
+        "title": "A reviewer is an executor: pass identities, not payloads"
+      },
+      {
+        "files": [],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R1",
+          "task-1"
+        ],
+        "summary": "codex resume silently dropped the sandbox mode, the reasoning effort, and --skip-git-repo-check, then fell through to a fresh session on failure. Resume now carries the same guarantees as a fresh dispatch and fails loudly. Proven live: a resumed header shows read-only and xhigh, across processes and after a >10 minute gap.",
+        "taskIds": [
+          "fn-169-review-subsystem-agentic-first-pass.1"
+        ],
+        "title": "Make resume trustworthy before relying on it"
+      },
+      {
+        "files": [],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R2",
+          "task-3"
+        ],
+        "summary": "Phase 1 resumes with the contract and the machine-read reply grammar but no re-rendered findings. Phase 2 fires only on a surfaced resume failure, rebuilding the prompt with them. The order cannot be collapsed: a lean prompt reaching a context-free session is a fresh blind review with the priors dropped. codex only; host has no session by design and always injects.",
+        "taskIds": [
+          "fn-169-review-subsystem-agentic-first-pass.3"
+        ],
+        "title": "Resume carries a lean prompt; injection is the fallback"
+      },
+      {
+        "files": [
+          {
+            "additions": 763,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 774,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Every behavioral change: two-phase dispatch, identity prompt builders, the deleted fitters, loud evidence failures, the bounded identity read.",
+            "taskIds": []
+          },
+          {
+            "additions": 763,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 774,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Byte-identical dual copy of the canonical script, required by test_tracker_distribution.",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/scripts/smoke_test.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Migrated to the identity API and asserts <diff_content> is absent.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Rubric rewritten for identities; names <spec> first and requires reading it.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/impl-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/standalone-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/references/completion-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R3",
+          "rid-R4",
+          "task-4"
+        ],
+        "summary": "Diff body to a base..head range, spec and task specs to paths, --stat to --numstat --no-renames -z. Deleting the payload deletes what existed to make it fit: three cursor fitters, the ratchet char budget, the 50 KB cap, eight argv constants, the three 'truncated to fit' markers, and both impl prompt builders whose only difference was fitting.",
+        "taskIds": [
+          "fn-169-review-subsystem-agentic-first-pass.4"
+        ],
+        "title": "Payloads become identities, and the fitting layer is deleted"
+      },
+      {
+        "files": [],
+        "kind": "step",
+        "ordinal": 6,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R3",
+          "task-4"
+        ],
+        "summary": "The model rests on the changed-file list being complete, and git abbreviates three independent ways: --stat elides with an ellipsis (28 of 43 paths on this spec's own diff), plain --numstat collapses renames to brace notation, and without -z any non-ASCII path is C-quoted. All three were found by running the real command; two of them by the reviewer.",
+        "taskIds": [
+          "fn-169-review-subsystem-agentic-first-pass.4"
+        ],
+        "title": "Make the scope map actually resolvable"
+      },
+      {
+        "files": [],
+        "kind": "step",
+        "ordinal": 7,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R3",
+          "task-4"
+        ],
+        "summary": "A failed git read raises with git's own message and aborts before a round is reserved; a genuinely empty range still returns empty. The artifact identity is the complete diff at the frozen range, streamed under a ceiling that raises rather than truncating, because a truncated identity collides with any diff sharing its prefix. A task with no readable markdown aborts instead of being invisible to both prompt and hash.",
+        "taskIds": [
+          "fn-169-review-subsystem-agentic-first-pass.4"
+        ],
+        "title": "Fail loudly where silence used to degrade the review"
+      },
+      {
+        "files": [
+          {
+            "additions": 292,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_prompt_no_embed_ratchet.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "The ratchet fn-74 omitted: drives the real handler with sentinel-bearing evidence and inspects the intercepted prompt.",
+            "taskIds": []
+          },
+          {
+            "additions": 889,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 280,
+            "path": "plugins/flow-next/tests/test_review_convergence_cap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Two-phase order, resolvable scope over real git history, loud-failure and bounded-read cases; the deleted fitters' tests went with them.",
+            "taskIds": []
+          },
+          {
+            "additions": 86,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 26,
+            "path": "plugins/flow-next/tests/test_backend_spec.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Builder signatures pinned as exact sets; the no-embed property asserted instead of a phrase.",
+            "taskIds": []
+          },
+          {
+            "additions": 199,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_eval_harness_prompt_api.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Keeps the offline-harness embedding carve-out working and confined.",
+            "taskIds": []
+          },
+          {
+            "additions": 41,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "plugins/flow-next/tests/test_prompt_text_pinned.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 33,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 13,
+            "path": "plugins/flow-next/tests/test_review_prompt_constraints.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 45,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 45,
+            "path": "plugins/flow-next/tests/test_review_prompt_template_parity.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 10,
+            "path": "plugins/flow-next/tests/test_review_findings_parser.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": "plugins/flow-next/tests/test_criteria.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 77,
+            "path": "plugins/flow-next/tests/test_cursor_review_commands.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/tests/test_cursor_run_exec.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 21,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 15,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/impl.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/impl_empty_optional.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/plan.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/plan_no_tasks.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/standalone.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/standalone_no_focus.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 26,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 22,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/completion.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 20,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/completion_no_tasks.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 8,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R6",
+          "task-6"
+        ],
+        "summary": "The ratchet drives the real handler with sentinel-bearing evidence and inspects the intercepted prompt; verified by simulating the regression and watching it go red. Builder signatures are pinned as exact sets, because the old name screen banned files_embedded and embedded_files and fn-90 walked past both with diff_content.",
+        "taskIds": [
+          "fn-169-review-subsystem-agentic-first-pass.6"
+        ],
+        "title": "Enforce it with a test, because prose already failed twice"
+      },
+      {
+        "files": [
+          {
+            "additions": 73,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "optimization/eval_prompt_payload.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "The one place offline harnesses embed, because they have no repository to fetch from.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "optimization/review-prompt/reveval.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "optimization/review-prompt/reveval_clean.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "optimization/review-prompt/reveval_plan.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "optimization/review-prompt/reveval_plan_clean.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "optimization/reached-path/plan_review_real_eval.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 20,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "optimization/reached-path/plan_review_candidate.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 69,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": "optimization/reached-path/generate_review_prompt_parity_evidence.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 26,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Host always-inject exception, and dispatch steps rewritten around the range and paths.",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Same host exception and dispatch correction for plan reviews.",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Same host exception and dispatch correction for completion reviews.",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 22,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          }
+        ],
+        "kind": "kept",
+        "ordinal": 9,
+        "rIds": [
+          "R4"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R4"
+        ],
+        "summary": "CURSOR_ARGV_TRANSPORT_MAX, renamed to say transport: the Windows CreateProcessW limit does not disappear because we stopped embedding, and it refuses loudly rather than trimming. The prior-finding renderer, against the task's original plan: a reviewer's own findings live in the receipt, not the tree, so deleting it would blind the injected fallback. Offline harnesses still embed, via one shared helper asserted absent from flowctl.",
+        "taskIds": [],
+        "title": "What deliberately survived, and why"
+      },
+      {
+        "files": [
+          {
+            "additions": 211,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "optimization/reached-path/evidence/fn169/prompt-identity-delta.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Measured prompt delta, complete-scope comparison, and per-dispatch usage for all ten review dispatches, including what is NOT demonstrated.",
+            "taskIds": []
+          },
+          {
+            "additions": 39,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "optimization/reached-path/evidence/fn169/resume-parity-live.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 111,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 111,
+            "path": "optimization/reached-path/evidence/fn136/review-output-format-token-delta.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "optimization/reached-path/runs/plan-review-candidate.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 70,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Outcome-first Unreleased entry, corrected after telemetry contradicted the original cost claim.",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "The identity contract, transport-vs-content, and the per-backend resume matrix.",
+            "taskIds": []
+          },
+          {
+            "additions": 21,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Prompt slots per review kind, and the loud-failure behavior.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/review-findings.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Why nothing shortens a prompt now, and why prior findings have no identity to pass instead.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/specs/fn-168-review-convergence-lost-ratchet-prompt.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 906,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 76,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 13,
+            "path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 32,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "deleted",
+            "deletions": 14,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "deleted",
+            "deletions": 60,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "deleted",
+            "deletions": 17,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.5.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "deleted",
+            "deletions": 44,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.6.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.6.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Carries this step's change.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 10,
+        "rIds": [
+          "R5",
+          "R7"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R5",
+          "rid-R7",
+          "task-6"
+        ],
+        "summary": "The prompt shrank 70,243 to 11,824 bytes (-83.17%) on this spec's own review range. But per-dispatch telemetry across all ten review dispatches showed input tokens ABOVE the pre-change baseline, and three dispatches hit the 600s bound, so the changelog's cost and latency claims were removed rather than reframed. Full suite green, ruff clean, mirror idempotent.",
+        "taskIds": [
+          "fn-169-review-subsystem-agentic-first-pass.6"
+        ],
+        "title": "Measured on this change, including what it does not show"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Embedded diff body vs cap",
+        "sourceRefs": [
+          "spec",
+          "rid-R3"
+        ],
+        "value": "641,784 B body against a 50 KB cap: reviewers saw ~10%"
+      },
+      {
+        "label": "Scope completeness",
+        "sourceRefs": [
+          "diff",
+          "rid-R3"
+        ],
+        "value": "--stat elided 28/43 paths; --numstat --no-renames -z elides 0"
+      },
+      {
+        "label": "Prompt size",
+        "sourceRefs": [
+          "spec",
+          "rid-R5"
+        ],
+        "value": "70,243 -> 11,824 bytes (-83.17%) on this spec's own range"
+      },
+      {
+        "label": "Token cost",
+        "sourceRefs": [
+          "spec",
+          "rid-R5"
+        ],
+        "value": "NOT improved: input tokens above baseline; claims withdrawn"
+      },
+      {
+        "label": "Enforcement",
+        "sourceRefs": [
+          "spec",
+          "rid-R6"
+        ],
+        "value": "Ratchet verified to fail when a re-embed is simulated"
+      },
+      {
+        "label": "Deleted machinery",
+        "sourceRefs": [
+          "spec",
+          "rid-R4"
+        ],
+        "value": "3 fitters, 50 KB cap, 8 argv constants, 3 truncation markers"
+      }
+    ],
+    "thesis": "Review prompts stop shipping the reviewer bytes it can fetch itself. A review now carries a commit range, the exact changed-path list, and spec/task paths; the reviewer reads the rest from the checkout. That deletes the layer built to make the payload fit, and closes the false-SHIP hole where a truncated prompt let an honest all-clear cover findings the reviewer never saw."
+  },
+  "generatedAt": "2026-08-07T00:00:00Z",
+  "headSha": "697ac280cf49ca2d4526d634fc5e3f1265747442",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-169-review-subsystem-agentic-first-pass"
+    },
+    {
+      "id": "task-1",
+      "kind": "task",
+      "ref": "fn-169-review-subsystem-agentic-first-pass.1"
+    },
+    {
+      "id": "task-3",
+      "kind": "task",
+      "ref": "fn-169-review-subsystem-agentic-first-pass.3"
+    },
+    {
+      "id": "task-4",
+      "kind": "task",
+      "ref": "fn-169-review-subsystem-agentic-first-pass.4"
+    },
+    {
+      "id": "task-6",
+      "kind": "task",
+      "ref": "fn-169-review-subsystem-agentic-first-pass.6"
+    },
+    {
+      "id": "rid-R1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "rid-R2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "rid-R3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "rid-R4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "rid-R5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "rid-R6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "rid-R7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "853aa5df9870d126aa0f4d9b57a594194ca68c07..697ac280cf49ca2d4526d634fc5e3f1265747442"
+    }
+  ],
+  "specId": "fn-169-review-subsystem-agentic-first-pass"
+}
