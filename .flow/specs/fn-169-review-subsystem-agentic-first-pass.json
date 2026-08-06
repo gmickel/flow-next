@@ -10,7 +10,9 @@
     "fn-168-review-convergence-lost-ratchet-prompt"
   ],
   "id": "fn-169-review-subsystem-agentic-first-pass",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-169-review-subsystem-agentic-first-pass.1": 1
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
@@ -158,6 +160,61 @@
       "task": null,
       "timestamp": "2026-08-06T05:51:11.175664Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "5bf9f4f9f112aa2b53db0eecab54786a12464835ecad5957aaa0c763c46b3f8f",
+      "backend": "codex",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-e7d4b379ccd2927dfccf6599bae8d252",
+            "classification": "introduced",
+            "findingId": "finding-e7d4b379ccd2927dfccf6599bae8d252",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-28e3c052c523780768839dfbba00169f",
+            "classification": "introduced",
+            "findingId": "finding-28e3c052c523780768839dfbba00169f",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-eed51ecfadb2887fbe5dc990e43eaf68",
+            "classification": "introduced",
+            "findingId": "finding-eed51ecfadb2887fbe5dc990e43eaf68",
+            "firstSeenThisRound": true,
+            "severity": "P3",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c9733dac1df2e33c9746c496286b74a2c114056a",
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_sha256": "92d7755cdbcd162f9035bf0b97e9bdbc04eeb753e84a955f684e9c0e4c343973",
+      "reservation_id": "db5b9961fb274864b99057721d95b8a8",
+      "round_consumed": true,
+      "scope": "impl:fn-169-review-subsystem-agentic-first-pass.1",
+      "superseded_by": null,
+      "task": "fn-169-review-subsystem-agentic-first-pass.1",
+      "timestamp": "2026-08-06T07:34:46.366296Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -167,6 +224,7 @@
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "impl:fn-169-review-subsystem-agentic-first-pass.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.md",
@@ -183,5 +241,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-06T06:20:55.162613Z"
+  "updated_at": "2026-08-06T07:34:46.369446Z"
 }
