@@ -11,7 +11,11 @@ Make session resume the primary continuity mechanism and injection the fallback 
 
 ### Approach
 - Today the cursor branch **resumes the session AND builds the ratchet with `prior_findings` + `prior_items` embedded** into the argv-budgeted prompt (~:40583). Both mechanisms, same dispatch — so on the one backend with a hard cap we re-ship bytes the resumed chat already has, then truncate them.
-- Gate injection on the resume outcome from `.1`: resumed => no injection; resume failed or unavailable => inject, deliberately and visibly.
+- **Two-phase dispatch — the resume outcome is not known in time for a single prompt build (plan-review r1, P1).** `run_codex_exec` builds the prompt, tries `codex exec resume`, and on `CalledProcessError` falls through to a fresh session **reusing the same prompt string**. So simply stripping priors would leave that fresh fallback BLIND, and `resolution_out["resume_failed"]` arrives after the dispatch that needed it. Restructure instead:
+  1. attempt resume with the **lean** prompt (no injection);
+  2. on resume failure, **rebuild** the prompt WITH injection and dispatch fresh.
+  The runner therefore needs a prompt **factory** (a callable) rather than a fixed string, or the caller owns both phases explicitly. A fixed string cannot express this contract — that is the whole finding.
+- Apply the same contract to copilot and cursor, or exclude them explicitly with a stated reason (cursor is resume-only with `require_nonempty_sid`; copilot is create-or-resume via marker).
 - **Host always injects** — no session by design (`session_id: null`, "Every re-review is a fresh subagent"), and `workflow-host.md:165` states the receipt's `review` field is REQUIRED for exactly this. Make it an explicit, tested exception so a later "simplification" cannot silently break host convergence.
 - The re-review prompt for the resumed path is ALREADY WRITTEN — `build_rereview_preamble` emits "This is a RE-REVIEW... **Updated files:** {files_list}... Re-read these files from the repository - do NOT rely on cached content." Keep that; drop only the prepended ratchet. Do NOT adopt RP's "reviewer sees your changes automatically" wording: that is an RP-specific auto-refresh property and false for CLI backends, which fetch on demand.
 - Validated shape (measured): resumed session + zero injection + the grammar instruction produced `Prior finding #1: fixed / #2: not-fixed / #3: fixed`, scored exactly by the production parser.

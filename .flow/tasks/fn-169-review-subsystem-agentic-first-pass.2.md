@@ -23,7 +23,12 @@ Extend the existing harness so it can measure what the current corpus structural
   - turns-to-verdict (count `command_execution` items)
   - scope precision — any finding naming an out-of-range file is a failure
   - resumed re-review **per-ordinal grammar compliance**, scored by feeding the reply to the production `_review_finding_prior_items` and comparing against the known resolution map
-- **Measure the baseline now**, against as-shipped behavior, and log it. Without this the post-change numbers mean nothing.
+- **Every trap needs an expected DISPOSITION, and classification must be scored (plan-review r1, P1).** `scope precision` only fails when a finding names an out-of-range *file* — but the unchanged-region bug sits inside an in-range changed file, so it would go unscored, and the keyword scorer might even reward reporting it without checking how it was classified. Define per trap:
+  - in-hunk planted bug -> must be reported, classification `introduced`;
+  - unchanged-region bug -> admissible ONLY as `pre_existing`, and must never block;
+  - pre-base decoy and post-head decoy -> forbidden outright (any mention fails the gate).
+  Misclassification fails the gate exactly like a missed finding.
+- **Measure the baseline AFTER `.1` lands, not before (plan-review r1, P1).** `.1` changes resume reliability, sandbox, and reasoning effort — all direct inputs to `verdict_delivered` and ordinal compliance — so a pre-`.1` baseline would measure broken resume and confound the variable under test. This task now depends on `.1`; both arms share identical resume/sandbox/effort behavior and differ only in embed-vs-fetch.
 - Keep the existing keyword scorer as-is so results stay comparable to fn-74's logged numbers; do not invent a new scoring scheme mid-study.
 - Backends: codex (project default) + cursor (the argv/truncation case). Cursor's default model is quota-blocked on this account — use `grok-4.5` or `composer-2.5`.
 

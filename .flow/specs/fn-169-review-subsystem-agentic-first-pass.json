@@ -12,10 +12,89 @@
   "id": "fn-169-review-subsystem-agentic-first-pass",
   "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_rounds": 0,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 1,
+  "plan_review_status": "needs_work",
+  "plan_reviewed_at": "2026-08-06T05:48:02.429335Z",
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "b64efe69e9f461a2c5cfbea49cfb527ee9866803f21efa3305b50fc04be10a5f",
+      "backend": "codex",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-7494a642cc534f86bc55918949a65024",
+            "classification": "introduced",
+            "findingId": "finding-7494a642cc534f86bc55918949a65024",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-3fad9b2ae9fc6e410430c8667d17ae08",
+            "classification": "introduced",
+            "findingId": "finding-3fad9b2ae9fc6e410430c8667d17ae08",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-35a453c3bf2213764543ebdd8d898f7b",
+            "classification": "introduced",
+            "findingId": "finding-35a453c3bf2213764543ebdd8d898f7b",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-35e963c38c198b1956ab06596d69fd53",
+            "classification": "introduced",
+            "findingId": "finding-35e963c38c198b1956ab06596d69fd53",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-459abcd490b8af4d51b1eaf7796f66b0",
+            "classification": "introduced",
+            "findingId": "finding-459abcd490b8af4d51b1eaf7796f66b0",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "909d5a0c8fb251363e3e49c36df8ed1e483d868b",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "724ae6138ad3fed72533965d29d1d931565d756c89639f65946b00e80313b9eb",
+      "reservation_id": "16bb0d0f45f84f9da5ee4d2be69ae8e2",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-06T05:48:02.425684Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.md",
   "status": "open",
   "title": "Review subsystem: agentic-first \u2014 pass identities, not payloads",
@@ -30,5 +109,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-06T05:43:16.642468Z"
+  "updated_at": "2026-08-06T05:48:02.430795Z"
 }

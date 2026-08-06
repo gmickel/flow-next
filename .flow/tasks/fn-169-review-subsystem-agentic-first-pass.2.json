@@ -3,12 +3,14 @@
   "claim_note": "",
   "claimed_at": null,
   "created_at": "2026-08-06T00:46:18.167061Z",
-  "depends_on": [],
+  "depends_on": [
+    "fn-169-review-subsystem-agentic-first-pass.1"
+  ],
   "id": "fn-169-review-subsystem-agentic-first-pass.2",
   "priority": null,
   "spec": "fn-169-review-subsystem-agentic-first-pass",
   "spec_path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.2.md",
   "status": "todo",
   "title": "Eval fixture with scope traps + baseline measurement of current behavior",
-  "updated_at": "2026-08-06T00:46:18.167061Z"
+  "updated_at": "2026-08-06T05:49:19.131123Z"
 }
