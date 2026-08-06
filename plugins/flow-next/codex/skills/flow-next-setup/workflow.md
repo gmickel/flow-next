@@ -901,6 +901,7 @@ Model-pin ceremony (fn-115.2): <MODELS_CEREMONY — "written" | "stamped" | "ski
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts
 - Ralph: answered in the setup ceremony (default off; skipped entirely on Cursor and Grok — unsupported). To enable later on supported hosts: /flow-next:ralph-init (merges project hooks; plugin ships none)
+- Live QA stage: off by default. `flowctl config set pipeline.qa on` makes /flow-next:pilot run one live /flow-next:qa pass over the finished build before make-pr (needs a running app plus a browser driver)
 - Use Linear / GitHub Issues / GitLab / Jira for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN / JIRA_BASE_URL + credential, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
 - Uninstall (run manually): rm -rf .flow/bin .flow/templates .flow/usage.md and remove the <!-- BEGIN/END FLOW-NEXT --> and <!-- flow-next:model-routing:start/end --> blocks from docs — or run /flow-next:uninstall for full cleanup (also strips Ralph guard hook entries from project settings)
 - This setup is optional - plugin works without it
