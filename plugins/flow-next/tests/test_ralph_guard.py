@@ -420,6 +420,42 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
                 proc = self._hook(command)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_blocks_command_substituted_env_names(self) -> None:
+        """PR #295 bot r7: an env-assignment NAME must be literal.
+
+        `env "$(printf MAX_REVIEW_)ITERATIONS=99"` builds the cap variable inside a
+        command substitution, so no value-matching screen can see it. The rule is
+        positional (the same literal-only contract the argv subcommand slots use),
+        not a blacklist — and it is split by verb, because `export`/`declare` treat
+        every argument as a name while `env`'s first non-assignment argument is the
+        COMMAND.
+        """
+        for command in (
+            'env "$(printf MAX_REVIEW_)ITERATIONS=99" $FLOWCTL codex impl-review fn-1.1',
+            "env '$(printf MAX_REVIEW_)ITERATIONS=99' $FLOWCTL codex impl-review fn-1.1",
+            'declare "$n=99"; $FLOWCTL codex impl-review fn-1.1',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_allows_expansions_in_env_values_and_commands(self) -> None:
+        """The rule covers the NAME position only.
+
+        `export PATH="$HOME/bin:$PATH"` expands in the VALUE, and
+        `env "$FLOWCTL" show` expands the COMMAND — neither can name the cap.
+        """
+        for command in (
+            'export PATH="$HOME/bin:$PATH"; $FLOWCTL show fn-1',
+            'export FLOWCTL="$PWD/.flow/bin/flowctl"; $FLOWCTL show fn-1',
+            'env "$FLOWCTL" show fn-1 --json',
+            'env FOO=bar "$FLOWCTL" show fn-1 --json',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_allows_the_sibling_transport_failure_knob(self) -> None:
         """PR #295 bot r4: `MAX_REVIEW_` as a prefix swept up a documented knob.
 

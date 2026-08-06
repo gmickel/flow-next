@@ -724,8 +724,33 @@ _ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 # expansion (`export "$name=99"`, `declare "${n}=99"`). The value of the name is
 # unknowable pre-expansion, so a command that also drives a flowctl launcher
 # fails closed rather than guessing.
+# An env-assignment NAME must be literal text. Any expansion there — `$VAR`,
+# `${VAR}`, `$(...)`, or a backtick — is unknowable before the shell runs, so it
+# fails closed beside a launcher. This is the positional literal-only contract the
+# argv subcommand slots already use, NOT a blacklist of values: PR #295 bot r7
+# smuggled the cap through `env "$(printf MAX_REVIEW_)ITERATIONS=99"`, which no
+# value-matching screen can see.
+#
+# Split by verb, because their argument grammars differ:
+#   export|declare|typeset|readonly — EVERY argument is a name or an assignment,
+#     so an expansion is always a name. No `=` required (`export "$v"` assigns
+#     whatever `$v` expands to).
+#   env — the first non-assignment argument is the COMMAND, so an expansion only
+#     counts as a name when the same argument also carries `=`. That keeps
+#     `env "$FLOWCTL" show fn-1` legal.
 _EXPANDED_ENV_NAME_RE = re.compile(
-    r"\b(?:export|declare|typeset|readonly|env)\s+[\"\']?\$\{?[A-Za-z_]"
+    r"""(?x)
+      # NAME part only: stop at `=`, so `export PATH="$HOME/bin:$PATH"` (an
+      # expansion in the VALUE) stays legal while `export "$v"` and
+      # `export "${n}ITERATIONS=99"` (expansions in the NAME) fail closed.
+      \b(?:export|declare|typeset|readonly)\s+["']?[^\s;|&="']*(?:\$|`)
+    | \benv\s+
+      (?:
+          "[^"]*(?:\$|`)[^"]*=
+        | '[^']*(?:\$|`)[^']*=
+        | [^\s;|&"']*(?:\$|`)[^\s;|&]*=
+      )
+    """
 )
 # An assignment whose VALUE is the bare `MAX_REVIEW_` prefix — i.e. the first half
 # of a composed variable NAME, not a complete env var. Anchored at the value's end
