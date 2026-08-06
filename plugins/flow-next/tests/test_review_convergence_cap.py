@@ -6435,3 +6435,78 @@ class TestResumedRatchetBlock(unittest.TestCase):
         self.assertNotIn("<prior_findings>", preamble)
         for rp_ism in ("automatically", "auto-refresh"):
             self.assertNotIn(rp_ism, preamble)
+
+
+class TestRereviewPromptPair(unittest.TestCase):
+    """fn-169 R2 — the resume/injection contract belongs to the ROUND.
+
+    Implementation, plan, and completion reviews all ratchet, all resume, and all
+    used to re-render the priors on a successful resume. These assert the shared
+    builder over all three, plus the structural guarantee that no dispatch site
+    can quietly opt out.
+    """
+
+    REVIEW_TYPES = ("implementation", "plan", "completion")
+
+    def _pair(self, review_type: str, *, two_phase: bool):
+        return flowctl._rereview_prompt_pair(
+            "BODY",
+            files=["a.py"],
+            review_type=review_type,
+            prior_findings="Prior finding #1: something",
+            prior_items=_ratchet_prior_container()["items"],
+            two_phase=two_phase,
+        )
+
+    def test_single_phase_is_byte_identical_to_the_old_behavior(self):
+        for review_type in self.REVIEW_TYPES:
+            dispatch, injected, preamble = self._pair(review_type, two_phase=False)
+            self.assertIsNone(injected, review_type)
+            self.assertEqual(dispatch, preamble + "BODY", review_type)
+            self.assertIn("<prior_findings>", dispatch, review_type)
+
+    def test_two_phase_drops_priors_from_the_dispatch_prompt_only(self):
+        for review_type in self.REVIEW_TYPES:
+            dispatch, injected, preamble = self._pair(review_type, two_phase=True)
+            self.assertNotIn("<prior_findings>", dispatch, review_type)
+            self.assertIn("<prior_findings>", injected, review_type)
+            self.assertEqual(dispatch, preamble + "BODY", review_type)
+            self.assertTrue(dispatch.endswith("BODY"), review_type)
+            self.assertLess(len(dispatch), len(injected), review_type)
+
+    def test_two_phase_keeps_the_machine_read_grammar_in_every_review_type(self):
+        for review_type in self.REVIEW_TYPES:
+            dispatch, _injected, _preamble = self._pair(review_type, two_phase=True)
+            self.assertRegex(
+                dispatch,
+                r"(?m)^\s*Prior finding #\d+: (?:fixed|not-fixed|withdrawn)\s*$",
+                f"{review_type}: lean prompt dropped the reply grammar along with "
+                "the payload — resolutions would become invisible",
+            )
+
+    def test_every_dispatch_site_forwards_injected_prompt(self):
+        """A handler that forgets the kwarg silently keeps re-rendering priors.
+
+        Parsed from the AST rather than grepped, and enumerating OUR call sites
+        (which is a closed set we own) rather than any external tool's options.
+        """
+        import ast as _ast
+
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        tree = _ast.parse(source)
+        missing = []
+        found = 0
+        for node in _ast.walk(tree):
+            if not isinstance(node, _ast.Call):
+                continue
+            func = node.func
+            name = getattr(func, "id", None) or getattr(func, "attr", None)
+            if name != "_dispatch_backend_review":
+                continue
+            found += 1
+            kwargs = {kw.arg for kw in node.keywords}
+            if "injected_prompt" not in kwargs:
+                missing.append(node.lineno)
+        self.assertGreaterEqual(found, 3, "dispatch call sites not located")
+        self.assertEqual(missing, [], f"dispatch sites missing injected_prompt: {missing}")

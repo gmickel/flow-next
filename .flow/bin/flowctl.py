@@ -39869,33 +39869,39 @@ def _resume_session_from_receipt(
     return session_id, is_rereview, prior_model, prior_effort
 
 
-def _apply_impl_rereview_preamble(
+def _rereview_prompt_pair(
     prompt: str,
     *,
-    base_branch: str,
-    is_rereview: bool,
-    receipt_path: Optional[str],
-    resumed: bool = False,
-) -> str:
-    """Prepend the fn-90 R4 convergence ratchet when re-reviewing.
+    files: list[str],
+    review_type: str,
+    prior_findings: Optional[str],
+    prior_items: Optional[dict],
+    two_phase: bool,
+) -> tuple[str, Optional[str], str]:
+    """Build the (dispatch, injected, preamble) triple for one re-review round.
 
-    fn-169 R2 — ``resumed=True`` builds the LEAN variant: the same contract and
-    reply grammar, without re-rendering findings the resumed reviewer already
-    holds. Callers running the two-phase dispatch build both and hand the injected
-    one to ``_dispatch_backend_review(injected_prompt=...)``.
+    fn-169 R2. Shared by all three review handlers — implementation, plan, and
+    completion — because the resume/injection contract is a property of the
+    ROUND, not of one review type. When ``two_phase`` is false (any backend
+    without a measured terminal resume, or a fresh dispatch) the returned
+    dispatch prompt carries the rendered priors and ``injected`` is None, which
+    is byte-for-byte the pre-fn-169 behavior.
+
+    The third element is the preamble actually prefixed to the dispatch prompt;
+    cursor's argv fitter strips and re-fits exactly that string, and cursor is
+    never two-phase, so it always receives the full one.
     """
-    prior_findings = _read_prior_findings(receipt_path)
-    prior_items = _read_prior_structured_findings(receipt_path)
-    if is_rereview or prior_findings is not None or prior_items is not None:
-        changed_files = get_changed_files(base_branch)
-        rereview_preamble = build_rereview_preamble(
-            changed_files, "implementation",
-            prior_findings=prior_findings,
-            prior_items=prior_items,
-            resumed=resumed,
-        )
-        prompt = rereview_preamble + prompt
-    return prompt
+    preamble = build_rereview_preamble(
+        files, review_type,
+        prior_findings=prior_findings, prior_items=prior_items,
+    )
+    if not two_phase:
+        return preamble + prompt, None, preamble
+    lean = build_rereview_preamble(
+        files, review_type,
+        prior_findings=prior_findings, prior_items=prior_items, resumed=True,
+    )
+    return lean + prompt, preamble + prompt, lean
 
 
 def _build_impl_prompt_default(
@@ -40855,27 +40861,17 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         )
         if reg["mint_session_id"] and not session_id:
             session_id = str(uuid.uuid4())
-        # fn-169 R2: two prompts. `prompt` is LEAN (contract + grammar, no
-        # re-rendered findings) and is what a resumed session receives;
-        # `injected_prompt` carries the findings and is used only if resume fails.
-        base_prompt = prompt
-        prompt = _apply_impl_rereview_preamble(
-            base_prompt,
-            base_branch=base_branch,
-            is_rereview=is_rereview,
-            receipt_path=receipt_path,
-            resumed=bool(session_id) and bool(reg.get("two_phase_resume")),
-        )
-        injected_prompt = (
-            _apply_impl_rereview_preamble(
-                base_prompt,
-                base_branch=base_branch,
-                is_rereview=is_rereview,
-                receipt_path=receipt_path,
+        prior_findings = _read_prior_findings(receipt_path)
+        prior_items = _read_prior_structured_findings(receipt_path)
+        if is_rereview or prior_findings is not None or prior_items is not None:
+            prompt, injected_prompt, _ = _rereview_prompt_pair(
+                prompt,
+                files=get_changed_files(base_branch),
+                review_type="implementation",
+                prior_findings=prior_findings,
+                prior_items=prior_items,
+                two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
             )
-            if bool(session_id) and bool(reg.get("two_phase_resume"))
-            else None
-        )
 
     # Cursor: persona override + final argv-cap backstop (after resolve so
     # task_id is canonicalized; order matches the pre-migration handler).
@@ -41272,6 +41268,10 @@ def _bind_receipt_model_effort(
 
 def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
     """Shared plan-review pipeline; per-backend variance via registry hooks."""
+    # Stays None for backends that always inject (cursor, copilot, host) and
+    # for a fresh round; only a two_phase_resume backend builds the second,
+    # findings-bearing prompt. fn-169 R2.
+    injected_prompt: Optional[str] = None
     reg = BACKEND_REGISTRY[backend]
     if not ensure_flow_exists():
         error_exit(".flow/ does not exist", use_json=args.json)
@@ -41324,13 +41324,16 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         spec_files = [str(epic_spec_path.relative_to(repo_root))]
         for task_file in sorted(tasks_dir.glob(f"{epic_id}.*.md")):
             spec_files.append(str(task_file.relative_to(repo_root)))
-        rereview_preamble = build_rereview_preamble(
-            spec_files, "plan",
+        prefixed, injected_prompt, rereview_preamble = _rereview_prompt_pair(
+            prompt,
+            files=spec_files,
+            review_type="plan",
             prior_findings=prior_findings,
             prior_items=prior_items,
+            two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
         )
         if reg["prompt_fit"] != "cursor_argv":
-            prompt = rereview_preamble + prompt
+            prompt = prefixed
 
     if reg["prompt_fit"] == "cursor_argv":
         prompt = fit_cursor_rereview_prompt_to_budget(
@@ -41381,6 +41384,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         review_type="plan",
         reviewed_head_sha=reviewed_head_sha,
         reservation_id=reservation_id,
+        injected_prompt=injected_prompt,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
@@ -41540,6 +41544,10 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
 
 def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
     """Shared completion-review pipeline; per-backend variance via registry hooks."""
+    # Stays None for backends that always inject (cursor, copilot, host) and
+    # for a fresh round; only a two_phase_resume backend builds the second,
+    # findings-bearing prompt. fn-169 R2.
+    injected_prompt: Optional[str] = None
     reg = BACKEND_REGISTRY[backend]
     if not ensure_flow_exists():
         error_exit(".flow/ does not exist", use_json=args.json)
@@ -41639,12 +41647,14 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         prior_items = _read_prior_structured_findings(receipt_path)
         if is_rereview or prior_findings is not None or prior_items is not None:
             changed_files = get_changed_files(base_branch)
-            rereview_preamble = build_rereview_preamble(
-                changed_files, "completion",
+            prompt, injected_prompt, rereview_preamble = _rereview_prompt_pair(
+                prompt,
+                files=changed_files,
+                review_type="completion",
                 prior_findings=prior_findings,
                 prior_items=prior_items,
+                two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
             )
-            prompt = rereview_preamble + prompt
 
     try:
         criteria_path = get_criteria_path()
@@ -41703,6 +41713,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         review_type="completion",
         reviewed_head_sha=reviewed_head_sha,
         reservation_id=reservation_id,
+        injected_prompt=injected_prompt,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
