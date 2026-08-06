@@ -39459,12 +39459,22 @@ def _gather_review_scope(base_sha: str, head_sha: str = "HEAD") -> str:
     65 exact paths in 4,315 bytes against the body's 641,784 — complete, and
     150x smaller.
 
+    `--no-renames` is load-bearing, not a detail (impl-review r1, P1). Plain
+    `--numstat` abbreviates a rename with brace notation — a real line from this
+    repo's history reads
+    `.flow/specs/{fn-139-...-flowctl-owns.json => fn-139-...-a-transport.json}` —
+    so NEITHER exact path appears, and the prompt's claim that this block is the
+    complete scope would be false. `--no-renames` splits the rename into an exact
+    delete and an exact add. Same failure class as `--stat`'s ellipsis, one level
+    down; a scope map that cannot be resolved to paths is not a scope map.
+
     Returns "" on failure. An empty range and an unreadable one are deliberately
     not distinguished here; the caller decides what an empty scope means.
     """
     try:
         result = subprocess.run(
-            ["git", "diff", "--numstat", f"{base_sha}..{head_sha}"],
+            ["git", "diff", "--numstat", "--no-renames",
+             f"{base_sha}..{head_sha}"],
             capture_output=True,
             text=True, encoding="utf-8",
             cwd=get_repo_root(),

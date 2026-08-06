@@ -6,6 +6,33 @@ import sys, os, re, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import reveval as R  # noqa: E402
 import flowctl  # noqa: E402
+# fn-169 R4: `build_review_prompt` carries identities (paths + a commit
+# range). This harness has no repo for the reviewer to read, so — like the
+# `export` review mode — it appends its own payload blocks after the builder.
+# Production paths never do this; the eval's variable is prompt WORDING, and
+# holding the payload constant across variants is what keeps that comparable.
+
+
+def _embed_payload(prompt, *, spec="", diff_summary="", diff_content="", task_specs=""):
+    """Append the payload blocks the identity builder no longer emits.
+
+    Eval-harness only: there is no repository to fetch from here. Ordering matches
+    the pre-fn-169 production builder so variant-to-variant deltas stay
+    attributable to the wording under test rather than to a layout change.
+    """
+    blocks = []
+    if diff_summary:
+        blocks.append(f"<diff_summary>\n{diff_summary}\n</diff_summary>")
+    if diff_content:
+        blocks.append(f"<diff_content>\n{diff_content}\n</diff_content>")
+    if spec:
+        blocks.append(f"<spec>\n{spec}\n</spec>")
+    if task_specs:
+        blocks.append(f"<task_specs>\n{task_specs}\n</task_specs>")
+    if not blocks:
+        return prompt
+    return prompt + "\n\n" + "\n\n".join(blocks)
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CLEAN = open(os.path.join(HERE, "orders_clean.py")).read()
@@ -17,14 +44,18 @@ SMELL_WORDS = ["feature envy", "data clump", "primitive obsession", "long method
 
 def _prompt(code, fowler_trim):
     if not fowler_trim:
-        return flowctl.build_review_prompt("impl", R.BASE_SPEC, "orders.py — a new single-file module.",
-                                           diff_summary="1 file changed, +80", diff_content=code)
+        return _embed_payload(
+            flowctl.build_review_prompt(
+                "impl", context_hints="orders.py — a new single-file module."),
+            spec=R.BASE_SPEC, diff_summary="1 file changed, +80", diff_content=code)
     saved = {k: getattr(flowctl, k) for k in R.TRIM}
     try:
         for k, v in R.TRIM.items():
             setattr(flowctl, k, v)
-        p = flowctl.build_review_prompt("impl", R.BASE_SPEC, "orders.py — a new single-file module.",
-                                        diff_summary="1 file changed, +80", diff_content=code)
+        p = _embed_payload(
+            flowctl.build_review_prompt(
+                "impl", context_hints="orders.py — a new single-file module."),
+            spec=R.BASE_SPEC, diff_summary="1 file changed, +80", diff_content=code)
     finally:
         for k, v in saved.items():
             setattr(flowctl, k, v)

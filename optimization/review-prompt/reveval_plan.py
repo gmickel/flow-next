@@ -6,6 +6,33 @@ import sys, os, re, json, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import reveval as R  # noqa: E402  (run_codex, verdict_of, HERE)
 import flowctl  # noqa: E402
+# fn-169 R4: `build_review_prompt` carries identities (paths + a commit
+# range). This harness has no repo for the reviewer to read, so — like the
+# `export` review mode — it appends its own payload blocks after the builder.
+# Production paths never do this; the eval's variable is prompt WORDING, and
+# holding the payload constant across variants is what keeps that comparable.
+
+
+def _embed_payload(prompt, *, spec="", diff_summary="", diff_content="", task_specs=""):
+    """Append the payload blocks the identity builder no longer emits.
+
+    Eval-harness only: there is no repository to fetch from here. Ordering matches
+    the pre-fn-169 production builder so variant-to-variant deltas stay
+    attributable to the wording under test rather than to a layout change.
+    """
+    blocks = []
+    if diff_summary:
+        blocks.append(f"<diff_summary>\n{diff_summary}\n</diff_summary>")
+    if diff_content:
+        blocks.append(f"<diff_content>\n{diff_content}\n</diff_content>")
+    if spec:
+        blocks.append(f"<spec>\n{spec}\n</spec>")
+    if task_specs:
+        blocks.append(f"<task_specs>\n{task_specs}\n</task_specs>")
+    if not blocks:
+        return prompt
+    return prompt + "\n\n" + "\n\n".join(blocks)
+
 
 SPEC = open(os.path.join(R.HERE, "spec_corpus.md")).read()
 RUNS = int(os.environ.get("REVEVAL_RUNS", "2"))
@@ -59,8 +86,10 @@ Untestable/unmeasurable acceptance criteria · Missing error/failure handling ·
 
 
 def _plan_prompt():
-    return flowctl.build_review_prompt("plan", SPEC, "Contacts CRM; existing single-add UI.",
-                                       task_specs="(tasks are inline in the spec above)")
+    return _embed_payload(
+        flowctl.build_review_prompt(
+            "plan", context_hints="Contacts CRM; existing single-add UI."),
+        spec=SPEC, task_specs="(tasks are inline in the spec above)")
 
 
 def v_plan_baseline():

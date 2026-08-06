@@ -20,6 +20,33 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, os.path.join(REPO, "plugins/flow-next/scripts"))
 os.chdir(REPO)
 import flowctl  # noqa: E402
+# fn-169 R4: `build_review_prompt` carries identities (paths + a commit
+# range). This harness has no repo for the reviewer to read, so — like the
+# `export` review mode — it appends its own payload blocks after the builder.
+# Production paths never do this; the eval's variable is prompt WORDING, and
+# holding the payload constant across variants is what keeps that comparable.
+
+
+def _embed_payload(prompt, *, spec="", diff_summary="", diff_content="", task_specs=""):
+    """Append the payload blocks the identity builder no longer emits.
+
+    Eval-harness only: there is no repository to fetch from here. Ordering matches
+    the pre-fn-169 production builder so variant-to-variant deltas stay
+    attributable to the wording under test rather than to a layout change.
+    """
+    blocks = []
+    if diff_summary:
+        blocks.append(f"<diff_summary>\n{diff_summary}\n</diff_summary>")
+    if diff_content:
+        blocks.append(f"<diff_content>\n{diff_content}\n</diff_content>")
+    if spec:
+        blocks.append(f"<spec>\n{spec}\n</spec>")
+    if task_specs:
+        blocks.append(f"<task_specs>\n{task_specs}\n</task_specs>")
+    if not blocks:
+        return prompt
+    return prompt + "\n\n" + "\n\n".join(blocks)
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CODE = open(os.path.join(HERE, "orders.py")).read()
@@ -108,9 +135,10 @@ BASE_SPEC = ("Order-fulfilment + pricing module. Acceptance: "
 
 
 def _base_prompt():
-    return flowctl.build_review_prompt(
-        "impl", BASE_SPEC, "orders.py — a new single-file module.",
-        diff_summary="1 file changed, +117", diff_content=CODE)
+    return _embed_payload(
+        flowctl.build_review_prompt(
+            "impl", context_hints="orders.py — a new single-file module."),
+        spec=BASE_SPEC, diff_summary="1 file changed, +117", diff_content=CODE)
 
 
 # The experimental Fowler smell baseline (Fowler, _Refactoring_ ch.3). Terse:

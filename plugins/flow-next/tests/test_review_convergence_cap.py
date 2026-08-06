@@ -6243,3 +6243,107 @@ class TestRereviewPromptPair(unittest.TestCase):
                 missing.append(node.lineno)
         self.assertGreaterEqual(found, 3, "dispatch call sites not located")
         self.assertEqual(missing, [], f"dispatch sites missing injected_prompt: {missing}")
+
+
+class TestReviewScopeIsResolvable(unittest.TestCase):
+    """fn-169 R3 — every path in `<changed_files>` must resolve to a real file.
+
+    The whole no-embed model rests on this block being the complete, exact scope:
+    the reviewer decides what to fetch from it, so a path it cannot resolve is
+    evidence it will never read. Two git features abbreviate and both were caught
+    the same way — by running the real command over real history rather than a
+    synthetic fixture.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = Path(__file__).resolve().parents[3]
+
+    def _rename_range(self) -> tuple[str, str]:
+        """Find a commit in this repo's own history that renamed a file."""
+        out = subprocess.run(
+            ["git", "log", "--diff-filter=R", "--format=%H", "-1"],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        if not out:
+            self.skipTest("no rename commit in history")
+        return f"{out}~1", out
+
+    def test_renames_are_not_abbreviated_to_brace_notation(self):
+        """Plain --numstat writes `{old => new}`, naming neither real path."""
+        base, head = self._rename_range()
+        with mock.patch.object(flowctl, "get_repo_root", return_value=self.repo):
+            scope = flowctl._gather_review_scope(base, head)
+        self.assertTrue(scope, "no scope gathered for a known rename commit")
+        self.assertNotIn("=>", scope, "rename abbreviated — neither path resolves")
+        self.assertNotIn("{", scope)
+
+    def test_every_scope_path_exists_at_the_reviewed_head(self):
+        """The paths are resolvable, not merely unabbreviated.
+
+        Added paths must exist at head; deleted ones must not. Both are checked
+        against git rather than the working tree, so the assertion is about the
+        reviewed snapshot the reviewer is told to read.
+        """
+        base, head = self._rename_range()
+        with mock.patch.object(flowctl, "get_repo_root", return_value=self.repo):
+            scope = flowctl._gather_review_scope(base, head)
+        tracked = subprocess.run(
+            ["git", "ls-tree", "-r", "--name-only", head],
+            cwd=self.repo, capture_output=True, text=True, check=True,
+        ).stdout.split("\n")
+        at_head = set(tracked)
+        checked = 0
+        for line in scope.split("\n"):
+            parts = line.split("\t")
+            if len(parts) != 3:
+                continue
+            added, _deleted, path = parts
+            if added == "0":
+                continue  # a pure deletion is correctly absent at head
+            self.assertIn(
+                path, at_head,
+                f"scope names {path!r}, which does not exist at the reviewed "
+                "head — the reviewer would be told to read a path it cannot open",
+            )
+            checked += 1
+        self.assertGreater(checked, 0, "no added/modified paths to verify")
+
+    def test_a_wide_diff_lists_every_path_in_full(self):
+        """The >50-file case the acceptance criterion names, on real history."""
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        base = None
+        for depth in ("~20", "~40", "~80"):
+            candidate = f"{head}{depth}"
+            names = subprocess.run(
+                ["git", "diff", "--name-only", "--no-renames",
+                 f"{candidate}..{head}"],
+                cwd=self.repo, capture_output=True, text=True,
+            )
+            if names.returncode == 0 and len(
+                [n for n in names.stdout.split("\n") if n]
+            ) > 50:
+                base = candidate
+                break
+        if base is None:
+            self.skipTest("no >50-file range available in shallow history")
+        with mock.patch.object(flowctl, "get_repo_root", return_value=self.repo):
+            scope = flowctl._gather_review_scope(base, head)
+        expected = {
+            n for n in subprocess.run(
+                ["git", "diff", "--name-only", "--no-renames", f"{base}..{head}"],
+                cwd=self.repo, capture_output=True, text=True, check=True,
+            ).stdout.split("\n") if n
+        }
+        got = {
+            line.split("\t")[2] for line in scope.split("\n")
+            if len(line.split("\t")) == 3
+        }
+        self.assertEqual(
+            got, expected,
+            "scope is not the exact changed-path set on a >50-file diff",
+        )
+        self.assertNotIn("...", scope, "a path was elided")
