@@ -46,9 +46,20 @@ Make the decision stick this time, then document and gate.
 - [ ] Full gate green: `python3 scripts/run_tests_parallel.py` + `uvx ruff@0.16.0 check .`; `test_prompt_text_pinned` green; propagation verified
 
 ## Done summary
-TBD
+Three layers of enforcement, docs, and a CHANGELOG that no longer claims more than the evidence supports.
 
+**Why three layers.** fn-74 made this exact decision, validated it with an eval, deleted the embedding code, and wrote it in a CHANGELOG. fn-90 re-added the diff body; fn-159 re-added it with a fitter. Each had a good local reason, and nothing failed when they did. A CHANGELOG entry is not a constraint.
+
+1. **STRATEGY.md + CLAUDE.md** (landed in `.1` so the review rounds could read them): the "identities, not payloads" principle, and three planning-time trip-wires in "How to spot a mistake" — embedding fetchable content, writing a payload fitter/truncator/budget, and enumerating ways-to-do-it-wrong.
+2. **An executable ratchet.** First attempt was vacuous, and the reviewer caught it: it asserted sentinels absent that were never fed in, so re-adding a `diff_content=` parameter would have left it green. Now it drives `cmd_backend_review` with the git reads and task spec mocked to return sentinel-bearing content, intercepts the dispatch, and inspects the prompt that would have crossed the process boundary — **verified by simulating the regression and watching it go red**. Alongside it, the old `files_embedded`/`embedded_files` name screen became an exact signature PIN, because a name list is a race against the next spelling: those two were banned and fn-90 walked straight past them with `diff_content`.
+3. **Docs**: `orchestration.md` gains the identity contract, the transport-vs-content distinction, and the per-backend resume matrix; `flowctl.md` documents the prompt slots per review kind and the loud-failure behavior; `review-findings.md` records why nothing shortens a prompt any more and why prior findings are the one payload with no identity to pass instead. All three `workflow-host.md` files state the host always-inject exception — and their dispatch steps were rewritten too, since the reviewer found they still said "the final diff" directly below the new paragraph forbidding it.
+
+**The CHANGELOG got corrected, not framed.** The acceptance criterion asks for receipt-derived telemetry, so I pulled per-round `usage` from all ten dispatches — and it contradicted what I had written. Input tokens ran 3.49M–5.55M, *above* the 544k–1.12M recorded for fn-168's pre-identity reviews, because a fetching reviewer moves cost off the prompt and onto conversation turns (91–96% cached, so billable cost does not track the raw number — but a saving is not demonstrated, and the comparison is confounded by diff size and round count anyway). Wall-clock is worse too: three dispatches hit the fixed 600s bound. So the entry no longer opens with "gets cheaper", no longer says "you pay for a much smaller prompt", and no longer claims removing the payload "deletes overhead rather than adding latency". It states what *is* demonstrated — complete evidence instead of ~10%, an 83% smaller prompt, a resolvable scope map — and sets the cost and latency expectation honestly, pointing at the evidence file.
+
+**Also landed here:** the exec bound raised 600 → 1800s and made env-overridable (`FLOW_REVIEW_EXEC_TIMEOUT`), because the fetch model made the old number kill working reviewers. The comment and the follow-up capture (`.flow/tmp/fn-170-idle-liveness-CAPTURE.md`) both record that this raises the number without fixing the shape: the right bound is an idle deadline over the event stream codex already emits.
+
+**Release note:** fn-168 (#295) is on `origin/main` as `1300e433`, so the "no release until both land" constraint is satisfied once this spec lands. No version bump — manifests untouched.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: faa3979f, 5c3e8d9b, 6be85422, 5dc024fe
+- Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_no_embed_ratchet test_eval_harness_prompt_api test_prompt_text_pinned test_review_prompt_template_parity -v
 - PRs:
