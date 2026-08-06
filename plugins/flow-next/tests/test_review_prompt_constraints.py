@@ -49,34 +49,44 @@ def _output_format(text: str) -> str:
     return text[start:end]
 
 
+SPEC_PATH = ".flow/specs/fn-1-demo.md"
+TASK_PATHS = (".flow/tasks/fn-1-demo.1.md", ".flow/tasks/fn-1-demo.2.md")
+RANGE = "aaaaaaa..bbbbbbb"
+
+
 class ReviewPromptConstraintTest(unittest.TestCase):
     def rendered_prompts(self) -> dict[str, str]:
+        # fn-169 R4: identities. SPEC_PATH/TASK_PATHS/RANGE replace the embedded
+        # spec body, task specs, and diff body; DIFF_SUMMARY is now `--numstat`.
         return {
             "impl": FLOWCTL.build_review_prompt(
                 "impl",
-                SPEC_BODY,
-                HINTS,
-                diff_summary=DIFF_SUMMARY,
-                diff_content=DIFF_CONTENT,
+                context_hints=HINTS,
+                review_scope=DIFF_SUMMARY,
+                diff_range=RANGE,
+                spec_path=SPEC_PATH,
             ),
             "impl_empty_optional": FLOWCTL.build_review_prompt(
-                "impl", SPEC_BODY, "", diff_summary="", diff_content=""
+                "impl", spec_path=SPEC_PATH
             ),
             "plan": FLOWCTL.build_review_prompt(
-                "plan", SPEC_BODY, HINTS, task_specs=TASKS
+                "plan", context_hints=HINTS, spec_path=SPEC_PATH,
+                task_spec_paths=TASK_PATHS,
             ),
-            "plan_no_tasks": FLOWCTL.build_review_prompt("plan", SPEC_BODY, HINTS),
+            "plan_no_tasks": FLOWCTL.build_review_prompt(
+                "plan", context_hints=HINTS, spec_path=SPEC_PATH
+            ),
             "standalone": FLOWCTL.build_standalone_review_prompt(
-                "main", "auth and sessions", DIFF_SUMMARY
+                "main", "auth and sessions", DIFF_SUMMARY, RANGE
             ),
             "standalone_no_focus": FLOWCTL.build_standalone_review_prompt(
-                "main", None, DIFF_SUMMARY
+                "main", None, DIFF_SUMMARY, RANGE
             ),
             "completion": FLOWCTL.build_completion_review_prompt(
-                SPEC_BODY, TASKS, DIFF_SUMMARY, DIFF_CONTENT
+                SPEC_PATH, TASK_PATHS, DIFF_SUMMARY, RANGE
             ),
             "completion_no_tasks": FLOWCTL.build_completion_review_prompt(
-                SPEC_BODY, "", DIFF_SUMMARY, DIFF_CONTENT
+                SPEC_PATH, (), DIFF_SUMMARY, RANGE
             ),
         }
 
@@ -190,8 +200,13 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "_export_run_git"): 1,
                 ("subprocess.run", "_export_read_base_blobs"): 1,
                 ("subprocess.run", "_psp_run_git"): 1,
-                ("subprocess.run", "_gather_review_diff"): 1,
-                ("subprocess.Popen", "_gather_review_diff"): 1,
+                # fn-169 R3/R4: `--numstat` for the prompt's scope map, and the
+                # full diff for the artifact identity. The old single
+                # `_gather_review_diff` did both with a streaming Popen because
+                # the body was capped at 50 KB before being EMBEDDED; nothing is
+                # embedded now, so both reads are plain captured runs.
+                ("subprocess.run", "_gather_review_scope"): 1,
+                ("subprocess.run", "_gather_review_identity_diff"): 1,
                 ("subprocess.run", "_resolve_review_sha"): 1,
                 ("subprocess.run", "_capture_review_snapshot"): 1,
                 ("subprocess.run", "_triage_chore_is_version_only"): 1,

@@ -137,25 +137,32 @@ def corpus_evidence(
         "## Test strategy\n"
         "- Verify batches of exactly 37 and malformed-row rollback.\n"
     )
-    task_specs = "Current task specs are supplied from persisted .flow/task files."
+    # fn-169 R4: the prompt carries the spec PATH, so the corpus varies by path,
+    # not by embedded body. `spec_grounded_verbatim` became a path claim: the
+    # reviewer must be able to resolve exactly one named spec. The three bodies
+    # above still differ, but they now differ ON DISK, which is where the
+    # reviewer reads them — the prompt's job is to name which one.
+    task_path = ".flow/tasks/fn-corpus.1.md"
     rows = {}
     for name, spec in (
         ("risky", risky),
         ("clean", clean),
         ("user-edited-spec", user_edited),
     ):
+        spec_path = f".flow/specs/fn-corpus-{name}.md"
         prompt = build_plan_prompt(
             "plan",
-            spec,
-            "Production Plan Review context hints.",
-            task_specs=task_specs,
+            context_hints="Production Plan Review context hints.",
+            spec_path=spec_path,
+            task_spec_paths=(task_path,),
         )
         rows[name] = {
             "production_builder": "flowctl.build_review_prompt(plan)",
             "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
-            "spec_grounded_verbatim": f"<spec>\n{spec}\n</spec>" in prompt,
+            "spec_body_chars": len(spec),
+            "spec_grounded_verbatim": f"<spec>\n{spec_path}\n</spec>" in prompt,
             "task_specs_grounded_verbatim": (
-                f"<task_specs>\n{task_specs}\n</task_specs>" in prompt
+                f"<task_specs>\n{task_path}\n</task_specs>" in prompt
             ),
             "verdict_grammar_present": all(
                 tag in prompt
@@ -177,11 +184,15 @@ def corpus_evidence(
         repo_root
         / "plugins/flow-next/tests/fixtures/review_prompts/plan.txt"
     ).read_text(encoding="utf-8")
+    # fn-169 R4: identities. Must mirror the parity suite's `plan` fixture inputs
+    # exactly, or the byte comparison below compares two different prompts.
     candidate_rendered = build_plan_prompt(
         "plan",
-        "SPEC_BODY_LINE1\nSPEC_BODY_LINE2",
-        "hint-a\nhint-b",
-        task_specs="TASK1\nTASK2",
+        context_hints="hint-a\nhint-b",
+        spec_path=".flow/specs/fn-parity.md",
+        task_spec_paths=(
+            ".flow/tasks/fn-parity.1.md", ".flow/tasks/fn-parity.2.md",
+        ),
     )
 
     def without_output_format(text: str) -> str:

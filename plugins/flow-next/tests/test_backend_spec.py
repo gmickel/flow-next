@@ -1664,23 +1664,53 @@ class TestRalphBareBackendExtraction(unittest.TestCase):
 
 
 class NoEmbedRegression(unittest.TestCase):
-    """PR #184 — all review backends (codex/copilot/cursor) read changed files
-    from disk; the review prompt NEVER embeds file contents. These guard against
-    a silent re-introduction of embedding (which broke cursor's argv limit and
-    bloated codex/copilot prompts)."""
+    """PR #184 / fn-169 R4 — a review prompt carries IDENTITIES, never payloads.
 
-    def test_review_prompt_has_no_embedded_files_block(self) -> None:
+    PR #184 removed embedded file CONTENTS; fn-90 and fn-159 then re-added the
+    diff body, the spec text, and every task spec, the second time with a fitter
+    that truncated it. These assert the property that regression class violates:
+    the prompt names what to read and contains none of it. The assertion is over
+    the payload slots and the byte count — not over a phrase in the prose, which
+    is free to be reworded.
+    """
+
+    def test_impl_prompt_carries_identities_not_payloads(self) -> None:
+        spec_path = ".flow/tasks/fn-1.1.md"
         prompt = flowctl.build_review_prompt(
-            "impl", "SPEC", "HINTS", diff_summary="DSUM", diff_content="DDIFF")
+            "impl", context_hints="HINTS", review_scope="1\t0\tsrc/x.py",
+            diff_range="aaa..bbb", spec_path=spec_path)
         self.assertNotIn("<embedded_files>", prompt)
-        self.assertTrue(
-            "read files from" in prompt or "full access" in prompt,
-            "review prompt must instruct the reviewer to read files from disk")
+        self.assertNotIn("<diff_content>", prompt)
+        self.assertIn("<diff_range>", prompt)
+        self.assertIn("aaa..bbb", prompt)
+        self.assertIn(spec_path, prompt)
 
-    def test_completion_prompt_has_no_embedded_files_block(self) -> None:
+    def test_completion_prompt_carries_identities_not_payloads(self) -> None:
         prompt = flowctl.build_completion_review_prompt(
-            "EPIC", "TASKS", "DSUM", "DDIFF")
+            ".flow/specs/fn-1.md", [".flow/tasks/fn-1.1.md"],
+            "1\t0\tsrc/x.py", "aaa..bbb")
         self.assertNotIn("<embedded_files>", prompt)
+        self.assertNotIn("<diff_content>", prompt)
+        self.assertIn(".flow/specs/fn-1.md", prompt)
+        self.assertIn(".flow/tasks/fn-1.1.md", prompt)
+        self.assertIn("aaa..bbb", prompt)
+
+    def test_prompt_size_is_independent_of_the_change_size(self) -> None:
+        """The load-bearing property: no diff size can grow the prompt.
+
+        A fitter is only needed when the payload can outgrow the transport. This
+        asserts the payload cannot exist, so the fitters cannot come back with a
+        reason attached.
+        """
+        small = flowctl.build_review_prompt(
+            "impl", review_scope="1\t0\ta.py", diff_range="aaa..bbb",
+            spec_path=".flow/tasks/fn-1.1.md")
+        # Same range, same paths — a 500 KB diff at that range changes nothing.
+        again = flowctl.build_review_prompt(
+            "impl", review_scope="1\t0\ta.py", diff_range="aaa..bbb",
+            spec_path=".flow/tasks/fn-1.1.md")
+        self.assertEqual(small, again)
+        self.assertLess(len(small), flowctl.CURSOR_ARGV_TRANSPORT_MAX)
 
     def test_embed_helper_stays_removed(self) -> None:
         # get_embedded_file_contents was removed when backends went agentic;
@@ -1761,7 +1791,7 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
             "run_exec",
             "resolve_spec",
             "check_probe",
-            "gather_diff",
+            "needs_persona_override",
             "prompt_fit",
             "resume_modes",
             "mint_session_id",
@@ -1777,7 +1807,7 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
                 self.assertTrue(callable(reg["run_exec"]))
                 self.assertTrue(callable(reg["resolve_spec"]))
                 self.assertTrue(callable(reg["check_probe"]))
-                self.assertTrue(callable(reg["gather_diff"]))
+                self.assertIsInstance(reg["needs_persona_override"], bool)
 
     def test_hook_variance_preserved(self) -> None:
         # Genuine differences stay as hooks, not collapsed to one behavior.
@@ -1920,7 +1950,6 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
             "run_exec": _mock_run_exec,
             "resolve_spec": _mock_resolve,
             "check_probe": lambda: "0.0.1",
-            "gather_diff": flowctl._gather_review_diff_capped,
             "resume_modes": ("mockreview",),
             "track_prior_receipt_model": False,
             "require_nonempty_sid": False,
@@ -1932,7 +1961,6 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
             "cli_label": "mockreview",
             "no_verdict_label": "MockReview",
             "prompt_fit": "none",
-            "build_impl_prompt": "default",
         }
 
         prev_cwd = os.getcwd()

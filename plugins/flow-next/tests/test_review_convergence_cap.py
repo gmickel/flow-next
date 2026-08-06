@@ -319,53 +319,6 @@ class TestConvergenceRatchet(unittest.TestCase):
                     flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line), line
                 )
 
-    def test_aggregate_is_not_honored_on_a_truncating_backend(self):
-        """fn-168 interim gate (deleted by fn-169): cursor can show a SUBSET.
-
-        `build_convergence_ratchet_block` renders only the prior items that fit
-        the cursor argv budget — its docstring notes a near-full prompt "can
-        retain the surrounding paired delimiters while omitting every whole
-        item". A reviewer shown a subset can truthfully answer the aggregate
-        all-clear for what it saw, and sweeping the untruncated container would
-        mark omitted, unverified findings `fixed`: a false SHIP.
-
-        The line stays RECOGNIZED (so the container is never dropped) — only the
-        sweep is withheld, leaving the prior carried at `open`, which is the
-        conservative default.
-        """
-        items = flowctl._review_finding_prior_items(
-            "Prior findings: all fixed",
-            _ratchet_prior_container(),
-            "receipt-2",
-            allow_aggregate=False,
-        )
-        self.assertIsNotNone(items, "the container must NOT be dropped")
-        self.assertEqual([item["status"] for item in items], ["open"])
-
-    def test_per_ordinal_records_are_honored_on_a_truncating_backend(self):
-        """A partial view can only UNDER-report, never mis-attribute.
-
-        Each per-ordinal record names the ordinal it resolves, so a reviewer that
-        saw a subset simply says less — it cannot mark an item it never saw. Only
-        the ordinal-less aggregate is unsafe, so per-ordinal stays honored.
-        """
-        items = flowctl._review_finding_prior_items(
-            "Prior finding #1: not-fixed",
-            _ratchet_prior_container(),
-            "receipt-2",
-            allow_aggregate=False,
-        )
-        self.assertEqual([item["status"] for item in items], ["not_fixed"])
-
-    def test_only_cursor_is_gated(self):
-        """The gate is scoped to backends that actually truncate.
-
-        Only cursor passes `max_total_chars` (via
-        `fit_cursor_rereview_prompt_to_budget`), so only cursor can render a
-        partial prior set. Gating codex would cost the aggregate for no reason.
-        """
-        self.assertEqual(flowctl._FINDINGS_TRUNCATING_BACKENDS, frozenset({"cursor"}))
-
     def test_unaddressed_empty_array_is_not_a_prior_findings_signal(self):
         """fn-168 R2, the load-bearing negative.
 
@@ -513,11 +466,19 @@ class TestConvergenceRatchet(unittest.TestCase):
         # No dangling empty bullet section.
         self.assertNotIn("**Updated files:**\n\n", out)
 
-    def test_prior_findings_truncated_when_huge(self):
+    def test_legacy_prose_priors_are_no_longer_truncated(self):
+        """fn-169 R4 — the 8000-char prose cap is gone with the argv budgets.
+
+        It only ever existed to fit a payload into cursor's positional argv. A
+        reviewer handed a head-truncated account of its own prior findings can
+        answer the aggregate all-clear for the part it saw, so the cap traded
+        bytes for exactly the false-SHIP class fn-168 chased. Nothing sizes a
+        prompt to a transport any more, so nothing shortens the evidence.
+        """
         prior = "X" * 20000
         out = flowctl.build_convergence_ratchet_block(prior)
-        self.assertIn("[prior review truncated]", out)
-        self.assertLess(len(out), 20000)
+        self.assertNotIn("[prior review truncated]", out)
+        self.assertIn(prior, out)
 
     def test_read_prior_findings_from_receipt(self):
         with tempfile.TemporaryDirectory() as d:
@@ -567,157 +528,6 @@ class TestConvergenceRatchet(unittest.TestCase):
         self.assertEqual(out.count("</prior_findings>"), 1)
         self.assertIn("[/prior_findings]", out)
         self.assertIn("[prior_findings]/x.py", out)
-
-    def test_cursor_structured_ratchet_keeps_whole_items_and_paired_delimiters(self):
-        item = self._structured_item(title="T" * flowctl._FINDINGS_MAX_TITLE)
-        item["anchor"] = {
-            **item["anchor"],
-            "path": "a" * (flowctl._FINDINGS_MAX_PATH - 3) + ".py",
-        }
-        scaffold = flowctl.build_convergence_ratchet_block(scaffold_only=True)
-        preamble = flowctl.build_rereview_preamble(
-            ["src/review.py"], "implementation", prior_items=[item]
-        )
-        nearly_full = "P" * (
-            flowctl.CURSOR_ARGV_PROMPT_MAX - len(scaffold) - 50
-        )
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            nearly_full,
-            rereview_preamble=preamble,
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-        )
-        self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
-        self.assertEqual(out.count("<prior_findings>"), out.count("</prior_findings>"))
-        self.assertIn(out.count("<prior_findings>"), (0, 1))
-        rendered = flowctl._render_structured_prior_finding(item)
-        self.assertTrue(rendered not in out or out.count(rendered) == 1)
-
-    def test_cursor_structured_path_keeps_full_rereview_preamble(self):
-        """fn-159.2 r1: the structured Cursor path used to return
-        ``ratchet + prompt``, silently dropping everything else the re-review
-        preamble carries (header, updated-files list, re-read-from-disk
-        instruction, closing contract)."""
-        item = self._structured_item()
-        preamble = flowctl.build_rereview_preamble(
-            ["src/review.py", "src/other.py"],
-            "implementation",
-            prior_items=[item],
-        )
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=preamble,
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-        )
-        # Non-ratchet preamble survives.
-        self.assertIn("## IMPORTANT: Re-review After Fixes", out)
-        self.assertIn("- src/review.py", out)
-        self.assertIn("- src/other.py", out)
-        self.assertIn("do NOT rely on cached content", out)
-        self.assertIn("CONVERGENCE RATCHET contract above", out)
-        # Ratchet items + paired delimiters survive.
-        self.assertIn(flowctl._render_structured_prior_finding(item), out)
-        self.assertEqual(out.count("<prior_findings>"), 1)
-        self.assertEqual(out.count("</prior_findings>"), 1)
-        self.assertIn("BODY", out)
-        self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
-
-    def test_cursor_plan_structured_path_keeps_task_spec_sync_section(self):
-        item = self._structured_item()
-        preamble = flowctl.build_rereview_preamble(
-            [".flow/specs/fn-1.md"], "plan", prior_items=[item]
-        )
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=preamble,
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-            spec_id="fn-1",
-        )
-        self.assertIn("## Task Spec Sync Required", out)
-        self.assertIn("flowctl task set-spec", out)
-
-    def test_cursor_persona_override_stays_first_on_both_branches(self):
-        """fn-90 R7: the override only supersedes the ambient persona if the
-        model reads it FIRST — never after a ratchet block."""
-        persona = flowctl.build_cursor_persona_override()
-        item = self._structured_item()
-        structured = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=flowctl.build_rereview_preamble(
-                ["src/review.py"], "implementation", prior_items=[item]
-            ),
-            prior_findings=None,
-            prior_items=[item],
-            repo_root=REPO,
-            persona=persona,
-        )
-        legacy = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=flowctl.build_rereview_preamble(
-                ["src/review.py"], "implementation", prior_findings="old text"
-            ),
-            prior_findings="old text",
-            prior_items=None,
-            repo_root=REPO,
-            persona=persona,
-        )
-        fresh = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble="",
-            prior_findings=None,
-            prior_items=None,
-            repo_root=REPO,
-            persona=persona,
-        )
-        for name, out in (
-            ("structured", structured), ("legacy", legacy), ("fresh", fresh),
-        ):
-            with self.subTest(branch=name):
-                self.assertTrue(out.startswith(persona))
-                self.assertLess(len(out), flowctl.CURSOR_ARGV_PROMPT_MAX)
-        self.assertLess(
-            structured.index("PERSONA OVERRIDE"),
-            structured.index("CONVERGENCE RATCHET"),
-        )
-        self.assertLess(
-            legacy.index("PERSONA OVERRIDE"),
-            legacy.index("CONVERGENCE RATCHET"),
-        )
-
-    def test_zero_item_container_never_renders_empty_structured_block(self):
-        """An empty v1 item list is not "structured findings" — it would emit
-        an empty <prior_findings> block plus a shrink-only contract over
-        nothing. It must degrade to prose / fresh-review instead."""
-        self.assertEqual(flowctl.build_convergence_ratchet_block(prior_items=[]), "")
-        prose = flowctl.build_convergence_ratchet_block(
-            "old review text", prior_items=[]
-        )
-        self.assertIn("[legacy prose fallback]", prose)
-        self.assertIn("old review text", prose)
-        fresh = flowctl.build_rereview_preamble(
-            ["src/x.py"], "implementation", prior_items=[]
-        )
-        self.assertNotIn("CONVERGENCE RATCHET", fresh)
-        self.assertNotIn("<prior_findings>", fresh)
-        self.assertIn("conduct a fresh implementation review", fresh)
-        # Scaffold measurement is the one place [] still renders the shell.
-        scaffold = flowctl.build_convergence_ratchet_block(scaffold_only=True)
-        self.assertIn("<prior_findings>", scaffold)
-        # Cursor path with a zero-item container: no empty structured block.
-        out = flowctl.fit_cursor_rereview_prompt_to_budget(
-            "BODY <review_instructions>rubric</review_instructions>",
-            rereview_preamble=fresh,
-            prior_findings=None,
-            prior_items=[],
-            repo_root=REPO,
-        )
-        self.assertNotIn("<prior_findings>", out)
-        self.assertIn("## IMPORTANT: Re-review After Fixes", out)
 
     def test_host_workflows_name_structured_ratchet_fields(self):
         for relative in (
@@ -3276,83 +3086,6 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         )
         self.assertEqual(round_number, 3)
         self.assertIsNotNone(reservation_id)
-
-    def test_intervening_artifact_change_and_cursor_fitted_diff_bind_the_stored_hash(self):
-        original = flowctl._review_artifact_sha256(
-            flowctl.build_impl_review_artifact_blob("before")
-        )
-        fitted = flowctl.fit_cursor_diff_to_budget(
-            "prompt" * 6000, "after" * 10000
-        )
-        dispatched = flowctl._dispatched_diff_from_prompt(
-            f"<diff_content>\n{fitted}\n</diff_content>", fitted
-        )
-        self.assertEqual(dispatched, fitted)
-        changed = flowctl._review_artifact_sha256(
-            flowctl.build_impl_review_artifact_blob(dispatched)
-        )
-        self._reserve_and_record(original, review_type="impl")
-        self.assertNotEqual(original, changed)
-        self._reserve_and_record(changed, review_type="impl")
-        self.assertEqual(
-            self._data()["review_attempts"][-1]["artifact_sha256"], changed
-        )
-
-    def test_diff_containing_the_closing_tag_round_trips_to_the_exact_hash(self):
-        """PR #290 bot r9: the old non-greedy tag regex stopped at the first
-        INNER `</diff_content>` — realistic in this repo, whose diffs edit
-        prompt templates — so the hashed identity was silently truncated."""
-        diff = (
-            "+--- a/prompt.py\n"
-            "+    parts.append(f\"<diff_content>\\n{diff}\\n</diff_content>\")\n"
-            "+tail that the old regex dropped\n"
-        )
-        prompt = f"head\n<diff_content>\n{diff}\n</diff_content>\n<review_instructions>x"
-        self.assertEqual(flowctl._dispatched_diff_from_prompt(prompt, diff), diff)
-        self.assertEqual(
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(
-                    flowctl._dispatched_diff_from_prompt(prompt, diff)
-                )
-            ),
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(diff)
-            ),
-        )
-
-    def test_diffs_sharing_the_truncated_prefix_hash_differently(self):
-        """Two diffs identical up to the embedded closing tag used to collide:
-        both extracted to the same prefix, so the unchanged-artifact guard read
-        the second review as 'nothing changed' and refused to dispatch."""
-        prefix = "+wrote f\"</diff_content>\"\n"
-        hashes = set()
-        for tail in ("+first variant\n", "+second variant\n"):
-            diff = prefix + tail
-            prompt = f"<diff_content>\n{diff}\n</diff_content>"
-            dispatched = flowctl._dispatched_diff_from_prompt(prompt, diff)
-            self.assertEqual(dispatched, diff)
-            hashes.add(
-                flowctl._review_artifact_sha256(
-                    flowctl.build_impl_review_artifact_blob(dispatched)
-                )
-            )
-        self.assertEqual(len(hashes), 2)
-
-    def test_whole_prompt_truncation_binds_the_delivered_prefix(self):
-        """Whole-prompt fitting can still head-truncate the blob the prompt was
-        built with; identity binds what was DELIVERED, confirmed by content."""
-        diff = "".join(f"+line {i}\n" for i in range(200))
-        prompt = f"<diff_content>\n{diff[:300]}"  # fitter cut mid-diff
-        dispatched = flowctl._dispatched_diff_from_prompt(prompt, diff)
-        self.assertEqual(dispatched, diff[:300])
-        self.assertNotEqual(
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(dispatched)
-            ),
-            flowctl._review_artifact_sha256(
-                flowctl.build_impl_review_artifact_blob(diff)
-            ),
-        )
 
     def test_ce_setup_failure_refunds_only_its_reservation(self):
         self._assert_transport_refund_is_reservation_scoped("ce")

@@ -208,10 +208,10 @@ class TestCriteriaHeadingConstant(unittest.TestCase):
         heading when .flow/criteria.md is absent (R1). Greps the shared
         constant so fn-137.2's injection is provably gated on file existence."""
         prompt = flowctl.build_completion_review_prompt(
-            epic_spec="# Spec\n\n- **R1:** something\n",
-            task_specs="task body",
-            diff_summary="1 file changed",
-            diff_content="diff --git a/x b/x\n",
+            spec_path=".flow/specs/fn-1.md",
+            task_spec_paths=[".flow/tasks/fn-1.1.md"],
+            review_scope="1\t0\tx",
+            diff_range="aaa..bbb",
         )
         self.assertNotIn(flowctl.GLOBAL_CRITERIA_HEADING, prompt)
 
@@ -259,10 +259,10 @@ class TestGlobalCriteriaBlock(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             flowctl.build_completion_review_prompt(
-                epic_spec="# Spec\n\n- **R1:** something\n",
-                task_specs="task body",
-                diff_summary="1 file changed",
-                diff_content="diff --git a/x b/x\n",
+                spec_path=".flow/specs/fn-1.md",
+                task_spec_paths=[".flow/tasks/fn-1.1.md"],
+                review_scope="1\t0\tx",
+                diff_range="aaa..bbb",
             )
 
     def test_valid_file_renders_block(self) -> None:
@@ -307,10 +307,10 @@ class TestGlobalCriteriaPromptInjection(unittest.TestCase):
             encoding="utf-8",
         )
         prompt = flowctl.build_completion_review_prompt(
-            epic_spec="# Spec\n\n- **R1:** something\n",
-            task_specs="task body",
-            diff_summary="1 file changed",
-            diff_content="diff --git a/x b/x\n",
+            spec_path=".flow/specs/fn-1.md",
+            task_spec_paths=[".flow/tasks/fn-1.1.md"],
+            review_scope="1\t0\tx",
+            diff_range="aaa..bbb",
         )
         self.assertIn(flowctl.GLOBAL_CRITERIA_HEADING, prompt)
         self.assertIn(

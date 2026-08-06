@@ -65,6 +65,16 @@ _FIX_HINT = (
 )
 
 
+DELETED_FITTER_MARKERS = (
+    # fn-169 R4. Each was the visible half of a content fitter; a
+    # reappearance is a fitter reappearing, which is the regression this
+    # spec exists to prevent.
+    "_CURSOR_DIFF_TRUNC_MARKER",
+    "_CURSOR_DIFF_OMITTED_MARKER",
+    "_CURSOR_PROMPT_TRUNC_MARKER",
+)
+
+
 def _sha(text: str) -> str:
     # Normalise line endings so a Windows checkout does not fail the pin.
     return hashlib.sha256(text.replace("\r\n", "\n").encode("utf-8")).hexdigest()
@@ -75,15 +85,15 @@ PROMPT_HASHES = {
     "CLASSIFICATION_RUBRIC_BLOCK":
         "fbde8f499ba3d82b50901b12a984912490b66c6e69f1b74c38edf80c28567a06",
     "COMPLETION_REVIEW_PROMPT_FALLBACK":
-        "13be57d3c2c7760bb0721a9ac158a4939e23b4aa422fe786dfda94550a7fa699",
+        "6907c0b9ec683eb7d8258c86ddaaa6168a4dcefdb075b314e793a9cca65c6ea3",
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     "IMPL_REVIEW_PROMPT_FALLBACK":
-        "b2f5ca5a8b92dfff0ee96d855d5352489f391eedb4552eb0801f3704fda9cea4",
+        "c056ec2629361f8e93d10d87eef686a6151668c064d3651affc1935bf8d29adb",
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
-        "4b9a57eed1ff53b99fcb137300a113840ee72c56fad24708fe25d69628565934",
+        "59520c8128166d4c0e3c153a1e9672232724349299e1b7678f1272604c1dc6b5",
     "PROTECTED_ARTIFACTS_BLOCK":
         "e9b68af0cf36f6b2cb1b70c9bcc5ff67ccb86295f369d02ffcec4f25fd6f2d5e",
     "REVIEW_JSON_TALLY_BLOCK":
@@ -95,18 +105,18 @@ PROMPT_HASHES = {
     "SPEC_SKELETON_TEMPLATE":
         "181c5cd5cba913346dc8c1800871dd42d139321319f86b80a67248ca15063ead",
     "STANDALONE_REVIEW_PROMPT_FALLBACK":
-        "2f258e4683e110b1025a9bfb3dd29e162ed506c1a3a022d39821682a17c1916d",
+        "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
     # Condensation of validate-pass.md, NOT a copy of it (#118).
     "VALIDATOR_TEMPLATE_FALLBACK":
         "558ab25ab09ade0e315d924e72615c76f4ac8c9348cf60cfbfd761896664a36c",
-    # Injected INTO the cursor reviewer prompt when the diff or body is too
-    # large for argv. Reviewer-facing instructions, so: prompt text.
-    "_CURSOR_DIFF_TRUNC_MARKER":
-        "a8a988166e6c67d2813750be1fdd0c88bcae5acb6082e68ee44082356bcf9b26",
-    "_CURSOR_DIFF_OMITTED_MARKER":
-        "eaca7619b45629e1db6dac60bb1042718baff9c7ea85f317116848e62def44e7",
-    "_CURSOR_PROMPT_TRUNC_MARKER":
-        "623c116989917678074c110eb51c5e37bfe966bdcf09ad222b7801202ca5f740",
+    # fn-169 R4 DELETED the three cursor shortening markers
+    # (_CURSOR_DIFF_TRUNC_MARKER, _CURSOR_DIFF_OMITTED_MARKER,
+    # _CURSOR_PROMPT_TRUNC_MARKER). They were reviewer-facing apologies for
+    # evidence the prompt had shortened - "read the changed files from disk
+    # for full context" - printed because the payload did not fit argv. The
+    # prompt carries no payload now, so there is nothing to shorten and no
+    # apology to make. Their absence is ASSERTED below rather than merely
+    # unpinned: a marker reappearing means a content fitter came back with it.
     # Completion-review criteria injection wrapper (fn-137.2). Rendered only
     # when .flow/criteria.md exists; empty otherwise.
     "_GLOBAL_CRITERIA_BLOCK_TEMPLATE":
@@ -151,13 +161,13 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":
         "41f7aa18ca28c48ec6ab27fac0c3fd18224232a76e1fbc6cef631435370dfc58",
     "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md":
-        "b2f5ca5a8b92dfff0ee96d855d5352489f391eedb4552eb0801f3704fda9cea4",
+        "c056ec2629361f8e93d10d87eef686a6151668c064d3651affc1935bf8d29adb",
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
-        "2f258e4683e110b1025a9bfb3dd29e162ed506c1a3a022d39821682a17c1916d",
+        "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
-        "4b9a57eed1ff53b99fcb137300a113840ee72c56fad24708fe25d69628565934",
+        "59520c8128166d4c0e3c153a1e9672232724349299e1b7678f1272604c1dc6b5",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
-        "13be57d3c2c7760bb0721a9ac158a4939e23b4aa422fe786dfda94550a7fa699",
+        "6907c0b9ec683eb7d8258c86ddaaa6168a4dcefdb075b314e793a9cca65c6ea3",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
     # ones an unattended run depends on most. fn-159.6 clarifies that a review
     # call's tag set differs from the step's return set: NEEDS_WORK loops
@@ -253,3 +263,18 @@ class TestOnDiskTemplatesPinned(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFitterMarkersStayDeleted(unittest.TestCase):
+    """fn-169 R4 - no prompt may tell a reviewer its evidence was shortened."""
+
+    def test_no_fitter_marker_returns(self) -> None:
+        for name in DELETED_FITTER_MARKERS:
+            with self.subTest(constant=name):
+                self.assertFalse(
+                    hasattr(flowctl, name),
+                    f"{name} is back - a content fitter returned with it. "
+                    "The review prompt carries identities, not payloads; "
+                    "nothing should need to shorten the evidence a verdict "
+                    "rests on.",
+                )

@@ -229,7 +229,7 @@ class CursorPromptTooLarge(unittest.TestCase):
     def test_oversized_prompt_returns_nonzero(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
-            big = "x" * (flowctl.CURSOR_ARGV_PROMPT_MAX + 1)
+            big = "x" * (flowctl.CURSOR_ARGV_TRANSPORT_MAX + 1)
             # Fail closed BEFORE shelling out — subprocess.run must not be called.
             with mock.patch.object(flowctl.subprocess, "run") as m_run, \
                     mock.patch.object(flowctl, "require_cursor",
@@ -245,7 +245,7 @@ class CursorPromptTooLarge(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
             # ``>=`` threshold: exactly MAX chars fails closed (no spawn).
-            at = "x" * flowctl.CURSOR_ARGV_PROMPT_MAX
+            at = "x" * flowctl.CURSOR_ARGV_TRANSPORT_MAX
             with mock.patch.object(flowctl.subprocess, "run") as m_run, \
                     mock.patch.object(flowctl, "require_cursor",
                                       return_value="/cursor-agent"):
@@ -258,7 +258,7 @@ class CursorPromptTooLarge(unittest.TestCase):
     def test_just_under_threshold_does_not_raise(self):
         with tempfile.TemporaryDirectory() as td:
             repo_root = Path(td)
-            ok = "x" * (flowctl.CURSOR_ARGV_PROMPT_MAX - 1)
+            ok = "x" * (flowctl.CURSOR_ARGV_TRANSPORT_MAX - 1)
             with mock.patch.object(flowctl, "require_cursor",
                                    return_value="/cursor-agent"), \
                     mock.patch.object(flowctl.subprocess, "run",

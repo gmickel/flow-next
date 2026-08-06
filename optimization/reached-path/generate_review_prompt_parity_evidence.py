@@ -90,7 +90,34 @@ def _without_output_format(text: str) -> str:
     raise ValueError("Output Format has no following section boundary")
 
 
-def _rendered_prompts(module: ModuleType) -> dict[str, str]:
+# fn-169 R4 changed the builder SIGNATURE: prompts carry identities (a commit
+# range and spec paths), not the diff body / spec text / task specs. The baseline
+# module is loaded from an immutable pre-change commit, so it must be rendered
+# with the OLD shape and the candidate with the new one. Both render the same
+# logical inputs — same spec, same tasks, same change — which is what makes the
+# token delta a measurement of the prompt rather than of the fixture.
+SPEC_PATH = ".flow/specs/fn-parity.md"
+TASK_PATHS = (".flow/tasks/fn-parity.1.md", ".flow/tasks/fn-parity.2.md")
+RANGE = "aaaaaaa..bbbbbbb"
+
+_CORPUS_NAMES = ("plan_corpus_risky", "plan_corpus_clean", "plan_corpus_user_edited")
+
+
+def _corpus_specs() -> dict[str, str]:
+    corpus_root = ROOT / "optimization/review-prompt"
+    return {
+        "plan_corpus_risky": (corpus_root / "spec_corpus.md").read_text(encoding="utf-8"),
+        "plan_corpus_clean": (corpus_root / "spec_clean.md").read_text(encoding="utf-8"),
+        "plan_corpus_user_edited": (
+            "# User-edited plan\n\n## Acceptance\n"
+            "- Preserve operator-authored batch size 37; do not restore generated 50.\n"
+            "## Test strategy\n- Verify batches of exactly 37 and malformed-row rollback.\n"
+        ),
+    }
+
+
+def _rendered_prompts_baseline(module: ModuleType) -> dict[str, str]:
+    """Render the pre-fn-169 builders (embedded payloads)."""
     prompts = {
         "impl": module.build_review_prompt(
             "impl", SPEC, HINTS, diff_summary=DSUM, diff_content=DDIFF
@@ -105,21 +132,51 @@ def _rendered_prompts(module: ModuleType) -> dict[str, str]:
         "completion": module.build_completion_review_prompt(SPEC, TASKS, DSUM, DDIFF),
         "completion_no_tasks": module.build_completion_review_prompt(SPEC, "", DSUM, DDIFF),
     }
-    corpus_root = ROOT / "optimization/review-prompt"
-    for name, spec in {
-        "plan_corpus_risky": (corpus_root / "spec_corpus.md").read_text(encoding="utf-8"),
-        "plan_corpus_clean": (corpus_root / "spec_clean.md").read_text(encoding="utf-8"),
-        "plan_corpus_user_edited": (
-            "# User-edited plan\n\n## Acceptance\n"
-            "- Preserve operator-authored batch size 37; do not restore generated 50.\n"
-            "## Test strategy\n- Verify batches of exactly 37 and malformed-row rollback.\n"
-        ),
-    }.items():
+    for name, spec in _corpus_specs().items():
         prompts[name] = module.build_review_prompt(
             "plan",
             spec,
             "Production Plan Review context hints.",
             task_specs="Current task specs are supplied from persisted .flow/task files.",
+        )
+    return prompts
+
+
+def _rendered_prompts(module: ModuleType) -> dict[str, str]:
+    """Render the current builders (identities)."""
+    prompts = {
+        "impl": module.build_review_prompt(
+            "impl", context_hints=HINTS, review_scope=DSUM,
+            diff_range=RANGE, spec_path=SPEC_PATH,
+        ),
+        "impl_empty_optional": module.build_review_prompt(
+            "impl", spec_path=SPEC_PATH
+        ),
+        "plan": module.build_review_prompt(
+            "plan", context_hints=HINTS, spec_path=SPEC_PATH,
+            task_spec_paths=TASK_PATHS,
+        ),
+        "plan_no_tasks": module.build_review_prompt(
+            "plan", context_hints=HINTS, spec_path=SPEC_PATH
+        ),
+        "standalone": module.build_standalone_review_prompt(BASE, FOCUS, DSUM, RANGE),
+        "standalone_no_focus": module.build_standalone_review_prompt(
+            BASE, None, DSUM, RANGE
+        ),
+        "completion": module.build_completion_review_prompt(
+            SPEC_PATH, TASK_PATHS, DSUM, RANGE
+        ),
+        "completion_no_tasks": module.build_completion_review_prompt(
+            SPEC_PATH, (), DSUM, RANGE
+        ),
+    }
+    for name in _CORPUS_NAMES:
+        # The corpus bodies now differ ON DISK; the prompt names which one.
+        prompts[name] = module.build_review_prompt(
+            "plan",
+            context_hints="Production Plan Review context hints.",
+            spec_path=f".flow/specs/fn-corpus-{name}.md",
+            task_spec_paths=(".flow/tasks/fn-corpus.1.md",),
         )
     return prompts
 
@@ -134,7 +191,7 @@ def main() -> None:
     parser.add_argument("--write", action="store_true", help="write fixtures and evidence")
     args = parser.parse_args()
 
-    baseline = _rendered_prompts(_load_baseline(args.baseline))
+    baseline = _rendered_prompts_baseline(_load_baseline(args.baseline))
     candidate = _rendered_prompts(_load_module(FLOWCTL_PATH, "flowctl_prompt_candidate"))
     if baseline.keys() != candidate.keys():
         raise ValueError("baseline and candidate prompt sets differ")
