@@ -868,6 +868,40 @@ class TestDeterministicCap(unittest.TestCase):
             ["review.maxIterations"],
         )
 
+    def test_autonomous_runs_can_only_lower_the_cap_via_config(self):
+        """fn-168 / PR #295 r6: the self-grant invariant lives in the CONSUMER.
+
+        ralph-guard screens the routes it can see, but a shell command's effective
+        destination is not decidable from its text — `cd .flow && … > config.json`
+        writes the protected file while naming neither the path nor the verb, and
+        the next spelling is always `pushd`, a variable, or a script. So the
+        invariant is enforced where it is true by construction: in an autonomous
+        run a bigger number in the file cannot extend the agent's own review gate.
+
+        Lowering is still honored — it is the knob fn-168 advertises ("lower the
+        cap, never re-add inference") and a smaller cap can never be a self-grant.
+        Interactive runs keep the key in full; a human raising their own cap is the
+        intended use.
+        """
+        cases = [
+            (99, False, 99),  # interactive: honored in full
+            (99, True, 8),    # autonomous: cannot RAISE
+            (4, False, 4),
+            (4, True, 4),     # autonomous: lowering still honored
+            (8, True, 8),
+        ]
+        for raw, autonomous, expected in cases:
+            with self.subTest(config=raw, autonomous=autonomous):
+                self._set_cap_config(raw)
+                env = {"FLOW_RALPH": "1"} if autonomous else {}
+                with mock.patch.dict(os.environ, env, clear=False):
+                    if not autonomous:
+                        os.environ.pop("FLOW_RALPH", None)
+                        os.environ.pop("REVIEW_RECEIPT_PATH", None)
+                        os.environ.pop("FLOW_AUTONOMOUS", None)
+                    flowctl._MAX_REVIEW_ITERATIONS_CONFIG_MEMO.clear()
+                    self.assertEqual(flowctl.get_max_review_iterations(), expected)
+
     def test_published_schema_knows_the_key(self):
         """fn-138 contract: a reader-accepted key must exist in the artifact."""
         schema = json.loads(

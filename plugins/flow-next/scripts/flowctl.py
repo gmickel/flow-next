@@ -9777,6 +9777,25 @@ def _max_review_iterations_from_config() -> Optional[int]:
         raise
     except Exception:
         value = None
+    if value is not None and _is_autonomous_context():
+        # fn-168 / PR #295 bot r6: in an AUTONOMOUS run the config rung may only
+        # LOWER the cap, never raise it — whatever wrote the file, and however it
+        # was written.
+        #
+        # ralph-guard screens the routes it can see (the `config set` verb, the
+        # config path, the env assignment), but a shell command's effective
+        # destination is not decidable from its text: `cd .flow && … > config.json`
+        # writes the protected file while naming neither the path nor the verb, and
+        # the next spelling is always `pushd`, a variable, or a script. Five rounds
+        # of that on this PR is the evidence. So the invariant lives HERE, where it
+        # is true by construction: a bigger number in the file simply cannot extend
+        # an autonomous agent's own review gate.
+        #
+        # Lowering is still honored, because that is the knob fn-168 advertises
+        # ("lower the cap, never re-add inference") and a smaller cap can never be
+        # a self-grant. Interactive runs keep the key in full — a human raising
+        # their own cap is the intended use, and humans are not guard-gated.
+        value = min(value, DEFAULT_MAX_REVIEW_ITERATIONS)
     _MAX_REVIEW_ITERATIONS_CONFIG_MEMO[key] = value
     return value
 
