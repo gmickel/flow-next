@@ -77,14 +77,25 @@ class TestEvalHarnessesBuildPrompts(unittest.TestCase):
         flowctl_src = (
             REPO_ROOT / "plugins/flow-next/scripts/flowctl.py"
         ).read_text(encoding="utf-8")
-        self.assertNotIn(
-            "_embed_payload", flowctl_src,
-            "the eval harness's embedding helper leaked into production",
-        )
+        for leaked in ("embed_payload", "eval_prompt_payload"):
+            self.assertNotIn(
+                leaked, flowctl_src,
+                "the eval harness's embedding helper leaked into production — a "
+                "production path using it would be re-adding embedding",
+            )
+        # Exactly one definition, under optimization/, imported by the harnesses.
+        helper = REPO_ROOT / "optimization/eval_prompt_payload.py"
+        self.assertTrue(helper.is_file(), "shared eval helper is missing")
+        self.assertIn("def embed_payload(", helper.read_text(encoding="utf-8"))
         for rel, _attr, _args in ENTRYPOINTS:
             src = (REPO_ROOT / rel).read_text(encoding="utf-8")
             with self.subTest(harness=rel):
-                self.assertIn("def _embed_payload(", src)
+                self.assertIn("from eval_prompt_payload import", src)
+                self.assertNotIn(
+                    "def _embed_payload(", src,
+                    "a local copy of the helper came back — impl-review r2 P3 "
+                    "flagged exactly this duplication",
+                )
 
 
 if __name__ == "__main__":

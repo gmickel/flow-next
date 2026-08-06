@@ -7,32 +7,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import reveval as R  # noqa
 import reveval_plan as P  # noqa
 import flowctl  # noqa
-# fn-169 R4: `build_review_prompt` carries identities (paths + a commit
-# range). This harness has no repo for the reviewer to read, so — like the
-# `export` review mode — it appends its own payload blocks after the builder.
-# Production paths never do this; the eval's variable is prompt WORDING, and
-# holding the payload constant across variants is what keeps that comparable.
+import pathlib
+# fn-169 R4: review prompts carry identities; this harness has no repo for a
+# reviewer to read, so it appends its own payload. One shared helper, see its
+# module docstring for why the carve-out is confined to optimization/.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from eval_prompt_payload import embed_payload as _embed_payload  # noqa: E402
 
-
-def _embed_payload(prompt, *, spec="", diff_summary="", diff_content="", task_specs=""):
-    """Append the payload blocks the identity builder no longer emits.
-
-    Eval-harness only: there is no repository to fetch from here. Ordering matches
-    the pre-fn-169 production builder so variant-to-variant deltas stay
-    attributable to the wording under test rather than to a layout change.
-    """
-    blocks = []
-    if diff_summary:
-        blocks.append(f"<diff_summary>\n{diff_summary}\n</diff_summary>")
-    if diff_content:
-        blocks.append(f"<diff_content>\n{diff_content}\n</diff_content>")
-    if spec:
-        blocks.append(f"<spec>\n{spec}\n</spec>")
-    if task_specs:
-        blocks.append(f"<task_specs>\n{task_specs}\n</task_specs>")
-    if not blocks:
-        return prompt
-    return prompt + "\n\n" + "\n\n".join(blocks)
 
 
 CLEAN = open(os.path.join(R.HERE, "spec_clean.md")).read()

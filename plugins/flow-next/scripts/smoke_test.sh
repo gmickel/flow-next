@@ -1157,7 +1157,9 @@ sys.path.insert(0, sys.argv[1])
 from flowctl import build_review_prompt
 
 # Test impl prompt has all 7 criteria
-impl_prompt = build_review_prompt("impl", "Test spec", "Test hints", "Test diff")
+impl_prompt = build_review_prompt(
+    "impl", context_hints="Test hints", review_scope="1\t0\tsrc/x.py",
+    diff_range="aaa..bbb", spec_path=".flow/tasks/fn-1.1.md")
 assert "<review_instructions>" in impl_prompt
 assert "Correctness" in impl_prompt
 assert "Simplicity" in impl_prompt
@@ -1170,7 +1172,8 @@ assert "<verdict>SHIP</verdict>" in impl_prompt
 assert "File:Line" in impl_prompt  # Structured output format
 
 # Test plan prompt has all 7 criteria
-plan_prompt = build_review_prompt("plan", "Test spec", "Test hints")
+plan_prompt = build_review_prompt(
+    "plan", context_hints="Test hints", spec_path=".flow/specs/fn-1.md")
 assert "Completeness" in plan_prompt
 assert "Feasibility" in plan_prompt
 assert "Clarity" in plan_prompt
@@ -1180,13 +1183,18 @@ assert "Scope" in plan_prompt
 assert "Testability" in plan_prompt
 assert "<verdict>SHIP</verdict>" in plan_prompt
 
-# Test context hints and diff are included
+# fn-169 R4: the prompt carries IDENTITIES, not payloads — the reviewer runs in
+# the repo and fetches what it needs. So: the scope map, the commit range, and
+# the spec PATH, with no diff body and no spec text.
 assert "<context_hints>" in impl_prompt
 assert "Test hints" in impl_prompt
-assert "<diff_summary>" in impl_prompt
-assert "Test diff" in impl_prompt
+assert "<changed_files>" in impl_prompt
+assert "src/x.py" in impl_prompt
+assert "<diff_range>" in impl_prompt
+assert "aaa..bbb" in impl_prompt
 assert "<spec>" in impl_prompt
-assert "Test spec" in impl_prompt
+assert ".flow/tasks/fn-1.1.md" in impl_prompt
+assert "<diff_content>" not in impl_prompt
 
 # fn-29.3: confidence rubric + suppression gate baked into impl prompt (fn-74: tightened headings)
 assert "Confidence (pick ONE anchor" in impl_prompt
@@ -1754,6 +1762,7 @@ PY
       fi
     else
       echo -e "${RED}✗${NC} copilot plan-review re-review (exit $cop_re_rc)"
+      echo "  output: $cop_re_result" | head -8
       FAIL=$((FAIL + 1))
     fi
   fi

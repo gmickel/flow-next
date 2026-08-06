@@ -200,13 +200,14 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "_export_run_git"): 1,
                 ("subprocess.run", "_export_read_base_blobs"): 1,
                 ("subprocess.run", "_psp_run_git"): 1,
-                # fn-169 R3/R4: `--numstat` for the prompt's scope map, and the
-                # full diff for the artifact identity. The old single
-                # `_gather_review_diff` did both with a streaming Popen because
-                # the body was capped at 50 KB before being EMBEDDED; nothing is
-                # embedded now, so both reads are plain captured runs.
-                ("subprocess.run", "_gather_review_scope"): 1,
-                ("subprocess.run", "_gather_review_identity_diff"): 1,
+                # fn-169 R3/R4: `--numstat --no-renames` for the prompt's scope
+                # map and the full diff for the artifact identity, both through
+                # ONE runner that raises rather than returning "" — an empty
+                # result and a failed read must not collapse now that nothing is
+                # embedded beside them. The old `_gather_review_diff` did both
+                # with a streaming Popen because the body was capped at 50 KB
+                # before being EMBEDDED; nothing is embedded, so no stream.
+                ("subprocess.run", "_run_review_git"): 1,
                 ("subprocess.run", "_resolve_review_sha"): 1,
                 ("subprocess.run", "_capture_review_snapshot"): 1,
                 ("subprocess.run", "_triage_chore_is_version_only"): 1,

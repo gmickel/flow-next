@@ -39448,6 +39448,33 @@ def spec_md_rel_path(spec_id: str) -> str:
 # by _wire_backend_review_hooks once the resolve_* / run_* helpers exist).
 
 
+class ReviewEvidenceError(RuntimeError):
+    """A git read that the review's evidence depends on failed (fn-169 R3).
+
+    Raised instead of returning "" so the caller aborts BEFORE reserving a review
+    round. The distinction that matters is failure vs. genuine emptiness: the
+    prompt no longer embeds anything, so an empty scope map or an empty artifact
+    identity is not a degraded review, it is no review at all.
+    """
+
+
+def _run_review_git(cmd: list[str], *, what: str) -> str:
+    """Run a git read the review depends on; raise loudly if it did not work."""
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True, encoding="utf-8", errors="replace",
+            cwd=get_repo_root(),
+        )
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise ReviewEvidenceError(f"cannot read {what}: {exc}") from exc
+    if result.returncode != 0:
+        detail = (result.stderr or "").strip() or f"exit {result.returncode}"
+        raise ReviewEvidenceError(f"cannot read {what}: {detail}")
+    return result.stdout.strip()
+
+
 def _gather_review_scope(base_sha: str, head_sha: str = "HEAD") -> str:
     """Return `git diff --numstat` for the reviewed range: the scope signal.
 
@@ -39468,20 +39495,18 @@ def _gather_review_scope(base_sha: str, head_sha: str = "HEAD") -> str:
     delete and an exact add. Same failure class as `--stat`'s ellipsis, one level
     down; a scope map that cannot be resolved to paths is not a scope map.
 
-    Returns "" on failure. An empty range and an unreadable one are deliberately
-    not distinguished here; the caller decides what an empty scope means.
+    Raises ``ReviewEvidenceError`` when the command FAILS, and returns "" only for
+    a range that genuinely contains no changes (impl-review r2, P1). The two must
+    not collapse: with nothing embedded beside it this block is the reviewer's
+    only scope map, so a swallowed failure dispatches a paid review round with no
+    evidence and an empty artifact identity — a silent empty review, which is
+    exactly what R3 forbids. An empty-but-successful range stays the caller's
+    judgement, because "nothing changed" means different things per review type.
     """
-    try:
-        result = subprocess.run(
-            ["git", "diff", "--numstat", "--no-renames",
-             f"{base_sha}..{head_sha}"],
-            capture_output=True,
-            text=True, encoding="utf-8",
-            cwd=get_repo_root(),
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return ""
-    return result.stdout.strip() if result.returncode == 0 else ""
+    return _run_review_git(
+        ["git", "diff", "--numstat", "--no-renames", f"{base_sha}..{head_sha}"],
+        what=f"changed-file scope for {base_sha}..{head_sha}",
+    )
 
 
 def _gather_review_identity_diff(base_sha: str, head_sha: str = "HEAD") -> str:
@@ -39498,19 +39523,16 @@ def _gather_review_identity_diff(base_sha: str, head_sha: str = "HEAD") -> str:
     process boundary, so the 50 KB cap that governed prompt bytes has no meaning
     here — applying one would make two different diffs sharing a 50 KB prefix
     hash identically, which the guard reads as "nothing changed".
+
+    Raises ``ReviewEvidenceError`` on failure for the same reason as
+    ``_gather_review_scope``: an empty identity makes the artifact-unchanged guard
+    read "nothing changed" for every subsequent round, so a failure that returned
+    "" would disable the guard silently rather than loudly.
     """
-    try:
-        result = subprocess.run(
-            ["git", "diff", f"{base_sha}..{head_sha}"],
-            capture_output=True,
-            text=True, encoding="utf-8", errors="replace",
-            cwd=get_repo_root(),
-        )
-    except (subprocess.CalledProcessError, OSError):
-        return ""
-    if result.returncode != 0:
-        return ""
-    return result.stdout.strip()
+    return _run_review_git(
+        ["git", "diff", f"{base_sha}..{head_sha}"],
+        what=f"review diff for {base_sha}..{head_sha}",
+    )
 
 
 def _clear_stale_review_receipt(receipt_path: Optional[str]) -> None:
@@ -40431,10 +40453,15 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
     except ValueError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
-    review_scope = _gather_review_scope(reviewed_base_sha, reviewed_head_sha)
-    identity_diff = _gather_review_identity_diff(
-        reviewed_base_sha, reviewed_head_sha
-    )
+    # fn-169 R3: abort BEFORE the round is reserved. With nothing embedded these
+    # two reads ARE the review's evidence, so a failure here has no degraded mode.
+    try:
+        review_scope = _gather_review_scope(reviewed_base_sha, reviewed_head_sha)
+        identity_diff = _gather_review_identity_diff(
+            reviewed_base_sha, reviewed_head_sha
+        )
+    except ReviewEvidenceError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
 
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
     # Stays None for backends that always inject (cursor, copilot, host); only a
@@ -41173,10 +41200,15 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
     except ValueError as exc:
         error_exit(str(exc), use_json=args.json, code=2)
-    review_scope = _gather_review_scope(reviewed_base_sha, reviewed_head_sha)
-    identity_diff = _gather_review_identity_diff(
-        reviewed_base_sha, reviewed_head_sha
-    )
+    # fn-169 R3: abort BEFORE the round is reserved. With nothing embedded these
+    # two reads ARE the review's evidence, so a failure here has no degraded mode.
+    try:
+        review_scope = _gather_review_scope(reviewed_base_sha, reviewed_head_sha)
+        identity_diff = _gather_review_identity_diff(
+            reviewed_base_sha, reviewed_head_sha
+        )
+    except ReviewEvidenceError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
     session_id, is_rereview, prior_receipt_model, prior_receipt_effort = (
         _resume_session_from_receipt(
             receipt_path,

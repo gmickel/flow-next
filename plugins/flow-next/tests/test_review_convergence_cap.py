@@ -6347,3 +6347,85 @@ class TestReviewScopeIsResolvable(unittest.TestCase):
             "scope is not the exact changed-path set on a >50-file diff",
         )
         self.assertNotIn("...", scope, "a path was elided")
+
+
+class TestEvidenceFailureIsLoud(unittest.TestCase):
+    """fn-169 R3 — a failed evidence read must never become an empty review.
+
+    Before fn-169 both git reads returned "" on failure and the prompt embedded a
+    diff body alongside, so a swallowed failure degraded the review. Nothing is
+    embedded now: the scope map IS the reviewer's evidence and the full diff IS
+    the artifact identity, so returning "" would dispatch a paid round with no
+    evidence AND leave the artifact-unchanged guard reading "nothing changed" for
+    every subsequent round. The distinction under test is failure vs. genuine
+    emptiness — collapsing them is the defect.
+    """
+
+    def _fake_git(self, *, returncode: int, stdout: str = "", stderr: str = ""):
+        def run(cmd, **kwargs):
+            return subprocess.CompletedProcess(
+                cmd, returncode, stdout=stdout, stderr=stderr
+            )
+        return run
+
+    def test_failed_scope_read_raises_instead_of_returning_empty(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=self._fake_git(
+                        returncode=128,
+                        stderr="fatal: bad revision 'deadbee..HEAD'",
+                    )):
+            with self.assertRaises(flowctl.ReviewEvidenceError) as ctx:
+                flowctl._gather_review_scope("deadbee", "HEAD")
+        # The operator needs git's own reason, not a generic failure.
+        self.assertIn("bad revision", str(ctx.exception))
+
+    def test_failed_identity_read_raises(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=self._fake_git(returncode=1, stderr="boom")):
+            with self.assertRaises(flowctl.ReviewEvidenceError):
+                flowctl._gather_review_identity_diff("aaa", "bbb")
+
+    def test_oserror_is_also_loud(self):
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=OSError("git not found")):
+            with self.assertRaises(flowctl.ReviewEvidenceError):
+                flowctl._gather_review_scope("aaa", "bbb")
+
+    def test_a_genuinely_empty_range_is_not_an_error(self):
+        """Success with no output stays the caller's judgement, not a failure."""
+        with mock.patch.object(flowctl, "get_repo_root", return_value=Path(".")), \
+                mock.patch.object(
+                    flowctl.subprocess, "run",
+                    side_effect=self._fake_git(returncode=0, stdout="")):
+            self.assertEqual(flowctl._gather_review_scope("aaa", "aaa"), "")
+            self.assertEqual(
+                flowctl._gather_review_identity_diff("aaa", "aaa"), ""
+            )
+
+    def test_handlers_abort_before_reserving_a_round(self):
+        """The abort must precede the reservation, or a round is burned.
+
+        Asserted structurally: in each diff-bearing handler the guarded gather
+        appears before the cap enforcement it protects. A reordering that put the
+        reservation first would spend a round to discover the evidence is missing.
+        """
+        source = (Path(__file__).resolve().parents[1]
+                  / "scripts" / "flowctl.py").read_text(encoding="utf-8")
+        for handler in ("_backend_impl_review", "_backend_completion_review"):
+            with self.subTest(handler=handler):
+                start = source.index(f"def {handler}(")
+                nxt = source.find("\ndef ", start + 1)
+                body = source[start:nxt if nxt != -1 else len(source)]
+                guard = body.index("except ReviewEvidenceError")
+                reserve = body.index("enforce_and_increment_review_cap")
+                self.assertLess(
+                    guard, reserve,
+                    f"{handler} reserves a review round before verifying it can "
+                    "read the evidence that review depends on",
+                )
