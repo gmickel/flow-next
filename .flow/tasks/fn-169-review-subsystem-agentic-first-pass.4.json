@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-06T00:46:18.167133Z",
+  "depends_on": [
+    "fn-169-review-subsystem-agentic-first-pass.3"
+  ],
+  "id": "fn-169-review-subsystem-agentic-first-pass.4",
+  "priority": null,
+  "spec": "fn-169-review-subsystem-agentic-first-pass",
+  "spec_path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.4.md",
+  "status": "todo",
+  "title": "Payloads become identities; delete the truncation layer",
+  "updated_at": "2026-08-06T00:46:18.167133Z"
+}

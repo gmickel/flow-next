@@ -877,6 +877,7 @@ flowctl config set memory.enabled false [--json]
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
 | `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (Ralph / pilot / receipt harness) this key may only **lower** the cap, never raise it — whatever wrote the file and however it was written — so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. Additionally the guard blocks `config set` on this key (in both its leaf and parent-key JSON forms), file-tool writes to `.flow/config.json`, and a `MAX_REVIEW_ITERATIONS=` assignment, because fn-159's invariant is that the implementing agent can never reset or extend its own gate. The guard does not fire on Cursor (different hook events), where the rule degrades to prose only — same as the existing counter-reset block. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
 | `tracker.specIds` | string | `flow` (merged default; **unset-detectable** on disk) | Id scheme for new specs when a tracker bridge is active: `flow` (native `fn-N`) or `tracker` (tracker-keyed `KEY-N-slug` / synthetic `gh-N` / `gl-N`). Strict enum — invalid CLI writes rejected; malformed on-disk values fail closed to `flow`. Not materialized at init so setup can ask once when a tracker is configured and the key is still absent. Skills route to `--tracker-first` / create-first when value is `tracker` and the bridge is active. See [`tracker-sync.md`](tracker-sync.md). |
@@ -1992,21 +1993,27 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   `spec reset-review-rounds`) advance the hash epoch — a post-reset re-review of
   an unchanged artifact dispatches cleanly without `--force`; `--force` bypasses
   the guard, stamps the attempt as forced, and is blocked in Ralph.
-- **Early terminals:** before reserving, flowctl compares the last two
+- **Early terminal:** before reserving, flowctl compares the last two
   non-truncated structured-findings digests in the current epoch. It exits `4`
-  with `ESCALATE: review loop stalled (<rule>)` when an open finding chain stays
-  unresolved, open severity and count both fail to improve, or each round adds
-  a newly introduced P0/P1. The lineage and fresh-critical rules require the
-  same backend and review kind across both rounds; the flat-trajectory rule
-  does not. Missing, malformed, legacy, truncated, or insufficient findings
-  are inert. A reviewer-emitted `NEEDS_HUMAN` is the
+  with `ESCALATE: review loop stalled (same-not-fixed-lineage)` when the
+  reviewer explicitly marked the same finding chain `not-fixed` in **both**
+  rounds — the one signal grounded in a stated resolution rather than an
+  inferred trend. It requires the same backend and review kind across both
+  rounds, so a backend switch is bounded by the round cap alone. fn-168 removed
+  the two trend/presence heuristics that used to sit beside it (they escalated
+  healthy converging loops three specs in a row); the round cap is now the sole
+  aggregate bound, deliberately. Missing, malformed, legacy, truncated, or
+  insufficient findings are inert. A reviewer-emitted `NEEDS_HUMAN` is the
   other exit-4 terminal: receipt, attempt, and status persist before
   `ESCALATE: reviewer requested human review` returns control to a human.
 - **Cap enforcement:** each backend reserves a round BEFORE running the reviewer
   (codex/copilot/cursor inside their wrapper; rp via `review-rounds increment`).
-  At `${MAX_REVIEW_ITERATIONS:-8}` delivered-verdict rounds it refuses before
-  dispatch, prints `ESCALATE:`, and exits `4`. The message includes live verdict
-  rounds and refunded transport attempts.
+  At the resolved cap in delivered-verdict rounds it refuses before dispatch,
+  prints `ESCALATE:`, and exits `4`. The message includes live verdict rounds and
+  refunded transport attempts. The cap resolves **env `MAX_REVIEW_ITERATIONS` >
+  config [`review.maxIterations`](#flowctl-config) > 8**, clamped to `>= 1` on
+  both rungs so it can never be disabled; raising it is a human act (ralph-guard
+  blocks the config write, the config file, and the env assignment).
 - **Round-counting:** a round is consumed only when reviewer output contains
   SHIP, NEEDS_WORK, MAJOR_RETHINK, or NEEDS_HUMAN. Empty output, missing tags, timeout,
   sandbox denial, and other no-verdict exits refund the pre-dispatch reservation

@@ -149,6 +149,29 @@ def is_receipt_write_command(command: str, receipt_path: str) -> bool:
     return any(re.search(pattern, command, re.I) for pattern in patterns)
 
 
+def _collapse_path_noise(text: str) -> str:
+    """Collapse redundant path syntax so equivalent spellings match one pattern.
+
+    `.flow//config.json`, `.flow/./config.json` and `.flow/x/../config.json` are
+    all the same destination to the shell, but not to a literal regex (PR #295
+    bot r5). This is a TEXT-level normalization over the whole command — no
+    filesystem resolve, no tokenization — applied only before the protected-path
+    screen, so a false collapse can widen the screen but never narrow it.
+    """
+    out = text.replace("\\", "/")
+    while "//" in out:
+        out = out.replace("//", "/")
+    while "/./" in out:
+        out = out.replace("/./", "/")
+    # `a/b/../c` -> `a/c`, repeatedly, so chained traversal also folds.
+    pattern = re.compile(r"[^/\s'\"|&;=]+/\.\./")
+    while True:
+        collapsed = pattern.sub("", out, count=1)
+        if collapsed == out:
+            return collapsed
+        out = collapsed
+
+
 def _normalize_path_for_match(path: str) -> str:
     """Normalize a path string for receipt equality checks (no filesystem resolve)."""
     if not path:
@@ -613,6 +636,12 @@ PROTECTED_FILE_PATTERNS = [
     "flowctl.py",
     "flowctl",
     "/hooks/hooks.json",
+    # fn-168 R7: the review-round cap has a persistent rung (review.maxIterations),
+    # so the config file is now a self-grant path — an agent could raise its own
+    # gate with a file tool and never touch `flowctl config set`. Screens FILE
+    # TOOLS only, so flowctl's own writers (`config set`, tracker resolve
+    # transactions) are unaffected.
+    ".flow/config.json",
 ]
 
 
@@ -691,6 +720,46 @@ _FLOWCTL_PATH_RE = re.compile(r"(?:.*/)?flowctl(?:\.py)?$")
 _REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor"})
 _REVIEW_DISPATCHES = frozenset({"impl-review", "plan-review", "completion-review"})
 _ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
+# fn-168 / PR #295 bot r1: an export|declare|typeset|readonly|env whose NAME is an
+# expansion (`export "$name=99"`, `declare "${n}=99"`). The value of the name is
+# unknowable pre-expansion, so a command that also drives a flowctl launcher
+# fails closed rather than guessing.
+# An env-assignment NAME must be literal text. Any expansion there — `$VAR`,
+# `${VAR}`, `$(...)`, or a backtick — is unknowable before the shell runs, so it
+# fails closed beside a launcher. This is the positional literal-only contract the
+# argv subcommand slots already use, NOT a blacklist of values: PR #295 bot r7
+# smuggled the cap through `env "$(printf MAX_REVIEW_)ITERATIONS=99"`, which no
+# value-matching screen can see.
+#
+# Split by verb, because their argument grammars differ:
+#   export|declare|typeset|readonly — EVERY argument is a name or an assignment,
+#     so an expansion is always a name. No `=` required (`export "$v"` assigns
+#     whatever `$v` expands to).
+#   env — the first non-assignment argument is the COMMAND, so an expansion only
+#     counts as a name when the same argument also carries `=`. That keeps
+#     `env "$FLOWCTL" show fn-1` legal.
+_EXPANDED_ENV_NAME_RE = re.compile(
+    r"""(?x)
+      # NAME part only: stop at `=`, so `export PATH="$HOME/bin:$PATH"` (an
+      # expansion in the VALUE) stays legal while `export "$v"` and
+      # `export "${n}ITERATIONS=99"` (expansions in the NAME) fail closed.
+      \b(?:export|declare|typeset|readonly)\s+["']?[^\s;|&="']*(?:\$|`)
+    | \benv\s+
+      (?:
+          "[^"]*(?:\$|`)[^"]*=
+        | '[^']*(?:\$|`)[^']*=
+        | [^\s;|&"']*(?:\$|`)[^\s;|&]*=
+      )
+    """
+)
+# An assignment whose VALUE is the bare `MAX_REVIEW_` prefix — i.e. the first half
+# of a composed variable NAME, not a complete env var. Anchored at the value's end
+# so `MAX_REVIEW_TRANSPORT_FAILURES=12` (a full, different name) never matches.
+_COMPOSED_CAP_NAME_RE = re.compile(
+    r"=['\"]?MAX_REVIEW_['\"]?(?=[\s;&|)]|$)"
+)
+# The project config file, in any spelling a shell command can reach it by.
+_FLOW_CONFIG_PATH_RE = re.compile(r"\.flow/config\.json")
 _DURATION_RE = re.compile(r"\d+(?:\.\d+)?[smhd]?")
 # PR #290 bot r4: raw-text launcher reference — `$FLOWCTL`/`${FLOWCTL}`, a bare
 # or path-qualified `flowctl` / `flowctl.py`. Used only by the raw floor, where
@@ -723,7 +792,12 @@ _ARGV_EXPANSION_RE = re.compile(r"[$`]")
 # `codex impl-review`); under a leaf verb it is an ARGUMENT, and
 # `flowctl show "$TASK_ID"` / `flowctl done "$ID"` must stay legal. So depth 2
 # is enforced exactly for the groups that OWN a guarded verb.
-_GUARDED_SUBCOMMAND_GROUPS = frozenset({"spec", "review-rounds"})
+# fn-168 R7 adds `config`: `config set` can write the review-round cap, so a
+# composed subcommand (`verb=set; "$FLOWCTL" config "$verb" review '{…}'`) would
+# otherwise never reach `_config_set_touches_review_cap`. The second token under
+# a group is a SUBCOMMAND, so holding it to a literal costs nothing —
+# `config get "$KEY"` spells `get` literally and stays legal.
+_GUARDED_SUBCOMMAND_GROUPS = frozenset({"spec", "review-rounds", "config"})
 # PR #290 bot r6: the literal-subcommand rule stopped at the subcommand slots,
 # so a composed FLAG still executed —
 # `flag=--for; flag="${flag}ce"; "$FLOWCTL" codex impl-review fn-1.1 "$flag"`.
@@ -1199,6 +1273,65 @@ def _command_has_recovery_markers(command: str) -> bool:
     command = _collapse_line_continuations(command)
     if re.search(r"reset-review-rounds", command):
         return True
+    # fn-168 R7: extending the cap is the same self-grant as resetting it. Three
+    # routes, all screened here as the raw-text floor (each also has an argv
+    # screen below where argv is parseable):
+    #   1. `flowctl config set review.maxIterations 99`
+    #   1b. the parent-key form `flowctl config set review '{"maxIterations":99}'`
+    #       — `_set_config_locked` JSON-coerces a `{`-leading value and replaces
+    #       whole subtrees, so a leaf-key-only screen would be no screen at all.
+    #   2. `MAX_REVIEW_ITERATIONS=99 <anything>` — the HIGHER-precedence rung,
+    #       and a hole that predates the config key.
+    # Matching the key NAME (not the whole invocation) keeps this scoped to the
+    # cap: `config set review.backend codex`, tracker resolve transactions, and
+    # setup's config writes all still pass.
+    # The distinctive PREFIX, not the whole name: a composed assignment
+    # (`n=MAX_REVIEW_; n="${n}ITERATIONS"; export "$n=99"`) never spells the full
+    # variable anywhere, and the review process still receives the override
+    # (PR #295 bot r1). Any command that mentions this prefix is either setting
+    # the cap or building the name that sets it.
+    if "MAX_REVIEW_ITERATIONS" in command:
+        return True
+    # A `MAX_REVIEW_` FRAGMENT as an assignment value is name-composition
+    # (`n=MAX_REVIEW_; n="${n}ITERATIONS"`). A complete sibling name is not:
+    # `MAX_REVIEW_TRANSPORT_FAILURES=12` is the documented transport knob and must
+    # keep working in a hooked session (PR #295 bot r4).
+    if _COMPOSED_CAP_NAME_RE.search(command):
+        return True
+    # An export/declare whose NAME is itself an expansion is unknowable before
+    # the shell runs it, so on a command that also drives a launcher it fails
+    # closed — the same literal-only contract the argv subcommand slots use.
+    if _FLOWCTL_TEXT_RE.search(command) and _EXPANDED_ENV_NAME_RE.search(command):
+        return True
+    # A shell write to the config file is the same self-grant as `config set`:
+    # `handle_protected_file_check` screens FILE TOOLS only, so
+    # `jq … > /tmp/c && mv /tmp/c .flow/config.json` or an interpreter writing
+    # the path sails past it (PR #295 bot r1). Ralph has no legitimate reason to
+    # write this file by any route; READS stay allowed, so the screen requires a
+    # write signal rather than the mere mention of the path.
+    # FAIL CLOSED on the path, not on an enumeration of writer APIs (PR #295 bot
+    # r3). The previous version listed mutation tokens, and the list leaked:
+    # `Path(...).write_bytes(...)`, `os.replace('/tmp/c', ...)` and `... | sponge
+    # <path>` all walked straight through. Every such list is a race against the
+    # next writer API someone thinks of, so the polarity is inverted — a shell
+    # command that so much as NAMES the protected config is refused, and reads go
+    # through `flowctl config get` (which never spells the path).
+    if _FLOW_CONFIG_PATH_RE.search(_collapse_path_noise(command)):
+        return True
+    if re.search(r"config['\"]?\s+['\"]?set\b", command):
+        if re.search(r"maxIterations", command):
+            return True
+        # Composition floor, mirroring `_RECOVERY_ASSIGN_RE`: the key or value can
+        # be built in assignments (`k=maxIter; k+=ations`) so no single token ever
+        # reads `maxIterations`. Only fires when the command also drives a
+        # launcher AND targets the `review` namespace, so ordinary variable-valued
+        # writes in other namespaces stay legal.
+        if (
+            _FLOWCTL_TEXT_RE.search(command)
+            and re.search(r"set['\"]?\s+['\"]?review['\"]?(?=[\s;&|)]|$)", command)
+            and re.search(r"[A-Za-z_][A-Za-z0-9_]*\+?=", command)
+        ):
+            return True
     # Quotes are stripped on BOTH sides of the gap (PR #290 bot r3): a
     # per-token-quoted `"review-rounds" "reset"` closes its quote before the
     # whitespace, which the old one-sided screen never matched.
@@ -1237,6 +1370,74 @@ def _command_has_recovery_markers(command: str) -> bool:
         ):
             return True
     return False
+
+
+def _json_mentions_review_cap(value: str) -> bool:
+    """True when a `config set` VALUE carries a `maxIterations` member.
+
+    Decoded rather than substring-matched, so an escaped key
+    (`{"\\u006daxIterations": 99}`) cannot slip past: `json.loads` resolves the
+    escape and the member name is compared literally. A value that is not valid
+    JSON falls back to the raw text — an unparseable blob naming the key is
+    still suspicious, and `config set` itself keeps a malformed `{`-leading
+    value as a literal string, so nothing is lost by being strict here.
+    """
+    try:
+        decoded = json.loads(value)
+    except (ValueError, TypeError):
+        return "maxIterations" in value
+
+    def walk(node: object) -> bool:
+        if isinstance(node, dict):
+            return any(
+                key == "maxIterations" or walk(child) for key, child in node.items()
+            )
+        if isinstance(node, list):
+            return any(walk(child) for child in node)
+        return False
+
+    return walk(decoded)
+
+
+def _config_set_touches_review_cap(argv: list[str]) -> bool:
+    """Does this `flowctl config set` argv write the review-round cap?
+
+    Three shapes reach the same on-disk value, so all three are screened:
+      * the leaf key `review.maxIterations`;
+      * the parent key `review` with a JSON value carrying a `maxIterations`
+        member — `_set_config_locked` json.loads-coerces a `{`-leading value and
+        its nested walk REPLACES whole subtrees, so a leaf-only screen would be
+        no screen at all;
+      * either of the above assembled at expansion time. Under the `review`
+        namespace an unexpanded key or value is unknowable pre-expansion, so it
+        fails closed — the same literal-only contract the guarded subcommand
+        slots already use. Other namespaces keep their variable values legal
+        (`config set tracker.perTracker.teamId "$TEAM_ID"` must still run).
+    """
+    rest = argv[2:]
+    if not rest:
+        return False
+    key = rest[0]
+    values = rest[1:]
+    if _ARGV_EXPANSION_RE.search(key):
+        # An unknowable key could expand to review.maxIterations.
+        return True
+    if key == "review.maxIterations":
+        return True
+    if key == "review":
+        # PARENT form only: `config set review <JSON>` replaces the whole subtree,
+        # so its value can carry `maxIterations`. An unexpanded value here is
+        # unknowable pre-expansion and fails closed.
+        if any(_ARGV_EXPANSION_RE.search(value) for value in values):
+            return True
+        return any(_json_mentions_review_cap(value) for value in values)
+    if key.startswith("review."):
+        # A LITERAL leaf key that is not the cap cannot reach the cap whatever its
+        # value is — `config set review.backend "$REVIEW_BACKEND"` is exactly what
+        # /flow-next:setup ships (PR #295 bot r4). The cap's own leaf key already
+        # returned True above.
+        return False
+    return any("maxIterations" in value for value in values)
 
 
 def _guarded_dispatch_index(argv: list[str]) -> "int | None":
@@ -1358,6 +1559,10 @@ def _blocks_review_counter_recovery(command: str) -> bool:
             return True
         if argv[:2] == ["review-rounds", "reset"]:
             return True
+        # fn-168 R7: the cap write. Token comparison, never a substring —
+        # `config set review.backend codex` must pass.
+        if argv[:2] == ["config", "set"] and _config_set_touches_review_cap(argv):
+            return True
         if "--force" not in argv:
             continue
         if argv[:2] == ["review-rounds", "increment"]:
@@ -1380,10 +1585,14 @@ def handle_pre_tool_use(data: dict) -> None:
     # argv tokens, not raw substrings, so quoting/spacing cannot evade the gate.
     if _blocks_review_counter_recovery(command):
         output_block(
-            "BLOCKED: review-counter reset and --force review dispatch/increment are "
+            "BLOCKED: review-counter reset, raising the review-round cap "
+            "(review.maxIterations / MAX_REVIEW_ITERATIONS), and --force review "
+            "dispatch/increment are "
             "human-only recovery tools. Ralph must surface the terminal instead. "
             "A shell command that merely mentions those verbs (prose, heredoc) trips "
             "the same screen - write the text with the file tool instead. "
+            "A shell command naming .flow/config.json is refused outright (the cap has a "
+            "durable rung there) - read it with `flowctl config get <key>` instead. "
             "flowctl SUBCOMMANDS must also be spelled literally: a variable or "
             "command substitution in either of the two tokens after the launcher "
             "is blocked (variable ARGUMENTS - ids, paths, --reservation-id - are fine). "

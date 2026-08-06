@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-05T15:35:41.339330Z",
+  "depends_on": [
+    "fn-168-review-convergence-lost-ratchet-prompt.1"
+  ],
+  "id": "fn-168-review-convergence-lost-ratchet-prompt.2",
+  "priority": null,
+  "spec": "fn-168-review-convergence-lost-ratchet-prompt",
+  "spec_path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.2.md",
+  "status": "todo",
+  "title": "Aggregate all-clear record semantics + production-path fixtures",
+  "updated_at": "2026-08-05T19:25:13.072218Z"
+}

@@ -28,6 +28,7 @@ import inspect
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -83,7 +84,355 @@ def _bash_executable() -> str:
 # ------------------------- R4: convergence ratchet -------------------------
 
 
+
+def _ratchet_prior_container(*, status: str = "open") -> dict:
+    """One minimal, strictly-valid v1 prior container (fn-168 R6 fixtures).
+
+    Built to the production validator's contract so the tests exercise the real
+    `_review_finding_prior_items` path rather than a parallel construction.
+    """
+    return {
+        "schemaVersion": 1,
+        "sourceReceiptId": "receipt-1",
+        "reviewKind": "implementation",
+        "backend": "codex",
+        "round": 1,
+        "headSha": "a" * 40,
+        "items": [
+            {
+                "id": flowctl._review_finding_lineage_id("receipt-1", 1),
+                "ordinal": 1,
+                "severity": "P1",
+                "confidence": 100,
+                "classification": "introduced",
+                "status": status,
+                "title": "Prior thing",
+                "body": "Body.",
+                "rIds": [],
+                "firstSeenReceiptId": "receipt-1",
+                "lastSeenReceiptId": "receipt-1",
+            }
+        ],
+    }
+
+
 class TestConvergenceRatchet(unittest.TestCase):
+    def test_every_advertised_prior_finding_token_parses(self):
+        """fn-168 R6: the prompt and the parser can never diverge unnoticed.
+
+        This guard is load-bearing rather than cosmetic. ``same-not-fixed-lineage``
+        is the only stall class left, and it reads ``not_fixed`` — a status only
+        an explicit parsed resolution line can write. So a prompt that advertises
+        a token the parser rejects does not merely degrade a heuristic: the
+        record/canonical counts diverge, `_review_finding_prior_items` returns
+        ``None``, the whole round's findings container is discarded, and stall
+        detection silently stops existing.
+
+        It caught exactly that: the shipped prompt said "state whether it is now
+        fixed or **not-fixed**" while `_FINDINGS_PRIOR_RE` spelled the negative
+        ``not[\\s_]fixed`` and rejected the hyphen.
+
+        Every token and example line is EXTRACTED from the production builder's
+        output — never hand-copied here, or the guard would drift with the thing
+        it guards.
+        """
+        block = flowctl.build_convergence_ratchet_block(
+            prior_findings="1. P1 | introduced | open | Prior thing | a.py:1"
+        )
+        # Fenced example lines AND inline backticked ones (the aggregate record
+        # is advertised in prose, so a line-start-only sweep would miss it).
+        example_lines = [
+            line.strip()
+            for line in block.splitlines()
+            if re.match(r"^\s*Prior finding", line)
+        ] + [
+            snippet
+            for snippet in re.findall(r"`([^`\n]+)`", block)
+            if snippet.startswith("Prior finding")
+        ]
+        self.assertTrue(example_lines, "prompt advertises no prior-finding lines")
+        self.assertTrue(
+            any(
+                flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line)
+                for line in example_lines
+            ),
+            "prompt advertises no aggregate all-clear record",
+        )
+
+        allowed = re.search(r"Allowed statuses:(.+)", block)
+        self.assertIsNotNone(allowed, "prompt states no allowed-status list")
+        tokens = re.findall(r"`([^`\n]+)`", allowed.group(1))
+        self.assertTrue(tokens, "allowed-status list names no tokens")
+
+        for token in tokens:
+            with self.subTest(token=token):
+                key = re.sub(r"[-_\s]+", " ", token.lower()).strip()
+                self.assertIn(
+                    key, flowctl._FINDINGS_STATUS_ALIASES,
+                    f"prompt advertises status {token!r} the alias table lacks",
+                )
+                self.assertIn(
+                    flowctl._FINDINGS_STATUS_ALIASES[key], flowctl._FINDINGS_STATUSES
+                )
+
+        for line in example_lines:
+            with self.subTest(line=line):
+                canonical = flowctl._FINDINGS_PRIOR_RE.findall(line)
+                aggregate = flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line)
+                record = flowctl._FINDINGS_PRIOR_RECORD_RE.findall(line)
+                self.assertTrue(
+                    canonical or aggregate,
+                    f"example line {line!r} is not accepted by the parser",
+                )
+                # The count the container's validity hinges on.
+                self.assertEqual(
+                    len(record), len(canonical) + len(aggregate),
+                    f"example line {line!r} forces a record/canonical mismatch, "
+                    "which discards the whole round's findings container",
+                )
+
+        # Each advertised status must also survive the full per-ordinal path.
+        for token in tokens:
+            with self.subTest(round_trip=token):
+                items = flowctl._review_finding_prior_items(
+                    f"Prior finding #1: {token}",
+                    _ratchet_prior_container(),
+                    "receipt-2",
+                )
+                self.assertIsNotNone(
+                    items, f"status {token!r} drops the findings container"
+                )
+                self.assertEqual(
+                    items[0]["status"],
+                    flowctl._FINDINGS_STATUS_ALIASES[
+                        re.sub(r"[-_\s]+", " ", token.lower()).strip()
+                    ],
+                )
+
+    def test_aggregate_all_clear_line_keeps_the_container(self):
+        """fn-168 R6/R2 recognition half: the aggregate record must not drop it.
+
+        `Prior findings: all fixed` matches the broad presence detector, so
+        before this spec it forced a record/canonical mismatch and discarded the
+        container. Recognition lands here; the sweep semantics are task .2's.
+        """
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed", _ratchet_prior_container(), "receipt-2"
+        )
+        self.assertIsNotNone(items)
+        self.assertEqual(len(items), 1)
+
+    def test_aggregate_sweeps_open_priors_to_fixed(self):
+        """fn-168 R2 semantics: the common "I fixed everything" round."""
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed", _ratchet_prior_container(), "receipt-2"
+        )
+        self.assertEqual([item["status"] for item in items], ["fixed"])
+        self.assertEqual(items[0]["lastSeenReceiptId"], "receipt-2")
+
+    def test_aggregate_sweeps_a_previously_not_fixed_prior(self):
+        """`open`/`not_fixed` are both swept (R8 already reset the latter)."""
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed",
+            _ratchet_prior_container(status="not_fixed"),
+            "receipt-2",
+        )
+        self.assertEqual([item["status"] for item in items], ["fixed"])
+
+    def test_aggregate_never_touches_withdrawn(self):
+        """`withdrawn` is a resolved terminal — re-stamping it corrupts lineage."""
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed",
+            _ratchet_prior_container(status="withdrawn"),
+            "receipt-2",
+        )
+        self.assertEqual([item["status"] for item in items], ["withdrawn"])
+
+    def test_explicit_per_ordinal_record_disables_the_aggregate(self):
+        """Explicit beats implicit, enforced by parse ORDER not just documented.
+
+        A contradicting pair must resolve to the explicit line, never to the
+        aggregate's optimistic sweep.
+        """
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed\nPrior finding #1: not-fixed",
+            _ratchet_prior_container(),
+            "receipt-2",
+        )
+        self.assertEqual([item["status"] for item in items], ["not_fixed"])
+
+    def test_aggregate_is_inert_with_no_prior_set(self):
+        """It never fires on an empty prior set, and never destroys the round."""
+        self.assertEqual(
+            flowctl._review_finding_prior_items(
+                "Prior findings: all fixed", None, "receipt-1"
+            ),
+            [],
+        )
+
+    def test_malformed_line_beside_an_aggregate_is_never_a_silent_all_clear(self):
+        """Recognized-but-invalid must select the INVALID sentinel.
+
+        The dangerous failure is the aggregate being honored while a stray line
+        is dropped — that would report every prior fixed on a round the parser
+        did not actually understand.
+        """
+        self.assertIsNone(
+            flowctl._review_finding_prior_items(
+                "Prior findings: all fixed\nPrior finding #1: pending",
+                _ratchet_prior_container(),
+                "receipt-2",
+            )
+        )
+
+    def test_qualified_all_clear_is_not_an_aggregate(self):
+        """fn-168 R2: a trailing qualifier must not sweep a still-open finding.
+
+        `Prior findings: all fixed except finding #2` used to match the aggregate
+        regex, and the sweep then marked the very finding the reviewer had just
+        excluded as fixed — erasing real evidence, which is strictly worse than
+        the false stall this spec removes. The line is now recognized-but-invalid.
+        """
+        for line in (
+            "Prior findings: all fixed except finding #1",
+            "Prior findings: all fixed but one remains",
+            "Prior findings: all fixed pending verification",
+        ):
+            with self.subTest(line=line):
+                self.assertFalse(
+                    flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line), line
+                )
+                self.assertIsNone(
+                    flowctl._review_finding_prior_items(
+                        line, _ratchet_prior_container(), "receipt-2"
+                    )
+                )
+
+    def test_plain_all_clear_tolerates_only_trailing_punctuation(self):
+        for line in (
+            "Prior findings: all fixed",
+            "Prior findings: all fixed.",
+            "Prior findings — all fixed",
+        ):
+            with self.subTest(line=line):
+                self.assertTrue(
+                    flowctl._FINDINGS_PRIOR_AGGREGATE_RE.findall(line), line
+                )
+
+    def test_aggregate_is_not_honored_on_a_truncating_backend(self):
+        """fn-168 interim gate (deleted by fn-169): cursor can show a SUBSET.
+
+        `build_convergence_ratchet_block` renders only the prior items that fit
+        the cursor argv budget — its docstring notes a near-full prompt "can
+        retain the surrounding paired delimiters while omitting every whole
+        item". A reviewer shown a subset can truthfully answer the aggregate
+        all-clear for what it saw, and sweeping the untruncated container would
+        mark omitted, unverified findings `fixed`: a false SHIP.
+
+        The line stays RECOGNIZED (so the container is never dropped) — only the
+        sweep is withheld, leaving the prior carried at `open`, which is the
+        conservative default.
+        """
+        items = flowctl._review_finding_prior_items(
+            "Prior findings: all fixed",
+            _ratchet_prior_container(),
+            "receipt-2",
+            allow_aggregate=False,
+        )
+        self.assertIsNotNone(items, "the container must NOT be dropped")
+        self.assertEqual([item["status"] for item in items], ["open"])
+
+    def test_per_ordinal_records_are_honored_on_a_truncating_backend(self):
+        """A partial view can only UNDER-report, never mis-attribute.
+
+        Each per-ordinal record names the ordinal it resolves, so a reviewer that
+        saw a subset simply says less — it cannot mark an item it never saw. Only
+        the ordinal-less aggregate is unsafe, so per-ordinal stays honored.
+        """
+        items = flowctl._review_finding_prior_items(
+            "Prior finding #1: not-fixed",
+            _ratchet_prior_container(),
+            "receipt-2",
+            allow_aggregate=False,
+        )
+        self.assertEqual([item["status"] for item in items], ["not_fixed"])
+
+    def test_only_cursor_is_gated(self):
+        """The gate is scoped to backends that actually truncate.
+
+        Only cursor passes `max_total_chars` (via
+        `fit_cursor_rereview_prompt_to_budget`), so only cursor can render a
+        partial prior set. Gating codex would cost the aggregate for no reason.
+        """
+        self.assertEqual(flowctl._FINDINGS_TRUNCATING_BACKENDS, frozenset({"cursor"}))
+
+    def test_unaddressed_empty_array_is_not_a_prior_findings_signal(self):
+        """fn-168 R2, the load-bearing negative.
+
+        `unaddressed` rides in the canonical closing JSON tail of EVERY review —
+        observed live in this workstream, a round-1 plan review emitted
+        `"unaddressed":["R1","R3","R6"]` before any prior finding existed, and a
+        round-3 SHIP emitted `"unaddressed":[]` with zero discussion of priors.
+        It is ambient, and it answers a different question (which spec R-IDs the
+        review left uncovered); a prior FINDING is not an R-ID, so a legitimately
+        empty array can coexist with a genuinely unfixed finding.
+
+        Sweeping priors off it would erase the only evidence stall detection has
+        left after fn-168 — `same-not-fixed-lineage` reads `not_fixed` and
+        nothing else — so every pathological loop would run to the cap with no
+        diagnostic. It must never mark a prior finding fixed.
+        """
+        output = (
+            "All prior findings have been addressed.\n\n"
+            "```json\n"
+            '{"classification_counts":{"introduced":0,"pre_existing":0},'
+            '"unaddressed":[]}\n'
+            "```\n"
+        )
+        items = flowctl._review_finding_prior_items(
+            output, _ratchet_prior_container(status="not_fixed"), "receipt-2"
+        )
+        # Carried forward, and R8 reset the unrepeated not_fixed — but NOT fixed.
+        self.assertEqual([item["status"] for item in items], ["open"])
+
+    def test_unrepeated_not_fixed_is_reset_to_open(self):
+        """fn-168 R8: one `not-fixed` must not escalate a later silent round."""
+        items = flowctl._review_finding_prior_items(
+            "The prior finding looks resolved to me.",
+            _ratchet_prior_container(status="not_fixed"),
+            "receipt-2",
+        )
+        self.assertEqual([item["status"] for item in items], ["open"])
+
+    def test_repeated_not_fixed_survives_as_not_fixed(self):
+        """A round that DOES restate it keeps the churn signal alive."""
+        items = flowctl._review_finding_prior_items(
+            "Prior finding #1: not-fixed",
+            _ratchet_prior_container(status="not_fixed"),
+            "receipt-2",
+        )
+        self.assertEqual([item["status"] for item in items], ["not_fixed"])
+
+    def test_resolved_terminals_are_never_reopened_by_the_reset(self):
+        for status in ("fixed", "withdrawn"):
+            with self.subTest(status=status):
+                items = flowctl._review_finding_prior_items(
+                    "No comment on priors this round.",
+                    _ratchet_prior_container(status=status),
+                    "receipt-2",
+                )
+                self.assertEqual([item["status"] for item in items], [status])
+
+    def test_out_of_vocabulary_status_stays_recognized_but_invalid(self):
+        """An unknown status must select the INVALID sentinel, never absence."""
+        for line in ("Prior finding #1: pending", "Prior finding #1: not-fixedish"):
+            with self.subTest(line=line):
+                self.assertIsNone(
+                    flowctl._review_finding_prior_items(
+                        line, _ratchet_prior_container(), "receipt-2"
+                    )
+                )
+
     def test_no_prior_findings_falls_back_to_fresh_preamble(self):
         """Round 1 / legacy receipt (no prior findings) → original fresh-review
         preamble, no ratchet block, back-compatible."""
@@ -441,6 +790,135 @@ class TestDeterministicCap(unittest.TestCase):
         for bad in ("0", "-1", "abc", ""):
             with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": bad}):
                 self.assertEqual(flowctl.get_max_review_iterations(), 8)
+
+    def _set_cap_config(self, value) -> None:
+        """Write review.maxIterations into this temp repo's real config file."""
+        config_path = self.root / ".flow" / "config.json"
+        config = (
+            json.loads(config_path.read_text()) if config_path.exists() else {}
+        )
+        config.setdefault("review", {})["maxIterations"] = value
+        config_path.write_text(json.dumps(config))
+        # Clear the WHOLE memo, not this path's entry: `get_flow_dir()` resolves
+        # symlinks (on macOS a temp dir under /var resolves to /private/var), so a
+        # keyed pop can miss and leave a stale value that makes these assertions
+        # pass vacuously. Caught by impl-review, and it had.
+        flowctl._MAX_REVIEW_ITERATIONS_CONFIG_MEMO.clear()
+
+    def test_config_rung_sets_the_cap(self):
+        """fn-168 R7: the persistent rung — the valve consequence (a) advertises."""
+        self._set_cap_config(4)
+        self.assertEqual(flowctl.get_max_review_iterations(), 4)
+
+    def test_env_wins_over_config(self):
+        self._set_cap_config(4)
+        with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": "6"}):
+            self.assertEqual(flowctl.get_max_review_iterations(), 6)
+
+    def test_config_rung_is_clamped_on_its_own_path(self):
+        """Before fn-168 the >= 1 clamp existed ONLY in the env branch.
+
+        A config rung with no clamp is how a `0` reaches the counter and disables
+        the runaway stop — fn-159's invariant. Every rejected value must fall
+        through to the default, never to "no cap".
+        """
+        for bad in (0, -1, "abc", "", None, True, False, 1.5, "1.5", "8x", [8], {}):
+            with self.subTest(bad=bad):
+                self._set_cap_config(bad)
+                self.assertEqual(flowctl.get_max_review_iterations(), 8)
+
+    def test_float_is_rejected_not_truncated(self):
+        """`int(1.5)` is 1 — coercing would turn a typo into the tightest cap."""
+        self.assertIsNone(flowctl._clamped_review_iterations(1.5))
+        self.assertIsNone(flowctl._clamped_review_iterations("1.5"))
+        self.assertEqual(flowctl._clamped_review_iterations(4), 4)
+        self.assertEqual(flowctl._clamped_review_iterations(" 4 "), 4)
+
+    def test_present_but_invalid_env_falls_back_to_the_default(self):
+        """A typo'd env override must not silently hand control to config.
+
+        R7's contract: an invalid / zero / negative value on EITHER path falls
+        back to the default. Absent is different from present-but-invalid — an
+        unset env var proceeds to the config rung (covered by the config tests).
+        """
+        self._set_cap_config(3)
+        for bad in ("0", "-1", "abc", "1.5"):
+            with self.subTest(bad=bad):
+                with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": bad}):
+                    self.assertEqual(flowctl.get_max_review_iterations(), 8)
+        # Empty means unset, so the config rung still answers.
+        with mock.patch.dict(os.environ, {"MAX_REVIEW_ITERATIONS": ""}):
+            self.assertEqual(flowctl.get_max_review_iterations(), 3)
+
+    def test_config_rung_is_read_at_most_once_per_config_path(self):
+        """Seven call sites must not become seven config round trips (fn-110)."""
+        self._set_cap_config(5)
+        real = flowctl.get_config
+        calls = []
+
+        def counting_get_config(key, default=None):
+            calls.append(key)
+            return real(key, default)
+
+        with mock.patch.object(flowctl, "get_config", counting_get_config):
+            for _ in range(7):
+                self.assertEqual(flowctl.get_max_review_iterations(), 5)
+        self.assertEqual(
+            [key for key in calls if key == "review.maxIterations"],
+            ["review.maxIterations"],
+        )
+
+    def test_autonomous_runs_can_only_lower_the_cap_via_config(self):
+        """fn-168 / PR #295 r6: the self-grant invariant lives in the CONSUMER.
+
+        ralph-guard screens the routes it can see, but a shell command's effective
+        destination is not decidable from its text — `cd .flow && … > config.json`
+        writes the protected file while naming neither the path nor the verb, and
+        the next spelling is always `pushd`, a variable, or a script. So the
+        invariant is enforced where it is true by construction: in an autonomous
+        run a bigger number in the file cannot extend the agent's own review gate.
+
+        Lowering is still honored — it is the knob fn-168 advertises ("lower the
+        cap, never re-add inference") and a smaller cap can never be a self-grant.
+        Interactive runs keep the key in full; a human raising their own cap is the
+        intended use.
+        """
+        cases = [
+            (99, False, 99),  # interactive: honored in full
+            (99, True, 8),    # autonomous: cannot RAISE
+            (4, False, 4),
+            (4, True, 4),     # autonomous: lowering still honored
+            (8, True, 8),
+        ]
+        for raw, autonomous, expected in cases:
+            with self.subTest(config=raw, autonomous=autonomous):
+                self._set_cap_config(raw)
+                env = {"FLOW_RALPH": "1"} if autonomous else {}
+                with mock.patch.dict(os.environ, env, clear=False):
+                    if not autonomous:
+                        os.environ.pop("FLOW_RALPH", None)
+                        os.environ.pop("REVIEW_RECEIPT_PATH", None)
+                        os.environ.pop("FLOW_AUTONOMOUS", None)
+                    flowctl._MAX_REVIEW_ITERATIONS_CONFIG_MEMO.clear()
+                    self.assertEqual(flowctl.get_max_review_iterations(), expected)
+
+    def test_published_schema_knows_the_key(self):
+        """fn-138 contract: a reader-accepted key must exist in the artifact."""
+        schema = json.loads(
+            (
+                Path(flowctl.__file__).resolve().parent.parent
+                / "schema"
+                / "flow-config.schema.json"
+            ).read_text()
+        )
+        review = schema["properties"]["review"]["properties"]
+        self.assertIn("maxIterations", review)
+        self.assertEqual(review["maxIterations"]["type"], "integer")
+
+    def test_default_config_answers_the_cap(self):
+        self.assertEqual(
+            flowctl.get_default_config()["review"]["maxIterations"], 8
+        )
 
     def test_increment_persists_across_fresh_calls(self):
         """Each enforce call increments and persists — cap survives fresh
@@ -4294,19 +4772,39 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self._assert_stalls("same-not-fixed-lineage")
 
-    def test_flat_trajectory_stalls(self):
-        self._write_attempts(
-            self._digest(self._item("one", severity="P2")),
-            self._digest(self._item("two", severity="P2")),
-        )
-        self._assert_stalls("flat-trajectory")
+    def test_trend_and_presence_twice_shapes_no_longer_stall(self):
+        """fn-168 R3: the two deleted classes leave no successor.
 
-    def test_fresh_introduced_critical_stalls(self):
+        Both shapes escalated before this spec: an open set that neither shrank
+        nor improved in severity, and two consecutive rounds that each raised a
+        freshly introduced blocker.  The second is what every healthy thorough
+        review loop looks like.  Neither is a stall now — the round cap is the
+        only aggregate bound.
+        """
+        for previous, current in (("P2", "P2"), ("P0", "P1"), ("P1", "P1")):
+            with self.subTest(previous=previous, current=current):
+                self._write_attempts(
+                    self._digest(self._item("one", severity=previous)),
+                    self._digest(self._item("two", severity=current)),
+                )
+                self.assertEqual(
+                    flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+                )
+
+    def test_distinct_not_fixed_lineages_do_not_stall(self):
+        """The surviving rule needs the SAME chain re-affirmed, not any two.
+
+        Two different findings each explicitly ``not-fixed`` in consecutive
+        rounds is progress-shaped, not a repeat, so the lineage intersection is
+        empty.  The deleted trend rule used to escalate this pair.
+        """
         self._write_attempts(
-            self._digest(self._item("one", severity="P0")),
-            self._digest(self._item("two", severity="P1")),
+            self._digest(self._item("left", status="not_fixed", first_seen=False)),
+            self._digest(self._item("right", status="not_fixed", first_seen=False)),
         )
-        self._assert_stalls("fresh-introduced-critical")
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+        )
 
     def test_epoch_boundary_and_digestless_round_are_inert(self):
         self._write_attempts(
@@ -4332,13 +4830,8 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
 
-    def test_three_round_newness_and_carried_introduced_distinguish_round_newness(self):
-        self._write_attempts(
-            self._digest(self._item("first", severity="P2")),
-            self._digest(self._item("second", severity="P0")),
-            self._digest(self._item("third", severity="P1")),
-        )
-        self._assert_stalls("fresh-introduced-critical")
+    def test_carried_introduced_prior_is_not_round_newness(self):
+        """A carried finding is never "raised this round", whatever its severity."""
         self._write_attempts(
             self._digest(self._item("root", severity="P0")),
             self._digest(
@@ -4347,12 +4840,14 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
         )
         self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
 
-    def test_severity_trajectory_uses_minimum_rank_and_empty_open_converges(self):
-        transitions = (
-            ("P0", "P1", False), ("P1", "P2", False),
-            ("P2", "P1", True),
-        )
-        for previous, current, stalled in transitions:
+    def test_severity_trend_and_all_fixed_rounds_are_inert(self):
+        """fn-168 R3: no severity/count trend is a terminal any more.
+
+        Worsening severity (P2 -> P1) used to escalate; an all-``fixed`` pair
+        never did.  Both are inert now — only a repeated explicit ``not-fixed``
+        lineage, or the round cap, ends a loop.
+        """
+        for previous, current in (("P0", "P1"), ("P1", "P2"), ("P2", "P1")):
             with self.subTest(previous=previous, current=current):
                 self._write_attempts(
                     self._digest(
@@ -4366,12 +4861,9 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
                         )
                     ),
                 )
-                if stalled:
-                    self._assert_stalls("flat-trajectory")
-                else:
-                    self.assertEqual(
-                        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
-                    )
+                self.assertEqual(
+                    flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+                )
         self._write_attempts(
             self._digest(
                 self._item("one", status="fixed", classification="pre_existing")
@@ -4381,6 +4873,223 @@ class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
             ),
         )
         self.assertEqual(flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3)
+
+    def _carried(self, root: str, *, severity: str = "P2", status: str = "open") -> dict:
+        return self._item(root, severity=severity, status=status, first_seen=False)
+
+    def test_fn158_shape_classifies_no_stall_of_any_class(self):
+        """fn-168 R3 early proof point — the field escalation, both variants.
+
+        Round 1 raises six freshly introduced P1s; round 2 carries all six and
+        raises one more P1.  Before this spec the pair escalated twice over: on
+        the open-count trend when the reviewer resolved the six in prose (they
+        stayed ``open``), and — once that was filtered — on "a fresh introduced
+        blocker in both rounds", which reads only fresh items and so no amount
+        of evidence-filtering could reach.  Both variants must now reserve a
+        normal round 3.
+
+        This test writes digest rows directly, so it holds without the prompt
+        grammar (.1) or the parser semantics (.2) having landed.
+        """
+        six = [f"prior-{index}" for index in range(6)]
+        round_one = self._digest(*(self._item(root, severity="P1") for root in six))
+        for carried_status in ("open", "fixed"):
+            with self.subTest(carried=carried_status):
+                self._write_attempts(
+                    round_one,
+                    self._digest(
+                        *(
+                            self._carried(root, severity="P1", status=carried_status)
+                            for root in six
+                        ),
+                        self._item("fresh", severity="P1"),
+                    ),
+                )
+                self.assertEqual(
+                    flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+                )
+
+    def test_three_healthy_rounds_never_stall(self):
+        """One fresh finding per round, forever, is not a terminal any more.
+
+        The deleted trend rule fired here (fresh findings flat at 1 -> 1).  A
+        loop that keeps surfacing genuinely new work is now bounded by the round
+        cap alone — the accepted regression vector recorded in the fn-168
+        Boundaries, deliberately not re-detected.
+        """
+        six = [f"prior-{index}" for index in range(6)]
+        round_one = self._digest(*(self._item(root, severity="P2") for root in six))
+        round_two = self._digest(
+            *(self._carried(root) for root in six),
+            self._item("fresh-two", severity="P2"),
+        )
+        round_three = self._digest(
+            *(self._carried(root) for root in [*six, "fresh-two"]),
+            self._item("fresh-three", severity="P2"),
+        )
+        self._write_attempts(round_one, round_two, round_three)
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 4
+        )
+
+    def test_same_not_fixed_lineage_fires_on_a_carried_re_affirmation(self):
+        """The survivor still classifies genuine churn.
+
+        The same chain explicitly ``not-fixed`` in both rounds is the one signal
+        left, and it reads a stated resolution rather than an inferred trend.
+        """
+        self._write_attempts(
+            self._digest(self._item("root", status="not_fixed")),
+            self._digest(self._carried("root", severity="P1", status="not_fixed")),
+        )
+        self._assert_stalls("same-not-fixed-lineage")
+
+    # ---- fn-168 R4: end to end on the PRODUCTION reservation path ----------
+    #
+    # These four drive reserve -> record_review_attempt -> findings attach for
+    # every round, so the digests the stall rule reads are built by the real
+    # parser from real reviewer text. `.3`'s direct-digest tests prove the
+    # classifier; these prove the whole seam, including the grammar `.1` states
+    # and the sweep `.2` implements.
+
+    def _finding_block(self, ordinal: int, *, severity: str = "P1") -> str:
+        return (
+            f"## Issue {ordinal}\n"
+            f"- **Severity**: {severity}\n"
+            "- **Confidence**: 100\n"
+            "- **Classification**: introduced\n"
+            f"- **File:Line**: `src/mod{ordinal}.py:{ordinal}`\n"
+            f"- **Problem**: Problem {ordinal}.\n"
+            f"- **Suggestion**: Fix {ordinal}.\n"
+        )
+
+    def _e2e_round(self, output: str, verdict: str = "NEEDS_WORK") -> None:
+        """One full production round: reserve, record, attach findings."""
+        _, reservation_id = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan", return_reservation=True
+        )
+        assert reservation_id is not None
+        target = self.root / "e2e-receipt.json"
+        flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="rp",
+            output=output,
+            verdict=verdict,
+            review_type="plan",
+            reservation_id=reservation_id,
+            receipt_target=str(target),
+            receipt_payload={
+                "type": "plan_review",
+                "id": self.spec_id,
+                "mode": "rp",
+                "head": "a" * 40,
+            },
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            flowctl.cmd_review_findings_attach(
+                mock.Mock(
+                    reservation_id=reservation_id, receipt=str(target), json=True
+                )
+            )
+
+    def _last_digest(self) -> dict:
+        return self._data()["review_attempts"][-1]["findings_digest"]
+
+    def test_e2e_fn158_pair_reaches_round_three_with_no_stall(self):
+        """R4 case 1 — the field escalation, resolved through the real parser.
+
+        Round 1 raises six freshly introduced P1s. Round 2 resolves them with the
+        aggregate all-clear the prompt now states and raises one more P1. Before
+        fn-168 this pair escalated at round 2 of 8, one round from SHIP: the six
+        priors carried at `open` because the reviewer had answered in prose, the
+        open count read 6 -> 7, and the trend rule called it flat. Filtering that
+        only moved the escalation to the presence-twice rule.
+        """
+        self._e2e_round("".join(self._finding_block(n) for n in range(1, 7)))
+        first = self._last_digest()
+        self.assertEqual(len(first["items"]), 6)
+        self.assertTrue(all(item["firstSeenThisRound"] for item in first["items"]))
+
+        self._e2e_round(
+            "Prior findings: all fixed\n\n" + self._finding_block(7)
+        )
+        second = self._last_digest()
+        statuses = sorted(item["status"] for item in second["items"])
+        self.assertEqual(statuses, ["fixed"] * 6 + ["open"])
+        self.assertEqual(
+            [item["firstSeenThisRound"] for item in second["items"]].count(True), 1
+        )
+
+        # The whole point: round 3 is reserved normally, no stall of any class.
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 3
+        )
+
+    def test_e2e_repeated_not_fixed_still_escalates(self):
+        """R4 case 2 — genuine churn still terminates early.
+
+        The reviewer states `not-fixed` for the same finding in two consecutive
+        rounds. That is a statement, not a trend, and it is the one signal left.
+        """
+        self._e2e_round(self._finding_block(1))
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        self.assertEqual(self._last_digest()["items"][0]["status"], "not_fixed")
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        self._assert_stalls("same-not-fixed-lineage")
+
+    def test_e2e_zero_resolution_evidence_never_stalls_early(self):
+        """R4 case 3 — a non-compliant reviewer is cap-bounded, not mis-judged.
+
+        The reviewer never uses the grammar, so no round produces `not_fixed` and
+        the only terminal cannot fire. This is the accepted trade recorded in the
+        fn-168 Boundaries: non-compliance now costs money (bounded by the cap)
+        instead of producing a wrong answer. It must NOT stall early.
+        """
+        # Every round the cap allows. `_e2e_round` reserves internally, so an
+        # early stall of any class would raise inside the loop.
+        cap = flowctl.get_max_review_iterations()
+        for round_number in range(1, cap + 1):
+            self._e2e_round(
+                "All prior findings were addressed in prose.\n\n"
+                + self._finding_block(round_number)
+            )
+            self.assertEqual(self._data()["plan_review_rounds"], round_number)
+            self.assertTrue(
+                all(
+                    item["status"] != "not_fixed"
+                    for item in self._last_digest()["items"]
+                )
+            )
+        # The loop ends on the CAP, not on a stall rule — assert the terminal
+        # rather than inferring cap-only behavior from the absence of a stall.
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as exc:
+                flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        self.assertEqual(exc.exception.code, flowctl.REVIEW_CAP_EXIT_CODE)
+        self.assertIn(f"MAX_REVIEW_ITERATIONS={cap}", err.getvalue())
+        self.assertNotIn("review loop stalled", err.getvalue())
+
+    def test_e2e_unrepeated_not_fixed_does_not_escalate(self):
+        """R4 case 4 / R8 — one `not-fixed` then silence is not a stall.
+
+        Round 2 states `not-fixed`; round 3 raises something new and says nothing
+        about the prior. Without R8's carry-forward reset the status persisted,
+        both digests held it, and the surviving rule escalated a round that had
+        made no claim — the deleted false stall reappearing inside the survivor.
+        """
+        self._e2e_round(self._finding_block(1))
+        self._e2e_round("Prior finding #1: not-fixed\n")
+        self.assertEqual(self._last_digest()["items"][0]["status"], "not_fixed")
+        self._e2e_round(self._finding_block(2))
+        carried = [
+            item for item in self._last_digest()["items"]
+            if not item["firstSeenThisRound"]
+        ]
+        self.assertEqual([item["status"] for item in carried], ["open"])
+        self.assertEqual(
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan"), 4
+        )
 
     def test_multi_hop_supersession_uses_the_original_chain_root(self):
         def item(source: str, ordinal: int, *, prior: str | None = None) -> dict:

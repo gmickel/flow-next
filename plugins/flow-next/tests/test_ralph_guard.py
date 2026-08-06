@@ -208,6 +208,289 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_blocks_cap_raise_via_config_set_leaf_key(self) -> None:
+        """fn-168 R7 route 1: extending the gate is the same self-grant as resetting it."""
+        proc = self._hook("$FLOWCTL config set review.maxIterations 99")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_cap_raise_via_config_set_parent_key_json(self) -> None:
+        """fn-168 R7 route 1b: the parent-key form writes the same value.
+
+        `_set_config_locked` json.loads-coerces a `{`-leading value and its nested
+        walk replaces whole subtrees, so `config set review '{"maxIterations":99}'`
+        raises the cap without ever naming the leaf key. A leaf-only screen would
+        be security theatre.
+        """
+        proc = self._hook(
+            "$FLOWCTL config set review '{\"maxIterations\": 99}'"
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_cap_raise_via_encoded_json_key(self) -> None:
+        """An escaped member name must not slip past a substring check.
+
+        `config set` json.loads-coerces the value, which resolves `\u006d` — so
+        the guard decodes before comparing member names rather than grepping.
+        """
+        proc = self._hook(
+            '$FLOWCTL config set review \'{"\\u006daxIterations": 99}\''
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_cap_raise_via_composed_key_or_value(self) -> None:
+        """Composition leaves no token reading `maxIterations`."""
+        for command in (
+            'k=maxIter; k="${k}ations"; $FLOWCTL config set "review.$k" 99',
+            'v=\'{"maxIter\'; $FLOWCTL config set review "${v}ations\": 99}"',
+            'PAYLOAD=99; $FLOWCTL config set review.maxIterations "$PAYLOAD"',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_expansion_in_a_review_namespace_config_value(self) -> None:
+        """Under `review.*` an unexpanded value is unknowable, so it fails closed."""
+        proc = self._hook('$FLOWCTL config set review "$PAYLOAD"')
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_allows_variable_values_outside_the_review_namespace(self) -> None:
+        """The literal-only contract is scoped: other namespaces keep expansions."""
+        proc = self._hook(
+            '$FLOWCTL config set tracker.perTracker.teamId "$TEAM_ID"'
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_blocks_cap_raise_via_composed_config_subcommand(self) -> None:
+        """A composed `set` verb must not skip the cap screen entirely.
+
+        `verb=set; $FLOWCTL config "$verb" review '{"max\\u0049terations":99}'`
+        leaves no `config set` text for the raw-text floor and no literal `set`
+        token for the argv screen, so `config` joins the guarded subcommand groups
+        and an expansion in that slot fails closed.
+        """
+        proc = self._hook(
+            'verb=set; $FLOWCTL config "$verb" review '
+            '\'{"max\\u0049terations":99}\''
+        )
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_allows_literal_config_read_with_variable_key(self) -> None:
+        """Only the SUBCOMMAND slot is literal-only; arguments stay variable."""
+        proc = self._hook('$FLOWCTL config get "$SOME_KEY"')
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_blocks_cap_raise_via_env_assignment(self) -> None:
+        """fn-168 R7 route 3: the HIGHER-precedence rung, a pre-existing hole."""
+        proc = self._hook(
+            "MAX_REVIEW_ITERATIONS=99 $FLOWCTL codex impl-review fn-168.5 --base main"
+        )
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_composed_env_var_name_for_the_cap(self) -> None:
+        """PR #295 bot r1: the literal name never appears, the override still lands.
+
+        `n=MAX_REVIEW_; n="${n}ITERATIONS"; export "$n=99"` reaches the review
+        process as MAX_REVIEW_ITERATIONS=99 while a whole-name regex sees nothing.
+        The screen keys on the distinctive prefix, and an export whose NAME is an
+        expansion fails closed beside a launcher.
+        """
+        for command in (
+            'name=MAX_REVIEW_; name="${name}ITERATIONS"; export "$name=99"; '
+            "$FLOWCTL codex impl-review fn-168.5 --base main",
+            'v=99; export "$v"; $FLOWCTL review-rounds increment fn-168 --kind plan',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_shell_writes_to_the_protected_config(self) -> None:
+        """PR #295 bot r1: PROTECTED_FILE_PATTERNS screens FILE TOOLS only.
+
+        A Bash write to `.flow/config.json` — redirect, mv-into-place, an
+        interpreter opening it for writing, or `sed -i` — never reached
+        `handle_protected_file_check`, so the durable cap was settable from the
+        shell despite the new invariant.
+        """
+        for command in (
+            "jq '.review.maxIterations=99' .flow/config.json > /tmp/c "
+            "&& mv /tmp/c .flow/config.json",
+            "python3 -c \"import json;d=json.load(open('.flow/config.json'));"
+            "d['review']['maxIterations']=99;json.dump(d,open('.flow/config.json','w'))\"",
+            "echo '{\"review\":{\"maxIterations\":99}}' > .flow/config.json",
+            "sed -i.bak 's/8/99/' .flow/config.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_blocks_every_shell_reference_to_the_protected_config(self) -> None:
+        """PR #295 bot r3: enumerate writer APIs and the list always leaks.
+
+        The first version listed mutation tokens; `Path(...).write_bytes(...)`,
+        `os.replace('/tmp/c', <path>)` and `... | sponge <path>` all walked
+        straight through, and each is enough to install a larger
+        `review.maxIterations`. Any such list is a race against the next writer
+        API someone thinks of, so the polarity is inverted: a shell command that
+        NAMES the protected config is refused outright.
+
+        Reads are refused too, deliberately. Ralph has no need to shell-read the
+        file — `flowctl config get <key>` is the sanctioned path and never spells
+        it — and "read-only" is not decidable from a command line.
+        """
+        for command in (
+            # writes the old allowlist missed
+            "python3 -c \"from pathlib import Path; "
+            "Path('.flow/config.json').write_bytes(b'{}')\"",
+            "python3 -c \"import os; os.replace('/tmp/c', '.flow/config.json')\"",
+            "jq '.review.maxIterations=99' .flow/config.json | sponge .flow/config.json",
+            "install -m644 /tmp/c .flow/config.json",
+            # writes it did catch, still caught
+            "echo '{}' > .flow/config.json",
+            "sed -i.bak 's/8/99/' .flow/config.json",
+            # reads: refused under the inverted policy
+            "cat .flow/config.json",
+            "jq -r .review.backend .flow/config.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_allows_the_sanctioned_config_read_path(self) -> None:
+        """`flowctl config get` never spells the path, so it stays legal."""
+        for command in (
+            "$FLOWCTL config get review.maxIterations --json",
+            "$FLOWCTL config get tracker.type --json",
+            "cat .flow/meta.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_blocks_equivalent_spellings_of_the_protected_config(self) -> None:
+        """PR #295 bot r5: the shell resolves these; a literal regex did not.
+
+        `.flow//config.json`, `.flow/./config.json` and `.flow/x/../config.json`
+        are the same destination. Path noise is collapsed at the text level before
+        the protected-path screen — no filesystem resolve, so a false collapse can
+        only widen the screen, never narrow it.
+        """
+        for command in (
+            "printf '{}' > .flow//config.json",
+            "cp /tmp/c .flow/./config.json",
+            "cp /tmp/c .flow/tmp/../config.json",
+            "cp /tmp/c .flow/a/b/../../config.json",
+            "cp /tmp/c ./.flow/config.json",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_path_collapse_does_not_over_block_neighbours(self) -> None:
+        """A different file that merely shares a name or a directory stays legal."""
+        for command in ("cat .flow/meta.json", "cat docs/config.json"):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_allows_setups_shipped_review_backend_write(self) -> None:
+        """PR #295 bot r4: a LITERAL leaf key cannot reach the cap.
+
+        `/flow-next:setup` ships `config set review.backend "$REVIEW_BACKEND"`.
+        Holding every `review.*` key to a literal value blocked it, even though
+        the key is already `review.backend` — its value cannot become
+        `review.maxIterations`. Only the PARENT `review` form takes a value that
+        replaces the subtree, so only that form fails closed on an expansion.
+        """
+        for command in (
+            '$FLOWCTL config set review.backend "$REVIEW_BACKEND" --json',
+            "$FLOWCTL config set review.backend codex",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_blocks_command_substituted_env_names(self) -> None:
+        """PR #295 bot r7: an env-assignment NAME must be literal.
+
+        `env "$(printf MAX_REVIEW_)ITERATIONS=99"` builds the cap variable inside a
+        command substitution, so no value-matching screen can see it. The rule is
+        positional (the same literal-only contract the argv subcommand slots use),
+        not a blacklist — and it is split by verb, because `export`/`declare` treat
+        every argument as a name while `env`'s first non-assignment argument is the
+        COMMAND.
+        """
+        for command in (
+            'env "$(printf MAX_REVIEW_)ITERATIONS=99" $FLOWCTL codex impl-review fn-1.1',
+            "env '$(printf MAX_REVIEW_)ITERATIONS=99' $FLOWCTL codex impl-review fn-1.1",
+            'declare "$n=99"; $FLOWCTL codex impl-review fn-1.1',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 2, proc.stdout)
+                self.assertIn("human-only", proc.stderr)
+
+    def test_allows_expansions_in_env_values_and_commands(self) -> None:
+        """The rule covers the NAME position only.
+
+        `export PATH="$HOME/bin:$PATH"` expands in the VALUE, and
+        `env "$FLOWCTL" show` expands the COMMAND — neither can name the cap.
+        """
+        for command in (
+            'export PATH="$HOME/bin:$PATH"; $FLOWCTL show fn-1',
+            'export FLOWCTL="$PWD/.flow/bin/flowctl"; $FLOWCTL show fn-1',
+            'env "$FLOWCTL" show fn-1 --json',
+            'env FOO=bar "$FLOWCTL" show fn-1 --json',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_allows_the_sibling_transport_failure_knob(self) -> None:
+        """PR #295 bot r4: `MAX_REVIEW_` as a prefix swept up a documented knob.
+
+        `MAX_REVIEW_TRANSPORT_FAILURES=12` tunes transport retries and does not
+        touch the round cap. The screen now matches the cap's full name, plus a
+        bare `MAX_REVIEW_` FRAGMENT as an assignment value — which is
+        name-composition (`n=MAX_REVIEW_; n="${n}ITERATIONS"`), not a complete
+        sibling name.
+        """
+        proc = self._hook(
+            "MAX_REVIEW_TRANSPORT_FAILURES=12 $FLOWCTL codex impl-review fn-1.1 --base main"
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        # the composed-fragment shape must still fail closed
+        blocked = self._hook(
+            'n=MAX_REVIEW_; n="${n}ITERATIONS"; export "$n=99"; '
+            "$FLOWCTL codex impl-review fn-1.1 --base main"
+        )
+        self.assertEqual(blocked.returncode, 2, blocked.stdout)
+
+    def test_allows_unrelated_config_set_writes(self) -> None:
+        """The cap block is scoped to the cap, NOT to `config set`.
+
+        Tracker resolve transactions and setup legitimately write config under
+        Ralph; a blanket block would break them.
+        """
+        for command in (
+            "$FLOWCTL config set review.backend codex",
+            "$FLOWCTL config set tracker.type linear",
+            "$FLOWCTL config get review.maxIterations",
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_blocks_quoted_and_spaced_reset_bypass(self) -> None:
         proc = self._hook('FLOWCTL=.flow/bin/flowctl "$FLOWCTL" spec "reset-review-rounds" fn-159')
         self.assertEqual(proc.returncode, 2)
@@ -878,3 +1161,12 @@ class TestProtectedRegistrationFiles(unittest.TestCase):
 
     def test_allows_ordinary_file(self) -> None:
         self.assertFalse(self._blocks("/repo/src/app.py"))
+
+    def test_blocks_flow_config_json(self) -> None:
+        """fn-168 R7 route 2: the cap has a persistent rung in .flow/config.json.
+
+        Without this, an agent could raise `review.maxIterations` with a file tool
+        and never go near `flowctl config set`. File tools only — flowctl's own
+        writers (`config set`, tracker resolve) do not pass through here.
+        """
+        self.assertTrue(self._blocks("/repo/.flow/config.json"))

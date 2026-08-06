@@ -63,6 +63,13 @@ DESCRIPTIONS: dict[str, str] = {
         "none are bare-only. copilot accepts no none/minimal effort. If "
         "unset, review commands require --review or FLOW_REVIEW_BACKEND."
     ),
+    "review.maxIterations": (
+        "Cumulative review-round cap per scope (default 8, minimum 1 - the cap "
+        "can never be disabled). The env var MAX_REVIEW_ITERATIONS takes "
+        "precedence over this key. Raising it is a human act: ralph-guard blocks "
+        "the config write, the config file, and the env assignment so an "
+        "autonomous agent cannot extend its own review gate."
+    ),
     "scouts": "Planning-scout settings.",
     "scouts.github": "Enable github-scout during planning (requires the gh CLI).",
     "tracker": (
@@ -569,6 +576,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("planSync.crossSpec", {"type": "boolean"}),
         ("review", {"kind": "object", "open": False}),
         ("review.backend", _review_backend_fragment()),
+        ("review.maxIterations", {"type": "integer", "minimum": 1}),
         ("scouts", {"kind": "object", "open": False}),
         ("scouts.github", {"type": "boolean"}),
         ("tracker", {"kind": "object", "open": False}),

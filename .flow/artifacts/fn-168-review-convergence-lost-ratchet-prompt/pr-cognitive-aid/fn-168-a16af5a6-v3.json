@@ -1,0 +1,1530 @@
+{
+  "artifactId": "fn-168-a16af5a6-v3",
+  "baseSha": "e00b7fdbed057d0824bda1f271b76a0e8fa25545",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "spec",
+          "diff"
+        ],
+        "summary": "The re-review prompt asked which prior findings were fixed but never stated the format the parser reads. Reviewers answered in prose, nothing parsed, every prior carried forward as still-open, and a trend rule concluded the loop was flat. fn-156, fn-157 and fn-158 all escalated while converging; a human hand-verified each one.",
+        "taskIds": [],
+        "title": "Three healthy loops were cut off at round 2 of 8"
+      },
+      {
+        "files": [],
+        "kind": "principle",
+        "ordinal": 2,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "rid-R3"
+        ],
+        "summary": "Both deleted rules were round-local snapshots inferring convergence from data the parser never reliably captured. The survivor reads an explicit reviewer statement. Non-compliance now costs rounds instead of producing a wrong verdict, with the cap as the ceiling.",
+        "taskIds": [],
+        "title": "Read resolution; do not infer it"
+      },
+      {
+        "files": [
+          {
+            "additions": 264,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 57,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-a52f4f2101d1a9031615badb0a45084834516bcb0b6ec993a50076403226568d",
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1",
+              "R6"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-1",
+              "rid-R1",
+              "rid-R6"
+            ],
+            "summary": "Ratchet rule 1 states the grammar; PRIOR_RE accepts the hyphen; a separate AGGREGATE_RE recognizes the all-clear.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 18,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-dc23ed755177dfe77907a51ac9072bab61d90d61d45e33dd092e891822a6dff8",
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-1",
+              "rid-R1"
+            ],
+            "summary": "Host reviewers never see the builder, so the grammar is stated by hand.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-9fd2d0f8f76f24d01608486455b2f0a5b87a79fd04724c225a4d17a59262ed6f",
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-1",
+              "rid-R1"
+            ],
+            "summary": "Same grammar, plan-review host path.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 18,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-891b10280b6675ee18f82463be9996e0ec31554dd5b2d521e6d52bd9f3d5e390",
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-1",
+              "rid-R1"
+            ],
+            "summary": "Same grammar, completion-review host path.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 18,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-9d8185dd0fc762d4d24b2186b91abb5fd5edb04ffe18f91adf711ed83156e800",
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-1",
+              "rid-R1"
+            ],
+            "summary": "Regenerated Codex mirror.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 19,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-02c9b847997056696bd4005ce42778d79dfa02e13c604a73fbe08357107ecaee",
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-1",
+              "rid-R1"
+            ],
+            "summary": "Regenerated Codex mirror.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 18,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-2d3436c253b72db7b88837bcf50521dc32e99442f863a73ca0ce45dc882b105b",
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-1",
+              "rid-R1"
+            ],
+            "summary": "Regenerated Codex mirror.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R1",
+          "R6"
+        ],
+        "sourceRefs": [
+          "spec",
+          "task-1",
+          "rid-R1",
+          "rid-R6"
+        ],
+        "summary": "Rule 1 of the shrink-only contract now shows the exact machine lines. The hyphenated `not-fixed` the prompt had always advertised was rejected by the canonical matcher while matching the loose one, so a reviewer that complied exactly had its whole round of findings discarded. R6's guard extracts every advertised token from the live prompt and proves each parses.",
+        "taskIds": [
+          "fn-168-review-convergence-lost-ratchet-prompt.1"
+        ],
+        "title": "State the grammar, and make the parser accept it"
+      },
+      {
+        "files": [
+          {
+            "additions": 187,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-8ab25a0fa5d73cd96acb1bf331f6256f12e48abee43c87d35ef2622d08f64829",
+            "path": "plugins/flow-next/tests/test_review_findings_parser.py",
+            "rIds": [
+              "R2",
+              "R8"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2",
+              "rid-R8"
+            ],
+            "summary": "Production-parser boundary cases and the three-round R8 chain.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 458,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 75,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-a6fd4c1916a2c1011ec3bfbeea72880433bc23596e6e2c47022eef08f77c6292",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/INDEX.json",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "New ratchet-aggregate case registered for all 6 backends.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 28,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-c776000e8f64d8768d838e9201a17f646e6fb8f5ef46b1128e2398c65059380b",
+            "path": "plugins/flow-next/tests/test_review_findings_fixture_corpus.py",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "Corpus contract learns the new case.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 6,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-8c3eace14e3178f1b3c05d851b8eec2e09aee988cd16bd29f5fd67f9d46b320e",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/codex/ratchet-aggregate.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "codex aggregate all-clear fixture.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 6,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-fa42df05560839d69ce35b5b4daf87ddc2267de1e91f99272d533d0dec506435",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/copilot/ratchet-aggregate.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "copilot aggregate all-clear fixture.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 8,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-a12dc7ce8a590be0e6019e44fe63d89a57aa66df7225c24e51caaa5a3fdef162",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/cursor/ratchet-aggregate.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "cursor aggregate all-clear fixture.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-53e2887bd8a9c76c9cda777e70c5e1fda5e241996e44e7b28623dd129c85ab2e",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/export/ratchet-aggregate.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "export aggregate all-clear fixture.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 7,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-8c7c02659444dbe57c764832fe032bcea741257204b0ae12ab50afa8c4cbe2ce",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/host/ratchet-aggregate.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "host aggregate all-clear fixture.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-71ea6b605992ee855d06a6ca66fc1e5fd957370288d64142a3c216cb124f8cda",
+            "path": "optimization/reached-path/fixtures/review-findings/v1/rp/ratchet-aggregate.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-2",
+              "rid-R2"
+            ],
+            "summary": "rp aggregate all-clear fixture.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "spec",
+          "task-2",
+          "rid-R2"
+        ],
+        "summary": "`Prior findings: all fixed` marks carried priors fixed, in the same pass as the per-ordinal records so explicit beats implicit by order. It must consume the whole line: `...all fixed except finding #2` used to match and swept the excluded finding. `unaddressed: []` is negative-tested — it rides in every review's JSON tail, including rounds with no priors, so treating it as an all-clear would erase the only evidence left.",
+        "taskIds": [
+          "fn-168-review-convergence-lost-ratchet-prompt.2"
+        ],
+        "title": "Sweep on an explicit all-clear; never on an ambient key"
+      },
+      {
+        "files": [
+          {
+            "additions": 704,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 29,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/08c0baf35064e79d0227d7ae8c4aa9c730ae28b9#diff-5eff4a0f3e63224ae9dc4b4f552c511a9c24224afefcdc1b652138677703e282",
+            "path": "plugins/flow-next/tests/test_review_convergence_cap.py",
+            "rIds": [
+              "R3",
+              "R4",
+              "R6",
+              "R7",
+              "R8"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-3",
+              "rid-R3",
+              "rid-R4",
+              "rid-R6",
+              "rid-R7",
+              "rid-R8"
+            ],
+            "summary": "Trend tests deleted, mixed test split, fn-158 shape asserted inert, four production-path e2e cases added.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.3"
+            ]
+          },
+          {
+            "additions": 17,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 10,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/08c0baf35064e79d0227d7ae8c4aa9c730ae28b9#diff-7955d335d0a9724e2a2b7aa6bd01e88a7c37dc60fbde423fd1adba06b7a8c3b3",
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [
+              "R3",
+              "R5",
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-3",
+              "rid-R3",
+              "rid-R5",
+              "rid-R7"
+            ],
+            "summary": "Early-terminal paragraph rewritten for one rule; review.maxIterations documented.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.3"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "spec",
+          "task-3",
+          "rid-R3"
+        ],
+        "summary": "The open-count/severity trend rule goes, including the evidence-filter committed earlier in this spec and now unreachable, and so does the 'a new blocker appeared in both rounds' rule — which fires on what every healthy thorough loop looks like. `same-not-fixed-lineage` and the round cap are the only terminals. Net deletion.",
+        "taskIds": [
+          "fn-168-review-convergence-lost-ratchet-prompt.3"
+        ],
+        "title": "Delete both inference rules"
+      },
+      {
+        "files": [],
+        "kind": "step",
+        "ordinal": 6,
+        "rIds": [
+          "R8"
+        ],
+        "sourceRefs": [
+          "spec",
+          "task-2",
+          "rid-R8"
+        ],
+        "summary": "Carry-forward copied statuses verbatim, so one `not-fixed` in round 2 followed by a round 3 that merely omitted the finding sat at `not_fixed` in both digests and escalated a round that said nothing — the deleted false stall reappearing inside the rule that survived it. Carried `not_fixed` now reverts to `open`; `fixed` and `withdrawn` are preserved as resolved terminals.",
+        "taskIds": [
+          "fn-168-review-convergence-lost-ratchet-prompt.2"
+        ],
+        "title": "An unrepeated `not-fixed` must not escalate a silent round"
+      },
+      {
+        "files": [
+          {
+            "additions": 143,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-80f043403f89d1f20f48fb7b3463ee2b83dbd49a8f516380d70369fac17a955a",
+            "path": "plugins/flow-next/scripts/hooks/ralph-guard.py",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-5",
+              "rid-R7"
+            ],
+            "summary": "Three self-grant routes screened, tokenized; JSON values decoded before comparing member names.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          },
+          {
+            "additions": 159,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-005713ec0110794882b0bdcc0de41914a294d54a2c1292eea2b7f490102a4c33",
+            "path": "plugins/flow-next/tests/test_ralph_guard.py",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-5",
+              "rid-R7"
+            ],
+            "summary": "One test per route plus positives that unrelated config writes still pass.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-5497589805eef8cdcb1e5fd7699feda6812f5a6eb438f34c927fdf1faad95bf2",
+            "path": "scripts/gen_flow_config_schema.py",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-5",
+              "rid-R7"
+            ],
+            "summary": "fn-138 contract: TABLE entry + description.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-b0979d2c2fcf4bbf4c40b289fc38b00c07beba28f3dfe26a823ace94dc722b78",
+            "path": "plugins/flow-next/schema/flow-config.schema.json",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-5",
+              "rid-R7"
+            ],
+            "summary": "Regenerated published schema.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 7,
+        "rIds": [
+          "R7"
+        ],
+        "sourceRefs": [
+          "spec",
+          "task-5",
+          "rid-R7"
+        ],
+        "summary": "`review.maxIterations` gives the cap a persistent rung (env still wins, minimum 1 on both, never disable-able) so 'lower the cap instead of re-adding inference' is actually reachable. A durable cap is a self-grant path, so ralph-guard blocks the config write in both its leaf and parent-key JSON forms, composed keys/values, a composed `set` verb, file-tool writes to the config, and the `MAX_REVIEW_ITERATIONS=` assignment — the last a hole that predates this key.",
+        "taskIds": [
+          "fn-168-review-convergence-lost-ratchet-prompt.5"
+        ],
+        "title": "Make the cap a setting, and close every route to raising it"
+      },
+      {
+        "files": [
+          {
+            "additions": 264,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 57,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-69b2da84117f3e851461df2e4f0f162ed49b40296fd053cd955c2201a349200c",
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Required propagation copy of flowctl.py — byte-identical to the canonical script.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-966ce3d591f8cd3d5bf48dccfea7be557bc349e88d9c864f6a7d9cc1d570f690",
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-5"
+            ],
+            "summary": "Regenerated tracker distribution manifest.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          },
+          {
+            "additions": 3,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-a7f88ad1ff34762e4d8d7fb470a1f622f96e89e7724575eba9d507b4fd3b7c67",
+            "path": ".flow/specs/fn-166-flowctl-module-split-importable.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-166 records the dependency ordering — it extracts this region after fn-168 lands.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 820,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 11,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-9e9d36a371e9d83a5aa4a33ed48f789d92d1bdd135a0b3e772847566549f4106",
+            "path": ".flow/specs/fn-168-review-convergence-lost-ratchet-prompt.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Spec re-planned to the delete-both shape; SHIP after 3 plan-review rounds.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 216,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 22,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-7500176d7750b2d0f4ee0ede5decd35a47188c8d021781997631d6d6e57dc22f",
+            "path": ".flow/specs/fn-168-review-convergence-lost-ratchet-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Spec re-planned to the delete-both shape; SHIP after 3 plan-review rounds.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-288a13516148c8d7c9b17c3e72561ca16c1d9672b1a8d608df958993621bc33b",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-1"
+            ],
+            "summary": "Task .1 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 84,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/dae22f8680d8aa0c3a94d43638743b8b748648ba#diff-c9804f91d64a5d1dac499d3ed382d915b9722702671e1b66ab6baf57332c4fc5",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-1"
+            ],
+            "summary": "Task .1 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.1"
+            ]
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-fe5170cca35aee0d0282ba603f40d765c0af2acc0eb72f6955f49d3fa27be4af",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-2"
+            ],
+            "summary": "Task .2 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 87,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/4bed73c7abcf167fcadf1190a8d68cefc23b3bbc#diff-1efa0356e0d6d1223db7221f54db2e1d2e98d9b70d81f1461bdbd7d2d24dc6fb",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-2"
+            ],
+            "summary": "Task .2 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.2"
+            ]
+          },
+          {
+            "additions": 11,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/08c0baf35064e79d0227d7ae8c4aa9c730ae28b9#diff-595f7418ed35020eb3cc174858ddda257db0b9e29be171cf0d76f682f15f9699",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-3"
+            ],
+            "summary": "Task .3 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.3"
+            ]
+          },
+          {
+            "additions": 73,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/08c0baf35064e79d0227d7ae8c4aa9c730ae28b9#diff-0d734e9e151b2b485585e828185675cd8fb7c609b3d8d3826dbe6c10770c8ed0",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-3"
+            ],
+            "summary": "Task .3 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.3"
+            ]
+          },
+          {
+            "additions": 18,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-efb33698716ac6ebb76c7372d849fed1eb092e6da910921eb43e9f2852208272",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.4.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Task .4 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 86,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-e9533074bb8e4f26b07c694bf762a79899256a0883a4407ed71dd8e59dfdc78f",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Task .4 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-d72ab3fcac09f8a2b26d3478119f4388f3450c4a53309871e02c16ba373ff9ed",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.5.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-5"
+            ],
+            "summary": "Task .5 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          },
+          {
+            "additions": 93,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-4d108e8366ba361f433a145466d9ee7e97420cc2c382753843998dd0eb93feb7",
+            "path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-5"
+            ],
+            "summary": "Task .5 definition and its done summary / evidence.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/3775486f51e38e38d23b370f9fc7f343883b4e0e#diff-e933177e059d7c184bbc394bad0757e4058a6ebc899d3dcd529b1a965b1a7d29",
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-5"
+            ],
+            "summary": "Regenerated tracker distribution manifest.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.5"
+            ]
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "copied",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-ff86a5b54061352d57798127b714b00ff839d4a884ed9a971525891e018d5cbd",
+            "path": ".flow/artifacts/fn-168-review-convergence-lost-ratchet-prompt/pr-cognitive-aid/.write.lock",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Interim gate, its tests, propagation, and the amended R2 / CHANGELOG.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 1240,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-f7247b1246528b950c55e6ccfe233dfcc5db91111f4203fcbc1d1cb6025106bc",
+            "path": ".flow/artifacts/fn-168-review-convergence-lost-ratchet-prompt/pr-cognitive-aid/fn-168-0fd3c9a8-v1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Interim gate, its tests, propagation, and the amended R2 / CHANGELOG.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 1241,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-dbbda5704bd1aa5a0729f0e35d06af20565cc6d14e66cdaa3eead842db266a4b",
+            "path": ".flow/artifacts/fn-168-review-convergence-lost-ratchet-prompt/pr-cognitive-aid/fn-168-30d64380-v2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "Interim gate, its tests, propagation, and the amended R2 / CHANGELOG.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 26,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-35707af0922390762c0408a6f7954552dc4a0deb6f1445a5c995b0c4acb565cd",
+            "path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 198,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-35273c5465c5e92a99629a0f54c1da53d53603a1b93e0dab4b1f04ca6f5907de",
+            "path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-b868b225f005204bcb4895236822efdf71c4800bbbbf7dc54c9e390bee32f42f",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 50,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-68649020be9e010db2ac2c1c760b2fad44596dbbba5feb2ed792bc2d1c30bf58",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-d5d9b3f15cffdcfee73521105c0056be4a4046389f2184eb4bca6bd3168cafc0",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 60,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-8ea64ad085101d771a6873e4dda944a0c3e34fe1a0ac25c53319a5e557161833",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-5d866c16af18f87fe65165bd5c741b2334607c5899835cc8b78b7bb35da7bc98",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 52,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-28bbb3195a7bbdf2d408ab4f5a41a31a309688f4f650cb8ade76fc19404dcfc4",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-71ba33ccf59aeb043e35776a2b197930e7a8ac6af9392bd0611d9ea62bfd27aa",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.4.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 55,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-0ee78f766e3bcb61dab99167fcb01ffed8ef5aad25f9745fb1c8ef99bd7dd83c",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-3970dcf40aa16dec2517c18b4310a8d81318919627a9b19bfce9f4a7a648e1bd",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.5.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 44,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-333c5b5bef302058deb7d4005e141c72be421394d960e5a9e382b2956f31ccbe",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-9d42cef9907e69e75d93c842e15d48b61a226672c407b52f935741f3479ac9e7",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.6.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 53,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/a16af5a64ab56781abd5db0cd7385e3aae366bd4#diff-d3ebbf311d0ccd02c089326198d5a9a56147d8dc6a92c0196652f0bc25150356",
+            "path": ".flow/tasks/fn-169-review-subsystem-agentic-first-pass.6.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff",
+              "task-4"
+            ],
+            "summary": "fn-169 spec/task records — the follow-up that deletes this PR's interim cursor gate along with the truncation layer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 8,
+        "rIds": [],
+        "sourceRefs": [
+          "spec",
+          "diff"
+        ],
+        "summary": "The spec/task records for the re-plan and the five done summaries, plus the propagation copies the repo's tests enforce: .flow/bin/flowctl.py byte-identical to the canonical script, regenerated tracker manifests, and the fn-166 note that it extracts this region only after fn-168 lands. No behavior here.",
+        "taskIds": [],
+        "title": "Flow bookkeeping and required propagation"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 9,
+        "rIds": [],
+        "sourceRefs": [
+          "spec",
+          "diff"
+        ],
+        "summary": "The round cap, pre-dispatch reservation/refund, artifact-unchanged guard, transport health, `NEEDS_HUMAN`, and the human-only reset verbs are untouched. No new receipt-schema fields and no digest-shape change — R8 changes carried status values only. The PR review-bot channel stays out of blast radius.",
+        "taskIds": [],
+        "title": "Unchanged on purpose"
+      },
+      {
+        "files": [
+          {
+            "additions": 86,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-1c53b9790d2e29f07acb23328c59072c5fa8d972e66646bea0ff0642e003332b",
+            "path": ".flow/memory/knowledge/decisions/review-stall-detection-reads-resolution-2026-08-05.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "The vaccine: why the rules went, and what to do instead of reinventing them.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 77,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-06572a96a58dc510037d5efa622f9bec8519bc1beab13c9f251e97e657a9d4ed",
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "Unreleased entry, outcome-first. No version bump.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 48,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-b1da683fb6f95a227fb52774ec2c82acd0e760db05d7f3e08f20bcc6b026209b",
+            "path": "plugins/flow-next/docs/review-findings.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "The reply grammar, the aggregate record, and the `unaddressed` non-signal.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-23e3ca46f0587d0e9264804c262625139909e89a5ece95401c1dfb51ce50a9b0",
+            "path": "plugins/flow-next/docs/troubleshooting.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "Running to the cap is now the expected shape for a non-compliant reviewer.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-cc2cc7c2a3760a6f83c62678758a723209988e59b6ee353cb822f55ada58193f",
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "Notable-updates bullet; the 3.14.0 claim marked superseded.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-c45c3e3fded4b99e4c475141bbb4090fd9a131ef6c5000679bf79dc741ca00c2",
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "Terminal list no longer advertises trend-based escalation.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-19286a5c1a3e8d0de4ad158cddf21bffb689c67508dec05d9c3f64d7007d6f1b",
+            "path": "plugins/flow-next/docs/ralph.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "Cap precedence and the surviving terminal.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          },
+          {
+            "additions": 3,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 3,
+            "diffUrl": "https://github.com/gmickel/flow-next/commit/c5025123173abed6e3f1e6af6e454e6cb5698258#diff-4f44fd0e8372d8c6e4ac036b56f447585a2406ee2bb56bcf969eb0e28263a57a",
+            "path": "optimization/reached-path/runs/plan-review-candidate.json",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "task-4",
+              "rid-R5"
+            ],
+            "summary": "Host route grew 17069->18017 chars; fn-130's tracked reduction for that route recomputed 64.8%->62.8%.",
+            "taskIds": [
+              "fn-168-review-convergence-lost-ratchet-prompt.4"
+            ]
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 10,
+        "rIds": [
+          "R4",
+          "R5"
+        ],
+        "sourceRefs": [
+          "spec",
+          "task-4",
+          "rid-R4",
+          "rid-R5"
+        ],
+        "summary": "Full suite 4219 tests / 0 failures and pinned ruff clean on the final tree; every task impl-reviewed to SHIP by codex (gpt-5.6-sol), 8 NEEDS_WORK rounds absorbed across the five tasks; plan-review SHIP after 3 rounds; completion review SHIP with all 8 R-IDs met. `grep` for both deleted class names is empty across code, tests and docs; `.flow/bin` parity verified and sync-codex is idempotent.",
+        "taskIds": [
+          "fn-168-review-convergence-lost-ratchet-prompt.4"
+        ],
+        "title": "What was actually run"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Field record",
+        "sourceRefs": [
+          "spec"
+        ],
+        "value": "3 false escalations (fn-156/157/158), 0 true positives for either deleted rule"
+      },
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "task-4",
+          "diff"
+        ],
+        "value": "4219 tests, 0 failures; ruff 0.16.0 clean"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "spec",
+          "task-4"
+        ],
+        "value": "8/8 acceptance criteria satisfied across 5 tasks"
+      },
+      {
+        "label": "Review",
+        "sourceRefs": [
+          "task-4"
+        ],
+        "value": "every task impl-review SHIP (codex/gpt-5.6-sol); completion review SHIP, no gaps"
+      },
+      {
+        "label": "Stall classes remaining",
+        "sourceRefs": [
+          "task-3",
+          "rid-R3"
+        ],
+        "value": "1 (same-not-fixed-lineage) plus the deterministic round cap"
+      }
+    ],
+    "thesis": "Review-loop stall detection stops inferring convergence and starts reading it: the prompt states the machine grammar for reporting prior findings, the parser accepts every token it advertises, and both trend-based stall rules are deleted. Non-compliance now costs rounds instead of producing a wrong verdict."
+  },
+  "generatedAt": "2026-08-06T00:00:00Z",
+  "headSha": "a16af5a64ab56781abd5db0cd7385e3aae366bd4",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-168-review-convergence-lost-ratchet-prompt"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "e00b7fdbed057d0824bda1f271b76a0e8fa25545..a16af5a64ab56781abd5db0cd7385e3aae366bd4"
+    },
+    {
+      "id": "task-1",
+      "kind": "task",
+      "ref": "fn-168-review-convergence-lost-ratchet-prompt.1"
+    },
+    {
+      "id": "task-2",
+      "kind": "task",
+      "ref": "fn-168-review-convergence-lost-ratchet-prompt.2"
+    },
+    {
+      "id": "task-3",
+      "kind": "task",
+      "ref": "fn-168-review-convergence-lost-ratchet-prompt.3"
+    },
+    {
+      "id": "task-4",
+      "kind": "task",
+      "ref": "fn-168-review-convergence-lost-ratchet-prompt.4"
+    },
+    {
+      "id": "task-5",
+      "kind": "task",
+      "ref": "fn-168-review-convergence-lost-ratchet-prompt.5"
+    },
+    {
+      "id": "rid-R1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "rid-R2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "rid-R3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "rid-R4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "rid-R5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "rid-R6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "rid-R7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "rid-R8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "commit-dae22f86",
+      "kind": "commit",
+      "ref": "dae22f8680d8aa0c3a94d43638743b8b748648ba"
+    },
+    {
+      "id": "commit-356734ef",
+      "kind": "commit",
+      "ref": "356734ef6a4584a4140ecc18b840d751492690bb"
+    },
+    {
+      "id": "commit-4bed73c7",
+      "kind": "commit",
+      "ref": "4bed73c7abcf167fcadf1190a8d68cefc23b3bbc"
+    },
+    {
+      "id": "commit-0f7452c2",
+      "kind": "commit",
+      "ref": "0f7452c21bde126035ada85352a67e58de3ea2db"
+    },
+    {
+      "id": "commit-08c0baf3",
+      "kind": "commit",
+      "ref": "08c0baf35064e79d0227d7ae8c4aa9c730ae28b9"
+    },
+    {
+      "id": "commit-c5025123",
+      "kind": "commit",
+      "ref": "c5025123173abed6e3f1e6af6e454e6cb5698258"
+    },
+    {
+      "id": "commit-064a5e10",
+      "kind": "commit",
+      "ref": "064a5e109ab5021ac89cd86bc32eb7074227ef54"
+    },
+    {
+      "id": "commit-3775486f",
+      "kind": "commit",
+      "ref": "3775486f51e38e38d23b370f9fc7f343883b4e0e"
+    },
+    {
+      "id": "commit-e204a914",
+      "kind": "commit",
+      "ref": "e204a91467bf346d5bf05f4b8b13425767f051b7"
+    },
+    {
+      "id": "commit-e1102866",
+      "kind": "commit",
+      "ref": "e1102866db9d81a146b4f6283db55632e5b19934"
+    }
+  ],
+  "specId": "fn-168-review-convergence-lost-ratchet-prompt",
+  "supersedesArtifactId": "fn-168-30d64380-v2"
+}

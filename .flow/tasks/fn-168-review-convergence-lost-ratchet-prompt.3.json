@@ -1,0 +1,11 @@
+{
+  "created_at": "2026-08-05T15:35:41.339369Z",
+  "depends_on": [],
+  "id": "fn-168-review-convergence-lost-ratchet-prompt.3",
+  "priority": null,
+  "spec": "fn-168-review-convergence-lost-ratchet-prompt",
+  "spec_path": ".flow/tasks/fn-168-review-convergence-lost-ratchet-prompt.3.md",
+  "status": "todo",
+  "title": "Delete both inference stall classes (flat-trajectory, fresh-introduced-critical)",
+  "updated_at": "2026-08-05T19:25:16.046646Z"
+}
