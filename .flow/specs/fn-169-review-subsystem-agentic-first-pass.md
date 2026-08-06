@@ -190,6 +190,21 @@ deliberate scope decoys — a reviewer that mis-derived the range produces visib
 
 Task `.1` (resume argv fix) is independently valuable and independently shippable: it closes a live read-only-contract violation and can be verified by asserting the resumed CLI header. If resume turns out to be unreliable across processes or after a gap (the unverified cases above), that is discovered here — before any work depends on resume being the primary continuity mechanism, and while injection is still unconditional.
 
+## Plan review: intentionally skipped after the reshape
+
+The 6-task plan passed codex plan-review (SHIP, 2 rounds, 5 P1s fixed). The reshape since then was a **reduction**
+— `.2` and `.5` removed — plus one line whose correctness was measured directly (`--stat` abbreviated 51 of 65
+paths; `--numstat` does not). A re-review would be reviewing a strict subset of an already-shipped plan, so it is
+skipped by explicit decision rather than recorded as a fresh SHIP. `plan_review_status` stays `unknown` on purpose:
+it is honest, and no gate depends on it here.
+
+## Guardrails land in `.1`, not `.6`
+
+The `STRATEGY.md` principle and the `CLAUDE.md` "How to spot a mistake" trip-wires move into `.1`. This spec is
+mostly deletion, and a reviewer with no stated constraint argues deterministic machinery back in — that is how
+fn-90 and fn-159 re-accreted precisely what fn-74 had removed. Landing the constraint first means every review
+round of `.3`/`.4` reads it. `.6` keeps the executable test, docs, CHANGELOG and the final gate.
+
 ## Task numbering
 
 Tasks are `.1`, `.3`, `.4`, `.6`. `.2` (eval fixture + baseline) and `.5` (re-measure against the gate) were
@@ -205,7 +220,7 @@ reference in this spec, its commits, and its plan-review history keeps pointing 
 | R3 | Payloads → identities incl. the `--numstat` scope signal; export + hash preserved | .4 | — |
 | R4 | Truncation layer deleted | .4 | — |
 | R5 | Live dogfood evidence + docs | .6 | no synthetic eval — see Decision Context |
-| R6 | STRATEGY.md + CLAUDE.md symptoms + executable no-embed test | .6 | — |
+| R6 | STRATEGY.md + CLAUDE.md trip-wires (.1, early by design) + executable no-embed/file-list test (.6) | .1, .6 | guardrails precede the review rounds they must govern |
 | R7 | Docs + CHANGELOG + mirror + full gate | .6 | — |
 
 ## References

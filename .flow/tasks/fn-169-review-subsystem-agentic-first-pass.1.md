@@ -1,5 +1,5 @@
 ---
-satisfies: [R1]
+satisfies: [R1, R6]
 ---
 # fn-169-review-subsystem-agentic-first-pass.1 Resume dispatch parity: sandbox, effort, git-check — and loud failure
 
@@ -16,6 +16,11 @@ Give the resume path the same guarantees as a fresh dispatch, and stop it failin
 - Audit the copilot (`--session-id` / `--resume`, marker-tracked) and cursor (`--resume`, resume-only, `require_nonempty_sid`) paths for the same three defect classes and fix what applies. Cursor takes no effort flag by design.
 - **Verify the unverified cases while you are here** (spec Open Questions): does resume survive (a) separate flowctl processes, and (b) a gap of minutes rather than seconds? Record the answers in the done summary — `.3` depends on them.
 - Propagation: `cp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py`.
+
+- **Land the strategic guardrails IN THIS TASK, before any review round of `.3`/`.4`.** This spec is mostly DELETION, and a reviewer with no stated constraint will argue deterministic machinery back in — that is exactly how fn-90 and fn-159 re-accreted what fn-74 removed. Two edits, both small:
+  - `STRATEGY.md` — the principle: **pass identities, not payloads; the reviewer is an agent with a shell and a checkout.** Use `/flow-next:strategy`.
+  - `CLAUDE.md`'s **"How to spot a mistake"** list — the planning-time trip-wires, which is the section agents actually read before designing: *embedding content the reviewer could fetch itself*; *writing a fitter/truncator for a prompt payload*; *adding a budget constant to a prompt path*. Three or more → convert to identities.
+  Landing these here means every subsequent review round is reading the constraint rather than inventing against it. `.6` keeps the executable test, docs, CHANGELOG and the gate.
 
 ### Investigation targets
 **Required:**
@@ -39,6 +44,8 @@ Give the resume path the same guarantees as a fresh dispatch, and stop it failin
 - [ ] Fallback behaviour unchanged in this task — injection is still unconditional
 - [ ] copilot and cursor resume paths audited for the same three defect classes; fixes applied where they apply, with the audit result stated in the done summary
 - [ ] Resume verified across separate flowctl processes AND after a multi-minute gap; both results recorded in the done summary
+- [ ] `STRATEGY.md` records the identities-not-payloads principle
+- [ ] `CLAUDE.md`'s "How to spot a mistake" list gains the three planning-time trip-wires
 - [ ] Focused suites green; propagation done (cp flowctl.py to .flow/bin)
 
 ## Done summary

@@ -11,7 +11,7 @@ Make the decision stick this time, then document and gate.
 
 ### Approach
 - **Three layers, because prose alone already failed twice.** fn-74 made this exact decision, eval-validated it, deleted the code, and wrote it in a CHANGELOG — and it was reversed by fn-90 and fn-159, each with a good local reason.
-  1. `STRATEGY.md` — the principle: pass identities, not payloads; the reviewer is an agent with a shell and a checkout. Use `/flow-next:strategy` to edit.
+  1. `STRATEGY.md` + the `CLAUDE.md` trip-wires — **already landed in `.1`** so review rounds could read them. Verify they are present and still accurate; do not duplicate.
   2. `CLAUDE.md`'s **"How to spot a mistake"** list — the planning-time trip-wire agents actually read before designing a feature. Add: *embedding content the reviewer could fetch itself*; *writing a fitter/truncator for a prompt payload*; *adding a budget constant to a prompt path*. This is the layer that would have caught fn-90 and fn-159, because both were planning decisions.
   3. An **executable test**: the built review prompt (non-`export`) contains no diff body, no spec body, and no rendered prior items. Name the offending tag in the failure message so a future regression is self-explaining.
 - Docs (canonical paths — all three live under `plugins/flow-next/docs/`, there is no repo-root `docs/`): `plugins/flow-next/docs/orchestration.md`, `plugins/flow-next/docs/flowctl.md`, `plugins/flow-next/docs/review-findings.md`, and the three `workflow-host.md` files state fetch-not-embed, the resumed-vs-injected split, and the host exception. Regenerate the codex mirror (`sync-codex.sh` twice, no second-run diff).
