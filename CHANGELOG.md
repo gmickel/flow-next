@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.16.0] - 2026-08-07
 
 Cross-model review now sees the whole change, and stops being cut off while it is
 working.

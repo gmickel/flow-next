@@ -913,7 +913,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-169-review-subsystem-agentic-first-pass.md",
-  "status": "open",
+  "status": "done",
   "title": "Review subsystem: agentic-first \u2014 pass identities, not payloads",
   "tracker": {
     "baseHashFlow": null,
@@ -926,5 +926,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-06T17:17:20.662159Z"
+  "updated_at": "2026-08-06T22:43:02.553800Z"
 }
