@@ -4307,8 +4307,16 @@ def run_codex_exec(
     spec: Optional["BackendSpec"] = None,
     repo_root: Optional[Path] = None,
     resolution_out: Optional[dict] = None,
+    resume_only: bool = False,
 ) -> tuple[str, Optional[str], int, str]:
     """Run codex exec and return (stdout, thread_id, exit_code, stderr).
+
+    fn-169 R2 — ``resume_only=True`` makes the resume attempt TERMINAL: on failure
+    it returns immediately instead of falling through to a fresh session. That is
+    what lets a caller run the two-phase dispatch (lean prompt on resume, rebuilt
+    with injected prior findings on failure). Without it the fallthrough would
+    re-send the LEAN prompt as a fresh blind review — the exact fn-90 runaway this
+    spec is closing. Default False keeps every existing caller unchanged.
 
     If session_id provided, tries to resume. Falls back to new session if resume fails.
 
@@ -4387,26 +4395,31 @@ def run_codex_exec(
                 resolution_out["resumed"] = True
             # For resumed sessions, thread_id stays the same
             return output, session_id, 0, result.stderr
-        except subprocess.CalledProcessError:
-            # Resume failed - fall through to new session (loud so caller sees it)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            reason = (
+                "resume timed out"
+                if isinstance(exc, subprocess.TimeoutExpired)
+                else "resume exited non-zero"
+            )
             if resolution_out is not None:
                 resolution_out["resume_failed"] = True
-                resolution_out["resume_failure_reason"] = "resume exited non-zero"
+                resolution_out["resume_failure_reason"] = reason
+            # LOUD either way: a silent fallthrough is indistinguishable from a
+            # real resume, which is how the ratchet ended up compensating for a
+            # broken resume for four months.
             print(
-                f"warning: resume of session {session_id} failed; "
-                "starting a fresh session",
+                f"warning: resume of session {session_id} failed ({reason}); "
+                + (
+                    "caller will rebuild the prompt and dispatch fresh"
+                    if resume_only
+                    else "starting a fresh session"
+                ),
                 file=sys.stderr,
             )
-        except subprocess.TimeoutExpired:
-            # Resume failed - fall through to new session (loud so caller sees it)
-            if resolution_out is not None:
-                resolution_out["resume_failed"] = True
-                resolution_out["resume_failure_reason"] = "resume timed out"
-            print(
-                f"warning: resume of session {session_id} failed; "
-                "starting a fresh session",
-                file=sys.stderr,
-            )
+            if resume_only:
+                # TERMINAL: never re-send a prompt built for a resumed session as
+                # a fresh review — it omits the prior findings on purpose.
+                return "", None, 1, reason
 
     # New session with model + reasoning effort from resolved spec.
     # fn-76: dispatch goes through the strongest-available fallback driver.
@@ -12037,6 +12050,68 @@ your verdict in exactly the grammar those instructions specify.
 """
 
 
+def _build_resumed_ratchet_block(review_type: str = "implementation") -> str:
+    """The shrink-only contract for a RESUMED session (fn-169 R2).
+
+    Same rules and the same machine grammar as the full ratchet, minus the thing a
+    resumed reviewer does not need: a re-render of findings it already made. It
+    carries no ``<prior_findings>`` delimiters, so there is no payload to fit and
+    nothing for an argv budget to truncate — which is what retires the whole
+    truncation class on this path.
+    """
+    plan_blocker_rule = ""
+    if review_type == "plan":
+        plan_blocker_rule = (
+            " For plan reviews, >= Major means P0/P1; first apply the confidence gate: "
+            "drop findings below 75, except P0 at 50+; then a blocker must name the concrete bad "
+            "downstream implementation outcome. A consequence-free self-contradiction "
+            "is FYI."
+        )
+    return f"""## CONVERGENCE RATCHET — this is a re-review, not a fresh review
+
+You reviewed this work earlier in THIS conversation. Your own findings from that
+round are the prior set — they are not repeated below, because you already have
+them. This round is a **ratchet, not a fresh draw**: verify whether those findings
+were addressed. Do NOT re-derive a brand-new finding set from scratch.
+
+**Shrink-only contract (follow exactly):**
+1. For EACH finding you raised earlier, state whether it is now fixed or not
+   (verify against the current spec/code on disk, not from memory of the code —
+   re-read what changed). These lines are MACHINE READ, so use exactly this
+   grammar — one line per finding, at the start of a line, echoing the number you
+   gave it:
+
+   ```
+   Prior finding #1: fixed
+   Prior finding #2: not-fixed
+   Prior finding #3: withdrawn
+   ```
+
+   Allowed statuses: `fixed`, `not-fixed`, `withdrawn`. Nothing else parses. If you
+   raised exactly one finding you may omit the number (`Prior finding: fixed`). If
+   — and only if — every prior finding is fixed you may replace the per-finding
+   lines with the single line `Prior findings: all fixed`. Do not mix the two: any
+   per-finding line present WINS and disables the aggregate. Prose is welcome but
+   is NOT a substitute; without these lines your resolutions are invisible and the
+   loop cannot converge. The `unaddressed` array in the JSON tail is about spec
+   R-ID coverage and does NOT vouch for prior findings.
+2. A NEW finding (not in your prior set) may **block** ONLY if it is **>= Major**
+   AND (it was *introduced by the fixes* OR it is a genuine *missed
+   showstopper*). Everything else — style, nits, pre-existing < Major, scope
+   expansions — is **FYI only** and must NOT hold up the verdict.{plan_blocker_rule}
+3. **If every prior finding is fixed AND there is no new >= Major blocker, your
+   verdict MUST be `<verdict>SHIP</verdict>`.** Do not withhold SHIP over
+   findings that fall outside rule 2.
+
+This is convergence, not leniency: every genuine >= Major finding still survives
+the ratchet. You are being held to the plan/diff under review, not invited to
+expand scope.
+
+---
+
+"""
+
+
 def build_convergence_ratchet_block(
     prior_findings: Optional[str] = None,
     *,
@@ -12044,6 +12119,7 @@ def build_convergence_ratchet_block(
     max_total_chars: Optional[int] = None,
     scaffold_only: bool = False,
     review_type: str = "implementation",
+    resumed: bool = False,
 ) -> str:
     """fn-90 R4: the shrink-only convergence contract for re-reviews.
 
@@ -12063,9 +12139,20 @@ def build_convergence_ratchet_block(
     there is no prose either). ``scaffold_only`` is the one internal exception —
     it renders the fixed prefix/suffix with no items so callers can MEASURE the
     scaffold cost before deciding an item budget.
+
+    fn-169 R2 — ``resumed=True`` emits the contract and the reply GRAMMAR with **no
+    rendered items and no ``<prior_findings>`` delimiters**. On a resumed session
+    the reviewer already holds its own findings, so re-rendering them ships a
+    duplicate; but it still has to be told the machine grammar, because that is a
+    reply format, not context. Verified live: a resumed reviewer given this shape
+    and nothing else answered `Prior finding #1: fixed / #2: not-fixed /
+    #3: withdrawn`, scored exactly by ``_review_finding_prior_items``.
     """
     structured = scaffold_only or bool(prior_items)
     prior = (prior_findings or "").strip()
+    if resumed:
+        # No items, no delimiters — the reviewer's own context IS the prior set.
+        return _build_resumed_ratchet_block(review_type)
     if not structured and not prior:
         return ""
     prefix = """## CONVERGENCE RATCHET — this is a re-review, not a fresh review
@@ -12169,6 +12256,7 @@ def build_rereview_preamble(
     review_type: str,
     prior_findings: Optional[str] = None,
     prior_items: Optional[list[dict]] = None,
+    resumed: bool = False,
 ) -> str:
     """Build preamble for re-reviews.
 
@@ -12195,7 +12283,8 @@ def build_rereview_preamble(
         )
 
     ratchet = build_convergence_ratchet_block(
-        prior_findings, prior_items=prior_items, review_type=review_type
+        prior_findings, prior_items=prior_items, review_type=review_type,
+        resumed=resumed,
     )
     has_ratchet = bool(ratchet)
 
@@ -39786,8 +39875,15 @@ def _apply_impl_rereview_preamble(
     base_branch: str,
     is_rereview: bool,
     receipt_path: Optional[str],
+    resumed: bool = False,
 ) -> str:
-    """Prepend the fn-90 R4 convergence ratchet when re-reviewing."""
+    """Prepend the fn-90 R4 convergence ratchet when re-reviewing.
+
+    fn-169 R2 — ``resumed=True`` builds the LEAN variant: the same contract and
+    reply grammar, without re-rendering findings the resumed reviewer already
+    holds. Callers running the two-phase dispatch build both and hand the injected
+    one to ``_dispatch_backend_review(injected_prompt=...)``.
+    """
     prior_findings = _read_prior_findings(receipt_path)
     prior_items = _read_prior_structured_findings(receipt_path)
     if is_rereview or prior_findings is not None or prior_items is not None:
@@ -39796,6 +39892,7 @@ def _apply_impl_rereview_preamble(
             changed_files, "implementation",
             prior_findings=prior_findings,
             prior_items=prior_items,
+            resumed=resumed,
         )
         prompt = rereview_preamble + prompt
     return prompt
@@ -39873,6 +39970,7 @@ def _codex_run_exec(
     spec: "BackendSpec",
     resolution_out: dict,
     args: argparse.Namespace,
+    resume_only: bool = False,
 ) -> tuple[str, Optional[str], int, str]:
     """Codex spawn: resolve sandbox from args, then run_codex_exec."""
     try:
@@ -39882,6 +39980,7 @@ def _codex_run_exec(
     return run_codex_exec(
         prompt, session_id=session_id, sandbox=sandbox, spec=spec,
         repo_root=repo_root, resolution_out=resolution_out,
+        resume_only=resume_only,
     )
 
 
@@ -40430,6 +40529,17 @@ def _wire_backend_review_hooks() -> None:
         "gather_diff": _gather_review_diff_capped,
         # Resume legacy receipts (mode None) + mode "codex"; track prior model.
         "resume_modes": (None, "codex"),
+        # fn-169 R2: two-phase (lean-on-resume / injected-on-failure) is enabled
+        # for codex only. Its resume is measured — same thread, cross-process, and
+        # after a >10min gap (evidence/fn169/resume-parity-live.json) — and
+        # `run_codex_exec` has the terminal `resume_only` mode the second phase
+        # needs. cursor and copilot keep UNCONDITIONAL injection until their
+        # resume semantics get the same treatment: copilot's `--resume` is
+        # create-or-resume via a marker, so "resumed" and "created" are not
+        # separable there, and cursor's resume-only path has not been measured.
+        # Injecting when it was not needed costs bytes; NOT injecting when resume
+        # silently failed costs a blind review, so the default stays injection.
+        "two_phase_resume": True,
         "track_prior_receipt_model": True,
         "require_nonempty_sid": False,
         "mint_session_id": False,
@@ -40537,9 +40647,54 @@ def _dispatch_backend_review(
     task_id: Optional[str] = None,
     reviewed_head_sha: Optional[str] = None,
     reservation_id: Optional[str] = None,
+    injected_prompt: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
-    """Run a backend and refund if dispatch itself terminates before a result."""
+    """Run a backend and refund if dispatch itself terminates before a result.
+
+    fn-169 R2 — TWO-PHASE dispatch when the caller supplies ``injected_prompt`` and
+    the backend supports a terminal resume (``two_phase_resume``):
+
+      phase 1  resume the session with ``prompt``, which carries the contract and
+               the reply grammar but NO re-rendered prior findings — the resumed
+               reviewer already holds them.
+      phase 2  only if resume failed: dispatch ``injected_prompt`` fresh, which
+               does carry them.
+
+    The order matters and cannot be collapsed. ``run_codex_exec`` used to resume
+    and, on failure, silently re-send the SAME prompt as a fresh session; with a
+    lean prompt that would be a fresh blind review with the prior findings dropped
+    — fn-90's runaway, reintroduced. So phase 1 runs ``resume_only=True`` (terminal
+    on failure) and phase 2 rebuilds. One review round still reserves exactly one
+    round: a failed resume returns no verdict, so nothing is double-consumed.
+    """
+    two_phase = (
+        injected_prompt is not None
+        and session_id is not None
+        and bool(reg.get("two_phase_resume"))
+    )
     try:
+        if two_phase:
+            out, sid, rc, err = reg["run_exec"](
+                prompt,
+                session_id=session_id,
+                repo_root=repo_root,
+                spec=resolved_spec,
+                resolution_out=resolution_out,
+                args=args,
+                resume_only=True,
+            )
+            if not resolution_out.get("resume_failed"):
+                return out, sid, rc, err
+            # Resume did not happen — the reviewer has no prior context, so the
+            # findings have to travel in the prompt after all.
+            return reg["run_exec"](
+                injected_prompt,
+                session_id=None,
+                repo_root=repo_root,
+                spec=resolved_spec,
+                resolution_out=resolution_out,
+                args=args,
+            )
         return reg["run_exec"](
             prompt,
             session_id=session_id,
@@ -40645,6 +40800,9 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     )
 
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    # Stays None for backends that always inject (cursor, copilot, host); only a
+    # two_phase_resume backend builds a second, findings-bearing prompt.
+    injected_prompt: Optional[str] = None
 
     # Cursor detects re-review BEFORE prompt build so the preamble is reserved
     # in the argv budget. Codex/copilot build the prompt first, then resume.
@@ -40697,11 +40855,26 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         )
         if reg["mint_session_id"] and not session_id:
             session_id = str(uuid.uuid4())
+        # fn-169 R2: two prompts. `prompt` is LEAN (contract + grammar, no
+        # re-rendered findings) and is what a resumed session receives;
+        # `injected_prompt` carries the findings and is used only if resume fails.
+        base_prompt = prompt
         prompt = _apply_impl_rereview_preamble(
-            prompt,
+            base_prompt,
             base_branch=base_branch,
             is_rereview=is_rereview,
             receipt_path=receipt_path,
+            resumed=bool(session_id) and bool(reg.get("two_phase_resume")),
+        )
+        injected_prompt = (
+            _apply_impl_rereview_preamble(
+                base_prompt,
+                base_branch=base_branch,
+                is_rereview=is_rereview,
+                receipt_path=receipt_path,
+            )
+            if bool(session_id) and bool(reg.get("two_phase_resume"))
+            else None
         )
 
     # Cursor: persona override + final argv-cap backstop (after resolve so
@@ -40770,6 +40943,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         task_id=None if standalone else task_id,
         reviewed_head_sha=reviewed_head_sha,
         reservation_id=reservation_id,
+        injected_prompt=injected_prompt,
     )
 
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(

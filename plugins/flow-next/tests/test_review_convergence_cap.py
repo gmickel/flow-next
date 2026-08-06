@@ -6270,3 +6270,168 @@ class TestCodexResumeArgvParity(unittest.TestCase):
         self.assertIn("--resume", resumed)
         self.assertIn("--mode", resumed)      # read-only posture preserved
         self.assertIn("--model", resumed)
+
+
+class TestTwoPhaseResumeDispatch(unittest.TestCase):
+    """fn-169 R2 — resume carries the lean prompt; only a failed resume injects.
+
+    The invariant these tests protect is an ORDER, not a string: the reviewer may
+    only be given a lean prompt while its session is alive, and a prompt that
+    dropped the prior findings must never reach a FRESH session. fn-90's runaway
+    is exactly that combination, and `run_codex_exec`'s old silent
+    resume-then-fresh fallthrough produced it.
+    """
+
+    def _dispatch(self, *, resume_fails: bool, two_phase: bool = True,
+                  injected: str | None = "INJECTED"):
+        calls: list[dict] = []
+
+        def fake_run_exec(prompt, *, session_id, repo_root, spec, resolution_out,
+                          args, resume_only=False):
+            calls.append(
+                {"prompt": prompt, "session_id": session_id, "resume_only": resume_only}
+            )
+            if resume_only and resume_fails:
+                resolution_out["resume_failed"] = True
+                resolution_out["resume_failure_reason"] = "exit 1"
+                return "", None, 1, "resume failed"
+            return "VERDICT=SHIP", session_id or "minted", 0, ""
+
+        reg: dict[str, Any] = {"run_exec": fake_run_exec}
+        if two_phase:
+            reg["two_phase_resume"] = True
+        result = flowctl._dispatch_backend_review(
+            backend="codex", reg=reg, args=argparse.Namespace(json=False),
+            prompt="LEAN", session_id="sess-1", repo_root=Path("."),
+            resolved_spec=None, resolution_out={}, receipt_path=None,
+            spec_id=None, review_kind=None, review_type="impl", task_id=None,
+            injected_prompt=injected,
+        )
+        return calls, result
+
+    def test_live_resume_sends_only_the_lean_prompt(self):
+        calls, (output, _sid, rc, _err) = self._dispatch(resume_fails=False)
+        self.assertEqual(len(calls), 1, "a working resume must not dispatch twice")
+        self.assertEqual(calls[0]["prompt"], "LEAN")
+        self.assertEqual(calls[0]["session_id"], "sess-1")
+        self.assertTrue(calls[0]["resume_only"],
+                        "phase 1 must be terminal — a silent fresh fallthrough "
+                        "would send the lean prompt to a context-free reviewer")
+        self.assertEqual((output, rc), ("VERDICT=SHIP", 0))
+
+    def test_failed_resume_injects_and_dispatches_fresh(self):
+        calls, (output, _sid, rc, _err) = self._dispatch(resume_fails=True)
+        self.assertEqual(len(calls), 2, "a failed resume must fall back to injection")
+        self.assertEqual(calls[0]["prompt"], "LEAN")
+        # The fresh dispatch is the ONLY one allowed to be session-free, and it
+        # is the one carrying the findings.
+        self.assertEqual(calls[1]["prompt"], "INJECTED")
+        self.assertIsNone(calls[1]["session_id"])
+        self.assertFalse(calls[1]["resume_only"])
+        self.assertEqual((output, rc), ("VERDICT=SHIP", 0))
+
+    def test_no_fresh_dispatch_ever_receives_the_lean_prompt(self):
+        """The structural property, stated once, over both outcomes."""
+        for resume_fails in (False, True):
+            calls, _ = self._dispatch(resume_fails=resume_fails)
+            for call in calls:
+                if call["session_id"] is None:
+                    self.assertNotEqual(
+                        call["prompt"], "LEAN",
+                        f"resume_fails={resume_fails}: a fresh session was handed "
+                        "the prompt that omits the prior findings",
+                    )
+
+    def test_backends_without_the_capability_are_untouched(self):
+        """cursor/copilot/host keep unconditional injection and one dispatch."""
+        for kwargs in ({"two_phase": False}, {"injected": None}):
+            calls, _ = self._dispatch(resume_fails=True, **kwargs)
+            self.assertEqual(len(calls), 1, kwargs)
+            self.assertEqual(calls[0]["prompt"], "LEAN", kwargs)
+            self.assertEqual(calls[0]["session_id"], "sess-1", kwargs)
+            self.assertFalse(calls[0]["resume_only"], kwargs)
+
+
+class TestResumedRatchetBlock(unittest.TestCase):
+    """fn-169 R2 — the lean block drops the payload, never the grammar."""
+
+    def test_resumed_block_omits_rendered_priors(self):
+        container = _ratchet_prior_container()
+        full = flowctl.build_convergence_ratchet_block(
+            "Prior finding #1: something", prior_items=container["items"],
+            review_type="implementation",
+        )
+        lean = flowctl.build_convergence_ratchet_block(
+            "Prior finding #1: something", prior_items=container["items"],
+            review_type="implementation", resumed=True,
+        )
+        self.assertIn("<prior_findings>", full)
+        self.assertNotIn("<prior_findings>", lean)
+        self.assertLess(len(lean), len(full))
+
+    def test_resumed_round_still_parses_per_ordinal_statuses(self):
+        """A reply written against the LEAN block's grammar must parse.
+
+        This is the failure mode that matters: dropping the payload is only safe
+        if the reply contract survives. So the assertion runs the real parser
+        over the real advertised grammar, not a hand-written sample.
+        """
+        lean = flowctl.build_convergence_ratchet_block(
+            "Prior finding #1: x\nPrior finding #2: y",
+            prior_items=_ratchet_prior_container()["items"],
+            review_type="implementation", resumed=True,
+        )
+        tokens = re.findall(
+            r"^\s*Prior finding #\d+: (?:fixed|not-fixed|withdrawn)\s*$",
+            lean, re.MULTILINE,
+        )
+        self.assertTrue(tokens, "lean block advertises no parseable prior-finding line")
+
+        container = _ratchet_prior_container()
+        template = container["items"][0]
+        container["items"] = [
+            dict(template, ordinal=n,
+                 id=flowctl._review_finding_lineage_id("receipt-1", n))
+            for n in (1, 2)
+        ]
+        reply = (
+            "Prior finding #1: fixed\n"
+            "Prior finding #2: not-fixed\n\n"
+            "VERDICT=NEEDS_WORK\n"
+        )
+        items = flowctl._review_finding_prior_items(reply, container, "receipt-2")
+        by_ordinal = {item["ordinal"]: item["status"] for item in items}
+        self.assertEqual(by_ordinal, {1: "fixed", 2: "not_fixed"})
+
+    def test_only_codex_opts_into_two_phase(self):
+        """Host's exception, and copilot/cursor's, stated as an assertion.
+
+        Host has no session by design ("every re-review is a fresh subagent"), so
+        it must always inject. Copilot's `--resume` is create-or-resume via a
+        marker and cursor's resume-only path is unmeasured. A later
+        "simplification" that flips any of them on would silently ship blind
+        re-reviews, which is what this asserts against.
+        """
+        flowctl._wire_backend_review_hooks()
+        opted_in = {
+            name for name, reg in flowctl.BACKEND_REGISTRY.items()
+            if reg.get("two_phase_resume")
+        }
+        self.assertEqual(opted_in, {"codex"})
+
+    def test_resumed_preamble_keeps_the_refetch_instruction(self):
+        """Dropping the payload must not drop "re-read from disk".
+
+        A resumed reviewer holds the findings, not the post-fix file contents —
+        RP's "reviewer sees your changes automatically" is an RP auto-refresh
+        property and false for every CLI backend.
+        """
+        preamble = flowctl.build_rereview_preamble(
+            ["a.py", "b.py"], "implementation",
+            prior_findings="Prior finding #1: x", resumed=True,
+        )
+        self.assertIn("Re-read these files from the repository", preamble)
+        self.assertIn("do NOT rely on cached content", preamble)
+        self.assertNotIn("<prior_findings>", preamble)
+        for rp_ism in ("automatically", "auto-refresh"):
+            self.assertNotIn(rp_ism, preamble)
