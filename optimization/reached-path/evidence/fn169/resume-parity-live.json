@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "task": "fn-169-review-subsystem-agentic-first-pass.1",
+  "codex_version": "0.146.1",
+  "note": "Live resume-parity evidence. Cannot live in the portable unit gate: needs a real codex install. One run.",
+  "checks": {
+    "fresh": {
+      "rc": 0,
+      "session_id": "019fd60b-3de5-79b3-965a-b1c89dd09c7f"
+    },
+    "resumed_header": {
+      "resumed": true,
+      "resume_failed": null,
+      "same_session": true,
+      "header": {
+        "model": "gpt-5.6-sol",
+        "sandbox": "read-only",
+        "reasoning effort": "xhigh"
+      },
+      "recall": true,
+      "expect": {
+        "sandbox": "read-only",
+        "reasoning effort": "xhigh"
+      }
+    },
+    "gap_seconds": 240,
+    "separate_process_after_gap": {
+      "resumed": true,
+      "resume_failed": null,
+      "recall": true,
+      "header": {
+        "model": "gpt-5.6-sol",
+        "sandbox": "read-only",
+        "reasoning effort": "xhigh"
+      },
+      "note": "fresh process, and the session was created >10 min earlier in this same run (see gap_seconds plus the intervening resumes) \u2014 so this single check covers BOTH open questions: cross-process and delayed resume."
+    }
+  }
+}

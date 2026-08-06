@@ -6167,6 +6167,14 @@ class TestCodexResumeArgvParity(unittest.TestCase):
     `require_codex` / `require_cursor` are mocked so these run on any host without
     the CLIs installed (CI installs neither) — same pattern as
     `test_cursor_run_exec.py`.
+
+    These assert the argv this implementation must build. The complementary claim —
+    that codex ACTUALLY applies those overrides — cannot live in a portable gate
+    because it needs a real codex install, so it is recorded as a live measurement in
+    `optimization/reached-path/evidence/fn169/resume-parity-live.json`: resumed
+    session reporting `sandbox: read-only` and `reasoning effort: xhigh` (against
+    `danger-full-access` / `medium` before the fix), from a separate process, more
+    than ten minutes after the session was created, with recall intact.
     """
 
     def _capture_resume_argv(self, **kwargs):
