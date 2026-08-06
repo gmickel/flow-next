@@ -6597,9 +6597,22 @@ class TestScopePathsSurviveUnusualFilenames(unittest.TestCase):
                 )
 
     def test_quotes_in_a_filename_are_not_re_escaped(self):
-        with self._repo_with('src/has"quote.py') as repo:
+        # NTFS forbids `"` in a filename outright (Errno 22), so this case is
+        # unrepresentable on Windows rather than merely awkward. Probe the real
+        # filesystem instead of keying off sys.platform: the constraint belongs to
+        # the filesystem, and a POSIX checkout mounted on a Windows runner would
+        # fail the same way.
+        name = 'src/has"quote.py'
+        try:
+            with tempfile.TemporaryDirectory() as probe:
+                target = Path(probe) / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("x", encoding="utf-8")
+        except OSError:
+            self.skipTest(f"filesystem rejects {name!r}; nothing to assert here")
+        with self._repo_with(name) as repo:
             scope = self._scope(repo)
-        self.assertIn('src/has"quote.py', scope)
+        self.assertIn(name, scope)
         self.assertNotIn('\\"', scope)
 
     def test_a_newline_bearing_path_is_flagged_not_silently_split(self):
