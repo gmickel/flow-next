@@ -29,6 +29,7 @@ Make session resume the primary continuity mechanism and injection the fallback 
 - `workflow-rp.md` ~:636 — the do-not-summarize principle (spirit, not the RP-specific justification)
 
 ### Key context
+- **The target shape is already proven** (spec § Already established): a resumed session with zero injection produced the exact per-ordinal grammar, scored by the production parser. Implement it; do not re-run a feasibility probe.
 - Depends on `.1`: without a trustworthy, loud resume signal this task would silently produce blind re-reviews — fn-90's original runaway.
 - If `.1` found resume unreliable for a backend, narrow this task to host plus that backend and record why.
 - fn-90's root cause was "every re-review ordered a FRESH blind review." Resume is the actual fix for that; injection was the compensation.

@@ -20,6 +20,29 @@ Defect 3 is the load-bearing discovery: **the convergence ratchet has been compe
 
 fn-74 removed the code but left **no executable ratchet**, so the decision was re-litigable by accident. It was re-litigated twice.
 
+## Already established — do NOT re-test or re-research
+
+Everything below was measured on this repo on 2026-08-06 with all four backends installed. Treat it as settled input. Re-anchor on the code locations in each task's Investigation targets, but do **not** re-run these probes, re-derive these numbers, or re-litigate the design:
+
+| Settled fact | Evidence |
+|---|---|
+| Embedded diff is capped at 50 KB on **every** backend | `_gather_review_diff(max_diff_bytes=50000)` |
+| fn-168's own diff = 495 374 B → reviewers saw **~10%** | `git diff <merge-base>..HEAD \| wc -c` |
+| Reviewers already read from disk while holding the diff | codex impl-review transcripts: `flowctl brief`, `rg -n`, `git diff --stat`, `sed -n`, `cmp`, `shasum` |
+| codex delivers the prompt on **stdin** — no size limit ever | `cmd = [codex, "exec", ..., "-"]`, prompt via `input=` |
+| cursor's 30 000 cap derives from Windows `CreateProcessW`; `ARG_MAX` here is 1 048 576 | `COPILOT_ARGV_PROMPT_MAX` comment; `getconf ARG_MAX` |
+| Resume **works**: codex (same thread, `resumed=True`), copilot (same sid), cursor on `grok-4.5` (same sid). All three have tool access | direct smoke test via `run_*_exec` |
+| cursor's DEFAULT model is quota-blocked on this account; use `grok-4.5` / `composer-2.5` | `ActionRequiredError: You've hit your usage limit` |
+| Resumed codex runs `sandbox: danger-full-access` and `reasoning effort: medium` | resumed CLI header, parsed from stderr |
+| Resume outside a git repo fails → **silent** fresh session (new `thread_id`, no recall, exit 0) | reproduced with `repo_root` set to a non-git dir |
+| **The target design works**: resumed session + zero injection + "I addressed some, `<path>`, re-read and verify" → `Prior finding #1: fixed / #2: not-fixed / #3: fixed`, scored **exactly** by the production `_review_finding_prior_items` | direct smoke test |
+| The minimal re-review prompt already exists in `build_rereview_preamble`; the ratchet is prepended to it | source |
+| Only cursor passes `max_total_chars`, so only cursor truncates prior items | one call site, in `fit_cursor_rereview_prompt_to_budget` |
+| ~594 lines of top-level defs + 8 constants are deletable | per-function line counts in Architecture below |
+| fn-74 already shipped no-embed for file contents (eval-validated) and fn-90/#202 + fn-159/#290 re-added payloads | `a7297f9a`, 2.5.0 CHANGELOG, `4b30937d`, `ddcda163` |
+
+**The only things that still need new measurement** are the three Open Questions at the foot of this spec — resume across separate processes, resume after a multi-minute gap, and copilot/cursor equivalents of the codex resume defects (all in `.1`) — plus the `.2` eval corpus, which is new instrumentation rather than a re-check of the above.
+
 ## Architecture & Data Models
 <!-- scope: technical -->
 

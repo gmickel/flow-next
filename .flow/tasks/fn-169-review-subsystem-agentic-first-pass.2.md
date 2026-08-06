@@ -38,6 +38,7 @@ Extend the existing harness so it can measure what the current corpus structural
 - `reveval_clean.py` / `orders_clean.py` — the over-flag pattern to mirror for the new corpus
 
 ### Key context
+- **Do not re-verify the spec's settled facts** (§ Already established): backend availability, resume working, the 50 KB cap, the 10%-visible number, codex-on-stdin. This task builds NEW instrumentation — the scope-trap corpus and its metrics — and records a baseline for comparison. It is not a re-audit.
 - Pre-register the decision gate in this task, before any post-change numbers exist, so it cannot be rationalised later.
 - fn-74 proved no-embed for file CONTENTS. The diff is the SCOPE signal — a different claim, which is why the traps exist.
 - Record discarded experiments too; that is the harness's stated discipline.

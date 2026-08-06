@@ -27,6 +27,7 @@ Give the resume path the same guarantees as a fresh dispatch, and stop it failin
 - `plugins/flow-next/skills/flow-next-impl-review/SKILL.md` — the read-only reviewer contract this restores
 
 ### Key context
+- **The three defects are ALREADY MEASURED** (spec § Already established): `danger-full-access`, `medium`, and the silent non-git fallthrough. Do NOT re-probe them to confirm — go straight to the fix and pin each with a regression test. The only NEW measurement in this task is resume across separate processes and after a multi-minute gap.
 - The reviewer read-only contract is stated in the impl-review skill: "never widen the reviewer sandbox: reviewers are read-only by contract, so a sandbox-blocked reviewer means something asked it to mutate the workspace." Resumed reviews have been violating it.
 - Every round 2+ review in the fn-168 workstream ran under `danger-full-access`. This is live, not theoretical.
 - Do NOT make injection conditional here — that is `.3`, and it must not land before resume is trustworthy.
