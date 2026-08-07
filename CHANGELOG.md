@@ -2,6 +2,28 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 3.16.1] - 2026-08-07
+
+If you opted into plan-sync, it now actually runs. Since the step shipped, the
+work loop's downstream-task extraction misread the task list's JSON shape, the
+error went to stderr, and the empty result looked exactly like "no downstream
+tasks to update" - so completed work never propagated drift into the tasks that
+came after it, and nothing said so. Thanks @sn-furali for the report and the
+measured diagnosis (#293).
+
+### Fixed
+
+- **Plan-sync reaches downstream tasks instead of silently skipping them.** The
+  work skill's downstream-ID extraction read `flowctl tasks --json` as a bare
+  array; it is an `{success, tasks, count}` envelope, so the jq filter errored
+  and the section's "skip if empty" contract swallowed the failure. The filter
+  now reads `.tasks[]`, and a failed extraction sets an explicit
+  `EXTRACT_FAILED` sentinel so a shape mismatch can never masquerade as the
+  legitimate nothing-to-do case again. (#293)
+- **Spec-completion-review (RepoPrompt classic mode) selects task files again.**
+  The same bare-array read sat in its tab-selection loop; task markdown files
+  were silently never added to the review selection.
+
 ## [flow-next 3.16.0] - 2026-08-07
 
 Cross-model review now sees the whole change, and stops being cut off while it is
