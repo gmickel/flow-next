@@ -2,6 +2,32 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 3.16.3] - 2026-08-07
+
+Hardens the spec-split path shipped hours ago in 3.16.2, after a live
+end-to-end run of the whole capture workflow surfaced prose defects the
+section-level testing could not see.
+
+### Fixed
+
+- **Choosing the split can no longer be read as "abort".** Three leftover
+  references to the pre-3.16.2 `consider-split` option said splitting exits
+  without writing; an agent following those lines instead of the new option
+  would have produced zero specs. All copies now agree: `split-as-proposed`
+  writes the linked set.
+- **You see the actual spec documents before they are written.** The split
+  path now prints every composed spec body and asks one confirmation before
+  creating anything - previously you ratified an allocation table and the
+  N documents were authored after approval, unseen.
+- **Captured specs keep their title.** The write step replaces the whole
+  spec file, and the old instruction forbade the body from carrying a title
+  heading - shipping heading-less specs. Bodies now open with their own
+  heading.
+- Split-composition rules made explicit: cross-cutting requirements are
+  duplicated into every spec they constrain; user-stated process items
+  ("tests must pass") are honored in prose, never as counted criteria; a
+  clause matching several business-signal categories counts once.
+
 ## [flow-next 3.16.2] - 2026-08-07
 
 POs, PMs, and devs who capture an epic, a briefing package, or a large
