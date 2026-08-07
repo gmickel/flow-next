@@ -2,7 +2,8 @@
   "branch_name": "fn-158-chart-sharpen-alias-namespace-make-edge",
   "created_at": "2026-08-02T07:07:12.552406Z",
   "depends_on_epics": [
-    "fn-153-chart-graph-integrity-premise-ordered"
+    "fn-153-chart-graph-integrity-premise-ordered",
+    "fn-170-chart-notes-correction-path-notes"
   ],
   "id": "fn-158-chart-sharpen-alias-namespace-make-edge",
   "next_task": 1,
@@ -22,5 +23,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-02T07:07:55.333302Z"
+  "updated_at": "2026-08-07T11:52:07.061023Z"
 }
