@@ -44,6 +44,12 @@ on:
       - "ruff.toml"
       - "scripts/**.py"
       - "agent_docs/**.py"
+  # Weekly drift backstop: full ubuntu / python 3.x run (units + smokes).
+  # The 3.x row was demoted from the per-PR matrix (it duplicated ubuntu-3.11
+  # almost entirely); day-to-day 3.x coverage rides python-intermediate-smoke,
+  # and this cron catches anything a new stable Python breaks in the full gate.
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
   workflow_dispatch:
     inputs:
       suite_mode:
@@ -77,21 +83,81 @@ on:
         default: false
 
 jobs:
-  test:
+  # ──────────── Change classification (docs-only prune) ────────────
+  # Classifies the change and emits the matrices the downstream jobs run on.
+  #   - schedule        → ubuntu / 3.x only (weekly full drift backstop)
+  #   - pull_request    → docs-only changes (**/*.md outside tests/, docs/**,
+  #                       agent_docs/**) run ONLY ubuntu-3.11 units (the
+  #                       prompt-pin / parity tests live there) and skip
+  #                       macos/windows plus all smoke jobs
+  #   - push / dispatch → always the full matrix (backstop; gate PRs only)
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      units_matrix: ${{ steps.classify.outputs.units_matrix }}
+      smokes_matrix: ${{ steps.classify.outputs.smokes_matrix }}
+      run_smokes: ${{ steps.classify.outputs.run_smokes }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+
+      - name: Classify change and emit job matrices
+        id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+          FULL_UNITS='[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.11"}]'
+          DOCS_UNITS='[{"os":"ubuntu-latest","python-version":"3.11"}]'
+          WEEKLY_3X='[{"os":"ubuntu-latest","python-version":"3.x"}]'
+          units="$FULL_UNITS"
+          smokes="$FULL_UNITS"
+          run_smokes=true
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            units="$WEEKLY_3X"
+            smokes="$WEEKLY_3X"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            git diff --name-only "${BASE_SHA}...HEAD" > "$RUNNER_TEMP/changed.txt"
+            echo "Changed files vs merge base:"
+            cat "$RUNNER_TEMP/changed.txt"
+            docs_only=true
+            # Empty diff (unexpected) → fail safe: run the full matrix.
+            [ -s "$RUNNER_TEMP/changed.txt" ] || docs_only=false
+            while IFS= read -r f; do
+              case "$f" in
+                docs/*|agent_docs/*) : ;;              # docs trees: docs-only
+                tests/*|*/tests/*) docs_only=false ;;  # anything under tests/ is code (even .md fixtures)
+                *.md) : ;;                             # markdown outside tests/
+                *) docs_only=false ;;                  # everything else is code
+              esac
+              [ "$docs_only" = "true" ] || break
+            done < "$RUNNER_TEMP/changed.txt"
+            if [ "$docs_only" = "true" ]; then
+              echo "Docs-only change: running ubuntu-3.11 units only (prompt-pin/parity coverage)."
+              units="$DOCS_UNITS"
+              run_smokes=false
+            fi
+          fi
+          {
+            echo "units_matrix=$units"
+            echo "smokes_matrix=$smokes"
+            echo "run_smokes=$run_smokes"
+          } >> "$GITHUB_OUTPUT"
+
+  # ──────────── Units (static checks + parallel unit suite) ────────────
+  # Split from the smokes so the two ~6-9m halves run side by side per OS
+  # instead of back to back. Neither job depends on the other.
+  units:
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            python-version: "3.11"
-          - os: macos-latest
-            python-version: "3.11"
-          - os: windows-latest
-            python-version: "3.11"
-          # Latest stable full gate. `3.x` advances with setup-python while the
-          # explicit 3.11 rows preserve the minimum-runtime contract.
-          - os: ubuntu-latest
-            python-version: "3.x"
+        # Explicit 3.11 rows preserve the minimum-runtime contract; the
+        # latest-stable `3.x` full gate runs on the weekly schedule and in
+        # python-intermediate-smoke, not per-PR.
+        include: ${{ fromJSON(needs.changes.outputs.units_matrix) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -205,13 +271,54 @@ jobs:
           # invisible debt. Bound a suspect file with --file-timeout instead.
           python scripts/run_tests_parallel.py "${JOBS_ARGS[@]}" "${MODE_ARGS[@]}" "${PATTERN_ARGS[@]}" "${VERBOSE_ARGS[@]}" "${TIMEOUT_ARGS[@]}"
 
+  # ──────────── Smokes (cursor install + functional bash smokes) ────────────
+  # Runs in parallel with the units job on each OS; skipped entirely on
+  # docs-only pull requests (push to main always runs the full set).
+  smokes:
+    needs: changes
+    if: needs.changes.outputs.run_smokes == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.smokes_matrix) }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows; bash on Linux/macOS — unifies the matrix.
+
+    steps:
+      - name: Disable git autocrlf so checkout preserves LF on Windows
+        run: git config --global core.autocrlf false
+        # Default Windows-runner config converts LF→CRLF on checkout, which
+        # changes heredoc bytes that smokes compare byte-identically against
+        # flowctl output. Force LF on all OSes for consistent fixtures.
+
+      # Reached-path B0/B1 validation reads immutable prompt sources from their
+      # recorded commits. A shallow checkout makes valid frozen evidence look
+      # corrupt because those commits are absent.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Configure git identity (smoke tests create commits)
+        run: |
+          git config --global user.email "ci@flow-next.test"
+          git config --global user.name "flow-next CI"
+          git config --global init.defaultBranch main
+
       # ──────────── Cursor local-install (1.9.0) ────────────
       # The bash + PowerShell Cursor installers (scripts/install-cursor.{sh,ps1})
       # must not drift, and must actually produce a complete + clean install on
-      # each OS. Installer-parity unit tests ride the parallel suite above; the
-      # real-install smoke runs the platform's OWN installer (rsync on Unix,
-      # robocopy on Windows) into ~/.cursor/plugins/local and verifies against
-      # the source tree (component trees match 1:1; codex/ tests/ *.pyc excluded).
+      # each OS. Installer-parity unit tests ride the parallel suite in the
+      # units job; the real-install smoke runs the platform's OWN installer
+      # (rsync on Unix, robocopy on Windows) into ~/.cursor/plugins/local and
+      # verifies against the source tree (component trees match 1:1; codex/
+      # tests/ *.pyc excluded).
 
       - name: install-cursor.sh real-install smoke (Unix)
         if: always() && runner.os != 'Windows'
@@ -309,11 +416,15 @@ jobs:
 
   python-intermediate-smoke:
     name: Python ${{ matrix.python-version }} compatibility smoke
+    needs: changes
+    if: needs.changes.outputs.run_smokes == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        # `3.x` (latest stable) rides this cheap contract leg per-PR now that
+        # the full ubuntu-3.x matrix row is demoted to the weekly schedule.
+        python-version: ["3.12", "3.13", "3.x"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -461,37 +572,3 @@ jobs:
           if ($out -notmatch '"success": true') { Write-Error "flowctl.cmd init did not succeed"; exit 1 }
           if ($out -match "Python was not found") { Write-Error "stub message leaked — flowctl.cmd did not bypass the stub"; exit 1 }
           Write-Host "PASS: flowctl.cmd bypassed the 9009 python3 stub"
-
-      - name: Git Bash — launcher rejects Python below 3.11 before source load
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH="$PYOLD_DIR:/usr/bin:/bin"
-          FLOWCTL="$GITHUB_WORKSPACE/plugins/flow-next/scripts/flowctl"
-          set +e
-          OUT="$("$FLOWCTL" --help 2>&1)"; RC=$?
-          set -e
-          [ "$RC" -ne 0 ]
-          echo "$OUT" | grep -q "Python 3.11 or newer is required"
-          ! echo "$OUT" | grep -q '^usage:'
-
-      - name: PowerShell — batch launcher rejects Python below 3.11 before source load
-        shell: pwsh
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          $env:PATH = $env:PYOLD_DIR
-          $flowctl = Join-Path $env:GITHUB_WORKSPACE "plugins/flow-next/scripts/flowctl.cmd"
-          # PowerShell's direct .cmd invocation does not reliably preserve the
-          # batch exit code on every runner. Assert it at the native cmd.exe
-          # boundary; the preceding step already proves direct pwsh invocation.
-          $command = "call `"$flowctl`" --help"
-          $outputLines = & $env:ComSpec /d /c $command 2>&1
-          $exitCode = $LASTEXITCODE
-          $out = $outputLines | Out-String
-          Write-Host $out
-          if ($exitCode -eq 0) { Write-Error "old Python probe unexpectedly succeeded"; exit 1 }
-          if ($out -notmatch "Python 3.11 or newer is required") { Write-Error "missing minimum-version error: $out"; exit 1 }
-          if ($out -match '^usage:') { Write-Error "flowctl.py loaded before minimum-version rejection"; exit 1 }
-          # The tested native failure is expected; do not let the Actions pwsh
-          # wrapper propagate its retained LASTEXITCODE after our assertions.
-          exit 0
