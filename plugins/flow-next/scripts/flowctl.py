@@ -16051,8 +16051,11 @@ def resolve_chart_decision(
                     "removals, or a notes correction) that a no-op would "
                     "silently ignore. Create follow-up decisions via "
                     "add-decision/wire-decision, drop parked questions via "
-                    "remove-question, and reopen the chart before "
-                    "re-resolving to append a fresh correction.",
+                    "remove-question, and carry the notes correction on a "
+                    "subsequent resolve of another decision (add-decision/"
+                    "wire-decision, or reopen the chart and resolve a "
+                    "follow-up decision) - resolved decisions stay "
+                    "immutable even after reopen.",
                     details={
                         "id": did,
                         "status": status,
@@ -16284,10 +16287,18 @@ def resolve_chart_decision(
         bullets = _format_notes_append_bullets(sharpen_notes, ts[:10])
         if bullets:
             notes_appended = bullets
-            existing_notes = _extract_chart_section_body(md_text, "Notes")
-            combined = existing_notes.strip()
-            if combined:
-                combined = combined + "\n" + "\n".join(bullets)
+            # R1 append-only: pre-existing Notes bytes stay verbatim.
+            # Splice the bullets at the section boundary - keep the raw
+            # body up to its trailing newline run, then re-attach that run
+            # (the blank separator before the next heading) after the new
+            # bullets. Never strip()-normalize the existing body.
+            existing_notes = _extract_chart_section_body(
+                md_text, "Notes", raw=True
+            )
+            if existing_notes.strip():
+                kept = existing_notes.rstrip("\n")
+                trailer = existing_notes[len(kept):]
+                combined = kept + "\n" + "\n".join(bullets) + trailer
             else:
                 combined = "\n".join(bullets)
             md_text = _replace_chart_section(md_text, "Notes", combined)
@@ -17336,7 +17347,9 @@ def _validate_briefing_membership(
             )
 
 
-def _extract_chart_section_body(md_text: str, heading: str) -> str:
+def _extract_chart_section_body(
+    md_text: str, heading: str, *, raw: bool = False
+) -> str:
     pattern = re.compile(
         rf"(^##\s+{re.escape(heading)}\s*\n)(.*?)(?=^##\s+|\Z)",
         re.MULTILINE | re.DOTALL,
@@ -17344,6 +17357,8 @@ def _extract_chart_section_body(md_text: str, heading: str) -> str:
     m = pattern.search(md_text or "")
     if not m:
         return ""
+    if raw:
+        return m.group(2)
     return m.group(2).strip()
 
 

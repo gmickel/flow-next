@@ -862,6 +862,63 @@ class TestNotesAppend(unittest.TestCase):
             self.assertIn("first correction", body)
             self.assertIn("second correction", body)
 
+    def test_existing_notes_bytes_preserved_verbatim(self) -> None:
+        """R1: an append never rewrites pre-existing Notes bytes. The
+        original section body (including internal blank lines and odd
+        spacing) survives as an exact byte prefix, and the blank
+        separator line before the next heading stays intact - the old
+        strip()-and-rerender path normalized both."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+
+            md_path = flow / "charts" / f"{chart_id}.md"
+            body = md_path.read_text(encoding="utf-8")
+            seeded = (
+                "- pre-existing  note   with  odd  spacing\n"
+                "\n"
+                "- second note\n"
+                "\n"
+            )
+            pattern = re.compile(
+                r"(^##\s+Notes\s*\n)(.*?)(?=^##\s+|\Z)",
+                re.MULTILINE | re.DOTALL,
+            )
+            self.assertIsNotNone(pattern.search(body))
+            body = pattern.sub(lambda m: m.group(1) + seeded, body, count=1)
+            md_path.write_text(body, encoding="utf-8")
+
+            sf = self._sharpen_file(
+                repo, "s.json", {"notes_append": "fresh correction"}
+            )
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+            body_after = _chart_md(flow, chart_id)
+            m = pattern.search(body_after)
+            self.assertIsNotNone(m)
+            new_raw = m.group(2)
+            core = seeded.rstrip("\n")
+            # Pre-existing bytes verbatim as a prefix...
+            self.assertTrue(
+                new_raw.startswith(core + "\n"),
+                f"pre-existing Notes bytes rewritten: {new_raw!r}",
+            )
+            # ...new bullet spliced after them, and the trailing blank
+            # separator before the next heading preserved.
+            self.assertRegex(
+                new_raw,
+                re.escape(core)
+                + r"\n- \[corrected \d{4}-\d{2}-\d{2}\] fresh correction\n\n\Z",
+            )
+
     def test_unknown_key_rejected_before_prose_refusal(self) -> None:
         """A payload with BOTH an unknown key and unsafe-looking notes
         prose must fail sharpen_file_unknown_key, never
