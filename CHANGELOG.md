@@ -2,6 +2,30 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 3.16.2] - 2026-08-07
+
+POs, PMs, and devs who capture an epic, a briefing package, or a large
+feature no longer have to guess whether it should be one spec or several -
+capture now tells you, with the actual split in hand.
+
+### Added
+
+- **Capture proposes how many specs your input should be.** When a capture
+  drafts 8 or more real requirements - business and technical only; standing
+  criteria and process items like "tests must be green" are never counted -
+  or the requirements clearly serve more than one independently shippable
+  outcome, the read-back includes a concrete proposal: per-spec titles, which
+  requirements go to which spec, and the dependency edges between them. One
+  answer (`split-as-proposed`) writes all of them, linked. The judgment is
+  independence, not size: a large-but-cohesive spec is recommended to stay
+  one spec, and small captures see nothing new. Nothing ever splits without
+  your say-so; autonomous runs record the proposal inside the spec instead
+  of acting on it.
+- **Interview makes the same call when a spec outgrows itself.** When
+  refinement pushes a spec past the threshold or an answer reveals a second
+  independent outcome, interview proposes the split before writing back,
+  with a guard that never renumbers criteria a review has already judged.
+
 ## [flow-next 3.16.1] - 2026-08-07
 
 If you opted into plan-sync, it now actually runs. Since the step shipped, the
