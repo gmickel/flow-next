@@ -4,6 +4,12 @@ satisfies: [R1]
 # fn-167-bugbot-pre-push-review-stage.1 Smoke test: verify patch-ID dedup and PR findings visibility (MANUAL, human-run)
 
 ## Description
+### Entry point (prebuilt 2026-08-07 by task .4)
+
+Everything is staged: branches `fn-167-smoke/bugbot-target` + `fn-167-smoke/bugbot-dedup` (byte-identical patch-id `6c49a82a`), deliberate-bug fixture `scratch/bugbot-smoke/queue-drain.js` (3 reviewer-visible bugs), zero CI triggers on the diff. **Follow `scratch/bugbot-smoke/RUNBOOK.md` on the target branch** - it condenses this task to 7 numbered steps (settings record, enable, probes A-D, record, revert).
+
+
+### Description
 HUMAN-RUN experiment. Do not implement anything in this task. Its only job is to reach 100% confidence on how `/review-bugbot` actually behaves against a real GitHub PR, because three unknowns decide the design and all are cheap to answer manually and expensive to get wrong in code:
 
 1. Does the patch-ID dedup actually fire on a real PR carrying an identical diff?
@@ -65,6 +71,22 @@ Disable Bugbot on `gmickel/flow-next` again. Restore "Run Once Per PR" to on and
 ### Hard stop
 
 If the dedup does not fire on an identical diff, the spec's cost premise is void. Record the finding and do not start task 2 or 3 on the cost argument. Note that a null result here does not necessarily kill the spec: if the draft probe shows Bugbot never reviews autonomous pilot output, the coverage argument stands on its own and the spec should be re-scoped around it rather than dropped. Bring it back for a re-decision either way.
+### Acceptance
+- Bugbot temporarily enabled on `gmickel/flow-next` for the test and **verifiably disabled again** afterwards; account settings restored (Run Once Per PR on, Review Draft PRs off, Autofix off).
+- Account settings in force recorded alongside every observation.
+- Evidence captured for a real non-draft PR: URL, verbatim skip comment, `Cursor Bugbot` check conclusion.
+- A definitive yes/no on whether local `/review-bugbot` findings render on the PR, with evidence.
+- Invariant 1 confirmed: with Run Once Per PR off, a further commit after the local review triggers a fresh remote review.
+- Invariant 2 confirmed: a dirty tree at review time produces a non-matching patch ID and no dedup.
+- Draft path characterised: whether a pilot-forced draft PR is reviewed at all with Review Draft PRs off, and what happens when it is marked ready-for-review without new commits.
+- Explicit go / no-go recorded in the spec artifacts, separating the cost premise (dedup) from the coverage premise (draft path), since either can survive alone.
+### Done summary
+TBD
+
+### Evidence
+- Commits:
+- Tests:
+- PRs:
 ## Acceptance
 - Bugbot temporarily enabled on `gmickel/flow-next` for the test and **verifiably disabled again** afterwards; account settings restored (Run Once Per PR on, Review Draft PRs off, Autofix off).
 - Account settings in force recorded alongside every observation.

@@ -3,12 +3,14 @@
   "claim_note": "",
   "claimed_at": null,
   "created_at": "2026-08-04T21:33:02.085153Z",
-  "depends_on": [],
+  "depends_on": [
+    "fn-167-bugbot-pre-push-review-stage.4"
+  ],
   "id": "fn-167-bugbot-pre-push-review-stage.1",
   "priority": null,
   "spec": "fn-167-bugbot-pre-push-review-stage",
   "spec_path": ".flow/tasks/fn-167-bugbot-pre-push-review-stage.1.md",
   "status": "todo",
   "title": "Smoke test: verify patch-ID dedup and PR findings visibility (MANUAL, human-run)",
-  "updated_at": "2026-08-04T21:59:46.272591Z"
+  "updated_at": "2026-08-07T11:55:40.515605Z"
 }
