@@ -787,6 +787,25 @@ class TestNotesAppend(unittest.TestCase):
             self.assertIn("already bulleted fact", body)
             self.assertIn("bare fact without a marker", body)
 
+    def test_leading_hyphen_prose_preserved(self) -> None:
+        """A leading hyphen without a following space (`--legacy`, `-5 ms`)
+        is prose, not a bullet marker - the hyphen must survive intact.
+        Only `- ` (and a bare `-`, the empty markdown bullet) is stripped."""
+        bullets = flowctl._format_notes_append_bullets(
+            "--legacy\n-5 ms\n- real bullet\n-\nplain prose\n",
+            "2026-08-08",
+        )
+        self.assertEqual(
+            bullets,
+            [
+                "- [corrected 2026-08-08] --legacy",
+                "- [corrected 2026-08-08] -5 ms",
+                "- [corrected 2026-08-08] real bullet",
+                "- [corrected 2026-08-08] ",
+                "- [corrected 2026-08-08] plain prose",
+            ],
+        )
+
     def test_backslash_content_not_corrupted(self) -> None:
         """_replace_chart_section substitutes via a lambda (literal text);
         a correction containing regex backreference shapes must survive

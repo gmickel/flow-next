@@ -15830,9 +15830,11 @@ def _format_notes_append_bullets(text: str, date_str: str) -> list[str]:
             continue
         if line.startswith("- "):
             content = line[2:].strip()
-        elif line.startswith("-"):
-            content = line[1:].strip()
+        elif line == "-":
+            content = ""
         else:
+            # A leading hyphen without a following space (`-5 ms`,
+            # `--legacy`) is prose, not a bullet marker - keep it intact.
             content = line
         bullets.append(f"- [corrected {date_str}] {content}")
     return bullets
