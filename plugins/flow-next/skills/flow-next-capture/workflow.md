@@ -21,7 +21,7 @@ If `.flow/` does not exist, print `No .flow/ directory — run \`$FLOWCTL init\`
 
 ```bash
 CAPTURE_CFG="${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json"   # literal path
-"$FLOWCTL" config get --json > "$CAPTURE_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$CAPTURE_CFG"
+"$FLOWCTL" config get --json > "$CAPTURE_CFG" 2>/dev/null || { printf '{"key":null,"value":{}}' > "$CAPTURE_CFG"; echo "[CAPTURE]: config snapshot empty — flowctl unreachable; snapshot-derived gates degrade to defaults" >&2; }
 ```
 
 The Ralph-block (SKILL.md) runs before this preamble. Phase 0 starts after the Ralph-block and the preamble.
@@ -399,7 +399,7 @@ Epics, briefing packages, and multi-feature requests arrive as one conversation 
 
 **Tripwire (when to compute):** 8+ acceptance criteria, OR the criteria visibly serve more than one independently shippable outcome. Below the tripwire, skip this section entirely — normal captures see nothing.
 
-**Counting rule:** count business and technical requirements only. Standing criteria (G-IDs from `.flow/criteria.md`) and process requirements (tests green, docs updated, mirror synced) never count — they ride along with any spec.
+**Counting rule:** count business and technical requirements only. Standing criteria (G-IDs from `.flow/criteria.md`) and process requirements (tests green, docs updated, mirror synced) never count — they ride along with any spec. Excluded-but-user-stated process items are still honored (R10): carry them in the spec body's prose or Quick commands, not as counted R-IDs.
 
 **Split criterion — independence, not size.** The count trips the check; the partition comes from shippability:
 
@@ -434,7 +434,7 @@ Rules:
 - **Source tags restricted to `[user]` or `[paraphrase]`** for biz-routed content. `[inferred]` never routes to a business destination. If a category has no conversation signal, its destination(s) receive no new content — sections without conversation signal stay absent (no empty-section auto-populate; this is the R22 invariant).
 - **One signal can land in multiple destinations** (e.g., a success metric becomes both an outcome-AC R-ID and a `### Motivation` rationale entry) — that still counts as **one** SIGNAL CATEGORY for the R25 threshold. Counting is over R24's nine categories, not over markdown destinations.
 - **Categories 1, 2, 9 (target user / problem framing / UX) collapse into `Goal & Context` prose.** Per-line tags inside the narrative are not required, but the section-level tag breakdown (e.g., `<!-- Goal & Context: 80% [user], 20% [paraphrase] -->`) must reflect them.
-- **Category 4 ("MVP scope / not doing X yet") and Category 6 ("what NOT to build") both route to `Boundaries`** but stay counted separately for R25 (different signal-source patterns: "MVP is narrow" vs "definitely not X").
+- **Category 4 ("MVP scope / not doing X yet") and Category 6 ("what NOT to build") both route to `Boundaries`** but stay counted separately for R25 (different signal-source patterns: "MVP is narrow" vs "definitely not X"). **Tie-break:** a single clause matching more than one category counts ONCE, in the most specific category it matches — never double-counted toward the R25 threshold.
 - **Decision Context substructure** — capture only ever writes fresh specs (never a rewrite of an existing FLAT body), so there is no FLAT→substructured promotion to handle here (that's `/flow-next:interview`'s merge contract). Decision rule for capture: when category 3, 5, 7, or 8 routes content, write `## Decision Context` as SUBSTRUCTURED — emit the `### Motivation` H3 with the routed content. Leave `### Implementation Tradeoffs` absent (do NOT write the `*Pending technical-scope interview pass.*` placeholder; that's `/flow-next:interview --scope=business`'s responsibility on a rewrite, not capture's). When none of categories 3, 5, 7, 8 carry content, write `## Decision Context` as FLAT — preserves R22 (solo dev with zero biz signals sees no Motivation/Implementation Tradeoffs scaffolding) and matches the canonical template's "(A) FLAT (default, R22 backward-compat)" branch.
 - **Constraints / risks (categories 5, 8) pick one destination per signal** — `Goal & Context` when the constraint sets up framing, `### Motivation` when it's the reason behind a trade-off. Don't double-route to both for the same signal.
 
@@ -549,7 +549,7 @@ Even when multiple must-ask cases fire, ask **one at a time**. Subsequent questi
 
 Write the full draft to that path via the **Write tool** — exactly once (the file is what Phase 5 hands to `spec set-plan --file`; do NOT re-author it into a Phase-5 heredoc). The Write is plumbing, not the user-facing read-back.
 
-The **draft file** contains the spec body (what `spec set-plan` consumes — no duplicate `# <title>` heading, per §5.1):
+The **draft file** contains the spec body (what `spec set-plan` consumes — it OPENS with a single `# <title>` heading, per §5.1: set-plan replaces the whole file, so a body without one ships a heading-less spec):
 
 1. The `## Conversation Evidence` block (Phase 1).
 2. Every section drafted in Phase 2, with source tags visible.
@@ -597,7 +597,7 @@ The **summary payload** (metadata about the draft — never a re-emission of it)
   - `edit` — revise specific sections (loops back to Phase 2 for those sections)
   - `abort` — exit 0, no write ("draft is thrown away, nothing saved")
 
-  When a `SPLIT_PROPOSAL` with N>1 exists, the recommendation may lead with `split-as-proposed` — proposing structure is not self-blessing content (the no-self-blessing rule above still governs `[inferred]` content): `Recommended: split-as-proposed — <N> independently shippable outcomes (allocation printed above). Confidence: [<tier>].`
+  When a `SPLIT_PROPOSAL` with N>1 exists, the recommendation leads with `split-as-proposed` — it takes precedence over a zero-`[inferred]` `Recommended: approve` (proposing structure is not self-blessing content; the no-self-blessing rule above still governs `[inferred]` content): `Recommended: split-as-proposed — <N> independently shippable outcomes (allocation printed above). Confidence: [<tier>].`
 
 Confidence tier (attaches to whichever recommendation the rule above produced):
 
@@ -705,7 +705,7 @@ Autofix never offers `edit` — there's no user to ask. The Write + `--yes` patt
 
 ### Done when
 
-- Interactive: full draft (and rewrite diff when applicable) printed as ordinary markdown, then user picked `approve` (proceed to Phase 5), `consider-split` / `abort` (exit 0, no write), or hit the edit-cycle cap. Edit cycles re-print the revised draft before each short ask. On approve, the glossary and mark-ready consents (when their gates fired) are recorded for Phase 5.8/5.9.
+- Interactive: full draft (and rewrite diff when applicable) printed as ordinary markdown, then user picked `approve` (proceed to Phase 5, one spec), `split-as-proposed` (proceed to Phase 5 via §5.2b, N specs), `abort` (exit 0, no write), or hit the edit-cycle cap. Edit cycles re-print the revised draft before each short ask. On approve or split, the glossary and mark-ready consents (when their gates fired) are recorded for Phase 5.8/5.9.
 - Autofix with `--yes`: draft Written, summary payload printed, proceeding to Phase 5.
 - Autofix without `--yes`: draft Written, summary payload printed, exit 0.
 
@@ -806,7 +806,7 @@ When `STRATEGY_PRESENT=false`, this entire section is a no-op — there's no str
 
 The approved draft file from §4.1 (revised in-place by Phase 4 edit cycles) IS the input to `flowctl spec set-plan --file <literal draft path>` — never re-authored into a heredoc. Source tags **stay in the spec body** — they are part of the audit trail and survive into the on-disk spec at `.flow/specs/<id>.md`. Future readers (including `/flow-next:plan` and `/flow-next:interview`) see the tags and can scrutinize.
 
-The frontmatter top of the spec is whatever `flowctl spec create` writes (it generates a placeholder via the spec-create plumbing). `spec set-plan` overwrites the placeholder with the captured body — so the captured body should NOT include a duplicate `# <title>` heading; `set-plan` accepts the body as-is and atomic-writes to `.flow/specs/<id>.md`.
+`spec set-plan` replaces the ENTIRE markdown file with the supplied body — the create-time placeholder (including its `# <title>` heading) does not survive. The captured body must therefore OPEN with a single `# <title>` heading of its own (verified live: a body without one ships a heading-less spec).
 
 ### 5.2 — New-spec branch
 
@@ -896,10 +896,18 @@ The draft file round-trips embedded markdown and newlines byte-exact — `read_f
 
 ### 5.2b — Split branch (interactive `split-as-proposed` only)
 
-Run the §5.2 new-spec ceremony once per proposed spec, in dependency order (dependencies first):
+**Compose first, show, then write.** The user ratified an allocation table, not the N bodies — so before any flowctl write:
+
+1. Compose every spec body (rules below), each at its own literal draft path — `${TMPDIR:-/tmp}/flow-capture-draft-<that-spec's-title-slug>-<same suffix as §4.1>.md` (per-spec slug, shared suffix).
+2. **Print all N bodies as ordinary assistant messages** (print-then-ask, same R13 contract as §4.2), then ONE short `AskUserQuestion` — header `Write N specs?`, body: one-line pointer + per-spec title list; options: `write` (proceed), `back` (return to the §4.2 read-back with the proposal still on offer). Content ratified in the combined draft needs no re-scrutiny prose — this ask exists because the slicing (renumbering, evidence slices, sibling notes) is new authored text the user has not seen.
+3. On `write`, run the §5.2 new-spec ceremony once per spec, in dependency order (dependencies first).
+
+Body composition rules:
 
 - **Each spec gets its own complete body**: its allocated criteria renumbered from R1, the Phase 2 sections that serve those criteria, a per-spec slice of `## Conversation Evidence`, and a short `## Decision Context` note naming the sibling specs and the shared origin. Specs are handover objects — never write "see the other spec" in place of content a worker needs.
-- Write each body to its own literal draft path (same path-persistence rule as §4.1) and hand it to that spec's `spec set-plan --file`.
+- **Cross-cutting requirements** (one constraint governing several specs, e.g. shared middleware) are duplicated into every spec they constrain — never allocated to a single spec, which would create an implicit dependency.
+- **User-stated process requirements** (tests green, docs updated) are honored per spec — carried in each spec's body prose or Quick commands, not as counted R-IDs (they were excluded from the §2.5 count for the same reason). When the repo has `.flow/criteria.md`, note that a recurring process statement is standing-criterion material.
+- `BIZ_SIGNAL_CATEGORIES` (§2.6) is conversation-level: reuse the single computed value for every spec's Phase 6 judgment — never recompute per spec slice.
 - **After all creates, record the edges**: `"$FLOWCTL" spec add-dep <dependent-id> <dependency-id> --json` per proposed edge.
 - §5.4–§5.10 (branch name, tracker sync, glossary, readiness, HTML lens) run per created spec exactly as for a single create; the Phase 4 mark-ready answer applies to all created specs or none.
 - Phase 6 lists every created id plus the dependency edges.
@@ -1116,12 +1124,14 @@ fi
 
 The literal suggestion phrasing matches the R25 spec verbatim ("business-requirements signals; consider `/flow-next:interview --scope=business <spec-id>`") so the surface text stays generic — capture does not enumerate which categories triggered the suggestion. Informational only — never a blocking prompt.
 
-If Phase 4 surfaced 8+ acceptance criteria AND the user picked `approve` (not `consider-split`), append:
+If Phase 2.5 proposed N>1 AND the user picked `approve` (declining the split), append:
 
 ```text
-Note: this spec has <N> acceptance criteria — /flow-next:plan can stage the
-breakdown into multiple sub-specs if needed.
+Note: a <N>-spec split was proposed and declined — the allocation is preserved
+in this conversation; /flow-next:interview <id> can still split later.
 ```
+
+On the `split-as-proposed` path, emit the footer block once PER created spec (each with its own `Spec captured at…`, its own mandatory `Tracker sync:` line — the sync check ran per spec — and its own next-step hint), followed by one shared line listing the dependency edges.
 
 If Phase 0.3 found memory hits, append the related-context footer:
 
