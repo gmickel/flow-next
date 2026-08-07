@@ -15884,32 +15884,32 @@ def _parse_sharpen_file(path: Path) -> dict:
             },
         )
 
-    decisions = data.get("decisions")
-    if decisions is None:
-        decisions = []
+    # An explicitly present key must satisfy its type contract — null is
+    # rejected, never conflated with omission (codex review, PR #299).
+    decisions = data["decisions"] if "decisions" in data else []
     if not isinstance(decisions, list):
         raise ChartError(
             "validation",
             "sharpen_file_invalid_decisions",
             "sharpen-file 'decisions' must be a list",
         )
-    remove_keys = (
-        data.get("remove_questions")
-        or data.get("remove_parked")
-        or data.get("parked_removals")
-        or []
-    )
-    if not isinstance(remove_keys, list):
-        raise ChartError(
-            "validation",
-            "sharpen_file_invalid_removals",
-            "sharpen-file remove_questions must be a list of keys",
-        )
+    remove_keys: list = []
+    for alias in ("remove_questions", "remove_parked", "parked_removals"):
+        if alias not in data:
+            continue
+        alias_val = data[alias]
+        if not isinstance(alias_val, list):
+            raise ChartError(
+                "validation",
+                "sharpen_file_invalid_removals",
+                "sharpen-file remove_questions must be a list of keys",
+            )
+        remove_keys = remove_keys or alias_val
     remove_keys = [str(k).strip() for k in remove_keys if str(k).strip()]
 
     notes_append_raw = data.get("notes_append")
     notes_append: Optional[str] = None
-    if notes_append_raw is not None:
+    if "notes_append" in data:
         if not isinstance(notes_append_raw, str):
             raise ChartError(
                 "validation",

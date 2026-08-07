@@ -945,6 +945,37 @@ class TestNotesAppend(unittest.TestCase):
                 _decision_json(flow, chart_id, 1)["status"], "open"
             )
 
+    def test_explicit_null_rejected_not_conflated_with_absent(self) -> None:
+        """An explicitly present null must fail the key's type contract,
+        never be treated as an omitted key (codex review, PR #299)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            cases = [
+                ({"notes_append": None}, "sharpen_file_invalid_notes_append"),
+                ({"decisions": None}, "sharpen_file_invalid_decisions"),
+                ({"remove_questions": None}, "sharpen_file_invalid_removals"),
+                ({"remove_parked": None}, "sharpen_file_invalid_removals"),
+                ({"parked_removals": None}, "sharpen_file_invalid_removals"),
+            ]
+            for payload, code in cases:
+                sf = self._sharpen_file(repo, "s.json", payload)
+                r = _run_flowctl(
+                    repo, "chart", "resolve", d1["id"],
+                    "--answer-file", str(af),
+                    "--sharpen-file", str(sf), "--json",
+                )
+                self.assertNotEqual(r.returncode, 0, payload)
+                err = json.loads(r.stdout)["error"]
+                self.assertEqual(err["code"], code, payload)
+            self.assertEqual(
+                _decision_json(flow, chart_id, 1)["status"], "open"
+            )
+
     def test_notes_appended_always_list_when_absent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
