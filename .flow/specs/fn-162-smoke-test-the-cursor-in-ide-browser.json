@@ -1,7 +1,9 @@
 {
   "branch_name": "fn-162-smoke-test-the-cursor-in-ide-browser",
   "created_at": "2026-08-03T16:00:32.808543Z",
-  "depends_on_epics": [],
+  "depends_on_epics": [
+    "fn-173-adopt-cua-browser-use-in-driveqa-rung-2"
+  ],
   "id": "fn-162-smoke-test-the-cursor-in-ide-browser",
   "next_task": 1,
   "plan_review_status": "unknown",
@@ -20,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-03T16:02:23.784712Z"
+  "updated_at": "2026-08-07T11:40:16.359198Z"
 }
