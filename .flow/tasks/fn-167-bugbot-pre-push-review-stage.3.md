@@ -34,9 +34,8 @@ Each property gets the update it needs, not a copy-paste of the repo docs.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+NOT BUILT - spec closed wont-do 2026-08-07 after task .1 falsified the load-bearing premise (patch-ID dedup does not survive local->PR; stage would double-bill and duplicate the existing cursor review backend). Users who want Bugbot enable it on GitHub directly; flow-next carries no opinion. Decision + evidence: .flow/memory knowledge/decisions.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: premise falsified pre-code by fn-167.1 live smoke
 - PRs:

@@ -97,9 +97,8 @@ TBD
 - Draft path characterised: whether a pilot-forced draft PR is reviewed at all with Review Draft PRs off, and what happens when it is marked ready-for-review without new commits.
 - Explicit go / no-go recorded in the spec artifacts, separating the cost premise (dedup) from the coverage premise (draft path), since either can survive alone.
 ## Done summary
-TBD
-
+Smoke executed 2026-08-07 (Gordon live in Cursor + agent-prebuilt fixtures, 3 fixture iterations). VERDICT: premise falsified - patch-ID dedup does not fire local->PR (fresh full review on identical diff, PR #298). Full observations: .flow/memory knowledge/decisions "Bugbot pre-push stage wont-do" + session memory. Spec closed wont-do as a result.
 ## Evidence
 - Commits:
-- Tests:
+- Tests: live probes A-C on gmickel/flow-next PRs #297/#298; fixture branches fn-167-smoke/* patch-id-verified
 - PRs:

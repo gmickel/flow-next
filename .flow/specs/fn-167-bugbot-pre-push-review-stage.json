@@ -15,7 +15,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-167-bugbot-pre-push-review-stage.md",
-  "status": "open",
+  "status": "done",
   "title": "Bugbot pre-push review stage",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-07T11:45:59.239057Z"
+  "updated_at": "2026-08-07T13:42:55.202022Z"
 }
