@@ -105,30 +105,9 @@ class StrategyReachedPathTests(unittest.TestCase):
             {name: _hash(path) for name, path in paths.items()},
         )
 
-        chars = {name: len(_text(path)) for name, path in paths.items()}
-        root = SKILL.relative_to(REPO).as_posix()
-        first = FIRST_RUN.relative_to(REPO).as_posix()
-        update = UPDATE.relative_to(REPO).as_posix()
-        interview = INTERVIEW.relative_to(REPO).as_posix()
-        template = TEMPLATE.relative_to(REPO).as_posix()
-        expected = {
-            "strategy.absent": chars[root] + chars[first] + chars[interview] + chars[template],
-            "strategy.husk": chars[root] + chars[first] + chars[interview],
-            "strategy.foreign-keep": chars[root],
-            "strategy.foreign-abort": chars[root],
-            "strategy.generated-first-run": chars[root] + chars[first] + chars[interview] + chars[template],
-            "strategy.update": chars[root] + chars[update] + chars[interview],
-            "strategy.malformed-unknown": chars[root],
-        }
-        for fixture in self.ledger["fixtures"]:
-            self.assertEqual(expected[fixture["id"]], fixture["candidate_reached_path_chars"])
-            baseline = fixture["baseline_reached_path_chars"]
-            if baseline is not None:
-                self.assertLess(fixture["candidate_reached_path_chars"], baseline)
-                self.assertEqual(
-                    fixture["candidate_reached_path_chars"] - baseline,
-                    fixture["delta_chars"],
-                )
+        # Size ratchet removed 2026-08-07: prose growth is judged by the
+        # standing criterion in .flow/criteria.md (G1), not a frozen baseline.
+        # The source_hashes pin above still forces conscious edits.
 
     def test_every_accuracy_cell_passes_and_discards_are_retained(self) -> None:
         self.assertTrue(all(v == "pass" for v in self.ledger["accuracy_checks"].values()))

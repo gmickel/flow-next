@@ -46,28 +46,9 @@ class WorkReachedPathRoutes(unittest.TestCase):
             with self.subTest(path=relative):
                 self.assertEqual(_hash(REPO_ROOT / relative), expected)
 
-    def test_measured_default_and_active_paths_shrink(self) -> None:
-        metrics = self.evidence["metrics"]
-        self.assertEqual(
-            metrics["algorithm"],
-            "lf-full-file-on-activation-once-per-path-hash",
-        )
-        default_chars = len(self.skill) + len(self.phases)
-        active_chars = default_chars + len(self.selection) + len(self.delegation)
-        self.assertEqual(
-            default_chars, metrics["default_path"]["candidate_reached_path_chars"]
-        )
-        self.assertEqual(
-            active_chars,
-            metrics["delegation_active_path"]["candidate_reached_path_chars"],
-        )
-        for route in ("default_path", "delegation_active_path"):
-            row = metrics[route]
-            self.assertLess(
-                row["candidate_reached_path_chars"],
-                row["baseline_reached_path_chars"],
-            )
-            self.assertGreater(row["reduction_chars"], 0)
+    # Size ratchet removed 2026-08-07: prose growth is judged by the standing
+    # criterion in .flow/criteria.md (G1), not a frozen char baseline. The
+    # prompt_hashes pin above still forces conscious, evidence-updating edits.
 
     def test_requested_path_loads_exact_selection_before_active_reference(self) -> None:
         self.assertNotIn("STOP and read", self.phases)

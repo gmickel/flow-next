@@ -701,13 +701,8 @@ class TestReachedPathHarness(unittest.TestCase):
         actual = {row["fixture_id"] for row in artifact["fixtures"]}
         self.assertEqual(expected, actual)
         self.assertEqual(len(actual), 15)
-        for row in artifact["fixtures"]:
-            self.assertEqual(row["before_reached_path_chars"], 452_552)
-            self.assertGreater(row["reduction_chars"], 0)
-            self.assertLess(
-                row["after_reached_path_chars"],
-                row["before_reached_path_chars"],
-            )
+        # Size ratchet removed 2026-08-07: prose growth is judged by the
+        # standing criterion in .flow/criteria.md (G1), not stored size deltas.
 
     def test_tracker_candidate_displays_custom_output_paths(self) -> None:
         relative = Path("optimization/reached-path/custom-candidate.json")

@@ -243,15 +243,8 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             "workflow.md must still own the QA-stage classification decision",
         )
 
-        ready_chars = len(normalized(self.pilot_skill)) + len(
-            normalized(self.pilot_workflow)
-        )
-        backlog_chars = ready_chars + len(normalized(self.pilot_backlog))
-        self.assertEqual(ready_chars, measured["ready_reached_path_chars"])
-        self.assertEqual(backlog_chars, measured["backlog_reached_path_chars"])
-        self.assertLess(
-            ready_chars, candidate["baseline"]["ready_reached_path_chars"]
-        )
+        # Size ratchet removed 2026-08-07: prose growth is judged by the
+        # standing criterion in .flow/criteria.md (G1), not a frozen baseline.
 
     def test_mirror_carries_tracker_sync_r14_phase0_fix(self) -> None:
         """The R14 Phase-0 autonomy-marker fix (fn-68.2) survives in the
