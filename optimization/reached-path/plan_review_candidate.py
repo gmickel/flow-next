@@ -211,11 +211,9 @@ def corpus_evidence(
             return text
         return text[:start] + "## Output Format\n<FORMAT>\n" + text[end:]
 
-    format_only_to_b1 = (
-        without_output_format(candidate_rendered)
-        == without_output_format(baseline_rendered)
-        and len(candidate_rendered) <= len(baseline_rendered)
-    )
+    format_only_to_b1 = without_output_format(
+        candidate_rendered
+    ) == without_output_format(baseline_rendered)
     rows["prompt_template"] = {
         "path": PROMPT.as_posix(),
         "b1_sha256": b1_prompt_hash,

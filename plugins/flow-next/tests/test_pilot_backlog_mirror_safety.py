@@ -44,7 +44,6 @@ Run:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import pathlib
 import re
@@ -202,20 +201,8 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         candidate = ledger["candidates"][0]
         self.assertEqual("keep", candidate["verdict"])
 
-        def normalized(text: str) -> str:
-            return text.replace("\r\n", "\n").replace("\r", "\n")
-
-        def digest(text: str) -> str:
-            return hashlib.sha256(normalized(text).encode("utf-8")).hexdigest()
-
-        measured = candidate["candidate"]
-        self.assertEqual(len(normalized(self.pilot_skill)), measured["skill_chars"])
-        self.assertEqual(digest(self.pilot_skill), measured["skill_hash"])
-        self.assertEqual(
-            digest(self.pilot_backlog), measured["backlog_reference_hash"]
-        )
-        self.assertEqual(digest(self.pilot_workflow), measured["workflow_hash"])
-        self.assertEqual(digest(self.pilot_qa), measured["qa_reference_hash"])
+        # Live-file hash/char freeze removed 2026-08-07 (.flow/criteria.md G1;
+        # deliberate-change protection lives in test_prompt_text_pinned.py).
         self.assertIn(
             "qa-stage gate remains conditional and fail-open; the reference "
             "computes freshness while workflow.md retains classification ownership",

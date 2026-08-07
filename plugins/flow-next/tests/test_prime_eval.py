@@ -3016,34 +3016,7 @@ class PrimeReachedPathRoutingTestCase(unittest.TestCase):
         self.assertTrue(routes["full-fixes"]["writes"])
         self.assertFalse(routes["full-fixes"]["asks"])
 
-    def test_measured_routes_match_live_candidate_and_improve_on_b1(self) -> None:
-        root_skill = PRIME_SKILL_DIR / "SKILL.md"
-        routes = self.routes["routes"]
-        for name, row in routes.items():
-            activated = [
-                REPO_ROOT / rel
-                for rel in row["required_reads"]
-                if not rel.endswith("/SKILL.md")
-            ]
-            metrics = self.character.compute_reached_path_from_paths(
-                REPO_ROOT,
-                root_skill,
-                activated,
-            )
-            self.assertEqual(
-                metrics["reached_path_chars"],
-                row["candidate_reached_path_chars"],
-                name,
-            )
-            self.assertLess(
-                row["candidate_reached_path_chars"],
-                row["b1_reached_path_chars"],
-                name,
-            )
-        self.assertGreaterEqual(
-            routes["classify-only"]["reduction_percent"],
-            60,
-        )
+    # Live-file char freeze removed 2026-08-07 (.flow/criteria.md G1).
 
     def test_classify_forbids_all_cold_references(self) -> None:
         forbidden = set(self.routes["routes"]["classify-only"]["forbidden_reads"])

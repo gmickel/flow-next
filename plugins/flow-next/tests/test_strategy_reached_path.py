@@ -95,19 +95,9 @@ class StrategyReachedPathTests(unittest.TestCase):
         self.assertNotIn("references/first-run.md", self.update)
         self.assertNotIn("references/strategy-template.md", self.update)
 
-    def test_candidate_hashes_and_reached_path_metrics_are_exact(self) -> None:
-        paths = {
-            path.relative_to(REPO).as_posix(): path
-            for path in (SKILL, FIRST_RUN, UPDATE, INTERVIEW, TEMPLATE)
-        }
-        self.assertEqual(
-            self.ledger["candidate"]["source_hashes"],
-            {name: _hash(path) for name, path in paths.items()},
-        )
-
-        # Size ratchet removed 2026-08-07: prose growth is judged by the
-        # standing criterion in .flow/criteria.md (G1), not a frozen baseline.
-        # The source_hashes pin above still forces conscious edits.
+    # Size ratchet + live-file hash freeze removed 2026-08-07: prose growth is
+    # judged by .flow/criteria.md G1; deliberate-change protection lives in
+    # test_prompt_text_pinned.py, not per-ledger pins.
 
     def test_every_accuracy_cell_passes_and_discards_are_retained(self) -> None:
         self.assertTrue(all(v == "pass" for v in self.ledger["accuracy_checks"].values()))

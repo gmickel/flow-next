@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 import unittest
 from pathlib import Path
@@ -104,24 +102,7 @@ class SetupReferenceRouting(unittest.TestCase):
         self.assertNotIn("### Dispatch pins (host agent picked)", self.text)
         self.assertNotIn("Remove only flow-next Ralph guard matcher", self.text)
 
-    def test_reached_path_evidence_matches_candidate_bytes(self) -> None:
-        evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
-        sizes: dict[str, int] = {}
-        for item in evidence["candidate_files"]:
-            path = REPO / item["path"]
-            text = path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
-            digest = hashlib.sha256(text.encode()).hexdigest()
-            self.assertEqual(len(text), item["chars_lf"], path)
-            self.assertEqual(digest, item["content_hash"], path)
-            sizes[path.name] = len(text)
-
-        common = sizes["SKILL.md"] + sizes["workflow.md"]
-        baseline = evidence["baseline"]["reached_path_chars"]
-        for result in evidence["fixture_results"] + evidence["supplementary_branch_results"]:
-            expected = common + sum(sizes[name] for name in result["reads"])
-            self.assertEqual(expected, result["candidate_chars"], result)
-            self.assertEqual(baseline - expected, result["reduction_chars"], result)
-            self.assertGreater(result["reduction_chars"], 0, result)
+    # Live-file hash/char freeze removed 2026-08-07 (.flow/criteria.md G1).
 
 
 if __name__ == "__main__":

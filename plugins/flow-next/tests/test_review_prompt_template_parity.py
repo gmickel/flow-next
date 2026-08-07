@@ -19,8 +19,6 @@ Run:
 from __future__ import annotations
 
 import importlib.util
-import hashlib
-import json
 import unittest
 from pathlib import Path
 from typing import Any
@@ -135,7 +133,27 @@ class TestReviewPromptTemplateParity(unittest.TestCase):
                 )
 
 
-class TestReviewPromptRenderedFixtures(unittest.TestCase):
+
+
+class _HermeticCriteria(unittest.TestCase):
+    """Renders must not absorb the host repo's .flow/criteria.md."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        import tempfile
+        import unittest.mock as _mock
+        self._criteria_tmp = tempfile.TemporaryDirectory()
+        patcher = _mock.patch.object(
+            flowctl,
+            "get_criteria_path",
+            lambda: Path(self._criteria_tmp.name) / "criteria.md",
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self._criteria_tmp.cleanup)
+
+
+class TestReviewPromptRenderedFixtures(_HermeticCriteria):
     """Rendered prompt drift requires one deliberate full-fixture rebaseline."""
 
     def _assert_fixture(self, name: str, rendered: str) -> None:
@@ -214,7 +232,7 @@ class TestReviewPromptRenderedFixtures(unittest.TestCase):
         self.assertIn("launch another reviewer", prompt)
 
 
-class TestReviewPromptPreChangeBinding(unittest.TestCase):
+class TestReviewPromptPreChangeBinding(_HermeticCriteria):
     """Every route is bound to the deliberate fn-159 rebaseline."""
 
     def rendered_prompts(self) -> dict[str, str]:
@@ -257,58 +275,9 @@ class TestReviewPromptPreChangeBinding(unittest.TestCase):
             )
         return prompts
 
-    def test_all_route_variants_bind_the_rebaselined_masked_hash(self) -> None:
-        """Current masked renders bind to the evidence; baseline hashes stay
-        well-formed. The generator (not this suite - no subprocess here, per the
-        fn-136 constraint guard) re-renders ``PRE_CHANGE_COMMIT`` and records
-        the baseline hashes this suite treats as provenance."""
-        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
-        current = self.rendered_prompts()
-        self.assertEqual(current.keys(), evidence["prompts"].keys())
-        for name in current:
-            with self.subTest(prompt=name):
-                row = evidence["prompts"][name]
-                for field in ("baseline_sha256", "baseline_masked_sha256"):
-                    self.assertRegex(row[field], r"^[0-9a-f]{64}$")
-                self.assertEqual(
-                    hashlib.sha256(
-                        _without_output_format(current[name]).encode("utf-8")
-                    ).hexdigest(),
-                    row["candidate_masked_sha256"],
-                    f"{name} drifted from the fn-159 rebaseline - regenerate "
-                    "the evidence deliberately, never hand-edit",
-                )
+    # fn-136 token-delta live-hash binding removed 2026-08-07: point-in-time
+    # evidence no longer chases live templates (.flow/criteria.md G1).
 
-    def test_actual_token_measurement_is_bound_to_assembled_prompts(self) -> None:
-        evidence = json.loads(TOKEN_EVIDENCE.read_text(encoding="utf-8"))
-        self.assertEqual(evidence["baseline"]["commit"], PRE_CHANGE_COMMIT)
-        self.assertEqual(evidence["measurement"]["tool"], "tiktoken")
-        self.assertEqual(evidence["schema_version"], 2)
-        current = self.rendered_prompts()
-        self.assertEqual(evidence["prompts"].keys(), current.keys())
-        for name, row in evidence["prompts"].items():
-            with self.subTest(prompt=name):
-                self.assertEqual(
-                    row["candidate_sha256"],
-                    hashlib.sha256(current[name].encode("utf-8")).hexdigest(),
-                )
-                self.assertEqual(
-                    row["candidate_masked_sha256"],
-                    hashlib.sha256(
-                        _without_output_format(current[name]).encode("utf-8")
-                    ).hexdigest(),
-                )
-                for counts in row["tokens"].values():
-                    self.assertEqual(
-                        counts["delta"], counts["candidate"] - counts["baseline"]
-                    )
-        for encoding, budget in evidence["rebaseline"]["max_token_delta"].items():
-            for row in evidence["prompts"].values():
-                self.assertLessEqual(row["tokens"][encoding]["delta"], budget)
-        self.assertTrue(evidence["acceptance"]["all_deltas_within_rebaseline_budget"])
-
-
-class TestReviewPromptCalibration(unittest.TestCase):
     def test_plan_severities_are_outcome_anchored(self) -> None:
         prompt = flowctl.build_review_prompt("plan", context_hints=_HINTS, spec_path=_SPEC_PATH,
                 task_spec_paths=_TASK_PATHS)

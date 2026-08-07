@@ -41,14 +41,9 @@ class WorkReachedPathRoutes(unittest.TestCase):
         )
         self.assertIn("never B0", lineage["rule"])
 
-    def test_candidate_hashes_match_live_canonical_inputs(self) -> None:
-        for relative, expected in self.evidence["prompt_hashes"].items():
-            with self.subTest(path=relative):
-                self.assertEqual(_hash(REPO_ROOT / relative), expected)
-
-    # Size ratchet removed 2026-08-07: prose growth is judged by the standing
-    # criterion in .flow/criteria.md (G1), not a frozen char baseline. The
-    # prompt_hashes pin above still forces conscious, evidence-updating edits.
+    # Size ratchet + live-file hash freeze removed 2026-08-07: prose growth is
+    # judged by the standing criterion in .flow/criteria.md (G1); deliberate-
+    # change protection lives in test_prompt_text_pinned.py, not per-ledger pins.
 
     def test_requested_path_loads_exact_selection_before_active_reference(self) -> None:
         self.assertNotIn("STOP and read", self.phases)

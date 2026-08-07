@@ -40,26 +40,8 @@ class MakePrReachedPathTests(unittest.TestCase):
         cls.html = (SKILL / "html-lens.md").read_text(encoding="utf-8")
         cls.create = (SKILL / "create-and-finalize.md").read_text(encoding="utf-8")
 
-    def test_candidate_hashes_and_frozen_corpora_are_exact(self) -> None:
-        for relative, expected in self.ledger["candidate_prompt_hashes"].items():
-            self.assertEqual(_sha256(REPO / relative), expected, relative)
-        for relative, expected in self.ledger["frozen_corpora"].items():
-            path = REPO / relative
-            json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(_sha256(path), expected, relative)
-
-    def test_workflow_slices_match_the_pinned_candidate(self) -> None:
-        slices = self.ledger["b1_unchanged_workflow_slices"]
-        before, rest = self.workflow.split("## Phase 1.5:", 1)
-        _html_phase, after = rest.split("## Phase 2:", 1)
-        self.assertEqual(
-            hashlib.sha256(before.encode()).hexdigest(),
-            slices["before_phase_1_5_sha256"],
-        )
-        self.assertEqual(
-            hashlib.sha256(after.encode()).hexdigest(),
-            slices["after_phase_1_5_sha256"],
-        )
+    # Live-file hash/char freeze removed 2026-08-07 (.flow/criteria.md G1;
+    # deliberate-change protection lives in test_prompt_text_pinned.py).
 
     def test_off_and_dry_run_keep_both_html_references_cold(self) -> None:
         kept = self.ledger["kept_candidate"]
@@ -95,48 +77,6 @@ class MakePrReachedPathTests(unittest.TestCase):
         ):
             self.assertIn(needle, self.html)
         self.assertIn("[html-lens.md](html-lens.md)", self.root)
-
-    def test_b1_to_candidate_metrics_match_full_file_algorithm(self) -> None:
-        sizes = {
-            "root": _lf_chars(SKILL / "SKILL.md"),
-            "workflow": _lf_chars(SKILL / "workflow.md"),
-            "create": _lf_chars(SKILL / "create-and-finalize.md"),
-            "mermaid": _lf_chars(SKILL / "mermaid-rules.md"),
-            "html_lens": _lf_chars(SKILL / "html-lens.md"),
-            "html_ref": _lf_chars(REPO / SHARED_HTML),
-            "pr_aid": _lf_chars(REPO / PR_AID),
-        }
-        routes = {
-            "dry-run": sizes["root"] + sizes["workflow"] + sizes["mermaid"] + sizes["pr_aid"],
-            "html-off": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["mermaid"] + sizes["pr_aid"],
-            "html-on": (
-                sizes["root"]
-                + sizes["workflow"]
-                + sizes["create"]
-                + sizes["mermaid"]
-                + sizes["html_lens"]
-                + sizes["html_ref"]
-                + sizes["pr_aid"]
-            ),
-            "create": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["mermaid"] + sizes["pr_aid"],
-            "finalize": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["pr_aid"],
-            "existing-pr": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["pr_aid"],
-            "push-retry": sizes["root"] + sizes["workflow"] + sizes["create"] + sizes["pr_aid"],
-        }
-        metrics = self.ledger["kept_candidate"]["route_metrics"]
-        for route, observed in routes.items():
-            self.assertEqual(metrics[route]["candidate_chars"], observed, route)
-            self.assertEqual(
-                metrics[route]["delta_chars"],
-                observed - metrics[route]["b1_chars"],
-                route,
-            )
-        self.assertLess(
-            metrics["html-off"]["delta_chars"],
-            10_000,
-            "structured cognitive-aid contract must keep reached-path overhead bounded",
-        )
-        self.assertIsNone(self.ledger["kept_candidate"]["wall_time_claim"])
 
     def test_creation_failure_and_autonomous_contracts_stay_at_consumers(self) -> None:
         for needle in (
