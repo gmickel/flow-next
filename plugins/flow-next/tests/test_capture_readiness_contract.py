@@ -16,18 +16,14 @@ def _read(directory: pathlib.Path, name: str) -> str:
 
 
 class CaptureReadinessContract(unittest.TestCase):
+    # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md G1,
+    # not grep. What remains: executable bash gates, option/field tokens, and
+    # the autofix never-writes-readiness guard.
+
     def test_rewrite_offer_follows_target_state(self) -> None:
         for directory in (CANONICAL, MIRROR):
             workflow = _read(directory, "workflow.md")
             with self.subTest(directory=directory):
-                self.assertIn(
-                    "Rewrite:** offer only when `REWRITE_WAS_READY` is `true`.",
-                    workflow,
-                )
-                self.assertIn(
-                    "For a rewrite, an unrelated ready spec never triggers this question.",
-                    workflow,
-                )
                 self.assertIn(
                     '[[ "$REWRITE_WAS_READY" == true ]] && READY_OFFER=true',
                     workflow,
@@ -38,22 +34,16 @@ class CaptureReadinessContract(unittest.TestCase):
             workflow = _read(directory, "workflow.md")
             with self.subTest(directory=directory):
                 self.assertIn(
-                    "New capture:** offer only when `READY_ADOPTED >= 1`.",
-                    workflow,
-                )
-                self.assertIn(
                     '[[ "$READY_ADOPTED" =~ ^[0-9]+$ && "$READY_ADOPTED" -ge 1 ]]',
                     workflow,
                 )
 
-    def test_tracker_authority_and_copy_contract(self) -> None:
+    def test_tracker_authority_gate(self) -> None:
         for directory in (CANONICAL, MIRROR):
             workflow = _read(directory, "workflow.md")
             with self.subTest(directory=directory):
                 self.assertIn("tracker.readyState", workflow)
                 self.assertIn('&& -z "$READY_STATE"', workflow)
-                self.assertIn("Pilot or another autonomous driver", workflow)
-                self.assertNotIn("after you've read it on disk", workflow)
 
     def test_option_tokens_reset_and_autofix_invariants(self) -> None:
         for directory in (CANONICAL, MIRROR):
@@ -62,7 +52,7 @@ class CaptureReadinessContract(unittest.TestCase):
                 self.assertIn("`mark-ready`", workflow)
                 self.assertIn("`keep-draft`", workflow)
                 self.assertIn('spec unready "$SPEC_ID"', workflow)
-                self.assertIn("autofix **never writes readiness**", workflow)
+                self.assertIn("never writes readiness", workflow)
 
 
 if __name__ == "__main__":

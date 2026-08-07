@@ -35,12 +35,11 @@ REMOVED_CARRIERS = [
     "flow-next-work",
 ]
 
-QUESTION = (
-    "Local Flow-Next copy v<X> differs from plugin v<Y>. "
-    "Refresh before planning?"
-)
-REFRESH = "Refresh now (Recommended)"
-CONTINUE = "Continue this run"
+# Smallest distinctive token of the drift question — also the marker forbidden
+# in every other lifecycle skill, so its exactly-one count pins the sole
+# carrier. (Full question/option copy pins removed 2026-08-07 - judged via
+# .flow/criteria.md G1, not grep.)
+DRIFT_TOKEN = "differs from plugin"
 LEGACY_MARKERS = (
     "FLOW_SETUP_ASK",
     "FLOW_SNIPPET_ASK",
@@ -58,25 +57,13 @@ def _skill(root: Path, name: str) -> str:
 class PrecheckModeContractTest(unittest.TestCase):
     def test_canonical_plan_owns_exact_copy_mode_contract(self) -> None:
         text = _skill(SKILLS, PLAN)
-        self.assertEqual(text.count(QUESTION), 1)
-        self.assertEqual(text.count(REFRESH), 1)
-        self.assertEqual(text.count(CONTINUE), 1)
+        self.assertEqual(text.count(DRIFT_TOKEN), 1)
         self.assertIn("AskUserQuestion", text)
-        self.assertIn("Before Step 0, read `.flow/meta.json`", text)
+        self.assertIn("`.flow/meta.json`", text)
         self.assertIn(
             "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json",
             text,
         )
-        self.assertIn("In copy mode only", text)
-        self.assertIn("run `/flow-next:setup`, then rerun Plan", text)
-        self.assertIn("never invoke Setup or resume this Plan invocation", text)
-        self.assertIn("Under autonomous, Ralph, or receipt-driven execution", text)
-        self.assertIn("warn once and proceed without asking", text)
-        self.assertIn(
-            "Version match, plugin mode, or unavailable comparison evidence is silent",
-            text,
-        )
-        self.assertIn("Never read or write legacy `version_ack` / `snippet_ack`", text)
         for marker in LEGACY_MARKERS:
             self.assertNotIn(marker, text)
 
@@ -85,7 +72,7 @@ class PrecheckModeContractTest(unittest.TestCase):
             "version_ack",
             "snippet_ack",
             "setup_version",
-            "differs from plugin",
+            DRIFT_TOKEN,
         )
         for name in REMOVED_CARRIERS:
             with self.subTest(skill=name):
@@ -103,9 +90,7 @@ class PrecheckModeContractTest(unittest.TestCase):
 
     def test_codex_mirror_preserves_contract_without_legacy_fleet(self) -> None:
         text = _skill(CODEX_SKILLS, PLAN)
-        self.assertEqual(text.count(QUESTION), 1)
-        self.assertEqual(text.count(REFRESH), 1)
-        self.assertEqual(text.count(CONTINUE), 1)
+        self.assertEqual(text.count(DRIFT_TOKEN), 1)
         self.assertIn("plain-text numbered prompt", text)
         self.assertNotIn("AskUserQuestion", text)
         self.assertIn("`${CODEX_HOME:-$HOME/.codex}/plugin.json`", text)

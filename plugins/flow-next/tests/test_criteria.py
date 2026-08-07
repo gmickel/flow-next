@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -207,13 +208,20 @@ class TestCriteriaHeadingConstant(unittest.TestCase):
         """Assembled completion-review prompt must not contain the criteria
         heading when .flow/criteria.md is absent (R1). Greps the shared
         constant so fn-137.2's injection is provably gated on file existence."""
-        prompt = flowctl.build_completion_review_prompt(
+        with tempfile.TemporaryDirectory() as tmp:
+            absent = Path(tmp) / "criteria.md"
+            with mock.patch.object(flowctl, "get_criteria_path", lambda: absent):
+                prompt = self._build_prompt()
+        self.assertNotIn(flowctl.GLOBAL_CRITERIA_HEADING, prompt)
+
+    @staticmethod
+    def _build_prompt() -> str:
+        return flowctl.build_completion_review_prompt(
             spec_path=".flow/specs/fn-1.md",
             task_spec_paths=[".flow/tasks/fn-1.1.md"],
             review_scope="1\t0\tx",
             diff_range="aaa..bbb",
         )
-        self.assertNotIn(flowctl.GLOBAL_CRITERIA_HEADING, prompt)
 
 
 class TestGlobalCriteriaBlock(unittest.TestCase):

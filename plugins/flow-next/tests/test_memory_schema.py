@@ -1,44 +1,121 @@
-"""Unit tests for memory schema + frontmatter helpers (fn-30 task 1).
+"""Unit tests for the memory schema, YAML quoting, and read budgets.
+
+Consolidates the former micro-suites (zero assertion loss):
+  - test_memory_schema.py       — schema + frontmatter helpers (fn-30 task 1)
+  - test_memory_yaml_quoting.py — YAML quoting + silent-drop warning (issue #235)
+  - test_memory_performance.py  — deterministic read budgets + direct-ID
+    safety (fn-122.8)
 
 Run:
     python3 -m unittest discover -s plugins/flow-next/tests -v
 
-Covers the AC of task 1:
+Covers (schema — fn-30 task 1):
   - AC2: category enum shapes
   - AC3: inline YAML parser reads valid frontmatter, rejects malformed
   - AC4: validate_memory_frontmatter returns errors for required/enum/unknown
   - AC7: PyYAML is optional (tests run whether or not it's installed)
   - AC8: frontmatter round-trip (write -> parse -> equality)
+
+Covers (YAML quoting — issue #235):
+  - memory add titles starting with ', ", -  round-trip via frontmatter
+  - _yaml_scalar_needs_quoting unit assertions for the new gates
+  - inline-parser round-trip of quoted escapes (embedded double quotes)
+  - malformed entry skip emits stderr warning
+
+Covers (read budgets — fn-122.8 evidence):
+  On the 24-entry fixture, pre-change exact-ID resolution performed 48 entry
+  reads (the full corpus, twice per entry); it now performs one validated
+  target read. Metadata/search enumeration moves from 2N to N entry reads.
+  Same live-repo ``memory list --status all --json`` benchmark, five runs on
+  2026-07-21: pre median 0.19 s (0.19-0.20), post 0.19 s (0.19-0.19), so
+  startup-dominated wall time is stable while I/O halves.
 """
 
 from __future__ import annotations
 
-import importlib.util
+import io
+import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
+from collections import Counter
+from contextlib import contextmanager, redirect_stderr
 from pathlib import Path
 from typing import Any
-
-import sys
+from unittest import mock
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-
-def _load_flowctl() -> Any:
-    here = Path(__file__).resolve()
-    flowctl_path = here.parent.parent / "scripts" / "flowctl.py"
-    if not flowctl_path.is_file():
-        raise RuntimeError(f"flowctl.py not found at {flowctl_path}")
-    spec = importlib.util.spec_from_file_location("flowctl_memory_under_test", flowctl_path)
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-    return mod
+import flowctl  # noqa: E402  (path-injected import)
 
 
-flowctl = _load_flowctl()
+HERE = Path(__file__).resolve()
+FLOWCTL_PY = HERE.parent.parent / "scripts" / "flowctl.py"
+
+
+def _init_repo(tmp: Path) -> Path:
+    subprocess.check_call(
+        [sys.executable, str(FLOWCTL_PY), "init", "--json"],
+        cwd=tmp,
+        stdout=subprocess.DEVNULL,
+    )
+    subprocess.check_call(
+        [
+            sys.executable,
+            str(FLOWCTL_PY),
+            "config",
+            "set",
+            "memory.enabled",
+            "true",
+            "--json",
+        ],
+        cwd=tmp,
+        stdout=subprocess.DEVNULL,
+    )
+    subprocess.check_call(
+        [sys.executable, str(FLOWCTL_PY), "memory", "init", "--json"],
+        cwd=tmp,
+        stdout=subprocess.DEVNULL,
+    )
+    return tmp / ".flow" / "memory"
+
+
+def _run_add(cwd: Path, *args: str) -> dict[str, Any]:
+    cmd = [sys.executable, str(FLOWCTL_PY), "memory", "add", *args, "--json"]
+    proc = subprocess.run(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env={**os.environ, "FLOW_NO_DEPRECATION": "1"},
+    )
+    if proc.returncode != 0:
+        raise AssertionError(
+            f"add unexpected rc={proc.returncode}: "
+            f"stdout={proc.stdout.decode()} stderr={proc.stderr.decode()}"
+        )
+    return json.loads(proc.stdout.decode())
+
+
+def _run_list(cwd: Path) -> dict[str, Any]:
+    cmd = [sys.executable, str(FLOWCTL_PY), "memory", "list", "--json"]
+    proc = subprocess.run(
+        cmd,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env={**os.environ, "FLOW_NO_DEPRECATION": "1"},
+    )
+    if proc.returncode != 0:
+        raise AssertionError(
+            f"list unexpected rc={proc.returncode}: "
+            f"stdout={proc.stdout.decode()} stderr={proc.stderr.decode()}"
+        )
+    return json.loads(proc.stdout.decode())
 
 
 # --- Schema constants ---
@@ -406,6 +483,298 @@ class TestFrontmatterRoundTrip(unittest.TestCase):
         self.assertLess(indices["category"], indices["module"])
         self.assertLess(indices["module"], indices["tags"])
         self.assertLess(indices["tags"], indices["problem_type"])
+
+
+# --- YAML quoting + silent-drop warning (issue #235) ---
+
+
+class TestYamlScalarNeedsQuoting(unittest.TestCase):
+    """Unit assertions for the quoting gate (issue #235 bug 1)."""
+
+    def test_needs_quoting_true_cases(self) -> None:
+        for text in ("'x", '"x', "- x", "-", "? x", " leading", "trailing "):
+            with self.subTest(text=repr(text)):
+                self.assertTrue(
+                    flowctl._yaml_scalar_needs_quoting(text),
+                    f"expected quoting for {text!r}",
+                )
+
+    def test_needs_quoting_false_cases(self) -> None:
+        for text in ("normal title", "-dash-no-space", "?question"):
+            with self.subTest(text=repr(text)):
+                self.assertFalse(
+                    flowctl._yaml_scalar_needs_quoting(text),
+                    f"unexpected quoting for {text!r}",
+                )
+
+
+class TestInlineParserRoundTrip(unittest.TestCase):
+    """_format_yaml_value → _parse_inline_yaml preserves escapes (bug 1b)."""
+
+    def test_embedded_double_quotes_round_trip(self) -> None:
+        title = 'say "hello", world'
+        rendered = flowctl._format_yaml_value(title, key="title")
+        # Must be quoted with escapes so the inline parser can recover.
+        self.assertTrue(rendered.startswith('"') and rendered.endswith('"'))
+        fm_text = f"title: {rendered}\n"
+        parsed = flowctl._parse_inline_yaml(fm_text)
+        self.assertEqual(parsed.get("title"), title)
+
+    def test_leading_quote_chars_round_trip(self) -> None:
+        for title in ("'leading single", '"leading double', "- leading dash"):
+            with self.subTest(title=title):
+                rendered = flowctl._format_yaml_value(title, key="title")
+                parsed = flowctl._parse_inline_yaml(f"title: {rendered}\n")
+                self.assertEqual(parsed.get("title"), title)
+
+    def test_list_item_embedded_quotes_round_trip(self) -> None:
+        tags = ['say "hi"', "plain"]
+        rendered = flowctl._format_yaml_value(tags, key="tags")
+        parsed = flowctl._parse_inline_yaml(f"tags: {rendered}\n")
+        self.assertEqual(parsed.get("tags"), tags)
+
+
+class TestMemoryAddLeadingSpecialTitles(unittest.TestCase):
+    """memory add with titles starting ', ", -  parses and lists (bug 1 e2e)."""
+
+    def test_titles_with_leading_specials_round_trip(self) -> None:
+        cases = [
+            ("'quoted single lead", "when 'foo applies"),
+            ('"quoted double lead', 'when "bar applies'),
+            ("- leading dash title", "- when dash applies"),
+        ]
+        with tempfile.TemporaryDirectory() as tmp_str:
+            tmp = Path(tmp_str)
+            _init_repo(tmp)
+            created_ids: list[str] = []
+            for title, applies_when in cases:
+                with self.subTest(title=title):
+                    data = _run_add(
+                        tmp,
+                        "--track",
+                        "knowledge",
+                        "--category",
+                        "conventions",
+                        "--title",
+                        title,
+                        "--applies-when",
+                        applies_when,
+                        "--no-overlap-check",
+                    )
+                    self.assertEqual(data["action"], "created")
+                    path = Path(data["path"])
+                    self.assertTrue(path.exists())
+                    fm = flowctl.parse_memory_frontmatter(path)
+                    self.assertEqual(fm.get("title"), title)
+                    self.assertEqual(fm.get("applies_when"), applies_when)
+                    created_ids.append(data["entry_id"])
+
+            listed = _run_list(tmp)
+            # list JSON groups entries; collect all entry ids / titles.
+            listed_titles: set[str] = set()
+            listed_ids: set[str] = set()
+            entries = listed.get("entries") or listed.get("items") or []
+            if isinstance(entries, dict):
+                # Grouped-by-category form: values are lists of entry dicts.
+                flat: list[Any] = []
+                for v in entries.values():
+                    if isinstance(v, list):
+                        flat.extend(v)
+                    elif isinstance(v, dict):
+                        for vv in v.values():
+                            if isinstance(vv, list):
+                                flat.extend(vv)
+                entries = flat
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                if "title" in entry:
+                    listed_titles.add(str(entry["title"]))
+                eid = entry.get("entry_id") or entry.get("id") or ""
+                if eid:
+                    listed_ids.add(str(eid))
+            for title, _ in cases:
+                self.assertIn(title, listed_titles, listed)
+            for eid in created_ids:
+                self.assertIn(eid, listed_ids, listed)
+
+
+class TestMalformedEntryStderrWarning(unittest.TestCase):
+    """Malformed frontmatter is skipped with a stderr warning (bug 2)."""
+
+    def test_iter_skips_malformed_and_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_str:
+            mem = Path(tmp_str) / "memory"
+            cat = mem / "bug" / "runtime-errors"
+            cat.mkdir(parents=True)
+            # Valid companion so the walk is non-empty either way.
+            flowctl.write_memory_entry(
+                cat / "valid-entry-2026-05-01.md",
+                {
+                    "title": "Valid entry",
+                    "date": "2026-05-01",
+                    "track": "bug",
+                    "category": "runtime-errors",
+                    "tags": ["ok"],
+                    "problem_type": "runtime-error",
+                    "symptoms": "x",
+                    "root_cause": "y",
+                    "resolution_type": "fix",
+                },
+                "body",
+            )
+            bad = cat / "broken-entry-2026-05-02.md"
+            # Delimiters present but body is not parseable key:value frontmatter.
+            bad.write_text(
+                "---\nthis is not: valid: yaml: : :\n:::\n---\nbody\n",
+                encoding="utf-8",
+            )
+
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                entries = flowctl._memory_iter_entries(mem)
+            err = buf.getvalue()
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["title"], "Valid entry")
+            self.assertIn("malformed frontmatter", err)
+            self.assertIn(str(bad), err)
+            self.assertIn("flowctl: skipping", err)
+
+
+# --- Read budgets + direct-ID safety (fn-122.8) ---
+
+
+class TestMemoryReadBudgets(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.memory = Path(self._tmp.name) / "memory"
+        self.paths: list[Path] = []
+        for index in range(24):
+            path = (
+                self.memory
+                / "knowledge"
+                / "conventions"
+                / f"entry-{index:02d}-2026-07-21.md"
+            )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            flowctl.write_memory_entry(
+                path,
+                {
+                    "title": f"Entry {index:02d}",
+                    "date": "2026-07-21",
+                    "track": "knowledge",
+                    "category": "conventions",
+                    "applies_when": "testing read budgets",
+                },
+                f"Body {index:02d}.\n",
+            )
+            self.paths.append(path)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _count_reads(self):
+        """Count content reads regardless of which primitive did the read.
+
+        `_memory_read_entry` reads through `Path.open(newline="")` — newline
+        translation has to stay off so a CRLF body survives a frontmatter-only
+        rewrite — while the metadata path still uses `Path.read_text`.
+        Instrument both, or the budget assertions silently measure nothing.
+        """
+        real_read = Path.read_text
+        real_open = Path.open
+        counts: Counter[str] = Counter()
+        # `read_text` is implemented on top of `open`; the depth guard keeps a
+        # single logical read from being counted by both wrappers.
+        depth: list[int] = []
+
+        def counting_read(path, *args, **kwargs):
+            counts[str(path)] += 1
+            depth.append(1)
+            try:
+                return real_read(path, *args, **kwargs)
+            finally:
+                depth.pop()
+
+        def counting_open(path, *args, **kwargs):
+            mode = kwargs.get("mode", args[0] if args else "r")
+            if not depth and not any(flag in mode for flag in ("w", "a", "x", "+")):
+                counts[str(path)] += 1
+            return real_open(path, *args, **kwargs)
+
+        @contextmanager
+        def patcher():
+            with mock.patch.object(Path, "read_text", counting_read):
+                with mock.patch.object(Path, "open", counting_open):
+                    yield
+
+        return patcher(), counts
+
+    def test_metadata_and_search_iterations_read_each_entry_once(self) -> None:
+        patcher, counts = self._count_reads()
+        with patcher:
+            metadata = flowctl._memory_iter_entries(self.memory)
+        self.assertEqual(len(metadata), len(self.paths))
+        self.assertTrue(all(entry["body"] == "" for entry in metadata))
+        self.assertTrue(all(entry["raw"] == "" for entry in metadata))
+        self.assertEqual({counts[str(path)] for path in self.paths}, {1})
+
+        patcher, counts = self._count_reads()
+        with patcher:
+            searchable = flowctl._memory_iter_entries(
+                self.memory, include_body=True
+            )
+        self.assertEqual(len(searchable), len(self.paths))
+        self.assertTrue(all(entry["body"].startswith("Body") for entry in searchable))
+        self.assertTrue(all(entry["raw"] == "" for entry in searchable))
+        self.assertEqual({counts[str(path)] for path in self.paths}, {1})
+
+    def test_full_id_reads_only_the_validated_target(self) -> None:
+        target_id = "knowledge/conventions/entry-17-2026-07-21"
+        patcher, counts = self._count_reads()
+        with patcher:
+            resolved = flowctl._memory_resolve_read_target(self.memory, target_id)
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved["entry"]["entry_id"], target_id)
+        self.assertTrue(resolved["entry"]["body"].startswith("Body"))
+        self.assertTrue(resolved["entry"]["raw"].startswith("---\n"))
+        self.assertEqual(sum(counts.values()), 1)
+        self.assertEqual(counts[str(self.paths[17])], 1)
+
+    def test_ambiguous_slug_scan_is_one_read_each_plus_selected_target(self) -> None:
+        patcher, counts = self._count_reads()
+        with patcher:
+            resolved = flowctl._memory_resolve_read_target(self.memory, "entry-17")
+            self.assertIsNotNone(resolved)
+            selected = Path(resolved["entry"]["path"])
+            flowctl._memory_read_entry(selected)
+        self.assertEqual(counts[str(selected)], 2)
+        self.assertEqual(
+            {counts[str(path)] for path in self.paths if path != selected}, {1}
+        )
+
+    def test_full_id_grammar_and_containment_reject_traversal_and_symlink(self) -> None:
+        self.assertIsNone(
+            flowctl._memory_resolve_read_target(
+                self.memory, "knowledge/conventions/../secret-2026-07-21"
+            )
+        )
+        outside = Path(self._tmp.name) / "outside-2026-07-21.md"
+        outside.write_text(self.paths[0].read_text(encoding="utf-8"), encoding="utf-8")
+        link = self.memory / "knowledge" / "conventions" / "linked-2026-07-21.md"
+        link.symlink_to(outside)
+        self.assertIsNone(
+            flowctl._memory_resolve_read_target(
+                self.memory, "knowledge/conventions/linked-2026-07-21"
+            )
+        )
+        loop = self.memory / "knowledge" / "conventions" / "loop-2026-07-21.md"
+        loop.symlink_to(loop.name)
+        self.assertIsNone(
+            flowctl._memory_resolve_read_target(
+                self.memory, "knowledge/conventions/loop-2026-07-21"
+            )
+        )
 
 
 if __name__ == "__main__":

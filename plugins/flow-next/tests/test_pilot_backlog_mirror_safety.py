@@ -27,16 +27,14 @@ no Python engine to unit-test; backlog mode is skill prose the agent executes):
      grep-able (the loop-stop + land hand-off); ``ASKED`` is the durable park;
      ``TRIAGED`` is documented diagnostic / dry-run-only (never a live terminal).
 
-  C. **Autonomous-safety invariants (verifies R6/R7).** Under the autonomy marker
-     (``FLOW_AUTONOMOUS=1`` / ``mode:autonomous``) backlog mode (1) never reaches
-     an interactive prompt — every ``AskUserQuestion`` mention in the pilot
-     canonical is a NEGATION, and the mirror rewrite preserves the negation;
-     (2) never merges / never invokes land — the ``assert_allowed_dispatch``
-     allowlist hard-excludes land/merge/resolve and survives in the mirror;
-     (3) never authors a spec — the ``assert_spec_write_allowed`` guard
-     hard-exits on a specless subject and survives in the mirror; and (4) the
-     gate-off (ready) path is byte-identical — no ``FLOW_AUTONOMOUS`` export, no
-     backlog-mode.md load.
+  C. **Autonomous-safety invariants (verifies R6/R7).** Keyed on tokens, not
+     sentences (prose-quality pins removed 2026-08-07 - judged via
+     .flow/criteria.md G1, not grep): (1) never prompt — every
+     ``AskUserQuestion`` mention in the pilot canonical is a NEGATION;
+     (2) never merge / never invoke land — the ``assert_allowed_dispatch``
+     allowlist survives in the mirror; (3) never author a spec — the
+     ``assert_spec_write_allowed`` guard survives in the mirror; and (4) the
+     ``FLOW_AUTONOMOUS`` export is scoped inside the backlog branch.
 
 Run:
     python3 -m unittest plugins.flow-next.tests.test_pilot_backlog_mirror_safety -v
@@ -128,12 +126,6 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         mirror_route = self.m_skill + "\n" + self.m_backlog
         self.assertIn("triage", mirror_route.lower())
         self.assertIn("ask", mirror_route.lower())
-        # The stage values line names triage/ask as backlog-only stages.
-        self.assertRegex(
-            mirror_route,
-            r"(?:`triage`\s*/\s*`ask`.*backlog mode only|Stage values add `triage` / `ask`)",
-            "the mirror must document triage/ask as backlog-only stages",
-        )
         # The async-question valve phase survives in the mirror workflow.
         self.assertIn("Phase 3.5", self.m_workflow)
         self.assertRegex(
@@ -146,10 +138,10 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         """The ASKED durable-park verdict survives in the mirror grammar."""
         mirror_route = self.m_skill + "\n" + self.m_backlog
         self.assertIn("ASKED", mirror_route)
-        self.assertRegex(
+        self.assertIn(
+            "`ASKED <id> (<n>)`",
             mirror_route,
-            r"`ASKED <id> \(<n>\)`.*durable park",
-            "the mirror must document ASKED as a durable park",
+            "the mirror must carry the ASKED grammar token",
         )
 
     def test_canonical_routes_backlog_grammar_behind_mode_gate(self) -> None:
@@ -201,37 +193,17 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         candidate = ledger["candidates"][0]
         self.assertEqual("keep", candidate["verdict"])
 
-        # Live-file hash/char freeze removed 2026-08-07 (.flow/criteria.md G1;
-        # deliberate-change protection lives in test_prompt_text_pinned.py).
-        self.assertIn(
-            "qa-stage gate remains conditional and fail-open; the reference "
-            "computes freshness while workflow.md retains classification ownership",
-            candidate["oracles"],
-        )
-        self.assertIn(
-            '`pipeline.qa == "on"`, or the gate\'s probe/parse errored — fail',
-            self.pilot_qa,
-            "the QA reference must retain conditional, fail-open activation",
-        )
-        self.assertIn(
-            "how to compute `QA_FRESH`",
-            self.pilot_qa,
-            "the QA reference must retain freshness-computation ownership",
-        )
-        self.assertIn(
-            "the **consumption stays\n> inline in `workflow.md`**",
-            self.pilot_qa,
-            "workflow.md must retain QA classification-consumption ownership",
-        )
+        # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
+        # G1, not grep. (Live-file hash/char freeze and size ratchet removed
+        # earlier for the same reason; deliberate-change protection lives in
+        # test_prompt_text_pinned.py.) The QA classification grammar tokens
+        # stay pinned:
         self.assertIn(
             "No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` "
             "**and** `QA_FRESH=0`",
             self.pilot_workflow,
             "workflow.md must still own the QA-stage classification decision",
         )
-
-        # Size ratchet removed 2026-08-07: prose growth is judged by the
-        # standing criterion in .flow/criteria.md (G1), not a frozen baseline.
 
     def test_mirror_carries_tracker_sync_r14_phase0_fix(self) -> None:
         """The R14 Phase-0 autonomy-marker fix (fn-68.2) survives in the
@@ -450,13 +422,12 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
         never interactive / no path reaches) — pilot genuinely never asks. (The
         one non-prose mention allowed is the maintainer breadcrumb's
         'keep this file Claude-native (`AskUserQuestion`, `Task`)'.)"""
+        # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
+        # G1, not grep: the cue list is reduced to minimal negation tokens
+        # rather than full sentence spellings.
         negation_cue = re.compile(
-            r"never reach|never an interactive|is forbidden|never asks? interactively"
-            r"|no (?:code )?path reaches|never reachable|keep this file\s+Claude-native"
-            r"|Claude-native \(`AskUserQuestion`"
-            # prompt-suppression phrasings are also negations ("can't hang on an
-            # AskUserQuestion", "suppresses all prompts so the loop can't hang"):
-            r"|can'?t hang on|cannot hang on|suppress(?:es)? all prompts",
+            r"\bnever\b|\bforbidden\b|can'?t|\bcannot\b|suppress"
+            r"|no (?:code )?path|Claude-native",
             re.IGNORECASE,
         )
         for fname, text in (
@@ -475,23 +446,36 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
                     )
 
     def test_mirror_preserves_the_never_prompt_negation(self) -> None:
-        """The no-prompt invariant survives the rewrite: the mirror states the
-        plain-text numbered prompt is never reached / forbidden on the tick
-        path — the rewritten negation, not an injected ask."""
-        joined = self.m_skill + "\n" + self.m_workflow
-        self.assertRegex(
-            joined,
-            r"`plain-text numbered prompt` is never reached"
-            r"|never an interactive `plain-text numbered prompt`"
-            r"|`plain-text numbered prompt` is forbidden",
-            "the mirror must preserve pilot's never-prompt negation",
+        """The no-prompt invariant survives the rewrite: every mirror mention
+        of the rewritten prompt form carries a negation cue — the rewritten
+        negation, not an injected ask. (Keyed on tokens, not sentences.)"""
+        negation_cue = re.compile(
+            r"\bnever\b|\bforbidden\b|can'?t|\bcannot\b|suppress"
+            r"|no (?:code )?path",
+            re.IGNORECASE,
         )
+        for fname, text in (
+            ("SKILL.md", self.m_skill),
+            ("workflow.md", self.m_workflow),
+        ):
+            for ln in text.splitlines():
+                if "plain-text numbered prompt" not in ln:
+                    continue
+                with self.subTest(file=fname, line=ln.strip()[:70]):
+                    self.assertTrue(
+                        negation_cue.search(ln),
+                        f"{fname}: non-negation prompt mention — pilot must "
+                        f"never ask — line: {ln.strip()!r}",
+                    )
 
     def test_never_merge_allowlist_survives_in_mirror(self) -> None:
         """Invariant #1 (never merge / never invoke land — R6) is an ENFORCING
         bash allowlist that survives in the mirror: the dispatch allowlist names
         only the pipeline + tracker-surface ops, and land/merge/resolve hard-exit
         to NEEDS_HUMAN."""
+        # Prose-quality restatement pins removed 2026-08-07 - judged via
+        # .flow/criteria.md G1, not grep. The ENFORCING bash allowlist is the
+        # guard that stays pinned.
         self.assertIn("assert_allowed_dispatch", self.m_workflow)
         # The allowlist names the sanctioned stage skills only.
         self.assertRegex(
@@ -500,65 +484,24 @@ class PilotBacklogMirrorSafety(unittest.TestCase):
             r"\|/flow-next:qa\|/flow-next:make-pr\)\s*return 0",
             "the dispatch allowlist must whitelist only the pipeline stages",
         )
-        # land / merge / resolve are named as the forbidden targets that never
-        # reach return 0.
-        self.assertRegex(
-            self.m_workflow,
-            r"/flow-next:land.*gh pr merge.*never reaches the allowlist"
-            r"|never merges/lands/resolves",
-            "the mirror must state land/merge/resolve never reach the allowlist",
-        )
-        # The forbidden block restates never-merge/never-land.
-        self.assertRegex(
-            self.m_skill,
-            r"Never merging / never invoking land",
-            "the mirror Forbidden block must restate never-merge/never-land",
-        )
 
     def test_never_author_guard_survives_in_mirror(self) -> None:
         """Invariant #2 (never author a spec) is an ENFORCING guard that survives
         in the mirror: a specless subject hard-exits rather than writing a
         stub."""
+        # Prose-quality restatement pins removed 2026-08-07 - judged via
+        # .flow/criteria.md G1, not grep. The ENFORCING guard + its hard-exit
+        # message are what stay pinned.
         self.assertIn("assert_spec_write_allowed", self.m_workflow)
         self.assertRegex(
             self.m_workflow,
             r"backlog mode never authors specs",
             "the mirror must keep the never-author hard-exit message",
         )
-        # The Forbidden block + boundaries restate never-author.
-        self.assertRegex(
-            self.m_skill,
-            r"Never authoring a spec",
-            "the mirror Forbidden block must restate never-author",
-        )
-        self.assertRegex(
-            self.m_backlog,
-            r"[Nn]ever authors? a spec",
-            "the mirror backlog-mode boundaries must restate never-author",
-        )
 
-    def test_gate_off_ready_path_is_byte_identical(self) -> None:
-        """Invariant: with the gate OFF (ready mode) the path is byte-identical —
-        no FLOW_AUTONOMOUS export, backlog-mode.md never loaded. The canonical
-        AND the mirror both state this, and both scope the autonomy export inside
-        the backlog branch."""
-        for label, text in (
-            ("canonical", self.pilot_workflow),
-            ("mirror", self.m_workflow),
-        ):
-            with self.subTest(where=label):
-                self.assertRegex(
-                    text,
-                    r"[Rr]eady mode is byte-for-byte unchanged",
-                    f"{label}: the gate-off byte-identical claim must be stated",
-                )
-                # The export is scoped to the backlog branch (the ready branch is
-                # a bare ':' no-op that does NOT export FLOW_AUTONOMOUS).
-                self.assertRegex(
-                    text,
-                    r"FLOW_AUTONOMOUS is NOT exported",
-                    f"{label}: ready mode must NOT export FLOW_AUTONOMOUS",
-                )
+    # Gate-off "byte-for-byte" prose pins removed 2026-08-07 - judged via
+    # .flow/criteria.md G1, not grep; the structural scoping check below is
+    # the enforcing guard.
 
     def test_autonomy_export_is_scoped_to_backlog_branch(self) -> None:
         """The FLOW_AUTONOMOUS export lives INSIDE the `if ... = backlog` branch

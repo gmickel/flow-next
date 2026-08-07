@@ -15,8 +15,8 @@ Pins the round-trip diet so future edits cannot silently regress it:
   * impl-review SKILL.md: exactly ONE `for arg in $ARGUMENTS` fence (R6).
   * plan-review: common orchestration + exactly one selected backend workflow;
     none/export stay backend-cold; the Foreground rule and the fn-90
-    deterministic-cap sentence are byte-exact; no agent-side iteration
-    counting is (re)introduced (R6).
+    deterministic-cap paragraph remain present (token pins); no agent-side
+    iteration counting is (re)introduced (R6).
 
 All assertions run against the canonical files AND (where the invariant is
 count-shaped and survives the sync rewrite) the codex mirror copies.
@@ -36,27 +36,12 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "plan_invocation_count
 # never a prose mention of the words "config get".
 CONFIG_GET = re.compile(r'\$FLOWCTL"?\s+config get')
 
-# Protected prose — byte-exact (R6). Any edit to these strings in the skill
-# must be a deliberate decision that also updates this test.
-FOREGROUND_RULE_BULLET = (
-    "- **Foreground rule:** run every `flowctl <backend> plan-review` call as "
-    "one **blocking foreground** Bash call with a generous timeout (10 minutes; "
-    "verdicts typically land in 1–7) — never `run_in_background` + "
-    "monitor/poll (a background completion does not reliably resume a subagent "
-    "context)"
-)
-CAP_SENTENCE = (
-    "**The cap is enforced deterministically by flowctl:** every dispatch "
-    "reserves a\nspec-scoped round before launch. SHIP / NEEDS_WORK / "
-    "MAJOR_RETHINK / NEEDS_HUMAN consume it;\na no-verdict transport failure is durably "
-    "recorded and refunded. At\n`${MAX_REVIEW_ITERATIONS:-8}` verdict rounds, "
-    "flowctl refuses with `ESCALATE:`\nand exit 4. More than "
-    "`${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive\nno-verdict failures "
-    "stop separately with `TRANSPORT_UNHEALTHY` + exit 5.\nCallers invoke "
-    "plan-review once and act on its terminal result. The verdict\ncounter "
-    "resets only on SHIP or an explicit re-plan, never on an edit, fresh\n"
-    "invocation, or transport failure.**"
-)
+# Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md G1, not
+# grep. The byte-exact Foreground-rule bullet and fn-90 cap paragraph are now
+# pinned by their smallest distinctive lead tokens only; deliberate-change
+# protection lives in test_prompt_text_pinned.py.
+FOREGROUND_RULE_BULLET = "**Foreground rule:**"
+CAP_SENTENCE = "**The cap is enforced deterministically by flowctl:**"
 
 
 def read(path: Path) -> str:
@@ -344,12 +329,12 @@ class PlanReviewSingleSourceTestCase(unittest.TestCase):
                 {"codex", "copilot", "cursor"},
             )
 
-    def test_protected_prose_byte_exact(self):
+    def test_protected_prose_tokens_present(self):
         text = read(SKILLS / "flow-next-plan-review/SKILL.md")
         self.assertIn(FOREGROUND_RULE_BULLET, text,
-                      "plan-review Foreground rule bullet drifted (must stay byte-exact)")
+                      "plan-review Foreground rule bullet removed")
         self.assertIn(CAP_SENTENCE, text,
-                      "fn-90 deterministic-cap sentence drifted (must stay byte-exact)")
+                      "fn-90 deterministic-cap paragraph removed")
 
     def test_subprocess_fences_redeclare_spec_id(self):
         for backend in ("codex", "copilot", "cursor"):

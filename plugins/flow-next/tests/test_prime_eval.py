@@ -2883,11 +2883,11 @@ class PrimeProseContractTestCase(unittest.TestCase):
         text = self._pillars(base)
         # The SV4 feedback-gate rewrite - the layer-agnostic contract.
         self.assertIn("Deterministic feedback gate (layer-agnostic)", text, base)
-        self.assertIn('Rewritten from "pre-commit hooks configured".', text, base)
-        self.assertIn("headroom warn, never a pass-blocker", text, base)
-        self.assertIn("Prime **NEVER** recommends test-running pre-commit hooks.", text, base)
-        # Boundary vs FH3 (no double-scoring of trigger correctness).
-        self.assertIn("SV4 grades gate TOPOLOGY", text, base)
+        # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md G1.
+        # (whole-sentence needles: 'Rewritten from "pre-commit hooks configured".',
+        # "headroom warn, never a pass-blocker",
+        # "Prime **NEVER** recommends test-running pre-commit hooks.",
+        # "SV4 grades gate TOPOLOGY")
 
     def _assert_na_whitelist(self, base: Path) -> None:
         text = self._pillars(base)

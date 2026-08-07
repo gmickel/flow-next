@@ -1,19 +1,24 @@
 """Live clean-tree integration smoke test for cursor reviews (fn-74.2, R8).
 
+Live-CLI smoke - run via FLOW_LIVE_SMOKES=1 or the smoke-test tier, not the
+default unit suite.
+
 A cursor review must leave the working tree byte-for-byte unchanged — the
 ``--mode ask`` read-only contract (asserted at the unit level in
 ``test_cursor_run_exec.py``) guarantees the CLI refuses to edit. This test
 proves it end-to-end: it runs a **real** ``cursor impl-review`` against a throw-
 away git repo and asserts ``git status --porcelain`` is identical before/after.
 
-It is **optional**: skipped cleanly when ``cursor-agent`` is not on PATH (CI /
-hosts without the CLI). It is NEVER a mocked clean-tree claim — when it runs, it
-spawns the real CLI. Auth/quota failures do not fail the test: the tree must
-stay clean even when the review errors out, which is exactly what R8 asserts.
+It is **opt-in**: gated behind ``FLOW_LIVE_SMOKES=1`` so it never runs inside
+the default ``unittest discover`` unit suite (it spawns a real network-bound
+CLI with a 240s ceiling), and skipped cleanly when ``cursor-agent`` is not on
+PATH (CI / hosts without the CLI). It is NEVER a mocked clean-tree claim — when
+it runs, it spawns the real CLI. Auth/quota failures do not fail the test: the
+tree must stay clean even when the review errors out, which is exactly what R8
+asserts.
 
 Opt-in knobs:
-  FLOW_TEST_CURSOR_LIVE=1   run even if you want to be explicit (auto-runs when
-                            cursor-agent is present regardless)
+  FLOW_LIVE_SMOKES=1        required — without it the live test is skipped
   FLOW_TEST_CURSOR_TIMEOUT  per-review timeout seconds (default 240)
 """
 
@@ -47,6 +52,10 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout
 
 
+@unittest.skipUnless(
+    os.environ.get("FLOW_LIVE_SMOKES") == "1",
+    "live-CLI smoke — set FLOW_LIVE_SMOKES=1 (or use the smoke-test tier) to run",
+)
 @unittest.skipUnless(
     shutil.which("cursor-agent"),
     "cursor-agent not on PATH — live clean-tree smoke test skipped",

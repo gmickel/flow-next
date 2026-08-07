@@ -1,5 +1,3 @@
-import hashlib
-import json
 import unittest
 from pathlib import Path
 
@@ -9,19 +7,11 @@ STRATEGY = REPO / "plugins/flow-next/skills/flow-next-strategy"
 SKILL = STRATEGY / "SKILL.md"
 FIRST_RUN = STRATEGY / "references/first-run.md"
 UPDATE = STRATEGY / "references/update.md"
-INTERVIEW = STRATEGY / "references/interview.md"
-TEMPLATE = STRATEGY / "references/strategy-template.md"
-LEDGER = REPO / "optimization/reached-path/strategy-candidate.json"
-B1 = REPO / "optimization/reached-path/fixtures/b1/strategy"
 MIRROR = REPO / "plugins/flow-next/codex/skills/flow-next-strategy"
 
 
 def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
-
-
-def _hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 class StrategyReachedPathTests(unittest.TestCase):
@@ -30,16 +20,10 @@ class StrategyReachedPathTests(unittest.TestCase):
         cls.root = _text(SKILL)
         cls.first = _text(FIRST_RUN)
         cls.update = _text(UPDATE)
-        cls.ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
 
-    def test_ledger_is_anchored_to_consistent_b1_inputs(self) -> None:
-        expected = self.ledger["lineage"]["input_hashes"]
-        for manifest_path in B1.glob("*.json"):
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(expected, manifest["prompt_hashes"])
-            self.assertEqual("B1", manifest["baseline"])
-        self.assertTrue(self.ledger["lineage"]["verified_before_mutation"])
-        self.assertIn("never to B0", self.ledger["lineage"]["rule"])
+    # Evidence-ledger archaeology removed 2026-08-07 - shipped optimizations are
+    # history, not invariants. (Ledger B1 input-hash anchoring and the
+    # accuracy/discards ledger-shape checks deleted; live skill-file tests remain.)
 
     def test_root_keeps_classification_and_non_clobber_safety_inline(self) -> None:
         for required in (
@@ -94,20 +78,6 @@ class StrategyReachedPathTests(unittest.TestCase):
             self.assertIn(required, self.update)
         self.assertNotIn("references/first-run.md", self.update)
         self.assertNotIn("references/strategy-template.md", self.update)
-
-    # Size ratchet + live-file hash freeze removed 2026-08-07: prose growth is
-    # judged by .flow/criteria.md G1; deliberate-change protection lives in
-    # test_prompt_text_pinned.py, not per-ledger pins.
-
-    def test_every_accuracy_cell_passes_and_discards_are_retained(self) -> None:
-        self.assertTrue(all(v == "pass" for v in self.ledger["accuracy_checks"].values()))
-        self.assertEqual("keep", self.ledger["verdict"]["decision"])
-        self.assertIsNone(self.ledger["verdict"]["wall_time_claim"])
-        self.assertEqual(2, len(self.ledger["discards"]))
-        self.assertTrue(all(row["decision"] == "discard" for row in self.ledger["discards"]))
-        self.assertTrue(all(row["score"]["quality"] for row in self.ledger["discards"]))
-        self.assertTrue(all(row["score"]["efficiency"] for row in self.ledger["discards"]))
-        self.assertTrue(all(row["reason"].startswith("Discarded:") for row in self.ledger["discards"]))
 
     def test_codex_mirror_routes_match_after_conductor_regeneration(self) -> None:
         mirror_first = MIRROR / "references/first-run.md"

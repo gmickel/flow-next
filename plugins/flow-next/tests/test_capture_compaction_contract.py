@@ -16,18 +16,14 @@ def _read(directory: pathlib.Path, name: str) -> str:
 
 
 class CaptureCompactionContract(unittest.TestCase):
-    def test_historical_compaction_is_advisory(self) -> None:
+    # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md G1,
+    # not grep. What remains: the fn-127 fail-closed guard tokens and the
+    # negative guard against the old detect-anything-then-refuse behavior.
+
+    def test_historical_compaction_is_not_an_automatic_refusal(self) -> None:
         for directory in (CANONICAL, MIRROR):
             workflow = _read(directory, "workflow.md")
             with self.subTest(directory=directory):
-                self.assertIn(
-                    "advisory, not an automatic refusal",
-                    workflow,
-                )
-                self.assertIn(
-                    "A historical system-summary block, `[compacted]` marker, or unrelated truncated tool result alone does not make the capture source incomplete.",
-                    workflow,
-                )
                 self.assertNotIn(
                     "If any are detected AND `FROM_COMPACTED_OK` is `0`, refuse",
                     workflow,
@@ -47,19 +43,6 @@ class CaptureCompactionContract(unittest.TestCase):
                 self.assertIn("summary-only", combined)
                 self.assertIn("--from-compacted-ok", combined)
                 self.assertIn("autofix", combined.lower())
-
-    def test_complete_relevant_evidence_proceeds_with_warning(self) -> None:
-        for directory in (CANONICAL, MIRROR):
-            workflow = _read(directory, "workflow.md")
-            with self.subTest(directory=directory):
-                self.assertIn(
-                    "Prior compaction detected; relevant capture evidence remains visible.",
-                    workflow,
-                )
-                self.assertIn(
-                    "signals exist but the relevant evidence remains fully visible, proceed",
-                    workflow,
-                )
 
 
 if __name__ == "__main__":

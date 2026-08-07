@@ -1,14 +1,11 @@
-"""Reached-path contract for Make PR's opt-in HTML lens (fn-130.11).
+"""Live routing contract for Make PR's opt-in HTML lens (fn-130.11).
 
-The immutable B1 manifests remain frozen. This suite validates the retained
-candidate ledger, exact corpus hashes, enabled/off router, and the action-site
-contracts that must not move with the HTML-only extraction.
+Validates the enabled/off router and the action-site contracts that must not
+move with the HTML-only extraction, against the live skill files.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import unittest
 from pathlib import Path
 
@@ -16,41 +13,21 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 SKILL = REPO / "plugins" / "flow-next" / "skills" / "flow-next-make-pr"
 MIRROR = REPO / "plugins" / "flow-next" / "codex" / "skills" / "flow-next-make-pr"
-SHARED_HTML = "plugins/flow-next/references/html-artifacts.md"
-HTML_LENS = "plugins/flow-next/skills/flow-next-make-pr/html-lens.md"
-PR_AID = "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md"
-CREATE = "plugins/flow-next/skills/flow-next-make-pr/create-and-finalize.md"
-LEDGER = REPO / "optimization" / "reached-path" / "make-pr-candidates.json"
-
-
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _lf_chars(path: Path) -> int:
-    return len(path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n"))
 
 
 class MakePrReachedPathTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
         cls.root = (SKILL / "SKILL.md").read_text(encoding="utf-8")
         cls.workflow = (SKILL / "workflow.md").read_text(encoding="utf-8")
         cls.html = (SKILL / "html-lens.md").read_text(encoding="utf-8")
         cls.create = (SKILL / "create-and-finalize.md").read_text(encoding="utf-8")
 
-    # Live-file hash/char freeze removed 2026-08-07 (.flow/criteria.md G1;
-    # deliberate-change protection lives in test_prompt_text_pinned.py).
+    # Evidence-ledger archaeology removed 2026-08-07 - shipped optimizations are
+    # history, not invariants. (Candidate-ledger required/forbidden-read and
+    # discard-shape checks deleted; live skill-file contracts remain.)
 
     def test_off_and_dry_run_keep_both_html_references_cold(self) -> None:
-        kept = self.ledger["kept_candidate"]
-        for route in ("dry-run", "html-off"):
-            forbidden = kept["forbidden_reads"][route]
-            self.assertIn(HTML_LENS, forbidden)
-            self.assertIn(SHARED_HTML, forbidden)
-        self.assertIn(CREATE, kept["forbidden_reads"]["dry-run"])
-
         gate = self.workflow.index("HTML_LENS=$(\"$FLOWCTL\" config get")
         route = self.workflow.index("read [html-lens.md](html-lens.md) in full")
         body = self.workflow.index("## Phase 2: Render body header sections")
@@ -61,9 +38,6 @@ class MakePrReachedPathTests(unittest.TestCase):
         self.assertNotIn("git check-ignore --no-index -q", self.workflow)
 
     def test_enabled_path_retains_html_safety_contract(self) -> None:
-        required = self.ledger["kept_candidate"]["required_reads"]["html-on"]
-        self.assertIn(HTML_LENS, required)
-        self.assertIn(SHARED_HTML, required)
         for needle in (
             "git check-ignore --no-index -q",
             'git add -- "$ARTIFACT_PATH"',
@@ -93,18 +67,6 @@ class MakePrReachedPathTests(unittest.TestCase):
             'select(.state == "OPEN")',
         ):
             self.assertIn(needle, self.workflow)
-
-    def test_discard_ledger_is_complete(self) -> None:
-        discarded = self.ledger["discarded_candidates"]
-        self.assertGreaterEqual(len(discarded), 3)
-        for row in discarded:
-            self.assertEqual(row["verdict"], "discard")
-            self.assertTrue(row["reason"])
-        self.assertEqual(
-            self.ledger["overlap_recheck"]["spec"],
-            "fn-73-glab-git-ops-make-prresolve-prland-over",
-        )
-        self.assertEqual(self.ledger["overlap_recheck"]["status"], "open")
 
     def test_codex_mirror_route_when_regenerated(self) -> None:
         """Conductor regenerates the mirror after joining the parallel wave."""

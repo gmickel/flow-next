@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import sys
 import unittest
 from pathlib import Path
@@ -29,14 +28,10 @@ PILOT_BACKLOG = (
 ).read_text(encoding="utf-8")
 
 
-def collapsed(text: str) -> str:
-    return re.sub(r"\s+", " ", text)
-
-
 class BacklogWireContractTests(unittest.TestCase):
     def test_list_open_is_a_deterministic_wire_verb(self) -> None:
         self.assertIn("list-open", WIRE_VERBS)
-        self.assertIn("deterministic `wire list-open` contract", STEPS)
+        self.assertIn("`wire list-open`", STEPS)
 
     def test_relation_and_question_ops_have_executable_wire_verbs(self) -> None:
         self.assertIn("relation-list", WIRE_VERBS)
@@ -75,16 +70,17 @@ class BacklogWireContractTests(unittest.TestCase):
                     {"issues": [], "truncated": False},
                 )
 
-    def test_docs_keep_exact_ready_lane_and_no_implicit_spec_creation(self) -> None:
+    # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md G1,
+    # not grep.
+    def test_docs_keep_exact_ready_lane(self) -> None:
         self.assertIn("resolved ready lane", STEPS)
-        self.assertIn("does not create Flow specs by itself", collapsed(STEPS))
 
 
 class QuestionValveContractTests(unittest.TestCase):
     def test_question_content_remains_an_explicit_judgment_surface(self) -> None:
+        # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
+        # G1, not grep.
         self.assertIn("**Comment content synthesis.**", SKILL)
-        self.assertIn(
-            "For `question`, the caller owns the semantic body", STEPS)
 
     def test_closed_marker_families_remain_in_semantic_reference(self) -> None:
         for marker in (
@@ -102,14 +98,12 @@ class QuestionValveContractTests(unittest.TestCase):
 
     def test_flat_tracker_answer_matches_by_id(self) -> None:
         self.assertIn("answer id=<hash>", COMMENTS)
-        self.assertIn("matched to the open question", COMMENTS)
         self.assertIn("parentId == null", COMMENTS)
 
     def test_wire_and_semantic_comment_shapes_are_not_conflated(self) -> None:
         self.assertIn('"parent_identity": "validated or not_available"', ADAPTER)
         self.assertIn('"created_at": "immutable provider timestamp or null"', ADAPTER)
         self.assertIn("stable subset `id`, `body`, and `parent_identity`", ADAPTER)
-        self.assertIn("semantic comment layer", collapsed(ADAPTER))
 
     def test_question_reopens_only_after_latest_answer(self) -> None:
         self.assertIn("latest question", COMMENTS)
@@ -119,8 +113,9 @@ class QuestionValveContractTests(unittest.TestCase):
 
 class AutonomousBoundaryTests(unittest.TestCase):
     def test_forked_decisions_queue_instead_of_prompting(self) -> None:
-        self.assertIn("In Ralph or a forked lifecycle call", SKILL)
-        self.assertIn("Never attempt an interactive prompt from the fork", SKILL)
+        # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
+        # G1, not grep. Smallest token kept for the autonomous-safety guard.
+        self.assertIn("Never attempt an interactive prompt", SKILL)
 
     def test_no_legacy_setup_precheck(self) -> None:
         self.assertNotIn("FLOW_SETUP_ASK", SKILL)
