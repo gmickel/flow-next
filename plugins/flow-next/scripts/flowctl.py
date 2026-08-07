@@ -15803,8 +15803,45 @@ def attach_chart_asset(
     }
 
 
+# Accepted top-level keys for resolve --sharpen-file. Single constant shared
+# by the unknown-key validation error and the --sharpen-file argparse help
+# text (R3) so they cannot drift apart.
+CHART_SHARPEN_ACCEPTED_KEYS = (
+    "decisions",
+    "remove_questions",
+    "remove_parked",
+    "parked_removals",
+    "notes_append",
+)
+
+
+def _format_notes_append_bullets(text: str, date_str: str) -> list[str]:
+    """Normalize notes_append prose into dated, append-only bullet lines.
+
+    Per non-blank line: an existing `- ` marker is preserved (its own marker
+    stripped and re-applied), a bare line is prefixed. Every bullet is
+    stamped `[corrected <date_str>]` by flowctl - the tool owns the date,
+    caller text is prose (R1).
+    """
+    bullets: list[str] = []
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("- "):
+            content = line[2:].strip()
+        elif line.startswith("-"):
+            content = line[1:].strip()
+        else:
+            content = line
+        bullets.append(f"- [corrected {date_str}] {content}")
+    return bullets
+
+
 def _parse_sharpen_file(path: Path) -> dict:
-    """Load resolve --sharpen-file JSON: decisions + remove_questions keys."""
+    """Load resolve --sharpen-file JSON: decisions, remove_questions,
+    and notes_append keys. Unknown keys are a hard validation error,
+    checked before any prose-safety refusal (R3)."""
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as e:
@@ -15830,6 +15867,23 @@ def _parse_sharpen_file(path: Path) -> dict:
             "--sharpen-file must be a JSON object",
             details={"path": str(path)},
         )
+
+    # Structural check FIRST: a typo'd key gets sharpen_file_unknown_key,
+    # never a prose-scan error, so the diagnostic points at the real cause.
+    unknown = sorted(set(data.keys()) - set(CHART_SHARPEN_ACCEPTED_KEYS))
+    if unknown:
+        raise ChartError(
+            "validation",
+            "sharpen_file_unknown_key",
+            "sharpen-file contains unrecognized key(s): "
+            f"{', '.join(unknown)} (accepted: "
+            f"{', '.join(CHART_SHARPEN_ACCEPTED_KEYS)})",
+            details={
+                "unknown_keys": unknown,
+                "accepted_keys": list(CHART_SHARPEN_ACCEPTED_KEYS),
+            },
+        )
+
     decisions = data.get("decisions")
     if decisions is None:
         decisions = []
@@ -15852,7 +15906,33 @@ def _parse_sharpen_file(path: Path) -> dict:
             "sharpen-file remove_questions must be a list of keys",
         )
     remove_keys = [str(k).strip() for k in remove_keys if str(k).strip()]
-    return {"decisions": decisions, "remove_questions": remove_keys}
+
+    notes_append_raw = data.get("notes_append")
+    notes_append: Optional[str] = None
+    if notes_append_raw is not None:
+        if not isinstance(notes_append_raw, str):
+            raise ChartError(
+                "validation",
+                "sharpen_file_invalid_notes_append",
+                "sharpen-file 'notes_append' must be a string",
+            )
+        if not notes_append_raw.strip():
+            raise ChartError(
+                "validation",
+                "sharpen_file_invalid_notes_append",
+                "sharpen-file 'notes_append' must not be empty or "
+                "whitespace-only",
+            )
+        # Same refusal contract as create-time notes (14498), before any
+        # allocation or persistence.
+        refuse_if_unsafe_prose(notes_append_raw, field="Sharpen notes_append")
+        notes_append = notes_append_raw
+
+    return {
+        "decisions": decisions,
+        "remove_questions": remove_keys,
+        "notes_append": notes_append,
+    }
 
 
 def resolve_chart_decision(
@@ -15959,15 +16039,18 @@ def resolve_chart_decision(
             sharpen_removes = list(
                 (sharpen or {}).get("remove_questions") or []
             )
-            if sharpen_new or sharpen_removes:
+            sharpen_notes = (sharpen or {}).get("notes_append")
+            if sharpen_new or sharpen_removes or sharpen_notes:
                 raise ChartError(
                     "invalid_state",
                     "decision_immutable",
                     f"Decision {did} is already resolved; retry supplies "
-                    "sharpen content (new decisions or parked-question "
-                    "removals) that a no-op would silently ignore. Create "
-                    "follow-up decisions via add-decision/wire-decision "
-                    "and drop parked questions via remove-question.",
+                    "sharpen content (new decisions, parked-question "
+                    "removals, or a notes correction) that a no-op would "
+                    "silently ignore. Create follow-up decisions via "
+                    "add-decision/wire-decision, drop parked questions via "
+                    "remove-question, and reopen the chart before "
+                    "re-resolving to append a fresh correction.",
                     details={
                         "id": did,
                         "status": status,
@@ -15984,6 +16067,9 @@ def resolve_chart_decision(
                             "remove_questions": [
                                 str(k) for k in sharpen_removes
                             ],
+                            "notes_append": (
+                                [sharpen_notes] if sharpen_notes else []
+                            ),
                         },
                     },
                 )
@@ -16000,6 +16086,7 @@ def resolve_chart_decision(
                     "replacements": [],
                     "sharpened": [],
                     "removed_questions": [],
+                    "notes_appended": [],
                 }
         raise ChartError(
             "invalid_state",
@@ -16184,6 +16271,24 @@ def resolve_chart_decision(
             d_num, gist, decision_record_link(chart_id, d_num)
         ),
     )
+
+    # Notes correction (R1): append-only, ONE append per resolve call
+    # regardless of cascade/supersede fan-out. flowctl stamps the date;
+    # unsafe-prose refusal and non-empty/type validation already ran in
+    # _parse_sharpen_file, before this transaction started.
+    notes_appended: list[str] = []
+    sharpen_notes = (sharpen or {}).get("notes_append")
+    if sharpen_notes:
+        bullets = _format_notes_append_bullets(sharpen_notes, ts[:10])
+        if bullets:
+            notes_appended = bullets
+            existing_notes = _extract_chart_section_body(md_text, "Notes")
+            combined = existing_notes.strip()
+            if combined:
+                combined = combined + "\n" + "\n".join(bullets)
+            else:
+                combined = "\n".join(bullets)
+            md_text = _replace_chart_section(md_text, "Notes", combined)
 
     for s in supersede_ids:
         s_full = dict(full_by_id[s])
@@ -16637,6 +16742,7 @@ def resolve_chart_decision(
         "replacements": replacements,
         "sharpened": sharpened,
         "removed_questions": removed_questions,
+        "notes_appended": notes_appended,
         "staled_links": staled_links,
         "record_path": primary.get("record_path")
         or decision_record_link(chart_id, d_num),
@@ -48487,7 +48593,10 @@ def main() -> None:
         "--sharpen-file",
         dest="sharpen_file",
         default=None,
-        help="JSON: new titled decisions + remove_questions keys (one transaction)",
+        help=(
+            "JSON object (one transaction); accepted keys: "
+            + ", ".join(CHART_SHARPEN_ACCEPTED_KEYS)
+        ),
     )
     p_chart_resolve.add_argument(
         "--supersedes",
