@@ -395,15 +395,25 @@ If a candidate criterion fails the test (e.g. "make it fast", "improve UX"), it 
 
 Track `[inferred]` count across all sections (especially in `## Acceptance Criteria` and `## Boundaries`). The count surfaces at Phase 4 read-back.
 
-### 2.5 — Acceptance-criterion volume heuristic (R11)
+### 2.5 — Spec-count heuristic (R11): how many specs is this?
 
-If Phase 2 produces **8 or more acceptance criteria**, Phase 4 read-back includes a `consider splitting?` option. The skill **never auto-splits**. The user decides:
+Epics, briefing packages, and multi-feature requests arrive as one conversation but often land best as 1..n specs. After drafting the criteria, judge the count:
 
-- Accept the larger spec.
-- Edit (drop / reword criteria).
-- Approve and run `/flow-next:plan <id>` afterward — plan can break it into multiple stages.
+**Tripwire (when to compute):** 8+ acceptance criteria, OR the criteria visibly serve more than one independently shippable outcome. Below the tripwire, skip this section entirely — normal captures see nothing.
 
-Capture's heuristic: ≥8 R-IDs is the trigger. The 8+ count itself goes into the short read-back ask (one-line warning) and the `consider-split` option.
+**Counting rule:** count business and technical requirements only. Standing criteria (G-IDs from `.flow/criteria.md`) and process requirements (tests green, docs updated, mirror synced) never count — they ride along with any spec.
+
+**Split criterion — independence, not size.** The count trips the check; the partition comes from shippability:
+
+- Would a stakeholder accept this cluster of criteria on its own?
+- Do the clusters touch disjoint surfaces?
+- Does one cluster depend on infrastructure another builds? A dependency seam is a natural spec boundary.
+
+A large-but-cohesive set (12 criteria, one subsystem, one outcome) is ONE spec — say so in the read-back note and move on. Never pad N to look thorough.
+
+**When the partition yields N>1, compute `SPLIT_PROPOSAL`:** per proposed spec — a short title, the criteria allocated to it, and the dependency edges between the proposed specs (`B depends on A`). Each proposed spec must be self-contained and independently reviewable; one spec = one PR = one completion review judging every R-ID, which is why oversized specs degrade review quality.
+
+The proposal surfaces at the Phase 4 read-back (allocation printed in full, one-line note in the ask). The skill **never auto-splits** — the user decides.
 
 ### 2.6 — Biz-context signal routing (R24) + signal-category count for R25
 
@@ -564,7 +574,7 @@ The **summary payload** (metadata about the draft — never a re-emission of it)
  [inferred] count: 7 total (Architecture 3 · API 2 · Boundaries 2)
  ```
  The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
-3. **8+ acceptance-criterion warning** (if Phase 2.5 fired) — one short clause, e.g. `11 acceptance criteria — consider-split is available.`
+3. **Spec-count note** (if Phase 2.5 fired) — one short clause, e.g. `11 criteria across 2 independent outcomes — split proposed, allocation printed above.` or `12 criteria, one cohesive outcome — single spec recommended.` When `SPLIT_PROPOSAL` has N>1, the printed read-back message (Step A) includes the full proposal block after the draft: per-spec titles, allocated criteria, dependency edges.
 4. **Related context** footnote (if Phase 0.3 found memory hits) — one short clause, e.g. `Related memory: bug/runtime-errors/oauth-callback-2025-08-12.`
 5. **Rewrite-mode pointer** (if `REWRITE_TARGET` is set) — one short clause, e.g. `Rewrite diff printed above.` (the full diff is already in the ordinary message; never paste it into the ask).
 6. **Glossary term-add proposals** (only when Phase 2.7 collected any) — compact one-liner of term names; full definitions live in the printed draft message (or a short glossary block printed above the ask), never multi-paragraph in the ask body:
@@ -584,10 +594,12 @@ The **summary payload** (metadata about the draft — never a re-emission of it)
  2. Compact summary payload from §4.1 (source-tag tally, 8+ note, related-memory footnote, rewrite pointer, glossary term names) — tallies and one-liners only.
  3. **The recommendation — no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend approve — the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked [inferred] in the draft above before choosing — approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve — <one-sentence rationale>. Confidence: [<tier>].`
 - **options** (frozen — each description states its consequence in plain words, "Choose this if…"):
- - `approve` — proceed to Phase 5 write ("this becomes the spec and work can start from it")
+ - `approve` — proceed to Phase 5 write as ONE spec ("this becomes the spec and work can start from it")
+ - `split-as-proposed` (only when Phase 2.5 proposed N>1) — Phase 5 runs the create ceremony once per proposed spec and records the dependency edges (§5.2b); "you get N linked specs exactly as printed above"
  - `edit` — revise specific sections (loops back to Phase 2 for those sections)
- - `consider-split` (only when Phase 2.5 fired) — exits 0; suggests user re-invokes capture with a narrower scope, or runs `/flow-next:plan` afterward to stage the breakdown
  - `abort` — exit 0, no write ("draft is thrown away, nothing saved")
+
+ When a `SPLIT_PROPOSAL` with N>1 exists, the recommendation may lead with `split-as-proposed` — proposing structure is not self-blessing content (the no-self-blessing rule above still governs `[inferred]` content): `Recommended: split-as-proposed — <N> independently shippable outcomes (allocation printed above). Confidence: [<tier>].`
 
 Confidence tier (attaches to whichever recommendation the rule above produced):
 
@@ -678,6 +690,8 @@ Autofix paths are unchanged by the interactive print-then-ask contract (no user 
 
 Autofix never offers `edit` — there's no user to ask. The Write + `--yes` pattern mirrors `flowctl memory migrate --yes` and is the documented autofix-substitute for read-back approval.
 
+**Autofix + split proposal:** autofix never multiplies artifacts. When Phase 2.5 proposed N>1, autofix writes ONE spec and records the proposal inside it — `## Decision Context` gains an `### Split proposal (unactioned)` H3 carrying the per-spec titles, criteria allocation, and edges — plus a one-line stdout note: `Split proposal (N specs) recorded in Decision Context — act on it via /flow-next:interview <id> or manual spec create + add-dep.`
+
 **Autofix + glossary proposals:** the summary payload's glossary block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
 
 **Autofix + readiness:** autofix **never writes readiness** — not even with `--yes` (Phase 5.9 is interactive-only). When the §4.2 target-aware predicate yields `READY_OFFER=true` AND the spec gets written (`--yes`), Phase 6 appends a one-line suggestion: `Mark ready when blessed: flowctl spec ready <SPEC_ID>`. Without `--yes` nothing is suggested (no spec id exists). Predicate fails → silence — including non-adopters, tracker-authoritative repos, and draft rewrite targets made visible only by an unrelated ready spec.
@@ -686,7 +700,7 @@ Autofix never offers `edit` — there's no user to ask. The Write + `--yes` patt
 
 - **Never silently skip the read-back.** Even if `[inferred]` count is 0, interactive mode prints the full draft then asks; autofix still materializes the draft file before any `.flow/` write. The user might still want to reject for reasons unrelated to inference.
 - **Never embed multi-paragraph drafts, diffs, or criteria lists in the `plain-text numbered prompt` body.** Print-then-ask only (R13).
-- **Never auto-split.** The `consider-split` option exits 0 and lets the user decide; it does not call `flowctl spec create` twice.
+- **Never auto-split.** N specs are written only through the user picking `split-as-proposed`; `approve` writes exactly one spec, and autofix never splits (§4.4).
 - **Never edit `--rewrite` target without printing the diff** as ordinary markdown before the short ask. The diff is non-optional in rewrite mode.
 - **Never write glossary terms here.** Phase 4 collects consent only; the writes happen in Phase 5.8, after the spec write.
 - **Never write readiness here.** Phase 4 collects the mark-ready consent only; the write happens in Phase 5.9, after the spec write. Never offer the question outside the target-aware predicate: no `tracker.readyState`, plus adopted local readiness for a new capture or an already-ready target for a rewrite.
@@ -881,6 +895,18 @@ The draft file round-trips embedded markdown and newlines byte-exact — `read_f
 - Capture decline / abort: call nothing; no `produced_specs[]` entry; chart stays resumable.
 - Partial multi-spec: record only successful `link-spec` calls; resume the failed cluster without duplicating the first.
 - Interruption after `spec create` / `spec set-plan` but before `link-spec`: on retry, discover the existing B-ID+cluster identity (chart sidecar `produced_specs[]` or matching specs) and link that same spec — never mint a second.
+
+### 5.2b — Split branch (interactive `split-as-proposed` only)
+
+Run the §5.2 new-spec ceremony once per proposed spec, in dependency order (dependencies first):
+
+- **Each spec gets its own complete body**: its allocated criteria renumbered from R1, the Phase 2 sections that serve those criteria, a per-spec slice of `## Conversation Evidence`, and a short `## Decision Context` note naming the sibling specs and the shared origin. Specs are handover objects — never write "see the other spec" in place of content a worker needs.
+- Write each body to its own literal draft path (same path-persistence rule as §4.1) and hand it to that spec's `spec set-plan --file`.
+- **After all creates, record the edges**: `"$FLOWCTL" spec add-dep <dependent-id> <dependency-id> --json` per proposed edge.
+- §5.4–§5.10 (branch name, tracker sync, glossary, readiness, HTML lens) run per created spec exactly as for a single create; the Phase 4 mark-ready answer applies to all created specs or none.
+- Phase 6 lists every created id plus the dependency edges.
+
+Autofix never reaches this branch (§4.4 records the proposal instead).
 
 ### 5.3 — Rewrite branch
 

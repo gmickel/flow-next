@@ -501,6 +501,12 @@ Question banks are scope-resolved via `flowctl scope bank "$SCOPE"`:
 
 Both banks share the `Pre-Question Taxonomy` and `Interview Guidelines` blocks, hoisted to [questions-shared.md](questions-shared.md) — single source of truth referenced by both banks.
 
+## Spec-count check (split proposal)
+
+Interviews grow specs — and an epic-shaped input sometimes turns out to be more than one spec. Before the write-back, when the refined criteria set crosses **8+ acceptance criteria** (counting business and technical requirements only — standing G-IDs and process requirements like "tests green" never count), or an answer reveals a second **independently shippable outcome** (a stakeholder would accept it on its own; disjoint surfaces; a dependency seam where one cluster needs infrastructure another builds), propose a split. A large-but-cohesive set is one spec — say so and move on; never pad the count.
+
+Present the concrete allocation as ordinary printed markdown (per-spec titles, allocated criteria, dependency edges), then one short `plain-text numbered prompt`: `keep-single` (default) / `split-as-proposed` / `adjust`. On split: create each sibling via `spec create` + `spec set-plan` (self-contained body; allocated criteria renumbered from R1 in the NEW spec), remove the moved criteria from the source spec's write-back, and record edges via `spec add-dep`. **Renumbering guard:** criteria a review cycle has already judged are never moved or renumbered — for those, keep them in place and record the proposal in `## Decision Context` instead. Autonomous/receipt-driven runs never split — record the proposal in `## Decision Context` as `### Split proposal (unactioned)`.
+
 ## NOT in scope (defer to /flow-next:plan)
 
 - Research scouts (codebase analysis)
