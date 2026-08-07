@@ -42,9 +42,8 @@ Document the correction path everywhere it is taught, stage the CHANGELOG entry,
 - [ ] dual-copy/manifest/sync-codex propagation done, full gate green
 
 ## Done summary
-TBD
-
+Documented the notes_append correction path, sharpen_file_unknown_key rejection, and the briefing post-transition status fix in `docs/flowctl.md` and the chart skill (`workflow.md` + `SKILL.md`), staged a CHANGELOG Unreleased entry crediting @sn-furali (#292), and regenerated the Codex mirror twice. Full test suite (179 files, 4243 tests) and ruff both green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 25dd51c46de52655c3397e501b5816b3e6d2745f
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution test_chart_briefing -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:
