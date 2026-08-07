@@ -30,10 +30,12 @@ This spec makes land correct on stacked PRs: recognize retargets and re-gate, me
 - **R4:** Land reads stack membership from the PR's REST payload (the `stack` object via `gh api`; `gh pr view --json` does not carry it). A stacked PR that is NOT the bottom-most open layer is never merged this tick - land reports it as awaiting its lower layers. [paraphrase]
 - **R5:** Land merges a stacked PR (bottom-most open layer, all gates green) via the stack merge endpoint (merge-async, squash, direct merge): submit, verify the response's server-captured expected head SHA equals the head land's gates just evaluated (mismatch is NEEDS_HUMAN - the endpoint has no client-side head pin), poll to a terminal status within the tick's bounded budget, and record the outcome. `pending` beyond budget is reported and re-checked next tick, never re-submitted blindly. [paraphrase]
 - **R6:** Non-stacked PRs keep the existing merge call and guard byte-identically (stack absent means zero behavior change). [paraphrase]
-- **R7:** Behavior for non-stacked PRs is unchanged across the whole gate tree - identical gate reads, verdicts, and ledger writes. [inferred]
+- **R7:** Behavior for non-stacked PRs is unchanged across the whole gate tree - identical verdicts and ledger writes (R4's stack read adds one `gh api` PR fetch to every tick, folded into an existing fetch where possible; verdict-affecting behavior is byte-identical). [inferred]
 - **R8:** The mechanical-rebase conflict rule is unchanged: a conflict produced by a stack retarget aborts to BLOCKED, never hand-resolved. [paraphrase]
 
 ## Boundaries
+
+- No flowctl Python changes: all gates, the stack read, and the R5 merge-async submit/poll loop are land-skill prose + `gh api` bash in workflow.md (like the existing merge block) - never a flowctl poller.
 
 - No stack authoring anywhere in this spec - creating/linking stacks is the make-pr v0 slice; pilot orchestration is fn-150. [user]
 - No dependency on the gh-stack CLI extension; everything is plain gh/REST. [paraphrase]

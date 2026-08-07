@@ -31,6 +31,9 @@ Early, optional stacked-PR support is a differentiator (GitHub shipped the publi
 
 ## Boundaries
 
+- `stacks.enabled` is a NEW `.flow/config.json` key: the same change must add its TABLE entry in `scripts/gen_flow_config_schema.py` and regenerate the committed schema artifact, or `test_flow_config_schema_drift` fails (fn-138 rule; skill-read keys are not exempt). This is the one flowctl-adjacent file this spec touches.
+- Docs task must note the R8 interaction with land: stacked layers born ready bypass land's draft-review-trigger assumption (land workflow.md ~355) - documented as the gate-scoped exception it is.
+
 - No merge behavior changes in this spec - stacked merging and retarget tolerance are the land hardening spec's scope (fn-149). [paraphrase]
 - No gh-stack extension dependency, no local stack-tracking files, no stack restructuring operations (reorder, fold, unstack). [user]
 - No merge-queue integration. [inferred]
