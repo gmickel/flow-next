@@ -58,7 +58,8 @@
     "enabled": true
   },
   "review": {
-    "backend": "rp"
+    "backend": "rp",
+    "maxIterations": 8
   },
   "scouts": {
     "github": false
