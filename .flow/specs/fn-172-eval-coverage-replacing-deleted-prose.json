@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-172-eval-coverage-replacing-deleted-prose",
+  "created_at": "2026-08-07T07:50:28.085852Z",
+  "depends_on_epics": [],
+  "id": "fn-172-eval-coverage-replacing-deleted-prose",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-172-eval-coverage-replacing-deleted-prose.md",
+  "status": "open",
+  "title": "Eval coverage replacing deleted prose-quality test pins",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-07T07:52:40.405442Z"
+}
