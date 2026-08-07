@@ -56,9 +56,8 @@ Add the `notes_append` key to `resolve --sharpen-file` and make unknown sharpen 
 - [ ] regression tests for all of the above in test_chart_resolution.py
 
 ## Done summary
-TBD
-
+Added `notes_append` to `chart resolve --sharpen-file` (append-only, date-stamped bullets into `## Notes`, one append per resolve call, always-list `notes_appended` result field, folded into the identical-retry `ignored_sharpen` guard) and made any unrecognized `--sharpen-file` key a hard `sharpen_file_unknown_key` validation error checked before unsafe-prose refusal, via a single shared accepted-keys constant. 10 new regression tests added to `test_chart_resolution.py` (26 total in the file, all green); ruff clean; dual-copy + tracker manifest propagated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 34e12f8966e5cedbea0f4cbbb4af5e1f3279b4d3
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_chart_resolution.py, python3 -m unittest test_chart_resolution -q (26/26 OK, conductor re-run)
 - PRs:

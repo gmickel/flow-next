@@ -17738,8 +17738,19 @@ def emit_chart_briefing(
     cluster_paths: dict[str, str] = {}
     mutations: list[tuple[str, str, str]] = []
 
+    # Header must show post-transition chart status: open->done happens later
+    # in this function (same predicate), after the index is rendered.
+    prior_final = any(
+        isinstance(b, dict) and b.get("status") == "final" for b in existing
+    )
+    post_transition_status = (
+        "done"
+        if briefing_status == "final" and status == "open" and not prior_final
+        else chart.get("status")
+    )
+
     index_body = _render_briefing_index_md(
-        chart,
+        dict(chart, status=post_transition_status),
         briefing_id=briefing_id,
         status=briefing_status,
         md_text=md_text,
