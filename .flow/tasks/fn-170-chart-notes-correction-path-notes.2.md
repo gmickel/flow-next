@@ -43,9 +43,8 @@ Verify appended corrections travel into the briefing `## Notes`, and fix the bri
 - [ ] fixtures added in test_chart_briefing.py
 
 ## Done summary
-TBD
-
+Fixed `_render_briefing_index_md`'s "Chart status" header to reflect the post-transition status (a final briefing that closes the chart now renders `done`, matching `chart show` immediately after) instead of the stale pre-transition value. Added a regression test proving `notes_append` corrections (from task .1) already flow into the briefing `## Notes` section with no extra plumbing, since `emit_chart_briefing` reads `md_text` fresh from disk. Also confirmed and documented: `chart_decision_revision` (the briefing-fingerprint hash) only covers the JSON sidecar (id/outcome/title/decisions/parked_questions) - `## Notes` lives in markdown only, so a notes_append correction does not stale prior briefings.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5037f5c086f7cbce402eadcdd99f07c380991fd6
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_chart_briefing -q, cd plugins/flow-next/tests && python3 -m unittest test_chart_resolution -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_chart_briefing.py
 - PRs:
