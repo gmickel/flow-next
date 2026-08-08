@@ -1,0 +1,475 @@
+{
+  "artifactId": "fn-170-aid-a4dbebfb-20260808",
+  "baseSha": "ee4cc08309eb12b23c8ff60796fd6b8f8c10b184",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "Chart ## Notes are seeded at create time, but discovery routinely disproves its own grounding facts; there was no correction path, and an unknown key in a sharpen file was silently ignored (issue #292).",
+        "taskIds": [],
+        "title": "Notes were write-once and sharpen typos vanished silently"
+      },
+      {
+        "files": [
+          {
+            "additions": 129,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t1",
+              "r1"
+            ],
+            "summary": "Accepted-keys constant, unknown-key rejection ordering, notes_append parse/format/append, retry-guard fold, briefing post-transition status.",
+            "taskIds": [
+              "fn-170-chart-notes-correction-path-notes.1"
+            ]
+          },
+          {
+            "additions": 362,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_resolution.py",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t1",
+              "r6"
+            ],
+            "summary": "TestNotesAppend: 11 tests pinning ordering, aliases, always-list, retry-ignore, post-reopen, backslash safety.",
+            "taskIds": [
+              "fn-170-chart-notes-correction-path-notes.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "t1",
+          "r1",
+          "r3",
+          "r4"
+        ],
+        "summary": "CHART_SHARPEN_ACCEPTED_KEYS constant feeds both the sharpen_file_unknown_key error and the argparse help; notes_append validates (non-empty string, unsafe-prose refused), appends dated correction bullets to ## Notes once per resolve inside the transaction; result JSON notes_appended is always a list; identical retries fold into ignored_sharpen.",
+        "taskIds": [
+          "fn-170-chart-notes-correction-path-notes.1"
+        ],
+        "title": "notes_append + unknown-key rejection in resolve sharpen"
+      },
+      {
+        "files": [
+          {
+            "additions": 106,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_chart_briefing.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t2",
+              "r5"
+            ],
+            "summary": "TestBriefingChartStatusHeader (post-transition status) + notes-correction carry-through test.",
+            "taskIds": [
+              "fn-170-chart-notes-correction-path-notes.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R2",
+          "R5"
+        ],
+        "sourceRefs": [
+          "t2",
+          "r2",
+          "r5"
+        ],
+        "summary": "A final briefing that closes the chart now renders Chart status: done instead of the stale pre-transition open; the header computation uses the exact predicate of the later open-to-done flip, and notes corrections were verified to flow into briefings with no extra plumbing.",
+        "taskIds": [
+          "fn-170-chart-notes-correction-path-notes.2"
+        ],
+        "title": "Briefing header reports post-transition status"
+      },
+      {
+        "files": [
+          {
+            "additions": 129,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Byte-identical distribution copy of scripts/flowctl.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated tracker manifest (distribution copy).",
+            "taskIds": []
+          },
+          {
+            "additions": 36,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "Unreleased entry: notes_append + unknown-key rejection (Added), briefing status (Fixed); credits @sn-furali (#292).",
+            "taskIds": [
+              "fn-170-chart-notes-correction-path-notes.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated codex mirror.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated codex mirror.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "notes_append + sharpen_file_unknown_key callouts, contract-table rows, fingerprint-scope note.",
+            "taskIds": [
+              "fn-170-chart-notes-correction-path-notes.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-chart/SKILL.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "Resolve flag-table row for notes_append.",
+            "taskIds": [
+              "fn-170-chart-notes-correction-path-notes.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated tracker manifest.",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-chart/workflow.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "Sharpen accepted-keys note + Correcting-a-grounding-note subsection (unattended: only on direct contradiction).",
+            "taskIds": [
+              "fn-170-chart-notes-correction-path-notes.3"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R6",
+          "R7"
+        ],
+        "sourceRefs": [
+          "t3",
+          "r6",
+          "r7"
+        ],
+        "summary": "flowctl.md documents notes_append, the unknown-key error, and the chart_decision_revision fingerprint scope; the chart skill teaches the correction path incl. the unattended never-speculative rule; CHANGELOG Unreleased entry credits the reporter of #292; codex mirror regenerated (sync-codex twice) and dual-copy/manifests propagated.",
+        "taskIds": [
+          "fn-170-chart-notes-correction-path-notes.3"
+        ],
+        "title": "Docs, skill prose, CHANGELOG, propagation"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "No standalone chart note verb, notes stay append-only (never mutable or deletable), briefing sections keep their order, chart reopen semantics untouched, final briefings never re-minted.",
+        "taskIds": [],
+        "title": "Deliberately unchanged"
+      },
+      {
+        "files": [
+          {
+            "additions": 187,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/specs/fn-170-chart-notes-correction-path-notes.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Flow spec sidecar: task statuses, review rounds, receipts bookkeeping.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-170-chart-notes-correction-path-notes.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task done summary + evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": ".flow/tasks/fn-170-chart-notes-correction-path-notes.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task done summary + evidence (incl. plan-sync line-anchor refresh).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-170-chart-notes-correction-path-notes.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task done summary + evidence.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 6,
+        "rIds": [],
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "summary": "Focused suites test_chart_resolution (26) + test_chart_briefing (17) green per task; full gate python3 scripts/run_tests_parallel.py 4243 tests OK plus uvx ruff@0.16.0 check clean at the docs commit; flow bookkeeping commit a4dbebfb carries task state and review outcomes.",
+        "taskIds": [
+          "fn-170-chart-notes-correction-path-notes.3"
+        ],
+        "title": "Verification"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Head commit",
+        "sourceRefs": [
+          "chead"
+        ],
+        "value": "a4dbebf"
+      },
+      {
+        "label": "Verification",
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "value": "focused suites 26+17 green; full gate 4243 tests OK + ruff clean"
+      },
+      {
+        "label": "Evidence commits",
+        "sourceRefs": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "value": "34e12f8 / 5037f5c / 25dd51c"
+      }
+    ],
+    "thesis": "chart resolve --sharpen-file gains an append-only, date-stamped notes correction path (issue #292): unknown sharpen keys now fail loudly instead of being silently dropped, corrections land in ## Notes inside the same resolve transaction and flow into briefings, and the briefing header reports the post-transition chart status."
+  },
+  "generatedAt": "2026-08-08T00:20:00Z",
+  "headSha": "a4dbebfb2fabd3f84f5912e80edc16116071f8f5",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-170-chart-notes-correction-path-notes"
+    },
+    {
+      "id": "t1",
+      "kind": "task",
+      "ref": "fn-170-chart-notes-correction-path-notes.1"
+    },
+    {
+      "id": "t2",
+      "kind": "task",
+      "ref": "fn-170-chart-notes-correction-path-notes.2"
+    },
+    {
+      "id": "t3",
+      "kind": "task",
+      "ref": "fn-170-chart-notes-correction-path-notes.3"
+    },
+    {
+      "id": "r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "r7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "ee4cc08309eb12b23c8ff60796fd6b8f8c10b184..a4dbebfb2fabd3f84f5912e80edc16116071f8f5"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "34e12f8966e5cedbea0f4cbbb4af5e1f3279b4d3"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "5037f5c086f7cbce402eadcdd99f07c380991fd6"
+    },
+    {
+      "id": "c3",
+      "kind": "commit",
+      "ref": "25dd51c46de52655c3397e501b5816b3e6d2745f"
+    },
+    {
+      "id": "chead",
+      "kind": "commit",
+      "ref": "a4dbebfb2fabd3f84f5912e80edc16116071f8f5"
+    }
+  ],
+  "specId": "fn-170-chart-notes-correction-path-notes"
+}

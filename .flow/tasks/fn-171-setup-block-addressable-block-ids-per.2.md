@@ -56,9 +56,8 @@ Add the read-only `check` verb: same classification apply computes, byte-equalit
 - [ ] surface pin updated
 
 ## Done summary
-TBD
-
+Added the read-only `flowctl setup-block check` verb: mirrors apply's byte-equality-first transition table but writes nothing in any branch, with the 0/2/3/1 verdict/exit-code contract (unchanged; template-drift/customized/hash-absent; missing-file/missing-markers/corrupt; ordinary errors). Updated the test_flowctl_surface.py help pin and added zero-write, two-blocks-one-file, and mixed-CRLF fixtures to test_setup_block_helper.py.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 73cdd05924affa07701343f6ff03dd39d3b5a173
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_setup_block_helper test_portable_locks test_flowctl_surface -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_setup_block_helper.py plugins/flow-next/tests/test_flowctl_surface.py
 - PRs:
