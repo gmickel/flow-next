@@ -11,22 +11,106 @@
   "impl_review_rounds": {},
   "next_task": 1,
   "plan_review_rounds": 0,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-08T11:59:19.847909Z",
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "d35074e283b17addcf07a55c9dac3fd1b6187e05ba96a383349d53160f4cf557",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "6a187734aedef745bd431d623a63de6730d380ef",
+      "kind": "plan",
+      "outcome": "transport_failure",
+      "output_sha256": "284c9791824d6794b0df8a0a74f2d98bc8b1cf535f662a376b36d8db47c24cc0",
+      "reservation_id": "44e206391bb94575bcaee4ca00eff1c9",
+      "round_consumed": false,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-08T11:48:21.007918Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "d35074e283b17addcf07a55c9dac3fd1b6187e05ba96a383349d53160f4cf557",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "6a187734aedef745bd431d623a63de6730d380ef",
+      "kind": "plan",
+      "outcome": "transport_failure",
+      "output_sha256": "0fa9f46d17a7e95b0f75466f064e4ae8cfd6facf9a5b6419d3db3c40c87064ca",
+      "reservation_id": "84189bae50b04a929ff7d86a3d21ee5d",
+      "round_consumed": false,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-08T11:52:14.519669Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "d35074e283b17addcf07a55c9dac3fd1b6187e05ba96a383349d53160f4cf557",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "6a187734aedef745bd431d623a63de6730d380ef",
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_sha256": "2d7bb493c165bc512ec528e276bc1f39c53b87f29e894c56d9d7e220bae65442",
+      "reservation_id": "a6c3542957994497a581649856191bbb",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-08T11:52:56.709182Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {
+    "plan": 2,
+    "plan#completion": 2
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-174-yagni-scope-discipline-in-plan-review.md",
   "status": "open",
   "title": "YAGNI scope discipline in plan, review, template, and worker prose",
   "tracker": {
-    "baseHashFlow": null,
-    "baseHashTracker": null,
+    "baseHashFlow": "795725185733fd6e88cb56f0efca752e7f947d79f73d20277b21f906979868e1",
+    "baseHashTracker": "c49f2a1a594f2dec3abbe13c65f6d6b8123347e0e7d6813a5545c809a0c00fa8",
     "depRelations": [],
-    "id": null,
-    "identifier": null,
-    "lastSyncedAt": null,
-    "mergeBaseFlow": null,
-    "mergeBaseTracker": null,
-    "url": null
+    "id": "0a1e9cc9-41dc-466d-ba18-62dc97d7858a",
+    "identifier": "FLOW-99",
+    "lastSyncedAt": "2026-08-08T12:00:33.634977Z",
+    "linkState": "linked",
+    "mergeBaseFlow": "# Overview\n\nPlanning agents systematically overbuild: in the flow-efficiency replay campaign, two independent opus runs of the same real request (gno fn-107) each produced 6 tasks / 21-23KB specs / a 500-900-line trust-consent subsystem, where the human-steered shipped version needed 4 tasks / 6.7KB and eliminated the trust problem structurally. A third run with scope-minimality prose produced 4 tasks, explicitly declined the trust machinery in Boundaries, and delivered -43% output tokens / -57% cost with reviewed quality ABOVE the unmodified arm. This spec lands that prose.\n\n**Evidence standing: validated in the flow-efficiency replay campaign (`~/work/agent-scripts/flow-efficiency/results/06-IMPLEMENTATION-LIST.md` \u00a71, `05-REPLAY-CAMPAIGN.md`). No further evaluation is required before landing.** Tested prose exists verbatim in worktree commit `5a54d5f0` (`replay/wt/flow-next-yagni`); this spec lands it plus one amendment its quality review demanded.\n\n## Goal & Context\n\nMake scope minimality a first-class, checkable planning discipline: every task traces to an R-ID, every R-ID traces to the request, unrequested capabilities go to Boundaries as one-line exclusions, and risk-elimination is preferred over risk-management machinery. Overengineering becomes a plan-review FINDING, not a taste note.\n\n## Quick commands\n\n```bash\ncd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q   # hash pin for plan-review-prompt.md\n./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git status --short       # mirror regen, idempotent (2nd run = no diff)\n```\n\n## Architecture & Data Models\n\nProse-only; no flowctl changes. Four edit sites (tested wording in `5a54d5f0`; all four verified unchanged on main HEAD, clean transplant):\n\n1. `plugins/flow-next/skills/flow-next-plan/steps.md` Step 2 (insert between the stakeholder paragraph ~L232 and `## Step 3` ~L234): binding scope-minimality block - trace-to-request rule, smallest architecture satisfying the ACs, structural-elimination-over-risk-machinery principle, one-line rejections in Decision Context, extras go to Boundaries.\n2. `plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md` criterion 6 (~L46): overengineering is a finding, with three concrete patterns (untraceable surface; risk-machinery where structural elimination is available; N-way generality for a one-case request). SHA-pinned in `tests/test_prompt_text_pinned.py` TEMPLATE_HASHES (~L167) - update hash in the SAME commit with prompt rationale in the message.\n3. `plugins/flow-next/templates/spec.md` (insert comment block between the second `-->` ~L62 and `# <spec-id> <Title>` ~L64): SCOPE DISCIPLINE comment block.\n4. `plugins/flow-next/agents/worker.md` Rules list (insert between `- Follow existing code style` L278 and `- Add tests if spec requires them` L279): build to the AC, not past it; follow-ups noted in the done summary, never built.\n\nAmendment (R2, applied at ALL four sites): each site's rigor-exemption clause must name BOTH (a) error/negative-case enumeration per AC AND (b) filesystem-identity, permission, and concurrency guards (realpath/symlink containment, lock-guarded writes, forced excludes of runtime state) as rigor, not scope. The amendment EXTENDS the tested exemption sentence in each site's own voice (worker.md imperative bullet, steps.md binding block, spec.md comment, review-prompt criterion); it never replaces or weakens the tested wording.\n\nMirrors and copies: `scripts/sync-codex.sh` regenerates `codex/skills/flow-next-plan/steps.md`, `codex/skills/flow-next-plan-review/references/plan-review-prompt.md`, `codex/templates/spec.md`, and `codex/agents/worker.toml` (md-to-toml transform - verify the multi-line bold bullet survives). `.flow/templates/spec.md` is the setup-managed copy the discovery cascade resolves BEFORE the bundled template - refresh it in the same change (fn-165 precedent: both updated together) so this repo's own plans see the new block.\n\n## Edge Cases & Constraints\n\n- The rigor exemption is the load-bearing safety clause and MUST appear at all four sites (the yagni arm's only defect was eliminating a containment guard along with the features - \"an eliminated guard, not an eliminated feature\").\n- worker.md phrasing risk: the guards clause gets its own sentence appended to the YAGNI bullet, so it cannot be read as re-muddying the build-to-AC rule.\n- New prose is pure markdown/comment text with no Claude-native tool names - portable to Cursor/Droid/Grok as-is; the amendment must not introduce any.\n- Only plan-review-prompt.md is hash-pinned; the other three sites have no test surface.\n\n## Acceptance Criteria\n\n- **R1:** All four edit sites carry the scope-minimality prose functionally equivalent to `5a54d5f0`. Errors: no error surface beyond prose consistency.\n- **R2:** Every site's exemption clause names BOTH error-case enumeration AND filesystem-identity/permission/concurrency guards as rigor, not scope. Errors: a site missing either exemption fails review.\n- **R3:** Plan-review rubric lists the three overengineering patterns as findings. Errors: none beyond R1.\n- **R4:** Codex/cursor mirrors regenerated; docs-site updated per downstream conventions; CHANGELOG entry cites the replay-campaign evidence. Errors: mirror-parity check red blocks merge.\n\n## Boundaries\n\n- No new evals or benchmark runs (evidence standing above).\n- No enforcement code, no lint, no flowctl verbs - prose only.\n- No length/byte budgets (measured ignored 3x; rejected lever).\n- No change to error-enumeration discipline itself (fn-165 stands as-is).\n\n## Strategy Alignment\n\nActive tracks served by this plan:\n- **Self-improving through normal work** - replay-campaign evidence converted directly into pipeline prose discipline.\n- **Cross-platform parity** - mirrors regenerated; new prose is portable-host-safe by construction.\n\n## Decision Context\n\nChosen over per-project config because the failure is universal in unattended planning and the discipline is self-exempting where a request genuinely needs the bigger design (the rules bind derivation, not outcomes - a traced task satisfying a real R-ID is always legal). Structural-elimination principle sourced from the campaign's sharpest reviewer finding: the shipped fn-107 made the profile format inert instead of building consent machinery; both unguided replay arms built the machinery. Rejected: shipping the tested prose without the guard-exemption amendment - the yagni arm's symlink-containment miss shows minimality pressure needs the guard clause before fleet exposure. Rejected: leaving `.flow/templates/spec.md` stale as overkill-avoidance - the cascade resolves it first, so a stale copy silently hides the new block from this repo's own planning.\n\n## Early proof point\n\nTask fn-174.1 validates the core approach (the tested prose transplants cleanly and the guard-exemption amendment reads as rigor-preserving at all four differently-voiced sites). If a site's amendment fights its voice, re-evaluate wording before mirrors/CHANGELOG.\n\n## Requirement coverage\n\n| Req | Description | Task(s) | Gap justification |\n|-----|-------------|---------|-------------------|\n| R1  | Four sites carry 5a54d5f0-equivalent prose | fn-174.1 | - |\n| R2  | Both exemptions named at every site | fn-174.1 | - |\n| R3  | Three overengineering patterns in rubric | fn-174.1 | - |\n| R4  | Mirrors + docs + CHANGELOG | fn-174.1 (mirrors), fn-174.2 (CHANGELOG/docs) | - |\n",
+    "mergeBaseTracker": "# Overview\n\nPlanning agents systematically overbuild: in the flow-efficiency replay campaign, two independent opus runs of the same real request (gno fn-107) each produced 6 tasks / 21-23KB specs / a 500-900-line trust-consent subsystem, where the human-steered shipped version needed 4 tasks / 6.7KB and eliminated the trust problem structurally. A third run with scope-minimality prose produced 4 tasks, explicitly declined the trust machinery in Boundaries, and delivered -43% output tokens / -57% cost with reviewed quality ABOVE the unmodified arm. This spec lands that prose.\n\n**Evidence standing: validated in the flow-efficiency replay campaign (**`~/work/agent-scripts/flow-efficiency/results/06-IMPLEMENTATION-LIST.md` **\u00a71,** `05-REPLAY-CAMPAIGN.md`**). No further evaluation is required before landing.** Tested prose exists verbatim in worktree commit `5a54d5f0` (`replay/wt/flow-next-yagni`); this spec lands it plus one amendment its quality review demanded.\n\n## Goal & Context\n\nMake scope minimality a first-class, checkable planning discipline: every task traces to an R-ID, every R-ID traces to the request, unrequested capabilities go to Boundaries as one-line exclusions, and risk-elimination is preferred over risk-management machinery. Overengineering becomes a plan-review FINDING, not a taste note.\n\n## Quick commands\n\n```bash\ncd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q   # hash pin for plan-review-prompt.md\n./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git status --short       # mirror regen, idempotent (2nd run = no diff)\n```\n\n## Architecture & Data Models\n\nProse-only; no flowctl changes. Four edit sites (tested wording in `5a54d5f0`; all four verified unchanged on main HEAD, clean transplant):\n\n1. `plugins/flow-next/skills/flow-next-plan/steps.md` Step 2 (insert between the stakeholder paragraph ~L232 and `## Step 3` ~L234): binding scope-minimality block - trace-to-request rule, smallest architecture satisfying the ACs, structural-elimination-over-risk-machinery principle, one-line rejections in Decision Context, extras go to Boundaries.\n2. `plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md` criterion 6 (~L46): overengineering is a finding, with three concrete patterns (untraceable surface; risk-machinery where structural elimination is available; N-way generality for a one-case request). SHA-pinned in `tests/test_prompt_text_pinned.py` TEMPLATE_HASHES (~L167) - update hash in the SAME commit with prompt rationale in the message.\n3. `plugins/flow-next/templates/spec.md` (insert comment block between the second `-->` ~L62 and `# <spec-id> <Title>` ~L64): SCOPE DISCIPLINE comment block.\n4. `plugins/flow-next/agents/worker.md` Rules list (insert between `- Follow existing code style` L278 and `- Add tests if spec requires them` L279): build to the AC, not past it; follow-ups noted in the done summary, never built.\n\nAmendment (R2, applied at ALL four sites): each site's rigor-exemption clause must name BOTH (a) error/negative-case enumeration per AC AND (b) filesystem-identity, permission, and concurrency guards (realpath/symlink containment, lock-guarded writes, forced excludes of runtime state) as rigor, not scope. The amendment EXTENDS the tested exemption sentence in each site's own voice (worker.md imperative bullet, steps.md binding block, spec.md comment, review-prompt criterion); it never replaces or weakens the tested wording.\n\nMirrors and copies: `scripts/sync-codex.sh` regenerates `codex/skills/flow-next-plan/steps.md`, `codex/skills/flow-next-plan-review/references/plan-review-prompt.md`, `codex/templates/spec.md`, and `codex/agents/worker.toml` (md-to-toml transform - verify the multi-line bold bullet survives). `.flow/templates/spec.md` is the setup-managed copy the discovery cascade resolves BEFORE the bundled template - refresh it in the same change (fn-165 precedent: both updated together) so this repo's own plans see the new block.\n\n## Edge Cases & Constraints\n\n* The rigor exemption is the load-bearing safety clause and MUST appear at all four sites (the yagni arm's only defect was eliminating a containment guard along with the features - \"an eliminated guard, not an eliminated feature\").\n* worker.md phrasing risk: the guards clause gets its own sentence appended to the YAGNI bullet, so it cannot be read as re-muddying the build-to-AC rule.\n* New prose is pure markdown/comment text with no Claude-native tool names - portable to Cursor/Droid/Grok as-is; the amendment must not introduce any.\n* Only plan-review-prompt.md is hash-pinned; the other three sites have no test surface.\n\n## Acceptance Criteria\n\n* **R1:** All four edit sites carry the scope-minimality prose functionally equivalent to `5a54d5f0`. Errors: no error surface beyond prose consistency.\n* **R2:** Every site's exemption clause names BOTH error-case enumeration AND filesystem-identity/permission/concurrency guards as rigor, not scope. Errors: a site missing either exemption fails review.\n* **R3:** Plan-review rubric lists the three overengineering patterns as findings. Errors: none beyond R1.\n* **R4:** Codex/cursor mirrors regenerated; docs-site updated per downstream conventions; CHANGELOG entry cites the replay-campaign evidence. Errors: mirror-parity check red blocks merge.\n\n## Boundaries\n\n* No new evals or benchmark runs (evidence standing above).\n* No enforcement code, no lint, no flowctl verbs - prose only.\n* No length/byte budgets (measured ignored 3x; rejected lever).\n* No change to error-enumeration discipline itself (fn-165 stands as-is).\n\n## Strategy Alignment\n\nActive tracks served by this plan:\n\n* **Self-improving through normal work** - replay-campaign evidence converted directly into pipeline prose discipline.\n* **Cross-platform parity** - mirrors regenerated; new prose is portable-host-safe by construction.\n\n## Decision Context\n\nChosen over per-project config because the failure is universal in unattended planning and the discipline is self-exempting where a request genuinely needs the bigger design (the rules bind derivation, not outcomes - a traced task satisfying a real R-ID is always legal). Structural-elimination principle sourced from the campaign's sharpest reviewer finding: the shipped fn-107 made the profile format inert instead of building consent machinery; both unguided replay arms built the machinery. Rejected: shipping the tested prose without the guard-exemption amendment - the yagni arm's symlink-containment miss shows minimality pressure needs the guard clause before fleet exposure. Rejected: leaving `.flow/templates/spec.md` stale as overkill-avoidance - the cascade resolves it first, so a stale copy silently hides the new block from this repo's own planning.\n\n## Early proof point\n\nTask fn-174.1 validates the core approach (the tested prose transplants cleanly and the guard-exemption amendment reads as rigor-preserving at all four differently-voiced sites). If a site's amendment fights its voice, re-evaluate wording before mirrors/CHANGELOG.\n\n## Requirement coverage\n\n| Req | Description | Task(s) | Gap justification |\n| -- | -- | -- | -- |\n| R1 | Four sites carry 5a54d5f0-equivalent prose | fn-174.1 | *  |\n| R2 | Both exemptions named at every site | fn-174.1 | *  |\n| R3 | Three overengineering patterns in rubric | fn-174.1 | *  |\n| R4 | Mirrors + docs + CHANGELOG | fn-174.1 (mirrors), fn-174.2 (CHANGELOG/docs) | *  |\n\n",
+    "url": "https://linear.app/gmickel/issue/FLOW-99"
   },
-  "updated_at": "2026-08-08T11:29:00.089102Z"
+  "updated_at": "2026-08-08T12:00:33.634991Z"
 }

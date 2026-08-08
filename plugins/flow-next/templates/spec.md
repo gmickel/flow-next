@@ -61,6 +61,21 @@ flow-next docs, "Customizing the scaffold for your project"
 (plugins/flow-next/docs/spec-template.md - https://flow-next.dev/docs/spec-template/).
 -->
 
+<!--
+SCOPE DISCIPLINE (YAGNI — applies to the whole spec):
+Specify the smallest system that satisfies the request. Every R-ID traces to
+the request; every task traces to an R-ID. Capabilities the request never
+asked for are not scope — name them in ## Boundaries as out-of-scope, one line
+each. Prefer designs that ELIMINATE a risk structurally (closed schema, inert
+format, unexposed capability) over machinery that manages it (trust layers,
+scanners, caps, extra state stores). Rejected bigger designs get one line in
+## Decision Context, never sections. This trims scope, never rigor: the
+error/negative-cases discipline below, Boundaries, and R-ID coverage are
+EXEMPT and stay complete. So are filesystem-identity, permission, and
+concurrency guards (realpath/symlink containment, lock-guarded writes, forced
+excludes of runtime state) — an eliminated guard is not an eliminated feature.
+-->
+
 # <spec-id> <Title>
 
 ## Goal & Context
