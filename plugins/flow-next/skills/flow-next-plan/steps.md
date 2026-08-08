@@ -505,16 +505,32 @@ Default to standard unless complexity demands more or less.
    Per object: `title` required non-empty; `description`/`acceptance` optional strings (full task-spec markdown — same content the granular `--description-file`/`--acceptance-file` flags take); `satisfies` an array of bare R-ID tokens (grammar `R[1-9][0-9]*[a-z]?`); `deps` an array of task-id strings or **1-based integer indexes of EARLIER entries in the same array** (so intra-plan dependencies need no pre-existing ids); `priority` optional int. Any invalid entry rejects the whole batch with zero writes; `--json` returns the created ids in input order. Omit `deps`/`satisfies` where they don't apply. Granular one-task `task create` (with `--description-file`/`--acceptance-file`/`--satisfies`) remains the tool for ADDING a task to an existing plan later; `task set-spec` is for editing tasks that already exist.
 
    **Task spec content** (remember: NO implementation code):
+
+   **The artifact split (binding):** the SPEC is the human-facing record of
+   what and why. The TASK is the delegation payload — the concrete HOW that
+   lets a weaker or cheaper implementer build without re-deriving design
+   decisions. Executors ALWAYS receive the task file TOGETHER with the full
+   parent spec (the anchor bundle delivers both verbatim), so:
+   - NEVER restate spec content in a task — no problem framing, no
+     architecture rationale, no re-told acceptance criteria. Reference R-IDs
+     and spec sections instead. A restatement is generated twice, delivered
+     twice in every anchor, and drifts (plan-sync then has to chase it).
+   - DO write the implementation plan: named files, concrete approach and
+     ordering, patterns to follow, task-scoped acceptance. That is the task's
+     entire job.
+
    ```markdown
    ---
    satisfies: [R1, R3]
+   touches: [src/auth/**, src/routes/auth.ts]
    ---
 
    ## Description
-   [What to build, not how to build it]
+   [What THIS task builds and why it is split this way — ≤10 lines. The how
+   lives in ## Approach; the why-it-matters lives in the parent spec.]
 
    **Size:** S/M (L tasks should be split)
-   **Files:** list expected files. Task files must carry the full contract - named files, named test cases, named acceptance - because downstream executors receive the task file AS the brief (plan-time knowledge reaches them through the task file, no other channel).
+   **Files:** list expected files. Task files carry the task-specific contract - named files, named test cases, named acceptance - because downstream executors receive the task file as the brief alongside the parent spec.
 
    ## Approach
    - Follow pattern at `src/example.ts:42`
@@ -566,6 +582,15 @@ Default to standard unless complexity demands more or less.
    - Tasks that do infrastructure, refactoring, shared plumbing, or docs-only work may legitimately have **no** `satisfies` entry — omit the flag entirely.
    - Use bare R-ID tokens (`--satisfies R1,R3`; rendered as `satisfies: [R1, R3]`), not quoted strings.
    - Frontmatter is additive — tasks created without it parse unchanged.
+
+   **`touches:` frontmatter rules (optional, additive):**
+   - Repo-relative paths/globs the task expects to MODIFY (not merely read),
+     authored at plan time from the `**Files:**` analysis and checked at plan
+     review. Example: `touches: [src/auth/**, src/routes/auth.ts]`.
+   - Unknown or hard to predict → OMIT the line entirely; downstream
+     concurrency planning treats omission as always-serial, which is the safe
+     default by design.
+   - Inert metadata to flowctl — models read it; no deterministic parsing.
 
 5. Add task dependencies (if not already set via `--deps`):
 

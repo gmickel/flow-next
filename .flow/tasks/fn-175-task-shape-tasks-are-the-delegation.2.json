@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T16:05:37.157982Z",
+  "depends_on": [
+    "fn-175-task-shape-tasks-are-the-delegation.1"
+  ],
+  "id": "fn-175-task-shape-tasks-are-the-delegation.2",
+  "priority": null,
+  "spec": "fn-175-task-shape-tasks-are-the-delegation",
+  "spec_path": ".flow/tasks/fn-175-task-shape-tasks-are-the-delegation.2.md",
+  "status": "todo",
+  "title": "CHANGELOG Unreleased entry (task-shape doctrine)",
+  "updated_at": "2026-08-08T16:05:37.157982Z"
+}
