@@ -351,13 +351,20 @@ Record the collision in the receipt surface — a stage-outcome line per fn-178:
 sees which `**Touches:**` declarations were wrong.
 
 **Reviewer overlap (fn-176).** review(N) may run concurrently with
-implement(N+1) ONLY when both hold: N+1 is dep-independent of N (transitive,
-same walk as the dispatch rule), AND N+1 is outside N's plan-sync target set
-(the spec-level reading of the same dep graph). **The schedule point is the
-sequential single-worker path**: when worker N has returned and its
+implement(N+1) ONLY when ALL hold: N+1 is dep-independent of N (transitive,
+same walk as the dispatch rule); AND `planSync.enabled` is NOT true — Phase
+3e's actual target set is EVERY remaining `todo` task, so with plan-sync on,
+a claimed N+1 would dodge the sync it is entitled to; with plan-sync enabled
+the overlap path is OFF and dispatch of N+1 waits for plan-sync(N) exactly as
+today (fail-closed: the status quo is the failure mode). **The schedule point
+is the sequential single-worker path**: when worker N has returned and its
 impl-review is about to be dispatched, the conductor MAY claim and dispatch
 N+1's worker (isolated workspace, wave rules apply) before or while running
-review(N) — instead of leaving the reviewer as the only live agent. On the
+review(N) — instead of leaving the reviewer as the only live agent. The
+overlapped worker is a ONE-TASK WAVE: it returns the parallel-wave handover
+(workspace, commits, summary/evidence paths; no `flowctl done`), and the
+conductor joins, reviews, and completes it through the standard 3d machinery
+before 3f recomputes the ready frontier — never left dangling. On the
 parallel-wave path the existing join-then-review order stands unchanged.
 **Plan-sync remains the barrier before any dependent work anchors**: done(N)
 still precedes plan-sync(N), which still precedes any anchor that could read
