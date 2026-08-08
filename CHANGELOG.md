@@ -38,6 +38,15 @@ declined that machinery explicitly and delivered 43% fewer output tokens at
   fields the example does not show. This closes a deviation class caught
   twice in benchmark and field runs (an implementer "helpfully" extending a
   shown shape past the spec).
+- Pipeline stages now leave an explicit outcome - ran, skipped with a reason,
+  or failed with a reason - in the receipts they already write, so a silently
+  no-oping stage (the class behind issue #293, where plan-sync no-oped for
+  weeks) is visible on its first occurrence: a skipped stage is an event with
+  a reason, never an absence, and a stage with no line is treated by review
+  as failed. `flowctl usage --stages <spec>` summarizes the lines per spec
+  (plain and JSON); malformed lines are counted, never a crash. No new state
+  stores; token telemetry stays out of scope (host-side data the CLI cannot
+  observe).
 - Tasks are now the delegation payload: named files, concrete approach, and
   task-scoped acceptance that let a cheaper implementer build without
   re-deriving design decisions. Tasks reference the spec's R-IDs instead of

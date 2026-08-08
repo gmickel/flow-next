@@ -441,6 +441,14 @@ If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity t
 
 Re-read state after dispatch. Judge advancement only on observed state, never sub-skill narration. Echo the before/after evidence block so a transcript-only driver can validate it.
 
+**Stage-outcome line (fn-178).** Every evidence echo additionally carries one
+outcome line for the stage this tick dispatched:
+`stage: <plan|plan-review|work|qa|make-pr> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)`.
+A skipped stage is an event with a reason, never an absence — a stage with no
+line is treated by review as failed. Timestamps only where this tick knows
+them; token/cost telemetry is out of scope (host-side data flowctl cannot
+observe).
+
 For `plan`, advancement means tasks now exist:
 
 ```text

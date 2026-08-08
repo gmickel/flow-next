@@ -1,43 +1,72 @@
 # Overview
 
-Issue #293 proved a pipeline stage can silently no-op for weeks: plan-sync's downstream extraction read the wrong JSON shape, errors went to stderr, and the empty result was indistinguishable from "nothing to do." Separately, the flow-efficiency campaign could only measure flow-next's own costs by hand-building external trace analyzers — the pipeline cannot see its own stage outcomes or timings. This spec makes stage outcomes explicit and cheaply observable.
+Issue #293 proved a pipeline stage can silently no-op for weeks: plan-sync's downstream extraction read the wrong JSON shape, errors went to stderr, and the empty result was indistinguishable from "nothing to do." Separately, the flow-efficiency campaign could only measure flow-next's own costs by hand-building external trace analyzers - the pipeline cannot see its own stage outcomes or timings. This spec makes stage outcomes explicit and cheaply observable.
 
 **Evidence standing: motivated by #293 (fixed in 3.16.1) and the flow-efficiency campaign's tooling gap (results 06 §5). No new evals.**
 
 ## Goal & Context
 
-Every optional or delegated pipeline stage (plan-review, impl-review, plan-sync, QA, delegation attempts, wave dispatch) leaves an explicit outcome — ran / skipped(reason) / failed(reason) — in the receipts it already writes, so "no record" can never again masquerade as "nothing to do," and stage-level timing is derivable from records that already exist.
+Every optional or delegated pipeline stage (plan-review, impl-review, plan-sync, QA, delegation attempts, wave dispatch) leaves an explicit outcome - ran / skipped(reason) / failed(reason) - in the receipts it already writes, so "no record" can never again masquerade as "nothing to do," and stage-level timing is derivable from records that already exist.
+
+## Quick commands
+
+```bash
+cd plugins/flow-next/tests && python3 -m unittest test_usage_stages -q
+./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git status --short   # idempotent
+```
 
 ## Architecture & Data Models
 
-Smallest mechanism that closes the gap — prose + existing receipt surfaces, no new stores:
+Smallest mechanism that closes the gap - prose + existing receipt surfaces, no new stores:
 
-1. **Stage-outcome lines in existing receipts:** the skills that orchestrate stages (work phases, pilot) record one line per stage in the done-evidence / receipt they already write: `stage: <name> — ran | skipped(<reason>) | failed(<reason>)`. A skipped stage is an EVENT with a reason (policy, config-off, empty-input, error), never an absence. The #293 class becomes visible on the first occurrence: `plan-sync — failed(EXTRACT_FAILED)` instead of silence.
-2. **Timing without new machinery:** lifecycle records already carry timestamps (task claim/start/done, review receipts). The spec adds only the convention that stage lines include start→end where the orchestrating skill knows them. Token counts are explicitly OUT of scope — flowctl cannot observe them (host-side data; a future host-integration could, not this spec).
-3. `flowctl usage` (existing verb) extended to summarize stage-outcome lines per spec (ran/skipped/failed counts, reasons) from the receipts — the one small flowctl change in this batch (Gordon approved 2026-08-08).
+1. **Stage-outcome lines (prose, R1/R2/R3/R4):** the orchestrating skills record one line per stage they orchestrate, in the receipt surface they already write: `stage: <name> - ran | skipped(<reason>) | failed(<reason>) [<start>..<end>]`. Surfaces: the task done summary (work/worker path - the free-text `## Done summary` the .md already carries), and the pilot tick's evidence echo. A skipped stage is an EVENT with a reason (policy / config / empty / error + free text), never an absence; a stage with no line is treated by review as failed. Timestamps appear where the orchestrator knows them; no new timing store. Token telemetry is documented out of scope in the same convention block (host-side data flowctl cannot observe).
+   - Sites: `plugins/flow-next/skills/flow-next-work/phases.md` (stage-line convention + the plan-sync 3e dispatch recording ran/skipped(reason)/failed(EXTRACT_FAILED) per #293), `plugins/flow-next/agents/worker.md` (done-summary stage lines for review/delegation stages the worker owns), `plugins/flow-next/skills/flow-next-pilot/workflow.md` (tick evidence echo carries the dispatched stage's outcome line).
+2. **`flowctl usage --stages <spec-id>` (the ONE approved python change, R5):** extends the existing `usage` verb (no new verb). Reads the spec's task .md files (`^stage: ` lines in Done summaries) plus `.flow/review-receipts/*<spec>*.json` (existing verdict receipts count as ran), prints per-stage ran/skipped/failed counts with reasons; `--json` mirror. Malformed or absent lines land in an `unknown` count - the verb never crashes on them. Bare `flowctl usage` keeps printing the usage guide unchanged.
+3. flowctl.py change carries the standard propagation: dual copy to `.flow/bin/flowctl.py`, `gen_tracker_manifest.py`, sync-codex x2, plus one focused unit test (`test_usage_stages.py`) covering the enumerated error case (malformed/absent lines → unknown, exit 0).
 
 ## Edge Cases & Constraints
 
-- Fail-open reporting: a stage that cannot even write its outcome line must not block the pipeline — but the NEXT lifecycle write (done evidence) states the gap.
-- No retroactive rewriting of existing receipts.
-- Reasons are short enums-by-convention (policy/config/empty/error + free text), not a schema — prose discipline first; schema only if the dogfood loop shows drift.
+- Fail-open reporting: a stage that cannot write its outcome line must not block the pipeline; the next lifecycle write states the gap.
+- No retroactive rewriting of existing receipts; reasons are enums-by-convention (policy/config/empty/error + free text), not a schema.
+- Bare `flowctl usage` output is byte-identical to today (back-compat; the extension is flag-gated).
 
 ## Acceptance Criteria
 
-- **R1:** work/pilot prose requires a stage-outcome line for every stage they orchestrate, with the skipped-is-an-event rule stated. Errors: a stage with no line is treated by review as failed — that inversion is the point.
+- **R1:** work/pilot prose requires a stage-outcome line for every stage they orchestrate, with the skipped-is-an-event rule stated. Errors: a stage with no line is treated by review as failed - that inversion is the point.
 - **R2:** plan-sync dispatch records ran/skipped(reason)/failed(reason) including the EXTRACT_FAILED sentinel path from #293. Errors: the #293 signature must produce a failed line, verified by inspection of the prose path.
 - **R3:** Outcome lines carry timestamps where the orchestrator knows them; no new timing store exists. Errors: none.
 - **R4:** Token telemetry explicitly documented as out of scope with the reason (not observable from flowctl). Errors: none.
 - **R5:** `flowctl usage` summarizes stage outcomes per spec from receipts; plain and `--json`. Errors: malformed/absent stage lines are reported as counts of unknown, never crash the verb.
-- **R6:** Mirrors, docs-site, CHANGELOG per conventions. Errors: parity red blocks merge.
+- **R6:** Mirrors, CHANGELOG per conventions; docs-site rides the batched release. Errors: parity red blocks merge.
 
 ## Boundaries
 
 - No new state files, stores, or flowctl verbs; the usage extension reads existing receipts only.
 - No token/cost telemetry (host-side; future host integration).
-- No dashboards, no aggregation tooling — read surfaces are receipts + usage.
+- No dashboards, no aggregation tooling - read surfaces are receipts + usage.
 - Does not re-fix #293 (fixed in 3.16.1); this makes its CLASS visible.
+
+## Strategy Alignment
+
+Active tracks served by this plan:
+- **Self-improving through normal work** - the pipeline can now see its own stage outcomes.
+- **Tracker determinism** - receipts stay the single evidence surface; no parallel store.
 
 ## Decision Context
 
-A structured telemetry subsystem (per-stage JSONL, token plumbing, dashboards) was considered and rejected as exactly the risk-management machinery the yagni spec warns about: the failure mode (#293) needs visibility, not instrumentation — one line per stage in receipts that already exist eliminates the silent-no-op class structurally. Applied to ourselves: this spec is deliberately the smallest artifact that satisfies its request.
+A structured telemetry subsystem (per-stage JSONL, token plumbing, dashboards) was considered and rejected as exactly the risk-management machinery the yagni spec warns about: the failure mode (#293) needs visibility, not instrumentation - one line per stage in receipts that already exist eliminates the silent-no-op class structurally. Applied to ourselves: this spec is deliberately the smallest artifact that satisfies its request. The usage extension parses the done-summary lines rather than a new store because the .md files are already the durable, committed record (the runtime state store is deliberately out-of-tree).
+
+## Early proof point
+
+Task fn-178.1 validates the core approach (the convention lines read naturally in the done summary and `usage --stages` summarizes them). If the parse surface proves ambiguous, tighten the line grammar before CHANGELOG.
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1  | Stage-line convention in work/pilot prose | fn-178.1 | - |
+| R2  | plan-sync outcome incl. EXTRACT_FAILED | fn-178.1 | - |
+| R3  | Timestamps where known, no new store | fn-178.1 | - |
+| R4  | Token telemetry out-of-scope note | fn-178.1 | - |
+| R5  | usage --stages summarizer + test | fn-178.1 | - |
+| R6  | Mirrors + CHANGELOG | fn-178.1 (mirrors), fn-178.2 (CHANGELOG) | - |
