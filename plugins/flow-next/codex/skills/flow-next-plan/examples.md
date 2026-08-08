@@ -2,7 +2,9 @@
 
 ## The Golden Rule in Practice
 
-Plans describe WHAT to build and WHERE to look — not HOW to implement.
+Plans never contain implementation CODE. The spec describes WHAT to build and
+why; the task describes the concrete approach — named files, patterns,
+ordering (the HOW) — but stops short of writing the implementation itself.
 
 ---
 
@@ -68,6 +70,21 @@ bun test src/lib/backend.test.ts
 
 ## Good vs Bad: Task Specs
 
+### ❌ BAD: Task that restates the spec
+
+```markdown
+# fn-2.3: Implement claude backend
+
+## Description
+The worker pool only supports codex today... [spec's problem framing,
+architecture rationale, and re-told R2 acceptance — retold at task length]
+```
+
+**Problems:**
+- Everything above is the PARENT SPEC retold — framing, rationale, re-told acceptance
+- Executors get the task TOGETHER with the full parent spec (anchor bundle), so restated content is generated twice, delivered twice, and drifts — plan-sync then chases it
+- Reference R-IDs and spec sections instead: `Implements R2 (see spec §Architecture)` is the whole context a task needs
+
 ### ❌ BAD: Task with full implementation
 
 ```markdown
@@ -90,16 +107,22 @@ export const claudeBackend: WorkerBackend = {
 - Implementer will re-read this, then write essentially the same code
 - If implementation differs slightly, causes plan-sync drift
 
-### ✅ GOOD: Task spec without implementation
+### ✅ GOOD: Task as delegation payload
 
 ```markdown
+---
+satisfies: [R2]
+---
+
 # fn-2.3: Implement claude backend
 
 ## Description
-Create claude backend following WorkerBackend interface.
+Create the claude backend adapter (R2). Split from fn-2.2 because each
+backend is an independent adapter behind the interface fn-2.1 landed.
 
 **Size:** S
 **Files:** `src/lib/backends/claude.ts`, `src/lib/backend.ts` (registration)
+**Touches:** [src/lib/backends/claude.ts, src/lib/backend.ts]
 
 ## Approach
 - Follow codex backend pattern at `src/lib/backends/codex.ts:15-40`
@@ -126,10 +149,15 @@ Create claude backend following WorkerBackend interface.
 ```
 
 **Why this is better:**
-- Points to pattern to follow (`codex.ts:15-40`)
-- Notes key decision (prompt via `-p` flag)
-- Implementer has freedom to write the actual code
-- Acceptance is testable, not "matches spec exactly"
+- The delegation payload: named files, concrete approach, task-scoped
+ acceptance — a cheaper implementer builds without re-deriving design
+ decisions
+- References R2 instead of restating what R2 says — the executor reads the
+ spec alongside the task
+- `**Touches:**` declares the write surface for later concurrency planning
+- Points to pattern to follow (`codex.ts:15-40`); notes key decision (prompt
+ via `-p` flag)
+- Implementer has freedom to write the actual code; acceptance is testable
 
 ---
 
@@ -401,7 +429,7 @@ If it fails, re-evaluate the passport.js strategy before continuing with fn-1-ad
 
 | Include in specs | Don't include |
 |------------------|---------------|
-| What to build | How to build it |
+| What to build + why (spec); concrete approach (task) | Restated spec context in tasks |
 | Where to look (file:line) | Full implementations |
 | Key decisions + why | Copy-paste code |
 | Recent/surprising APIs | Obvious patterns |

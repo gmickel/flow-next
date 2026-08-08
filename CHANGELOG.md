@@ -38,6 +38,15 @@ declined that machinery explicitly and delivered 43% fewer output tokens at
   fields the example does not show. This closes a deviation class caught
   twice in benchmark and field runs (an implementer "helpfully" extending a
   shown shape past the spec).
+- Tasks are now the delegation payload: named files, concrete approach, and
+  task-scoped acceptance that let a cheaper implementer build without
+  re-deriving design decisions. Tasks reference the spec's R-IDs instead of
+  restating its context - replay agents wrote tasks at roughly three times
+  the fleet norm, and the bloat was paraphrased spec context that drifts.
+  Nothing is lost: executors always receive the task together with the full
+  parent spec. Tasks can also declare a Touches: line (the paths they expect
+  to modify) for later concurrency planning; leaving it out is safe and
+  simply means serial scheduling.
 - Workers run focused tests for the code under change while iterating; the
   full suite runs only where an existing gate's Quick commands already
   require it, never as a mid-loop reflex - in the replay campaign 54% of
