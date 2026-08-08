@@ -575,8 +575,20 @@ else
 fi
 cat > "$SUMMARY_FILE" << 'EOF'
 <1-2 sentence summary of what was implemented>
+
+stage: impl-review - ran [<start>..<end>] | skipped(config: REVIEW_MODE=none) | skipped(policy: host-deferred - conductor owns the gate) | failed(<reason>)
+stage: delegation - ran [<start>..<end>] | skipped(config: delegation off) | failed(<reason>)
 EOF
 ```
+
+**Stage-outcome lines (fn-178):** the summary records one `stage:` line for
+every optional/delegated stage THIS worker orchestrated (impl-review dispatch,
+delegation attempt) — pick the branch that happened and delete the others. A
+skipped stage is an event with a reason (policy/config/empty/error), never an
+absence; a stage with no line is treated by review as failed. Timestamps only
+where you know them. Stages you did not reach at all (e.g. no delegation flags
+in the prompt) need no line — the rule binds stages orchestrated, not the full
+catalog.
 
 Complete the task only on the standard branch (parallel-wave and host-deferred
 branches return before this command). Recompute both standard paths in this

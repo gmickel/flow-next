@@ -447,6 +447,21 @@ Follow your phases in plan-sync.md exactly.
 
 Plan-sync returns summary. Log it but don't block - task updates are best-effort.
 
+**Stage-outcome line (mandatory — fn-178).** Whatever happened above, record ONE
+outcome line for the plan-sync stage in the completed task's done evidence (the
+task .md `## Done summary` the run already writes, via a small append or the
+next `flowctl done` summary when the wave is still resolving):
+
+```
+stage: plan-sync - ran [<start>..<end>] | skipped(config: planSync.enabled != true) | skipped(empty: no downstream todo tasks) | failed(EXTRACT_FAILED: <detail>) | failed(error: <detail>)
+```
+
+A skipped stage is an EVENT with a reason, never an absence — `DOWNSTREAM=EXTRACT_FAILED`
+MUST yield a `failed(EXTRACT_FAILED...)` line (the #293 class becomes visible on
+first occurrence), and "no downstream tasks" yields `skipped(empty...)`, which is
+distinguishable from a broken extraction. Include start..end timestamps when this
+orchestrator knows them.
+
 ### 3f. Loop or Finish
 
 **IMPORTANT**: Steps 3d and 3e ALWAYS run after the whole selected wave returns,
@@ -616,6 +631,25 @@ Review: <verdict | n/a>
 Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B> # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
 ```
+
+**Stage-outcome lines (fn-178, binding on every stage this run orchestrated).**
+Each optional or delegated stage the run reached (plan-sync, impl-review,
+completion review, QA, a delegation attempt, a wave dispatch) records exactly
+one line in the receipt surface it already writes — the task's `## Done
+summary` for task-scoped stages, this final summary for run-scoped ones:
+
+```
+stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)
+```
+
+Rules: a SKIPPED stage is an event with a reason, never an absence — review
+treats a stage with no line as failed (that inversion is the point: "no
+record" can never again masquerade as "nothing to do", the #293 class).
+Timestamps ride the line only where this orchestrator knows them; there is no
+separate timing store. Token/cost telemetry is explicitly OUT of scope — it is
+host-side data flowctl cannot observe (a future host integration could report
+it; nothing here does). Reading them back: `flowctl usage --stages <spec-id>`
+summarizes ran/skipped/failed counts + reasons from the committed receipts.
 
 ## Definition of Done
 

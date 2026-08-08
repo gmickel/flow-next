@@ -19832,13 +19832,110 @@ def cmd_init(args: argparse.Namespace) -> None:
         print(message)
 
 
+# fn-178: stage-outcome line grammar (prose convention, parsed leniently).
+# `stage: <name> - ran|skipped(...)|failed(...)` at line start; anything that
+# opens with `stage:` but does not parse lands in the `unknown` bucket — the
+# summarizer never crashes on a malformed line (R5).
+_STAGE_LINE_RE = re.compile(
+    r"^stage:\s*(?P<name>[A-Za-z0-9_.-]+)\s*[-—]\s*"
+    r"(?P<outcome>ran|skipped|failed)\s*"
+    r"(?:\((?P<reason>[^)]*)\))?",
+)
+
+
+def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
+    """Summarize fn-178 stage-outcome lines for one spec (R5).
+
+    Read surfaces are the receipts that already exist: the spec's committed
+    task .md files (stage lines live in their done summaries) and
+    .flow/review-receipts/*<spec>*.json (a receipt with a verdict counts as a
+    `ran` for its review stage). No new stores; malformed lines count as
+    `unknown`, never a crash.
+    """
+    flow_dir = get_flow_dir()
+    spec_id = expand_bare_spec_id(flow_dir, casefold_handle(spec_id), use_json=use_json)
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.is_file():
+        error_exit(f"Spec '{spec_id}' not found in .flow/specs/", use_json=use_json)
+
+    stages: dict[str, dict] = {}
+
+    def bucket(name: str) -> dict:
+        return stages.setdefault(
+            name, {"ran": 0, "skipped": 0, "failed": 0, "unknown": 0, "reasons": []}
+        )
+
+    unknown_lines = 0
+    tasks_dir = flow_dir / "tasks"
+    for task_md in sorted(tasks_dir.glob(f"{spec_id}.*.md")):
+        try:
+            text = task_md.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped.lower().startswith("stage:"):
+                continue
+            match = _STAGE_LINE_RE.match(stripped)
+            if not match:
+                unknown_lines += 1
+                continue
+            entry = bucket(match.group("name"))
+            entry[match.group("outcome")] += 1
+            reason = match.group("reason")
+            if reason:
+                entry["reasons"].append(reason.strip())
+
+    receipts_dir = flow_dir / "review-receipts"
+    if receipts_dir.is_dir():
+        for receipt_path in sorted(receipts_dir.glob(f"*{spec_id}*.json")):
+            try:
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                unknown_lines += 1
+                continue
+            if not isinstance(receipt, dict) or not receipt.get("verdict"):
+                continue
+            kind = str(receipt.get("type") or "review")
+            bucket(kind)["ran"] += 1
+
+    result = {
+        "success": True,
+        "spec": spec_id,
+        "stages": stages,
+        "unknown_lines": unknown_lines,
+    }
+    if use_json:
+        print(json.dumps(result, indent=2))
+        return
+    print(f"Stage outcomes for {spec_id}:")
+    if not stages and not unknown_lines:
+        print("  (no stage-outcome lines recorded)")
+    for name in sorted(stages):
+        entry = stages[name]
+        counts = (
+            f"ran={entry['ran']} skipped={entry['skipped']} "
+            f"failed={entry['failed']} unknown={entry['unknown']}"
+        )
+        print(f"  {name}: {counts}")
+        for reason in entry["reasons"]:
+            print(f"    - {reason}")
+    if unknown_lines:
+        print(f"  unknown (unparseable lines/receipts): {unknown_lines}")
+
+
 def cmd_usage(args: argparse.Namespace) -> None:
     """Print the bundled usage guide (CLI cheatsheet + orchestration recipes).
 
     Resolution: plugin-bundled canonical first (always current with the
     installed plugin version), repo-local .flow/usage.md as fallback for
     copied installs (.flow/bin/flowctl.py has no plugin tree around it).
+
+    With --stages <spec-id> (fn-178): summarize stage-outcome lines instead.
     """
+    if getattr(args, "stages", None):
+        _usage_stage_summary(args.stages, use_json=bool(getattr(args, "json", False)))
+        return
     here = Path(__file__).resolve().parent
     candidates = [
         here.parent / "templates" / "usage.md",
@@ -49787,6 +49884,15 @@ def main() -> None:
     # usage
     p_usage = subparsers.add_parser(
         "usage", help="Print the bundled usage guide (CLI + orchestration recipes)"
+    )
+    p_usage.add_argument(
+        "--stages",
+        metavar="SPEC_ID",
+        help="Summarize fn-178 stage-outcome lines for a spec from its "
+        "committed receipts (task done summaries + review receipts)",
+    )
+    p_usage.add_argument(
+        "--json", action="store_true", help="JSON output (with --stages only)"
     )
     p_usage.set_defaults(func=cmd_usage)
 
