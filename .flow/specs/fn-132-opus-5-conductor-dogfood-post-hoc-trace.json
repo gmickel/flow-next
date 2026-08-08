@@ -9,7 +9,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-132-opus-5-conductor-dogfood-post-hoc-trace.md",
-  "status": "open",
+  "status": "done",
   "title": "Opus 5 conductor dogfood: post-hoc trace analysis of the fn-122 run",
   "tracker": {
     "baseHashFlow": null,
@@ -22,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-07-24T21:56:53.514864Z"
+  "updated_at": "2026-08-08T11:15:14.408583Z"
 }
