@@ -231,6 +231,28 @@ Before diving into gaps, identify who's affected:
 
 This shapes what the plan needs to cover. A pure backend refactor needs different detail than a user-facing feature.
 
+**Scope minimality (YAGNI — binding on the plan you write):**
+- Every task must trace to an R-ID, and every R-ID must trace to the REQUEST.
+  A capability the request never asked for — an extra command, an export path,
+  a detection hook, a config surface — is not scope; it goes into
+  `## Boundaries` as explicitly out-of-scope, in one line.
+- Prefer the SMALLEST architecture that satisfies the acceptance criteria.
+  When you find yourself designing machinery to MANAGE a risk (trust stores,
+  consent layers, caps, scanners), first ask whether the risk can be
+  ELIMINATED STRUCTURALLY (a closed schema, an inert format, a path proven
+  outside the writable root, a capability simply not exposed) — structural
+  elimination is usually less code, fewer failure modes, and no new state.
+- Rejected bigger designs get ONE line each in `## Decision Context`
+  ("rejected X as overkill: <why>"), never tasks.
+- One collection/surface/format now beats N configurable ones later; ship the
+  single concrete case the request names.
+- This discipline trims SCOPE, never rigor: error/negative-case enumeration
+  per AC (the template's negative-cases discipline) is EXEMPT and stays
+  complete, as do Boundaries and R-ID coverage. Equally exempt are
+  filesystem-identity, permission, and concurrency guards (realpath/symlink
+  containment, lock-guarded writes, forced excludes of runtime state) — an
+  eliminated guard is not an eliminated feature.
+
 ## Step 3: Flow gap check
 
 Run the gap analyst subagent:

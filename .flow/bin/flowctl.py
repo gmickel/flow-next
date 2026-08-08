@@ -9365,7 +9365,7 @@ You are reviewing:
 3. **Clarity** - Specs unambiguous? Acceptance criteria testable?
 4. **Architecture** - Right abstractions? Clean boundaries?
 5. **Risks** - Blockers identified? Security gaps? Mitigation?
-6. **Scope** - Right-sized? Over/under-engineering?
+6. **Scope** - Right-sized? Over/under-engineering? Overengineering is a FINDING, not a taste note: flag (a) any task or surface not traceable to a stated requirement (extra commands, export/import paths, detection hooks, config knobs "for later"); (b) risk-management machinery (trust/consent layers, caps, scanners, secondary state stores) where the risk could be eliminated structurally (closed schema, inert format, capability not exposed); (c) N-way generality where the request names one concrete case. Scope-minimality never trims rigor: error/negative-case enumeration per AC must stay complete — flag the plan if minimality was achieved by dropping error handling or by dropping filesystem-identity, permission, or concurrency guards (realpath/symlink containment, lock-guarded writes, forced excludes of runtime state).
 7. **Testability** - How will we verify this works?
 8. **Consistency** - Do task specs align with epic spec?
 

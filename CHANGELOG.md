@@ -2,6 +2,33 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Autonomous planning now resists its own worst habit: building more than you
+asked for. In the flow-efficiency replay campaign, two unguided replay runs of
+the same real request each invented a 500-900-line risk-management subsystem
+the request never needed; a run carrying the new scope-minimality prose
+declined that machinery explicitly and delivered 43% fewer output tokens at
+57% lower cost, with reviewed quality above the unguided arm.
+
+### Changed
+
+- Plans are now bound to scope minimality: every task must trace to a
+  requirement, every requirement to the request, and capabilities nobody asked
+  for become one-line Boundaries exclusions instead of tasks. Planners are
+  steered to eliminate risks structurally (a closed schema, an inert format,
+  an unexposed capability) before building machinery to manage them.
+- Plan review treats overengineering as a finding, not a taste note - on both
+  review rubric copies. Reviewers flag untraceable surface, risk-management
+  machinery where structural elimination was available, and N-way generality
+  for a one-case request.
+- Workers build to the acceptance criteria, not past them; mid-implementation
+  ideas land in the done summary as follow-ups, never as unrequested code.
+- The discipline trims scope, never rigor: error-case enumeration and
+  filesystem-identity, permission, and concurrency guards (symlink
+  containment, lock-guarded writes, runtime-state excludes) are explicitly
+  exempt - an eliminated guard is not an eliminated feature.
+
 ## [flow-next 3.17.0] - 2026-08-08
 
 Two field reports from the same practitioner, one shape of problem: state that

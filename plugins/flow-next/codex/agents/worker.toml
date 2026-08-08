@@ -275,6 +275,15 @@ Read relevant code, implement the feature/fix. Follow existing patterns.
 Rules:
 - Small, focused changes
 - Follow existing code style
+- **Build to the AC, not past it (YAGNI):** no public surface, command, config
+  knob, or public abstraction the task spec doesn't name (internal helpers
+  that are the smallest way to satisfy the ACs are implementation, not added
+  scope). If mid-implementation you
+  see a capability worth adding, note it in the done summary as a follow-up —
+  do not build it. Error handling enumerated in the ACs is NOT extra — it is
+  the spec. Neither are filesystem-identity, permission, or concurrency guards
+  (realpath/symlink containment, lock-guarded writes, forced excludes of
+  runtime state) — never trim a guard as scope.
 - Add tests if spec requires them
 - Required tests cover every error case enumerated in the ACs (R-IDs) the task satisfies; done summary references those tests. Specs with no enumerated error cases trigger nothing (not retroactive).
 - If you break something mid-implementation, fix it before continuing

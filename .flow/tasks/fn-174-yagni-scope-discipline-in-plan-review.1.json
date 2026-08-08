@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T11:37:52.570550Z",
+  "depends_on": [],
+  "id": "fn-174-yagni-scope-discipline-in-plan-review.1",
+  "priority": null,
+  "spec": "fn-174-yagni-scope-discipline-in-plan-review",
+  "spec_path": ".flow/tasks/fn-174-yagni-scope-discipline-in-plan-review.1.md",
+  "status": "todo",
+  "title": "Transplant scope-minimality prose to all four sites + guard-exemption amendment + hash pin + mirrors",
+  "updated_at": "2026-08-08T11:54:35.564613Z"
+}
