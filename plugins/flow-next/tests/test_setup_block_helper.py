@@ -590,6 +590,34 @@ class SetupBlockFixtureTest(unittest.TestCase):
         self.assertEqual(target.read_bytes(), target_before)
         self.assertEqual(self.meta_path.read_bytes(), meta_before)
 
+    def test_template_embedded_marker_token_rejected_no_writes(self) -> None:
+        # A marker TOKEN embedded mid-line passes the standalone-line counts
+        # but would be written by apply and then trip the whole-target
+        # corruption scan forever - reject at template validation instead.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        embedded = self.repo / "embedded-template.md"
+        embedded.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\n"
+            "text <!-- END FLOW-NEXT --> embedded\n"
+            "<!-- END FLOW-NEXT -->\n",
+            encoding="utf-8",
+        )
+        for command, extra in (
+            ("apply", ()),
+            ("check", ()),
+            ("resolve", ("--choice", "overwrite")),
+        ):
+            with self.subTest(command=command):
+                rejected = self._flowctl(command, "CLAUDE.md", embedded, *extra)
+                self.assertEqual(rejected.returncode, 1)
+                combined = rejected.stdout + rejected.stderr
+                self.assertIn("embeds a marker token", combined)
+                self.assertEqual(target.read_bytes(), target_before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
     def test_template_with_outside_prose_rejected_no_writes(self) -> None:
         # fn-171 review tightening: a template must be EXACTLY the managed
         # span. Prose outside the pair would be applied+hashed by `apply` but

@@ -2681,6 +2681,18 @@ def _setup_block_require_template_pair(
             f"{block_id} (BEGIN first line, END last line, trailing newline)",
             use_json=use_json,
         )
+    # Embedded occurrences of the operated id's marker TOKENS (not standalone
+    # lines) would pass the line counts above, get written by apply, and then
+    # trip the whole-target corruption scan on every later operation for this
+    # id - a self-inflicted permanent `corrupt`. Reject them here, before any
+    # write can materialize them.
+    if content.count(begin_marker) != 1 or content.count(end_marker) != 1:
+        error_exit(
+            f"template embeds a marker token for id {block_id} inside the "
+            "block body; markers may appear only as the standalone BEGIN/END "
+            "lines",
+            use_json=use_json,
+        )
 
 
 def _setup_block_is_nested_hashes(entry: object) -> bool:
