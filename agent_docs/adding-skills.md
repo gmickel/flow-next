@@ -113,6 +113,36 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 **sync-codex.sh impact:** the existing FLOWCTL rewrite rule (grep `\.codex/scripts/flowctl` in sync-codex.sh) and the local-fallback awk (grep the fallback string `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"`) continue to work with the once-per-file pattern. No sync edits needed for consolidation — the rewrite acts on the single FLOWCTL definition wherever it appears.
 
+## Prose-contract tests — pin content + reachability (heuristic)
+
+A prose-contract test asserts against skill/command/agent markdown (string pins, executed bash fences, cross-skill parity, verb inventories, mirror parity). It exists to stop a *behavior* from silently regressing — not to freeze the current file layout.
+
+**Rule — pin two things, never a third:**
+
+1. **CONTENT** — the substantive string, fence, or inventory, asserted against the file that actually carries it today (its reference home).
+2. **REACHABILITY** — the always-loaded file the agent starts from links or names that home, so the content is still on the agent's path: `self.assertIn("[references/foo.md](references/foo.md)", skill_md)`.
+
+Never pin bare **location** — "this sentence lives in `workflow.md`" — when the contract would survive the sentence moving one level down into a reachable reference. `workflow.md` is where the prose happens to sit this release; that it is *reachable* is the contract.
+
+**Exception — when location IS the contract** (pin it, and say why in the test docstring):
+
+- **Executed fences whose placement is load-bearing** — a gate skeleton must sit in the file that runs it; a `## Preamble` `$FLOWCTL` definition must sit at the top of each canonical file that uses it.
+- **Preamble/ordering rules** — "the gate resolves before the forcing read", "the claim precedes the work". These are position assertions by construction (see `test_setup_reference_routing.test_model_pin_gate_is_resolved_before_forcing_read`).
+- **Mirror-parity paths** — canonical ↔ `codex/` ↔ Cursor twins, and byte-identical dual copies. The path pair IS the invariant.
+- **Cold-path / token-budget negatives** — "this payload must NOT appear in the always-loaded spine". The point of the assertion is that the content is *not* in a particular file.
+- **Reachability assertions themselves** — asserting the link exists is pinning location on purpose.
+
+**Failure signature.** A test that breaks when verbatim content moves to a reachable reference has pinned the wrong thing. That is a test bug, not a prose regression: nothing the agent can reach changed, so nothing the agent does changed. The fix is to retarget the assertion at the new home and add the reachability link pin — not to move the prose back.
+
+The inverse signature is just as useful: a test that keeps passing after the sentence is deleted from every reachable file has pinned nothing at all. Delete it.
+
+**Corollary — one copy, one pin.** When branch-disclosure dedupes a phrase down to a single home, the test follows it there and pins the spine's cross-link instead of a second copy. Byte-exact pins survive only on the side that still owns the wording; the other side gets pinned by its load-bearing clauses.
+
+**Landed examples** (fn-169 retarget round):
+- `test_interview_source_tags.test_skill_md_states_per_pass_user_semantics` — per-pass `[user]` semantics moved into `references/pass-business.md` / `pass-technical.md`; the test now pins each pass's own sentence in its own file, plus SKILL.md's pass-neutral rule and both `references/…` links.
+- `test_interview_source_tags.test_tag_definitions_match_capture` — capture's second tag table was deduped out of `workflow.md`; the definition pins target the surviving `phases.md` copy and `workflow.md` is pinned to still route there (`[phases.md](phases.md) §Source-tag taxonomy`).
+- `test_capture_readiness_contract` — readiness gate skeletons asserted in their reference homes (content), `workflow.md` pinned for the link (reachability), both copies checked canonical + codex mirror (location-is-contract exception).
+
 ## Reference
 
 This checklist captures the lessons from the 0.34.0 → 0.37.0 era when (a) 4 user-facing skills (resolve-pr, prospect, audit, memory-migrate) silently shipped to Codex without UI metadata, and (b) several skills shipped with inline cross-platform tables (`AskUserQuestion` / `request_user_input` / `ask_user`) that polluted the agent's context. Both fixed in 0.37.1. Don't repeat them.
