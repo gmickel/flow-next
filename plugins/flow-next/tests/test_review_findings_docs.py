@@ -91,7 +91,9 @@ class ReviewFindingsDocsTest(unittest.TestCase):
 
         root_surfaces = {
             "README.md": "docs/review-findings.md",
-            "GLOSSARY.md": "## Structured finding",
+            # Root GLOSSARY.md is a compact vocabulary dictionary; the
+            # long-form `## Structured finding` entry moved to the archive.
+            "agent_docs/archive/GLOSSARY-full.md": "## Structured finding",
         }
         for relative, phrase in root_surfaces.items():
             with self.subTest(relative=relative):

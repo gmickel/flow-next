@@ -575,7 +575,11 @@ class ChartInvariantPhrases(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_glossary_terms(self) -> None:
-        text = _read(REPO_ROOT / "GLOSSARY.md")
+        # Root GLOSSARY.md keeps a single `## Chart` dictionary entry (pinned
+        # by ChartPipelineSurfaces); the six long-form chart term definitions
+        # live in the archived full glossary.
+        self.assertIn("## Chart", _read(REPO_ROOT / "GLOSSARY.md"))
+        text = _read(REPO_ROOT / "agent_docs" / "archive" / "GLOSSARY-full.md")
         for heading in (
             "## Chart",
             "## Decision record",

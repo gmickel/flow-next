@@ -14,7 +14,7 @@ The offline-resilient reference for flow-next — **repeatable agentic engineeri
 - *"This idea is too big / still unclear before capture?"* → [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md) - optional `/flow-next:chart` decision-map discovery; never mandatory.
 - *"Not sure which pre-build path is smallest?"* → [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide` router.
 
-> For the repo's strategic intent see [`../../../STRATEGY.md`](../../../STRATEGY.md). For canonical vocabulary (Spec, Chart, D-ID, R-ID, Handover object, Receipt, render lens, …) see [`../../../GLOSSARY.md`](../../../GLOSSARY.md).
+> For the repo's strategic intent see [`../../../STRATEGY.md`](../../../STRATEGY.md). For vocabulary discipline — the load-bearing terms (Spec, Task, R-ID, Chart, Receipt, Gate, plan-sync, …) and the synonyms to avoid — see [`../../../GLOSSARY.md`](../../../GLOSSARY.md); it is a dictionary, not an encyclopedia, and the concepts themselves are explained on the pages below. The retired long-form glossary is archived at [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md).
 
 ## Subsystem references
 

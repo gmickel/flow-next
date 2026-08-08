@@ -433,14 +433,14 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Memory schema: bug / knowledge tracks, frontmatter, audit lifecycle | [`docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) | n/a |
 | Self-improving loops: memory, glossary, decisions, strategy | [`docs/self-improving.md`](plugins/flow-next/docs/self-improving.md) | n/a |
 | Tracker-sync bridge: projection model, hybrid ids, deterministic `flowctl tracker` transport, `/flow-next:tracker-sync` vs `/flow-next:sync` | [`docs/tracker-sync.md`](plugins/flow-next/docs/tracker-sync.md) | n/a |
-| Project glossary: `GLOSSARY.md` shape, R17 forbidden-vocabulary guard | [`docs/glossary.md`](plugins/flow-next/docs/glossary.md) · [`GLOSSARY.md`](GLOSSARY.md) | n/a |
+| Project glossary feature: `GLOSSARY.md` shape, `flowctl glossary` verbs, R17 forbidden-vocabulary guard | [`docs/glossary.md`](plugins/flow-next/docs/glossary.md) · this repo's own: [`GLOSSARY.md`](GLOSSARY.md) | n/a |
 | Project strategy: `STRATEGY.md` shape, downstream skill grounding | [`docs/strategy.md`](plugins/flow-next/docs/strategy.md) · [`STRATEGY.md`](STRATEGY.md) | n/a |
 | Cross-platform install matrix + Codex / Droid / OpenCode notes | [`docs/platforms.md`](plugins/flow-next/docs/platforms.md) | n/a |
 | `scripts/sync-codex.sh` pipeline, plain-text transform, validation guards | [`docs/sync-codex.md`](plugins/flow-next/docs/sync-codex.md) | n/a |
 | Troubleshooting: stuck tasks, Ralph debug, receipt validation, uninstall | [`docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) | n/a |
 | Contributing: local dev, adding skills, releasing | [`CONTRIBUTING.md`](CONTRIBUTING.md) | n/a |
 | Repo strategic intent + active tracks | [`STRATEGY.md`](STRATEGY.md) | n/a |
-| Canonical vocabulary | [`GLOSSARY.md`](GLOSSARY.md) | n/a |
+| Vocabulary dictionary (terms + banned synonyms) | [`GLOSSARY.md`](GLOSSARY.md) | n/a |
 | Visual overview, diagrams, methodology | n/a | [`flow-next.dev`](https://flow-next.dev) |
 
 Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugins/flow-next/docs/README.md).

@@ -5,7 +5,7 @@ Thanks for wanting to make flow-next better. This file is a router, not a manual
 ## Quick orientation
 
 - The repo **is** the flow-next plugin (`plugins/flow-next/`), plus the bundled `flowctl` Python CLI and the Ralph TUI (`flow-next-tui/`).
-- Strategic intent: [`STRATEGY.md`](STRATEGY.md). Canonical vocabulary: [`GLOSSARY.md`](GLOSSARY.md). Architecture rules (skill-vs-flowctl split, cross-platform patterns): [`CLAUDE.md`](CLAUDE.md).
+- Strategic intent: [`STRATEGY.md`](STRATEGY.md). Vocabulary discipline (load-bearing terms + the synonyms to avoid): [`GLOSSARY.md`](GLOSSARY.md). Architecture rules (skill-vs-flowctl split, cross-platform patterns): [`CLAUDE.md`](CLAUDE.md).
 - This repo dogfoods itself — work is tracked as specs/tasks under `.flow/` via flow-next. You don't have to use it for a small PR, but reading [the teams guide](plugins/flow-next/docs/teams.md) explains the artefacts you'll see.
 
 ## How to contribute

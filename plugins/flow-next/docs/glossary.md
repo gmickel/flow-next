@@ -2,7 +2,7 @@
 
 `GLOSSARY.md` is a human-readable, project-canonical terminology file shipped in v0.39.0. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` — terminology is the project's, not flow-next's.
 
-> Canonical vocabulary for this repo: [`../../../GLOSSARY.md`](../../../GLOSSARY.md).
+> Vocabulary discipline for this repo: [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — a compact dictionary of load-bearing terms with `_Avoid_` aliases, not an encyclopedia (its retired long-form text is archived at [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md)).
 > Glossary files are written/maintained via the `flowctl glossary` subcommands (`add` / `list` / `read` / `remove`), driven by `/flow-next:interview`, `/flow-next:audit`, and `/flow-next:sync`. (There is no standalone `flow-next-glossary` skill — `flowctl glossary` is the mechanism.)
 
 ## Format
@@ -53,6 +53,6 @@ A small list of jargon terms is grep-guarded out of canonical skill / agent / co
 
 ## See also
 
-- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — canonical glossary for this repo (Spec, Task, R-ID, Handover object, ...).
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — this repo's own glossary: 12 load-bearing terms (Spec, Task, R-ID, Receipt, Gate, plan-sync, ...) with `_Avoid_` aliases. Long-form text: [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md).
 - [`strategy.md`](strategy.md) — peer doc for the repo-root `STRATEGY.md` file.
 - [`memory-schema.md`](memory-schema.md) — categorized memory schema; the `knowledge/decisions/` subtree pairs naturally with glossary as terminology + load-bearing choices.
