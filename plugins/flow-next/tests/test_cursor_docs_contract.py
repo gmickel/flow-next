@@ -7,6 +7,15 @@ Locks the docs surface after the Cursor first-class rewrite:
   * install-cursor.sh — no under-lists caveat in post-install output
   * README.md — Cursor section mentions marketplace import
 
+Pin shape (agent_docs/adding-skills.md, "Prose-contract tests — pin content +
+reachability"): the POSITIVE pins assert the fact somewhere on the Cursor
+READING SURFACE — the `## Cursor` section of platforms.md plus every markdown
+file that section routes to — instead of welding it to the section body. Move
+the admin runbook into a routed page and the contract still holds; drop it and
+the test fails. The NEGATIVE sweeps stay pinned to the section (and to the
+install scripts): "this stale claim must not appear HERE" is a location
+assertion by construction.
+
 Run:
     cd plugins/flow-next/tests && python3 -m unittest test_cursor_docs_contract -q
 """
@@ -49,6 +58,24 @@ def _cursor_section(text: str) -> str:
     return text[start:end]
 
 
+def _cursor_surface(section: str) -> dict[str, str]:
+    """The Cursor reading surface: the section plus every page it routes to.
+
+    A fact may live in the section body or in a markdown file the section
+    links — that is the reachability half of the pin. Files the section does
+    NOT route to are absent from the surface, so content that drifts off the
+    reader's path still fails.
+    """
+    surface = {"docs/platforms.md §Cursor": section}
+    for target in sorted(set(re.findall(r"[A-Za-z0-9_./-]+\.md", section))):
+        for base in (PLUGIN_DIR / "docs", PLUGIN_DIR, REPO_ROOT):
+            candidate = (base / target).resolve()
+            if candidate.is_file() and candidate != PLATFORMS_MD:
+                surface[target] = _read(candidate)
+                break
+    return surface
+
+
 class TestPlatformsCursorSection(unittest.TestCase):
     def setUp(self) -> None:
         self.assertTrue(PLATFORMS_MD.is_file(), f"missing {PLATFORMS_MD}")
@@ -58,26 +85,37 @@ class TestPlatformsCursorSection(unittest.TestCase):
             self.cursor,
             "platforms.md must have a '## Cursor' section",
         )
+        self.surface = _cursor_surface(self.cursor)
+
+    def assert_on_surface(self, predicate, what: str) -> str:
+        """`what` is stated on some page of the Cursor reading surface."""
+        hits = [label for label, text in self.surface.items() if predicate(text)]
+        self.assertTrue(
+            hits,
+            f"nothing on the Cursor reading surface states {what} — "
+            f"searched {sorted(self.surface)}",
+        )
+        return hits[0]
 
     def test_marketplace_import_recommended(self) -> None:
-        # Recommended path is team-marketplace repo import (R12).
-        lower = self.cursor.lower()
-        self.assertTrue(
-            (
-                "team-marketplace" in lower
-                or "team marketplace" in lower
-                or "marketplace repo import" in lower
+        """R12: team-marketplace repo import is the recommended path — stated
+        on the Cursor surface (section body or a page it routes to)."""
+        self.assert_on_surface(
+            lambda text: (
+                "team-marketplace" in text.lower()
+                or "team marketplace" in text.lower()
+                or "marketplace repo import" in text.lower()
             )
-            and "recommended" in lower,
-            "platforms.md Cursor section must present team-marketplace "
-            "repo import as recommended",
+            and "recommended" in text.lower(),
+            "team-marketplace repo import as the recommended path",
         )
 
     def test_admin_runbook_present(self) -> None:
-        self.assertRegex(
-            self.cursor,
-            r"(?i)admin\s+runbook",
-            "platforms.md Cursor section must include an Admin runbook subsection",
+        """The admin runbook and its steps are reachable from the Cursor
+        section — whether inline or in a routed page."""
+        self.assert_on_surface(
+            lambda text: re.search(r"(?i)admin\s+runbook", text) is not None,
+            "an Admin runbook",
         )
         # Runbook steps: import, install modes, auto-refresh, per-repo setup.
         for needle in (
@@ -87,10 +125,9 @@ class TestPlatformsCursorSection(unittest.TestCase):
             r"(?i)/flow-next[:-]setup|per-repo",
         ):
             with self.subTest(needle=needle):
-                self.assertRegex(
-                    self.cursor,
-                    needle,
-                    f"admin runbook missing expected content matching {needle!r}",
+                self.assert_on_surface(
+                    lambda text, needle=needle: re.search(needle, text) is not None,
+                    f"admin runbook content matching {needle!r}",
                 )
 
     def test_no_stale_under_lists_claim(self) -> None:
@@ -99,11 +136,11 @@ class TestPlatformsCursorSection(unittest.TestCase):
             "platforms.md Cursor section must not claim autocomplete under-lists "
             "(slash autocomplete lists hyphenated commands on Cursor)",
         )
-        # Positive truth: autocomplete lists / hyphenated form present.
-        self.assertTrue(
-            re.search(r"(?i)autocomplete|hyphenated", self.cursor),
-            "platforms.md Cursor section should document autocomplete / "
-            "hyphenated command form",
+        # Positive truth: autocomplete lists / hyphenated form documented
+        # somewhere on the Cursor reading surface.
+        self.assert_on_surface(
+            lambda text: re.search(r"(?i)autocomplete|hyphenated", text) is not None,
+            "the autocomplete / hyphenated command form",
         )
 
     def test_no_stale_hook_schema_mismatch(self) -> None:
@@ -113,14 +150,14 @@ class TestPlatformsCursorSection(unittest.TestCase):
             r"(?i)hook[- ]schema\s+mismatch|schema\s+mismatch",
             "platforms.md Cursor section must not claim hook-schema mismatch",
         )
-        self.assertTrue(
-            re.search(
+        self.assert_on_surface(
+            lambda text: re.search(
                 r"(?i)intentionally\s+(?:does\s+not|not)\s+(?:build|register)|"
                 r"not\s+built\s+for\s+Cursor",
-                self.cursor,
-            ),
-            "platforms.md Cursor section must state Ralph is intentionally "
-            "not built/registered on Cursor",
+                text,
+            )
+            is not None,
+            "that Ralph is intentionally not built/registered on Cursor",
         )
 
 

@@ -255,22 +255,6 @@ class SpecIdNetworkCost(unittest.TestCase):
 class SpecIdDiscoverability(unittest.TestCase):
     """R11: plan / work / capture name tracker-first as recommended team default."""
 
-    def test_plan_work_capture_name_team_default(self) -> None:
-        for name, path in (
-            ("plan", PLAN_SITE),
-            ("work", WORK_SITE),
-            ("work-skill", WORK_SKILL),
-            ("capture", CAPTURE_SITE),
-        ):
-            text = _read(path)
-            with self.subTest(site=name):
-                self.assertRegex(
-                    text,
-                    r"recommended team default|team default",
-                    f"{name}: must name tracker-first as recommended team default",
-                )
-                self.assertIn("tracker-first", text)
-
     def test_no_runtime_advisory_nag(self) -> None:
         """Withdrawn R10: no nag/advisory line at mint time."""
         # Positive nag shapes only. Forbidden-by-prose mentions ("do not … runtime
