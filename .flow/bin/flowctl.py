@@ -2933,45 +2933,53 @@ def cmd_setup_block_check(args: argparse.Namespace) -> None:
     canonical_hash = _setup_block_hash(canonical)
 
     with _setup_block_lock():
-        # Brief lock for a consistent meta read only; nothing is mutated.
+        # Hold the lock through the meta read, target read, AND
+        # classification so the verdict describes ONE consistent state -
+        # writers mutate both resources under this same lock, and releasing
+        # between the two reads lets a racing apply update target+meta after
+        # the recorded hash was captured (stale `customized` instead of the
+        # post-apply `template-drift`). Still zero mutation under the lock.
         _, meta = _setup_block_meta_or_exit(args.json)
         recorded = _setup_block_recorded_hash(meta, key, block_id)
 
-    if not target.exists():
-        _setup_block_emit(args, key, "missing-file", None, recorded)
-        sys.exit(3)
+        if not target.exists():
+            _setup_block_emit(args, key, "missing-file", None, recorded)
+            sys.exit(3)
 
-    try:
-        current = _read_text_verbatim(target)
-        span = _setup_block_span(current, block_id)
-    except ValueError:
-        _setup_block_emit(args, key, "corrupt", None, recorded)
-        sys.exit(3)
-    except Exception as e:
-        error_exit(f"target unreadable: {target} ({e})", use_json=args.json)
+        try:
+            current = _read_text_verbatim(target)
+            span = _setup_block_span(current, block_id)
+        except ValueError:
+            _setup_block_emit(args, key, "corrupt", None, recorded)
+            sys.exit(3)
+        except Exception as e:
+            error_exit(f"target unreadable: {target} ({e})", use_json=args.json)
 
-    if span is None:
-        _setup_block_emit(args, key, "missing-markers", None, recorded)
-        sys.exit(3)
+        if span is None:
+            _setup_block_emit(args, key, "missing-markers", None, recorded)
+            sys.exit(3)
 
-    current_block = current[span[0]:span[1]]
-    if current_block.replace("\r\n", "\n") == canonical.replace("\r\n", "\n"):
-        # Byte-equality first, matching apply's order: a pristine block reads
-        # `unchanged` even when the recorded hash carries the customized
-        # sentinel (a hand-reverted block should read as clean).
-        _setup_block_emit(args, key, "unchanged", None, canonical_hash)
-        return
+        current_block = current[span[0]:span[1]]
+        if current_block.replace("\r\n", "\n") == canonical.replace("\r\n", "\n"):
+            # Byte-equality first, matching apply's order: a pristine block
+            # reads `unchanged` even when the recorded hash carries the
+            # customized sentinel (a hand-reverted block should read as
+            # clean).
+            _setup_block_emit(args, key, "unchanged", None, canonical_hash)
+            return
 
-    current_hash = _setup_block_hash(current_block)
-    if recorded == current_hash:
-        _setup_block_emit(args, key, "template-drift", None, recorded)
-    elif recorded == "customized":
-        _setup_block_emit(args, key, "customized", "customized-sentinel", recorded)
-    elif recorded is not None:
-        _setup_block_emit(args, key, "customized", None, recorded)
-    else:
-        _setup_block_emit(args, key, "hash-absent", None, None)
-    sys.exit(2)
+        current_hash = _setup_block_hash(current_block)
+        if recorded == current_hash:
+            _setup_block_emit(args, key, "template-drift", None, recorded)
+        elif recorded == "customized":
+            _setup_block_emit(
+                args, key, "customized", "customized-sentinel", recorded
+            )
+        elif recorded is not None:
+            _setup_block_emit(args, key, "customized", None, recorded)
+        else:
+            _setup_block_emit(args, key, "hash-absent", None, None)
+        sys.exit(2)
 
 
 def cmd_setup_block_resolve(args: argparse.Namespace) -> None:
