@@ -38,6 +38,18 @@ declined that machinery explicitly and delivered 43% fewer output tokens at
   fields the example does not show. This closes a deviation class caught
   twice in benchmark and field runs (an implementer "helpfully" extending a
   shown shape past the spec).
+- Same-spec worker waves now dispatch by an explicit fail-closed rule instead
+  of a judgment call: tasks run concurrently only when their declared
+  Touches: sets are disjoint, no dependency path connects them (transitively),
+  the wave is at most three tasks, and nothing touches the always-serial set
+  (.flow/, lockfiles, migrations, generated outputs). Anything missing or
+  doubtful stays serial - exactly today's behavior. A join conflict is never
+  auto-resolved: the losing task re-runs serially and the collision is
+  recorded in the receipt, so wrong declarations surface to plan review.
+  Review of a finished task may overlap the next dep-independent task's
+  implementation, with plan-sync still the barrier before dependent work.
+  Verified by a sequential-equivalence replay (wave and serial runs produce
+  identical test outcomes).
 - Pipeline stages now leave an explicit outcome - ran, skipped with a reason,
   or failed with a reason - in the receipts they already write, so a silently
   no-oping stage (the class behind issue #293, where plan-sync no-oped for
