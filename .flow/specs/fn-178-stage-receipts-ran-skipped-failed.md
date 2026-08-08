@@ -14,7 +14,7 @@ Smallest mechanism that closes the gap — prose + existing receipt surfaces, no
 
 1. **Stage-outcome lines in existing receipts:** the skills that orchestrate stages (work phases, pilot) record one line per stage in the done-evidence / receipt they already write: `stage: <name> — ran | skipped(<reason>) | failed(<reason>)`. A skipped stage is an EVENT with a reason (policy, config-off, empty-input, error), never an absence. The #293 class becomes visible on the first occurrence: `plan-sync — failed(EXTRACT_FAILED)` instead of silence.
 2. **Timing without new machinery:** lifecycle records already carry timestamps (task claim/start/done, review receipts). The spec adds only the convention that stage lines include start→end where the orchestrating skill knows them. Token counts are explicitly OUT of scope — flowctl cannot observe them (host-side data; a future host-integration could, not this spec).
-3. `flowctl usage` (existing verb) is the natural read surface; extend its output to summarize stage lines per spec IF trivially derivable from receipts — otherwise defer (Boundaries).
+3. `flowctl usage` (existing verb) extended to summarize stage-outcome lines per spec (ran/skipped/failed counts, reasons) from the receipts — the one small flowctl change in this batch (Gordon approved 2026-08-08).
 
 ## Edge Cases & Constraints
 
@@ -28,11 +28,12 @@ Smallest mechanism that closes the gap — prose + existing receipt surfaces, no
 - **R2:** plan-sync dispatch records ran/skipped(reason)/failed(reason) including the EXTRACT_FAILED sentinel path from #293. Errors: the #293 signature must produce a failed line, verified by inspection of the prose path.
 - **R3:** Outcome lines carry timestamps where the orchestrator knows them; no new timing store exists. Errors: none.
 - **R4:** Token telemetry explicitly documented as out of scope with the reason (not observable from flowctl). Errors: none.
-- **R5:** Mirrors, docs-site, CHANGELOG per conventions. Errors: parity red blocks merge.
+- **R5:** `flowctl usage` summarizes stage outcomes per spec from receipts; plain and `--json`. Errors: malformed/absent stage lines are reported as counts of unknown, never crash the verb.
+- **R6:** Mirrors, docs-site, CHANGELOG per conventions. Errors: parity red blocks merge.
 
 ## Boundaries
 
-- No new state files, stores, or flowctl verbs; `flowctl usage` extension only if it falls out of existing receipt reads, else deferred.
+- No new state files, stores, or flowctl verbs; the usage extension reads existing receipts only.
 - No token/cost telemetry (host-side; future host integration).
 - No dashboards, no aggregation tooling — read surfaces are receipts + usage.
 - Does not re-fix #293 (fixed in 3.16.1); this makes its CLASS visible.
