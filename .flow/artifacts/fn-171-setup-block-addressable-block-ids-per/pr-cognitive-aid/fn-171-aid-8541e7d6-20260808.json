@@ -1,0 +1,492 @@
+{
+  "artifactId": "fn-171-aid-8541e7d6-20260808",
+  "baseSha": "40b7b85fb5ca34efdeccc7d8622e6940845cb12a",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "setup-block did the careful parts (byte-preserving replacement, idempotence, customization detection) but only for a single span with compiled-in FLOW-NEXT markers, one hash per path, and no way for CI to ask whether a managed block was hand-edited (issue #294).",
+        "taskIds": [],
+        "title": "One hardwired span, no read-only query"
+      },
+      {
+        "files": [
+          {
+            "additions": 226,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 42,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t1",
+              "r1"
+            ],
+            "summary": "Id normalize/validate, derived markers, per-id span + fail-close, template-pair check, nested state helpers, check verb, argparse for all three verbs.",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.1"
+            ]
+          },
+          {
+            "additions": 446,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/tests/test_setup_block_helper.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t1",
+              "r5"
+            ],
+            "summary": "Existing tests: meta-shape assertions only updated to nested form; +20 new fixtures across ids/scoping/state/check contracts.",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.1"
+            ]
+          },
+          {
+            "additions": 31,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_portable_locks.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t1",
+              "r5"
+            ],
+            "summary": "Parallel-apply merge fixture extended to two ids on one path (lossless per-(path,id) merge).",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R2",
+          "R3"
+        ],
+        "sourceRefs": [
+          "t1",
+          "r1",
+          "r2",
+          "r3"
+        ],
+        "summary": "Optional --id with strict validation (1-64, [A-Z0-9][A-Z0-9._-]*, no --, empty rejected, exit 1 via error_exit); markers derived from the id; span resolution and corruption fail-close scoped to the operated id; template must carry exactly one derived pair (both bounds tested); pristine state becomes nested {path: {id: hash}} with tolerant legacy read and write-through upgrade. Default id byte-for-byte with today.",
+        "taskIds": [
+          "fn-171-setup-block-addressable-block-ids-per.1"
+        ],
+        "title": "Addressable ids, per-id scoping, nested state"
+      },
+      {
+        "files": [
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t2",
+              "r4"
+            ],
+            "summary": "Help-surface pin gains the setup-block check line.",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R4",
+          "R6"
+        ],
+        "sourceRefs": [
+          "t2",
+          "r4",
+          "r6"
+        ],
+        "summary": "flowctl setup-block check computes apply's classification without writing anything in any branch: exit 0 unchanged / 2 drift (template-drift, customized, hash-absent) / 3 structural (missing-file, missing-markers, corrupt) / 1 ordinary errors; byte-equality first (a reverted hand-edit is pristine); CRLF-only difference is never drift; JSON reuses the emit shape with no new fields.",
+        "taskIds": [
+          "fn-171-setup-block-addressable-block-ids-per.2"
+        ],
+        "title": "Read-only check verb"
+      },
+      {
+        "files": [
+          {
+            "additions": 30,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "Unreleased: Added (--id, nested state, check) + Fixed entries crediting @sn-furali (#294); fn-170 entries untouched.",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.3"
+            ]
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "agent_docs/setup-modes.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "Invariant 2 rewritten (id-derived markers); new per-(path,id) keying invariant.",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated codex mirror.",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "setup-block section: --id, nested state, check exit table, CI recipe.",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "diff",
+              "t3",
+              "r7"
+            ],
+            "summary": "Nested meta-shape reference line updated (call sites unaffected, default id).",
+            "taskIds": [
+              "fn-171-setup-block-addressable-block-ids-per.3"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R7"
+        ],
+        "sourceRefs": [
+          "t3",
+          "r7"
+        ],
+        "summary": "flowctl.md documents --id, nested state, the exit-code table, the argparse-usage-errors-also-exit-2 caveat, and a set -e-safe copy-mode CI recipe with its committed-template prerequisite; setup-modes.md invariant 2 rewritten for id-derived markers (free-form overrides still forbidden) plus a per-(path,id) invariant; CHANGELOG Unreleased credits the #294 reporter; dual copy, manifests, codex mirror regenerated.",
+        "taskIds": [
+          "fn-171-setup-block-addressable-block-ids-per.3"
+        ],
+        "title": "Docs, invariants, CHANGELOG, propagation"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "spec"
+        ],
+        "summary": "No verbs beyond check, no --dry-run on apply, no free-form begin/end marker overrides, no meta.json schema suite, and flow-next's own other managed regions (model-routing prose block, .flow/.gitignore block) stay unmigrated and unbroken.",
+        "taskIds": [],
+        "title": "Deliberately unchanged"
+      },
+      {
+        "files": [
+          {
+            "additions": 475,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-170-chart-notes-correction-path-notes/pr-cognitive-aid/fn-170-aid-a4dbebfb-20260808.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "fn-170's PR cognitive-aid artifact (regenerable bookkeeping swept into the branch; fn-170 already merged).",
+            "taskIds": []
+          },
+          {
+            "additions": 226,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 42,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Byte-identical distribution copy.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated manifest (distribution copy).",
+            "taskIds": []
+          },
+          {
+            "additions": 132,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/specs/fn-171-setup-block-addressable-block-ids-per.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Spec sidecar: task statuses, review rounds, receipts.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": ".flow/tasks/fn-171-setup-block-addressable-block-ids-per.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task done summary + evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": ".flow/tasks/fn-171-setup-block-addressable-block-ids-per.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task done summary + evidence (incl. plan-sync anchor refresh).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-171-setup-block-addressable-block-ids-per.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Task done summary + evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "diff"
+            ],
+            "summary": "Regenerated tracker manifest.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 6,
+        "rIds": [],
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "summary": "Focused suites (setup-block helper, portable locks, surface) 53 green per task; full gate python3 scripts/run_tests_parallel.py 4266 tests OK plus uvx ruff@0.16.0 check clean; flow bookkeeping carries task state, review rounds, and receipts.",
+        "taskIds": [
+          "fn-171-setup-block-addressable-block-ids-per.3"
+        ],
+        "title": "Verification"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Head commit",
+        "sourceRefs": [
+          "chead"
+        ],
+        "value": "8541e7d"
+      },
+      {
+        "label": "Verification",
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "value": "focused suites 53 green; full gate 4266 tests OK + ruff clean"
+      },
+      {
+        "label": "Evidence commits",
+        "sourceRefs": [
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "value": "7a8a06c / 73cdd05 / cf5933d"
+      }
+    ],
+    "thesis": "flowctl setup-block becomes a multi-block primitive (issue #294): managed spans are addressable by block id with derived markers, pristine state is keyed per (path, id) so several tracked regions share a file, and a new read-only check verb gives CI a drift verdict with a stable exit-code contract - all byte-for-byte compatible for existing default-id callers."
+  },
+  "generatedAt": "2026-08-08T02:20:00Z",
+  "headSha": "8541e7d6c2ccc4975aaf612553299b08ab60c6b5",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "spec",
+      "kind": "spec",
+      "ref": "fn-171-setup-block-addressable-block-ids-per"
+    },
+    {
+      "id": "t1",
+      "kind": "task",
+      "ref": "fn-171-setup-block-addressable-block-ids-per.1"
+    },
+    {
+      "id": "t2",
+      "kind": "task",
+      "ref": "fn-171-setup-block-addressable-block-ids-per.2"
+    },
+    {
+      "id": "t3",
+      "kind": "task",
+      "ref": "fn-171-setup-block-addressable-block-ids-per.3"
+    },
+    {
+      "id": "r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "r7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "diff",
+      "kind": "diff_metadata",
+      "ref": "40b7b85fb5ca34efdeccc7d8622e6940845cb12a..8541e7d6c2ccc4975aaf612553299b08ab60c6b5"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "7a8a06ceb40627fc1216fb2c9f3125a9ad23afb1"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "73cdd05924affa07701343f6ff03dd39d3b5a173"
+    },
+    {
+      "id": "c3",
+      "kind": "commit",
+      "ref": "cf5933d2f679922b566fb852c036ef6642e4c883"
+    },
+    {
+      "id": "chead",
+      "kind": "commit",
+      "ref": "8541e7d6c2ccc4975aaf612553299b08ab60c6b5"
+    }
+  ],
+  "specId": "fn-171-setup-block-addressable-block-ids-per"
+}

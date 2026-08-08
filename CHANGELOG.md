@@ -2,15 +2,15 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.17.0] - 2026-08-08
 
-Charts stay honest when discovery disproves its own starting facts. Thanks to
-@sn-furali for the field report (#292): a chart's `## Notes` were write-once,
-so a decision that disproved a grounding fact had nowhere to put the
-correction, `resolve --sharpen-file` silently ignored any key it didn't
-recognize (including the `notes` key a caller naturally reaches for), and a
-final briefing's header could show the chart's status from *before* that
-resolve closed it.
+Two field reports from the same practitioner, one shape of problem: state that
+could not be corrected, and silent no-ops where an error belonged. Charts can
+now record that discovery disproved one of their own starting facts, in the
+same transaction that closes the decision. `flowctl setup-block` can manage
+several marker blocks in one file and answer "has this block been hand-edited?"
+without writing anything, which makes it usable as a CI gate. Thanks to
+@sn-furali for both reports (#292, #294).
 
 ### Added
 
@@ -21,14 +21,42 @@ resolve closed it.
   `chart briefing` renders the correction alongside the original fact. The
   resolve result reports what was appended under `notes_appended`, always a
   list. An identical retry does not double-append - it folds into the
-  existing `decision_immutable` error instead. Corrections appended after a
-  chart's final briefing reach artifacts via the existing `chart reopen`
-  re-mint path, unchanged.
+  existing `decision_immutable` error instead. Corrections after a chart's
+  final briefing ride the existing `chart reopen` re-mint path on a follow-up
+  decision; a resolved decision stays immutable.
+- **Several managed blocks can live in one file, each tracked independently.**
+  `--id <BLOCK-ID>` on `apply`, `resolve`, and the new `check` derives that
+  id's own marker pair and its own recorded state. Omit `--id` (or pass
+  `--id FLOW-NEXT`) for the original single-block behavior - markers,
+  transitions, exit codes, and every existing caller are unchanged. A custom
+  id never touches another id's block, even a stray or corrupt one, in the
+  same file.
+- **`flowctl setup-block check` answers "did someone hand-edit this?" without
+  writing.** It classifies a managed block read-only - pristine, drifted, or
+  structurally broken - and exits non-zero on anything but a clean match, so
+  CI (especially a `setup_mode: copy` repo, where the block is an ordinary
+  tracked file) can gate on a hand-edit with no risk of a write. A block that
+  was edited and reverted reads clean, and a CRLF-only difference is never
+  drift. `docs/flowctl.md` carries the exit-code table and a copy-paste CI
+  recipe.
+
+### Changed
+
 - **A typo in `--sharpen-file` is now an error instead of a silent no-op.**
   Any key outside `decisions`, `remove_questions` (and its `remove_parked` /
   `parked_removals` aliases), and the new `notes_append` fails the whole
   resolve with `sharpen_file_unknown_key`, naming the offending key(s) and the
-  accepted set, checked before anything is allocated or persisted.
+  accepted set, checked before anything is allocated or persisted. An explicit
+  `null` value is rejected the same way rather than read as an omitted key.
+- **A setup-block template must now be exactly its marker-pair block:** the
+  BEGIN marker on the first line, the END marker on the last, a trailing
+  newline, and no marker token embedded in the body. Prose outside the pair
+  used to be written and hashed by `apply` but never seen by the span-based
+  comparison, so a freshly applied block could report as customized; a
+  template without its trailing newline ate the END marker's line terminator
+  on refresh and welded an adjacent block's BEGIN onto it. Every template
+  flow-next ships already conforms - a custom template with surrounding prose
+  now fails with a clear error instead of drifting silently.
 
 ### Fixed
 
@@ -37,36 +65,23 @@ resolve closed it.
   open-to-done transition it was itself completing, so a final briefing could
   say `open` in its own header while `chart show` immediately afterward said
   `done`. The header now reflects the post-transition status.
-
-`flowctl setup-block` can now track several independent marker blocks in
-one file, and check whether one has drifted without touching anything.
-Thanks to @sn-furali for the field report (#294): the second `apply` for a
-different block in the same file used to overwrite the first block's
-recorded state, and there was no way to ask "has this block been hand-edited?"
-without risking a write.
-
-### Added
-
-- **`--id <BLOCK-ID>` on `apply`, `resolve`, and the new `check`.** Several
-  managed spans can now live in one file, each addressed and tracked
-  independently. Omit `--id` (or pass `--id FLOW-NEXT`) for the original
-  single-block behavior - the markers, recorded state, and every existing
-  caller are unchanged. A custom id derives its own marker pair and never
-  touches another id's block, even a stray or corrupt one, in the same file.
-- **`flowctl setup-block check`** classifies a managed block read-only -
-  pristine, drifted, or structurally broken - and exits non-zero on
-  anything but a clean match, so CI (especially a `setup_mode: copy` repo,
-  where the block is an ordinary tracked file) can gate on a hand-edit
-  without flowctl writing anything. See `docs/flowctl.md` for the exit-code
-  table and a copy-paste CI recipe.
-
-### Fixed
-
 - **Tracking a second block in a file no longer clobbers the first block's
-  recorded state.** Pristine-hash state is now keyed per block id, not just
-  per file; a pre-existing recorded hash is read transparently as the
+  recorded state.** Pristine-hash state is keyed per (file, block id) rather
+  than per file; a pre-existing recorded hash is read transparently as the
   default block's state and upgraded on the next write, with no separate
   migration step.
+- **`setup-block` fails closed on a structurally broken block in the places it
+  previously let through.** `resolve --choice keep` recorded the customized
+  sentinel without ever validating the operated span; a duplicate or orphaned
+  marker for the operated id after the first valid pair escaped the corruption
+  scan entirely; and `check` released its lock between reading state and
+  reading the target, so a concurrent `apply` could skew the verdict. All
+  three now hold the documented per-id fail-closed contract, and `check` still
+  writes nothing in any branch.
+- **A correction bullet that starts with a hyphen keeps it.** `notes_append`
+  only strips a real `- ` markdown bullet marker, so prose like `--legacy` or
+  `-5 ms` is recorded verbatim, and the existing note region stays
+  byte-identical when a correction is appended.
 
 ## [flow-next 3.16.3] - 2026-08-07
 
