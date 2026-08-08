@@ -758,16 +758,25 @@ class TestR23_RIDsAppendOnlyDocumented(unittest.TestCase):
 class TestR26_BizPassDocsInvestigation(unittest.TestCase):
     """R26: business pass MUST investigate project documentation BEFORE
     drafting questions — symmetric to the tech pass's codebase
-    investigation. Verify SKILL.md's `--scope=business` block names the
-    doc sources + `## Resolved via Project Docs` audit section."""
+    investigation. Verify the `--scope=business` block names the doc
+    sources + `## Resolved via Project Docs` audit section.
+
+    Branch-disclosure (fn-169) moved the biz-pass merge contract and its
+    read list into `references/pass-business.md`, which SKILL.md's scope
+    switch loads when `SCOPE == business`. The doc-source and ordering
+    pins target that reference; SKILL.md is pinned to still name the
+    audit section and route to it."""
 
     def setUp(self) -> None:
         self.skill_body = (INTERVIEW_DIR / "SKILL.md").read_text(encoding="utf-8")
+        self.biz_body = (
+            INTERVIEW_DIR / "references" / "pass-business.md"
+        ).read_text(encoding="utf-8")
 
     def test_business_block_names_required_doc_sources(self) -> None:
-        """SKILL.md must instruct the biz pass to read README.md /
-        CHANGELOG.md / STRATEGY.md / GLOSSARY.md / knowledge/decisions/ /
-        .flow/specs/ index / docs/ BEFORE drafting questions."""
+        """The biz pass must read README.md / CHANGELOG.md / STRATEGY.md /
+        GLOSSARY.md / knowledge/decisions/ / .flow/specs/ index / docs/
+        BEFORE drafting questions."""
         for source in (
             "README.md",
             "CHANGELOG.md",
@@ -779,9 +788,17 @@ class TestR26_BizPassDocsInvestigation(unittest.TestCase):
         ):
             self.assertIn(
                 source,
-                self.skill_body,
-                f"SKILL.md --scope=business block must name {source!r}",
+                self.biz_body,
+                f"references/pass-business.md must name {source!r}",
             )
+        # Reachability: SKILL.md routes `SCOPE == business` to that file and
+        # keeps the R26 read-list pointer.
+        self.assertIn(
+            "[`references/pass-business.md`](references/pass-business.md)",
+            self.skill_body,
+            "SKILL.md must route the business pass to pass-business.md, "
+            "where the R26 read list now lives",
+        )
 
     def test_business_block_names_audit_section(self) -> None:
         """`## Resolved via Project Docs` is the audit section that
@@ -800,21 +817,28 @@ class TestR26_BizPassDocsInvestigation(unittest.TestCase):
         BEFORE/before relation explicitly."""
         # Find any sentence near R26 / Investigate Project Docs that
         # uses BEFORE / before to assert ordering.
-        body_lower = self.skill_body.lower()
+        body_lower = self.biz_body.lower()
         # The clear marker per the spec.
         self.assertIn("before", body_lower)
         # And the symmetric-form bug rule from R26. Case-insensitive — the
-        # actual line in SKILL.md starts with `If you...` (capitalized).
+        # actual line starts with `If you...` (capitalized).
         import re as _re
         self.assertIsNotNone(
             _re.search(
                 r"if you find yourself asking the user a biz question that "
                 r"(?:README|STRATEGY|CHANGELOG|GLOSSARY)",
-                self.skill_body,
+                self.biz_body,
                 _re.IGNORECASE,
             ),
-            "SKILL.md must include the symmetric form of the "
-            "'should-via-grep' rule",
+            "references/pass-business.md must include the symmetric form of "
+            "the 'should-via-grep' rule",
+        )
+        # Reachability: SKILL.md's project-docs-answerable row names R26 and
+        # points at the reference that carries the ordering rule.
+        self.assertIn("(business pass, R26)", self.skill_body)
+        self.assertIn(
+            "[`references/pass-business.md`](references/pass-business.md)",
+            self.skill_body,
         )
 
 

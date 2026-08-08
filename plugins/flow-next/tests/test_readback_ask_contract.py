@@ -99,7 +99,11 @@ class ReadbackAskContract(unittest.TestCase):
                 self.assertIn("Print-then-ask", text)
         # Short-ask tally token + edit-cycle reprint token.
         self.assertIn("[inferred]", self.capture_workflow)
-        self.assertIn("reprint", self.capture_workflow)
+        # Branch-disclosure (fn-169) rewrote capture's §4 recap on the spine
+        # with the hyphenated spelling ("Edit cycles re-print the revised
+        # draft before each short ask") and moved the unhyphenated copy into
+        # references/manual-smoke.md. Same contract, both spellings accepted.
+        self.assertRegex(self.capture_workflow, r"re-?print")
         self.assertIn("reprint", self.capture_phases)
         self.assertIn("reprint", self.doc_aware.lower())
         self.assertIn("reprint", self.write_back.lower())

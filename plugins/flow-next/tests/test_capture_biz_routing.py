@@ -245,12 +245,25 @@ class TestR25ThresholdProseContract(unittest.TestCase):
             "workflow.md Phase 6 must carry the pinned R25 threshold sentence",
         )
 
-    def test_threshold_sentence_in_skill_md(self) -> None:
+    def test_threshold_rule_reachable_from_skill_md(self) -> None:
+        """Branch-disclosure moved the pinned R25 sentence into workflow.md
+        Phase 6 (the only place it now lives — verified by
+        `test_threshold_sentence_in_workflow_md`). SKILL.md step 6 is the
+        gating index: it must still state the `1 <= BIZ_SIGNAL_CATEGORIES < 3`
+        fire rule AND route to workflow.md, so the pinned sentence stays
+        reachable rather than merely existing."""
         body = (CAPTURE_DIR / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn(
-            R25_THRESHOLD_SENTENCE,
+            "the R25 business-pass suggestion fires at "
+            "`1 <= BIZ_SIGNAL_CATEGORIES < 3`",
             body,
-            "SKILL.md step 6 must carry the pinned R25 threshold sentence",
+            "SKILL.md step 6 must carry the R25 threshold fire rule",
+        )
+        self.assertIn(
+            "workflow.md",
+            body,
+            "SKILL.md must route to workflow.md, where the pinned R25 "
+            "threshold sentence now lives",
         )
 
     def test_workflow_branches_on_agent_threshold_not_flowctl(self) -> None:

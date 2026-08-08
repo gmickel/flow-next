@@ -24,10 +24,23 @@ PLUGIN = REPO_ROOT / "plugins" / "flow-next"
 SKILLS = PLUGIN / "skills"
 
 CAPTURE_WORKFLOW = SKILLS / "flow-next-capture" / "workflow.md"
+# Branch-disclosure (fn-169) left capture's source-tag taxonomy as a SINGLE
+# copy in phases.md; workflow.md §2.3 now cross-links it instead of carrying a
+# second table. Capture-side vocabulary/definition pins therefore target
+# phases.md, and workflow.md is pinned to still route there.
 CAPTURE_PHASES = SKILLS / "flow-next-capture" / "phases.md"
+CAPTURE_TAXONOMY_LINK = "[phases.md](phases.md) §Source-tag taxonomy"
 INTERVIEW_SKILL = SKILLS / "flow-next-interview" / "SKILL.md"
 INTERVIEW_WRITE_BACK = (
     SKILLS / "flow-next-interview" / "references" / "write-back.md"
+)
+# The per-pass `[user]` semantics moved to the scope references the SKILL.md
+# scope switch loads.
+INTERVIEW_PASS_BUSINESS = (
+    SKILLS / "flow-next-interview" / "references" / "pass-business.md"
+)
+INTERVIEW_PASS_TECHNICAL = (
+    SKILLS / "flow-next-interview" / "references" / "pass-technical.md"
 )
 FIXTURE_DIR = pathlib.Path(__file__).parent / "fixtures" / "interview_source_tags"
 
@@ -118,6 +131,8 @@ class InterviewSourceTagsTest(unittest.TestCase):
         cls.capture_phases = read(CAPTURE_PHASES)
         cls.interview_skill = read(INTERVIEW_SKILL)
         cls.write_back = read(INTERVIEW_WRITE_BACK)
+        cls.pass_business = read(INTERVIEW_PASS_BUSINESS)
+        cls.pass_technical = read(INTERVIEW_PASS_TECHNICAL)
 
     # --- R1: interview emits tags at all -------------------------------------
 
@@ -161,9 +176,25 @@ class InterviewSourceTagsTest(unittest.TestCase):
         self.assertIn("pre-existing bullets keep their tag", self.write_back)
 
     def test_skill_md_states_per_pass_user_semantics(self) -> None:
-        """R7: a reader can tell what [user] means per pass."""
-        self.assertIn("the PO answering in this pass", self.interview_skill)
-        self.assertIn("the tech lead answering in this pass", self.interview_skill)
+        """R7: a reader can tell what [user] means per pass.
+
+        Branch-disclosure moved the per-pass merge contracts into the scope
+        references SKILL.md's scope switch loads, so each pass now states its
+        own `[user]` identity in its own file. SKILL.md keeps the pass-neutral
+        rule plus the routes to both references (reachability).
+        """
+        self.assertIn("the PO answering in this pass", self.pass_business)
+        self.assertIn(
+            "the tech lead answering in this pass", self.pass_technical
+        )
+        self.assertIn(
+            "`[user]` = the human answering in this pass", self.interview_skill
+        )
+        for link in (
+            "[`references/pass-business.md`](references/pass-business.md)",
+            "[`references/pass-technical.md`](references/pass-technical.md)",
+        ):
+            self.assertIn(link, self.interview_skill)
         self.assertIn(
             "the PO under `--scope=business`, the tech lead under `--scope=technical`",
             self.write_back,
@@ -185,10 +216,11 @@ class InterviewSourceTagsTest(unittest.TestCase):
     def test_tag_definitions_match_capture(self) -> None:
         """Neither skill can reword a definition alone."""
         sources = {
-            "capture/workflow.md": self.capture_workflow,
             "capture/phases.md": self.capture_phases,
             "interview/references/write-back.md": self.write_back,
         }
+        # Reachability: capture's spine must still route to the single copy.
+        self.assertIn(CAPTURE_TAXONOMY_LINK, self.capture_workflow)
         for definition in SHARED_DEFINITIONS:
             for label, text in sources.items():
                 with self.subTest(definition=definition, file=label):
@@ -215,10 +247,11 @@ class InterviewSourceTagsTest(unittest.TestCase):
         otherwise contaminate the set.
         """
         sources = {
-            "capture/workflow.md": self.capture_workflow,
             "capture/phases.md": self.capture_phases,
             "interview/references/write-back.md": self.write_back,
         }
+        # Reachability: capture's spine must still route to the single copy.
+        self.assertIn(CAPTURE_TAXONOMY_LINK, self.capture_workflow)
         for label, text in sources.items():
             with self.subTest(file=label):
                 found = tag_table_tokens(text)
@@ -253,21 +286,34 @@ class InterviewSourceTagsTest(unittest.TestCase):
     def test_strategy_long_form_matches_capture_workflow(self) -> None:
         """The `[strategy]` tail interview copied cannot drift alone.
 
-        SHARED_DEFINITIONS pins only the prefix (capture's two copies diverge
-        past it), so without this the substantive tail could change on one side
-        unnoticed. Pinned for the workflow.md <-> write-back.md pair only.
+        SHARED_DEFINITIONS pins only the prefix, so without this the
+        substantive tail could change on one side unnoticed.
+
+        Branch-disclosure deduped capture's second tag table out of
+        workflow.md; the capture-side long form now lives once in phases.md
+        §Source-tag taxonomy (same substance, capture's own sentence shape), so
+        the tail is pinned per-side: byte-exact on interview's copy, and by its
+        two load-bearing clauses on capture's surviving copy.
         """
-        for label, text in (
-            ("capture/workflow.md", self.capture_workflow),
-            ("interview/references/write-back.md", self.write_back),
+        self.assertIn(
+            STRATEGY_LONG_FORM,
+            self.write_back,
+            "interview/references/write-back.md no longer carries the full "
+            "`[strategy]` definition — the pair has drifted",
+        )
+        for clause in (
+            "`### <track-name>` H3 sub-block",
+            "track name lives literally in the tag",
         ):
-            with self.subTest(file=label):
+            with self.subTest(clause=clause):
                 self.assertIn(
-                    STRATEGY_LONG_FORM,
-                    text,
-                    f"{label} no longer carries the full `[strategy]` "
-                    f"definition — the pair has drifted",
+                    clause,
+                    self.capture_phases,
+                    f"capture/phases.md no longer carries the `[strategy]` "
+                    f"tail clause {clause!r} — the pair has drifted",
                 )
+        # Reachability: capture's spine routes to that single copy.
+        self.assertIn(CAPTURE_TAXONOMY_LINK, self.capture_workflow)
 
     # --- R5: tags discriminate on the frozen fixture ------------------------
 

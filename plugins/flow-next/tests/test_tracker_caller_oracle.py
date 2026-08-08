@@ -47,6 +47,58 @@ REQUIRED_CALLER_FIELDS = {
     "stderr",
 }
 RUNNER_TOKENS = ("tracker-runner", "tracker_runner", "tracker-dispatch")
+
+SKILLS = "plugins/flow-next/skills"
+
+# The oracle is commit-addressed and immutable: its `file` field names each
+# caller's home in the pre-teardown tree. The fn-169 branch-disclosure wave
+# moved several caller bodies off the always-loaded spine into the reference
+# their gate loads, so the CURRENT tree splits some callers across two files.
+# This map names the current home(s); assertions about the current tree read
+# the concatenation, and `_GATE_EDGES` pins that the spine still loads the
+# reference (reachability, not mere existence).
+CURRENT_CALLER_FILES = {
+    "capture": (
+        f"{SKILLS}/flow-next-capture/workflow.md",
+        f"{SKILLS}/flow-next-capture/references/tracker-integration.md",
+    ),
+    "interview": (
+        f"{SKILLS}/flow-next-interview/SKILL.md",
+        f"{SKILLS}/flow-next-interview/references/post-write-back.md",
+    ),
+    "plan": (
+        f"{SKILLS}/flow-next-plan/steps.md",
+        f"{SKILLS}/flow-next-plan/references/tracker-projection.md",
+    ),
+    "qa": (
+        f"{SKILLS}/flow-next-qa/workflow.md",
+        f"{SKILLS}/flow-next-qa/references/autonomy.md",
+    ),
+    "chart": (
+        f"{SKILLS}/flow-next-chart/workflow.md",
+        f"{SKILLS}/flow-next-chart/references/tracker-projection.md",
+    ),
+}
+
+# spine file -> reference token it must name for the moved caller body to be
+# reachable on the branch that needs it.
+_GATE_EDGES = (
+    (
+        f"{SKILLS}/flow-next-capture/workflow.md",
+        "references/tracker-integration.md",
+    ),
+    (
+        f"{SKILLS}/flow-next-interview/SKILL.md",
+        "references/post-write-back.md",
+    ),
+    (f"{SKILLS}/flow-next-plan/steps.md", "references/tracker-projection.md"),
+    (f"{SKILLS}/flow-next-qa/workflow.md", "references/autonomy.md"),
+    (f"{SKILLS}/flow-next-chart/workflow.md", "references/tracker-projection.md"),
+    (
+        f"{SKILLS}/flow-next-work/phases.md",
+        "references/tracker-touchpoints.md",
+    ),
+)
 CURRENT_TEARDOWN_ADDITIONS = (
     "plugins/flow-next/docs/tracker-sync.md",
     "plugins/flow-next/skills/flow-next-tracker-sync/references/comments-sync.md",
@@ -60,6 +112,29 @@ class TrackerCallerOracleTests(unittest.TestCase):
         cls.callers = {
             caller["id"]: caller for caller in cls.oracle["callers"]
         }
+
+    @staticmethod
+    def _current_files(caller: dict) -> tuple[str, ...]:
+        return CURRENT_CALLER_FILES.get(caller["id"], (caller["file"],))
+
+    def _current_text(self, caller: dict) -> str:
+        return "\n".join(
+            (REPO_ROOT / relative).read_text(encoding="utf-8")
+            for relative in self._current_files(caller)
+        )
+
+    def test_moved_caller_bodies_stay_reachable(self) -> None:
+        """Every caller body parked in a reference must be named by the
+        always-loaded file that gates it."""
+        for spine, ref_token in _GATE_EDGES:
+            with self.subTest(spine=spine):
+                text = (REPO_ROOT / spine).read_text(encoding="utf-8")
+                self.assertIn(
+                    ref_token,
+                    text,
+                    f"{spine} does not load {ref_token} — the tracker caller "
+                    "body it owns would be unreachable",
+                )
 
     def _source_at_oracle_commit(self, relative: str) -> str:
         result = subprocess.run(
@@ -211,11 +286,21 @@ class TrackerCallerOracleTests(unittest.TestCase):
         first_claim_text = (
             REPO_ROOT / self.callers["work.firstClaim"]["file"]
         ).read_text(encoding="utf-8")
-        phases_text = (
-            REPO_ROOT / "plugins/flow-next/skills/flow-next-work/phases.md"
+        # Branch-disclosure moved work's second copy of the first-claim call
+        # out of phases.md into the retro-fire reference phases.md loads.
+        retro_text = (
+            REPO_ROOT
+            / "plugins/flow-next/skills/flow-next-work"
+            / "references/tracker-retro-fire.md"
         ).read_text(encoding="utf-8")
         self.assertIn("--op push --status-only", first_claim_text)
-        self.assertIn("--op push --status-only", phases_text)
+        self.assertIn("--op push --status-only", retro_text)
+        self.assertIn(
+            "references/tracker-retro-fire.md",
+            (
+                REPO_ROOT / "plugins/flow-next/skills/flow-next-work/phases.md"
+            ).read_text(encoding="utf-8"),
+        )
 
     def test_caller_inventory_and_event_tokens_match_real_files(self) -> None:
         sweep = self.oracle["teardown_sweep"]
@@ -236,7 +321,7 @@ class TrackerCallerOracleTests(unittest.TestCase):
             - post_baseline,
         )
         for caller in self.callers.values():
-            text = (REPO_ROOT / caller["file"]).read_text(encoding="utf-8")
+            text = self._current_text(caller)
             self.assertIn(caller["event"], text, caller["id"])
             self.assertIn(caller["config_key"], text, caller["id"])
 
@@ -256,16 +341,21 @@ class TrackerCallerOracleTests(unittest.TestCase):
                 "evidence=<task-id>@<final-evidence-commit-sha>",
                 "evidence=<reviewed-head-sha>",
             ),
-            "plugins/flow-next/skills/flow-next-work/phases.md": (
+            (
+                "plugins/flow-next/skills/flow-next-work/"
+                "references/tracker-retro-fire.md"
+            ): (
                 "evidence=<task-id>@<final-evidence-commit-sha>",
                 "evidence=<reviewed-head-sha>",
             ),
-            "plugins/flow-next/skills/flow-next-capture/workflow.md": (
-                "evidence=<sha256-of-current-spec-file>",
-            ),
-            "plugins/flow-next/skills/flow-next-interview/SKILL.md": (
-                "evidence=<sha256-of-current-spec-file>",
-            ),
+            (
+                "plugins/flow-next/skills/flow-next-capture/"
+                "references/tracker-integration.md"
+            ): ("evidence=<sha256-of-current-spec-file>",),
+            (
+                "plugins/flow-next/skills/flow-next-interview/"
+                "references/post-write-back.md"
+            ): ("evidence=<sha256-of-current-spec-file>",),
             (
                 "plugins/flow-next/skills/flow-next-plan/"
                 "references/tracker-projection.md"
@@ -368,7 +458,7 @@ class TrackerCallerOracleTests(unittest.TestCase):
             )
 
         for caller in self.callers.values():
-            text = (REPO_ROOT / caller["file"]).read_text(encoding="utf-8")
+            text = self._current_text(caller)
             self.assertIn("sync active --json", text, caller["id"])
             self.assertIn("tracker sync", text, caller["id"])
             self.assertIn(f"--event {caller['event']}", text, caller["id"])
@@ -377,9 +467,7 @@ class TrackerCallerOracleTests(unittest.TestCase):
 
         synthesized_comments = EVENTS - {"work.firstClaim"}
         for caller_id in synthesized_comments:
-            text = (REPO_ROOT / self.callers[caller_id]["file"]).read_text(
-                encoding="utf-8"
-            )
+            text = self._current_text(self.callers[caller_id])
             self.assertRegex(text.lower(), r"synthesi[sz]es?", caller_id)
 
 

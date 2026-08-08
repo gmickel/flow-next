@@ -16,22 +16,33 @@ PLUGIN = Path(__file__).resolve().parent.parent
 SKILLS = PLUGIN / "skills"
 
 PLAN_STEPS = SKILLS / "flow-next-plan" / "steps.md"
+PLAN_MINT_REF = SKILLS / "flow-next-plan" / "references" / "tracker-first-mint.md"
 WORK_MINT_REF = SKILLS / "flow-next-work" / "references" / "spec-id-mint.md"
 WORK_PHASES = SKILLS / "flow-next-work" / "phases.md"
 WORK_SKILL = SKILLS / "flow-next-work" / "SKILL.md"
 CAPTURE_WF = SKILLS / "flow-next-capture" / "workflow.md"
+CAPTURE_TRACKER_REF = (
+    SKILLS / "flow-next-capture" / "references" / "tracker-integration.md"
+)
 INTERVIEW_WB = SKILLS / "flow-next-interview" / "references" / "write-back.md"
 QA_BUG = SKILLS / "flow-next-qa" / "references" / "bug-filing.md"
 SETUP_WF = SKILLS / "flow-next-setup" / "workflow.md"
 
+# fn-134 review, extended by the fn-169 branch-disclosure wave: the mint gates
+# moved off the always-loaded path into on-demand references so the reached
+# path stays below the fn-130 baseline. Same contract, different file — each
+# site is the gating spine file PLUS the reference its gate loads, concatenated,
+# so the assertions below are unchanged. Reachability of each reference (the
+# spine actually names and loads it) is pinned by `test_gates_load_their_mint_reference`.
+PLAN_SITE = [PLAN_STEPS, PLAN_MINT_REF]
+WORK_SITE = [WORK_PHASES, WORK_MINT_REF]
+CAPTURE_SITE = [CAPTURE_WF, CAPTURE_TRACKER_REF]
+
 # Five mint sites named in the spec / task.
 MINT_SITES = {
-    "plan": PLAN_STEPS,
-    # fn-134 review: the gate moved off the always-loaded path into an on-demand
-    # reference to keep the reached path below the fn-130 baseline. Same contract,
-    # different file - concatenate both so the assertions are unchanged.
-    "work": [WORK_PHASES, WORK_MINT_REF],
-    "capture": CAPTURE_WF,
+    "plan": PLAN_SITE,
+    "work": WORK_SITE,
+    "capture": CAPTURE_SITE,
     "interview": INTERVIEW_WB,
     "qa": QA_BUG,
 }
@@ -67,7 +78,7 @@ class SpecIdConfigReadBudget(unittest.TestCase):
     def test_sites_holding_a_snapshot_do_not_take_a_second(self) -> None:
         # plan and capture take a root snapshot early; their mint sites must jq
         # that file rather than issue another `config get --json`.
-        for name, path in (("plan", PLAN_STEPS), ("capture", CAPTURE_WF)):
+        for name, path in (("plan", PLAN_SITE), ("capture", CAPTURE_SITE)):
             text = _read(path)
             with self.subTest(site=name):
                 self.assertLessEqual(
@@ -106,9 +117,9 @@ class SpecIdRoutingGate(unittest.TestCase):
     def test_plan_work_capture_interview_own_the_gate(self) -> None:
         """These sites implement the gate (create-first + degrade), not only mention it."""
         for name, path in (
-            ("plan", PLAN_STEPS),
-            ("work", [WORK_PHASES, WORK_MINT_REF]),
-            ("capture", CAPTURE_WF),
+            ("plan", PLAN_SITE),
+            ("work", WORK_SITE),
+            ("capture", CAPTURE_SITE),
             ("interview", INTERVIEW_WB),
         ):
             text = _read(path)
@@ -120,6 +131,23 @@ class SpecIdRoutingGate(unittest.TestCase):
                     f"{name}: must degrade silently to flow-first",
                 )
                 self.assertIn("override", text.lower())
+
+    def test_gates_load_their_mint_reference(self) -> None:
+        """Reachability: a mint contract parked in a reference is only binding
+        if the always-loaded spine names that reference at the gate. Pins the
+        spine -> reference edge for each split site."""
+        for name, spine, ref_name in (
+            ("plan", PLAN_STEPS, "references/tracker-first-mint.md"),
+            ("work", WORK_PHASES, "references/spec-id-mint.md"),
+            ("capture", CAPTURE_WF, "references/tracker-integration.md"),
+        ):
+            with self.subTest(site=name):
+                self.assertIn(
+                    ref_name,
+                    _read(spine),
+                    f"{name}: spine does not load {ref_name} — the mint gate "
+                    "is unreachable",
+                )
 
     def test_qa_inherits_capture_and_names_owner(self) -> None:
         text = _read(QA_BUG)
@@ -137,9 +165,9 @@ class SpecIdRoutingGate(unittest.TestCase):
             re.IGNORECASE,
         )
         for name, path in (
-            ("plan", PLAN_STEPS),
-            ("work", [WORK_PHASES, WORK_MINT_REF]),
-            ("capture", CAPTURE_WF),
+            ("plan", PLAN_SITE),
+            ("work", WORK_SITE),
+            ("capture", CAPTURE_SITE),
             ("interview", INTERVIEW_WB),
             ("qa", QA_BUG),
         ):
@@ -152,18 +180,22 @@ class SpecIdRoutingGate(unittest.TestCase):
                 )
 
     def test_plan_and_capture_use_existing_snapshot_path(self) -> None:
-        plan = _read(PLAN_STEPS)
+        plan = _read(PLAN_SITE)
         self.assertIn("flow-plan-config-", plan)
         self.assertIn(".value.tracker.specIds", plan)
-        capture = _read(CAPTURE_WF)
+        capture = _read(CAPTURE_SITE)
         self.assertIn("flow-capture-config-", capture)
         self.assertIn(".value.tracker.specIds", capture)
+        # The snapshot itself stays on the spine (taken every run); only the
+        # mint that jq-reads it moved behind the tracker gate.
+        self.assertIn("flow-plan-config-", _read(PLAN_STEPS))
+        self.assertIn("flow-capture-config-", _read(CAPTURE_WF))
 
     def test_issue_first_and_fresh_idea_paths_both_present(self) -> None:
         for name, path in (
-            ("plan", PLAN_STEPS),
-            ("work", [WORK_PHASES, WORK_MINT_REF]),
-            ("capture", CAPTURE_WF),
+            ("plan", PLAN_SITE),
+            ("work", WORK_SITE),
+            ("capture", CAPTURE_SITE),
             ("interview", INTERVIEW_WB),
         ):
             text = _read(path)
@@ -201,9 +233,9 @@ class SpecIdNetworkCost(unittest.TestCase):
 
     def test_conditional_cost_stated_at_primary_mints(self) -> None:
         for name, path in (
-            ("plan", PLAN_STEPS),
-            ("work", [WORK_PHASES, WORK_MINT_REF]),
-            ("capture", CAPTURE_WF),
+            ("plan", PLAN_SITE),
+            ("work", WORK_SITE),
+            ("capture", CAPTURE_SITE),
             ("setup", SETUP_WF),
         ):
             text = _read(path)
@@ -225,10 +257,10 @@ class SpecIdDiscoverability(unittest.TestCase):
 
     def test_plan_work_capture_name_team_default(self) -> None:
         for name, path in (
-            ("plan", PLAN_STEPS),
-            ("work", [WORK_PHASES, WORK_MINT_REF]),
+            ("plan", PLAN_SITE),
+            ("work", WORK_SITE),
             ("work-skill", WORK_SKILL),
-            ("capture", CAPTURE_WF),
+            ("capture", CAPTURE_SITE),
         ):
             text = _read(path)
             with self.subTest(site=name):
@@ -320,8 +352,8 @@ class NamedIssueMintMustAttach(unittest.TestCase):
     """
 
     SITES = {
-        "capture": SKILLS / "flow-next-capture" / "workflow.md",
-        "plan": SKILLS / "flow-next-plan" / "steps.md",
+        "capture": CAPTURE_TRACKER_REF,
+        "plan": PLAN_MINT_REF,
         "interview": SKILLS / "flow-next-interview" / "references" / "write-back.md",
         # work was omitted from this list originally, which is exactly how the
         # attach requirement went missing there for a whole review wave.

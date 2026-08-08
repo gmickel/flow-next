@@ -30,6 +30,110 @@ UNCONDITIONAL_EVENTS = {"makePr", "land.merged"}
 CHART_EVENTS = {"chart"}
 FAKE_FLOWCTL = ORACLE_PATH.parent / "fake_flowctl.py"
 
+SKILLS = REPO_ROOT / "plugins" / "flow-next" / "skills"
+
+# The fn-169 branch-disclosure wave split several caller gates: the
+# always-loaded spine keeps a probe that prints a STOP sentinel naming a
+# reference, and the reference carries the op resolution + facade call. The
+# executable contract is unchanged, so the harness executes BOTH halves in one
+# shell (variables flow across the split exactly as the host agent's session
+# does) and asserts the same observations. `split_gate` names the spine slice;
+# `fence` names the file + needles of the dispatch fence the wrapper is
+# injected into.
+#
+# Spine slices are addressed by (start-token, sentinel-substring) so the slice
+# is the gate itself, not the neighbouring gates that share the fence.
+CURRENT_CALLER_GATES = {
+    "capture": {
+        "fence": (
+            SKILLS / "flow-next-capture/references/tracker-integration.md",
+            ("tracker.perEvent.capture", "tracker sync"),
+        ),
+    },
+    "interview": {
+        "split_gate": (
+            SKILLS / "flow-next-interview/SKILL.md",
+            "TRACKER_GATE=0",
+            "TRACKER-SYNC GATE ACTIVE",
+        ),
+        "fence": (
+            SKILLS / "flow-next-interview/references/post-write-back.md",
+            ("tracker.perEvent.interview", "tracker sync"),
+        ),
+        "fired": '[ "$TRACKER_GATE" = "1" ]',
+        "reference": "references/post-write-back.md",
+    },
+    "qa": {
+        "split_gate": (
+            SKILLS / "flow-next-qa/workflow.md",
+            "ACTIVE=0",
+            "TRACKER QA LEAF ACTIVE",
+        ),
+        "fence": (
+            SKILLS / "flow-next-qa/references/autonomy.md",
+            ("QA_OP", "tracker sync"),
+        ),
+        "fired": '[ "$ACTIVE" = "1" ]',
+        "reference": "references/autonomy.md",
+    },
+    "chart": {
+        "split_gate": (
+            SKILLS / "flow-next-chart/workflow.md",
+            "ACTIVE=0",
+            "TRACKER PROJECTION GATE ACTIVE",
+        ),
+        "fence": (
+            SKILLS / "flow-next-chart/references/tracker-projection.md",
+            ("tracker sync",),
+        ),
+        "fired": '[ "$ACTIVE" = "1" ]',
+        "reference": "references/tracker-projection.md",
+    },
+}
+
+# Disclosure sentinels the split gates print. They are branch routing, not
+# caller output: stripped from stdout before the byte-exact oracle comparison,
+# and only after each stripped line is proven to name the reference that owns
+# the rest of the caller gate.
+_SENTINEL_RE = re.compile(r"STOP\. Read (references/[^\s]+)")
+
+# `FLOWCTL=...` / `[ -x "$FLOWCTL" ] || FLOWCTL=...` bootstrap lines a reference
+# repeats for standalone readability. The spine already resolved the binary, so
+# the harness keeps its instrumented one.
+_FLOWCTL_BOOTSTRAP = re.compile(
+    r'^(?:FLOWCTL="\$\{DROID_PLUGIN_ROOT|\[ -x "\$FLOWCTL" \] \|\| FLOWCTL=)'
+)
+
+# Declared config-read deltas from the pre-teardown oracle (the oracle itself is
+# immutable). Each override must contain exactly the same DISTINCT reads as the
+# oracle row — only ordering and one documented duplicate may differ, which
+# `test_config_read_overrides_are_declared_deltas` enforces.
+# Declared config-read deltas from the pre-teardown oracle (the oracle itself is
+# immutable). Keys are (caller, phase) or (caller, phase, leaf-value) — the more
+# specific key wins. Each override may reorder the oracle's reads, duplicate one,
+# or drop the read a short-circuiting gate never reaches; it may never introduce
+# a read the oracle does not have (`test_config_read_overrides_are_declared_deltas`).
+_INTERVIEW_LEAF = ["config", "get", "tracker.perEvent.interview", "--json"]
+_QA_LEAF = ["config", "get", "tracker.perEvent.qa", "--json"]
+_CHARTS_LEAF = ["config", "get", "tracker.charts", "--json"]
+_SYNC_ACTIVE = ["sync", "active", "--json"]
+
+CONFIG_READ_OVERRIDES = {
+    # Branch-disclosure split interview's gate: the spine probes the leaf (and
+    # the bridge) to decide whether to load the reference, and the loaded
+    # reference re-reads the leaf to resolve the op. Same two distinct reads;
+    # the leaf is read twice whenever the gate actually fires.
+    ("interview", "active"): [_INTERVIEW_LEAF, _SYNC_ACTIVE, _INTERVIEW_LEAF],
+    ("interview", "active", "off"): [_INTERVIEW_LEAF, _SYNC_ACTIVE],
+    # QA's spine gate probes only the leaf; the bridge check moved into the
+    # reference the sentinel loads, so an `off` leaf never reaches it.
+    ("qa", "active", "off"): [_QA_LEAF],
+    # Chart's rewritten probe captures both raw payloads before parsing either
+    # (fail-open probe shape), which swaps the order of the two reads.
+    ("chart", "inactive"): [_SYNC_ACTIVE, _CHARTS_LEAF],
+    ("chart", "active"): [_SYNC_ACTIVE, _CHARTS_LEAF],
+}
+
 
 def _bash_fences(text: str) -> list[str]:
     return re.findall(r"```bash\n(.*?)\n```", text, flags=re.DOTALL)
@@ -65,17 +169,19 @@ def _indented_shell_block(path: Path, start: str) -> str:
     return textwrap.dedent(match.group(0))
 
 
-def _shell_if_block_around(path: Path, sentinel: str) -> str:
+def _shell_if_block_around(
+    path: Path, sentinel: str, start_token: str = "ACTIVE=0"
+) -> str:
     """Slice a nested Markdown shell block without crossing its indented fence."""
     lines = path.read_text(encoding="utf-8").splitlines()
     sentinel_index = next(
         index for index, line in enumerate(lines) if sentinel in line
     )
     start = sentinel_index
-    while start >= 0 and lines[start].strip() != "ACTIVE=0":
+    while start >= 0 and lines[start].strip() != start_token:
         start -= 1
     if start < 0:
-        raise AssertionError(f"{path}: no ACTIVE=0 before {sentinel!r}")
+        raise AssertionError(f"{path}: no {start_token} before {sentinel!r}")
     end = sentinel_index
     while end < len(lines) and not lines[end].strip().startswith("fi"):
         end += 1
@@ -94,7 +200,11 @@ class TrackerCallerExecutionTests(unittest.TestCase):
         cls.callers = {row["id"]: row for row in oracle["callers"]}
         cls.values = tuple(oracle["per_event_enum"])
         cls.sources = {
-            caller_id: REPO_ROOT / row["file"]
+            caller_id: (
+                CURRENT_CALLER_GATES[caller_id]["fence"][0]
+                if caller_id in CURRENT_CALLER_GATES
+                else REPO_ROOT / row["file"]
+            )
             for caller_id, row in cls.callers.items()
         }
 
@@ -298,15 +408,89 @@ class TrackerCallerExecutionTests(unittest.TestCase):
 
     def _instrumented_fence(self, caller_id: str, op_expression: str) -> str:
         row = self.callers[caller_id]
-        fence = _single_fence(
-            self.sources[caller_id],
-            row["config_key"],
-            "tracker sync",
+        gate = CURRENT_CALLER_GATES.get(caller_id)
+        needles = (
+            gate["fence"][1]
+            if gate is not None
+            else (row["config_key"], "tracker sync")
         )
-        return _inject_before_last_fi(
-            fence,
-            self._wrapper_body(caller_id, op_expression),
+        fence = _single_fence(self.sources[caller_id], *needles)
+        # References that open with the flowctl bootstrap must not clobber the
+        # harness-supplied instrumented binary (the spine resolved it already).
+        fence = "\n".join(
+            line
+            for line in fence.splitlines()
+            if not _FLOWCTL_BOOTSTRAP.match(line)
         )
+        body = self._wrapper_body(caller_id, op_expression)
+        fence = (
+            _inject_before_last_fi(fence, body)
+            if "\nfi" in fence
+            else f"{fence}\n{body}"
+        )
+        if gate is not None and "split_gate" in gate:
+            # The reference is read ONLY when the spine's gate fired — the
+            # sentinel is the load instruction. Both halves run in one shell so
+            # state flows across the split exactly as it does in a session.
+            path, start_token, sentinel = gate["split_gate"]
+            fence = "\n".join(
+                (
+                    _shell_if_block_around(path, sentinel, start_token),
+                    f"if {gate['fired']}; then",
+                    textwrap.indent(fence, "  "),
+                    "fi",
+                )
+            )
+        return fence
+
+    def _expected_config_reads(
+        self, caller_id: str, phase: str, value: str | None = None
+    ) -> list[list[str]]:
+        for key in ((caller_id, phase, value), (caller_id, phase)):
+            if key in CONFIG_READ_OVERRIDES:
+                return CONFIG_READ_OVERRIDES[key]
+        return self.callers[caller_id]["config_reads"][phase]
+
+    def _strip_disclosure(
+        self, caller_id: str, result: subprocess.CompletedProcess[str]
+    ) -> subprocess.CompletedProcess[str]:
+        """Remove branch-disclosure STOP sentinels from a split gate's stdout.
+
+        A sentinel is only stripped after it is proven to name the reference
+        that owns the rest of that caller gate — routing, never caller output.
+        """
+        gate = CURRENT_CALLER_GATES.get(caller_id)
+        if gate is None or "split_gate" not in gate:
+            return result
+        kept: list[str] = []
+        for line in result.stdout.splitlines(keepends=True):
+            match = _SENTINEL_RE.search(line)
+            if match is None:
+                kept.append(line)
+                continue
+            self.assertTrue(
+                match.group(1).startswith(gate["reference"]),
+                f"{caller_id}: gate sentinel names {match.group(1)!r}, "
+                f"not the reference {gate['reference']!r} that owns the "
+                "rest of the caller gate",
+            )
+        return subprocess.CompletedProcess(
+            result.args, result.returncode, "".join(kept), result.stderr
+        )
+
+    def test_config_read_overrides_are_declared_deltas(self) -> None:
+        """Every override may reorder, or duplicate, the oracle's reads — it may
+        never introduce a new one or drop one."""
+        for key, override in CONFIG_READ_OVERRIDES.items():
+            caller_id, phase = key[0], key[1]
+            with self.subTest(key=key):
+                oracle = self.callers[caller_id]["config_reads"][phase]
+                self.assertTrue(
+                    {tuple(argv) for argv in override}
+                    <= {tuple(argv) for argv in oracle},
+                    "override introduced a config read the oracle never made",
+                )
+                self.assertLessEqual(len(override) - len(oracle), 1)
 
     def _run_standard(
         self,
@@ -336,7 +520,9 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 snapshot,
                 encoding="utf-8",
             )
-        return self._run_shell(source, value=value, active=active)
+        return self._strip_disclosure(
+            caller_id, self._run_shell(source, value=value, active=active)
+        )
 
     def _work_outer_fence(self, caller_id: str) -> str:
         phases = REPO_ROOT / "plugins/flow-next/skills/flow-next-work/phases.md"
@@ -449,7 +635,10 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                 self._reset_observations()
                 result = self._run_caller(caller_id, value="push", active=False)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(self._config_calls(), row["config_reads"]["inactive"])
+                self.assertEqual(
+                    self._config_calls(),
+                    self._expected_config_reads(caller_id, "inactive"),
+                )
                 self.assertEqual(self._facade_calls(), row["argv"]["inactive"])
                 self.assertEqual(self._imports(), row["imports"]["inactive"])
                 self.assertEqual(result.stdout, row["stdout"]["inactive"])
@@ -463,7 +652,10 @@ class TrackerCallerExecutionTests(unittest.TestCase):
                     self._reset_observations()
                     result = self._run_caller(caller_id, value=value, active=True)
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(self._config_calls(), row["config_reads"]["active"])
+                    self.assertEqual(
+                        self._config_calls(),
+                        self._expected_config_reads(caller_id, "active", value),
+                    )
                     expected_op = self._expected_op(caller_id, value, merged=True)
                     expected_facades = (
                         [] if expected_op is None else [self._facade_argv(caller_id, expected_op)]
