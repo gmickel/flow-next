@@ -19,7 +19,7 @@ After interview complete, write everything back — **scope depends on input typ
 
 The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
 
-Section-write rules from the scope-aware pass behavior (above) MUST be honored — the write-policy result from `flowctl scope write-policy` is the source of truth for which sections this scope writes vs preserves. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
+Section-write rules from the scope-aware pass behavior (SKILL.md, plus the pass reference read for the resolved scope) MUST be honored — the write-policy result from `flowctl scope write-policy` is the source of truth for which sections this scope writes vs preserves. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
 
 **Project-added sections.** `write-policy` enumerates the canonical sections only, so a spec may contain sections this project added via its own repo-root `SPEC.md` scaffold (a risk register, user stories, a rollout runbook). Never treat a section's absence from the write-policy lists as permission to drop it. Decide ownership from the section's own scope-owner marker in the body, and default to caution:
 
