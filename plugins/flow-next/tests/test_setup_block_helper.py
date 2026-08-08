@@ -286,6 +286,7 @@ class SetupBlockFixtureTest(unittest.TestCase):
             for command, extra in (
                 ("apply", ()),
                 ("resolve", ("--choice", "overwrite")),
+                ("check", ()),
             ):
                 with self.subTest(command=command, bad_id=bad_id):
                     rejected = self._flowctl(
