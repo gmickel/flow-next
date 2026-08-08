@@ -30,7 +30,7 @@ TBD (interview). Likely: an onboard skill + command wrapper (per `agent_docs/add
 - **Honesty risk:** self-declared skill is gameable → team-lead-settable override; consider calibrating from **observed behavior over time** (skip rate, answer depth) rather than trusting the one-time declaration.
 - **Moving target:** profiles drift as people level up → re-onboarding / easy adjustment must be first-class, not a one-shot.
 - **Don't dumb down or over-gate:** the strong path must genuinely reduce friction (fewer/skippable questions) without dropping the parts of the interview that catch real design decisions; the guarded path must not condescend.
-- **No perf surveillance:** this is developer-experience calibration, NOT productivity measurement — keep it strictly separate from PSVI / any KPI or measurement surface.
+- **No perf surveillance:** this is developer-experience calibration, NOT productivity measurement — keep it strictly separate from private-vocabulary / any KPI or measurement surface.
 
 ## Acceptance Criteria
 <!-- scope: both -->
@@ -45,7 +45,7 @@ TBD (interview). Likely: an onboard skill + command wrapper (per `agent_docs/add
 <!-- scope: business -->
 
 - In: a one-time-ish onboarding that produces a per-dev profile, and flow-next adapting interview/output/suggestions to it.
-- Out: a full RBAC/skills/permissions system; productivity/perf measurement (PSVI/SapienXT — separate, confidential); the orchestration auto-model-selection engine itself (related but its own item; this only *feeds* suggestions).
+- Out: a full RBAC/skills/permissions system; productivity/perf measurement (private-vocabulary/SapienXT — separate, confidential); the orchestration auto-model-selection engine itself (related but its own item; this only *feeds* suggestions).
 
 ## Decision Context
 <!-- scope: both -->

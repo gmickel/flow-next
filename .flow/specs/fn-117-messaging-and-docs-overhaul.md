@@ -27,7 +27,7 @@ This spec overhauls the messaging and docs across all five properties around one
 
 ### Hard boundaries (binding on all workstreams)
 
-- NO PSVI / Velocity Index vocabulary anywhere public (patent-pending, vault-private). "Measurement methodology / KPIs" framing only.
+- NO private-vocabulary vocabulary anywhere public (patent-pending, vault-private). "Measurement methodology / KPIs" framing only.
 - NO client names; anonymize to sector descriptors. Verify anonymization survives cross-referencing (issue links that name companies stay as-is - already public - but prose never connects them to coaching stories).
 - NO fabricated or unlinked testimonials; every quote links to a public source. RESOLVED SOURCE (maintainer): the original testimonials with correct handles + x.com status URLs exist in mickel.tech git history - commit d7a4024 ("feat(flow-next): add testimonials...") holds the full array (verified: Claire Novotny, @clairernovotny, "I've found it generating production-quality code. Far far better than any of the other tools I've tried so far." https://x.com/clairernovotny/status/1886200988044026046). The current live page MANGLED the links/usernames. Task: extract the full original array from d7a4024 (+ any later testimonial commits), verify each URL resolves, fix the links on mickel.tech, and reuse the verified set for README + flow-next.dev.
 - NO marketing of the 5 flagged-aspirational recipes (task-parallel workers in one spec; tracker-driven agent spawning; pilot invoking capture/interview/merge; GitHub-# tracker-first; export-context in autonomous loops).
@@ -92,7 +92,7 @@ Must: Messaging Library full rewrite (new claim hierarchy, flexibility pillar, r
 
 ## Workstream F: release-guidance update (private CLAUDE.md)
 
-Update the maintainer's private ~/.claude/CLAUDE.md "Flow-Next downstream properties" section so future agents walk the downstream chain with NARRATIVE discipline, not just mechanics. Additions: (1) the claim hierarchy as the standing messaging frame every downstream update applies (which claim does this release strengthen? lead with that); (2) the story-beat habit (each release gets one beat in the docs-site changelog + vault Release Timeline, in the established voice - "the eval that said no" register); (3) the hard boundaries (no PSVI, no client names, linked-testimonials-only, role labels over volatile model ids); (4) the per-property tone map (GitHub = skeptical staff engineer; flow-next.dev = practitioner + agent-legible; guide = methodology coach; mickel.tech = client/employer; vault = internal candid); (5) pointer to the messaging architecture's canonical home (vault Messaging Library post-rewrite). Keep the existing mechanical chain (repo docs -> flow-next.dev -> microsite + guide -> vault) intact; this layers the WHY/HOW-IT-SOUNDS on top.
+Update the maintainer's private ~/.claude/CLAUDE.md "Flow-Next downstream properties" section so future agents walk the downstream chain with NARRATIVE discipline, not just mechanics. Additions: (1) the claim hierarchy as the standing messaging frame every downstream update applies (which claim does this release strengthen? lead with that); (2) the story-beat habit (each release gets one beat in the docs-site changelog + vault Release Timeline, in the established voice - "the eval that said no" register); (3) the hard boundaries (no private-vocabulary, no client names, linked-testimonials-only, role labels over volatile model ids); (4) the per-property tone map (GitHub = skeptical staff engineer; flow-next.dev = practitioner + agent-legible; guide = methodology coach; mickel.tech = client/employer; vault = internal candid); (5) pointer to the messaging architecture's canonical home (vault Messaging Library post-rewrite). Keep the existing mechanical chain (repo docs -> flow-next.dev -> microsite + guide -> vault) intact; this layers the WHY/HOW-IT-SOUNDS on top.
 
 ## Sequencing and review gates
 
@@ -108,7 +108,7 @@ Task breakdown at /flow-next:plan time follows these phases; A and B1 are parall
 - No product-behavior changes ride this spec (the fn-110..115 optimization series is separate and concurrent; coordinate CHANGELOG only).
 - No paid placements, no launch-post writing (a launch thread can be a follow-up; this spec makes the properties worth linking).
 - No new testimonial fabrication or consent-skipping; outreach for quote permission is a task, not an assumption.
-- PSVI and client-name boundaries are absolute (see hard boundaries).
+- private-vocabulary and client-name boundaries are absolute (see hard boundaries).
 - German localization of new mickel.tech copy only where the page already has DE parity.
 
 ## Quick commands
@@ -116,8 +116,8 @@ Task breakdown at /flow-next:plan time follows these phases; A and B1 are parall
 ```bash
 cd ~/work/flow-next.dev && pnpm build                        # docs-site gate (MDX + mermaid render)
 cd ~/work/mickel.tech && bun x biome check && bun run build  # microsite gate
-grep -ri "PSVI\|Velocity Index" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/  # boundary gate: MUST be empty
-grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/  # boundary gate: client names - MUST be empty (pattern list is private, deliberately outside this public repo; see agent_docs/testimonials.md)
+grep -ri "private-vocabulary\|private-vocabulary" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/  # boundary gate: MUST be empty
+grep -riwf <private client-names list> ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/  # boundary gate: client names - MUST be empty (pattern list is private, deliberately outside this public repo; see agent_docs/testimonials.md)
 ```
 
 ## Acceptance Criteria
@@ -138,7 +138,7 @@ grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src ~/work/
 
 ## Early proof point
 
-Task fn-117.1 validates the foundation: the d7a4024 testimonial set recovers with resolving URLs and the boundary discipline (PSVI/client-name greps) can be mechanically gated. If recovery fails, the proof strategy for R5 reverts to GitHub-pool-only before any property copy ships.
+Task fn-117.1 validates the foundation: the d7a4024 testimonial set recovers with resolving URLs and the boundary discipline (private-vocabulary/client-name greps) can be mechanically gated. If recovery fails, the proof strategy for R5 reverts to GitHub-pool-only before any property copy ships.
 
 ## Requirement coverage
 

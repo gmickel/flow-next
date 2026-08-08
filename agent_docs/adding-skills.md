@@ -23,6 +23,8 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 
 9. **Smoke test** if the skill has any flowctl plumbing (atomic file writes, schema additions). Pure-skill additions (markdown-only) get verified by manual invocation in a real session.
 
+10. **Conduct checklist** at [`agent_docs/conduct/<skill>.md`](conduct/README.md) plus an index row in `conduct/README.md`: 4–6 falsifiable observable behaviors of a session running the skill correctly, each checkable from a transcript in seconds. This is the review rubric for future prose changes to the skill and the dogfood pass/fail list after edits — a skill without one has no prose regression harness. Never reference it from the skill's own files; it carries zero runtime context.
+
 ## Backend-split workflow.md (heuristic)
 
 When a skill's `workflow.md` carries backend-specific content (RP / Codex / Copilot, or parallel-vs-serial dispatch), split it so only the active backend's content enters the agent's context per invocation.

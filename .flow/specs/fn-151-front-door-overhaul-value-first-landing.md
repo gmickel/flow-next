@@ -114,7 +114,7 @@ Grok Build qualifies on the same standard Cursor already meets: its own setup de
 - **Concurrent agents.** Other agents are active in `~/work/flow-next` (fn-137 in the main checkout, fn-135 and fn-148 in other worktrees) and pushing to main. All work for this spec happens in its own worktree; rebase before pushing; never touch another agent's uncommitted files.
 - **Lineage citation boundary.** Wei, Karpathy, Vogels, Sonar, and Willison citations remain confined to `/strategy/verification-spine/`. SlopCodeBench is outside that restriction and already ships in the README.
 - **Testimonial boundary.** Every published quote resolves to a public URL and ships verbatim including the author's own punctuation. The curly apostrophe in the `raydocs` quote stays. The excluded X/Twitter set must not return.
-- **No client names.** Sector descriptors only. No PSVI or Velocity Index vocabulary anywhere public.
+- **No client names.** Sector descriptors only. No private-vocabulary or private-vocabulary vocabulary anywhere public.
 - **No process or speed self-praise.** Release cadence and issue-closure rate are true and banned.
 - **The video goes stale on chart.** `pipeline-hero.mp4` animates a route that fn-135 invalidates. Its re-cut is already scoped into fn-135 task 8 and is explicitly out of scope here.
 - **fn-135 is unblocked and workable today** (fn-141 landed). No dependency edge is recorded in either direction, because a real edge would block fn-135 needlessly. Instead: **fn-151 should land first.** fn-135 task 7 owns `README.md` and task 8 owns `index.astro`, `site.ts`, `astro.config.mjs`, and `introduction.mdx`; if fn-135 lands first, fn-151's from-scratch recomposition of those files would steamroll it and force exactly the second overhaul this spec exists to avoid. Landing fn-151 first leaves fn-135 four small additions: two nav entries, one routing paragraph, one figcaption string, one README mention.
@@ -158,7 +158,7 @@ Grok Build qualifies on the same standard Cursor already meets: its own setup de
 - **R28:** Curly quotes are replaced with straight quotes except inside verbatim third-party quotations.
 - **R29:** New and rewritten copy states claims flat and in the present tense, with no hedging qualifier in front of a capability that exists. The sole exception is the evidence-band close.
 - **R30:** New and rewritten copy contains no negative-parallelism construction beyond the two grandfathered coined lines, and no phrase from the banned-opener, dead-transition, engagement-bait, or tech-marketing lists.
-- **R31:** The PSVI vocabulary grep and the private client-name grep both exit clean against every edited surface.
+- **R31:** The private-vocabulary vocabulary grep and the private client-name grep both exit clean against every edited surface.
 - **R32:** `pnpm build` and `pnpm check` pass in the flow-next.dev worktree, and the DESIGN.md visual QA checklist is walked including search on both a landing and a docs surface.
 - **R33:** The landing renders without a dead viewport between the harness strip and the following section, and the pipeline video band either plays or is replaced by its poster.
 - **R34:** The landing and README are verified at desktop and mobile widths, with no horizontal overflow and visible keyboard focus retained.
@@ -218,8 +218,8 @@ diff <(grep -oE 'slug: "[^"]+"' astro.config.mjs | sed -E 's/slug: "([^"]+)"/\1/
      <(grep -oE '"[a-z][a-zA-Z0-9/_-]*"' src/lib/site.ts | tr -d '"' | sort -u)
 
 # boundary gates - both MUST produce no output
-grep -ri "PSVI\|Velocity Index" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/
-grep -riwf ~/.claude/flow-next-client-names.txt ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/
+grep -ri "private-vocabulary\|private-vocabulary" ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/
+grep -riwf <private client-names list> ~/work/flow-next.dev/src ~/work/mickel.tech/app/apps/flow-next README.md plugins/flow-next/docs/
 
 # em-dash census on the five front-door surfaces
 grep -c '—' README.md ~/work/flow-next.dev/src/pages/index.astro
