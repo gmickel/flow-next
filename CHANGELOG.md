@@ -2,14 +2,18 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.18.0] - 2026-08-08
 
-Autonomous planning now resists its own worst habit: building more than you
-asked for. In the flow-efficiency replay campaign, two unguided replay runs of
-the same real request each invented a 500-900-line risk-management subsystem
-the request never needed; a run carrying the new scope-minimality prose
-declined that machinery explicitly and delivered 43% fewer output tokens at
-57% lower cost, with reviewed quality above the unguided arm.
+The flow-efficiency release: five disciplines measured in a replay campaign
+against real shipped work, landed as one batch. Autonomous planning now
+resists its own worst habit - building more than you asked for: two unguided
+replay runs of the same real request each invented a 500-900-line
+risk-management subsystem the request never needed, while a run carrying the
+new scope-minimality prose declined that machinery explicitly and delivered
+43% fewer output tokens at 57% lower cost, with reviewed quality above the
+unguided arm. Around that core, tasks became lean delegation payloads,
+planning artifacts became editable files, pipeline stages stopped being able
+to fail silently, and worker concurrency got an explicit fail-closed rule.
 
 ### Changed
 
