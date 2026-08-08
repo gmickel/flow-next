@@ -76,7 +76,7 @@ two passes:
 2. normalize each task's evidence to the integrated commit IDs and retain its
  exact task-specific normalized integrated base **and head**;
 3. when its resolved `REVIEW_MODE` is not `none`, run
- `/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
+ `$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
  from a safe review context whose `HEAD` is that task's normalized integrated
  head. The host chooses that context and isolation mechanism; it must not use
  the wave target's later `HEAD` when peer commits extend it. Apply the existing

@@ -334,16 +334,21 @@ done
 
 # --- STRUCTURAL: Task tool → agent invocation ---
 
-# flow-next-work: phases.md
-phases="$CODEX_DIR/skills/flow-next-work/phases.md"
-if [ -f "$phases" ]; then
+# flow-next-work: phases.md + its reached-path references (wave-join.md,
+# host-deferred-review.md carry the same actionable invocations post branch-disclosure)
+for wf in "$CODEX_DIR/skills/flow-next-work/phases.md" "$CODEX_DIR"/skills/flow-next-work/references/*.md; do
+  [ -f "$wf" ] || continue
   # Actionable impl-review invocations must use the Codex skill name. Passive
   # /flow-next: mentions elsewhere stay.
   sed -i.bak \
     -e 's|`/flow-next:impl-review <task-id> --base \$BASE_COMMIT --review=host`|`$flow-next-impl-review <task-id> --base $BASE_COMMIT --review=host`|g' \
     -e 's|`/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`|`$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`|g' \
-    "$phases"
-  rm -f "${phases}.bak"
+    "$wf"
+  rm -f "${wf}.bak"
+done
+
+phases="$CODEX_DIR/skills/flow-next-work/phases.md"
+if [ -f "$phases" ]; then
 
   # Replace section 3c with agent invocation
   start_line=$(grep -n "^### 3c\. Spawn Worker" "$phases" | cut -d: -f1)
