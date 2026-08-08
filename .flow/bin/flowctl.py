@@ -2912,6 +2912,68 @@ def _cmd_setup_block_apply_locked(
         _setup_block_emit(args, key, "ask", "hash-absent", None)
 
 
+def cmd_setup_block_check(args: argparse.Namespace) -> None:
+    """Read-only fn-171 verdict verb: classifies drift without writing anything.
+
+    Mirrors `_cmd_setup_block_apply_locked`'s transition table (byte-equality
+    first) but never writes the target or meta.json, and adds the
+    structural-failure verdicts apply expresses as hard errors instead:
+    `missing-file` / `missing-markers` / `corrupt` (exit 3). Shared drift
+    states reuse apply's vocabulary (`unchanged` exit 0; `template-drift` /
+    `customized` / `hash-absent` exit 2). Ordinary errors (bad id, unreadable
+    template/target, template<->id mismatch) exit 1 via `error_exit`.
+    """
+    block_id = _setup_block_normalize_id(getattr(args, "id", None), args.json)
+    _, target, template, key = _setup_block_paths(args)
+    try:
+        canonical = _read_text_verbatim(template)
+    except Exception as e:
+        error_exit(f"template unreadable: {template} ({e})", use_json=args.json)
+    _setup_block_require_template_pair(canonical, block_id, args.json)
+    canonical_hash = _setup_block_hash(canonical)
+
+    with _setup_block_lock():
+        # Brief lock for a consistent meta read only; nothing is mutated.
+        _, meta = _setup_block_meta_or_exit(args.json)
+        recorded = _setup_block_recorded_hash(meta, key, block_id)
+
+    if not target.exists():
+        _setup_block_emit(args, key, "missing-file", None, recorded)
+        sys.exit(3)
+
+    try:
+        current = _read_text_verbatim(target)
+        span = _setup_block_span(current, block_id)
+    except ValueError:
+        _setup_block_emit(args, key, "corrupt", None, recorded)
+        sys.exit(3)
+    except Exception as e:
+        error_exit(f"target unreadable: {target} ({e})", use_json=args.json)
+
+    if span is None:
+        _setup_block_emit(args, key, "missing-markers", None, recorded)
+        sys.exit(3)
+
+    current_block = current[span[0]:span[1]]
+    if current_block.replace("\r\n", "\n") == canonical.replace("\r\n", "\n"):
+        # Byte-equality first, matching apply's order: a pristine block reads
+        # `unchanged` even when the recorded hash carries the customized
+        # sentinel (a hand-reverted block should read as clean).
+        _setup_block_emit(args, key, "unchanged", None, canonical_hash)
+        return
+
+    current_hash = _setup_block_hash(current_block)
+    if recorded == current_hash:
+        _setup_block_emit(args, key, "template-drift", None, recorded)
+    elif recorded == "customized":
+        _setup_block_emit(args, key, "customized", "customized-sentinel", recorded)
+    elif recorded is not None:
+        _setup_block_emit(args, key, "customized", None, recorded)
+    else:
+        _setup_block_emit(args, key, "hash-absent", None, None)
+    sys.exit(2)
+
+
 def cmd_setup_block_resolve(args: argparse.Namespace) -> None:
     """Resolve fn-99's one-time customized-block prompt (keep or overwrite)."""
     block_id = _setup_block_normalize_id(getattr(args, "id", None), args.json)
@@ -47324,6 +47386,7 @@ def main() -> None:
     )
     for name, handler, help_text in (
         ("apply", cmd_setup_block_apply, "Apply the canonical block safely"),
+        ("check", cmd_setup_block_check, "Read-only verdict on a marker block (no writes)"),
         ("resolve", cmd_setup_block_resolve, "Keep or overwrite a customized block"),
     ):
         sub = setup_block_sub.add_parser(name, help=help_text)

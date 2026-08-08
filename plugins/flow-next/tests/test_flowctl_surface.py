@@ -161,6 +161,7 @@ scope bank
 scope resolve
 scope write-policy
 setup-block apply
+setup-block check
 setup-block resolve
 setup-mode set
 show

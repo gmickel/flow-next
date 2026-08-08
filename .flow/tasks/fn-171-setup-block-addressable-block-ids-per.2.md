@@ -20,14 +20,18 @@ Add the read-only `check` verb: same classification apply computes, byte-equalit
 - Verdict/exit table (spec Architecture item 4): 0 `unchanged`; 2 drift (`template-drift`, `customized`, `hash-absent`); 3 structural (`missing-file`, `missing-markers`, `corrupt`); 1 ordinary errors. Shared states reuse apply's vocabulary; structural verdicts are check-only names.
 - Zero writes in EVERY branch: no target write, no meta.json mutation, no hash re-record (apply re-records in the unchanged-with-drifted-hash and refresh branches - check must not). Acquire `_setup_block_lock` briefly for a consistent meta read; never mutate under it.
 - JSON: `_setup_block_emit` shape (`target`/`action`/`reason`/`hash`), action = verdict. NO `command` field exists in setup-block emissions and none is added - the verdict vocabulary alone disambiguates check output. Docs must note argparse usage errors also exit 2, so CI recipes distinguishing drift from usage errors key on the JSON verdict.
-- CRLF parity with `_setup_block_hash` (2557-2560): CRLF-only diff is not drift. Mixed-line-ending two-span fixture preserves bytes outside the operated span.
+- CRLF parity with `_setup_block_hash` (2584-2587): CRLF-only diff is not drift. Mixed-line-ending two-span fixture preserves bytes outside the operated span.
+<!-- Updated by plan-sync: fn-171.1 shifted setup-block section anchors (new helpers inserted before _setup_block_hash) -->
+
 - Update the `test_flowctl_surface.py:163-164` help pin with the `check` line.
 
 ### Investigation targets
 **Required:**
-- `plugins/flow-next/scripts/flowctl.py:2743-2809` - apply transition table to mirror
-- `plugins/flow-next/scripts/flowctl.py:2727-2740` - `_setup_block_emit`
+- `plugins/flow-next/scripts/flowctl.py:2856-2912` - apply transition table (`_cmd_setup_block_apply_locked`) to mirror
+- `plugins/flow-next/scripts/flowctl.py:2813-2826` - `_setup_block_emit`
 - `plugins/flow-next/tests/test_flowctl_surface.py:163-164` - surface pin
+<!-- Updated by plan-sync: fn-171.1 used id-parameterized helpers (_setup_block_normalize_id, _setup_block_markers, _setup_block_require_template_pair, _setup_block_is_nested_hashes) inserted at flowctl.py:2555-2660, shifting all downstream setup-block anchors by ~113 lines -->
+
 
 **Optional:**
 - `plugins/flow-next/tests/test_setup_block_helper.py` - fixture helpers from task 1
