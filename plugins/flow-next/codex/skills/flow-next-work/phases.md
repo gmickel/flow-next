@@ -175,7 +175,9 @@ In SPEC_MODE, consider every returned task and apply the **wave dispatch rule
 1. same spec;
 2. wave size ≤ 3;
 3. no dependency path between any pair, in either direction, TRANSITIVELY
- (walk `flowctl dep` / `depends_on` closure — a direct-only check is wrong);
+ (walk the `depends_on` closure from `$FLOWCTL show <task-id> --json` /
+ `$FLOWCTL tasks --spec <spec-id> --json` — `flowctl dep` only writes edges,
+ it has no read verb; a direct-only check is wrong);
 4. every dispatched task HAS a `**Touches:**` declaration, and the declared
  sets are pairwise DISJOINT (`touches(A) ∩ touches(B) = ∅`, glob-aware);
 5. no task touches the always-serial set: `.flow/`, lockfiles, migration
@@ -319,10 +321,16 @@ sees which `**Touches:**` declarations were wrong.
 **Reviewer overlap (fn-176).** review(N) may run concurrently with
 implement(N+1) ONLY when both hold: N+1 is dep-independent of N (transitive,
 same walk as the dispatch rule), AND N+1 is outside N's plan-sync target set
-(the spec-level reading of the same dep graph). **Plan-sync remains the
-barrier before any dependent work anchors**: done(N) still precedes
-plan-sync(N), which still precedes any anchor that could read N's downstream
-updates — overlap is scheduling only and never reorders receipts.
+(the spec-level reading of the same dep graph). **The schedule point is the
+sequential single-worker path**: when worker N has returned and its
+impl-review is about to be dispatched, the conductor MAY claim and dispatch
+N+1's worker (isolated workspace, wave rules apply) before or while running
+review(N) — instead of leaving the reviewer as the only live agent. On the
+parallel-wave path the existing join-then-review order stands unchanged.
+**Plan-sync remains the barrier before any dependent work anchors**: done(N)
+still precedes plan-sync(N), which still precedes any anchor that could read
+N's downstream updates — overlap is scheduling only and never reorders
+receipts.
 
 Reuse the existing per-task review contract in
 two passes:
