@@ -37,6 +37,8 @@ It re-runs `scripts/sync-codex.sh` (so release step 2 below is a belt-and-braces
 jq . plugins/flow-next/.codex-plugin/plugin.json   # 3. verify version
 # 4. update CHANGELOG.md with [flow-next X.Y.Z] entry (repo canonical, keep-a-changelog style)
 # 5. update the flow-next.dev docs-site changelog — see "Docs-site changelog entry" below
+#    ALSO bump FLOW_NEXT_VERSION in that repo's src/lib/site.ts (the site version
+#    badge) — bump.sh does NOT touch it and it goes stale silently (caught at 3.18.0)
 # 6. if this release has a behavior-affecting change or new opt-in default, append one line
 #    to plugins/flow-next/docs/README.md § "Notable updates" (newest first; format is
 #    documented inline in that section). Same story on the flow-next.dev landing page
