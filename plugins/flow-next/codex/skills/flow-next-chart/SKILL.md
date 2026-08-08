@@ -108,7 +108,7 @@ Documented for scripting; conversational equivalents in [references/examples.md]
 | `--decision <n>` | Pin a D-ID for work mode |
 | `--json` on every `flowctl chart` subcommand | Machine envelope for drivers |
 | `chart create --initial-map-file` / `--force-size --reason` | Atomic chart + ceiling override (audited) |
-| `chart resolve --answer-file` / `--sharpen-file` / `--supersedes` / `--keep-dependents` | Close + optional sharpen/cascade |
+| `chart resolve --answer-file` / `--sharpen-file` / `--supersedes` / `--keep-dependents` | Close + optional sharpen/cascade; `--sharpen-file` also carries a dated `notes_append` correction when the answer disproves a grounding note (unattended: only on direct contradiction, never speculative); unrecognized keys fail the whole resolve |
 | `chart attach-asset --asset-file` | Safe artefact while open |
 | `chart briefing --proposal-file` / `--force` | Confirmed split proposal; force is draft-only; after a `chart reopen` the same proposal mints the next B-ID |
 | `chart claim` / `release-claim [--break-stale --reason]` | Claims; no silent expiry |

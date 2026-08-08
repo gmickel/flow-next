@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -696,6 +697,474 @@ class TestSharpenAndCrash(unittest.TestCase):
             body = _chart_md(flow, chart_id)
             self.assertIn("Parked unknown X", body)
             self.assertNotIn("**D1:**", body.split("## Decisions")[1].split("##")[0])
+
+
+class TestNotesAppend(unittest.TestCase):
+    """fn-170.1: resolve --sharpen-file notes_append + unknown-key rejection."""
+
+    def _sharpen_file(self, repo: Path, name: str, payload: dict) -> Path:
+        p = repo / name
+        p.write_text(json.dumps(payload), encoding="utf-8")
+        return p
+
+    def test_no_notes_section_creates_it(self) -> None:
+        """A chart body predating the Notes feature (heading missing
+        entirely) must not crash; _replace_chart_section appends it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+
+            # Strip the ## Notes section entirely to simulate a pre-feature
+            # chart body.
+            md_path = flow / "charts" / f"{chart_id}.md"
+            body = md_path.read_text(encoding="utf-8")
+            body = re.sub(
+                r"^##\s+Notes\s*\n.*?(?=^##\s+)",
+                "",
+                body,
+                count=1,
+                flags=re.MULTILINE | re.DOTALL,
+            )
+            self.assertNotIn("## Notes", body)
+            md_path.write_text(body, encoding="utf-8")
+
+            sf = self._sharpen_file(
+                repo, "s.json",
+                {"notes_append": "the auth module DOES have tests"},
+            )
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            result = json.loads(r.stdout)["result"]
+            self.assertEqual(len(result["notes_appended"]), 1)
+            self.assertIn(
+                "the auth module DOES have tests", result["notes_appended"][0]
+            )
+            body_after = _chart_md(flow, chart_id)
+            self.assertIn("## Notes", body_after)
+            self.assertIn("- [corrected ", body_after)
+            self.assertIn("the auth module DOES have tests", body_after)
+
+    def test_mixed_bulleting_normalized(self) -> None:
+        """Lines already carrying `- ` keep their marker; bare lines get
+        one; each bullet gets its own date stamp."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            sf = self._sharpen_file(
+                repo, "s.json",
+                {
+                    "notes_append": (
+                        "- already bulleted fact\n"
+                        "bare fact without a marker\n"
+                    )
+                },
+            )
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            result = json.loads(r.stdout)["result"]
+            self.assertEqual(len(result["notes_appended"]), 2)
+            for bullet in result["notes_appended"]:
+                self.assertRegex(bullet, r"^- \[corrected \d{4}-\d{2}-\d{2}\] ")
+            self.assertIn("already bulleted fact", result["notes_appended"][0])
+            self.assertIn(
+                "bare fact without a marker", result["notes_appended"][1]
+            )
+            body = _chart_md(flow, chart_id)
+            self.assertIn("already bulleted fact", body)
+            self.assertIn("bare fact without a marker", body)
+
+    def test_leading_hyphen_prose_preserved(self) -> None:
+        """A leading hyphen without a following space (`--legacy`, `-5 ms`)
+        is prose, not a bullet marker - the hyphen must survive intact.
+        Only `- ` (and a bare `-`, the empty markdown bullet) is stripped."""
+        bullets = flowctl._format_notes_append_bullets(
+            "--legacy\n-5 ms\n- real bullet\n-\nplain prose\n",
+            "2026-08-08",
+        )
+        self.assertEqual(
+            bullets,
+            [
+                "- [corrected 2026-08-08] --legacy",
+                "- [corrected 2026-08-08] -5 ms",
+                "- [corrected 2026-08-08] real bullet",
+                "- [corrected 2026-08-08] ",
+                "- [corrected 2026-08-08] plain prose",
+            ],
+        )
+
+    def test_backslash_content_not_corrupted(self) -> None:
+        """_replace_chart_section substitutes via a lambda (literal text);
+        a correction containing regex backreference shapes must survive
+        byte-for-byte."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            sf = self._sharpen_file(
+                repo, "s.json",
+                {"notes_append": r"matches \d+ occurrences, not \1 or \g<0>"},
+            )
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            body = _chart_md(flow, chart_id)
+            self.assertIn(r"matches \d+ occurrences, not \1 or \g<0>", body)
+
+    def test_two_sequential_appends_both_survive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Question one", "research")
+            d2 = _add_decision(repo, chart_id, "Question two", "research")
+
+            sf1 = self._sharpen_file(
+                repo, "s1.json", {"notes_append": "first correction"}
+            )
+            af1 = _write_answer(repo, "ans1.txt", "Answer one")
+            r1 = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af1), "--sharpen-file", str(sf1), "--json",
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+
+            sf2 = self._sharpen_file(
+                repo, "s2.json", {"notes_append": "second correction"}
+            )
+            af2 = _write_answer(repo, "ans2.txt", "Answer two")
+            r2 = _run_flowctl(
+                repo, "chart", "resolve", d2["id"],
+                "--answer-file", str(af2), "--sharpen-file", str(sf2), "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+
+            body = _chart_md(flow, chart_id)
+            self.assertIn("first correction", body)
+            self.assertIn("second correction", body)
+
+    def test_existing_notes_bytes_preserved_verbatim(self) -> None:
+        """R1: an append never rewrites pre-existing Notes bytes. The
+        original section body (including internal blank lines and odd
+        spacing) survives as an exact byte prefix, and the blank
+        separator line before the next heading stays intact - the old
+        strip()-and-rerender path normalized both."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+
+            md_path = flow / "charts" / f"{chart_id}.md"
+            body = md_path.read_text(encoding="utf-8")
+            seeded = (
+                "- pre-existing  note   with  odd  spacing\n"
+                "\n"
+                "- second note\n"
+                "\n"
+            )
+            pattern = re.compile(
+                r"(^##\s+Notes\s*\n)(.*?)(?=^##\s+|\Z)",
+                re.MULTILINE | re.DOTALL,
+            )
+            self.assertIsNotNone(pattern.search(body))
+            body = pattern.sub(lambda m: m.group(1) + seeded, body, count=1)
+            md_path.write_text(body, encoding="utf-8")
+
+            sf = self._sharpen_file(
+                repo, "s.json", {"notes_append": "fresh correction"}
+            )
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+            body_after = _chart_md(flow, chart_id)
+            m = pattern.search(body_after)
+            self.assertIsNotNone(m)
+            new_raw = m.group(2)
+            core = seeded.rstrip("\n")
+            # Pre-existing bytes verbatim as a prefix...
+            self.assertTrue(
+                new_raw.startswith(core + "\n"),
+                f"pre-existing Notes bytes rewritten: {new_raw!r}",
+            )
+            # ...new bullet spliced after them, and the trailing blank
+            # separator before the next heading preserved.
+            self.assertRegex(
+                new_raw,
+                re.escape(core)
+                + r"\n- \[corrected \d{4}-\d{2}-\d{2}\] fresh correction\n\n\Z",
+            )
+
+    def test_unknown_key_rejected_before_prose_refusal(self) -> None:
+        """A payload with BOTH an unknown key and unsafe-looking notes
+        prose must fail sharpen_file_unknown_key, never
+        unsafe_prose_content - the structural check runs first (R3)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            sf = self._sharpen_file(
+                repo, "s.json",
+                {
+                    "notes": "token is sk-FAKESECRETVALUE0000000000",
+                    "notes_append": "token is sk-FAKESECRETVALUE0000000000",
+                },
+            )
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["code"], "sharpen_file_unknown_key")
+            self.assertIn("notes", err["details"]["unknown_keys"])
+            self.assertEqual(
+                _decision_json(flow, chart_id, 1)["status"], "open"
+            )
+
+    def test_unknown_key_alone_lists_offending_and_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            sf = self._sharpen_file(repo, "s.json", {"typo_key": "oops"})
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertNotEqual(r.returncode, 0)
+            err = json.loads(r.stdout)["error"]
+            self.assertEqual(err["code"], "sharpen_file_unknown_key")
+            self.assertEqual(err["details"]["unknown_keys"], ["typo_key"])
+            for key in (
+                "decisions", "remove_questions", "remove_parked",
+                "parked_removals", "notes_append",
+            ):
+                self.assertIn(key, err["details"]["accepted_keys"])
+
+    def test_alias_keys_still_accepted(self) -> None:
+        """remove_parked / parked_removals aliases remain accepted (R3)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            park_body = repo / "park.txt"
+            park_body.write_text("A parked fact", encoding="utf-8")
+            park = _run_flowctl(
+                repo, "chart", "park-question", chart_id,
+                "--body-file", str(park_body), "--json",
+            )
+            pkey = json.loads(park.stdout)["result"]["key"]
+            sf = self._sharpen_file(
+                repo, "s.json", {"remove_parked": [pkey]}
+            )
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--sharpen-file", str(sf), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+    def test_empty_whitespace_and_nonstring_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            for bad in ("", "   \n  ", 5, ["not", "a", "string"]):
+                sf = self._sharpen_file(
+                    repo, "s.json", {"notes_append": bad}
+                )
+                r = _run_flowctl(
+                    repo, "chart", "resolve", d1["id"],
+                    "--answer-file", str(af),
+                    "--sharpen-file", str(sf), "--json",
+                )
+                self.assertNotEqual(r.returncode, 0, bad)
+                err = json.loads(r.stdout)["error"]
+                self.assertEqual(err["code"], "sharpen_file_invalid_notes_append")
+            self.assertEqual(
+                _decision_json(flow, chart_id, 1)["status"], "open"
+            )
+
+    def test_explicit_null_rejected_not_conflated_with_absent(self) -> None:
+        """An explicitly present null must fail the key's type contract,
+        never be treated as an omitted key (codex review, PR #299)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            cases = [
+                ({"notes_append": None}, "sharpen_file_invalid_notes_append"),
+                ({"decisions": None}, "sharpen_file_invalid_decisions"),
+                ({"remove_questions": None}, "sharpen_file_invalid_removals"),
+                ({"remove_parked": None}, "sharpen_file_invalid_removals"),
+                ({"parked_removals": None}, "sharpen_file_invalid_removals"),
+            ]
+            for payload, code in cases:
+                sf = self._sharpen_file(repo, "s.json", payload)
+                r = _run_flowctl(
+                    repo, "chart", "resolve", d1["id"],
+                    "--answer-file", str(af),
+                    "--sharpen-file", str(sf), "--json",
+                )
+                self.assertNotEqual(r.returncode, 0, payload)
+                err = json.loads(r.stdout)["error"]
+                self.assertEqual(err["code"], code, payload)
+            self.assertEqual(
+                _decision_json(flow, chart_id, 1)["status"], "open"
+            )
+
+    def test_notes_appended_always_list_when_absent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            result = json.loads(r.stdout)["result"]
+            self.assertEqual(result["notes_appended"], [])
+
+    def test_identical_retry_with_notes_append_ignored_no_double_append(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r1 = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--json",
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+
+            sf = self._sharpen_file(
+                repo, "s.json", {"notes_append": "a late correction"}
+            )
+            r2 = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af),
+                "--sharpen-file", str(sf), "--json",
+            )
+            self.assertNotEqual(r2.returncode, 0)
+            err = json.loads(r2.stdout)["error"]
+            self.assertEqual(err["class"], "invalid_state")
+            self.assertEqual(err["code"], "decision_immutable")
+            self.assertEqual(
+                err["details"]["ignored_sharpen"]["notes_append"],
+                ["a late correction"],
+            )
+            body = _chart_md(flow, chart_id)
+            self.assertNotIn("a late correction", body)
+
+    def test_post_reopen_resolve_appends_fresh(self) -> None:
+        """A chart-level reopen does not retroactively unresolve any
+        decision; a fresh decision created and resolved after reopen is a
+        normal (non-retry) resolve and appends its correction."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id = _create_chart(repo)
+            d1 = _add_decision(repo, chart_id, "Main question", "research")
+            af = _write_answer(repo, "ans.txt", "Answer text")
+            r1 = _run_flowctl(
+                repo, "chart", "resolve", d1["id"],
+                "--answer-file", str(af), "--json",
+            )
+            self.assertEqual(r1.returncode, 0, r1.stderr + r1.stdout)
+
+            prop = repo / "prop.json"
+            prop.write_text(
+                json.dumps(
+                    {
+                        "clusters": [
+                            {
+                                "key": "1",
+                                "rationale": "sole surface",
+                                "decisions": [d1["id"]],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            brief = _run_flowctl(
+                repo, "chart", "briefing", chart_id,
+                "--proposal-file", str(prop), "--json",
+            )
+            self.assertEqual(brief.returncode, 0, brief.stderr + brief.stdout)
+            self.assertEqual(_chart_json(flow, chart_id)["status"], "done")
+
+            reopen = _run_flowctl(
+                repo, "chart", "reopen", chart_id,
+                "--reason", "premise disproved during downstream work",
+                "--json",
+            )
+            self.assertEqual(reopen.returncode, 0, reopen.stderr + reopen.stdout)
+            self.assertEqual(_chart_json(flow, chart_id)["status"], "open")
+
+            d2 = _add_decision(repo, chart_id, "Follow-up question", "research")
+            sf = self._sharpen_file(
+                repo, "s.json", {"notes_append": "premise 1 disproved"}
+            )
+            af2 = _write_answer(repo, "ans2.txt", "Follow-up answer")
+            r2 = _run_flowctl(
+                repo, "chart", "resolve", d2["id"],
+                "--answer-file", str(af2),
+                "--sharpen-file", str(sf), "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stderr + r2.stdout)
+            result = json.loads(r2.stdout)["result"]
+            self.assertEqual(len(result["notes_appended"]), 1)
+            body = _chart_md(flow, chart_id)
+            self.assertIn("premise 1 disproved", body)
 
 
 class TestOutOfScopeAndAbandon(unittest.TestCase):

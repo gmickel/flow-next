@@ -2,6 +2,42 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Charts stay honest when discovery disproves its own starting facts. Thanks to
+@sn-furali for the field report (#292): a chart's `## Notes` were write-once,
+so a decision that disproved a grounding fact had nowhere to put the
+correction, `resolve --sharpen-file` silently ignored any key it didn't
+recognize (including the `notes` key a caller naturally reaches for), and a
+final briefing's header could show the chart's status from *before* that
+resolve closed it.
+
+### Added
+
+- **A resolve can correct a grounding note in the same transaction that closes
+  the decision.** `resolve --sharpen-file` accepts a new `notes_append` key: a
+  dated correction bullet gets appended to `## Notes` (the section is created
+  if the chart has none), existing notes are never rewritten, and the next
+  `chart briefing` renders the correction alongside the original fact. The
+  resolve result reports what was appended under `notes_appended`, always a
+  list. An identical retry does not double-append - it folds into the
+  existing `decision_immutable` error instead. Corrections appended after a
+  chart's final briefing reach artifacts via the existing `chart reopen`
+  re-mint path, unchanged.
+- **A typo in `--sharpen-file` is now an error instead of a silent no-op.**
+  Any key outside `decisions`, `remove_questions` (and its `remove_parked` /
+  `parked_removals` aliases), and the new `notes_append` fails the whole
+  resolve with `sharpen_file_unknown_key`, naming the offending key(s) and the
+  accepted set, checked before anything is allocated or persisted.
+
+### Fixed
+
+- **A final chart briefing's header now shows the chart's actual status.**
+  `chart briefing` used to render the chart's status from just before the
+  open-to-done transition it was itself completing, so a final briefing could
+  say `open` in its own header while `chart show` immediately afterward said
+  `done`. The header now reflects the post-transition status.
+
 ## [flow-next 3.16.3] - 2026-08-07
 
 Hardens the spec-split path shipped hours ago in 3.16.2, after a live

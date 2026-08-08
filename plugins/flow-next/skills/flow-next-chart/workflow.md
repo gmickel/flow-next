@@ -407,7 +407,17 @@ After an answer exposes sharper questions, include them in the same resolve tran
 }
 ```
 
-`resolve --sharpen-file` allocates new D-IDs, wires graph if provided, removes parked keys, all-or-nothing. Do not hand-edit Open Questions.
+`resolve --sharpen-file` allocates new D-IDs, wires graph if provided, removes parked keys, all-or-nothing. Do not hand-edit Open Questions. Accepted top-level keys are `decisions`, `remove_questions` (aliases `remove_parked` / `parked_removals`), and `notes_append`; any other key fails the whole resolve with `sharpen_file_unknown_key` before anything is allocated.
+
+**Correcting a grounding note.** `## Notes` is otherwise write-once for the life of the chart. When the answer you are resolving directly disproves one of those starting facts, carry the correction in `notes_append` in the **same** resolve - not as a separate follow-up:
+
+```json
+{
+  "notes_append": "- auth module DOES have tests (src/auth/tests/, 14 files)"
+}
+```
+
+flowctl stamps the date (`- [corrected YYYY-MM-DD] ...`) and appends it to `## Notes`, creating the section if the chart has none; existing notes are never rewritten. The resolve result reports the appended bullet(s) under `notes_appended`. **Unattended discovery writes a correction only when the measured answer directly contradicts a specific existing note - never speculatively, and never as a guess at what the note-writer "probably meant."** A note that is merely incomplete, not contradicted, is left alone.
 
 ### 2.10 - Recompute frontier and stop
 
@@ -531,6 +541,7 @@ Always read back reason and consequence first.
 | Wire edges after create | `chart wire-decision` |
 | Attach prototype evidence | `chart attach-asset --asset-file` |
 | Sharpen after answer | `resolve --sharpen-file` |
+| Correct a disproved note | `resolve --sharpen-file` (`notes_append`) |
 | Reverse prior answer | `resolve --supersedes` |
 | Brief for capture | `chart briefing --proposal-file` |
 | Re-enter from tracker URL | `chart locate` (local only; degrade if missing) |

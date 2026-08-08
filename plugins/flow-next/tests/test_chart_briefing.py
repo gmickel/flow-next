@@ -877,6 +877,37 @@ class TestVersionedBriefingPaths(unittest.TestCase):
             self.assertIn("-briefing-B2.md", side["briefings"][1]["paths"]["index"])
 
 
+class TestBriefingChartStatusHeader(unittest.TestCase):
+    """R5: final briefing that closes the chart must render post-transition
+    status in the index header (not the pre-transition `open`)."""
+
+    def test_final_briefing_renders_chart_status_done(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            chart_id, prop, _d1, _d2 = _ready_single_cluster(repo)
+
+            r = _brief(repo, chart_id, prop)
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            result = json.loads(r.stdout)["result"]
+            self.assertEqual(result["status"], "final")
+            self.assertTrue(result["transitioned_done"])
+            self.assertEqual(result["chart_status"], "done")
+
+            index = (flow / "charts" / f"{chart_id}-briefing.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("**Chart status:** done", index)
+            self.assertNotIn("**Chart status:** open", index)
+
+            show = _run_flowctl(repo, "chart", "show", chart_id, "--json")
+            self.assertEqual(show.returncode, 0, show.stderr + show.stdout)
+            self.assertEqual(
+                json.loads(show.stdout)["result"]["status"], "done"
+            )
+
+
 class TestBriefingCarriesChartNotes(unittest.TestCase):
     """R52: grounding facts must survive the handoff - capture reads the
     briefing artifacts, not the original chart body."""
@@ -935,6 +966,81 @@ class TestBriefingCarriesChartNotes(unittest.TestCase):
             )
             self.assertIn("## Notes", index)
             self.assertIn(note, index)
+
+    def test_notes_append_correction_appears_in_briefing(self) -> None:
+        """R2: a notes_append correction on resolve must land in briefing
+        ## Notes alongside the original grounding fact (no extra plumbing —
+        emit reads live md_text)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            _init_repo(repo)
+            flow = _init_flow(repo)
+            note = "- Shared schema today [ref: src/db/schema.sql rev:9f2c1ab]"
+            correction = "the auth module DOES have tests"
+            map_path = repo / "map.json"
+            map_path.write_text(
+                json.dumps(
+                    {
+                        "decisions": [{"title": "Choose key", "type": "research"}],
+                        "notes": note,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            r = _run_flowctl(
+                repo, "chart", "create", "--title", "Tenants", "--outcome",
+                "Ready", "--initial-map-file", str(map_path), "--json",
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            chart_id = json.loads(r.stdout)["result"]["id"]
+
+            answer = repo / "a.md"
+            answer.write_text("Use a tenant column.", encoding="utf-8")
+            sharpen = repo / "s.json"
+            sharpen.write_text(
+                json.dumps({"notes_append": correction}), encoding="utf-8"
+            )
+            r2 = _run_flowctl(
+                repo, "chart", "resolve", f"{chart_id}.D1",
+                "--answer-file", str(answer),
+                "--sharpen-file", str(sharpen), "--json",
+            )
+            self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+            resolve_out = json.loads(r2.stdout)["result"]
+            self.assertEqual(len(resolve_out["notes_appended"]), 1)
+            self.assertIn(correction, resolve_out["notes_appended"][0])
+            self.assertRegex(
+                resolve_out["notes_appended"][0],
+                r"^- \[corrected \d{4}-\d{2}-\d{2}\] ",
+            )
+
+            proposal = repo / "p.json"
+            proposal.write_text(
+                json.dumps(
+                    {
+                        "clusters": [
+                            {
+                                "key": "1",
+                                "rationale": "one spec",
+                                "decisions": [f"{chart_id}.D1"],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            r3 = _run_flowctl(
+                repo, "chart", "briefing", chart_id,
+                "--proposal-file", str(proposal), "--json",
+            )
+            self.assertEqual(r3.returncode, 0, r3.stdout + r3.stderr)
+            index = (flow / "charts" / f"{chart_id}-briefing.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("## Notes", index)
+            self.assertIn(note, index)
+            self.assertIn("- [corrected ", index)
+            self.assertIn(correction, index)
 
 
 if __name__ == "__main__":
