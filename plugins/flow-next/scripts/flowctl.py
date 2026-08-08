@@ -2538,10 +2538,12 @@ def read_text_or_exit(path: Path, what: str, use_json: bool = True) -> str:
         error_exit(f"{what} unreadable: {path} ({e})", use_json=use_json)
 
 
-# --- Setup docs block helpers (fn-99, R3/R8/R12) ---
+# --- Setup docs block helpers (fn-99, R3/R8/R12; fn-171 addressable ids) ---
 
+SETUP_BLOCK_DEFAULT_ID = "FLOW-NEXT"
 SETUP_BLOCK_BEGIN = "<!-- BEGIN FLOW-NEXT -->"
 SETUP_BLOCK_END = "<!-- END FLOW-NEXT -->"
+_SETUP_BLOCK_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]*$")
 
 
 def _read_text_verbatim(path: Path) -> str:
@@ -2550,34 +2552,64 @@ def _read_text_verbatim(path: Path) -> str:
         return f.read()
 
 
+def _setup_block_markers(block_id: str) -> tuple[str, str]:
+    """Derive the standalone BEGIN/END marker pair for a setup-block id."""
+    if block_id == SETUP_BLOCK_DEFAULT_ID:
+        return SETUP_BLOCK_BEGIN, SETUP_BLOCK_END
+    return f"<!-- BEGIN {block_id} -->", f"<!-- END {block_id} -->"
+
+
+def _setup_block_normalize_id(raw_id: Optional[str], use_json: bool) -> str:
+    """Validate and normalize a setup-block id; None/empty -> default.
+
+    Rejects (never sanitizes): length > 64, charset outside
+    ``[A-Z0-9][A-Z0-9._-]*``, or a ``--`` substring. Explicit ``FLOW-NEXT``
+    is the default id (same state key as omitting ``--id``).
+    """
+    if raw_id is None or raw_id == "":
+        return SETUP_BLOCK_DEFAULT_ID
+    if (
+        len(raw_id) > 64
+        or "--" in raw_id
+        or _SETUP_BLOCK_ID_RE.fullmatch(raw_id) is None
+    ):
+        error_exit(
+            "invalid setup-block id: must be 1-64 chars matching "
+            "[A-Z0-9][A-Z0-9._-]* with no '--' substring",
+            use_json=use_json,
+        )
+    return raw_id
+
+
 def _setup_block_hash(content: str) -> str:
     """Hash a marker block after the fn-99 CRLF-only normalization."""
     normalized = content.replace("\r\n", "\n")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _setup_block_span(content: str) -> Optional[tuple[int, int]]:
-    """Return marker-line indexes, or fail on a BEGIN marker without END.
+def _setup_block_span(content: str, block_id: str) -> Optional[tuple[int, int]]:
+    """Return marker-line indexes for *block_id*, or fail on unpaired BEGIN.
 
-    A marker counts ONLY as a standalone line (stripped equality). Replacing
-    whole lines that merely CONTAIN a marker would delete the surrounding
-    user content (violates R3/R12 outside-marker preservation), so when no
-    standalone BEGIN exists but a marker token appears embedded in other
-    content, the block state is ambiguous and we refuse to write.
+    Scans ONLY this id's derived markers; markers for other ids are opaque
+    byte-preserved content and never trigger fail-close. A marker counts ONLY
+    as a standalone line (stripped equality). Replacing whole lines that
+    merely CONTAIN a marker would delete surrounding user content (violates
+    R3/R12 outside-marker preservation), so when no standalone BEGIN exists
+    but this id's marker token appears embedded in other content, the block
+    state is ambiguous and we refuse to write.
     """
+    begin_marker, end_marker = _setup_block_markers(block_id)
     lines = content.splitlines(keepends=True)
 
     def _is_marker(line: str, marker: str) -> bool:
         return line.strip() == marker
 
     begin_index = next(
-        (i for i, line in enumerate(lines) if _is_marker(line, SETUP_BLOCK_BEGIN)),
+        (i for i, line in enumerate(lines) if _is_marker(line, begin_marker)),
         None,
     )
     if begin_index is None:
-        if any(
-            SETUP_BLOCK_BEGIN in line or SETUP_BLOCK_END in line for line in lines
-        ):
+        if any(begin_marker in line or end_marker in line for line in lines):
             raise ValueError(
                 "corrupt flow-next marker block: marker must be on its own line"
             )
@@ -2586,12 +2618,12 @@ def _setup_block_span(content: str) -> Optional[tuple[int, int]]:
         (
             index
             for index in range(begin_index + 1, len(lines))
-            if _is_marker(lines[index], SETUP_BLOCK_END)
+            if _is_marker(lines[index], end_marker)
         ),
         None,
     )
     if end_index is None:
-        if any(SETUP_BLOCK_END in line for line in lines[begin_index + 1 :]):
+        if any(end_marker in line for line in lines[begin_index + 1 :]):
             raise ValueError(
                 "corrupt flow-next marker block: marker must be on its own line"
             )
@@ -2599,6 +2631,33 @@ def _setup_block_span(content: str) -> Optional[tuple[int, int]]:
     start = sum(len(line) for line in lines[:begin_index])
     end = sum(len(line) for line in lines[: end_index + 1])
     return start, end
+
+
+def _setup_block_require_template_pair(
+    content: str, block_id: str, use_json: bool
+) -> None:
+    """Fail closed when the template lacks exactly one standalone pair for id."""
+    begin_marker, end_marker = _setup_block_markers(block_id)
+    lines = content.splitlines(keepends=True)
+    begin_indexes = [i for i, line in enumerate(lines) if line.strip() == begin_marker]
+    end_indexes = [i for i, line in enumerate(lines) if line.strip() == end_marker]
+    if (
+        len(begin_indexes) == 1
+        and len(end_indexes) == 1
+        and begin_indexes[0] < end_indexes[0]
+    ):
+        return
+    error_exit(
+        f"template does not contain the marker pair for id {block_id}",
+        use_json=use_json,
+    )
+
+
+def _setup_block_is_nested_hashes(entry: object) -> bool:
+    """True when *entry* is a valid nested ``{id: hash-or-sentinel}`` map."""
+    return isinstance(entry, dict) and all(
+        isinstance(k, str) and isinstance(v, str) for k, v in entry.items()
+    )
 
 
 def _setup_block_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, str]:
@@ -2641,33 +2700,60 @@ def _setup_block_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, str]
     return repo_root, target, template, key
 
 
-def _setup_block_recorded_hash(meta: dict, key: str) -> Optional[str]:
-    """Return a valid stored hash, treating malformed setup metadata as absent."""
+def _setup_block_recorded_hash(
+    meta: dict, key: str, block_id: str
+) -> Optional[str]:
+    """Return the stored hash for (path, id), with tolerant legacy flat reads.
+
+    ``block_hashes[path]`` may be a legacy string (default id only) or a nested
+    ``{id: hash}`` dict. Genuinely malformed per-path entries are treated as
+    absent here; the write path repairs them without wiping sibling paths.
+    """
     setup = meta.get("setup")
     if not isinstance(setup, dict):
         return None
     block_hashes = setup.get("block_hashes")
     if not isinstance(block_hashes, dict):
         return None
-    if any(not isinstance(value, str) for value in block_hashes.values()):
+    entry = block_hashes.get(key)
+    if isinstance(entry, str):
+        if block_id != SETUP_BLOCK_DEFAULT_ID:
+            return None
+        return entry
+    if not _setup_block_is_nested_hashes(entry):
         return None
-    value = block_hashes.get(key)
+    value = entry.get(block_id)
     return value if isinstance(value, str) else None
 
 
-def _setup_block_record_hash(meta: dict, key: str, value: str) -> None:
-    """Repair only malformed fn-99 setup state and record one target's value."""
+def _setup_block_record_hash(
+    meta: dict, key: str, block_id: str, value: str
+) -> None:
+    """Record one (path, id) hash; upgrade legacy strings; repair only that path.
+
+    Writes always use the nested ``{path: {id: hash}}`` shape. A legacy string
+    at ``block_hashes[path]`` is converted in place (write-through upgrade).
+    Malformed per-path values become ``{}`` for that path only — sibling path
+    entries (legacy string or nested) are never wiped.
+    """
     setup = meta.get("setup")
     if not isinstance(setup, dict):
         setup = {}
         meta["setup"] = setup
     block_hashes = setup.get("block_hashes")
-    if not isinstance(block_hashes, dict) or any(
-        not isinstance(existing, str) for existing in block_hashes.values()
-    ):
+    if not isinstance(block_hashes, dict):
         block_hashes = {}
         setup["block_hashes"] = block_hashes
-    block_hashes[key] = value
+    entry = block_hashes.get(key)
+    if isinstance(entry, str):
+        nested = {SETUP_BLOCK_DEFAULT_ID: entry}
+        block_hashes[key] = nested
+    elif _setup_block_is_nested_hashes(entry):
+        nested = entry
+    else:
+        nested = {}
+        block_hashes[key] = nested
+    nested[block_id] = value
 
 
 def _setup_block_write(target: Path, content: str) -> None:
@@ -2710,9 +2796,9 @@ def _setup_block_meta_or_exit(use_json: bool) -> tuple[Path, dict]:
 def _setup_block_lock():
     """Serialize setup-block meta.json read-modify-write across concurrent runs.
 
-    Parallel CLAUDE.md + AGENTS.md applies both load the per-target
-    `setup.block_hashes` map, mutate one key, and write back; unlocked, the
-    second writer clobbers the first target's hash. A repo-local exclusive lock
+    Parallel applies (distinct paths, or distinct ids on one path) both load the
+    nested `setup.block_hashes` map, mutate one (path, id) leaf, and write back;
+    unlocked, the second writer clobbers the first. A repo-local exclusive lock
     (re-read meta INSIDE the lock at each call site) makes the map merge safe.
     """
     # Preserve the legacy leaf so POSIX processes across an upgrade contend.
@@ -2742,6 +2828,7 @@ def _setup_block_emit(args: argparse.Namespace, target: str, action: str,
 
 def cmd_setup_block_apply(args: argparse.Namespace) -> None:
     """Apply fn-99's R3/R8/R12 pristine-hash transition table to one doc block."""
+    block_id = _setup_block_normalize_id(getattr(args, "id", None), args.json)
     _, target, template, key = _setup_block_paths(args)
     try:
         canonical = _read_text_verbatim(template)
@@ -2752,26 +2839,44 @@ def cmd_setup_block_apply(args: argparse.Namespace) -> None:
         # Re-read meta inside the lock so a concurrent sibling apply cannot
         # clobber this target's hash (fn-99 R8 concurrency finding).
         meta_path, meta = _setup_block_meta_or_exit(args.json)
-        recorded = _setup_block_recorded_hash(meta, key)
+        recorded = _setup_block_recorded_hash(meta, key, block_id)
         _cmd_setup_block_apply_locked(
-            args, target, canonical, canonical_hash, recorded, meta_path, meta, key
+            args,
+            target,
+            canonical,
+            canonical_hash,
+            recorded,
+            meta_path,
+            meta,
+            key,
+            block_id,
         )
 
 
-def _cmd_setup_block_apply_locked(args, target, canonical, canonical_hash,
-                                  recorded, meta_path, meta, key) -> None:
+def _cmd_setup_block_apply_locked(
+    args,
+    target,
+    canonical,
+    canonical_hash,
+    recorded,
+    meta_path,
+    meta,
+    key,
+    block_id,
+) -> None:
     """Transition body for cmd_setup_block_apply; runs under _setup_block_lock."""
+    _setup_block_require_template_pair(canonical, block_id, args.json)
 
     if not target.exists():
         _setup_block_write(target, canonical)
-        _setup_block_record_hash(meta, key, canonical_hash)
+        _setup_block_record_hash(meta, key, block_id, canonical_hash)
         atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "appended", None, canonical_hash)
         return
 
     try:
         current = _read_text_verbatim(target)
-        span = _setup_block_span(current)
+        span = _setup_block_span(current, block_id)
     except ValueError as e:
         error_exit(str(e), use_json=args.json)
     except Exception as e:
@@ -2780,7 +2885,7 @@ def _cmd_setup_block_apply_locked(args, target, canonical, canonical_hash,
     if span is None:
         separator = "" if not current else ("\n" if current.endswith("\n") else "\n\n")
         _setup_block_write(target, current + separator + canonical)
-        _setup_block_record_hash(meta, key, canonical_hash)
+        _setup_block_record_hash(meta, key, block_id, canonical_hash)
         atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "appended", None, canonical_hash)
         return
@@ -2789,14 +2894,14 @@ def _cmd_setup_block_apply_locked(args, target, canonical, canonical_hash,
     current_hash = _setup_block_hash(current_block)
     if current_block.replace("\r\n", "\n") == canonical.replace("\r\n", "\n"):
         if recorded != canonical_hash:
-            _setup_block_record_hash(meta, key, canonical_hash)
+            _setup_block_record_hash(meta, key, block_id, canonical_hash)
             atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "unchanged", None, canonical_hash)
         return
 
     if recorded == current_hash:
         _setup_block_write(target, current[:span[0]] + canonical + current[span[1]:])
-        _setup_block_record_hash(meta, key, canonical_hash)
+        _setup_block_record_hash(meta, key, block_id, canonical_hash)
         atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "refreshed", None, canonical_hash)
     elif recorded == "customized":
@@ -2809,25 +2914,35 @@ def _cmd_setup_block_apply_locked(args, target, canonical, canonical_hash,
 
 def cmd_setup_block_resolve(args: argparse.Namespace) -> None:
     """Resolve fn-99's one-time customized-block prompt (keep or overwrite)."""
+    block_id = _setup_block_normalize_id(getattr(args, "id", None), args.json)
     _, target, template, key = _setup_block_paths(args)
     with _setup_block_lock():
         # Re-read meta inside the lock (fn-99 R8 concurrency finding).
         meta_path, meta = _setup_block_meta_or_exit(args.json)
-        _cmd_setup_block_resolve_locked(args, target, template, key, meta_path, meta)
+        _cmd_setup_block_resolve_locked(
+            args, target, template, key, meta_path, meta, block_id
+        )
 
 
-def _cmd_setup_block_resolve_locked(args, target, template, key, meta_path, meta) -> None:
+def _cmd_setup_block_resolve_locked(
+    args, target, template, key, meta_path, meta, block_id
+) -> None:
     """Resolve body; runs under _setup_block_lock."""
+    try:
+        canonical = _read_text_verbatim(template)
+    except Exception as e:
+        error_exit(f"target or template unreadable ({e})", use_json=args.json)
+    _setup_block_require_template_pair(canonical, block_id, args.json)
+
     if args.choice == "keep":
-        _setup_block_record_hash(meta, key, "customized")
+        _setup_block_record_hash(meta, key, block_id, "customized")
         atomic_write_json(meta_path, meta)
         _setup_block_emit(args, key, "kept", "customized-sentinel", "customized")
         return
 
     try:
-        canonical = _read_text_verbatim(template)
         current = _read_text_verbatim(target)
-        span = _setup_block_span(current)
+        span = _setup_block_span(current, block_id)
     except ValueError as e:
         error_exit(str(e), use_json=args.json)
     except Exception as e:
@@ -2836,7 +2951,7 @@ def _cmd_setup_block_resolve_locked(args, target, template, key, meta_path, meta
         error_exit("target has no flow-next marker block to overwrite", use_json=args.json)
     canonical_hash = _setup_block_hash(canonical)
     _setup_block_write(target, current[:span[0]] + canonical + current[span[1]:])
-    _setup_block_record_hash(meta, key, canonical_hash)
+    _setup_block_record_hash(meta, key, block_id, canonical_hash)
     atomic_write_json(meta_path, meta)
     _setup_block_emit(args, key, "overwritten", None, canonical_hash)
 
@@ -47219,6 +47334,12 @@ def main() -> None:
                 "--choice", required=True, choices=["keep", "overwrite"],
                 help="Resolution for a customized marker block",
             )
+        sub.add_argument(
+            "--id",
+            required=False,
+            default=None,
+            help="Block id (default: FLOW-NEXT)",
+        )
         sub.add_argument("--json", action="store_true", help="JSON output")
         sub.set_defaults(func=handler)
 

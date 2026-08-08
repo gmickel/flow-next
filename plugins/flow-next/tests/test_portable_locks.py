@@ -161,8 +161,20 @@ class PortableLockSubprocessTest(unittest.TestCase):
             "<!-- BEGIN FLOW-NEXT -->\nsecond\n<!-- END FLOW-NEXT -->\n",
             encoding="utf-8",
         )
+        alpha_template = self.repo / "alpha-template.md"
+        beta_template = self.repo / "beta-template.md"
+        alpha_template.write_text(
+            "<!-- BEGIN ALPHA -->\nalpha\n<!-- END ALPHA -->\n",
+            encoding="utf-8",
+        )
+        beta_template.write_text(
+            "<!-- BEGIN BETA -->\nbeta\n<!-- END BETA -->\n",
+            encoding="utf-8",
+        )
 
-        def apply(target: str, template: Path) -> subprocess.CompletedProcess:
+        def apply(
+            target: str, template: Path, *extra: str
+        ) -> subprocess.CompletedProcess:
             return self._run(
                 "setup-block",
                 "apply",
@@ -170,6 +182,7 @@ class PortableLockSubprocessTest(unittest.TestCase):
                 target,
                 "--template",
                 str(template),
+                *extra,
             )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
@@ -181,6 +194,23 @@ class PortableLockSubprocessTest(unittest.TestCase):
         self.assertTrue(all(p.returncode == 0 for p in results), results)
         hashes = json.loads(meta.read_text(encoding="utf-8"))["setup"]["block_hashes"]
         self.assertEqual(set(hashes), {"CLAUDE.md", "AGENTS.md"})
+        self.assertEqual(set(hashes["CLAUDE.md"]), {"FLOW-NEXT"})
+        self.assertEqual(set(hashes["AGENTS.md"]), {"FLOW-NEXT"})
+
+        # Two ids on one path: last-writer-wins per (path, id), never per path.
+        (self.repo / "SHARED.md").write_text("shared\n", encoding="utf-8")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(apply, "SHARED.md", alpha_template, "--id", "ALPHA"),
+                pool.submit(apply, "SHARED.md", beta_template, "--id", "BETA"),
+            ]
+            results = [future.result() for future in futures]
+        self.assertTrue(all(p.returncode == 0 for p in results), results)
+        hashes = json.loads(meta.read_text(encoding="utf-8"))["setup"]["block_hashes"]
+        self.assertEqual(set(hashes["SHARED.md"]), {"ALPHA", "BETA"})
+        shared_text = (self.repo / "SHARED.md").read_text(encoding="utf-8")
+        self.assertIn("<!-- BEGIN ALPHA -->", shared_text)
+        self.assertIn("<!-- BEGIN BETA -->", shared_text)
 
     def test_runtime_lock_timeout_uses_json_error_contract(self) -> None:
         spec = json.loads(
