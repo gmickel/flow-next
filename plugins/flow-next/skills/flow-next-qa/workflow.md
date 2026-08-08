@@ -32,15 +32,16 @@ NO_PROMPT=0
 if [ "${QA_AUTONOMOUS:-}" = "1" ] || [ "$RALPH" = "1" ]; then NO_PROMPT=1; fi
 ```
 
-When `NO_PROMPT=1`, every `AskUserQuestion` info-prompt below routes deterministically instead of asking — resolve from spec / config / env, else surface the limitation as a **BLOCKED `qa_verdict`** (§6.3) + clean exit (the spec-id-undetermined case under Ralph is the one genuine hard error — Phase A §1). The autonomous routing table:
+When `NO_PROMPT=1`, every `AskUserQuestion` info-prompt below routes deterministically instead of asking — resolve from spec / config / env, else surface the limitation as a **BLOCKED `qa_verdict`** (§6.3) + clean exit (the spec-id-undetermined case under Ralph is the one genuine hard error — Phase A §1). Each phase below restates its own branch; the full per-fact routing table is reached only on the autonomous path:
 
-| Undocumented fact | `NO_PROMPT=0` (interactive) | `NO_PROMPT=1` (autonomous / Ralph) |
-|-------------------|------------------------------|-------------------------------------|
-| Spec id (1.1) | `AskUserQuestion` (info) | resolve by branch-match; else non-zero exit + stderr (no user to ask) |
-| Base ref (1.2) | `AskUserQuestion` (info) | use the detection cascade; if it yields nothing → **BLOCKED** + clean exit |
-| Target URL (3.1) | `AskUserQuestion` (info) | use spec/repo/`--target`/env signal; undocumented → **BLOCKED** + clean exit |
-| Test accounts (3.2) | `AskUserQuestion` (info) | use a documented playbook; undocumented → **BLOCKED** + clean exit |
-| No reachable local app (3.1/4) | carries to BLOCKED verdict | **BLOCKED** + clean exit |
+```bash
+# Fail OPEN: an unset NO_PROMPT (gate above failed to compute) reads the reference.
+if [ "${NO_PROMPT:-1}" = "1" ]; then
+  echo "AUTONOMOUS GATE ACTIVE — STOP. Read references/autonomy.md#0-the-autonomous-routing-table-no_prompt1 before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
+```
+
+When the sentinel prints, STOP and Read [references/autonomy.md](references/autonomy.md) (§0, the per-fact routing table) before any further step. When the gate is silent (`NO_PROMPT=0`, interactive), continue — every prompt path below asks the user as written.
 
 `QA_AUTONOMOUS` (autonomy ≠ Ralph) gates **question suppression only** — it activates no ralph-guard hook and no receipt-path gate. The pilot QA stage passes it so the build loop never hangs on a prompt; the BLOCKED-and-advance contract (R6) keeps an environment without a local app from wedging the pipeline.
 
@@ -273,40 +274,21 @@ A target the driver cannot reach (no live deploy, no localhost app started) is *
 
 ### 3.2 — Resolve test accounts (ask when undocumented)
 
-Most scenarios beyond the public happy path need credentials. Resolve them before authoring auth-dependent steps:
+Most scenarios beyond the public happy path need credentials. Resolve them before authoring auth-dependent steps. When a documented playbook exists (auth-provider dev mode, a seed script, fixtures, a `.env.test.example`), use it. If none is documented: when `NO_PROMPT=0`, **ask the user** (`AskUserQuestion`, info prompt) for the auth provider / dev-user docs, an admin account, and the per-run email-suffix convention. When `NO_PROMPT=1` (autonomous / Ralph), undocumented accounts are a hard limitation → BLOCKED + clean exit (the public happy-path scenarios may still run if a target URL resolved; auth-dependent scenarios that cannot proceed without credentials make the outcome BLOCKED). **Never guess credentials**, and never commit a password to the repo.
 
-1. Look for a documented playbook — auth-provider dev mode, a seed script (`scripts/seed-*`, `db/seeds/`, `supabase/seed.sql`), fixtures (`__fixtures__/`, `test-data/`), or a `.env.test.example`.
-2. If none is documented: when `NO_PROMPT=0`, **ask the user** (`AskUserQuestion`, info prompt): the auth provider / dev-user docs, an admin account (or permission to create one), and the per-run email-suffix convention — offer to document the convention as part of the pass. When `NO_PROMPT=1` (autonomous / Ralph), undocumented accounts are a hard limitation → BLOCKED + clean exit (the public happy-path scenarios may still run if a target URL resolved; auth-dependent scenarios that cannot proceed without credentials make the outcome BLOCKED).
-3. **Never guess credentials**, and never commit a password to the repo — record only the email pattern + role; pass secrets via the existing chat / vault. (Provider fixtures like Clerk's `424242` OTP or Stripe's `4242…` test card are out of this lean borrow's scope — reach for the provider's docs when a flow needs one.)
-
-Generate fresh-user personas with the collision-proof suffix from `qa-discipline.md` — `qa-<persona>+run<MMDD>-<N>@example.com` (`example.com` never sends real mail; bump `N` on every retry).
+The where-to-look list, the persona-suffix generator, and the secret-handling rule live in **[references/prepare-surface.md](references/prepare-surface.md)** §1 — read it when a scenario needs an account.
 
 ### 3.3 — Session hygiene (the fresh-user contract)
 
-Apply the **five hygiene rules** from [references/qa-discipline.md](references/qa-discipline.md) — they are the highest-dividend borrow:
-
-1. **Fresh user = fresh storage** — clear `localStorage` + `sessionStorage` **and** cookies before any fresh-user scenario (cookies alone are not enough; storage outlives a logout).
-2. **One session per agent** — isolate via agent-browser `--session <name>`; if isolation can't be guaranteed, run sequentially.
-3. **Cool-down between auth attempts** (~30s; on a 429 → BLOCKED, do not retry-spam).
-4. **Unique persona per scenario** (bump the `+run…-N` suffix on retry — a reused failed email leaves the provider stuck).
-5. **Reset between role changes** — full sign-out + storage clear + tab reset, not just "click sign out".
-
-Run the **pre-scenario hygiene checklist** (qa-discipline.md) for each scenario; the exact storage-clear / auth commands are fn-51's (`auth.md`, `session-management.md`). If, with perfect hygiene, behavior still depends on unpredictable prior session state, **that is the bug** — file it (typically P1), capturing the storage snapshot before clearing as evidence.
+Apply the **five hygiene rules** and the **pre-scenario hygiene checklist** from [references/qa-discipline.md](references/qa-discipline.md) — fresh storage (not just cookies), one isolated session per agent, auth cool-down, a unique persona per scenario, and a full reset between role changes. They are the highest-dividend borrow; read them before driving a fresh-user scenario. The exact storage-clear / auth commands are fn-51's (`auth.md`, `session-management.md`). If, with perfect hygiene, behavior still depends on unpredictable prior session state, **that is the bug** — file it (typically P1), capturing the storage snapshot before clearing as evidence.
 
 ### 3.4 — Device matrix (v1 = viewport emulation only)
 
-v1 covers **one desktop + one mobile viewport** via fn-51's web ladder — viewport **emulation**, not real-device / cross-device testing (the spec's planning decision; true device coverage inherits fn-51's surface support later):
-
-| Mode | Reference viewport | Set via (fn-51) |
-|------|--------------------|-----------------|
-| Desktop | `1280 × 800` | `agent-browser set viewport 1280 800` |
-| Mobile | `375 × 812` | `agent-browser set viewport 375 812` |
-
-Lead with the app's **primary** target: take it from the spec; if the spec is silent, ask the user which mode matters most when `NO_PROMPT=0`; when `NO_PROMPT=1` (autonomous / Ralph — no user to ask), infer the likely primary from repo signals (responsive CSS / framework defaults / marketing copy) and **note the assumption** in the run notes. The viewport choice is a soft default, not a blocking fact — it never gates the run (unlike an undocumented target URL / accounts, which BLOCK). Record the chosen viewports against each scenario so Phase 4 drives at the right size and the evidence tuple's `viewport` field is accurate. Layout / overflow / tap-target bugs hide at the breakpoint you skip — run the relevant scenarios at **both** viewports, not just the primary.
+v1 covers **one desktop + one mobile viewport** via fn-51's web ladder — viewport **emulation**, not real-device / cross-device testing. Record the chosen viewports against each scenario so Phase 4 drives at the right size and the evidence tuple's `viewport` field is accurate. The viewport choice is a soft default, not a blocking fact — it never gates the run (unlike an undocumented target URL / accounts, which BLOCK). The reference viewports, the primary-target selection rule (incl. the `NO_PROMPT=1` inference + assumption note), and the both-breakpoints caution are in **[references/prepare-surface.md](references/prepare-surface.md)** §2 — read it on a web-surface run before Phase 4.
 
 ### 3.5 — Write-path-first ordering
 
-When a later scenario reads data an earlier scenario creates (a group, org, workspace, invite), order the **write path first** so the artifact exists before any scenario that reads it; record the created IDs / invite URLs in the run notes for reuse. This is the caution in `qa-discipline.md` — v1 runs scenarios sequentially with one host agent, so it is an ordering rule, not a parallel coordinator. For any write path, Phase 4 must verify the **server / DB row or API response** (the write-side-effect evidence in [references/bug-filing.md](references/bug-filing.md)) — never trust the optimistic UI render.
+When a later scenario reads data an earlier scenario creates (a group, org, workspace, invite), order the **write path first** so the artifact exists before any scenario that reads it; record the created IDs / invite URLs in the run notes for reuse (the caution in [references/qa-discipline.md](references/qa-discipline.md); v1 runs scenarios sequentially with one host agent, so it is an ordering rule, not a parallel coordinator). For any write path, Phase 4 must verify the **server / DB row or API response** (the write-side-effect evidence in [references/bug-filing.md](references/bug-filing.md)) — never trust the optimistic UI render.
 
 After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), its fresh-vs-returning storage requirement, and the resolved target URL — everything Phase 4 needs to drive it via the fn-51 read-and-drive contract.
 
@@ -376,52 +358,9 @@ Evidence lives under `.flow/tmp/` (gitignored) and is **referenced by path**, ne
 
 ### 5.4 — File the finding to bug memory (immediately; host owns update-vs-create)
 
-On a confirmed FAIL, file at once via `memory add --track bug` **with overlap scoring left ON**. See [references/bug-filing.md](references/bug-filing.md) §"Filing to bug memory" for the full command and the finding body template. Skeleton:
+On a confirmed FAIL — and only then; a run with zero findings never reaches this step — file at once via `memory add --track bug` **with overlap scoring left ON** (**NEVER** `--no-overlap-check`). STOP and Read [references/bug-filing.md](references/bug-filing.md) — its §"Filing to bug memory" carries the finding body template, and §"Host filing skeleton" carries the exact command sequence to execute (memory-disabled no-op, the fn-113.2 high-overlap fold that drops the just-created duplicate, and the `QA_FILED_MEMORY` path tracking §6.3b commits from).
 
-```bash
-# memory disabled → no-op cleanly (still record the finding in the run notes for the verdict).
-if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
-  mkdir -p .flow/tmp/qa-"$SPEC_ID"
-  # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
-  # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the reference template, then:
-  # Prefer --update <prior-id> when this run (or a prior QA pass) already filed the same finding.
-  _out="$($FLOWCTL memory add \
-    --track bug --category "<ui|runtime-errors|integration|data|...>" \
-    --title "<persona> can't <goal> — <one-line symptom>" \
-    --module "<surface / route / component>" \
-    --tags "qa,<spec-id>,<surface>" \
-    --symptoms "<observed actual>" \
-    --root-cause "(observed via live QA — unconfirmed)" \
-    --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
-  # fn-113.2: high-overlap match -> fold into the EXISTING entry and drop the
-  # just-created duplicate, so autonomous QA never commits a near-copy.
-  _lvl="$(printf '%s' "$_out" | jq -r '.overlap_level // empty')"
-  _dup="$(printf '%s' "$_out" | jq -r '.path // empty')"
-  if [ "$_lvl" = "high" ]; then
-    _mid="$(printf '%s' "$_out" | jq -r '.matches[0].id // empty')"
-    if [ -n "$_mid" ]; then
-      _out="$("$FLOWCTL" memory add --track bug --category "<same category as the create above>" \
-        --title "<same title>" --update "$_mid" \
-        --module "<same module>" --tags "qa,<spec-id>,<surface>" \
-        --symptoms "<same symptoms>" \
-        --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
-      # Remove the duplicate WE just created (safe: our own fresh file).
-      [ -n "$_dup" ] && rm -f "$_dup"
-    fi
-  fi
-  _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
-  # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
-  # runs in a subshell, so the assignment would be lost and the memory left uncommitted.
-  [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
-  # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
-  # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check.
-  # memory add always creates unless --update <id> (fn-113). Read .matches (scored):
-  # high score → surface "matches existing entry X"; re-run with --update <id> when
-  # this is the same finding. Moderate → related_to cross-reference on the new entry.
-fi
-```
-
-`memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
+`memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. When memory is disabled the filing is a clean no-op — **still record the finding in the run notes** so Phase 6 counts it toward the verdict. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
 Track every finding (including P2) in `QA_FINDINGS`, with id, severity, discrete confidence
 (`0|25|50|75|100`), classification (`introduced|pre_existing`), reason, and
@@ -664,9 +603,7 @@ The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the
 
 ### 6.3b — Commit QA's own handoff (autonomous mode only)
 
-When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the bug-memory entries tracked in `QA_FILED_MEMORY` at §5.4), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits.
-
-**Precondition (autonomous mode):** the loop operates on **committed state** — the worker commits before QA, so `.flow/memory` is clean at dispatch. QA commits only the entries it filed this run; the one out-of-contract case is a pre-existing **uncommitted** manual/audit edit to a bug entry that QA then `--update`s — that edit would ride this commit. The autonomous pilot loop never carries such state (it operates on committed trees); a human running `/flow-next:qa mode:autonomous` over a dirty `.flow/memory` should commit those edits first.
+When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the bug-memory entries tracked in `QA_FILED_MEMORY` at §5.4), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits, so this whole step does not exist on the interactive path. The precondition (the loop operates on committed state; a dirty `.flow/memory` should be committed first) is in [references/autonomy.md](references/autonomy.md) §5.
 
 ```bash
 if [ "$QA_AUTONOMOUS" = "1" ]; then
@@ -697,14 +634,7 @@ Print the YES/NO call, the `qa_outcome`, the open P0/P1 list (with finding ids +
 
 ### A.1 — Detect Ralph once, route deterministically (R11)
 
-Detect at the top of the run, then route downstream — never re-probe per phase (the make-pr §0.0 pattern):
-
-```bash
-RALPH=0
-if [ -n "${REVIEW_RECEIPT_PATH:-}" ] || [ "${FLOW_RALPH:-}" = "1" ]; then
-  RALPH=1
-fi
-```
+`RALPH` was already computed **once** in the Autonomous-mode gate above (the make-pr §0.0 pattern — detect at the top of the run, then route downstream; never re-probe per phase). Reuse that value here; do not recompute it.
 
 - **No top-of-skill exit guard.** `RALPH=1` does **not** abort the skill. QA runs in Ralph; it just routes differently (the make-pr precedent — autonomous loops emitting a QA verdict is the intended use). Do **not** add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard.
 - **`AskUserQuestion` is info-only, never a confirm gate.** It resolves *undocumented* facts (target URL, test accounts — Phases 1.1, 3.1, 3.2), never "shall I run QA? / ship?". Interactive asks; Ralph cannot ask, so an undocumented URL/accounts under Ralph is a **hard limitation → BLOCKED** (Phase 6, `blocked_reason`), not a prompt and not an exit.
@@ -716,29 +646,20 @@ No live deploy reachable, OR no driver available (incl. fn-51 degraded to its te
 
 ### A.3 — Opt-in tracker verdict post (`tracker.perEvent.qa`, R9)
 
-After the Phase 6 verdict is written, optionally post it as a structured tracker comment — gated identically to every other lifecycle touchpoint (fn-52 pattern; see [flow-next-work/SKILL.md](../flow-next-work/SKILL.md) "Shared gating predicate"). Runs ONLY when the bridge is active AND the leaf is opted in; otherwise a silent no-op. **Best-effort** — a tracker failure never blocks the verdict:
+After the Phase 6 verdict is written, optionally post it as a structured tracker comment — gated identically to every other lifecycle touchpoint (fn-52 pattern; see [flow-next-work/SKILL.md](../flow-next-work/SKILL.md) "Shared gating predicate"). Runs ONLY when the leaf is opted in AND the bridge is active; **default `off`**, so on the default path this is a silent no-op. **Best-effort** — a tracker failure never blocks the verdict (which is already written at §6.3 and is never rolled back):
 
 ```bash
-QA_LEAF="$($FLOWCTL config get tracker.perEvent.qa --json | jq -r '.value')"
-case "$QA_LEAF" in
-  pull|push|reconcile|comment) QA_OP="comment" ;;
-  off|null)                    QA_OP="off" ;;
-  *)                           QA_OP="off" ;; # malformed config stays silent
-esac
-if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
-   && [ "$QA_OP" != "off" ]; then
-  # QA synthesizes the comment content by name: verdict, qa_outcome, open P0/P1
-  # findings, and R-ID coverage. Its FIRST line is
-  # `evidence=<tested-head-sha>`. Write it to a mode 0600 temporary body file,
-  # never argv. The inline flow-next-tracker-sync wrapper makes exactly one
-  # facade call and deletes the file:
-  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event qa --body-file "$BODY_FILE"
-  # pull, push, reconcile, and comment all coerce to comment. Best-effort.
-  : # never blocks
+ACTIVE=0
+# NO pipelines in the probe — a failed producer masked by a healthy consumer
+# fails CLOSED. Capture raw first, rc-checked; parse separately.
+RAW="$($FLOWCTL config get tracker.perEvent.qa --json 2>/dev/null)" || ACTIVE=1   # probe ERROR ⇒ ACTIVE (fail open)
+if [ "$ACTIVE" = "0" ]; then
+  QA_LEAF="$(printf '%s' "$RAW" | jq -r '.value' 2>/dev/null)" || ACTIVE=1        # parse ERROR ⇒ ACTIVE
+  [ "$QA_LEAF" != "off" ] && [ "$QA_LEAF" != "null" ] && ACTIVE=1
 fi
+if [ "$ACTIVE" = "1" ]; then
+  echo "TRACKER QA LEAF ACTIVE — STOP. Read references/autonomy.md#4-opt-in-tracker-verdict-post-trackerpereventqa-r9 and execute it before finishing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
-The facade emits one receipt tagged `--event qa`. Structured errors are routed
-by the inline wrapper and remain best-effort.
-
-The leaf accepts `off` | `comment` (default `off`). `comment` is the only verdict-meaningful verb; treat any other non-`off` value as `comment` (never `push`/`pull`/`reconcile`). The actual transport / comment dedup / receipt lives entirely in the **flow-next-tracker-sync** skill — Phase A only gates + delegates.
+When the sentinel prints, STOP and Read [references/autonomy.md](references/autonomy.md) (§4 — the bridge-active check, the body-file contract, and the single facade call) before any further step. The comment QA synthesizes always opens with the stable token `evidence=<tested-head-sha>` on its FIRST line, written to a mode 0600 temporary body file, never argv. When the gate is silent (leaf `off` — the default), continue: nothing is posted. The leaf accepts `off` | `comment` (default `off`); `comment` is the only verdict-meaningful verb, and any other non-`off` value coerces to `comment` (never `push`/`pull`/`reconcile`). The actual transport / comment dedup / receipt lives entirely in the **flow-next-tracker-sync** skill — Phase A only gates + delegates.
