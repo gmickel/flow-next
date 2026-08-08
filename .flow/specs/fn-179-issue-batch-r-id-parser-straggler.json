@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-179-issue-batch-r-id-parser-straggler",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-08T12:01:35.065799Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-179-issue-batch-r-id-parser-straggler",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-179-issue-batch-r-id-parser-straggler.md",
   "status": "open",
   "title": "Issue batch: R-ID parser straggler, criteria parser drops, setup detection, resolve --select, claim reclaim",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:01:35.067646Z"
+  "updated_at": "2026-08-08T12:07:38.412200Z"
 }

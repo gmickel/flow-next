@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:29.448846Z",
+  "depends_on": [
+    "fn-179-issue-batch-r-id-parser-straggler.1",
+    "fn-179-issue-batch-r-id-parser-straggler.2",
+    "fn-179-issue-batch-r-id-parser-straggler.3",
+    "fn-179-issue-batch-r-id-parser-straggler.4"
+  ],
+  "id": "fn-179-issue-batch-r-id-parser-straggler.5",
+  "priority": null,
+  "spec": "fn-179-issue-batch-r-id-parser-straggler",
+  "spec_path": ".flow/tasks/fn-179-issue-batch-r-id-parser-straggler.5.md",
+  "status": "todo",
+  "title": "Gate-classify docs statement, CHANGELOG credits, propagation + full gate",
+  "updated_at": "2026-08-08T12:07:29.448846Z"
+}

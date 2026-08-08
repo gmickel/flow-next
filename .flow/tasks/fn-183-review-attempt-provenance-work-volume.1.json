@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:31.082692Z",
+  "depends_on": [],
+  "id": "fn-183-review-attempt-provenance-work-volume.1",
+  "priority": null,
+  "spec": "fn-183-review-attempt-provenance-work-volume",
+  "spec_path": ".flow/tasks/fn-183-review-attempt-provenance-work-volume.1.md",
+  "status": "todo",
+  "title": "Attempt-row write path: output bytes, tool-call count, base_sha, head_sha_observed",
+  "updated_at": "2026-08-08T12:07:31.082692Z"
+}

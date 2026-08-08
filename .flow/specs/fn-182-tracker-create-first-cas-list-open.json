@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-182-tracker-create-first-cas-list-open",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-08T12:01:42.776281Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-182-tracker-create-first-cas-list-open",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-182-tracker-create-first-cas-list-open.md",
   "status": "open",
   "title": "Tracker: create-first CAS, list-open capability error, per-spec Linear Project, abandon docs",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:01:42.778229Z"
+  "updated_at": "2026-08-08T12:07:44.103433Z"
 }

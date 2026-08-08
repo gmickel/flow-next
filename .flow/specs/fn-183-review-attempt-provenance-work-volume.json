@@ -1,13 +1,21 @@
 {
   "branch_name": "fn-183-review-attempt-provenance-work-volume",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-08T12:01:43.340748Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "fn-178-stage-receipts-ran-skipped-failed"
   ],
   "id": "fn-183-review-attempt-provenance-work-volume",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-183-review-attempt-provenance-work-volume.md",
   "status": "open",
   "title": "Review attempt provenance: work volume, head_sha origin, base_sha",
@@ -22,5 +30,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:01:50.578880Z"
+  "updated_at": "2026-08-08T12:07:44.524068Z"
 }

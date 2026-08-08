@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:30.230919Z",
+  "depends_on": [
+    "fn-181-state-provenance-status-source-review.1",
+    "fn-181-state-provenance-status-source-review.2",
+    "fn-181-state-provenance-status-source-review.3"
+  ],
+  "id": "fn-181-state-provenance-status-source-review.4",
+  "priority": null,
+  "spec": "fn-181-state-provenance-status-source-review",
+  "spec_path": ".flow/tasks/fn-181-state-provenance-status-source-review.4.md",
+  "status": "todo",
+  "title": "Docs, CHANGELOG, propagation + full gate",
+  "updated_at": "2026-08-08T12:07:30.230919Z"
+}

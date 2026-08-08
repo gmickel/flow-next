@@ -1,0 +1,18 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:30.648060Z",
+  "depends_on": [
+    "fn-182-tracker-create-first-cas-list-open.1",
+    "fn-182-tracker-create-first-cas-list-open.2",
+    "fn-182-tracker-create-first-cas-list-open.3"
+  ],
+  "id": "fn-182-tracker-create-first-cas-list-open.4",
+  "priority": null,
+  "spec": "fn-182-tracker-create-first-cas-list-open",
+  "spec_path": ".flow/tasks/fn-182-tracker-create-first-cas-list-open.4.md",
+  "status": "todo",
+  "title": "Abandon-path docs, CHANGELOG, manifest + full gate",
+  "updated_at": "2026-08-08T12:07:30.648060Z"
+}

@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:29.837627Z",
+  "depends_on": [
+    "fn-180-declared-vs-evidenced-r-id-coverage.2",
+    "fn-180-declared-vs-evidenced-r-id-coverage.3"
+  ],
+  "id": "fn-180-declared-vs-evidenced-r-id-coverage.4",
+  "priority": null,
+  "spec": "fn-180-declared-vs-evidenced-r-id-coverage",
+  "spec_path": ".flow/tasks/fn-180-declared-vs-evidenced-r-id-coverage.4.md",
+  "status": "todo",
+  "title": "Docs, CHANGELOG, propagation + full gate",
+  "updated_at": "2026-08-08T12:07:29.837627Z"
+}

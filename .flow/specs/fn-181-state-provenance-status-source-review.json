@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-181-state-provenance-status-source-review",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-08T12:01:42.236085Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-181-state-provenance-status-source-review",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-181-state-provenance-status-source-review.md",
   "status": "open",
   "title": "State provenance: status_source, review-skill lifecycle rule, ready/anchor staleness advisory",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:01:42.238011Z"
+  "updated_at": "2026-08-08T12:07:43.693293Z"
 }

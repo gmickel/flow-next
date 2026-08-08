@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:30.647737Z",
+  "depends_on": [],
+  "id": "fn-182-tracker-create-first-cas-list-open.1",
+  "priority": null,
+  "spec": "fn-182-tracker-create-first-cas-list-open",
+  "spec_path": ".flow/tasks/fn-182-tracker-create-first-cas-list-open.1.md",
+  "status": "todo",
+  "title": "create-first-put --if-absent (compare-and-set mint claim)",
+  "updated_at": "2026-08-08T12:07:30.647737Z"
+}

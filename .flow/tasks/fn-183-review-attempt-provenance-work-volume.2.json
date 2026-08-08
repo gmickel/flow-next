@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:31.082969Z",
+  "depends_on": [
+    "fn-183-review-attempt-provenance-work-volume.1"
+  ],
+  "id": "fn-183-review-attempt-provenance-work-volume.2",
+  "priority": null,
+  "spec": "fn-183-review-attempt-provenance-work-volume",
+  "spec_path": ".flow/tasks/fn-183-review-attempt-provenance-work-volume.2.md",
+  "status": "todo",
+  "title": "Read surface: attempts --json exposes new fields; old rows tolerated",
+  "updated_at": "2026-08-08T12:07:31.082969Z"
+}

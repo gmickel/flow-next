@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T12:07:29.837539Z",
+  "depends_on": [
+    "fn-180-declared-vs-evidenced-r-id-coverage.1"
+  ],
+  "id": "fn-180-declared-vs-evidenced-r-id-coverage.2",
+  "priority": null,
+  "spec": "fn-180-declared-vs-evidenced-r-id-coverage",
+  "spec_path": ".flow/tasks/fn-180-declared-vs-evidenced-r-id-coverage.2.md",
+  "status": "todo",
+  "title": "make-pr skill: plan-gate rendering + abort re-keyed on undeclared coverage",
+  "updated_at": "2026-08-08T12:07:29.837539Z"
+}
