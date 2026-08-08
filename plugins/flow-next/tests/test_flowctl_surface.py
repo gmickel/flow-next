@@ -401,11 +401,24 @@ class CliSurfaceContractTest(unittest.TestCase):
         self.assertEqual(missing, [])
 
     def test_live_plan_invocation_manifest_exists_and_parses(self) -> None:
+        # Branch-disclosure refactor: plan's gated bash moved verbatim into
+        # references/ (readiness-warn, route-a-refine, tracker-first-mint,
+        # setup-questions, strategy-alignment, next-steps-menu). The reached
+        # paths still invoke the same flowctl verbs, so the manifest is checked
+        # against the skill files PLUS every reference they disclose.
+        plan_skill = PLUGIN / "skills" / "flow-next-plan"
+        plan_files = [plan_skill / "SKILL.md", plan_skill / "steps.md"]
+        plan_files += sorted((plan_skill / "references").glob("*.md"))
+        gating_text = "\n".join(
+            f.read_text(encoding="utf-8")
+            for f in (plan_skill / "SKILL.md", plan_skill / "steps.md")
+        )
+        for reference in sorted((plan_skill / "references").glob("*.md")):
+            # Every reference whose verbs count toward the manifest must be
+            # reachable: a gating file has to name it.
+            self.assertIn(f"references/{reference.name}", gating_text)
         plan_text = "\n".join(
-            (
-                PLUGIN / "skills" / "flow-next-plan" / name
-            ).read_text(encoding="utf-8")
-            for name in ("SKILL.md", "steps.md")
+            f.read_text(encoding="utf-8") for f in plan_files
         )
         invocations = set()
         for match in FLOWCTL_INVOCATION.finditer(plan_text):
@@ -518,13 +531,15 @@ class ActiveReferenceContractTest(unittest.TestCase):
 
 class RepoPromptCapabilityProbeTest(unittest.TestCase):
     PROBE_PATHS = (
-        "skills/flow-next-plan/SKILL.md",
+        # Plan's RepoPrompt probe moved verbatim into its setup-questions
+        # reference (reached only on the setup-question path).
+        "skills/flow-next-plan/references/setup-questions.md",
         "skills/flow-next-plan-review/workflow.md",
         "skills/flow-next-impl-review/workflow-common.md",
         "skills/flow-next-spec-completion-review/workflow-common.md",
         "skills/flow-next-setup/workflow.md",
         "skills/flow-next-ralph-init/SKILL.md",
-        "codex/skills/flow-next-plan/SKILL.md",
+        "codex/skills/flow-next-plan/references/setup-questions.md",
         "codex/skills/flow-next-impl-review/workflow-common.md",
         "codex/skills/flow-next-spec-completion-review/workflow-common.md",
         "codex/skills/flow-next-setup/workflow.md",

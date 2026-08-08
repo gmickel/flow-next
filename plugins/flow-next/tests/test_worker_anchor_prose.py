@@ -53,6 +53,21 @@ CANONICAL_WORKER = PLUGIN / "agents" / "worker.md"
 MIRROR_WORKER = PLUGIN / "codex" / "agents" / "worker.toml"
 CANONICAL_PHASES = PLUGIN / "skills" / "flow-next-work" / "phases.md"
 MIRROR_PHASES = PLUGIN / "codex" / "skills" / "flow-next-work" / "phases.md"
+# The branch-disclosure refactor moved the 3e downstream-extraction /
+# CROSS_SPEC read / plan-sync spawn prose verbatim out of the always-loaded
+# phases.md into a reached-path reference, loaded only once 3e has read
+# `planSync.enabled == true`. Same contract, new home.
+CANONICAL_PLAN_SYNC_DISPATCH = (
+    PLUGIN / "skills" / "flow-next-work" / "references" / "plan-sync-dispatch.md"
+)
+MIRROR_PLAN_SYNC_DISPATCH = (
+    PLUGIN
+    / "codex"
+    / "skills"
+    / "flow-next-work"
+    / "references"
+    / "plan-sync-dispatch.md"
+)
 
 
 def _read(path: pathlib.Path) -> str:
@@ -134,23 +149,32 @@ class WorkerAnchorCallProse(unittest.TestCase):
 class PhasesCrossSpecProse(unittest.TestCase):
     """phases.md 3e: CROSS_SPEC passed; spawn stays unconditional."""
 
-    def _assert_phases_contract(self, path: pathlib.Path) -> None:
+    def _assert_phases_contract(
+        self, path: pathlib.Path, dispatch: pathlib.Path
+    ) -> None:
         text = _read(path)
-        # Single config-leaf read + spawn-prompt input.
-        self.assertIn("planSync.crossSpec", text, path)
-        self.assertIn("CROSS_SPEC=$(", text, path)  # reads the actual config value
+        dispatch_text = _read(dispatch)
+        # 3e's gate leaf stays on the always-loaded path, and 3e names the
+        # reached-path reference that carries the dispatch prose.
+        self.assertIn("planSync.enabled", text, path)
+        self.assertIn("references/plan-sync-dispatch.md", text, path)
+        # Single config-leaf read + spawn-prompt input (now in the reference).
+        self.assertIn("planSync.crossSpec", dispatch_text, dispatch)
+        # reads the actual config value
+        self.assertIn("CROSS_SPEC=$(", dispatch_text, dispatch)
         # The spawn template references the READ value, not the ambiguous
         # literal "true|false" (plan-sync Phase 4b only skips on exact false).
-        self.assertIn("$CROSS_SPEC value read above", text, path)
+        self.assertIn("$CROSS_SPEC value read above", dispatch_text, dispatch)
+        self.assertNotIn("CROSS_SPEC: true|false", dispatch_text, dispatch)
         self.assertNotIn("CROSS_SPEC: true|false", text, path)
         # The spawn is gated ONLY on planSync.enabled — today's behavior.
-        self.assertIn("planSync.enabled", text, path)
+        self.assertIn("planSync.enabled", dispatch_text, dispatch)
 
     def test_canonical_phases(self) -> None:
-        self._assert_phases_contract(CANONICAL_PHASES)
+        self._assert_phases_contract(CANONICAL_PHASES, CANONICAL_PLAN_SYNC_DISPATCH)
 
     def test_mirror_phases(self) -> None:
-        self._assert_phases_contract(MIRROR_PHASES)
+        self._assert_phases_contract(MIRROR_PHASES, MIRROR_PLAN_SYNC_DISPATCH)
 
 
 class GateRemovalGuards(unittest.TestCase):
@@ -176,7 +200,7 @@ class GateRemovalGuards(unittest.TestCase):
         self.assertEqual(self._scan(roots), [])
 
     def test_user_surface_guard_mirror_worker_files(self) -> None:
-        for path in (MIRROR_WORKER, MIRROR_PHASES):
+        for path in (MIRROR_WORKER, MIRROR_PHASES, MIRROR_PLAN_SYNC_DISPATCH):
             with self.subTest(file=str(path)):
                 self.assertIsNone(self.USER_SURFACE_RE.search(_read(path)))
 
@@ -204,7 +228,7 @@ class GateRemovalGuards(unittest.TestCase):
                 if "PLAN_DEVIATION" in text:
                     hits.append(str(path))
         self.assertEqual(hits, [])
-        for path in (MIRROR_WORKER, MIRROR_PHASES):
+        for path in (MIRROR_WORKER, MIRROR_PHASES, MIRROR_PLAN_SYNC_DISPATCH):
             with self.subTest(file=str(path)):
                 self.assertNotIn("PLAN_DEVIATION", _read(path))
 

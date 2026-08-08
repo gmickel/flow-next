@@ -20,6 +20,20 @@ CANONICAL_PLAN = PLUGIN / "skills" / "flow-next-plan" / "steps.md"
 MIRROR_PLAN = PLUGIN / "codex" / "skills" / "flow-next-plan" / "steps.md"
 CANONICAL_WORK = PLUGIN / "skills" / "flow-next-work" / "phases.md"
 MIRROR_WORK = PLUGIN / "codex" / "skills" / "flow-next-work" / "phases.md"
+# Branch-disclosure refactor: the wave join/handover-consumption prose moved
+# verbatim out of the always-loaded phases.md into the reached-path reference
+# phases.md links from its parallel-wave branch. Same contract, new home.
+CANONICAL_WAVE_JOIN = (
+    PLUGIN / "skills" / "flow-next-work" / "references" / "wave-join.md"
+)
+MIRROR_WAVE_JOIN = (
+    PLUGIN
+    / "codex"
+    / "skills"
+    / "flow-next-work"
+    / "references"
+    / "wave-join.md"
+)
 CANONICAL_WORKER = PLUGIN / "agents" / "worker.md"
 MIRROR_WORKER = PLUGIN / "codex" / "agents" / "worker.toml"
 
@@ -44,30 +58,37 @@ class ParallelPlanProse(unittest.TestCase):
 
 
 class ParallelWorkConductorProse(unittest.TestCase):
-    def _assert_contract(self, path: pathlib.Path) -> None:
+    def _assert_contract(self, path: pathlib.Path, join: pathlib.Path) -> None:
         text = _read(path)
+        join_text = _read(join)
         # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md
         # G1, not grep. Handover field labels + grammar tokens only below.
+        # Dispatch-side labels stay on the always-loaded conductor path.
         self.assertIn("Selected wave:", text)
         self.assertIn("Isolation:", text)
         self.assertIn("Dispatch count:", text)
         self.assertIn("Sequential fallback:", text)
         self.assertIn("HANDOVER_SUMMARY", text)
         self.assertIn("HANDOVER_EVIDENCE", text)
-        self.assertIn("Worker outcomes:", text)
-        self.assertIn("Join: complete", text)
+        # The parallel branch must name the reached-path join reference…
+        self.assertIn("references/wave-join.md", text)
+        # …which owns the join/outcome grammar.
+        self.assertIn("Worker outcomes:", join_text)
+        self.assertIn("Join: complete", join_text)
+        self.assertIn("HANDOVER_SUMMARY", join_text)
+        self.assertIn("HANDOVER_EVIDENCE", join_text)
 
     def test_canonical(self) -> None:
-        self._assert_contract(CANONICAL_WORK)
+        self._assert_contract(CANONICAL_WORK, CANONICAL_WAVE_JOIN)
         self.assertIn(
             "/flow-next:impl-review <task-id> --base "
             "<task-normalized-integrated-base> --review=<backend>",
-            _read(CANONICAL_WORK),
+            _read(CANONICAL_WAVE_JOIN),
         )
 
     def test_codex_mirror(self) -> None:
-        self._assert_contract(MIRROR_WORK)
-        text = _read(MIRROR_WORK)
+        self._assert_contract(MIRROR_WORK, MIRROR_WAVE_JOIN)
+        text = _read(MIRROR_WAVE_JOIN)
         self.assertIn(
             "$flow-next-impl-review <task-id> --base "
             "<task-normalized-integrated-base> --review=<backend>",

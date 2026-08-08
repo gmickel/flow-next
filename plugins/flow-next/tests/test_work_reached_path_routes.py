@@ -23,6 +23,10 @@ class WorkReachedPathRoutes(unittest.TestCase):
             WORK / "references" / "codex-delegation-selection.md"
         )
         cls.delegation = _text(WORK / "references" / "codex-delegation.md")
+        # Branch-disclosure refactor: the parallel-wave join contract moved
+        # verbatim out of the always-loaded phases.md into this reached-path
+        # reference, linked from phases.md's parallel-wave branch.
+        cls.wave_join = _text(WORK / "references" / "wave-join.md")
 
     # Evidence-ledger archaeology removed 2026-08-07 - shipped optimizations are
     # history, not invariants. (Lineage baseline-commit pin and the stored
@@ -88,14 +92,20 @@ class WorkReachedPathRoutes(unittest.TestCase):
         for contract in (
             "inspect the whole ready frontier",
             "Never run concurrent writers in one checkout",
-            "wait for every dispatched worker",
             "host-deferred",
-            "Use the host's chosen integration mechanism",
             "Do not run plan-sync while any peer worker is active",
             "Tracker sync:",
+            # phases.md must still route to the join reference it hands off to.
+            "references/wave-join.md",
         ):
             with self.subTest(contract=contract):
                 self.assertIn(contract, self.phases)
+        for contract in (
+            "wait for every dispatched worker",
+            "Use the host's chosen integration mechanism",
+        ):
+            with self.subTest(contract=contract, file="references/wave-join.md"):
+                self.assertIn(contract, self.wave_join)
         self.assertNotIn("plan-sync-probe", self.phases)
         self.assertNotIn("PLAN_DEVIATION", self.phases)
 

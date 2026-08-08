@@ -541,7 +541,11 @@ class CodexDelegationProseContract(unittest.TestCase):
 
     def test_phases_default_path_adds_single_value_check(self) -> None:
         # The one cheap value-check is the only thing added to the default path.
-        self.assertIn("config get work.delegate", self.phases)
+        # fn-110 folded it into the ONE root config snapshot (`config get --json`
+        # + a jq read of the `work.delegate` leaf) shared with the Phase 1 mint —
+        # still a single read of the same leaf on the default path.
+        self.assertIn("config get --json", self.phases)
+        self.assertIn(".value.work.delegate", self.phases)
         # And it is explicitly framed as the ONLY added step.
         self.assertRegex(self.phases, r"ONLY step|single step|byte-identical")
 
@@ -562,10 +566,20 @@ class CodexDelegationProseContract(unittest.TestCase):
         # delegation_requested so the reference is NEVER read on a non-Claude host
         # (Codex / Droid / OpenCode). Both host skill files carry the check, ANDed
         # into the predicate; the reference header states it is not read there.
-        for src in (self.phases, self.skill):
+        # The literal check + ANDed predicate live on the always-loaded
+        # phases.md Phase 0 and in the Phase-1.5 selection reference (which
+        # restates the predicate it is gated by). SKILL.md's routing prose —
+        # after the branch-disclosure refactor — names the host check and the
+        # predicate it feeds, and points at that reference.
+        for src in (self.phases, self.selection):
             self.assertIn("host_is_claude_code", src)
             self.assertRegex(src, r"host_is_claude_code\s*&&")
             self.assertIn("delegation_requested", src)
+        self.assertRegex(self.skill, r"Claude-Code host check")
+        self.assertIn("delegation_requested", self.skill)
+        self.assertIn(
+            "references/codex-delegation-selection.md", self.skill
+        )
         self.assertIn("Off, unavailable, or declined paths never read this file", self.ref)
 
     def test_reference_load_waits_for_completed_selection(self) -> None:
