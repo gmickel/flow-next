@@ -28,9 +28,14 @@ Land the stage-outcome line convention at the three orchestrator sites (R1-R4) a
 - [ ] TBD
 
 ## Done summary
-TBD
+Landed the stage-outcome convention at the three orchestrator sites (work phases.md: convention block + plan-sync 3e outcome lines incl. failed(EXTRACT_FAILED); worker.md: summary stage lines for worker-owned stages; pilot workflow.md: evidence-echo stage line) with skipped-is-an-event, no-line-is-failed inversion, timestamps-where-known, and the R4 token-telemetry out-of-scope note. Implemented flowctl usage --stages (flag-gated on the existing verb; parses committed done-summary stage lines + review receipts; malformed -> unknown, exit 0; bare usage byte-identical). 6-case table-driven test green; full suite 4279 green; ruff clean; dual copy + manifest + mirrors idempotent.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
+stage: impl-review - skipped(policy: maintainer waived in-host review for this series; bot review on the PR is the gate)
+stage: delegation - failed(error: cursor-agent bridge returned empty output 3x earlier in this campaign; conductor self-implemented per goal fallback)
+
+RECEIPT NOTE (goal): this plan was authored on the new prose and came out scope-minimal - 2 tasks, every task traced to R-IDs, no unrequested surface (the usage extension stayed flag-gated on the existing verb; a telemetry subsystem was declined in Decision Context). Tasks were how-shaped without spec restatement: Description ≤10 lines referencing R-IDs, HOW in Approach, Touches: body lines per fn-175.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f7a929c7
+- Tests: python3 -m unittest test_usage_stages -q (6 cases), python3 scripts/run_tests_parallel.py (4279 OK), uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh x2 idempotent
 - PRs:

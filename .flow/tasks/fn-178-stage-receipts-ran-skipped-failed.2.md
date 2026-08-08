@@ -23,9 +23,10 @@ Extend the Unreleased CHANGELOG with the fn-178 entry.
 - [ ] TBD
 
 ## Done summary
-TBD
+Added the stage-receipts Unreleased bullet (explicit outcomes, skipped-is-an-event, no-line-is-failed, usage --stages read surface, no new stores, token telemetry out of scope). No version manifests. OWED AT BATCHED RELEASE: flow-next.dev changelog entry + docs/README.md notable-updates line.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0ba41b46
+- Tests: docs-only; register read-through
 - PRs:
