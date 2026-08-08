@@ -53,12 +53,8 @@ Add `--id` to `apply`/`resolve` with id-derived marker pairs, per-id-scoped span
 - [ ] existing suite green (meta-shape assertion updates only); two-id parallel merge lossless
 
 ## Done summary
-TBD
-
+Added `--id` to `setup-block apply`/`resolve` with id-derived, per-id-scoped markers and fail-close; `meta["setup"]["block_hashes"]` is now a nested `{path: {id: hash}}` map with tolerant legacy read and write-through upgrade; a template<->id consistency check fails exit 1 before any write when the template lacks a marker pair for the operated id. Existing 12-test suite updated with meta-shape assertions only (zero behavioral changes); added 7 new fixtures plus a two-ids-on-one-path parallel-lock extension. Focused suite green (28 tests), ruff clean, dual copy + tracker manifest regenerated.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7a8a06ceb40627fc1216fb2c9f3125a9ad23afb1, df091c8a, a1cd9ab8
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_setup_block_helper test_portable_locks -q (28 tests OK), uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_setup_block_helper.py plugins/flow-next/tests/test_portable_locks.py (clean), cd plugins/flow-next/tests && python3 -m unittest test_flowctl_surface test_prompt_text_pinned -q (18 tests OK), cd plugins/flow-next/tests && python3 -m unittest test_startup_bootstrap test_tracker_distribution -q (36 tests OK)
 - PRs:
-
-<!-- Updated by plan-review fix loop: template-id consistency (spec Architecture item 1) -->
-- Additional acceptance: apply/resolve/check fail exit 1 with "template does not contain the marker pair for id <ID>" when the template lacks exactly one standalone derived pair for the operated id; fixture covers the DEPLOY-id-with-FLOW-NEXT-template case (no write, no re-append loop). (R2)

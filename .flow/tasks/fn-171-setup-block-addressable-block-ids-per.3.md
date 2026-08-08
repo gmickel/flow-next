@@ -43,9 +43,8 @@ Document `--id`, the nested state, and the CI check recipe; stage the CHANGELOG 
 - [ ] propagation chain done, full gate green
 
 ## Done summary
-TBD
-
+Documented `flowctl setup-block`'s `--id`, per-(path,id) nested state, and the new `check` verb (exit-code table + copy-mode CI recipe) in `docs/flowctl.md`; rewrote `agent_docs/setup-modes.md` invariant 2 to state markers are id-derived (never leaving the old "never parameterize" sentence standing) and added a per-(path,id) state invariant; updated the setup skill's meta.json shape reference; staged a CHANGELOG `## Unreleased` entry crediting @sn-furali (#294). No version bump. Ran `sync-codex.sh` twice (idempotent) since `workflow.md` changed. Full gate (`run_tests_parallel.py`: 4266 tests, 0 failures; `ruff@0.16.0 check .`) green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: cf5933d2f679922b566fb852c036ef6642e4c883, 236c4556
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_setup_block_helper test_flowctl_surface -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:

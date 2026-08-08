@@ -76,12 +76,12 @@ class SetupBlockFixtureTest(unittest.TestCase):
         canonical = (TEMPLATES / "claude-md-snippet.md").read_text(encoding="utf-8")
         self.assertEqual(result["action"], "appended")
         self.assertEqual(claude.read_text(encoding="utf-8"), "Existing prose.\n\n" + canonical)
-        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"], _hash(canonical))
+        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"]["FLOW-NEXT"], _hash(canonical))
 
         self._result(self._flowctl("apply", "AGENTS.md", TEMPLATES / "agents-md-snippet.md"))
         hashes = self._meta()["setup"]["block_hashes"]
         self.assertEqual(set(hashes), {"CLAUDE.md", "AGENTS.md"})
-        self.assertNotEqual(hashes["CLAUDE.md"], hashes["AGENTS.md"])
+        self.assertNotEqual(hashes["CLAUDE.md"]["FLOW-NEXT"], hashes["AGENTS.md"]["FLOW-NEXT"])
 
     def test_pristine_refresh_and_idempotent_rerun(self) -> None:
         target = self.repo / "CLAUDE.md"
@@ -97,7 +97,7 @@ class SetupBlockFixtureTest(unittest.TestCase):
         self.assertEqual(refreshed["action"], "refreshed")
         after = target.read_bytes()
         self.assertEqual(after.replace(self.v2.read_bytes(), b""), outside_before)
-        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"], _hash(self.v2.read_text()))
+        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"]["FLOW-NEXT"], _hash(self.v2.read_text()))
 
         meta_before = self.meta_path.read_bytes()
         bytes_before = target.read_bytes()
@@ -120,7 +120,7 @@ class SetupBlockFixtureTest(unittest.TestCase):
         overwritten = self._result(self._flowctl("resolve", "CLAUDE.md", self.v2, "--choice", "overwrite"))
         self.assertEqual(overwritten["action"], "overwritten")
         self.assertEqual(target.read_text(encoding="utf-8"), "top\n\n" + self.v2.read_text() + "bottom\n")
-        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"], _hash(self.v2.read_text()))
+        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"]["FLOW-NEXT"], _hash(self.v2.read_text()))
 
     def test_hash_absent_keep_never_reasks(self) -> None:
         target = self.repo / "CLAUDE.md"
@@ -131,7 +131,7 @@ class SetupBlockFixtureTest(unittest.TestCase):
         kept = self._result(self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep"))
         self.assertEqual(kept["action"], "kept")
         self.assertEqual(target.read_bytes(), original)
-        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"], "customized")
+        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"]["FLOW-NEXT"], "customized")
         rerun = self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
         self.assertEqual(rerun["action"], "kept")
         self.assertEqual(target.read_bytes(), original)
@@ -151,7 +151,7 @@ class SetupBlockFixtureTest(unittest.TestCase):
         kept = self._result(self._flowctl("resolve", "CLAUDE.md", self.v2, "--choice", "keep"))
         self.assertEqual(kept["action"], "kept")
         self.assertEqual(target.read_bytes(), edited)  # bytes unchanged
-        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"], "customized")
+        self.assertEqual(self._meta()["setup"]["block_hashes"]["CLAUDE.md"]["FLOW-NEXT"], "customized")
         rerun = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
         self.assertEqual(rerun["action"], "kept")  # sentinel: never re-asks
         self.assertEqual(target.read_bytes(), edited)
@@ -194,12 +194,15 @@ class SetupBlockFixtureTest(unittest.TestCase):
         target = locked / "CLAUDE.md"
         target.write_text(self.v1.read_text(encoding="utf-8"), encoding="utf-8")
         self._result(self._flowctl("apply", "locked/CLAUDE.md", self.v1))
-        hash_before = self._meta()["setup"]["block_hashes"]["locked/CLAUDE.md"]
+        hash_before = self._meta()["setup"]["block_hashes"]["locked/CLAUDE.md"]["FLOW-NEXT"]
         locked.chmod(0o500)
         try:
             failed = self._flowctl("apply", "locked/CLAUDE.md", self.v2)
             self.assertNotEqual(failed.returncode, 0)
-            self.assertEqual(self._meta()["setup"]["block_hashes"]["locked/CLAUDE.md"], hash_before)
+            self.assertEqual(
+                self._meta()["setup"]["block_hashes"]["locked/CLAUDE.md"]["FLOW-NEXT"],
+                hash_before,
+            )
         finally:
             locked.chmod(stat.S_IRWXU)
 
@@ -220,17 +223,67 @@ class SetupBlockFixtureTest(unittest.TestCase):
                 self.assertEqual(target.read_bytes(), before)
                 self.assertEqual(self.meta_path.read_bytes(), meta_before)
 
-    def test_duplicate_marker_pairs_replace_first_block_only(self) -> None:
+    def test_duplicate_marker_pairs_fail_closed(self) -> None:
+        # fn-171 R2 review hardening: TWO full pairs for the operated id make
+        # the block state ambiguous (which span is "the" block?) - check
+        # exits 3 corrupt; apply and resolve fail closed with no writes.
         target = self.repo / "CLAUDE.md"
         second = "<!-- BEGIN FLOW-NEXT -->\nsecond\n<!-- END FLOW-NEXT -->\n"
         target.write_text(self.v1.read_text(encoding="utf-8") + "middle\n" + second, encoding="utf-8")
-        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))  # records v1 hash
-        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
-        self.assertEqual(refreshed["action"], "refreshed")
-        self.assertEqual(
-            target.read_text(encoding="utf-8"),
-            self.v2.read_text(encoding="utf-8") + "middle\n" + second,
+        before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+
+        checked = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(checked.returncode, 3, checked.stdout + checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["action"], "corrupt")
+
+        rejected = self._flowctl("apply", "CLAUDE.md", self.v2)
+        self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
+        self.assertIn("corrupt", (rejected.stdout + rejected.stderr).lower())
+
+        resolved = self._flowctl("resolve", "CLAUDE.md", self.v2, "--choice", "keep")
+        self.assertEqual(resolved.returncode, 1, resolved.stdout + resolved.stderr)
+
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_trailing_stray_same_id_marker_fails_closed_other_id_opaque(self) -> None:
+        # fn-171 R2 review hardening: a valid A pair followed by a stray
+        # same-id BEGIN A is corruption for A - the whole target is scanned,
+        # not just up to the first END. B's markers stay opaque: B's own pair
+        # in the same file still checks clean.
+        a_tmpl = self.repo / "a.md"
+        a_tmpl.write_text("<!-- BEGIN A -->\na-body\n<!-- END A -->\n", encoding="utf-8")
+        b_tmpl = self.repo / "b.md"
+        b_tmpl.write_text("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", encoding="utf-8")
+        target = self.repo / "CLAUDE.md"
+        target.write_text(
+            "<!-- BEGIN A -->\na-body\n<!-- END A -->\n"
+            "<!-- BEGIN B -->\nb-body\n<!-- END B -->\n"
+            "<!-- BEGIN A -->\n",
+            encoding="utf-8",
         )
+        before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+
+        checked = self._flowctl("check", "CLAUDE.md", a_tmpl, "--id", "A")
+        self.assertEqual(checked.returncode, 3, checked.stdout + checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["action"], "corrupt")
+
+        rejected = self._flowctl("apply", "CLAUDE.md", a_tmpl, "--id", "A")
+        self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
+        self.assertIn("corrupt", (rejected.stdout + rejected.stderr).lower())
+
+        resolved = self._flowctl("resolve", "CLAUDE.md", a_tmpl, "--id", "A", "--choice", "keep")
+        self.assertEqual(resolved.returncode, 1, resolved.stdout + resolved.stderr)
+
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+        # A's stray marker is opaque to B: B's pair still reads clean.
+        check_b = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(check_b.returncode, 0, check_b.stdout + check_b.stderr)
+        self.assertEqual(json.loads(check_b.stdout)["action"], "unchanged")
 
     @unittest.skipIf(os.name == "nt", "POSIX permission bits required")
     def test_write_preserves_existing_mode_and_umask_for_new_files(self) -> None:
@@ -264,6 +317,601 @@ class SetupBlockFixtureTest(unittest.TestCase):
         corrupt = self._flowctl("apply", "CLAUDE.md", self.v1)
         self.assertNotEqual(corrupt.returncode, 0)
         self.assertEqual(target.read_bytes(), target_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_resolve_keep_corrupt_block_fails_closed_without_writes(self) -> None:
+        # fn-171 R2: `resolve --choice keep` must validate the operated span
+        # before recording the sentinel - a corrupt target fails exit 1 with
+        # meta.json and target bytes untouched, matching apply/check.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("<!-- BEGIN FLOW-NEXT -->\nno end\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        corrupt = self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep")
+        self.assertEqual(corrupt.returncode, 1, corrupt.stderr + corrupt.stdout)
+        self.assertEqual(target.read_bytes(), target_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_resolve_keep_missing_markers_and_missing_file_fail_closed(self) -> None:
+        # No span for the operated id -> nothing to keep; a sentinel would be
+        # recorded for nothing. Exit 1, no meta write.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("prose only\n", encoding="utf-8")
+        meta_before = self.meta_path.read_bytes()
+        no_markers = self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep")
+        self.assertEqual(no_markers.returncode, 1, no_markers.stderr + no_markers.stdout)
+        self.assertIn("no flow-next marker block to keep", no_markers.stdout + no_markers.stderr)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+        target.unlink()
+        missing = self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep")
+        self.assertEqual(missing.returncode, 1, missing.stderr + missing.stdout)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_invalid_ids_rejected_before_any_file_touch(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("prose\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        invalid_ids = (
+            "",
+            "x" * 65,
+            "lowercase",
+            "_LEADING",
+            "HAS--DASHES",
+            ".DOTSTART",
+        )
+        for bad_id in invalid_ids:
+            for command, extra in (
+                ("apply", ()),
+                ("resolve", ("--choice", "overwrite")),
+                ("check", ()),
+            ):
+                with self.subTest(command=command, bad_id=bad_id):
+                    rejected = self._flowctl(
+                        command, "CLAUDE.md", self.v1, *extra, "--id", bad_id
+                    )
+                    self.assertEqual(rejected.returncode, 1, rejected.stderr + rejected.stdout)
+                    self.assertNotEqual(rejected.returncode, 2)
+                    self.assertIn("invalid setup-block id", rejected.stdout + rejected.stderr)
+                    self.assertEqual(target.read_bytes(), target_before)
+                    self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_explicit_flow_next_id_matches_omitted(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("top\n", encoding="utf-8")
+        omitted = self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        after_omitted = target.read_bytes()
+        meta_omitted = self.meta_path.read_bytes()
+        hashes = self._meta()["setup"]["block_hashes"]["CLAUDE.md"]
+        self.assertEqual(set(hashes), {"FLOW-NEXT"})
+        self.assertEqual(hashes["FLOW-NEXT"], _hash(self.v1.read_text()))
+
+        # Reset and apply with explicit --id FLOW-NEXT.
+        target.write_text("top\n", encoding="utf-8")
+        self.meta_path.write_text(
+            json.dumps({"next_spec": 1, "schema_version": 3}), encoding="utf-8"
+        )
+        explicit = self._result(
+            self._flowctl("apply", "CLAUDE.md", self.v1, "--id", "FLOW-NEXT")
+        )
+        self.assertEqual(explicit, omitted)
+        self.assertEqual(target.read_bytes(), after_omitted)
+        self.assertEqual(self.meta_path.read_bytes(), meta_omitted)
+        self.assertEqual(
+            set(self._meta()["setup"]["block_hashes"]["CLAUDE.md"]), {"FLOW-NEXT"}
+        )
+
+    def test_two_ids_on_one_file_tracked_independently(self) -> None:
+        deploy_tmpl = self.repo / "deploy.md"
+        flow_tmpl = self.repo / "flow.md"
+        deploy_tmpl.write_text(
+            "<!-- BEGIN DEPLOY -->\ndeploy-v1\n<!-- END DEPLOY -->\n", encoding="utf-8"
+        )
+        flow_tmpl.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\nflow-v1\n<!-- END FLOW-NEXT -->\n", encoding="utf-8"
+        )
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+
+        self._result(self._flowctl("apply", "CLAUDE.md", flow_tmpl))
+        self._result(self._flowctl("apply", "CLAUDE.md", deploy_tmpl, "--id", "DEPLOY"))
+        text = target.read_text(encoding="utf-8")
+        self.assertIn("<!-- BEGIN FLOW-NEXT -->\nflow-v1\n<!-- END FLOW-NEXT -->", text)
+        self.assertIn("<!-- BEGIN DEPLOY -->\ndeploy-v1\n<!-- END DEPLOY -->", text)
+        path_hashes = self._meta()["setup"]["block_hashes"]["CLAUDE.md"]
+        self.assertEqual(set(path_hashes), {"FLOW-NEXT", "DEPLOY"})
+        self.assertEqual(path_hashes["FLOW-NEXT"], _hash(flow_tmpl.read_text()))
+        self.assertEqual(path_hashes["DEPLOY"], _hash(deploy_tmpl.read_text()))
+
+        flow_v2 = self.repo / "flow-v2.md"
+        flow_v2.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\nflow-v2\n<!-- END FLOW-NEXT -->\n", encoding="utf-8"
+        )
+        before_deploy = "<!-- BEGIN DEPLOY -->\ndeploy-v1\n<!-- END DEPLOY -->"
+        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", flow_v2))
+        self.assertEqual(refreshed["action"], "refreshed")
+        after = target.read_text(encoding="utf-8")
+        self.assertIn("<!-- BEGIN FLOW-NEXT -->\nflow-v2\n<!-- END FLOW-NEXT -->", after)
+        self.assertIn(before_deploy, after)
+        self.assertEqual(
+            self._meta()["setup"]["block_hashes"]["CLAUDE.md"]["DEPLOY"],
+            _hash(deploy_tmpl.read_text()),
+        )
+
+    def test_stray_other_id_marker_is_opaque_and_scoped_fail_close(self) -> None:
+        a_tmpl = self.repo / "a.md"
+        a_tmpl.write_text(
+            "<!-- BEGIN A -->\na-body\n<!-- END A -->\n", encoding="utf-8"
+        )
+        b_tmpl = self.repo / "b.md"
+        b_tmpl.write_text(
+            "<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", encoding="utf-8"
+        )
+        target = self.repo / "CLAUDE.md"
+        # Valid A pair plus a stray unpaired BEGIN B (corrupt for B only).
+        target.write_text(
+            "<!-- BEGIN A -->\na-body\n<!-- END A -->\n"
+            "<!-- BEGIN B -->\norphan\n",
+            encoding="utf-8",
+        )
+        self._result(self._flowctl("apply", "CLAUDE.md", a_tmpl, "--id", "A"))
+        # Refresh A while stray B remains — succeeds; B content byte-preserved.
+        a_v2 = self.repo / "a-v2.md"
+        a_v2.write_text("<!-- BEGIN A -->\na-v2\n<!-- END A -->\n", encoding="utf-8")
+        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", a_v2, "--id", "A"))
+        self.assertEqual(refreshed["action"], "refreshed")
+        after_a = target.read_text(encoding="utf-8")
+        self.assertIn("<!-- BEGIN A -->\na-v2\n<!-- END A -->", after_a)
+        self.assertIn("<!-- BEGIN B -->\norphan\n", after_a)
+
+        # Operating B on the stray unpaired marker fails closed; A's span untouched.
+        before_bytes = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        rejected = self._flowctl("apply", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(rejected.returncode, 1)
+        self.assertIn("corrupt", (rejected.stdout + rejected.stderr).lower())
+        self.assertEqual(target.read_bytes(), before_bytes)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+        self.assertIn("<!-- BEGIN A -->\na-v2\n<!-- END A -->", after_a)
+
+    def test_legacy_string_hash_tolerant_read_and_write_through_upgrade(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        v1_text = self.v1.read_text(encoding="utf-8")
+        target.write_text(v1_text, encoding="utf-8")
+        legacy_hash = _hash(v1_text)
+        self.meta_path.write_text(
+            json.dumps(
+                {
+                    "next_spec": 1,
+                    "schema_version": 3,
+                    "setup": {"block_hashes": {"CLAUDE.md": legacy_hash}},
+                }
+            ),
+            encoding="utf-8",
+        )
+        unchanged = self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        self.assertEqual(unchanged["action"], "unchanged")
+        # No write on matching hash — legacy string shape preserved.
+        self.assertEqual(
+            self._meta()["setup"]["block_hashes"]["CLAUDE.md"], legacy_hash
+        )
+
+        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
+        self.assertEqual(refreshed["action"], "refreshed")
+        entry = self._meta()["setup"]["block_hashes"]["CLAUDE.md"]
+        self.assertIsInstance(entry, dict)
+        self.assertEqual(entry, {"FLOW-NEXT": _hash(self.v2.read_text())})
+
+    def test_malformed_per_path_repair_preserves_sibling_entries(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\nmine\n<!-- END FLOW-NEXT -->\n", encoding="utf-8"
+        )
+        legacy_hash = _hash(self.v1.read_text())
+        nested_hash = _hash(self.v2.read_text())
+        for malformed in (123, ["bad"], {"FLOW-NEXT": 99}):
+            with self.subTest(malformed=malformed):
+                target.write_text(
+                    "<!-- BEGIN FLOW-NEXT -->\nmine\n<!-- END FLOW-NEXT -->\n",
+                    encoding="utf-8",
+                )
+                self.meta_path.write_text(
+                    json.dumps(
+                        {
+                            "next_spec": 1,
+                            "schema_version": 3,
+                            "setup": {
+                                "block_hashes": {
+                                    "LEGACY.md": legacy_hash,
+                                    "NESTED.md": {"FLOW-NEXT": nested_hash},
+                                    "CLAUDE.md": malformed,
+                                }
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                asked = self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+                self.assertEqual((asked["action"], asked["reason"]), ("ask", "hash-absent"))
+                self._result(
+                    self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "overwrite")
+                )
+                hashes = self._meta()["setup"]["block_hashes"]
+                self.assertEqual(hashes["LEGACY.md"], legacy_hash)
+                self.assertEqual(hashes["NESTED.md"], {"FLOW-NEXT": nested_hash})
+                self.assertEqual(
+                    hashes["CLAUDE.md"], {"FLOW-NEXT": _hash(self.v1.read_text())}
+                )
+
+    def test_template_id_consistency_rejects_missing_marker_pair(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        # Template only has FLOW-NEXT; operating DEPLOY must fail closed.
+        for command, extra in (
+            ("apply", ()),
+            ("resolve", ("--choice", "overwrite")),
+        ):
+            with self.subTest(command=command):
+                rejected = self._flowctl(
+                    command, "CLAUDE.md", self.v1, *extra, "--id", "DEPLOY"
+                )
+                self.assertEqual(rejected.returncode, 1)
+                combined = rejected.stdout + rejected.stderr
+                self.assertIn(
+                    "template does not contain the marker pair for id DEPLOY",
+                    combined,
+                )
+                self.assertEqual(target.read_bytes(), target_before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_template_id_consistency_rejects_duplicated_marker_pair(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        # "Exactly one" upper bound: a template with TWO derived pairs for the
+        # operated id is rejected the same as zero pairs.
+        doubled = self.repo / "doubled-template.md"
+        doubled.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\none\n<!-- END FLOW-NEXT -->\n"
+            "<!-- BEGIN FLOW-NEXT -->\ntwo\n<!-- END FLOW-NEXT -->\n",
+            encoding="utf-8",
+        )
+        rejected = self._flowctl("apply", "CLAUDE.md", str(doubled))
+        self.assertEqual(rejected.returncode, 1)
+        combined = rejected.stdout + rejected.stderr
+        self.assertIn(
+            "template does not contain the marker pair for id FLOW-NEXT",
+            combined,
+        )
+        self.assertEqual(target.read_bytes(), target_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_template_embedded_marker_token_rejected_no_writes(self) -> None:
+        # A marker TOKEN embedded mid-line passes the standalone-line counts
+        # but would be written by apply and then trip the whole-target
+        # corruption scan forever - reject at template validation instead.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        embedded = self.repo / "embedded-template.md"
+        embedded.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\n"
+            "text <!-- END FLOW-NEXT --> embedded\n"
+            "<!-- END FLOW-NEXT -->\n",
+            encoding="utf-8",
+        )
+        for command, extra in (
+            ("apply", ()),
+            ("check", ()),
+            ("resolve", ("--choice", "overwrite")),
+        ):
+            with self.subTest(command=command):
+                rejected = self._flowctl(command, "CLAUDE.md", embedded, *extra)
+                self.assertEqual(rejected.returncode, 1)
+                combined = rejected.stdout + rejected.stderr
+                self.assertIn("embeds a marker token", combined)
+                self.assertEqual(target.read_bytes(), target_before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_template_with_outside_prose_rejected_no_writes(self) -> None:
+        # fn-171 review tightening: a template must be EXACTLY the managed
+        # span. Prose outside the pair would be applied+hashed by `apply` but
+        # never compared by `check` (whole-template-vs-span skew).
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        prosed = self.repo / "prosed-template.md"
+        prosed.write_text(
+            "intro prose\n"
+            "<!-- BEGIN FLOW-NEXT -->\nbody\n<!-- END FLOW-NEXT -->\n"
+            "outro prose\n",
+            encoding="utf-8",
+        )
+        for command in ("apply", "check"):
+            with self.subTest(command=command):
+                rejected = self._flowctl(command, "CLAUDE.md", str(prosed))
+                self.assertEqual(rejected.returncode, 1)
+                combined = rejected.stdout + rejected.stderr
+                self.assertIn(
+                    "template must contain exactly the marker-pair block for "
+                    "id FLOW-NEXT (BEGIN first line, END last line, "
+                    "trailing newline)",
+                    combined,
+                )
+                self.assertEqual(target.read_bytes(), target_before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_template_missing_trailing_newline_rejected_no_writes(self) -> None:
+        # A template ending at the END marker without a terminator would eat
+        # the END line's newline on refresh, concatenating an adjacent
+        # block's BEGIN onto it.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        unterminated = self.repo / "unterminated-template.md"
+        unterminated.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\nbody\n<!-- END FLOW-NEXT -->",
+            encoding="utf-8",
+        )
+        for command in ("apply", "check"):
+            with self.subTest(command=command):
+                rejected = self._flowctl(command, "CLAUDE.md", str(unterminated))
+                self.assertEqual(rejected.returncode, 1)
+                combined = rejected.stdout + rejected.stderr
+                self.assertIn(
+                    "template must contain exactly the marker-pair block for "
+                    "id FLOW-NEXT (BEGIN first line, END last line, "
+                    "trailing newline)",
+                    combined,
+                )
+                self.assertEqual(target.read_bytes(), target_before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_adjacent_blocks_refresh_keeps_neighbor_intact(self) -> None:
+        # Happy-path guard for the two failure modes above: with blocks A and
+        # B directly adjacent (no blank line between), refreshing A must keep
+        # B's span byte-intact and `check --id B` at exit 0; and a check right
+        # after a first apply is `unchanged` exit 0.
+        a_v1 = self.repo / "a-v1.md"
+        a_v1.write_text("<!-- BEGIN A -->\na-v1\n<!-- END A -->\n", encoding="utf-8")
+        a_v2 = self.repo / "a-v2.md"
+        a_v2.write_text("<!-- BEGIN A -->\na-v2\n<!-- END A -->\n", encoding="utf-8")
+        b_tmpl = self.repo / "b.md"
+        b_tmpl.write_text("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", encoding="utf-8")
+        target = self.repo / "CLAUDE.md"
+        # Construct direct adjacency by hand (apply's append path inserts a
+        # separator, so adjacency arises from hand-arranged files): A's END
+        # line immediately followed by B's BEGIN line. The two applies then
+        # take the byte-equal `unchanged` path, recording both hashes.
+        target.write_text(
+            a_v1.read_text(encoding="utf-8") + b_tmpl.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "<!-- END A -->\n<!-- BEGIN B -->", target.read_text(encoding="utf-8")
+        )
+        self._result(self._flowctl("apply", "CLAUDE.md", a_v1, "--id", "A"))
+        self._result(self._flowctl("apply", "CLAUDE.md", b_tmpl, "--id", "B"))
+
+        # apply-then-check == unchanged exit 0 immediately after first apply.
+        first_check = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(first_check.returncode, 0, first_check.stdout + first_check.stderr)
+        self.assertEqual(json.loads(first_check.stdout)["action"], "unchanged")
+
+        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", a_v2, "--id", "A"))
+        self.assertEqual(refreshed["action"], "refreshed")
+        text = target.read_text(encoding="utf-8")
+        self.assertIn("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", text)
+        self.assertIn("<!-- END A -->\n<!-- BEGIN B -->", text)
+
+        check_b = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(check_b.returncode, 0, check_b.stdout + check_b.stderr)
+        self.assertEqual(json.loads(check_b.stdout)["action"], "unchanged")
+        check_a = self._flowctl("check", "CLAUDE.md", a_v2, "--id", "A")
+        self.assertEqual(check_a.returncode, 0, check_a.stdout + check_a.stderr)
+        self.assertEqual(json.loads(check_a.stdout)["action"], "unchanged")
+
+    # -- fn-171.2: read-only `check` verdict verb -----------------------
+
+    def test_check_unchanged_pristine_exit_zero_and_writes_nothing(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        mtime_before = target.stat().st_mtime_ns
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertEqual(result["action"], "unchanged")
+        self.assertNotIn("command", result)
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(target.stat().st_mtime_ns, mtime_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_byte_pristine_with_customized_sentinel_is_unchanged(self) -> None:
+        # Byte-equality first, matching apply's order: a hand-reverted block
+        # reads clean even though the sentinel is still on record.
+        target = self.repo / "CLAUDE.md"
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        meta = self._meta()
+        meta["setup"]["block_hashes"]["CLAUDE.md"]["FLOW-NEXT"] = "customized"
+        self.meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["action"], "unchanged")
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_template_drift_exit_two_writes_nothing(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        mtime_before = target.stat().st_mtime_ns
+        proc = self._flowctl("check", "CLAUDE.md", self.v2)
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["action"], "template-drift")
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(target.stat().st_mtime_ns, mtime_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_customized_exit_two_writes_nothing(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        target.write_text(
+            target.read_text(encoding="utf-8").replace("v1", "mine"), encoding="utf-8"
+        )
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["action"], "customized")
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_customized_sentinel_with_real_drift_exit_two(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))
+        target.write_text(
+            target.read_text(encoding="utf-8").replace("v1", "mine"), encoding="utf-8"
+        )
+        self._result(self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep"))
+        # Sentinel now on record; hand-edit again so the block is not pristine.
+        target.write_text(
+            target.read_text(encoding="utf-8").replace("mine", "mine2"), encoding="utf-8"
+        )
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertEqual((result["action"], result["reason"]), ("customized", "customized-sentinel"))
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_hash_absent_exit_two_writes_nothing(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\nmine\n<!-- END FLOW-NEXT -->\n", encoding="utf-8"
+        )
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        mtime_before = target.stat().st_mtime_ns
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["action"], "hash-absent")
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(target.stat().st_mtime_ns, mtime_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_missing_file_exit_three(self) -> None:
+        meta_before = self.meta_path.read_bytes()
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 3, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["action"], "missing-file")
+        self.assertFalse((self.repo / "CLAUDE.md").exists())
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_missing_markers_exit_three_writes_nothing(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("just prose, no markers\n", encoding="utf-8")
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 3, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["action"], "missing-markers")
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_corrupt_unpaired_marker_exit_three_writes_nothing(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("<!-- BEGIN FLOW-NEXT -->\norphan\n", encoding="utf-8")
+        meta_before = self.meta_path.read_bytes()
+        bytes_before = target.read_bytes()
+        proc = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(proc.returncode, 3, proc.stdout + proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["action"], "corrupt")
+        self.assertEqual(target.read_bytes(), bytes_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_template_id_consistency_rejects_missing_marker_pair(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        rejected = self._flowctl("check", "CLAUDE.md", self.v1, "--id", "DEPLOY")
+        self.assertEqual(rejected.returncode, 1)
+        combined = rejected.stdout + rejected.stderr
+        self.assertIn(
+            "template does not contain the marker pair for id DEPLOY", combined
+        )
+        self.assertEqual(target.read_bytes(), target_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_check_two_blocks_one_file_end_to_end(self) -> None:
+        a_tmpl = self.repo / "a.md"
+        a_tmpl.write_text("<!-- BEGIN A -->\na-body\n<!-- END A -->\n", encoding="utf-8")
+        b_tmpl = self.repo / "b.md"
+        b_tmpl.write_text("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", encoding="utf-8")
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        self._result(self._flowctl("apply", "CLAUDE.md", a_tmpl, "--id", "A"))
+        self._result(self._flowctl("apply", "CLAUDE.md", b_tmpl, "--id", "B"))
+
+        # Hand-edit B only, inside its own span; A's span is untouched.
+        text = target.read_text(encoding="utf-8").replace("b-body", "b-mine")
+        target.write_text(text, encoding="utf-8")
+
+        check_a = self._flowctl("check", "CLAUDE.md", a_tmpl, "--id", "A")
+        self.assertEqual(check_a.returncode, 0, check_a.stdout + check_a.stderr)
+        self.assertEqual(json.loads(check_a.stdout)["action"], "unchanged")
+
+        check_b = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(check_b.returncode, 2, check_b.stdout + check_b.stderr)
+        self.assertEqual(json.loads(check_b.stdout)["action"], "customized")
+
+    def test_check_mixed_line_endings_across_two_spans_preserve_bytes(self) -> None:
+        # write_bytes throughout: write_text newline-translates on Windows,
+        # which would turn every span CRLF before the fixture's deliberate
+        # mixed-endings setup (windows-latest CI failure).
+        a_tmpl = self.repo / "a.md"
+        a_tmpl.write_bytes(b"<!-- BEGIN A -->\na-body\n<!-- END A -->\n")
+        b_tmpl = self.repo / "b.md"
+        b_tmpl.write_bytes(b"<!-- BEGIN B -->\nb-body\n<!-- END B -->\n")
+        target = self.repo / "CLAUDE.md"
+        target.write_bytes(b"header\n")
+        self._result(self._flowctl("apply", "CLAUDE.md", a_tmpl, "--id", "A"))
+        self._result(self._flowctl("apply", "CLAUDE.md", b_tmpl, "--id", "B"))
+
+        # Convert ONLY B's span to CRLF; A's span and the rest of the file
+        # stay LF. A CRLF-only diff must not read as drift for either id.
+        content = target.read_bytes()
+        b_span_lf = b"<!-- BEGIN B -->\nb-body\n<!-- END B -->"
+        b_span_crlf = b"<!-- BEGIN B -->\r\nb-body\r\n<!-- END B -->"
+        self.assertIn(b_span_lf, content)
+        mixed = content.replace(b_span_lf, b_span_crlf)
+        target.write_bytes(mixed)
+        outside_b_before = mixed.replace(b_span_crlf, b"")
+
+        meta_before = self.meta_path.read_bytes()
+        check_a = self._flowctl("check", "CLAUDE.md", a_tmpl, "--id", "A")
+        self.assertEqual(check_a.returncode, 0, check_a.stdout + check_a.stderr)
+        self.assertEqual(json.loads(check_a.stdout)["action"], "unchanged")
+        check_b = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(check_b.returncode, 0, check_b.stdout + check_b.stderr)
+        self.assertEqual(json.loads(check_b.stdout)["action"], "unchanged")
+
+        self.assertEqual(target.read_bytes(), mixed)
+        self.assertEqual(target.read_bytes().replace(b_span_crlf, b""), outside_b_before)
         self.assertEqual(self.meta_path.read_bytes(), meta_before)
 
 
