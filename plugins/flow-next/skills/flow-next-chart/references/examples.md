@@ -6,6 +6,13 @@ Each native example lists: inferred operation, read-back point, evidence/consent
 
 Use plain hyphens only. Never embed literal destructive shell command strings or realistic secrets - describe risky operations in prose.
 
+- [Native examples](#native-examples)
+- [Four adaptive traces (illustrative - not phases)](#four-adaptive-traces-illustrative---not-phases)
+- [Flags (automation only - not required vocabulary)](#flags-automation-only---not-required-vocabulary)
+- [Automation flag map (not required vocabulary)](#automation-flag-map-not-required-vocabulary)
+- [Conversational equivalents for common flags](#conversational-equivalents-for-common-flags)
+- [Verdict grammar reminder](#verdict-grammar-reminder)
+
 ---
 
 ## Native examples
@@ -184,6 +191,39 @@ CHART_VERDICT=NO_WORK chart=- decision=- reason="no consequential unknowns; capt
 ```text
 CHART_VERDICT=COMPLETE chart=fn-140 decision=- reason="multi-spec briefing B1 confirmed; shared_context preserved"
 ```
+
+---
+
+## Flags (automation only - not required vocabulary)
+
+| Flag / form | Purpose |
+|---|---|
+| `--status` | Status mode - render only |
+| `--decision <n>` | Pin a D-ID for work mode |
+| `--json` on every `flowctl chart` subcommand | Machine envelope for drivers |
+| `chart create --initial-map-file` / `--force-size --reason` | Atomic chart + ceiling override (audited) |
+| `chart resolve --answer-file` / `--sharpen-file` / `--supersedes` / `--keep-dependents` | Close + optional sharpen/cascade; `--sharpen-file` also carries a dated `notes_append` correction when the answer disproves a grounding note (unattended: only on direct contradiction, never speculative); unrecognized keys fail the whole resolve |
+| `chart attach-asset --asset-file` | Safe artefact while open |
+| `chart briefing --proposal-file` / `--force` | Confirmed split proposal; force is draft-only; after a `chart reopen` the same proposal mints the next B-ID |
+| `chart claim` / `release-claim [--break-stale --reason]` | Claims; no silent expiry |
+| `chart locate <selector>` | Local ledger re-entry (may be absent - degrade) |
+
+## Automation flag map (not required vocabulary)
+
+| Human intent | flowctl |
+|---|---|
+| Start discovery on an idea | `chart create --title --outcome --initial-map-file` |
+| Keep one chart past ceiling | same + `--force-size --reason` after consent |
+| What's next | `chart frontier` / `chart show` |
+| Work this decision | `chart claim` then route then `resolve` / `out-of-scope` |
+| Park a vague unknown | `chart park-question --body-file` |
+| Wire edges after create | `chart wire-decision` |
+| Attach prototype evidence | `chart attach-asset --asset-file` |
+| Sharpen after answer | `resolve --sharpen-file` |
+| Correct a disproved note | `resolve --sharpen-file` (`notes_append`) |
+| Reverse prior answer | `resolve --supersedes` |
+| Brief for capture | `chart briefing --proposal-file` |
+| Re-enter from tracker URL | `chart locate` (local only; degrade if missing) |
 
 ---
 
