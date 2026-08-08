@@ -253,7 +253,7 @@ class SpecIdNetworkCost(unittest.TestCase):
 
 
 class SpecIdDiscoverability(unittest.TestCase):
-    """R11: plan / work / capture name tracker-first as recommended team default."""
+    """Withdrawn R10: mint-time discoverability stays out of runtime prose."""
 
     def test_no_runtime_advisory_nag(self) -> None:
         """Withdrawn R10: no nag/advisory line at mint time."""
