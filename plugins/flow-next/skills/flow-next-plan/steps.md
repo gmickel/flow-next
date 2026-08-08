@@ -318,11 +318,11 @@ Default to standard unless complexity demands more or less.
    The plan markdown (step 2's scaffold) is fed to the creation call via `--plan-file` so create + set-plan collapse into one invocation (`--plan-file` validates before id allocation and composes unchanged with the tracker-first flags). **Author-as-file rule:** compose the plan with the **Write tool** at a literal agent-composed path — NOT inside a bash heredoc. Resolve `${TMPDIR:-/tmp}` yourself and type the RESOLVED literal path (e.g. `/tmp/flow-plan-body-ab12.md`) identically in the Write call and the Bash block — file tools do not expand shell variables; the path is literal in both tool calls, so no shell variable crosses calls. If plan review or a fix loop demands revisions, revise this file with **Edit** (span edits) and re-run only the affected flowctl call — never re-emit the document. Delete the file only after the spec (and any revision loop) is finalized; the durable plan lives in `.flow/` via the create call.
 
    ```
-   Write tool -> ${TMPDIR:-/tmp}/flow-plan-body-<suffix>.md   (full plan markdown — step 2's scaffold)
+   Write tool -> /tmp/flow-plan-body-<suffix>.md   (full plan markdown — step 2's scaffold; a RESOLVED literal path — substitute your resolved temp dir, never an unexpanded ${TMPDIR} expression)
    ```
    ```bash
    # Creation block references the SAME literal path (no cross-call variable):
-   PLAN_FILE="${TMPDIR:-/tmp}/flow-plan-body-<suffix>.md"
+   PLAN_FILE="/tmp/flow-plan-body-<suffix>.md"   # the EXACT resolved literal the Write call used
    # ... routing + creation lines below run HERE ...
    # (delete $PLAN_FILE only after the plan is finalized — see author-as-file rule)
    ```
@@ -492,14 +492,14 @@ Default to standard unless complexity demands more or less.
 
 4. Create ALL child tasks in ONE `task create --from-json` call (fn-163; all-or-nothing under one lock — zero follow-up `task set-spec` on the plan path). Compose the task set with the **Write tool** (author-as-file rule — revisable with Edit if the batch is rejected or the plan is revised, instead of re-emitting the array):
    ```
-   Write tool -> ${TMPDIR:-/tmp}/flow-plan-tasks-<suffix>.json   (ONE bare JSON array):
+   Write tool -> /tmp/flow-plan-tasks-<suffix>.json   (ONE bare JSON array; RESOLVED literal path — same string in the flowctl call below):
    [
      {"title": "<Task 1 title>", "description": "<## Description ...>", "acceptance": "<- [ ] ...>", "satisfies": ["R1", "R3"]},
      {"title": "<Task 2 title>", "deps": [1], "description": "...", "acceptance": "...", "satisfies": ["R2"]}
    ]
    ```
    ```bash
-   $FLOWCTL task create --spec <spec-id> --from-json "${TMPDIR:-/tmp}/flow-plan-tasks-<suffix>.json" --json
+   $FLOWCTL task create --spec <spec-id> --from-json "/tmp/flow-plan-tasks-<suffix>.json" --json   # same resolved literal the Write call used
    ```
 
    Per object: `title` required non-empty; `description`/`acceptance` optional strings (full task-spec markdown — same content the granular `--description-file`/`--acceptance-file` flags take); `satisfies` an array of bare R-ID tokens (grammar `R[1-9][0-9]*[a-z]?`); `deps` an array of task-id strings or **1-based integer indexes of EARLIER entries in the same array** (so intra-plan dependencies need no pre-existing ids); `priority` optional int. Any invalid entry rejects the whole batch with zero writes; `--json` returns the created ids in input order. Omit `deps`/`satisfies` where they don't apply. Granular one-task `task create` (with `--description-file`/`--acceptance-file`/`--satisfies`) remains the tool for ADDING a task to an existing plan later; `task set-spec` is for editing tasks that already exist.

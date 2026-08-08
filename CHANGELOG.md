@@ -38,13 +38,14 @@ declined that machinery explicitly and delivered 43% fewer output tokens at
   fields the example does not show. This closes a deviation class caught
   twice in benchmark and field runs (an implementer "helpfully" extending a
   shown shape past the spec).
-- Workers run focused tests for the code under change while iterating and
-  the full suite exactly at the gates that already require it (pre-edit
-  baseline, pre-review, pre-commit) - in the replay campaign 54% of
+- Workers run focused tests for the code under change while iterating; the
+  full suite runs only where an existing gate's Quick commands already
+  require it, never as a mid-loop reflex - in the replay campaign 54% of
   full-suite runs were redundant mid-loop re-runs at roughly three times the
-  targeted-test cost. Test mass follows the spec's error enumeration: one
-  focused test per acceptance criterion and error case, table-driven over
-  copy-paste, no re-testing already-covered branches.
+  targeted-test cost. No gate definition changes. Test mass follows the
+  spec's error enumeration: one focused test per acceptance criterion and
+  error case, table-driven over copy-paste, no re-testing already-covered
+  branches.
 
 ## [flow-next 3.17.0] - 2026-08-08
 
