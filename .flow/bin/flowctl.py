@@ -2996,12 +2996,10 @@ def _cmd_setup_block_resolve_locked(
         error_exit(f"target or template unreadable ({e})", use_json=args.json)
     _setup_block_require_template_pair(canonical, block_id, args.json)
 
-    if args.choice == "keep":
-        _setup_block_record_hash(meta, key, block_id, "customized")
-        atomic_write_json(meta_path, meta)
-        _setup_block_emit(args, key, "kept", "customized-sentinel", "customized")
-        return
-
+    # Validate the operated span BEFORE any meta.json mutation - for both
+    # choices. `keep` used to record the sentinel blind; on a corrupt
+    # (unpaired/embedded) or marker-less target that contradicted the per-id
+    # fail-closed contract `apply` and `check` enforce (fn-171 R2).
     try:
         current = _read_text_verbatim(target)
         span = _setup_block_span(current, block_id)
@@ -3010,7 +3008,16 @@ def _cmd_setup_block_resolve_locked(
     except Exception as e:
         error_exit(f"target or template unreadable ({e})", use_json=args.json)
     if span is None:
-        error_exit("target has no flow-next marker block to overwrite", use_json=args.json)
+        error_exit(
+            f"target has no flow-next marker block to {args.choice}",
+            use_json=args.json,
+        )
+
+    if args.choice == "keep":
+        _setup_block_record_hash(meta, key, block_id, "customized")
+        atomic_write_json(meta_path, meta)
+        _setup_block_emit(args, key, "kept", "customized-sentinel", "customized")
+        return
     canonical_hash = _setup_block_hash(canonical)
     _setup_block_write(target, current[:span[0]] + canonical + current[span[1]:])
     _setup_block_record_hash(meta, key, block_id, canonical_hash)

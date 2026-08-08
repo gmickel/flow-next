@@ -269,6 +269,35 @@ class SetupBlockFixtureTest(unittest.TestCase):
         self.assertEqual(target.read_bytes(), target_before)
         self.assertEqual(self.meta_path.read_bytes(), meta_before)
 
+    def test_resolve_keep_corrupt_block_fails_closed_without_writes(self) -> None:
+        # fn-171 R2: `resolve --choice keep` must validate the operated span
+        # before recording the sentinel - a corrupt target fails exit 1 with
+        # meta.json and target bytes untouched, matching apply/check.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("<!-- BEGIN FLOW-NEXT -->\nno end\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        corrupt = self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep")
+        self.assertEqual(corrupt.returncode, 1, corrupt.stderr + corrupt.stdout)
+        self.assertEqual(target.read_bytes(), target_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_resolve_keep_missing_markers_and_missing_file_fail_closed(self) -> None:
+        # No span for the operated id -> nothing to keep; a sentinel would be
+        # recorded for nothing. Exit 1, no meta write.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("prose only\n", encoding="utf-8")
+        meta_before = self.meta_path.read_bytes()
+        no_markers = self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep")
+        self.assertEqual(no_markers.returncode, 1, no_markers.stderr + no_markers.stdout)
+        self.assertIn("no flow-next marker block to keep", no_markers.stdout + no_markers.stderr)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+        target.unlink()
+        missing = self._flowctl("resolve", "CLAUDE.md", self.v1, "--choice", "keep")
+        self.assertEqual(missing.returncode, 1, missing.stderr + missing.stdout)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
     def test_invalid_ids_rejected_before_any_file_touch(self) -> None:
         target = self.repo / "CLAUDE.md"
         target.write_text("prose\n", encoding="utf-8")
