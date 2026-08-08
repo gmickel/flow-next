@@ -72,12 +72,6 @@ If empty, ask: "What should I plan? Give me the feature or bug in 1-5 sentences.
 
 ## FIRST: Parse Options or Ask Questions
 
-Check configured backend:
-```bash
-REVIEW_BACKEND=$($FLOWCTL review-backend)
-```
-Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none` (configured).
-
 ### Autonomous mode (mode:autonomous / FLOW_AUTONOMOUS)
 
 Parse `$ARGUMENTS` for the literal token `mode:autonomous` (strip it, same shape as capture's `mode:autofix` — a NEW parse branch, never overloading that token). Also honor the env var `FLOW_AUTONOMOUS=1` as a secondary signal (process-level drivers). Either signal → `AUTONOMOUS=1`.
@@ -102,22 +96,6 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 
 ### If options NOT found in arguments
 
-**RepoPrompt eligibility** (compute once, before any question below):
-
-```bash
-# Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
-if command -v rpce-cli >/dev/null 2>&1 \
-  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
-  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
-  || command -v rp-cli >/dev/null 2>&1; then
-  RP_ELIGIBLE=1
-else
-  RP_ELIGIBLE=0
-fi
-```
-
-Eligibility governs *review-backend proposals only* — an explicit `--review=rp` argument (parsed above) is always honored and errors at runtime if no supported RepoPrompt CLI resolves.
-
 **Plan depth** (parse from args or ask):
 - `--depth=short` or "quick" or "minimal" → SHORT
 - `--depth=standard` or "normal" → STANDARD
@@ -126,57 +104,32 @@ Eligibility governs *review-backend proposals only* — an explicit `--review=rp
 
 **If `AUTONOMOUS=1`:** skip every question below — apply the autonomous defaults above and continue.
 
+Check the configured backend and route:
+
+```bash
+ACTIVE=0
+# NO pipelines in the probe — a failed producer masked by a healthy consumer
+# fails CLOSED. Capture raw first, rc-checked; parse separately.
+RAW="$($FLOWCTL review-backend 2>/dev/null)" || ACTIVE=1        # probe ERROR ⇒ ACTIVE (fail open)
+if [ "$ACTIVE" = "0" ]; then
+  REVIEW_BACKEND="$(printf '%s' "$RAW" | tr -d '[:space:]' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$REVIEW_BACKEND" = "ASK" ] && ACTIVE=1
+fi
+[ "${AUTONOMOUS:-0}" = "1" ] && ACTIVE=0        # autonomous NEVER asks — defaults apply
+if [ "$ACTIVE" = "1" ]; then
+  echo "SETUP-QUESTIONS GATE ACTIVE — STOP. Read references/setup-questions.md before continuing."
+fi
+```
+
+`review-backend` returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none` (configured).
+
+When the sentinel prints, STOP and Read [`references/setup-questions.md`](references/setup-questions.md) before any further step — it owns RepoPrompt eligibility, the two question variants, and the empty/ambiguous defaults.
+
 **If REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none** (already configured): ask nothing — depth defaults apply unless passed, research is `repo-scout`, review is the configured backend. Show the override hint:
 
 ```
 (Tip: --depth=short|standard|deep, --review=rp|codex|host|none)
 ```
-
-**If REVIEW_BACKEND is ASK** (not configured): ask the setup questions below (do NOT use AskUserQuestion tool).
-
-When `RP_ELIGIBLE=1`:
-
-```
-Quick setup before planning:
-
-1. **Plan depth** — How detailed?
-   a) Short — problem, acceptance, key context only
-   b) Standard (default) — + approach, risks, test notes
-   c) Deep — + phases, alternatives, rollout plan
-
-2. **Review** — Run Carmack-level review after?
-   a) Codex CLI
-   b) RepoPrompt
-   c) Export for external LLM
-   d) None (configure later)
-
-(Reply: "1a 2d", or just tell me naturally)
-```
-
-When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): drop the RepoPrompt review option:
-
-```
-Quick setup before planning:
-
-1. **Plan depth** — How detailed?
-   a) Short — problem, acceptance, key context only
-   b) Standard (default) — + approach, risks, test notes
-   c) Deep — + phases, alternatives, rollout plan
-
-2. **Review** — Run Carmack-level review after?
-   a) Codex CLI
-   b) Export for external LLM
-   c) None (configure later)
-
-(Reply: "1a 2c", or just tell me naturally)
-```
-
-Wait for response. Parse naturally — user may reply terse ("1a 2b") or ramble via voice.
-
-**Defaults when empty/ambiguous:**
-- Depth = `standard` (balanced detail)
-- Research = `repo-scout`
-- Review = configured backend if set, else `none`
 
 ## Spec-id scheme (team default)
 
@@ -188,9 +141,11 @@ Read [steps.md](steps.md) and follow each step in order.
 
 **Step 1 readiness soft-check (fn-58)**: existing-spec inputs get an adoption-gated readiness check BEFORE the scout fan-out — warn-not-block, default proceed; repos that never adopted readiness see nothing. Details in steps.md Step 1.
 
-**Optional paths**: `steps.md` gates tracker projection, selected review, and the
-HTML render lens after their existing config/choice signals. Their references
-stay cold when off; Step 0 remains the only config snapshot.
+**Optional paths**: `steps.md` gates the readiness warning, the Route A refine
+path, the tracker-first mint, tracker projection, selected review, the
+interactive next-steps menu, and the HTML render lens after their existing
+config/choice/route signals. Their references stay cold when the path is not
+taken; Step 0 remains the only config snapshot.
 
 **CRITICAL — Step 1 (Research)**: You MUST launch ALL scouts in the **depth-appropriate set** (steps.md tier table — the full set at STANDARD/DEEP; the full set MINUS the three web-research scouts at SHORT) in ONE parallel Task call. Do NOT skip scouts within that set or run them sequentially. Each scout in the set provides unique signal.
 

@@ -117,29 +117,17 @@ if [[ "$SPEC_READY" != "true" ]]; then
   READY_ADOPTED=$($FLOWCTL specs --json 2>/dev/null | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null || echo 0)
   if [[ -n "$READY_STATE" || "$READY_ADOPTED" -ge 1 ]]; then
     READINESS_WARN=true
+    echo "READINESS GATE ACTIVE — STOP. Read references/readiness-warn.md before continuing."
   fi
 fi
 ```
 
-When `READINESS_WARN=false`: continue silently — zero behavior change for ready specs and for repos that never adopted readiness.
+When `READINESS_WARN=false`: continue silently — zero behavior change for ready specs and for repos that never adopted readiness. No sentinel prints; load no reference.
 
-When `READINESS_WARN=true`:
-
-- **Non-interactive / Ralph / autonomous** (any non-interactive marker: `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, `FLOW_AUTONOMOUS=1`, or the `mode:autonomous` token parsed in SKILL.md — treat the marker *family* as the gate, not a rigid two-var list): auto-proceed with ONE stderr line, never block:
-  ```bash
-  echo "[READINESS]: spec <id> not marked ready — proceeding (non-interactive)" >&2
-  ```
-- **Interactive**: ask ONE question (MUST use `AskUserQuestion` tool; lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
-  - **`tracker.readyState` NOT configured** (local readiness):
-    - **header**: `Spec not ready`
-    - **body**: `<spec-id> is not marked ready (readiness is in use in this repo). Recommended: proceed — planning is non-destructive and refining a draft is normal. Confidence: [high].`
-    - **options** (frozen): `proceed` (default — continue to research), `mark-ready-then-proceed` (run `$FLOWCTL spec ready <id> --json`, then continue), `abort` (exit 0 — no spec or task changes made; re-run /flow-next:plan once the spec is blessed)
-  - **`tracker.readyState` configured** (tracker-authoritative readiness — one-way pull; NEVER offer local mark-ready, the next sync would silently revert it):
-    - **header**: `Spec not ready`
-    - **body**: `<spec-id> is not marked ready; readiness projects from the tracker (state: <readyState>). Recommended: proceed — planning is non-destructive. Confidence: [high].`
-    - **options** (frozen): `proceed` (default — continue to research), `abort` (exit 0 — no spec or task changes made), `update-tracker-state-then-rerun` (exit 0 with guidance: move the linked issue to "<readyState>" on the board, pull via /flow-next:tracker-sync, re-run /flow-next:plan)
-
-Never a hard block — `abort` / `update-tracker-state-then-rerun` are user choices, not skill-imposed stops (R6).
+When the sentinel prints (`READINESS_WARN=true`), STOP and Read
+[`references/readiness-warn.md`](references/readiness-warn.md) before any
+further step — it owns the non-interactive stderr line and the two frozen
+interactive option sets. Never a hard block (R6).
 
 **Check if memory and github-scout are enabled** (from the Step 0 root snapshot — no config get calls):
 ```bash
@@ -159,12 +147,13 @@ if [[ "$STRATEGY_FILLED" -ge 1 ]]; then
   # `last_updated` verbatim — no paraphrasing. Active tracks shape the Strategy Alignment
   # section in Step 5; conflicts with active tracks surface as drift in Step 5.
   STRATEGY_PRESENT=true
+  echo "STRATEGY GATE ACTIVE — STOP. Read references/strategy-alignment.md before continuing."
 else
   STRATEGY_PRESENT=false
 fi
 ```
 
-When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy content. When `STRATEGY_PRESENT=false` (no STRATEGY.md or husk), the plan skips the `## Strategy Alignment` section and any drift-surfacing entirely (Step 5) — absence is fine, no signal to align to.
+When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy content; STOP and Read [`references/strategy-alignment.md`](references/strategy-alignment.md) before any further step — it owns the `## Strategy Alignment` and `## Strategy drift flagged for review` sections Step 5 renders. When `STRATEGY_PRESENT=false` (no STRATEGY.md or husk), the plan skips the `## Strategy Alignment` section and any drift-surfacing entirely (Step 5) — absence is fine, no signal to align to; load no reference.
 
 **CRITICAL: run every scout in the DEPTH-appropriate set below, in parallel. The set is keyed on `--depth` (a DETERMINISTIC, user-signaled tier), NOT on your judgment of "what seems relevant" — that judgment-skip is the anti-pattern.**
 
@@ -274,23 +263,10 @@ Default to standard unless complexity demands more or less.
 
 **Efficiency note**: Author documents with the **Write tool**, revise them with **Edit** — never compose a document inside a bash heredoc or stdin pipe. A heredoc puts the whole document into the command string, so every revision (review fix loop, interview write-back) re-emits it in full; a Written file is revised span-by-span with Edit at a fraction of the tokens. Heredocs/stdin (`--file -`) stay acceptable only for short transient payloads (≲10 lines). Route B is the ceremony fast path (fn-163): `spec create --plan-file` creates the spec WITH its plan in one call, and ONE `task create --from-json` call materializes every task of the plan (all-or-nothing, one lock). Granular verbs (`spec set-plan`, per-task `task create`, `task set-spec`) remain the tools for editing what already exists (Route A edits, interview write-backs, review fix loops, adding a task later).
 
-**Route A - Input was an existing Flow ID**:
-
-1. If spec ID (fn-N-slug or legacy fn-N/fn-N-xxx):
-   Compose the revised plan as a FILE: `"$FLOWCTL" cat <id> > "${TMPDIR:-/tmp}/flow-plan-body-<suffix>.md"` (or Write it fresh), revise it with **Edit** (span edits, not re-emission), then:
-   ```bash
-   $FLOWCTL spec set-plan <id> --file "${TMPDIR:-/tmp}/flow-plan-body-<suffix>.md" --json
-   rm -f "${TMPDIR:-/tmp}/flow-plan-body-<suffix>.md"
-   ```
-   - Create/update child tasks as needed
-
-2. If task ID (fn-N-slug.M or legacy fn-N.M/fn-N-xxx.M):
-   ```bash
-   # Combined set-spec: description + acceptance in one call
-   # Write to temp files only if content has single quotes — unique per-task paths
-   # (path-persistence rule: literal agent-composed paths, never shared fixed names)
-   $FLOWCTL task set-spec <id> --description "${TMPDIR:-/tmp}/flow-plan-desc-<task-id>.md" --acceptance "${TMPDIR:-/tmp}/flow-plan-acc-<task-id>.md" --json
-   ```
+**Route A - Input was an existing Flow ID**: the spec-id and task-id edit paths
+live in [`references/route-a-refine.md`](references/route-a-refine.md) — read it
+now, follow it, then continue with the plan-content and task-authoring rules
+below (they bind on both routes). Route B sessions skip that file entirely.
 
 **Route B - Input was text (new idea)**:
 
@@ -309,29 +285,23 @@ Default to standard unless complexity demands more or less.
    ```
 
    ```bash
-   # From the Step 0 root snapshot (literal path; no new config get).
-   SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)
-   BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
-
-   if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
-     # Named existing issue in the request → mint from that key, THEN attach + seed:
-     #   $FLOWCTL spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "<Short title>" --plan-file "$PLAN_FILE" --json
-     #   Minting stores the identifier but NOT the durable tracker.id, so this
-     #   branch MUST also run the fetch/attach/seed ceremony (tracker-sync
-     #   steps.md Phase 2b). Skipping it leaves the spec effectively unlinked and
-     #   a later touchpoint creates a SECOND remote issue instead of linking.
-     # Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
-     #   skill: flow-next-tracker-sync (operation: create-first, title: "<Short title>", body: "<seed body>")
-     #   → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below
-     #   $FLOWCTL spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "<Short title>" --plan-file "$PLAN_FILE" --json
-     #   then attach + seed merge base per tracker-sync steps.md Phase 2d "Enabled caller sequence"
-     # Network cost (honest, conditional): when tracker.perEvent.plan is already active,
-     # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
-     # bridge-active repo can have every lifecycle event disabled), tracker-first adds an
-     # EARLIER remote write that flow-first would not have made.
-     # Assign the result to SPEC_OUTPUT on every path that succeeds here.
-     :
+   # Spec-id allocator gate — from the Step 0 root snapshot (literal path; no new config get).
+   # NO pipelines in the probe — a failed producer masked by a healthy consumer
+   # fails CLOSED. Capture raw first, rc-checked; parse separately.
+   ACTIVE=0
+   SPEC_IDS="$(jq -r '.value.tracker.specIds // "flow"' "${TMPDIR:-/tmp}/flow-plan-config-<suffix>.json" 2>/dev/null)" || ACTIVE=1   # probe ERROR ⇒ ACTIVE (fail open)
+   if [ "$ACTIVE" = "0" ]; then
+     BRIDGE_RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE
    fi
+   if [ "$ACTIVE" = "0" ]; then
+     BRIDGE_ACTIVE="$(printf '%s' "$BRIDGE_RAW" | jq -r '.active // false' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+     [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ] && ACTIVE=1
+   fi
+   if [ "$ACTIVE" = "1" ]; then
+     echo "TRACKER-FIRST GATE ACTIVE — STOP. Read references/tracker-first-mint.md before continuing."
+   fi
+   # The tracker-first arm (named-issue mint, create-first ceremony, attach + seed)
+   # runs HERE, and ONLY per that reference — it assigns SPEC_OUTPUT / IDENTIFIER.
 
    # SILENT degrade - the ONLY flow-first creation site, deliberately OUTSIDE
    # the branch above. A create-first noop / unreachable transport / failed mint
@@ -346,6 +316,12 @@ Default to standard unless complexity demands more or less.
      SPEC_OUTPUT=$($FLOWCTL spec create --title "<Short title>" --plan-file "$PLAN_FILE" --json)
    fi
    ```
+   When the sentinel prints, STOP and Read
+   [`references/tracker-first-mint.md`](references/tracker-first-mint.md) before
+   any further step — it owns the tracker-first mint ceremony and its network
+   cost. When it does not print, the unconditional post-check above is the whole
+   creation path.
+
    This returns the spec ID (e.g., `wor-17-slug` under tracker-first, or `fn-1-add-oauth` under flow-first). `branch_name` defaults to the spec ID at create time — no follow-up `spec set-branch` call on the create path. Only when the user specified a custom branch, pass it at create: `$FLOWCTL spec create --title "<Short title>" --branch "<custom-branch>" --plan-file "$PLAN_FILE" --json` (`spec set-branch` remains the tool for renaming an existing spec's branch later). Do **not** add a runtime advisory/nag about the id scheme at this mint site (withdrawn R10) — setup owns the one-time question.
 
 2. The plan content (this scaffold is what the Write tool composes into step 1's `$PLAN_FILE`; `spec set-plan` is the Route A / editing path, not part of Route B creation):
@@ -373,25 +349,11 @@ Default to standard unless complexity demands more or less.
    ## Boundaries / non-goals
    - <what this spec explicitly does NOT cover>
 
-   ## Strategy Alignment
-   <!-- Include this section ONLY when STRATEGY_PRESENT=true from Step 1.
-        When STRATEGY_PRESENT=false (no STRATEGY.md or husk: sections_filled == 0),
-        skip this section entirely. -->
-
-   Active tracks served by this plan:
-   - **<track-name>** — <one line on how this plan advances the track>
-   - **<track-name>** — <one line>
-
-   <!-- If the plan serves no active strategy track, replace the bulleted list with: -->
-   _No active strategy track served — review for drift._
-
-   ## Strategy drift flagged for review
-   <!-- Include this block ONLY when the plan scope conflicts with an active track.
-        Mirrors plan-sync's "Decision overrides flagged for review" convention
-        (agents/plan-sync.md). Read-only — the plan skill never auto-supersedes
-        STRATEGY.md; the user (or `/flow-next:strategy`) decides whether to revise. -->
-
-   - **<track-name>**: <one line on how this plan diverges from the track's stated direction>. Review for revision via `/flow-next:strategy`.
+   <!-- ## Strategy Alignment and ## Strategy drift flagged for review go HERE,
+        between ## Boundaries / non-goals and ## Decision context, ONLY when
+        STRATEGY_PRESENT=true from Step 1 — their shapes and rules live in
+        references/strategy-alignment.md. When STRATEGY_PRESENT=false, omit both
+        entirely. -->
 
    ## Decision context
    - <why this approach over alternatives>
@@ -414,18 +376,6 @@ Default to standard unless complexity demands more or less.
    | R3  | <deferred item> | — | Deferred to fn-M-slug |
    ```
 
-   **`## Strategy Alignment` rules (active iff STRATEGY_PRESENT=true from Step 1):**
-   - Section sits between `## Boundaries / non-goals` and `## Decision context` in the template above.
-   - List active tracks (`### <track-name>` blocks parsed from the strategy snapshot's `tracks` raw markdown string) that this plan advances.
-   - When the plan serves NO active track, render the placeholder `_No active strategy track served — review for drift._` literally — do not omit the section.
-   - Skip the entire section when STRATEGY_PRESENT=false. Husk-vs-presence: gated on `sections_filled >= 1`, NOT `[[ -f STRATEGY.md ]]`.
-
-   **`## Strategy drift flagged for review` rules (conditional on conflict detection):**
-   - Mirrors plan-sync's "Decision overrides flagged for review" surface (`agents/plan-sync.md` Phase 6 summary).
-   - Bulleted list with track name + plan-decision divergence + `Review for revision via /flow-next:strategy.` line per item.
-   - Read-only — the plan skill never edits STRATEGY.md, never marks a track superseded, never auto-supersedes anything. Surface for human review only.
-   - Omit the heading entirely when no drift detected. Empty drift block is silent, not `_(none)_`.
-
    **Early proof point rules:**
    - Identify which task proves the fundamental approach works
    - One sentence: which task + what it proves
@@ -447,9 +397,7 @@ Default to standard unless complexity demands more or less.
    - When `.flow/criteria.md` exists, do not restate its standing criteria (G-IDs) as R-IDs - completion review already judges every G-ID against the spec. Reference a relevant G-ID in prose when useful; write an R only for what this spec adds beyond the standing rule.
    - Each behavioral R-ID enumerates its error/invalid-input/boundary cases inside the bullet (malformed input, missing files, conflicting state, limits), or records "no error surface beyond X"; silence is incomplete. Applies to spec-added R-IDs only — never to standing G-IDs from `.flow/criteria.md`.
 
-   **Source-tag consumption (Route A refine of a capture-authored spec):** `/flow-next:capture` tags each acceptance criterion with its provenance — `[user]` (verbatim), `[paraphrase]` (user-grounded), `[inferred]` (the agent filled a gap), `[strategy:<track>]`. capture invests real machinery in these *so plan can scrutinize them* — do not plan an `[inferred]` criterion as established fact. When the spec carries source tags:
-   - `[user]` / `[paraphrase]` / `[strategy:*]` → user- or strategy-grounded; plan normally.
-   - `[inferred]` → **unconfirmed**. Route it through the Step-1 scouts (does the codebase actually support/need it?). A scout-confirmed inference becomes a normal criterion (drop the tag); an **unconfirmed** one moves to `## Open Questions` (or renders as a `⚠️ unconfirmed inference` coverage-table row) rather than being silently planned as a requirement. This closes capture→plan: the provenance capture records is otherwise dropped at the one consumer built to read it.
+   **Source-tag consumption:** a capture-authored spec carries provenance tags on its acceptance criteria. Route A sessions handle them per [`references/route-a-refine.md`](references/route-a-refine.md); Route B specs have no tags to consume.
 
 3. Set spec dependencies (from spec-scout findings) — BOTH directions:
 
@@ -654,7 +602,8 @@ review mode was selected, load and follow
 
 ## Step 8: Offer next steps
 
-Show spec summary with size breakdown and offer options:
+Show spec summary with size breakdown — the validate result plus the derived
+execution waves, on every run:
 
 ```
 Spec fn-N-slug created: "<title>"
@@ -662,22 +611,22 @@ Tasks: M total | Sizes: Ns S, Nm M
 Execution waves:
 - Wave 1 (parallel candidates): fn-N.1, fn-N.2
 - Wave 2: fn-N.3
-
-Next steps:
-1) Start work: `/flow-next:work fn-N-slug`
-2) Refine via interview: `/flow-next:interview fn-N-slug`
-3) Review the plan: `/flow-next:plan-review fn-N-slug`
-4) Go deeper on specific tasks (tell me which)
-5) Simplify (reduce detail level)
 ```
 
-If user selects 4 or 5:
-- **Go deeper**: Ask which task(s), then add more context/research to those specific tasks
-- **Simplify**: Remove non-essential sections, tighten acceptance criteria, merge small tasks
+Then route on interactivity:
 
-Loop back to options after changes until user selects 1, 2, or 3.
+```bash
+ACTIVE=0
+[ "${AUTONOMOUS:-0}" = "1" ] || [ -n "${FLOW_AUTONOMOUS:-}" ] || [ -n "${FLOW_RALPH:-}" ] || [ -n "${REVIEW_RECEIPT_PATH:-}" ] || ACTIVE=1
+if [ "$ACTIVE" = "1" ]; then
+  echo "NEXT-STEPS MENU ACTIVE — STOP. Read references/next-steps-menu.md before continuing."
+fi
+```
 
-**On loop exit (user picked 1, 2, or 3):** run Step 8.5 BEFORE dispatching the chosen next step or finishing — never on first arrival at this menu. Options 4/5 mutate tasks; generating earlier would render a lens the user is still editing.
+When the sentinel prints, STOP and Read
+[`references/next-steps-menu.md`](references/next-steps-menu.md) before any
+further step — it owns the numbered options menu and the go-deeper / simplify
+loop, including when Step 8.5 runs relative to that loop.
 
 Under `AUTONOMOUS=1` there is no options menu — run Step 8.5 directly after Step 6/7 complete.
 
