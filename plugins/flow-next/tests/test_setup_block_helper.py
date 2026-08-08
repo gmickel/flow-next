@@ -673,12 +673,15 @@ class SetupBlockFixtureTest(unittest.TestCase):
         self.assertEqual(json.loads(check_b.stdout)["action"], "customized")
 
     def test_check_mixed_line_endings_across_two_spans_preserve_bytes(self) -> None:
+        # write_bytes throughout: write_text newline-translates on Windows,
+        # which would turn every span CRLF before the fixture's deliberate
+        # mixed-endings setup (windows-latest CI failure).
         a_tmpl = self.repo / "a.md"
-        a_tmpl.write_text("<!-- BEGIN A -->\na-body\n<!-- END A -->\n", encoding="utf-8")
+        a_tmpl.write_bytes(b"<!-- BEGIN A -->\na-body\n<!-- END A -->\n")
         b_tmpl = self.repo / "b.md"
-        b_tmpl.write_text("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", encoding="utf-8")
+        b_tmpl.write_bytes(b"<!-- BEGIN B -->\nb-body\n<!-- END B -->\n")
         target = self.repo / "CLAUDE.md"
-        target.write_text("header\n", encoding="utf-8")
+        target.write_bytes(b"header\n")
         self._result(self._flowctl("apply", "CLAUDE.md", a_tmpl, "--id", "A"))
         self._result(self._flowctl("apply", "CLAUDE.md", b_tmpl, "--id", "B"))
 
