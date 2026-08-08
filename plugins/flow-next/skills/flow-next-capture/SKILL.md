@@ -17,21 +17,7 @@ flowctl provides thin spec plumbing (`spec create`, `spec set-plan`, optional `s
 
 Clear meaningful ideas and finished chart briefings route **here** - to capture (or direct spec authoring). Capture does **not** manufacture a chart for clear work. When intent and boundaries are already stateable, skip chart (`signal absent`). After a structured brief lands, narrow or skip interview only once read-back proves no material gaps - never pre-skip interview on hope. Unsure: `/flow-next:guide`.
 
-### Chart briefing ingestion (fn-135)
-
-When the conversation (or `$ARGUMENTS`) references a chart briefing — a path under `.flow/charts/*-briefing*.md`, an explicit B-ID (`B1`, `B2`, …), or a chart id with a published briefing — capture treats that briefing as **attributable evidence**, not as pre-tagged acceptance criteria:
-
-1. **Detect** the briefing input early (Phase 1 evidence). Read the index (and cluster file when multi-spec). Record chart id, B-ID, cluster key (if any), D-ID links, and approved asset references.
-2. **Admission (fail closed):** ordinary capture **REFUSES draft or stale briefings**. A forced draft (`status: draft`) is never treated as final. A stale B-ID (after `chart reopen` or supersession of linked D-IDs) is refused by default.
-3. **Explicit risk override only:** to admit a draft or stale briefing, the user must name the unresolved or invalidated D-IDs and the agent must **read back the exact risk** before write. The override never promotes a forced draft into a final briefing and never rewrites chart history.
-4. **Provenance separation (load-bearing):**
-   - Chart/B-ID/cluster/D-ID evidence and approved assets go into `## Decision Context` / evidence sections as **links and references** — never with trailing `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]` tags.
-   - The four source tags apply **only** to acceptance criteria capture **newly authors**. Never retag existing criteria. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
-   - Do **not** introduce verified/inferred fact or decision grammar (fn-148 closed STOPPED — no verdict; it licenses nothing here).
-5. **Write order after approval:** `spec create` → `spec set-plan` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
-6. **Retry / partial multi-spec:** on retry, first check `produced_specs[]` (and existing specs) for this B-ID+cluster identity; if a link already exists, link/use that spec instead of minting a duplicate. Partial multi-spec capture records only successful links and resumes the failed cluster without duplicating the first. Shared-context D-IDs stay attributable in each handoff but become acceptance requirements only where read-back confirms the target spec needs that guarantee.
-
-**Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the must-ask cases lookup, source-tag taxonomy, confidence tiers, and forbidden-behaviors list.**
+**Read [workflow.md](workflow.md) for the full phase-by-phase execution. Read [phases.md](phases.md) for the source-tag taxonomy and confidence tiers.** Path-specific machinery lives in `references/*.md`, loaded only when the gate at its branch point fires — a run that never takes a branch never pays for it.
 
 ## Preamble
 
@@ -85,21 +71,18 @@ if [[ "$RAW_ARGS" == *"--override-strategy"* ]]; then
   OVERRIDE_STRATEGY=1
   RAW_ARGS="${RAW_ARGS//--override-strategy/}"
 fi
+
+if [ "$MODE" = "autofix" ]; then
+  echo "GATE ACTIVE — STOP. Read references/autofix-mode.md before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 | Mode | When | Behavior |
 |------|------|----------|
 | **Interactive** (default) | User is at the terminal | Phase 0 asks on duplicate detection; Phase 3 asks on must-ask ambiguities; Phase 4 print-then-ask read-back (full draft as ordinary markdown, then short blocking-question tool) — write only on `approve` |
-| **Autofix** (`mode:autofix`) | Batch usage from another skill / scripted invocation | No user questions. Phase 0 hard-errors on duplicates / relevant evidence made incomplete by compaction without explicit overrides. Historical compaction signals alone do not block. Phase 3 must-ask cases hard-error (autofix can't ask). Phase 4 Writes the full draft once + prints the summary tally to stdout (autofix path unchanged). **Writes to `.flow/` ONLY when `--yes` is also passed**; without `--yes`, exit 0 with "draft written; rerun with --yes to commit" |
+| **Autofix** (`mode:autofix`) | Batch usage from another skill / scripted invocation | No user questions; every "ask" branch becomes exit 2; Phase 4 Writes the draft once and requires `--yes` to reach the `.flow/` write |
 
-### Autofix mode rules
-
-- **No user questions.** Never call the blocking-question tool.
-- **Phase 0 hard-errors:** duplicate detected → list overlapping spec IDs to stderr, exit 2 unless `--rewrite <id>` was passed; relevant capture evidence is missing / truncated / summary-only after compaction → exit 2 unless `--from-compacted-ok` was passed. A historical compaction marker or system-summary block alone is advisory and does not block.
-- **Phase 3 must-ask hard-errors:** ambiguous title / untestable acceptance / scope-conflict-with-existing-spec → exit 2 with which case fired and why. Autofix cannot resolve must-ask cases.
-- **Phase 4 single emission, no `.flow/` write.** Full draft Written once to the §4.1 draft file (all sections + R-IDs); summary payload (`[inferred]` tally + 8+ acceptance suggestion if applicable) printed to stdout. Without `--yes`, exit 0 with the "rerun with --yes" hint. With `--yes`, proceed to Phase 5 write. (Autofix has no interactive print-then-ask; `--yes` is the consent substitute.)
-- **Phase 5 commits identically to interactive once it runs.**
-- **Readiness never written.** The mark-ready write (workflow.md §5.9) is interactive-consent-only; autofix prints a footer suggestion at most (and only when readiness is adopted, no `tracker.readyState`, and the spec was written). The `--rewrite` readiness reset (§5.3) still runs — it is idempotent plumbing, not a consent question.
+When the sentinel above prints, read [references/autofix-mode.md](references/autofix-mode.md) before Phase 0 — it owns the per-phase autofix rules (Phase 0 hard-errors, Phase 3 exits, §4.4 read-back substitute, split / glossary / readiness behavior). On the default interactive path, read nothing.
 
 ## Ralph-block (R13) — runs first, before everything else
 
@@ -116,7 +99,7 @@ No env-var opt-in. Ralph never decides direction.
 
 ## Interaction Principles (interactive mode only)
 
-In autofix mode, skip user questions entirely and apply the rules above.
+In autofix mode, skip user questions entirely and apply the rules in the autofix reference.
 
 In interactive mode:
 
@@ -138,19 +121,21 @@ The goal is automated synthesis with human oversight on judgment calls — not a
 - **Setting `context: fork`** — blocking-question tools must stay reachable.
 - **Calling `flowctl spec create` before Phase 4 approval.** Phase 5 is the only write phase.
 - **Writing glossary terms without consent, or in autofix mode.** Term-adds require the Phase 4.2 `Glossary?` approval; autofix prints suggestions only (`--yes` consents to the spec write, not to vocabulary changes). The gate is husk-aware (`glossary list --json` `total_terms > 0`) — seeding an empty glossary is `/flow-next:prime`'s job, never capture's.
+- **Marking a spec ready without consent, in autofix, or outside the target-aware readiness predicate.** Readiness is the human's gate — capture never infers it.
+- **Treating a forced draft chart briefing as final, or admitting a draft/stale briefing silently.** Fail closed; the override requires named D-IDs + a risk read-back.
 - **Using `git add -A` from this skill.** When committing the new spec, stage only the JSON sidecar (`.flow/specs/<id>.json`) + `.flow/specs/<id>.md` (and `.flow/meta.json` if the next-id counter mutated). Other working-tree changes are not capture's concern.
 
 ## Workflow
 
-Execute the phases in [workflow.md](workflow.md) in order:
+Execute the phases in [workflow.md](workflow.md) in order. Each phase's detail — including which branch gate loads which reference — lives there; this index is navigation only:
 
-0. **Pre-flight** — duplicate detection (scan `.flow/specs/` + `flowctl memory search` on extracted keywords); compaction relevance check (refuse only when the evidence needed for this capture is missing / truncated / summary-only, not merely because history contains a compaction signal); idempotency (refuse silent overwrite without `--rewrite`); chart-briefing admission when a briefing path/B-ID is in play (refuse draft/stale unless explicit risk override with named D-IDs + read-back).
-1. **Extract conversation evidence** — build a verbatim `## Conversation Evidence` block FIRST (raw quotes from recent user turns, capped ~30 lines). When a chart briefing is in play, also extract chart id / B-ID / cluster / D-ID / asset evidence references (untagged). Spec sections refer to evidence by line, not from agent memory.
-2. **Source-tagged synthesis** — draft each section with per-line tags (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`) **only on acceptance criteria and prose capture newly authors**. Chart D-ID evidence is never source-tagged. Apply the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline). At runtime the template is resolved via the 4-tier discovery cascade — first match wins: `<repo_root>/SPEC.md` → `<repo_root>/spec.md` → `.flow/templates/spec.md` → bundled `${PLUGIN_ROOT}/templates/spec.md`. The bundled file is the canonical source of truth; earlier tiers are user-customized overrides. Route explicit biz-context signals (nine SIGNAL CATEGORIES per fn-44 R24, only `[user]` / `[paraphrase]` tags) to their destinations; sections without conversation signal stay absent. Compute `BIZ_SIGNAL_CATEGORIES` (0..9) for Phase 6's R25 dispatch.
-3. **Must-ask cases (R9)** — interactive only; autofix exits 2 if any fire. Hard-error conditions: ambiguous title / untestable acceptance / scope-conflict. Optional ambiguities use lead-with-recommendation + confidence tier.
-4. **Read-back loop (mandatory, even in autofix)** — Write the full draft ONCE to a literal unique path (workflow.md §4.1). **Interactive print-then-ask (R13):** print the FULL draft markdown (and rewrite-mode diff when applicable) as an ordinary assistant message FIRST, then issue a SHORT `AskUserQuestion` — one-line pointer + compact `[inferred]` tally/warnings + options only; never embed multi-paragraph drafts, diffs, or criteria lists in the ask body (they render as collapsed plain text). Never `Recommended: approve` while unverified `[inferred]` items exist (workflow.md §4.2). Interactive: `approve` / `split-as-proposed` (when workflow.md §2.5 proposed N>1 — writes N linked specs via §5.2b) / `edit` / `abort`; edit cycles revise via Edit + full-file Read + **reprint the revised draft** before each short re-ask. Epic-shaped inputs get a concrete split proposal at read-back (§2.5: 8+ counted criteria or multiple independently shippable outcomes → titles + criteria allocation + dependency edges; R11). When the glossary is populated (`total_terms > 0`) and the conversation surfaced new project vocabulary: surface term-add proposals + a consent question after approve (workflow.md §2.7 / §4.2; writes land in §5.8). With no `tracker.readyState`, a new capture in a repo with adopted local readiness offers one `Mark ready?` question; a rewrite offers it only when the target itself was ready before the rewrite. An unrelated ready spec never prompts on a draft rewrite. The copy explains Pilot/autonomous eligibility; default keep-draft (workflow.md §4.2; write lands in §5.9). Autofix: prints summary payload to stdout; requires `--yes` to commit; term proposals print as suggestions, never written; readiness never written (autofix path unchanged).
-5. **Write via flowctl** — `flowctl spec create --title "..." --json` → parse `id` → `flowctl spec set-plan <id> --file <literal draft path> --json` (consumes the §4.1 draft file — no heredoc re-authoring). When capturing from a chart briefing: after each successful create+set-plan, call `flowctl chart link-spec <chart-id> --briefing <B> --spec <id> --decisions <D,...> [--cluster <k>] --json`. On retry, discover an already-linked B-ID+cluster identity in `produced_specs[]` first and link the existing spec instead of creating a duplicate. Decline / abort records nothing. Partial multi-spec: record only successful links; resume the failed cluster. Optional `flowctl spec set-branch` if user named one. Capture creates fresh specs; allocate R-IDs sequentially from R1. `--rewrite` resets readiness via idempotent `spec unready` (§5.3); consented mark-ready lands via `spec ready` (§5.9). When `artifacts.html.enabled` is true, Phase 5 closes by regenerating the spec render lens at `.flow/artifacts/<id>/spec.html` per the shared disclosure reference ([`plugins/flow-next/references/html-artifacts.md`](../../references/html-artifacts.md)) and replacing the spec's artifact link line in place (workflow.md §5.10); the Phase 6 footer then names the artifact path. With the mode off/unset there is zero artifact-related behavior or output.
-6. **Suggested next step** — print `Spec captured at .flow/specs/<id>.md.` plus `/flow-next:plan <id>` and `/flow-next:interview <id>` next-step hints. The R25 business-pass suggestion fires when the captured conversation names 1-2 distinct R24 signal categories (the same `1 <= n < 3` rule), agent-judged. When it fires, append the `/flow-next:interview --scope=business` suggestion line.
+0. **Pre-flight** — duplicate detection (spec-title overlap + `flowctl memory search`), compaction relevance check, idempotency (never a silent overwrite), plus the strategy / duplicate-branch / chart-briefing / rewrite gates.
+1. **Extract conversation evidence** — a verbatim `## Conversation Evidence` block FIRST (~30 lines of raw user quotes); spec sections refer to evidence by line, not from agent memory.
+2. **Source-tagged synthesis** — draft each section against the canonical template at [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (per R17 — cross-link, never re-embed the section list inline), tagging **only acceptance criteria and prose capture newly authors**; route explicit biz-context signals (nine R24 categories) and compute `BIZ_SIGNAL_CATEGORIES` for Phase 6.
+3. **Must-ask cases (R9)** — ambiguous title / untestable acceptance / scope-conflict; interactive asks one at a time, autofix exits 2.
+4. **Read-back loop (mandatory, even in autofix)** — Write the full draft ONCE to a literal path, print it as ordinary markdown, then a SHORT `AskUserQuestion`; never `Recommended: approve` while unverified `[inferred]` items remain.
+5. **Write via flowctl** — `spec create` → parse `id` → `spec set-plan <id> --file <literal draft path>` (consumes the §4.1 draft file — no heredoc re-authoring); R-IDs allocate sequentially from R1.
+6. **Suggested next step** — `Spec captured at .flow/specs/<id>.md.` plus the mandatory `Tracker sync:` slot and `/flow-next:plan` / `/flow-next:interview` hints; the R25 business-pass suggestion fires at `1 <= BIZ_SIGNAL_CATEGORIES < 3`.
 
 ## Output rules
 

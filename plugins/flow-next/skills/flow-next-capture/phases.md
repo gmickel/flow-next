@@ -1,87 +1,18 @@
-# Capture — phase reference, must-ask cases, source-tag taxonomy, confidence tiers
+# Capture — source-tag taxonomy, confidence tiers, decision tree
 
-This file is the lookup-and-calibration companion to [workflow.md](workflow.md). The workflow drives the phases in order; this file is what you re-read when a specific case fires.
+This file is the lookup-and-calibration companion to [workflow.md](workflow.md). The workflow drives the phases in order; this file holds the two calibration surfaces every run consumes (source tags, confidence tiers) plus the whole-run decision tree.
 
----
+Path-specific lookups live one level deep in `references/*.md` and are loaded only when workflow.md's gate at that branch point fires — must-ask case detail, chart-briefing provenance, split proposals, glossary, readiness, rewrite, tracker, autofix. The per-phase `Done when` checklists live at the end of each workflow.md phase (single copy).
 
-## Phase reference
-
-| Phase | Goal | Done-when |
-|-------|------|-----------|
-| **0 — Pre-flight** | Detect duplicates, compaction, idempotency conflict before drafting | Conversation keywords extracted; spec-title overlap scanned (`.flow/specs/`); memory cross-check (if memory initialized); compaction passed (or `--from-compacted-ok`); idempotency resolved (`REWRITE_TARGET` validated, or no prior-capture artifact, or user picked supersede/proceed) |
-| **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST | ≤30-line block of `> user (turn N): "..."` lines drafted; optional file-reference subagent results merged; candidate title proposed |
-| **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using CLAUDE.md richer template | Every section drafted; R-IDs allocated sequentially from R1; `[inferred]` count computed; 8+ acceptance flag set if applicable; untestable criteria flagged for Phase 3; `GLOSSARY_PROPOSALS` collected (≤5; empty when glossary absent/husk — §2.7) |
-| **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict | Interactive: user resolved each fired case; autofix: exit 2 with which case fired |
-| **4 — Read-back loop** | Print full draft as ordinary markdown, then short ask (`[inferred]` tally + options); obtain approval | Interactive print-then-ask: full draft (and rewrite diff) printed first, then short ask → `approve` / `split-as-proposed` (when 2.5 proposed N>1) / `abort`; edit cycles reprint revised draft before each short re-ask; on approve with glossary proposals, `Glossary?` consent recorded; on approve with the target-aware readiness predicate met (new capture: ≥1 ready spec; rewrite: target itself was ready; both: no `tracker.readyState` — §4.2), `Mark ready?` consent recorded (default keep-draft); autofix `--yes`: payload printed; autofix without `--yes`: payload printed + exit 0 (proposals print as suggestions, never written; readiness never written) |
-| **5 — Write via flowctl** | Atomic write of new (or rewritten) spec | `.flow/specs/<id>.md` exists; `SPEC_ID` known; approved term-adds written via `flowctl glossary add` (§5.8, interactive only); consented mark-ready written via `flowctl spec ready` (§5.9, interactive only); rewrite branch ran idempotent `spec unready` with `READY_RESET` recorded (§5.3); HTML render lens regenerated + link line replaced in place iff `artifacts.html.enabled` (§5.10 — off/unset is a silent no-op beyond one config read) |
-| **6 — Suggested next step** | Print footer with `/flow-next:plan` and `/flow-next:interview` hints | Footer printed; skill exits 0 |
-
----
-
-## Must-ask cases (R9)
-
-The three hard-error conditions that fire in Phase 3. Interactive asks; autofix exits 2.
-
-### Case (a) — Ambiguous title
-
-**Trigger:** Phase 1.3 candidate title is `[inferred]` AND the conversation supports multiple plausible titles, none load-bearing.
-
-**Why hard-error:** an ambiguous title leads to bad spec ids, bad branch names, bad git history. The cost of asking is one question; the cost of guessing wrong is renaming the spec later.
-
-**Examples:**
-
-- Conversation: "let me think about this rate limiting problem... maybe we need throttling... or queue depth... or per-tenant quotas". Candidate titles: `Rate limiting`, `Request throttling`, `Per-tenant quotas`. None of those is load-bearing in the conversation. → must-ask.
-- Conversation: "the OAuth callback is broken when X happens". Candidate title: `Fix OAuth callback X bug`. Specific. → no must-ask.
-
-**Interactive question shape:**
-
-- header: `Title?`
-- body: `Conversation supports multiple titles. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>]. (Other plausible: <Y>, <Z>.)`
-- options: `<X>`, `<Y>`, `<Z>`, `custom`
-
-**Autofix:** exit 2 with: `Must-ask (a): spec title genuinely ambiguous from conversation. Candidates: <X>, <Y>, <Z>. Re-run interactively to choose.`
-
-### Case (b) — Untestable acceptance
-
-**Trigger:** Phase 2.4 flagged ≥1 acceptance criterion that fails the testability check. A criterion is testable if a reviewer can point at code / behavior / config and say "satisfied" or "not satisfied" with two engineers agreeing.
-
-**Why hard-error:** untestable acceptance criteria turn into "done when the user feels good", which never closes. Capture's purpose is producing a usable spec; vague acceptance defeats that.
-
-**Examples:**
-
-- Untestable: `- **R3:** Make it fast.` (fast how?)
-- Untestable: `- **R4:** Improve UX.` (improve how — measured how?)
-- Testable: `- **R3:** Median p95 latency under 200ms for the OAuth callback path.`
-- Testable: `- **R4:** Form errors render inline within 100ms of input blur.`
-
-**Interactive question shape (per-criterion):**
-
-- header: `Criterion R<n>`
-- body: `"<criterion>" can't be made testable as written. Recommended: <reword candidate> — <rationale>. Confidence: [<tier>]. (Or drop / clarify in your own words.)`
-- options: `<reword candidate>`, `drop`, `clarify`
-
-If user picks `clarify`, follow-up question accepts free text → re-run testability check on the new wording.
-
-**Autofix:** exit 2 with: `Must-ask (b): <N> criteria failed testability check: <list>. Re-run interactively to reword or drop.`
-
-### Case (c) — Scope-conflict with existing spec
-
-**Trigger:** Phase 0.5 went `supersede` or `proceed-anyway` (user accepted a duplicate-ish spec), AND the new spec's drafted scope (Phase 2) still substantively overlaps the existing spec's scope on a load-bearing axis (same module + same problem domain, even if framed differently).
-
-**Why hard-error:** if the new spec is "in addition to" the old one, the boundaries between them must be explicit. Otherwise the next time someone runs `/flow-next:plan`, both specs fight over the same tasks.
-
-**Examples:**
-
-- Old spec: `OAuth callback rate limiter` (in progress, 2 tasks done). New conversation: "we need rate limiting on the API". User picks `proceed-anyway`. New scope drafted as "all API endpoints" — explicit superset of old. → must-ask: how do the two specs carve up the rate-limit space?
-- Old spec: `OAuth callback rate limiter`. New conversation: "we need rate limiting on the GraphQL endpoint". New scope: GraphQL only. → no must-ask. Boundaries are clear.
-
-**Interactive question shape:**
-
-- header: `Boundary?`
-- body: `Old spec <id> "<title>" overlaps new spec on <axis>. Recommended: <X> (carve out <bound>) — <rationale>. Confidence: [<tier>].`
-- options: `carve-by-module`, `carve-by-feature`, `mark-old-as-subsumed`, `keep-overlap-and-let-plan-resolve`
-
-**Autofix:** exit 2 with: `Must-ask (c): scope conflict with existing spec <id>. Re-run interactively to disambiguate.`
+| Phase | Goal |
+|-------|------|
+| **0 — Pre-flight** | Detect duplicates, compaction, idempotency conflict before drafting |
+| **1 — Extract conversation evidence** | Build verbatim `## Conversation Evidence` block FIRST |
+| **2 — Source-tagged synthesis** | Draft spec sections with per-line tags using the canonical template |
+| **3 — Must-ask cases** | Resolve ambiguous-title / untestable-acceptance / scope-conflict |
+| **4 — Read-back loop** | Print full draft as ordinary markdown, then short ask; obtain approval |
+| **5 — Write via flowctl** | Atomic write of new (or rewritten) spec |
+| **6 — Suggested next step** | Print footer with `/flow-next:plan` and `/flow-next:interview` hints |
 
 ---
 
@@ -134,15 +65,7 @@ The breakdown is informational at read-back. Phase 4's `[inferred]` tally counts
 
 A spec with 0 `[inferred]` items is rare and probably means the conversation was unusually thorough. A spec with 30 `[inferred]` items is suspicious — the conversation was probably too thin for capture, and the user should pursue `/flow-next:interview` instead.
 
-### Chart briefing provenance (fn-135) — do not collapse lanes
-
-Three provenance lanes must not collapse:
-
-1. **Chart decision provenance** — D-ID, type, answer/gist, assets, supersession, briefing membership. Briefings preserve links; capture copies them into evidence sections as references.
-2. **Acceptance-criterion author tags** — `[user]` | `[paraphrase]` | `[inferred]` | `[strategy:<track>]` only on criteria **this capture pass newly authors**. Never retag existing criteria. Never tag D-ID evidence or chart facts. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
-3. **Verified-versus-inferred technical facts** — fn-148 closed 2026-07-30 as STOPPED with **no verdict**. Capture adds **no** `[verified]` / verified-vs-inferred decision grammar. Do not invent one.
-
-Draft/stale briefings fail closed for ordinary capture; explicit risk override must name unresolved/invalidated D-IDs and read back the risk without promoting a forced draft to final. `link-spec` runs only after `spec create` + `spec set-plan`; retry discovers B-ID+cluster identity first.
+Chart D-ID evidence, chart facts, assets, and briefing membership are **never** source-tagged — the four-tag grammar applies only to acceptance criteria this capture pass newly authors. The full provenance-lane rule loads with the chart-briefing gate (workflow.md §0.5b).
 
 ---
 
@@ -172,26 +95,9 @@ The `[your-call]` tier exists deliberately. Always recommending trains users to 
 
 ---
 
-## Forbidden behaviors (R10) — recap
+## Forbidden behaviors (R10)
 
-The full list lives in [SKILL.md](SKILL.md). Quick reference:
-
-| Forbidden | Why |
-|-----------|-----|
-| Tech-stack mentions the user did not state | Capture writes intent; `/flow-next:plan` writes implementation. Spec-kit convention. |
-| Inventing acceptance criteria not in conversation | Source-tagging exists to make this visible. Pure `[inferred]` acceptance must surface at read-back for explicit user confirmation. |
-| Code snippets / specific file paths in spec body | Those belong in `/flow-next:plan` task specs after research lands. Capture's output is high-level. |
-| Silent overwrite of existing spec | Idempotency requires `--rewrite <id>`. Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway. |
-| Auto-splitting an 8+ acceptance spec | Phase 4 surfaces the option; the user decides. Capture never auto-actions a split. |
-| Setting `context: fork` | Blocking-question tools must stay reachable. |
-| Calling `flowctl spec create` before Phase 4 approval | Phase 5 is the only write phase. |
-| Treating a forced draft briefing as final, or silent draft/stale admission | Fail closed; override requires named D-IDs + risk read-back; never promotes draft to final. |
-| Source-tagging D-ID / chart evidence as `[user]` | Chart provenance is structural links; four-tag grammar is for newly authored criteria only. |
-| `chart link-spec` before `spec create` / `spec set-plan`, or minting a duplicate after interruption | Order: create → set-plan → link-spec; retry discovers B-ID+cluster identity first. |
-| Chart facts get no verified/inferred grammar | fn-148 stopped - no verdict. |
-| Glossary term-adds without read-back consent, or in autofix | Consent lives in Phase 4.2's `Glossary?` question; autofix prints suggestions only. Husk-aware gate (`total_terms > 0`) — seeding an empty glossary is `/flow-next:prime`'s job. |
-| Marking a spec ready without consent, in autofix, or outside the target-aware predicate | Consent lives in Phase 4.2's `Mark ready?` question (new capture: adopted local readiness; rewrite: target itself was ready; both: no `tracker.readyState`); the write is Phase 5.9, interactive-only. An unrelated ready spec never prompts on a draft rewrite. Readiness is the human's gate — capture never infers it. Autofix prints the footer suggestion only. |
-| `git add -A` from this skill | Stage only the JSON sidecar (`.flow/specs/<id>.json`) + `.flow/specs/<id>.md` (and `.flow/meta.json` if mutated). Capture does NOT commit by default — user owns staging. |
+The full list lives in [SKILL.md](SKILL.md) — single copy. Branch-specific rows (chart provenance, split, glossary, readiness) repeat at the bottom of the reference their gate loads.
 
 ---
 
@@ -211,11 +117,11 @@ Compaction signal detected?
                   yes → continue
 
 Duplicate detection: ≥2 strong spec-title matches AND --rewrite not set?
-  yes → ask: extend / supersede / proceed-anyway / abort (interactive); exit 2 (autofix)
+  yes → gate → ask: extend / supersede / proceed-anyway / abort (interactive); exit 2 (autofix)
   no  → continue
 
 Prior-capture artifact id detected in conversation AND --rewrite not set?
-  yes → ask: rewrite / proceed / abort (interactive); exit 2 (autofix)
+  yes → gate → ask: rewrite / proceed / abort (interactive); exit 2 (autofix)
   no  → continue
 
 --rewrite target invalid or missing?
@@ -225,7 +131,7 @@ Prior-capture artifact id detected in conversation AND --rewrite not set?
 Extract conversation evidence → draft spec → tag every line.
 
 Must-ask cases: ambiguous title / untestable acceptance / scope-conflict?
-  any fired → ask one at a time (interactive); exit 2 (autofix)
+  any fired → gate → ask one at a time (interactive); exit 2 (autofix)
   none      → continue
 
 Read-back (print-then-ask): print FULL draft markdown (+ rewrite diff if any)
