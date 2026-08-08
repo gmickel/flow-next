@@ -2,6 +2,12 @@
 
 Use when `BACKEND="codex"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`.
 
+## Critical Rules (codex backend)
+
+1. Use `$FLOWCTL codex impl-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews
+3. Parse verdict from command output
+
 ## Step 1: Identify Task and Diff Base
 
 ```bash
@@ -54,13 +60,13 @@ Format: `{"mode":"codex","task":"<id>","verdict":"<verdict>","session_id":"<thre
 
 ## Optional phases (gated by flags)
 
-When the corresponding flag is set, run these phases from [workflow-common.md](workflow-common.md) — the dispatch matches the `codex` case in each phase:
+When the corresponding flag is set, run these phases from [optional-phases.md](optional-phases.md) — the dispatch matches the `codex` case in each phase:
 
 - `--deep` → "Deep-Pass Phase" (Step D.1 → D.5)
 - `--validate` → "Validator Pass" (Step V.1 → V.4)
 - `--interactive` → "Interactive Walkthrough Phase" (Step W.1 → W.5)
 
-See [workflow-common.md](workflow-common.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
+See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
 
 ---
 

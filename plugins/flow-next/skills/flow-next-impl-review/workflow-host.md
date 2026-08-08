@@ -218,7 +218,7 @@ Do **not** invent a `session_id` for resume — host re-reviews always spawn a n
 
 ## Step 4: Optional phases
 
-When `--deep` / `--validate` / `--interactive` flags are set, run the gated phases from [workflow-common.md](workflow-common.md) / [optional-phases.md](optional-phases.md) where they apply. Host has no `flowctl host deep-pass` / `validate` — if those paths require a subprocess backend, either:
+When `--deep` / `--validate` / `--interactive` flags are set, run the gated phases from [optional-phases.md](optional-phases.md) where they apply. Host has no `flowctl host deep-pass` / `validate` — if those paths require a subprocess backend, either:
 - run the pass as another host-native read-only subagent with the same cross-family pin, or
 - skip with an explicit note in the receipt when the pass cannot run without a CLI backend
 

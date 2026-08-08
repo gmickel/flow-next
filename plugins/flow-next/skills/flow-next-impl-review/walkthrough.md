@@ -10,8 +10,7 @@ each review finding on a NEEDS_WORK verdict. Active only when:
 **No env var form.** `--interactive` is per-invocation only — this is a
 hard-coded rule in SKILL.md to prevent Ralph from accidentally engaging a flow
 that requires user input. If `REVIEW_RECEIPT_PATH` is set OR `FLOW_RALPH=1`,
-the skill exits 2 with a clear error before running anything. See SKILL.md
-"Interactive flag + Ralph-block" for the guard.
+the skill exits 2 with a clear error before running anything. See SKILL.md Step 0's parse fence for the guard.
 
 ## Finding source
 
@@ -21,7 +20,7 @@ fingerprint-deduped / cross-pass promoted if `--deep` also ran. It doesn't
 care which pass produced each finding — it reads the merged output.
 
 Extract findings into `/tmp/walkthrough-findings.jsonl` using the same JSON
-Lines format as the validator pass (see workflow.md "Validator Pass"):
+Lines format as the validator pass (see optional-phases.md "Validator Pass"):
 
 ```jsonl
 {"id":"f1","severity":"P1","confidence":75,"classification":"introduced","file":"src/auth.ts","line":42,"title":"null deref in middleware","suggested_fix":"Add current_user guard before line 42"}
@@ -224,7 +223,7 @@ and records decisions.
 ## Acceptance criteria coverage (R-IDs from fn-32 epic)
 
 - **R8:** Per-finding blocking question with five options ✓ (§ "Per-finding flow")
-- **R9:** Ralph env detection hard-errors with clear message ✓ (SKILL.md "Interactive flag + Ralph-block")
+- **R9:** Ralph env detection hard-errors with clear message ✓ (SKILL.md Step 0 parse fence)
 - **R10:** `.flow/review-deferred/<branch-slug>.md` as a durable record ✓ (§ "Branch slug + defer sink")
 - **R11:** Apply list dispatches fixer; Skip/Acknowledge logged no-op ✓ (§ "After walkthrough")
 - **R12:** Receipt extensions additive / Ralph-ignoring ✓ (§ "Update receipt")
