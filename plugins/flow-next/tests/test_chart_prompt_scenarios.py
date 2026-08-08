@@ -33,7 +33,22 @@ GUIDE_SKILL_MD = PLUGIN / "skills" / "flow-next-guide" / "SKILL.md"
 
 SKILL_MD = SKILL_DIR / "SKILL.md"
 WORKFLOW_MD = SKILL_DIR / "workflow.md"
-EXAMPLES_MD = SKILL_DIR / "references" / "examples.md"
+REFERENCES = SKILL_DIR / "references"
+EXAMPLES_MD = REFERENCES / "examples.md"
+
+# Branch-disclosure refactor: workflow.md routes to exactly one mode reference
+# per invocation, so the skill's prose surface is SKILL.md + workflow.md + the
+# references those files link. Contract tokens are asserted against that whole
+# reachable surface; reachability itself is asserted in
+# ChartPromptFixturesExist.test_mode_references_reachable.
+MODE_REFERENCE_NAMES = (
+    "chart-mode.md",  # Phase 1 chart mode
+    "work-mode.md",  # Phase 2 + 5 work mode
+    "briefing-and-reopen.md",  # Phase 4 + 6 briefing / reopen
+    "re-entry.md",  # Phase 0.2 locator re-entry
+    "tracker-projection.md",  # Phase 0.2b projection gate
+)
+MODE_REFERENCE_MDS = tuple(REFERENCES / name for name in MODE_REFERENCE_NAMES)
 
 # Required top-level keys on every scenario fixture.
 REQUIRED_TOP = (
@@ -145,13 +160,13 @@ def _load_fixtures() -> list[tuple[Path, dict[str, Any]]]:
 
 
 def _skill_prose() -> str:
-    return "\n".join(
-        (
-            SKILL_MD.read_text(encoding="utf-8"),
-            WORKFLOW_MD.read_text(encoding="utf-8"),
-            EXAMPLES_MD.read_text(encoding="utf-8"),
-        )
-    )
+    parts = [
+        SKILL_MD.read_text(encoding="utf-8"),
+        WORKFLOW_MD.read_text(encoding="utf-8"),
+        EXAMPLES_MD.read_text(encoding="utf-8"),
+    ]
+    parts += [p.read_text(encoding="utf-8") for p in MODE_REFERENCE_MDS]
+    return "\n".join(parts)
 
 
 def _guide_prose() -> str:
@@ -168,7 +183,7 @@ def _is_flowctl_like(token: str) -> bool:
 class ChartPromptFixturesExist(unittest.TestCase):
     def test_fixtures_dir_and_skill_files(self) -> None:
         self.assertTrue(FIXTURES_DIR.is_dir(), f"missing {FIXTURES_DIR}")
-        for path in (SKILL_MD, WORKFLOW_MD, EXAMPLES_MD):
+        for path in (SKILL_MD, WORKFLOW_MD, EXAMPLES_MD, *MODE_REFERENCE_MDS):
             self.assertTrue(path.is_file(), f"missing {path}")
         fixtures = list(FIXTURES_DIR.glob("*.json"))
         self.assertGreaterEqual(
@@ -176,6 +191,19 @@ class ChartPromptFixturesExist(unittest.TestCase):
             len(REQUIRED_FAMILIES),
             "expected at least one fixture per required family",
         )
+
+    def test_mode_references_reachable(self) -> None:
+        """Contract tokens may live in a reference only if workflow.md links it."""
+        workflow = WORKFLOW_MD.read_text(encoding="utf-8")
+        skill = SKILL_MD.read_text(encoding="utf-8")
+        for name in MODE_REFERENCE_NAMES:
+            with self.subTest(reference=name):
+                self.assertIn(
+                    f"references/{name}",
+                    workflow,
+                    f"workflow.md must link references/{name}",
+                )
+        self.assertIn("references/examples.md", skill)
 
 
 class ChartPromptFixtureSchema(unittest.TestCase):

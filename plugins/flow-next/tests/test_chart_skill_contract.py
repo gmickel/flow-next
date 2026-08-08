@@ -23,7 +23,18 @@ SHIM = PLUGIN / "commands" / "chart.md"
 
 SKILL_MD = SKILL_DIR / "SKILL.md"
 WORKFLOW_MD = SKILL_DIR / "workflow.md"
-EXAMPLES_MD = SKILL_DIR / "references" / "examples.md"
+REFERENCES = SKILL_DIR / "references"
+EXAMPLES_MD = REFERENCES / "examples.md"
+
+# Branch-disclosure refactor: workflow.md routes to exactly one mode reference
+# per invocation. Prose that used to sit inline in workflow.md now lives in the
+# reference for the mode that reaches it. Each contract below is asserted
+# against its new home PLUS the link that makes that home reachable.
+CHART_MODE_MD = REFERENCES / "chart-mode.md"  # Phase 1 (chart mode)
+WORK_MODE_MD = REFERENCES / "work-mode.md"  # Phase 2 + 5 (work mode)
+BRIEFING_MD = REFERENCES / "briefing-and-reopen.md"  # Phase 4 + 6
+RE_ENTRY_MD = REFERENCES / "re-entry.md"  # Phase 0.2 locator re-entry
+TRACKER_PROJECTION_MD = REFERENCES / "tracker-projection.md"  # Phase 0.2b gate
 
 REGISTRY_FILES = (
     REPO_ROOT / ".claude-plugin" / "marketplace.json",
@@ -90,6 +101,25 @@ class ChartSkillFilesExist(unittest.TestCase):
         for path in (SKILL_MD, WORKFLOW_MD, EXAMPLES_MD, SHIM):
             self.assertTrue(path.is_file(), f"missing {path}")
 
+    def test_mode_references_exist_and_are_reachable(self) -> None:
+        """Every mode reference exists and workflow.md links it by path."""
+        workflow = _read(WORKFLOW_MD)
+        for path in (
+            CHART_MODE_MD,
+            WORK_MODE_MD,
+            BRIEFING_MD,
+            RE_ENTRY_MD,
+            TRACKER_PROJECTION_MD,
+        ):
+            with self.subTest(reference=path.name):
+                self.assertTrue(path.is_file(), f"missing {path}")
+                self.assertIn(
+                    f"references/{path.name}",
+                    workflow,
+                    f"workflow.md must link references/{path.name} "
+                    "(prose moved there is unreachable otherwise)",
+                )
+
 
 class ChartVerdictGrammar(unittest.TestCase):
     def test_exact_verdict_grammar_line(self) -> None:
@@ -150,17 +180,24 @@ class ChartFrontierAndClaim(unittest.TestCase):
     def test_frontier_is_sole_selection_input(self) -> None:
         skill = _read(SKILL_MD)
         workflow = _read(WORKFLOW_MD)
+        work_mode = _read(WORK_MODE_MD)
         self.assertIn("sole selection input", skill)
         self.assertIn("chart frontier", skill)
-        self.assertIn("sole selection input", workflow)
+        # Work-mode selection prose lives in the work-mode reference now;
+        # workflow.md keeps the frontier render for status mode.
+        self.assertIn("sole selection input", work_mode)
+        self.assertIn('chart frontier "$CHART_ID"', work_mode)
         self.assertIn('chart frontier "$CHART_ID"', workflow)
+        self.assertIn("references/work-mode.md", workflow)
 
     def test_claim_before_work(self) -> None:
         skill = _read(SKILL_MD)
         workflow = _read(WORKFLOW_MD)
+        work_mode = _read(WORK_MODE_MD)
         self.assertIn("Claim before any work", skill)
-        self.assertIn("Claim before any work", workflow)
-        self.assertIn("chart claim", workflow)
+        self.assertIn("Claim before any work", work_mode)
+        self.assertIn("chart claim", work_mode)
+        self.assertIn("references/work-mode.md", workflow)
 
     def test_one_decision_per_invocation_no_batch(self) -> None:
         skill = _read(SKILL_MD)
@@ -201,11 +238,13 @@ class ChartModeContracts(unittest.TestCase):
     def test_breadth_first_initial_frontier_resolves_nothing(self) -> None:
         skill = _read(SKILL_MD)
         workflow = _read(WORKFLOW_MD)
-        combined = skill + "\n" + workflow
-        self.assertIn("breadth-first", combined)
+        chart_mode = _read(CHART_MODE_MD)
+        combined = skill + "\n" + workflow + "\n" + chart_mode
+        self.assertIn("breadth-first", chart_mode)
         self.assertIn("Charting resolves nothing", skill)
-        self.assertIn("Resolve no decisions", workflow)
+        self.assertIn("Resolve no decisions", chart_mode)
         self.assertIn("resolves nothing", combined.lower())
+        self.assertIn("references/chart-mode.md", workflow)
 
     def test_cost_readback_before_persistence_and_force_size(self) -> None:
         skill = _read(SKILL_MD)
@@ -231,7 +270,8 @@ class ChartPrototypeLifecycle(unittest.TestCase):
     def test_attach_before_reaction_and_resumability(self) -> None:
         skill = _read(SKILL_MD)
         workflow = _read(WORKFLOW_MD)
-        combined = skill + "\n" + workflow
+        work_mode = _read(WORK_MODE_MD)
+        combined = skill + "\n" + workflow + "\n" + work_mode
         self.assertIn("attach-asset", combined)
         self.assertIn("reaction", combined.lower())
         self.assertRegex(
@@ -246,7 +286,9 @@ class ChartPrototypeLifecycle(unittest.TestCase):
                 re.I,
             ),
         )
-        self.assertIn("awaiting reaction", workflow.lower())
+        # Prototype lifecycle detail lives in the work-mode reference.
+        self.assertIn("awaiting reaction", work_mode.lower())
+        self.assertIn("references/work-mode.md", workflow)
 
 
 class ChartLocateReentry(unittest.TestCase):
@@ -254,13 +296,16 @@ class ChartLocateReentry(unittest.TestCase):
         skill = _read(SKILL_MD)
         workflow = _read(WORKFLOW_MD)
         examples = _read(EXAMPLES_MD)
-        combined = skill + "\n" + workflow + "\n" + examples
+        re_entry = _read(RE_ENTRY_MD)
+        combined = skill + "\n" + workflow + "\n" + examples + "\n" + re_entry
         self.assertIn("chart locate", combined)
         self.assertRegex(
             combined,
             re.compile(r"local (ledger|only)|strictly local", re.I),
         )
-        self.assertIn("No remote search", workflow)
+        # Locator re-entry contract moved to the Phase 0.2 reference.
+        self.assertIn("No remote search", re_entry)
+        self.assertIn("references/re-entry.md", workflow)
         self.assertIn("title inference", combined.lower())
         self.assertRegex(
             combined,
@@ -275,7 +320,7 @@ class ChartLocateReentry(unittest.TestCase):
                 re.I | re.S,
             ),
         )
-        self.assertIn("mutate nothing", workflow.lower())
+        self.assertIn("mutate nothing", re_entry.lower())
 
 
 class ChartPortableHostAndAsk(unittest.TestCase):
@@ -373,7 +418,17 @@ class ChartProvenanceAndSafety(unittest.TestCase):
         )
 
     def test_no_em_dashes_in_skill_files(self) -> None:
-        for path in (SKILL_MD, WORKFLOW_MD, EXAMPLES_MD, SHIM):
+        for path in (
+            SKILL_MD,
+            WORKFLOW_MD,
+            EXAMPLES_MD,
+            CHART_MODE_MD,
+            WORK_MODE_MD,
+            BRIEFING_MD,
+            RE_ENTRY_MD,
+            TRACKER_PROJECTION_MD,
+            SHIM,
+        ):
             text = _read(path)
             m = EM_OR_EN_DASH.search(text)
             if m is not None:
@@ -383,7 +438,17 @@ class ChartProvenanceAndSafety(unittest.TestCase):
                 )
 
     def test_no_literal_destructive_command_strings(self) -> None:
-        for path in (SKILL_MD, WORKFLOW_MD, EXAMPLES_MD, SHIM):
+        for path in (
+            SKILL_MD,
+            WORKFLOW_MD,
+            EXAMPLES_MD,
+            CHART_MODE_MD,
+            WORK_MODE_MD,
+            BRIEFING_MD,
+            RE_ENTRY_MD,
+            TRACKER_PROJECTION_MD,
+            SHIM,
+        ):
             text = _read(path)
             for pat in DESTRUCTIVE_LITERALS:
                 m = pat.search(text)

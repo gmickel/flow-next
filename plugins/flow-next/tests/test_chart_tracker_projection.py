@@ -2571,13 +2571,23 @@ class ChartCallerInventoryTests(unittest.TestCase):
         chart = next(c for c in oracle["callers"] if c["id"] == "chart")
         self.assertEqual(chart["config_key"], "tracker.charts")
         self.assertEqual(chart["resolved_facade_op"], "push")
-        skill = (
-            ROOT / "skills" / "flow-next-chart" / "workflow.md"
+        chart_skill = ROOT / "skills" / "flow-next-chart"
+        skill = (chart_skill / "workflow.md").read_text(encoding="utf-8")
+        # Phase 0.2b keeps the gate probe inline; the projection contract it
+        # gates moved into references/tracker-projection.md.
+        projection = (
+            chart_skill / "references" / "tracker-projection.md"
         ).read_text(encoding="utf-8")
         self.assertIn("tracker.charts", skill)
         self.assertIn("sync active --json", skill)
-        self.assertIn("tracker sync", skill)
-        self.assertIn("--event chart", skill)
+        self.assertIn(
+            "references/tracker-projection.md",
+            skill,
+            "workflow.md must link the projection reference from the 0.2b gate",
+        )
+        self.assertIn("tracker.charts", projection)
+        self.assertIn("tracker sync", projection)
+        self.assertIn("--event chart", projection)
 
 
 if __name__ == "__main__":

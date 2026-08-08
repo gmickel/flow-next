@@ -26,6 +26,19 @@ COMMANDS = PLUGIN / "commands"
 CODEX = PLUGIN / "codex"
 FLOWCTL_PY = PLUGIN / "scripts" / "flowctl.py"
 
+# Branch-disclosure refactor: chart prose that used to sit inline in SKILL.md /
+# workflow.md now lives in the mode reference that reaches it. Contracts are
+# asserted against their new home, plus the link that keeps the home reachable.
+CHART_SKILL_DIR = SKILLS / "flow-next-chart"
+CHART_REFERENCES = CHART_SKILL_DIR / "references"
+CHART_MODE_REFS = (
+    "chart-mode.md",  # Phase 1 chart mode
+    "work-mode.md",  # Phase 2 + 5 work mode
+    "briefing-and-reopen.md",  # Phase 4 + 6 briefing / reopen
+    "re-entry.md",  # Phase 0.2 locator re-entry
+    "tracker-projection.md",  # Phase 0.2b projection gate
+)
+
 REGISTRY_COUNT_FILES = (
     REPO_ROOT / ".claude-plugin" / "marketplace.json",
     PLUGIN / ".claude-plugin" / "plugin.json",
@@ -117,11 +130,17 @@ class ChartDocsFilesExist(unittest.TestCase):
         are not mirrored (sync-codex.sh emits skills/agents/references/
         templates).
         """
-        for rel in (
+        mirrored = [
             "skills/flow-next-chart/SKILL.md",
             "skills/flow-next-chart/workflow.md",
             "skills/flow-next-guide/SKILL.md",
-        ):
+        ]
+        # Mode references carry the branch-disclosed prose - the mirror is
+        # useless without them.
+        mirrored += [
+            f"skills/flow-next-chart/references/{name}" for name in CHART_MODE_REFS
+        ]
+        for rel in mirrored:
             path = CODEX / rel
             self.assertTrue(
                 path.is_file(),
@@ -456,9 +475,21 @@ class ChartInvariantPhrases(unittest.TestCase):
     """Grounding / prototype / projection / URL re-entry must remain greppable."""
 
     def test_skill_grounding_and_prototype(self) -> None:
-        skill = _read(SKILLS / "flow-next-chart" / "SKILL.md")
-        workflow = _read(SKILLS / "flow-next-chart" / "workflow.md")
-        combined = skill + "\n" + workflow
+        skill = _read(CHART_SKILL_DIR / "SKILL.md")
+        workflow = _read(CHART_SKILL_DIR / "workflow.md")
+        # Reference bodies are part of the skill's reachable prose after the
+        # branch-disclosure refactor - workflow.md routes to exactly one per
+        # invocation, and reachability is asserted below.
+        references = "\n".join(
+            _read(CHART_REFERENCES / name) for name in CHART_MODE_REFS
+        )
+        combined = skill + "\n" + workflow + "\n" + references
+        for name in CHART_MODE_REFS:
+            self.assertIn(
+                f"references/{name}",
+                workflow,
+                f"workflow.md must link references/{name}",
+            )
         for phrase in (
             "Grounding Snapshot",
             "attach-asset",
@@ -483,6 +514,19 @@ class ChartInvariantPhrases(unittest.TestCase):
                 combined,
                 f"chart skill missing invariant phrase {phrase!r}",
             )
+
+        # Pin the moved contracts to their exact new homes, not just the blob.
+        briefing = _read(CHART_REFERENCES / "briefing-and-reopen.md")
+        self.assertIn("chart reopen", briefing)
+        self.assertIn("supersedes stale", briefing)
+        re_entry = _read(CHART_REFERENCES / "re-entry.md")
+        self.assertIn("chart locate", re_entry)
+        projection = _read(CHART_REFERENCES / "tracker-projection.md")
+        self.assertIn("tracker.charts", projection)
+        chart_mode = _read(CHART_REFERENCES / "chart-mode.md")
+        self.assertIn("Grounding Snapshot", chart_mode)
+        work_mode = _read(CHART_REFERENCES / "work-mode.md")
+        self.assertIn("attach-asset", work_mode)
 
     def test_tracker_sync_projection_and_url_reentry(self) -> None:
         text = _read(DOCS / "tracker-sync.md")
@@ -612,9 +656,10 @@ class ChartGuideOptionality(unittest.TestCase):
         skill and the guide matrix must name that refusal, and the chart skill
         must carry the verdict a driver greps for.
         """
-        chart = _read(SKILLS / "flow-next-chart" / "SKILL.md") + "\n" + _read(
-            SKILLS / "flow-next-chart" / "workflow.md"
-        )
+        skill = _read(CHART_SKILL_DIR / "SKILL.md")
+        workflow = _read(CHART_SKILL_DIR / "workflow.md")
+        chart_mode = _read(CHART_REFERENCES / "chart-mode.md")
+        chart = skill + "\n" + workflow
         guide = _read(SKILLS / "flow-next-guide" / "SKILL.md")
         for label, text in (("chart skill", chart), ("guide skill", guide)):
             self.assertRegex(
@@ -627,11 +672,16 @@ class ChartGuideOptionality(unittest.TestCase):
                 r"(?i)make X more Y|direction",
                 f"{label} must name the direction-not-destination disqualifier",
             )
+        # The discriminator stays inline in SKILL.md; the exact refusal verdict
+        # a driver greps for moved into the chart-mode reference (Phase 1) that
+        # workflow.md routes to for free-form ideas.
+        self.assertIn("No nameable destination -> STOP", skill)
         self.assertIn(
             'reason="direction not destination; narrow to one effort or run prospect"',
-            chart,
+            chart_mode,
             "chart skill must carry the exact refusal verdict for a direction-only prompt",
         )
+        self.assertIn("references/chart-mode.md", workflow)
 
     def test_guide_skill_optional_chart(self) -> None:
         text = _read(SKILLS / "flow-next-guide" / "SKILL.md")
