@@ -38,6 +38,36 @@ resolve closed it.
   say `open` in its own header while `chart show` immediately afterward said
   `done`. The header now reflects the post-transition status.
 
+`flowctl setup-block` can now track several independent marker blocks in
+one file, and check whether one has drifted without touching anything.
+Thanks to @sn-furali for the field report (#294): the second `apply` for a
+different block in the same file used to overwrite the first block's
+recorded state, and there was no way to ask "has this block been hand-edited?"
+without risking a write.
+
+### Added
+
+- **`--id <BLOCK-ID>` on `apply`, `resolve`, and the new `check`.** Several
+  managed spans can now live in one file, each addressed and tracked
+  independently. Omit `--id` (or pass `--id FLOW-NEXT`) for the original
+  single-block behavior - the markers, recorded state, and every existing
+  caller are unchanged. A custom id derives its own marker pair and never
+  touches another id's block, even a stray or corrupt one, in the same file.
+- **`flowctl setup-block check`** classifies a managed block read-only -
+  pristine, drifted, or structurally broken - and exits non-zero on
+  anything but a clean match, so CI (especially a `setup_mode: copy` repo,
+  where the block is an ordinary tracked file) can gate on a hand-edit
+  without flowctl writing anything. See `docs/flowctl.md` for the exit-code
+  table and a copy-paste CI recipe.
+
+### Fixed
+
+- **Tracking a second block in a file no longer clobbers the first block's
+  recorded state.** Pristine-hash state is now keyed per block id, not just
+  per file; a pre-existing recorded hash is read transparently as the
+  default block's state and upgraded on the next write, with no separate
+  migration step.
+
 ## [flow-next 3.16.3] - 2026-08-07
 
 Hardens the spec-split path shipped hours ago in 3.16.2, after a live

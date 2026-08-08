@@ -151,16 +151,46 @@ Output:
 
 ### setup-block
 
-Apply or resolve the tracked Flow-Next docs marker block in `CLAUDE.md` / `AGENTS.md` (used by `/flow-next:setup`). Atomic helpers only - the skill owns the ask.
+Apply, resolve, or check a tracked marker block in a mixed-ownership file (e.g. `CLAUDE.md` / `AGENTS.md`, used by `/flow-next:setup`). Atomic helpers only - the skill owns the ask.
 
 ```bash
-flowctl setup-block apply --file CLAUDE.md --template <canonical-snippet.md> [--json]
-flowctl setup-block resolve --file CLAUDE.md --template <canonical-snippet.md> --choice keep|overwrite [--json]
+flowctl setup-block apply --file CLAUDE.md --template <canonical-snippet.md> [--id <BLOCK-ID>] [--json]
+flowctl setup-block resolve --file CLAUDE.md --template <canonical-snippet.md> --choice keep|overwrite [--id <BLOCK-ID>] [--json]
+flowctl setup-block check --file CLAUDE.md --template <canonical-snippet.md> [--id <BLOCK-ID>] [--json]
 ```
 
 - **`apply`** inserts or refreshes a pristine marker block from `--template`. Refuses to clobber a customized block (hash mismatch) - the skill then asks and calls `resolve`.
 - **`resolve --choice keep`** records a `"customized"` sentinel so future re-runs never re-ask and never overwrite.
 - **`resolve --choice overwrite`** replaces the marker block with the canonical snippet (customizations inside the markers are lost; content outside the markers is preserved).
+- **`check`** is the read-only counterpart: it computes the same drift classification `apply` would, but never touches the target file or `meta.json`. Use it in CI to assert a managed block hasn't been hand-edited (see the recipe below).
+
+**`--id <BLOCK-ID>`** (all three verbs) addresses one managed span by id, so several independently-tracked blocks can live in the same file. Omit it (or pass `--id FLOW-NEXT`) for the original single-block behavior - byte-identical to pre-`--id` flowctl, including the exact historical marker strings and state-key shape. A custom id derives its own marker pair, `<!-- BEGIN <ID> --> … <!-- END <ID> -->`, scoped independently: content outside that pair - including other ids' blocks and stray markers belonging to other ids - is byte-preserved and never triggers fail-close for the id you're operating on. Ids must be 1-64 chars matching `[A-Z0-9][A-Z0-9._-]*` with no `--` substring; an invalid id is rejected via a normal command error (exit 1) before any file is read - never as an argparse usage error. The `--template` you pass must itself contain exactly one standalone marker pair for the id you're operating on (`apply`/`resolve`/`check` all fail exit 1 otherwise) - a template built for a different id, or missing the id's markers entirely, is rejected rather than silently appended forever.
+
+Pristine state is keyed per `(path, id)` in `meta.json` (`setup.block_hashes`), nested as `{<path>: {<id>: <hash-or-sentinel>}}`. A pre-`--id` install's flat `{<path>: <hash>}` entries are read transparently as the default id's hash and upgraded to the nested form on the first write to that path - no separate migration step.
+
+**`check` exit codes and verdicts** (JSON emits the same `{target, action, reason, hash}` shape as `apply`/`resolve`, with `action` carrying the verdict):
+
+| Exit | Meaning | Verdicts |
+|---|---|---|
+| 0 | pristine | `unchanged` |
+| 2 | drift | `template-drift` (matches the recorded hash but not the current template), `customized` (hand-edited), `hash-absent` (no state recorded) |
+| 3 | structural | `missing-file`, `missing-markers` (file exists, no pair for this id), `corrupt` (unpaired/embedded marker) |
+| 1 | ordinary error | bad `--id`, unreadable template/target, template lacks the operated id's marker pair, etc. |
+
+Byte-equality is checked first, matching `apply`'s order: a block that's byte-identical to the template reads `unchanged`/exit 0 even if `meta.json` still carries a `"customized"` sentinel from an earlier hand-edit that has since been reverted. CRLF-only differences are never drift (same normalization as `apply`). **Argparse usage errors (bad flags, missing required args) also exit 2** - the same code as the `drift` tier - so a CI recipe that must tell "someone hand-edited the block" apart from "the command was invoked wrong" should key off the JSON `action` field, not the bare exit code, whenever that distinction matters.
+
+CI recipe (works in a `setup_mode: copy` repo, where the block is an ordinary tracked file and a hand-edit is a normal reviewable diff; no `jq` required to gate):
+
+```bash
+flowctl setup-block check --file CLAUDE.md --template .flow/templates/claude-block.md
+# exit 0: pristine, nothing to do
+# exit 2: drift (see --json .action for template-drift / customized / hash-absent)
+# exit 3: structural problem (missing file/markers, corrupt block)
+if [ $? -ne 0 ]; then
+  echo "setup-block drift detected - run /flow-next:setup or flowctl setup-block apply/resolve"
+  exit 1
+fi
+```
 
 Serialization locks live under `.flow/locks/` (auto-gitignored).
 
