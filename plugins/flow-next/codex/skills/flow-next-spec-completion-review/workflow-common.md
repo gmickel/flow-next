@@ -77,6 +77,8 @@ Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 
 **If backend is "none"**: Skip review, inform user, and exit cleanly (no error).
 
+**Backend at a glance** — the per-backend summary (models, env vars, `--spec` forms) and the `backend[:model[:effort]]` spec grammar live in [references/backend-at-a-glance.md](references/backend-at-a-glance.md). Read it only when you surface backend guidance (the ASK branch above, a recommendation, an override hint); routing does not need it.
+
 **Then branch to the backend-specific workflow file:**
 
 | `$BACKEND` | Read |
@@ -93,7 +95,82 @@ Only the file for the active backend should enter context. Do not read the other
 
 ---
 
+## Fix Loop (INTERNAL - do not exit to Ralph)
+
+**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use the plain-text numbered prompt in this loop.**
+
+**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
+The codex/copilot/cursor handlers reserve a round before dispatch; the selected
+rp/host workflows call the same `review-rounds` reserve/record surface.
+Verdict-bearing attempts consume the reservation; no-verdict transport failures
+are recorded and refunded.
+
+When a delivered `NEEDS_WORK` consumes round
+`${MAX_REVIEW_ITERATIONS:-8}`, it is the terminal capped verdict:
+
+- codex/copilot/cursor already self-wrote `needs_work` while handling that
+ verdict; do not duplicate it.
+- host/rp continue to SKILL.md's Step 0.5 checkpoint immediately, write
+ `needs_work` exactly once, then emit `ESCALATE:` and exit 4. Do not attempt
+ another reserve/dispatch first.
+
+The exit-4 cap refusal and transport-failure semantics are stated in SKILL.md
+directly under the Step 0.5 checkpoint; the unchanged-artifact terminal is at
+the top of this file.
+
+**ANTI-PATTERN (never do either):** (1) a delivered verdict is never a
+transport failure. Once flowctl parses `VERDICT=...` the round is consumed and
+recorded; do not re-dispatch or re-frame a `NEEDS_WORK` as a backend/sandbox
+problem to claim a refund. (2) Never widen the reviewer sandbox. Reviewers are
+read-only by contract; a sandbox-blocked reviewer means something asked it to
+mutate the workspace. Fix that, do not pass `--sandbox workspace-write` /
+`danger-full-access` or set `CODEX_SANDBOX` (Windows resolves via `auto`).
+
+If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
+
+1. **Parse issues** from reviewer feedback (missing requirements, incomplete implementations)
+2. **Fix code** and run tests/lints
+3. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`)
+4. **Re-review**:
+ - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
+ - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
+ - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
+ - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
+ re-review path.
+ - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
+5. **Repeat** until `<verdict>SHIP</verdict>` — or a delivered `NEEDS_WORK`
+ consumes the final round. On that final host/rp verdict, run the terminal
+ status step below before the cap terminal; never rely on a later step after
+ exit 4.
+
+**CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
+
+## Record the terminal verdict exactly once
+
+`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
+
+For host/rp, execute the SKILL.md Step 0.5 checkpoint again now. The
+just-recorded terminal attempt is newer than the stored status, so that shared
+checkpoint is the sole writer and emits the terminal only after persistence
+succeeds. Codex/copilot/cursor handlers already self-write status; their next
+invocation also runs Step 0.5 first, so a handler-side write failure recovers
+without another reviewer dispatch.
+
+For host and rp, write once on every delivered terminal path — Step 0.5 maps
+SHIP → `ship` (exit 0), capped-NEEDS_WORK → `needs_work` (exit 4), and
+NEEDS_HUMAN → `needs_human` (exit 4, `ESCALATE: reviewer requested human
+review`). A delivered NEEDS_HUMAN is terminal at ANY round: never reserve or
+dispatch another review for it. The write happens immediately after the
+final verdict is recorded and before `ESCALATE:` / exit 4; no later control
+flow is assumed. Transport failure, malformed verdict, and retry outcomes are
+non-terminal and never write completion status.
+
 ## Anti-patterns (all backends)
+
+**FORBIDDEN**:
+- Self-declaring SHIP without actual backend verdict
+- Mixing backends mid-review (stick to one)
+- Skipping review silently (must inform user and exit cleanly when backend is "none")
 
 - **Reviewing yourself** - You coordinate; the backend reviews
 - **No receipt** - If REVIEW_RECEIPT_PATH is set, you MUST write receipt

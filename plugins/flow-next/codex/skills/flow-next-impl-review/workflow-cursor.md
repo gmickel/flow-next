@@ -4,6 +4,13 @@ Use when `BACKEND="cursor"`. Prerequisite: Phase 0 backend detection in [workflo
 
 Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`), billed against the user's Cursor subscription. It reaches reviewer models the other backends can't (`gpt-5.5-high` 1M-ctx default, the `gpt-5.3-codex` family, `composer-2.5`, `claude-opus-4-8-thinking-high`). This is the **review backend**, independent of the Cursor-as-primary-host-driver path.
 
+## Critical Rules (cursor backend)
+
+1. Use `$FLOWCTL cursor impl-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
+3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
+4. Parse verdict from command output
+
 ## Step 1: Identify Task and Diff Base
 
 ```bash
@@ -72,13 +79,13 @@ Session resume guard: re-review only resumes the cursor session when the existin
 
 ## Optional phases (gated by flags)
 
-When the corresponding flag is set, run these phases from [workflow-common.md](workflow-common.md) — the dispatch matches the `cursor` case in each phase:
+When the corresponding flag is set, run these phases from [optional-phases.md](optional-phases.md) — the dispatch matches the `cursor` case in each phase:
 
 - `--deep` → "Deep-Pass Phase" (Step D.1 → D.5)
 - `--validate` → "Validator Pass" (Step V.1 → V.4)
 - `--interactive` → "Interactive Walkthrough Phase" (Step W.1 → W.5)
 
-See [workflow-common.md](workflow-common.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
+See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
 
 ---
 

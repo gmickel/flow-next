@@ -76,17 +76,9 @@ Run `/flow-next:memory-migrate` first to make these auditable (or `flowctl memor
 
 ### 0.3 — Apply scope hint (when present)
 
-When `SCOPE_HINT` is non-empty, narrow the candidate set in this order — first match wins:
+When `SCOPE_HINT` is empty, every discovered entry stays in scope — skip this step and go to §0.4.
 
-1. **Track match** — `bug` or `knowledge` as a literal token. Filter to that track.
-2. **Category match** — exact match against `MEMORY_CATEGORIES` enum (e.g. `runtime-errors`, `architecture-patterns`, `tooling-decisions`). Filter to that category across both tracks.
-3. **Module match** — substring match against `frontmatter.module`. Useful when the user types `auth` or `plugins/flow-next/scripts/flowctl.py`.
-4. **Tag match** — exact match against any value in `frontmatter.tags`.
-5. **Title / body keyword** — case-insensitive substring search across `title` and `body`. Last resort because it can be noisy.
-
-Print the strategy used and the count: `Scope hint "auth" matched module field on 4 entries.`
-
-If no entries match, **interactive**: ask whether to (a) widen to all entries, (b) re-enter a different hint, (c) abort. **Autofix**: print `Scope hint "<hint>" matched zero entries — nothing to audit.` and exit cleanly.
+When `SCOPE_HINT` is non-empty, read [references/scope-narrowing.md](references/scope-narrowing.md) and execute its `0.3 — Apply scope hint` section — it owns the five-step first-match-wins narrowing order (track, category, module, tag, title / body keyword), the strategy print, and the zero-match handling (interactive asks widen / re-enter / abort; autofix prints and exits cleanly).
 
 ### 0.4 — Count + route
 
@@ -101,31 +93,9 @@ Count remaining entries (`TOTAL`). Route:
 
 ### 0.5 — Broad-scope triage (only when `TOTAL >= 9`)
 
-Group entries by `(module, category)` pair. For each cluster:
+When `TOTAL < 9`, there is nothing to triage — the route picked in §0.4 stands.
 
-- Count entries.
-- Note cross-references (`related_to` frontmatter field pointing into the same cluster).
-- Spot-check drift: does the most-referenced file in the cluster still exist? Use Glob.
-
-Compute impact: `cluster_score = entries + 2 * cross_refs + (3 if missing_anchor_file else 0)`. The highest-scoring cluster is the recommended starting area.
-
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
-**Interactive:** present top cluster + 2 alternatives via plain-text numbered prompt:
-
-```
-Found 24 entries across 6 clusters.
-
-The auth/runtime-errors cluster has 5 entries cross-referencing each other —
-3 reference files that no longer exist on disk. Highest staleness signal.
-
-Options:
- 1. Start with auth/runtime-errors (recommended)
- 2. Pick a different cluster
- 3. Audit everything (will take longer)
-```
-
-**Autofix:** process all clusters in impact order (highest first). Print the queue order so the report shows what got prioritized.
+When `TOTAL >= 9`, read [references/scope-narrowing.md](references/scope-narrowing.md) and execute its `0.5 — Broad-scope triage` section — it owns the `(module, category)` clustering, the `cluster_score` formula, the interactive top-cluster-plus-two-alternatives question, and the autofix impact-ordered queue print.
 
 ### Done when
 
@@ -141,146 +111,25 @@ Options:
 
 This phase runs in parallel concept to the memory walk — same audit invocation, separate scope. Glossary files are project state (not flow-next bookkeeping; see fn-38 R18). Skip the phase entirely when `flowctl glossary list --json` reports zero files.
 
-### 0.5.1 — Enumerate glossaries
-
-Use the flowctl helper as the single source of truth:
-
 ```bash
-GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null || echo '{"groups":[],"file_count":0,"total_terms":0}')"
+ACTIVE=0
+# NO pipelines in the probe — a failed producer masked by a healthy consumer
+# fails CLOSED. Capture raw first, rc-checked; parse separately.
+RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+if [ "$ACTIVE" = "0" ]; then
+ VAL="$(printf '%s' "$RAW" | jq -r '(.file_count // 0) > 0' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
+ [ "$VAL" = "true" ] && ACTIVE=1
+fi
+if [ "$ACTIVE" = "1" ]; then
+ echo "GATE ACTIVE — read and execute references/glossary-scan.md, then continue with Phase 0.75."
+fi # default branch: bare no-op — NO link, NO read path
 ```
 
-JSON shape (fn-38 task 2):
-
-```json
-{
- "groups": [
- {
- "path": "/abs/path/GLOSSARY.md",
- "entries": [
- {
- "term": "<canonical>",
- "definition": "<one-line>",
- "avoid": ["<alias-1>", "<alias-2>"],
- "relates_to": ["<other-term>"]
- }
- ],
- "count": 1
- }
- ],
- "file_count": 1,
- "total_terms": 1
-}
-```
-
-When `file_count == 0`, skip Phase 0.5 entirely. When `total_terms == 0` but `file_count > 0`, every group is a husk (see §0.5.4).
-
-### 0.5.2 — Per-term code search
-
-For each `(group, entry)` where `count > 0`:
-
-1. **Build the search corpus** — tracked source files only. Use `git ls-files` to honor `.gitignore`; exclude `.flow/`, the glossary file itself, and known build artifacts:
-
- ```bash
- git -C "$REPO_ROOT" ls-files -z \
- | grep -zvE '^\.flow/|/GLOSSARY\.md$|^GLOSSARY\.md$|/node_modules/|/\.git/' \
- > /tmp/glossary-corpus.zlist
- ```
-
- On platforms where Bash file ops gate behind permissions, the host agent should fall back to Glob with the equivalent exclusion pattern.
-
-2. **Search for the term** — case-insensitive, whole-word match (matches T2's `_glossary_term_matches` invariant). Normalize whitespace in the term first (collapse runs of whitespace to a single space), then anchor with `\b`:
-
- ```bash
- TERM_NORM="$(printf '%s' "$term" | tr -s '[:space:]' ' ')"
- TERM_HITS=$(xargs -0 grep -liEw -- "$(printf '%s' "$TERM_NORM" | sed 's/[][\.*^$\/]/\\&/g')" \
- < /tmp/glossary-corpus.zlist 2>/dev/null | wc -l | tr -d ' ')
- ```
-
- The agent may also use the Grep tool directly with an equivalent pattern; either path is fine.
-
-3. **Search for each `_Avoid_` alias** — same matching rule. Aggregate alias hits per-alias so the report can name the offending alias.
-
-4. **Decide:**
-
- | Term hits | Any alias hits | Outcome |
- |-----------|----------------|---------|
- | ≥1 | (n/a) | **Keep** — record reviewed-without-change |
- | 0 | 0 | **Mark stale** — Edit tool, append HTML comment after the term heading |
- | 0 | ≥1 | **Mark stale + alias-creep flag** — same Edit, plus surface to Phase 3 (interactive) or report (autofix) |
- | ≥1 | ≥1 | **Alias-creep flag only** — term is alive but an alias is being used in code; do not mark stale |
-
-### 0.5.3 — Stale-marking via Edit tool
-
-There is no `flowctl glossary mark-stale` subcommand. fn-38 task 2 shipped only `add / list / read / remove`; stale-marking is an Edit-tool operation on the glossary file directly.
-
-The Edit appends an HTML comment immediately after the term heading line (preserves the body untouched, never deletes the entry). The comment lives between the heading and the definition paragraph so a casual reader sees it and `flowctl glossary list` still parses cleanly:
-
-```text
-## <Term>
-
-<!-- stale: zero hits in tracked code on <YYYY-MM-DD> (audited-by: /flow-next:audit) -->
-
-<one-line definition>
-
-_Avoid_: alias-1, alias-2
-```
-
-Idempotency: when the heading already has a `<!-- stale: ... -->` comment immediately following, replace the comment in place rather than stacking. Use `Edit` with `old_string` matching the existing comment line.
-
-**The agent must not delete the term entry on stale-detection.** Deletion is the operator's call. The audit surfaces it as a Phase 5 recommendation:
-
-```
-Recommended manual review: GLOSSARY.md term "<term>" has no code hits.
-Stale comment added; consider `flowctl glossary remove <term>` if the concept is gone.
-```
-
-### 0.5.4 — Husk awareness
-
-A glossary file with `count: 0` (the file is `# Glossary` H1 followed by no term entries — left intact after the last term was removed; see fn-38 task 2 R18) skips the per-term walk. Surface a single Phase 5 advisory per husk:
-
-```
-GLOSSARY.md at <relative path> is an empty husk (no terms defined).
-flow-next keeps it as project state per fn-38 R18 — remove it manually if no
-longer needed.
-```
-
-The audit never deletes the file.
-
-### 0.5.5 — Alias-creep handling
-
-When a term has alias hits in code (whether or not the canonical term also has hits):
-
-- **Interactive (Phase 3):** present per alias as a question. Lead with the recommendation:
-
- ```
- Glossary term: "<term>" (defined in <relative path>)
- _Avoid_ alias "<alias>" appears in tracked code at <file:line> (and N other locations).
-
- Options:
- 1. Rename the code uses to "<term>" (recommended)
- 2. Drop "<alias>" from the _Avoid_ list (alias is now acceptable)
- 3. Skip — surface in report only
- ```
-
- Option 1 is a code-edit recommendation only — the audit reports the locations; the operator handles the rename. (Mass-renaming code from a memory audit is out of scope.)
- Option 2 is an Edit on the glossary file: remove the alias from the `_Avoid_` list while preserving the rest of the entry.
-
-- **Autofix:** never auto-rename code. Surface the alias-creep finding in the report under "Recommended" with file:line locations. The agent does not Edit the glossary unless the term itself is also stale (in which case the stale comment captures the alias-creep too).
-
-### 0.5.6 — Carry into Phase 5 report
-
-Capture the per-term outcomes into a glossary section of the report (see §5.1 below). Counts:
-
-- `glossary_kept` — terms with code hits.
-- `glossary_marked_stale` — terms with zero code hits and zero alias hits, stale comment applied.
-- `glossary_alias_creep` — terms whose `_Avoid_` aliases hit code (regardless of canonical hit count).
-- `glossary_husks` — files with `count: 0`.
+When the sentinel prints, STOP and Read [references/glossary-scan.md](references/glossary-scan.md) before any further step, then execute it — it owns the enumeration and JSON shape, the per-term code search and its decision table, Edit-tool stale-marking, husk advisories, alias-creep handling, the four glossary report counts, and the §4.4.1 Phase-4 execution half. Then continue with Phase 0.75. When the gate is silent (no glossary files on the ancestor chain), continue — nothing fires here, the glossary report counts are all zero, and §4.4.1 has nothing to execute.
 
 ### Done when
 
-- Every glossary group with `count > 0` has every term decided (Keep / mark stale / alias-creep).
-- Every husk file has a queued advisory.
-- The orchestrator has a glossary-side decision map alongside the memory-side investigation map.
+- The glossary gate has been evaluated, and — when it fired — the reference's own `Done when` is satisfied.
 
 ---
 
@@ -573,87 +422,14 @@ When all four conditions hold, classify as Delete and execute without asking (in
 
 **Goal:** confirm decisions with the user. Skip entirely in autofix mode.
 
-### 3.1 — Group decisions to minimize friction
+**Autofix (`MODE=autofix`):** skip this phase — no questions, no batching, no Harden accept. Genuinely ambiguous classifications were already routed to mark-stale in Phase 2; Harden candidates, un-graduation proposals, and glossary alias-creep findings carry straight into the Phase-5 Recommended bucket. Go to Phase 4.
 
-Bundle the easy ones, isolate the hard ones:
-
-1. **Group obvious Keeps** — single batched confirmation: "These N entries reviewed without changes — proceed?"
-2. **Group obvious Updates** — batched confirmation when the fixes are mechanical (path rename, module field update). "These N entries get straightforward reference updates — proceed?"
-3. **Present Consolidate clusters individually** — show canonical doc + what merges + what gets deleted.
-4. **Present Replace candidates individually** — show old guidance + current code finding + proposed successor outline.
-5. **Present non-auto Delete cases individually** — show evidence, ask explicitly. Auto-Delete bypasses this.
-6. **Present Harden candidates individually** — never batched. Each one edits shared repo infrastructure, so each needs its own explicit consent. See §3.4.
-7. **Present un-graduation proposals individually** — a hardened entry whose gate is gone (§0.75.2). Show which surface was checked and what was missing; options are `mark-fresh` (recommended) / leave hardened / skip.
-
-### 3.2 — Question style
-
-Use `plain-text numbered prompt`.
-
-Rules:
-
-- **One question at a time.**
-- **Multiple choice** when natural.
-- **Lead with the recommendation** — don't enumerate all 6 outcomes if only 2 are plausible.
-- **One-sentence rationale** — evidence is in the report, not the question.
-
-Example question shape (single entry):
-
-```
-Entry: bug/runtime-errors/oauth-callback-2025-08-12
-Evidence:
- - module `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts`
- - function signature unchanged
- - no successor entry found
-Recommendation: Update (rename references)
-
-Options:
- 1. Update (recommended)
- 2. Skip for now
- 3. Mark stale
-```
-
-### 3.3 — Harden candidate questions
-
-One question per candidate, via the same plain-text numbered prompt. Show the proposed gate type, the **draft artifact exactly as it would be written**, and the recurrence evidence as artifacts (never as a usage count — there is no read-side telemetry):
-
-```
-Entry: knowledge/conventions/timestamps-utc-2026-03-04
-Lesson: always stamp timestamps UTC ISO-8601; naive datetime.now() broke receipt comparisons
-Evidence:
- - 2 `## Update` headings (re-taught in fn-97 and fn-104)
- - 4 commits on the entry file
- - mechanizable: naive-datetime use is lint-detectable
- - duplication guard: no `DTZ` rule found in pyproject.toml
-Proposed gate: (a) lint rule — add `DTZ` to the ruff `select` list in pyproject.toml
-
- [tool.ruff.lint]
- select = ["E", "F", "DTZ"] # <- DTZ added
-
-On accept: the edit is written, `ruff check` is run to confirm DTZ is active in the
-resolved config, and only then is the entry demoted to a pointer at the gate
-(file stays on disk, body intact).
-
-Options:
- 1. Accept — write the lint rule, verify, demote (recommended)
- 2. Pick a different gate type (CI step / CLAUDE.md rule)
- 3. Decline — keep the entry as context
-```
-
-Rules for these questions:
-
-- **Always three options**: accept / pick a different gate type / decline. Declining is a first-class answer, not a failure.
-- If the user picks option 2, present the alternative surfaces that actually exist in this repo with their drafts; never offer a surface the repo does not have, and never offer to scaffold one.
-- For a **pointer-demotion** candidate (duplication guard found an active gate), there is no draft artifact — the question shows the existing gate and asks only accept / decline.
-- Nothing is written before the answer. The draft is staging, not a preview of an applied edit.
-
-### 3.4 — Skip discoverability check until Phase 6
-
-Phase 3 only handles per-entry decisions. The CLAUDE.md / AGENTS.md discoverability question runs in Phase 6 — separate, after the report exists.
+**Interactive (`MODE=interactive`):** STOP and Read [references/interactive-ask.md](references/interactive-ask.md) before any further step, then execute it — it owns the grouping rules (batch obvious Keeps and obvious Updates; present Consolidate / Replace / non-auto Delete / Harden / un-graduation individually), the question-style rules, the example question shapes, the Harden candidate question (gate type, the draft artifact exactly as it would be written, evidence, and accept / different-gate-type / decline), and the deferral of the discoverability question to Phase 6.
 
 ### Done when
 
-- User has confirmed every batched group and every individual item.
-- Skipped items are recorded in the report.
+- Autofix: nothing runs here.
+- Interactive: the reference's own `Done when` is satisfied — the user has confirmed every batched group and every individual item, and skipped items are recorded in the report.
 
 ---
 
@@ -710,15 +486,7 @@ Execute per [phases.md](phases.md) §Replace — the authoritative copy:
 
 ### 4.4.1 — Glossary stale-marking (Phase 0.5 outcomes)
 
-For each glossary term flagged "Mark stale" in Phase 0.5, the orchestrator applies the Edit on the main thread (no subagent — short, focused edits):
-
-1. Open the glossary file via Read.
-2. Edit the line immediately after the `## <Term>` heading. If a `<!-- stale: ... -->` comment already exists there, replace it (idempotent re-mark). Otherwise insert it as a new line above the definition paragraph.
-3. The comment text is `<!-- stale: zero hits in tracked code on <YYYY-MM-DD> (audited-by: /flow-next:audit) -->`.
-
-Glossary edits stage in the same git context as memory edits (Phase 5 picks the commit strategy uniformly across both).
-
-For alias-creep findings without a stale-flag (term has hits, but `_Avoid_` alias also has hits), the orchestrator does **not** edit the glossary in autofix mode. Interactive mode may edit only if the user picks "Drop the alias from `_Avoid_`" in Phase 3. Code renames are out of scope — the audit reports file:line locations and stops there.
+Runs only when the Phase 0.5 gate fired. The steps live in [references/glossary-scan.md](references/glossary-scan.md) §4.4.1 — already loaded on that path. When the gate was silent there are no glossary outcomes to execute.
 
 ### 4.5 — Delete flow
 
@@ -736,42 +504,9 @@ Execute per [phases.md](phases.md) §"Mark stale (autofix ambiguous + Replace-in
 
 ### 4.7 — Harden flow (interactive only — autofix never applies)
 
-**Autofix stops here.** In `mode:autofix` no gate artifact is written and no entry is demoted; candidates go straight to the Phase-5 Recommended bucket. Everything below runs only after an explicit accept in Phase 3.
+**Autofix stops here.** In `mode:autofix` no gate artifact is written and no entry is demoted; candidates go straight to the Phase-5 Recommended bucket carrying the full detail a human needs — gate type, the draft artifact, the recurrence evidence, and the `--gate-ref` that would be recorded. Un-graduation proposals (§0.75.2) are likewise Recommended-only.
 
-Process Harden candidates **one at a time, sequentially** — each one edits shared repo infrastructure and each needs its own verification run.
-
-1. **Write the artifact** to the accepted surface via Edit / Write — exactly the draft the user accepted, nothing more. Lint and CI edits are surgical (one rule, one step); instruction-file edits stay 1-2 lines and never restructure the file.
-2. **Verify the gate actually fires.** This is a hard precondition of demotion, not a formality — writing config is not enforcing a rule, and a gate that does not fire is strictly worse than no gate: it retires the only working copy of the lesson while enforcing nothing. By gate type:
- - **lint** — run the linter and confirm the new rule is active in the **resolved** config: not merely present as text in a file the tool does not read, and not neutralized by a later `ignore` / disable entry.
- - **CI** — confirm the step parses and sits in a workflow AND a job that actually run on the relevant trigger, not a disabled, unreferenced, or manual-only one.
- - **instruction file** — confirm the rule landed in the substantive file the agents actually read (same discovery as Phase 6 §6.1), not an `@`-including stub.
-3. **Verification failed** → **stop**. The entry stays `active`, `mark-hardened` is NOT called, and the artifact edit is reported alongside a **failed graduation** with the reason (`ruff does not read this file`, `job never runs on push`, `landed in the @-include shim`). Leave the artifact for a human to fix or revert; do not silently retry with a different gate type.
-4. **Verification passed** → demote:
-
- ```bash
- "$FLOWCTL" memory mark-hardened "$ENTRY_ID" \
- --gate-ref "<path>#<rule-id> -- <note>" \
- --audited-by "/flow-next:audit"
- ```
-
- The helper sets `status: hardened`, stores `hardened_into` verbatim, clears the stale-only fields, and stamps `last_audited` (a UTC date — a same-day re-mark is observably a no-op on that field). It is atomic and preserves unknown frontmatter fields — **never hand-edit frontmatter to demote**.
-5. **`--gate-ref` format** is the skill's contract (flowctl stores it verbatim and validates only non-emptiness — parsing it there would be judgment leaking into plumbing): `<path>#<rule-id> -- <note>`, with `<path>` repo-relative and `<rule-id>` a **literal substring of the artifact at that path** — copy the exact token from the file you just wrote. §0.75.2 greps for it verbatim on the next run, so a locator expression describing where the rule lives (`tool.ruff.select:DTZ`, `jobs.lint.steps[name=ruff]`, a heading anchor, a JSON path) is wrong: it never occurs in the TOML/YAML/Markdown, and the live gate would be falsely proposed for un-graduation. Grep the artifact to confirm the ref hits before calling `mark-hardened`. `<note>` is a short human gloss — never grepped, so put the human context there. One example per gate type:
-
- - lint: `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes` (`DTZ` is the literal token in the select list)
- - CI: `.github/workflows/ci.yml#ruff check -- lint job runs the DTZ gate` (the command string as written in the YAML)
- - instruction file: `CLAUDE.md#stamp timestamps in UTC ISO-8601 -- instruction-file floor gate` (the rule line's own wording)
-
-**Never `git rm` on Harden — on any track.** The entry file stays on disk with its body intact; it becomes a pointer at the gate, so provenance survives and "why does this rule exist?" stays answerable. For `knowledge/decisions/` entries the supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status — `mark-hardened` touches only status, `hardened_into`, `last_audited`, and `audit_notes`.
-
-**Pointer-demotion (duplication guard found an active gate):** skip steps 1-3 entirely — the gate already exists and was already confirmed active. Go straight to step 4 with the existing gate as `--gate-ref`. No new artifact is written.
-
-**Un-graduation (§0.75.2, gate gone):**
-
-```bash
-"$FLOWCTL" memory mark-fresh "$ENTRY_ID" --audited-by "/flow-next:audit"
-```
-
-Returns the entry to `active` and drops `hardened_into`, so the lesson re-enters the context window. Autofix reports the proposal instead of applying it.
+**Interactive, and only after an explicit accept in Phase 3:** STOP and Read [references/harden-flow.md](references/harden-flow.md) before any further step, then execute it — it owns the one-at-a-time sequential processing, the artifact write, the per-gate-type verification that is a **hard precondition of demotion** (verification failure leaves the entry `active`, does NOT call `mark-hardened`, and reports a failed graduation), the `flowctl memory mark-hardened --gate-ref "<path>#<rule-id> -- <note>"` demotion with its literal-substring rule for `<rule-id>`, the pointer-demotion shortcut, and the `mark-fresh` un-graduation command. **Never `git rm` on Harden — on any track.**
 
 ### Done when
 

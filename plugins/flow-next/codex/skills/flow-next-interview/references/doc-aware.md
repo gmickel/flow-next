@@ -1,7 +1,84 @@
-# Interview — doc-aware behaviors (loaded on demand)
+# Interview — doc-aware behaviors and flag matrix (loaded on demand)
 
-> Loaded ONLY when `DOC_AWARE=1` or `STRATEGY_AWARE=1` (from the `--docs`/`--strategy` flags or
-> autodetect in SKILL.md Setup). On the default technical-scope, no-docs path this file is never read.
+> Loaded when the doc-aware gate sentinel prints (`DOC_AWARE=1` or `STRATEGY_AWARE=1`, from the
+> `--docs`/`--strategy` flags or autodetect in SKILL.md Setup), or when the invocation carried any of
+> the four doc/strategy flags (§ Flag matrix). On the default technical-scope, no-docs, no-flag path
+> this file is never read.
+
+Contents:
+
+- [Flag parsing](#flag-parsing) — the strip block for `--docs` / `--no-docs` / `--strategy` / `--no-strategy` and the cascade rules.
+- [Flag matrix](#flag-matrix) — what each flag combination drives, plus the scope × doc/strategy interaction table.
+- [Why counts, not file presence](#why-counts-not-file-presence) — rationale for the autodetect predicates.
+- [Doc-aware behaviors](#doc-aware-behaviors) — (a) phase-zero glossary scan, (b) fuzzy-term sharpening, (c) code-versus-assertion contradiction, (d) decision-record write, (e) code-versus-strategy contradiction.
+
+## Flag parsing
+
+Strip the four doc-aware override flags from `$ARGUMENTS` before input-type detection so they don't get confused for a Flow ID or path:
+
+```bash
+RAW_ARGS="$ARGUMENTS"
+DOC_AWARE_FORCE="" # "" = autodetect, "on" = forced on, "off" = forced off (controls glossary + decisions)
+STRATEGY_AWARE_FORCE="" # "" = autodetect, "on" = forced on, "off" = forced off (controls strategy independently)
+
+# Glossary + decisions: --docs / --no-docs (mutually exclusive; --no-docs wins)
+if [[ "$RAW_ARGS" == *"--no-docs"* ]]; then
+ DOC_AWARE_FORCE="off"
+ RAW_ARGS="${RAW_ARGS//--no-docs/}"
+elif [[ "$RAW_ARGS" == *"--docs"* ]]; then
+ DOC_AWARE_FORCE="on"
+ RAW_ARGS="${RAW_ARGS//--docs/}"
+fi
+
+# Strategy: explicit --strategy / --no-strategy always wins. Otherwise --docs / --no-docs cascades.
+# Order: explicit pair first (mutually exclusive; --no-strategy wins on conflict), then docs cascade.
+if [[ "$RAW_ARGS" == *"--no-strategy"* ]]; then
+ STRATEGY_AWARE_FORCE="off"
+ RAW_ARGS="${RAW_ARGS//--no-strategy/}"
+elif [[ "$RAW_ARGS" == *"--strategy"* ]]; then
+ STRATEGY_AWARE_FORCE="on"
+ RAW_ARGS="${RAW_ARGS//--strategy/}"
+elif [[ "$DOC_AWARE_FORCE" == "off" ]]; then
+ # --no-docs alone cascades to strategy: matrix row 3 says all three off.
+ STRATEGY_AWARE_FORCE="off"
+elif [[ "$DOC_AWARE_FORCE" == "on" ]]; then
+ # --docs alone cascades to strategy: matrix row 2 says all three on.
+ STRATEGY_AWARE_FORCE="on"
+fi
+
+RAW_ARGS=$(printf "%s" "$RAW_ARGS" | tr -s ' ' | sed 's/^ //;s/ $//')
+# RAW_ARGS now contains the Flow ID / file path / empty.
+```
+
+Each pair is mutually exclusive (the `if/elif` checks the negation first so it wins on conflict). The `--docs` / `--strategy` tokens get left in the residual `RAW_ARGS` after stripping, which surfaces downstream as an unrecognized argument — loud failure beats silent acceptance of conflicting state.
+
+## Flag matrix
+
+Doc-aware flags (rows describe glossary / decisions / strategy gates):
+
+| Flags | Glossary | Decisions | Strategy |
+|-------|----------|-----------|----------|
+| (default) | autodetect | autodetect | autodetect |
+| `--docs` | on | on | on |
+| `--no-docs` | off | off | off |
+| `--no-docs --strategy` | off | off | on |
+| `--docs --no-strategy` | on | on | off |
+
+`--docs` / `--no-docs` cascade to strategy when no explicit `--strategy` / `--no-strategy` is passed (matrix rows 2 + 3). Explicit `--strategy` / `--no-strategy` always wins (matrix rows 4 + 5) and is the only way to drive a different value into strategy than into glossary + decisions. The matrix is the contract.
+
+**Scope x doc/strategy** — the `--scope` axis is orthogonal to the doc-aware matrix above. Each row of this table is a valid combination:
+
+| Scope | Doc-aware default | Pass behavior |
+|-------|------------------|---------------|
+| `--scope=technical` (resolver fallback, also `--tech`) | autodetect cascade above runs | tech-owned sections (Architecture / API Contracts / Edge Cases / verifiable AC); preserves biz sections byte-for-byte; reads biz sections when populated, silent when absent |
+| `--scope=business` (also `--biz`) | autodetect cascade still runs; doc-awareness does NOT auto-activate from biz pass alone (`R26` adds project-docs investigation independently) | biz-owned sections (Goal & Context / Boundaries / outcome AC / `### Motivation`); preserves tech sections byte-for-byte; writes placeholder `*Pending technical-scope interview pass.*` ONLY under EMPTY tech sections |
+| `--scope=both` | autodetect cascade runs | runs biz pass first, then tech pass; same merge contract applies in each phase |
+
+R26 project-docs investigation is gated on `SCOPE=business` (and the biz-pass phase of `both`) — runs BEFORE drafting the first biz question, regardless of doc-aware autodetect state.
+
+## Why counts, not file presence
+
+**Why `total_terms > 0` and `sections_filled >= 1` rather than `[[ -f <file> ]]`:** `flowctl glossary remove` leaves a `# Glossary` H1 husk after the last term is removed; `flowctl strategy` leaves a frontmatter-plus-H1 husk under the same R18 invariant. Both files are project state, intentionally retained. A presence-only check would false-positive on an empty husk and surface phantom doc-aware questions when no canonical vocabulary / strategic intent is actually defined. `glossary list --json` and `strategy status --json` walk the file and count populated entries; both report zero for a husk.
 
 ## Doc-aware behaviors
 
@@ -10,7 +87,7 @@ Five behaviors layer onto the standard interview workflow when their respective 
 - Behaviors (a)-(d) are gated on `DOC_AWARE=1` (glossary + decisions signal). When `DOC_AWARE=0`, skip them.
 - Behavior (e) is gated on `STRATEGY_AWARE=1` (strategy signal). When `STRATEGY_AWARE=0`, skip it.
 
-The two gates are independent (see flag matrix above) — `DOC_AWARE` and `STRATEGY_AWARE` may differ within the same interview session.
+The two gates are independent (see the flag matrix above) — `DOC_AWARE` and `STRATEGY_AWARE` may differ within the same interview session.
 
 ### Behavior (a) — Phase-zero glossary scan
 
@@ -78,6 +155,18 @@ Across the conversation, watch for overloaded language — words the user keeps 
 3. The next question can re-read the glossary. There is no in-memory cache to invalidate — re-read on every doc-aware round that needs canonical lookup. The cost is one stat + one file read per round; sub-millisecond at typical sizes.
 
 **When to skip behavior (b):** if a term is single-use, or if the user volunteered a clear definition the first time they used it, or if the conversation is short enough (≤6 user replies) that consolidation buys nothing yet. The behavior triggers when overloading is real and persistent, not on every undefined word.
+
+### Behavior (c) — Code-versus-assertion contradiction
+
+When grep / Read reveals the code disagrees with something the user asserted ("we already have X at path Y" but Y is gone, or "the auth flow uses OAuth" but the code uses API keys), do **not** silently log under `## Resolved via Codebase`. Surface the contradiction as an `plain-text numbered prompt`:
+
+- **header**: `Code mismatch?`
+- **body**: `Code shows <X> at <file:line>; you said <Y>. Recommended: <treat-code-as-source-of-truth | update-spec-to-match-code | revisit-the-area>. Confidence: [<tier>].`
+- **options**: frozen — `match-code` (revise spec to align with what's there), `update-code` (treat the assertion as the goal; flag the divergence as a task), `clarify` (user explains; agent re-investigates with new context).
+
+Confidence tier: `[high]` when grep evidence is unambiguous (file does not exist, function signature is clearly different); `[judgment-call]` when interpretation is at play (similar names, partial overlap, recent rename). Never silently pick a side — the user owns the resolution.
+
+The bar for surfacing: a meaningful contradiction that affects spec correctness. If the user says "the validator returns boolean" and grep shows it returns `Result<bool, Error>`, surface. If the user paraphrases a function's role and grep shows the role matches but the implementation differs in unrelated detail, log under `## Resolved via Codebase` and move on.
 
 ### Behavior (d) — Decision-record write (three-criteria gate)
 

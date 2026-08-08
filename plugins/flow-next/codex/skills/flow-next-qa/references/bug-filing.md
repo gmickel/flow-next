@@ -4,6 +4,10 @@ A finding is only useful if engineering can act on it. **File immediately on FAI
 
 > The P0/P1/P2 taxonomy, the evidence rules, the reproduce-before-file discipline, and the "never downgrade a P0" rule are a lean borrow from Ray Fernando's `running-bug-review-board` skill (Apache-2.0). flow-next adapts them to its own storage — the **bug memory track** (`track: bug`) and the **`qa_verdict` receipt** — rather than BRB's `BUG-NNN.md` files + HTML dashboard. (Full credit lives in the skill's CHANGELOG + the R8 lean-borrow reference.)
 
+**Contents:** reproduce-twice · severity (P0/P1/P2) + tie-break · steps to reproduce ·
+expected vs actual · evidence · title style · filing to bug memory (body template, **host
+filing skeleton**, category) · dedup · promote to a spec/task · anti-patterns.
+
 ## Reproduce before you file (twice)
 
 Agentic driving is non-deterministic — a single failed observation is not yet a finding. Re-run the scenario's failing step a **second** time (fresh `observe → snapshot → act → verify`, same persona + viewport). File only if it fails **both** times. A pass-on-retry is a flake: record it in the run notes (not a finding) and move on. This closes the GitHub-Eng gap — agent self-reported failure is ~82% accurate; reproduce-twice grounds the verdict in structural evidence, not narration.
@@ -96,6 +100,55 @@ EOF
  --symptoms "<observed actual, one line>" \
  --root-cause "(observed via live QA — unconfirmed)" \
  --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md
+fi
+```
+
+### Host filing skeleton (dedup fold + commit tracking)
+
+`workflow.md` §5.4 executes this on the host the moment a FAIL is confirmed. It wraps the
+`memory add` above with the fn-113.2 high-overlap fold and the `QA_FILED_MEMORY` tracking
+that §6.3b's narrow-pathspec commit depends on:
+
+```bash
+# memory disabled → no-op cleanly (still record the finding in the run notes for the verdict).
+if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
+ mkdir -p .flow/tmp/qa-"$SPEC_ID"
+ # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
+ # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the template above, then:
+ # Prefer --update <prior-id> when this run (or a prior QA pass) already filed the same finding.
+ _out="$($FLOWCTL memory add \
+ --track bug --category "<ui|runtime-errors|integration|data|...>" \
+ --title "<persona> can't <goal> — <one-line symptom>" \
+ --module "<surface / route / component>" \
+ --tags "qa,<spec-id>,<surface>" \
+ --symptoms "<observed actual>" \
+ --root-cause "(observed via live QA — unconfirmed)" \
+ --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
+ # fn-113.2: high-overlap match -> fold into the EXISTING entry and drop the
+ # just-created duplicate, so autonomous QA never commits a near-copy.
+ _lvl="$(printf '%s' "$_out" | jq -r '.overlap_level // empty')"
+ _dup="$(printf '%s' "$_out" | jq -r '.path // empty')"
+ if [ "$_lvl" = "high" ]; then
+ _mid="$(printf '%s' "$_out" | jq -r '.matches[0].id // empty')"
+ if [ -n "$_mid" ]; then
+ _out="$("$FLOWCTL" memory add --track bug --category "<same category as the create above>" \
+ --title "<same title>" --update "$_mid" \
+ --module "<same module>" --tags "qa,<spec-id>,<surface>" \
+ --symptoms "<same symptoms>" \
+ --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
+ # Remove the duplicate WE just created (safe: our own fresh file).
+ [ -n "$_dup" ] && rm -f "$_dup"
+ fi
+ fi
+ _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
+ # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
+ # runs in a subshell, so the assignment would be lost and the memory left uncommitted.
+ [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
+ # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
+ # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check.
+ # memory add always creates unless --update <id> (fn-113). Read .matches (scored):
+ # high score → surface "matches existing entry X"; re-run with --update <id> when
+ # this is the same finding. Moderate → related_to cross-reference on the new entry.
 fi
 ```
 

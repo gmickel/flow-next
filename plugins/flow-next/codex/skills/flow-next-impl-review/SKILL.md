@@ -6,7 +6,7 @@ user-invocable: false
 
 # Implementation Review Mode
 
-**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy + trivial-diff triage + phase-ordering matrix), then read ONLY the file matching your active backend. The opt-in `--deep`/`--validate`/`--interactive` phase detail lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
+**Workflow is backend-split. Read [workflow-common.md](workflow-common.md) for Phase 0 (backend detection + philosophy + trivial-diff triage), then read ONLY the file matching your active backend. The opt-in `--deep`/`--validate`/`--interactive` phase detail (including the phase-ordering matrix) lives in [optional-phases.md](optional-phases.md), loaded only when a flag fires:**
 
 - `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
@@ -14,7 +14,7 @@ user-invocable: false
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 - `BACKEND=rp` → [workflow-rp.md](workflow-rp.md)
 
-Do not load the others — only the active backend's file is needed.
+Do not load the others — only the active backend's file is needed. Each backend file carries its own Critical Rules and anti-patterns.
 
 Conduct a John Carmack-level review of implementation changes on the current branch.
 
@@ -56,44 +56,13 @@ If found, use that backend and skip all other detection.
 
 No `--review` flag → `$BACKEND` comes from [workflow-common.md](workflow-common.md) Phase 0 (executed once per the Preamble): the single `flowctl review-backend "$REVIEW_ID"` call with ASK handling included. Do not re-resolve here.
 
-### Backend at a glance
+### Backend detail (model / effort / spec grammar) — on demand
 
-When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (explicit `--review=rp` still honored):
-
-- **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
-- **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
-- **copilot** — GitHub Copilot CLI (cross-platform); supports Claude families through Opus 5 plus GPT-5.x families via a Copilot subscription (availability is org-policy managed — a given install may expose fewer). `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
-- **cursor** — Cursor CLI (`cursor-agent`, cross-platform); reaches `gpt-5.5-high` (1M-ctx default), the `gpt-5.3-codex` family, `composer-2.5`, and Claude tiers (`claude-opus-5-thinking-high`, `claude-opus-4-8-thinking-high`) via a Cursor subscription. `FLOW_CURSOR_MODEL` env var, or `--spec cursor:gpt-5.5-high`. Cursor folds reasoning effort into the model name — **no effort field**.
-- **host** — Bare-only non-executable selection sentinel; selected mechanics
- live in [workflow-host.md](workflow-host.md).
-
-**Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`, `cursor:gpt-5.5-high` (cursor takes model only — no `:effort`), `host` (bare only). Per-task `review` (set via `flowctl task set-backend`) overrides env.
+The per-backend "at a glance" descriptions, the `backend[:model[:effort]]` spec grammar, and the `FLOW_REVIEW_BACKEND` spec-form examples live in [references/backend-specs.md](references/backend-specs.md). Read it only when you must surface backend guidance to the user or resolve a model/effort spec — a normal review already has `$BACKEND` and needs nothing from it. When `RP_ELIGIBLE=0`, omit the **rp** line from any guidance you surface (explicit `--review=rp` still honored).
 
 ## Critical Rules
 
-**For rp backend:**
-1. **DO NOT REVIEW CODE YOURSELF** - you coordinate, RepoPrompt reviews
-2. **MUST WAIT for actual RP response** - never simulate/skip the review
-3. **MUST use `setup-review (5-15 min, DO NOT RETRY)`** - handles window selection + builder atomically
-4. **DO NOT add --json flag to chat-send (2-10 min, DO NOT RETRY)** - it suppresses the review response
-5. **Re-reviews MUST stay in SAME chat** - omit `--new-chat` after first review
-
-**For codex backend:**
-1. Use `$FLOWCTL codex impl-review` exclusively
-2. Pass `--receipt` for session continuity on re-reviews
-3. Parse verdict from command output
-
-**For copilot backend:**
-1. Use `$FLOWCTL copilot impl-review` exclusively
-2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
-3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
-4. Parse verdict from command output
-
-**For cursor backend:**
-1. Use `$FLOWCTL cursor impl-review` exclusively
-2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
-3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
-4. Parse verdict from command output
+**Per-backend rules** for `rp`, `codex`, `copilot`, and `cursor` live at the top of each `workflow-<backend>.md` — read the active backend's file (routing table above) and follow its Critical Rules section.
 
 **For host backend (fn-123 R5 / fn-126):**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
@@ -187,47 +156,13 @@ if [[ "$INTERACTIVE" == "true" ]]; then
  exit 2
  fi
 fi
-```
 
-`VALIDATE` gates the validator pass in [workflow-common.md](workflow-common.md). When false (default),
-behavior is unchanged.
-
-`DEEP` gates the deep-pass phase in [workflow-common.md](workflow-common.md). When false (default),
-behavior is unchanged.
-
-**Pass selection (when DEEP=true):**
-
-```bash
-# If explicit CSV provided, use those passes verbatim.
-# Otherwise: adversarial always + security/performance auto-enabled by
-# changed-file globs via `flowctl review-deep-auto`.
-if [[ -n "$DEEP_PASSES" ]]; then
- SELECTED_PASSES="${DEEP_PASSES//,/ }"
-else
- # Determine changed files for auto-enable heuristic
- if [[ -n "$BASE_COMMIT" ]]; then
- CHANGED="$(git diff --name-only "$BASE_COMMIT"..HEAD)"
- else
- DIFF_BASE=main; git rev-parse main >/dev/null 2>&1 || DIFF_BASE=master
- CHANGED="$(git diff --name-only "$DIFF_BASE"..HEAD)"
- fi
- SELECTED_PASSES="$(printf '%s\n' "$CHANGED" | $FLOWCTL review-deep-auto)"
+if [[ "$DEEP" == "true" || "$VALIDATE" == "true" || "$INTERACTIVE" == "true" ]]; then
+ echo "OPTIONAL PHASES ACTIVE — STOP. Read optional-phases.md (deep=$DEEP validate=$VALIDATE interactive=$INTERACTIVE) before continuing."
 fi
-echo "Deep passes selected: $SELECTED_PASSES"
 ```
 
-See [deep-passes.md](deep-passes.md) for the pass prompt templates, the
-auto-enable globs, and merge/promotion rules.
-
-**Interactive flag + Ralph-block (fn-32.3):** parsed and Ralph-blocked in the single fence above (no env var form — per-invocation only).
-
-`INTERACTIVE` gates the walkthrough phase in [walkthrough.md](walkthrough.md).
-When false (default), behavior is unchanged. When true + verdict is
-NEEDS_WORK, the skill walks each finding with the user via the platform's
-plain-text numbered prompt (Apply / Defer / Skip / Acknowledge / LFG-rest).
-
-See [walkthrough.md](walkthrough.md) for the full per-finding flow and
-deferred-findings sink contract.
+When that sentinel prints, STOP and Read [optional-phases.md](optional-phases.md) before any further step — it owns the phase-ordering + flag-combination matrix, the deep-pass selection bash, the validator dispatch, and the walkthrough steps (per-finding loop detail in [walkthrough.md](walkthrough.md), pass prompt templates in [deep-passes.md](deep-passes.md)). All three phases are default-OFF: when no flag fires, run the primary review only and write no `validator` / `deep_passes` / `walkthrough` receipt keys.
 
 ### Step 0.5: Trivial-diff triage (fn-29.6)
 
@@ -267,24 +202,20 @@ when explicitly validating a suspicious chore diff, or when the deterministic
 whitelist misclassifies). `FLOW_RALPH_NO_TRIAGE=1` has the same effect for
 Ralph runs.
 
+The deterministic rule table, the SKIP receipt shape, and the `FLOW_TRIAGE_LLM=1`
+judge live in [references/triage-rules.md](references/triage-rules.md) — read it
+only when a triage result needs justifying or auditing.
+
 ### Step 1: Load Backend Workflow
 
 1. `$BACKEND` was already resolved by workflow-common.md Phase 0 (Preamble) — do NOT re-run it.
-2. Read **only** the file for that backend:
-
-| `$BACKEND` | File to read |
-|------------|--------------|
-| `codex` | [workflow-codex.md](workflow-codex.md) |
-| `copilot` | [workflow-copilot.md](workflow-copilot.md) |
-| `cursor` | [workflow-cursor.md](workflow-cursor.md) |
-| `host` | [workflow-host.md](workflow-host.md) |
-| `rp` | [workflow-rp.md](workflow-rp.md) |
+2. Read **only** the file for that backend, per the routing table at the top of this file.
 
 **Do not read the other backend files.** Each is self-contained for its backend; loading the others wastes context.
 
 ### Step 2: Execute the backend workflow
 
-Follow the phases in the per-backend file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps (and, for RP, the full Phase 1-4 setup-review (5-15 min, DO NOT RETRY) / chat-send (2-10 min, DO NOT RETRY) / receipt build + Fix Loop). Cross-backend gated phases (Deep-Pass, Validator, Interactive Walkthrough) live in [workflow-common.md](workflow-common.md) — the backend files reference them.
+Follow the phases in the per-backend file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps (and, for RP, the full Phase 1-4 setup-review (5-15 min, DO NOT RETRY) / chat-send (2-10 min, DO NOT RETRY) / receipt build + Fix Loop). Cross-backend gated phases (Deep-Pass, Validator, Interactive Walkthrough) live in [optional-phases.md](optional-phases.md) — the backend files reference them.
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 
@@ -321,40 +252,4 @@ deliberate `--force` dispatch.
  `--sandbox workspace-write` / `danger-full-access` or set `CODEX_SANDBOX`.
  The one exception is Windows, where `auto` already resolves for you.
 
-If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
-
-0. **Deep-pass phase (only if `DEEP=true`)** — see [optional-phases.md](optional-phases.md) § Deep-Pass Phase.
- - After primary review completes (any verdict) and before validator,
- run each selected pass via
- `$FLOWCTL <backend> deep-pass --pass <name> --receipt ... --primary-findings ...`.
- - Passes merge into receipt via fingerprint dedup + cross-pass promotion
- (autonomy markers only; interactive returns host_judges JSON, receipt untouched - fn-113).
- - Deep may upgrade `SHIP → NEEDS_WORK` if it surfaces new blocking findings;
- it never downgrades `NEEDS_WORK → SHIP`.
-1. **Validator pass (only if `VALIDATE=true`)** — see [optional-phases.md](optional-phases.md) § Validator Pass.
- - Extract findings JSON-lines, dispatch `$FLOWCTL <backend> validate --findings-file ... --receipt ...`
- - If all findings drop → verdict upgrades to SHIP automatically (exit fix loop;
- autonomy markers only - interactive returns host_judges JSON and you judge survivors, fn-113)
- - Else → only surviving (kept) findings enter the fix loop in step 2
-2. **Interactive walkthrough (only if `INTERACTIVE=true` AND verdict still NEEDS_WORK)** — see [walkthrough.md](walkthrough.md).
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
-
- - For each surviving finding, ask user via plain-text numbered prompt: Apply / Defer / Skip / Acknowledge / LFG-rest.
- - Deferred findings appended to `.flow/review-deferred/<branch-slug>.md`.
- - Skip / Acknowledge are no-ops beyond receipt logging.
- - Apply list restricts the fix loop below to just those findings.
- - Receipt gains `walkthrough: {applied, deferred, skipped, acknowledged}`.
-3. **Parse issues** from reviewer feedback (Critical → Major → Minor)
-4. **Fix code** and run tests/lints
-5. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`)
-6. **Re-review**:
- - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
- - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
- - **Cursor**: Re-run `flowctl cursor impl-review` (receipt enables context; must be `mode == "cursor"` to resume)
- - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
- re-review path.
- - **RP Classic**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
- - **RepoPrompt CE**: `$FLOWCTL rp chat-send (2-10 min, DO NOT RETRY) --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file <literal re-review path>` (`T` is the canonical context binding, not visible-tab projection; NO `--tab`; same response-file rule)
-7. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap above breaks the loop (escalate with surviving findings)
-
-**CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
+**On `NEEDS_WORK` — STOP and Read [references/fix-loop.md](references/fix-loop.md)** before any further step: it owns the ordered loop (optional deep / validator / walkthrough hooks, parse issues, fix code, run tests and lints, commit fixes, per-backend re-review command, repeat until `<verdict>SHIP</verdict>` or the cap above). Do not improvise the loop from memory. On `SHIP` the review is complete and nothing further is read.

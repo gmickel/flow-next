@@ -115,36 +115,10 @@ configured/overridden backend — codex, copilot, cursor, rp, or host — itself
 
 **If `AUTONOMOUS=1` (autonomous mode):** ask nothing — apply the autonomous defaults and continue to the workflow.
 
-**If REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none** (already configured): Only ask branch question. Show override hint:
-
-```
-Quick setup: Where to work?
-a) Current branch b) New branch c) Isolated worktree
-
-(Reply: "a", "current", or just tell me)
-(Tip: --review=rp|codex|copilot|cursor|host|export|none overrides configured backend)
-```
-
-**If REVIEW_BACKEND is ASK** (not configured): Ask both branch AND review questions:
-
-```
-Quick setup before starting:
-
-1. **Branch** — Where to work?
- a) Current branch
- b) New branch
- c) Isolated worktree
-
-2. **Review** — Run Carmack-level review after?
- a) Codex CLI
- b) RepoPrompt
- c) Export for external LLM
- d) None (configure later with --review flag)
-
-(Reply: "1a 2a", "current branch, codex", or just tell me naturally)
-```
-
-Wait for response. Parse naturally — user may reply terse or ramble via voice.
+**Otherwise (interactive)**: the branch question MUST be answered before anything else. Read
+[references/setup-questions.md](references/setup-questions.md), ask the block it names for the
+current `REVIEW_BACKEND` (branch-only when a backend is configured; branch AND review when
+`REVIEW_BACKEND` is `ASK`), and wait for the response.
 
 **Defaults when empty/ambiguous:**
 - Branch = `new`
@@ -170,17 +144,13 @@ If user chose review, pass the review mode to the worker. The worker agent invok
 
 **Spec-id scheme on mint:** with a tracker configured, tracker-first is the recommended team default (`tracker.specIds=tracker`) — it stops parallel `fn-N` collisions. Gate: phases.md Phase 1.
 
-**Unlink / re-link lifecycle:** detaching a spec from its tracker issue is done via `/flow-next:tracker-sync unlink <id>` — that ceremony (in the tracker-sync skill) clears the tracker id + `lastSyncedAt` + merge-base atomically (`flowctl sync clear`) and posts a one-line "detached" comment to the issue. After unlink, all lifecycle touchpoints above no-op for that spec (no linked id). A later re-link re-seeds the merge base from the current issue body (so re-link does not resurrect stale state). The spec/task ids, branch, and files are NEVER touched by unlink (no rename).
+**Unlink / re-link lifecycle:** documented with the touchpoints in [references/tracker-touchpoints.md](references/tracker-touchpoints.md) (`Unlink / re-link lifecycle`) — no work-run step.
 
 ## Codex implementation-delegation (opt-in, off by default)
 
 **The in-session path is the documented default and is behaviorally unchanged.**
-With delegation off — the default — Work performs one cheap request check and
-loads no delegation reference. A requested path reads
-[references/codex-delegation-selection.md](references/codex-delegation-selection.md)
-for the exact host/config/input/consent selection. Only a passing selection
-loads the active machinery in
-[references/codex-delegation.md](references/codex-delegation.md).
+With delegation off — the default — Work performs one cheap request check
+(phases.md Phase 0) and loads no delegation reference.
 
 **Activation is disambiguated from the review backend.** `/flow-next:work`
 already maps the generic fuzzy "use codex" to the **review backend** (Review-mode
@@ -191,20 +161,13 @@ parsing above). Delegation activates ONLY via the explicit arg token
 
 **Resolution chain (precedence):** arg token (`delegate:codex` / `delegate:local`)
 > flow config `work.delegate` > hard default OFF. Phase 0 combines that value
-with the cheap Claude-Code host check to compute `delegation_requested`.
-Phase 1.5 resolves the remaining host/input/availability/consent/clean-tree
-selection reference; only a passing selection sets `delegation_active=true`:
-
-```text
-delegation_requested = host_is_claude_code && (arg delegate:codex | work.delegate == "codex") && not arg delegate:local
-delegation_active = delegation_requested && Phase 1.5 selection passed
-```
-
-The executable request check and fail-open selection stay beside their
-consuming phases in [phases.md](phases.md). Any selection failure runs the
-standard path and leaves the active reference cold. Once selected, the host
-(NOT the worker) reads the active reference once and follows its complete
-path-handoff, safety, worker-signal, and circuit-breaker contract.
+with the cheap Claude-Code host check to compute `delegation_requested`. A
+requested path then reads
+[references/codex-delegation-selection.md](references/codex-delegation-selection.md)
+at Phase 1.5 for the exact host/config/input/consent/clean-tree selection; only
+a passing selection sets `delegation_active=true` and loads the active machinery
+in [references/codex-delegation.md](references/codex-delegation.md). Any
+selection failure runs the standard path and leaves the active reference cold.
 
 ## Guardrails
 

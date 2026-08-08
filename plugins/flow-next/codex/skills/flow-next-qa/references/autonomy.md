@@ -10,16 +10,31 @@ post, and the graceful-degradation matrix when no live deploy / driver is presen
 > make-pr §0.0 precedent ([flow-next-make-pr/SKILL.md](../../flow-next-make-pr/SKILL.md)
 > "Forbidden"). Detect Ralph once, then route deterministically; never re-probe per phase.
 
+**Contents:** §0 the autonomous routing table (`NO_PROMPT=1`) · §1 detect-once routing ·
+§2 the four-outcome verdict as the autonomy contract · §3 graceful degradation ·
+§4 opt-in tracker verdict post · §5 autonomous self-commit.
+
+## 0. The autonomous routing table (NO_PROMPT=1)
+
+Reached from `workflow.md` "Autonomous-mode gate" when `NO_PROMPT=1` (the `mode:autonomous`
+token, `FLOW_AUTONOMOUS=1`, or Ralph). Every `plain-text numbered prompt` info-prompt in the workflow
+routes deterministically instead of asking — resolve from spec / config / env, else surface
+the limitation as a **BLOCKED `qa_verdict`** (§6.3) + clean exit:
+
+| Undocumented fact | `NO_PROMPT=0` (interactive) | `NO_PROMPT=1` (autonomous / Ralph) |
+|-------------------|------------------------------|-------------------------------------|
+| Spec id (1.1) | `plain-text numbered prompt` (info) | resolve by branch-match; else non-zero exit + stderr (no user to ask) |
+| Base ref (1.2) | `plain-text numbered prompt` (info) | use the detection cascade; if it yields nothing → **BLOCKED** + clean exit |
+| Target URL (3.1) | `plain-text numbered prompt` (info) | use spec/repo/`--target`/env signal; undocumented → **BLOCKED** + clean exit |
+| Test accounts (3.2) | `plain-text numbered prompt` (info) | use a documented playbook; undocumented → **BLOCKED** + clean exit |
+| No reachable local app (3.1/4) | carries to BLOCKED verdict | **BLOCKED** + clean exit |
+
 ## 1. Detect-once routing (R11)
 
-Detect at the top of the run and route downstream — never re-detect:
-
-```bash
-RALPH=0
-if [ -n "${REVIEW_RECEIPT_PATH:-}" ] || [ "${FLOW_RALPH:-}" = "1" ]; then
- RALPH=1
-fi
-```
+Detect at the top of the run and route downstream — never re-detect. `RALPH` is computed
+**once**, in `workflow.md`'s "Autonomous-mode gate" preamble block
+(`REVIEW_RECEIPT_PATH` set OR `FLOW_RALPH=1` ⇒ `RALPH=1`); every step below reuses that
+value rather than re-probing.
 
 `plain-text numbered prompt` is **info-only** — it resolves *undocumented facts* (target URL,
 test accounts), NEVER a confirm gate ("shall I QA? / ship?"). Interactive resolves
@@ -83,14 +98,30 @@ When opted in AND the bridge is active, post the Phase 6 verdict as a structured
 tracker **comment** — gated identically to every fn-52 lifecycle touchpoint
 ([flow-next-work/SKILL.md](../../flow-next-work/SKILL.md) "Shared gating predicate").
 
+`workflow.md` §A.3's gate already read the leaf and printed the sentinel. Confirm the bridge
+is active, then delegate:
+
 ```bash
-QA_LEAF="$($FLOWCTL config get tracker.perEvent.qa --json | jq -r '.value')"
+case "$QA_LEAF" in
+ pull|push|reconcile|comment) QA_OP="comment" ;;
+ off|null) QA_OP="off" ;;
+ *) QA_OP="off" ;; # malformed config stays silent
+esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$QA_LEAF" != "off" ] && [ "$QA_LEAF" != "null" ]; then
- # invoke flow-next-tracker-sync (comment op) — best-effort, never blocks the verdict
- :
+ && [ "$QA_OP" != "off" ]; then
+ # QA synthesizes the comment content by name: verdict, qa_outcome, open P0/P1
+ # findings, and R-ID coverage. Its FIRST line is
+ # `evidence=<tested-head-sha>`. Write it to a mode 0600 temporary body file,
+ # never argv. The inline flow-next-tracker-sync wrapper makes exactly one
+ # facade call and deletes the file:
+ # "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event qa --body-file "$BODY_FILE"
+ # pull, push, reconcile, and comment all coerce to comment. Best-effort.
+ : # never blocks
 fi
 ```
+
+The facade emits one receipt tagged `--event qa`. Structured errors are routed
+by the inline wrapper and remain best-effort.
 
 ### Why `comment` is the only verb
 
@@ -119,3 +150,17 @@ already a recognised leaf verb (fn-52); this task only adds the `qa` *key* defau
 A `qa-*.json` receipt parses to `parse_receipt_path`'s fallback but still validates via
 the verdict enum. `parse_receipt_path` is **not** extended in v1 — QA is **not** a hard
 Ralph receipt-gate (the planning decision); no `ralph-guard.py` change.
+
+## 5. Autonomous self-commit (`QA_AUTONOMOUS=1`)
+
+The commit itself is `workflow.md` §6.3b (it runs only when `QA_AUTONOMOUS=1` — the pilot
+stage dispatched the pass; autonomy ≠ Ralph). This section carries the precondition that
+governs it.
+
+**Precondition (autonomous mode):** the loop operates on **committed state** — the worker
+commits before QA, so `.flow/memory` is clean at dispatch. QA commits only the entries it
+filed this run; the one out-of-contract case is a pre-existing **uncommitted** manual/audit
+edit to a bug entry that QA then `--update`s — that edit would ride this commit. The
+autonomous pilot loop never carries such state (it operates on committed trees); a human
+running `/flow-next:qa mode:autonomous` over a dirty `.flow/memory` should commit those edits
+first.

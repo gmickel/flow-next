@@ -4,6 +4,13 @@ Use when `BACKEND="cursor"`. Prerequisite: Phase 0 backend detection in [workflo
 
 Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`), billed against the user's Cursor subscription. This is the **review backend**, independent of the Cursor-as-primary-host-driver path.
 
+## Critical rules (cursor backend)
+
+1. Use `$FLOWCTL cursor completion-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
+3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
+4. Parse verdict from command output
+
 ## Step 1: Identify Spec
 
 ```bash

@@ -2,6 +2,13 @@
 
 Use when `BACKEND="copilot"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`.
 
+## Critical Rules (copilot backend)
+
+1. Use `$FLOWCTL copilot impl-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
+3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
+4. Parse verdict from command output
+
 ## Step 1: Identify Task and Diff Base
 
 ```bash
@@ -65,13 +72,13 @@ Session resume guard: re-review only resumes the copilot session when the existi
 
 ## Optional phases (gated by flags)
 
-When the corresponding flag is set, run these phases from [workflow-common.md](workflow-common.md) — the dispatch matches the `copilot` case in each phase:
+When the corresponding flag is set, run these phases from [optional-phases.md](optional-phases.md) — the dispatch matches the `copilot` case in each phase:
 
 - `--deep` → "Deep-Pass Phase" (Step D.1 → D.5)
 - `--validate` → "Validator Pass" (Step V.1 → V.4)
 - `--interactive` → "Interactive Walkthrough Phase" (Step W.1 → W.5)
 
-See [workflow-common.md](workflow-common.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
+See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
 
 ---
 

@@ -29,6 +29,14 @@
 
 Use when `BACKEND="rp"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, `REPO_ROOT`, and `SPEC_ID`.
 
+## Critical rules (rp backend)
+
+1. **DO NOT REVIEW CODE YOURSELF** - you coordinate, RepoPrompt reviews
+2. **MUST WAIT for actual RP response** - never simulate/skip the review
+3. **MUST use `setup-review`** - handles window selection + builder atomically
+4. **DO NOT add --json flag to chat-send** - it suppresses the review response
+5. **Re-reviews MUST stay in SAME chat** - omit `--new-chat` after first review
+
 ## Phase 1: Gather Context (RP)
 
 **Run this BEFORE setup-review so the builder gets a real summary.**

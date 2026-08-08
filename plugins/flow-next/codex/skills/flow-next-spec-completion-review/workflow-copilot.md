@@ -2,6 +2,13 @@
 
 Use when `BACKEND="copilot"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and `SPEC_ID`.
 
+## Critical rules (copilot backend)
+
+1. Use `$FLOWCTL copilot completion-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
+3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
+4. Parse verdict from command output
+
 ## Step 1: Identify Spec
 
 ```bash

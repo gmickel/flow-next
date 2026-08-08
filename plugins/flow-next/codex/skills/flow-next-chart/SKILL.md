@@ -7,7 +7,7 @@ allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Task
 
 # Chart - decision-map discovery (pre-capture)
 
-**Read [workflow.md](workflow.md) for full mode-by-mode execution.** Native prompts and adaptive traces: [references/examples.md](references/examples.md).
+**Read [workflow.md](workflow.md) for routing and the mode dispatch table.** It routes to exactly one mode reference per invocation (chart / work / briefing-reopen / re-entry); status mode and the safety recap stay inline there. Native prompts, adaptive traces, and the full flag tables: [references/examples.md](references/examples.md).
 
 Takes **one unshaped idea that is too big for a single capture session and wrapped in unknowns**, and finds the route by resolving **one decision at a time** until the effort can be captured as one or more specs. Unit of work is a **decision** (D-ID), not a build task. Chart never writes a spec and never sets `ready`; output is a briefing handed to `/flow-next:capture`.
 
@@ -100,30 +100,18 @@ Attendance is stored and validated by flowctl for five types; `task` requires `-
 
 ## Flags (automation only - not required vocabulary)
 
-Documented for scripting; conversational equivalents in [references/examples.md](references/examples.md).
-
-| Flag / form | Purpose |
-|---|---|
-| `--status` | Status mode - render only |
-| `--decision <n>` | Pin a D-ID for work mode |
-| `--json` on every `flowctl chart` subcommand | Machine envelope for drivers |
-| `chart create --initial-map-file` / `--force-size --reason` | Atomic chart + ceiling override (audited) |
-| `chart resolve --answer-file` / `--sharpen-file` / `--supersedes` / `--keep-dependents` | Close + optional sharpen/cascade; `--sharpen-file` also carries a dated `notes_append` correction when the answer disproves a grounding note (unattended: only on direct contradiction, never speculative); unrecognized keys fail the whole resolve |
-| `chart attach-asset --asset-file` | Safe artefact while open |
-| `chart briefing --proposal-file` / `--force` | Confirmed split proposal; force is draft-only; after a `chart reopen` the same proposal mints the next B-ID |
-| `chart claim` / `release-claim [--break-stale --reason]` | Claims; no silent expiry |
-| `chart locate <selector>` | Local ledger re-entry (may be absent - degrade) |
+Documented for scripting; the full flag table, the human-intent -> flowctl map, and conversational equivalents live in [references/examples.md](references/examples.md). Only `--status` (status mode) and `--decision <n>` (pin a D-ID for work mode) affect routing; `--json` is available on every `flowctl chart` subcommand.
 
 ## Workflow
 
 Execute [workflow.md](workflow.md):
 
 0. **Route** - parse args, probe locator for URL-like selectors, choose mode.
-1. **Chart mode** - Grounding Snapshot (ordered) -> read-back Outcome/frontier/cost -> create or stop.
-2. **Work mode** - re-anchor -> frontier -> claim -> evidence route -> resolve/scope/release -> sharpen -> re-chart -> one verdict.
-3. **Status mode** - compact show + frontier + cost; no mutations.
-4. **Briefing handoff** - when briefable, propose clusters, confirm, `briefing --proposal-file`, hand to capture.
-5. **Supersession** - when steering says direction changed, resolve with `--supersedes` after read-back.
+1. **Mode dispatch** - read only the routed mode's reference:
+ - **Chart mode** - Grounding Snapshot (ordered) -> read-back Outcome/frontier/cost -> create or stop.
+ - **Work mode** - re-anchor -> frontier -> claim -> evidence route -> resolve/scope/release -> sharpen -> re-chart -> one verdict; supersession when steering says the direction changed.
+ - **Briefing handoff / reopen** - when briefable, propose clusters, confirm, `briefing --proposal-file`, hand to capture.
+2. **Status mode** - compact show + frontier + cost; no mutations (inline in workflow.md).
 
 ## Forbidden
 
