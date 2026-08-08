@@ -2,6 +2,8 @@
 
 Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, or Jira) and reconcile body / status / comments two-way. Drives the `/flow-next:tracker-sync` skill plus the `flowctl sync …` plumbing.
 
+> **Optional.** flow-next runs fully without this. It costs a bidirectional round-trip per lifecycle event you enable, plus a conflict policy to hold an opinion about and a second place state can be wrong; turn it on when other people need to read or edit status where they already work, or invoke it manually with `/flow-next:tracker-sync` and leave the bridge off in between. Spec-only is a first-class mode, not a degraded one. See [`running-lean.md`](running-lean.md).
+
 > **`/flow-next:tracker-sync` is NOT `/flow-next:sync`.** `/flow-next:sync` is **plan-sync** — it updates downstream *task* specs after implementation drift inside flow-next (`flow-next-sync` skill). `/flow-next:tracker-sync` is the **external tracker bridge** documented here. The two share a verb and nothing else.
 
 ## Projection, not coordination

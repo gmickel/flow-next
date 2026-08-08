@@ -18,7 +18,7 @@ The idea-to-merge pipeline, in order. Chart and guide sit **upstream of capture*
 | [`flow-next-interview`](../skills/flow-next-interview/SKILL.md) | `/flow-next:interview` | Deep Q&A over a spec or task to extract complete detail - lead-with-recommendation, confidence tiers, codebase-first investigation; `--scope=business\|technical\|both`. |
 | [`flow-next-plan`](../skills/flow-next-plan/SKILL.md) | `/flow-next:plan` | Research the codebase via parallel scouts, then break a spec into dependency-ordered, context-fit tasks. Writes the plan, never code. |
 | [`flow-next-plan-review`](../skills/flow-next-plan-review/SKILL.md) | `/flow-next:plan-review` | Carmack-level cross-model review of a spec or plan (RepoPrompt / Codex / Copilot / Cursor backend). |
-| [`flow-next-work`](../skills/flow-next-work/SKILL.md) | `/flow-next:work` | Execute a spec or task — git setup, fresh-context worker subagents, re-anchoring, quality checks, commits, evidence. Opt-in `delegate:codex` implementation offload. |
+| [`flow-next-work`](../skills/flow-next-work/SKILL.md) | `/flow-next:work` | Execute a spec or task — git setup, fresh-context worker subagents, re-anchoring, quality checks, commits, evidence. Opt-in `delegate:codex` implementation offload (**deprecated** — see [`running-lean.md`](running-lean.md#packaged-codex-delegation-deprecated)). |
 | [`flow-next-impl-review`](../skills/flow-next-impl-review/SKILL.md) | `/flow-next:impl-review` | Carmack-level cross-model implementation review — confidence anchors, introduced-vs-pre-existing classification, SHIP / NEEDS_WORK receipt. |
 | [`flow-next-spec-completion-review`](../skills/flow-next-spec-completion-review/SKILL.md) | `/flow-next:spec-completion-review` | End-of-spec gate — verifies the *combined* implementation across all tasks satisfies the spec. |
 | [`flow-next-qa`](../skills/flow-next-qa/SKILL.md) | `/flow-next:qa` | Live-app real-user QA derived from the spec — drives the running app via `flow-next-drive`, files P0/P1/P2 findings with evidence, YES/NO ship verdict receipt. Forbidden from marking PASS by reading source. Opt-in. |
@@ -31,7 +31,7 @@ The idea-to-merge pipeline, in order. Chart and guide sit **upstream of capture*
 |---|---|---|
 | [`flow-next-pilot`](../skills/flow-next-pilot/SKILL.md) | `/flow-next:pilot` | Single-tick build-loop conductor — advances one *ready* spec by one pipeline stage per tick, ends with a `PILOT_VERDICT` line; your host's `/loop` or `/goal` owns iteration. |
 | [`flow-next-land`](../skills/flow-next-land/SKILL.md) | `/flow-next:land` | Cadence-tick ship loop — babysits build-loop-authored PRs through CI fixes, review convergence, gated explicit merge, spec close, and release-follow; ends with a `LAND_VERDICT` line. |
-| [`flow-next-ralph-init`](../skills/flow-next-ralph-init/SKILL.md) | `/flow-next:ralph-init` | Scaffold the repo-local Ralph hardened harness under `scripts/ralph/` — external shell loop, fresh session per iteration, hook guardrails, receipts. |
+| [`flow-next-ralph-init`](../skills/flow-next-ralph-init/SKILL.md) | `/flow-next:ralph-init` | **Deprecated** — prefer a script calling `/flow-next:pilot` + `/flow-next:land` ([why](running-lean.md#ralph-deprecated)); existing installs keep working. Scaffold the repo-local Ralph hardened harness under `scripts/ralph/` — external shell loop, fresh session per iteration, hook guardrails, receipts. |
 
 ## Knowledge & maintenance
 

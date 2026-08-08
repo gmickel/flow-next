@@ -2,6 +2,8 @@
 
 Opt-in HTML artifact mode (2.0.0+). When activated, the lifecycle skills (capture, plan, make-pr) also emit beautifully rendered, self-contained HTML pages — **render lenses** — alongside their markdown output: a spec visualizer for business/plan review and a PR review instrument for diff review. Markdown (and tracker-sync) stays 100% the source of truth; every artifact is regenerable and never parsed back as state. OFF by default — markdown-only users see zero new steps, zero token overhead, zero behavior change.
 
+> **Optional.** flow-next runs fully without this. It costs an extra render step on capture, plan, and make-pr, plus an artifact tree to commit or ignore; turn it on when you hand specs to business reviewers or PRs to decision-level reviewers, or ask for a render in conversation when you need one. See [`running-lean.md`](running-lean.md).
+
 ---
 
 ## Table of Contents

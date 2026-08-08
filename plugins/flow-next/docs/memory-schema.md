@@ -2,6 +2,8 @@
 
 Persistent learnings that survive context compaction. Opt-in, categorized — v0.33.0+. One entry per file, YAML frontmatter, two tracks (`bug` / `knowledge`).
 
+> **On by default, and droppable.** flow-next runs fully without this. The tree itself is nearly free — entries are written as a side effect of work already happening and read by search, never loaded wholesale; the layer with a price is the **audit sweep**, a pass over every entry judged against the current codebase. Leave memory on; run the sweep deliberately with `/flow-next:audit` after a refactor invalidates prior art, rather than on a schedule. See [`running-lean.md`](running-lean.md).
+
 ## Directory tree
 
 ```

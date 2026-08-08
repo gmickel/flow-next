@@ -2,6 +2,70 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Running lean is now a documented choice, not a guess
+
+flow-next has always run fully as spec -> plan -> work, with everything else
+optional - but the docs never said so evenly, and never said what any of it
+costs. Tracker sync opened straight into projection theory with "off until
+explicitly enabled" buried three sections down; nothing anywhere told you what
+turning a layer on would actually cost you. So the honest answer to "do I need
+all of this?" was only available to people who already knew.
+
+New page [`docs/running-lean.md`](plugins/flow-next/docs/running-lean.md)
+answers it directly. It frames two **operating profiles** - **human-driven**,
+where you are present and can be the reviewer, the tracker, and the QA, so you
+run lean and reach for layers deliberately; and **autonomous**, where nobody is
+watching, so those same layers are what replace you and the run should be
+gated. Neither is the real mode. The failure it exists to prevent is paying
+autonomous-profile costs while sitting at the keyboard: a full tracker
+round-trip on every lifecycle event for a spec only you will ever read.
+
+Every optional layer is then priced with the same four fields: what it
+automates away from you, what it costs **structurally** (a bidirectional
+round-trip per lifecycle event, an extra review pass per round - never a
+benchmark number), when it earns its keep, and the manual invocation if you
+want the capability without the standing cost. Each layer's stated default was
+read from the published config schema rather than assumed, so the two layers
+that are **on** by default (plan-sync, memory) say so, with the genuinely
+optional part named precisely - for memory that is the audit sweep, not the
+tree.
+
+The optionality caveat itself is now one canonical pattern with a
+change-here-first note, instanced at the top of each optional subsystem's page
+and into the published config-schema descriptions, so the posture is visible
+wherever you meet the toggle instead of only where you meet the narrative.
+
+A lean run still leaves a record: stage receipts already carry
+`skipped(reason)`, so a layer you deliberately left off is an explicit entry
+with your reason attached rather than a silent absence. Read it back with
+`flowctl usage --stages <spec-id>`.
+
+### Deprecated: Ralph, and packaged codex delegation
+
+Both predate the orchestration primitives that now replace them. **Nothing is
+removed, no defaults change, and existing installs keep working** - these are
+signals so the field stops adopting a path we intend to retire, and both
+reference pages stay maintained for current users.
+
+- **Ralph** (`/flow-next:ralph-init`, `scripts/ralph/`). A shell script calling
+  `/flow-next:pilot` to build and `/flow-next:land` to ship, driven by a host
+  loop or `cron`, does the same job without the scaffold, the guard-hook
+  registration, or the second receipt plumbing. New setups should use pilot +
+  land.
+- **Packaged codex delegation** (`work.delegate*`, `delegate:codex`). Superseded
+  by the agentic route: the `/flow-next:setup` model-routing scaffold writes
+  standing routing prose into `CLAUDE.md` / `AGENTS.md` that is loaded every
+  turn - including unattended runs - and `.flow/usage.md` carries the bridge
+  recipes. That covers what the packaged subsystem was built for without a
+  second config surface duplicating the role map. Removal is specced separately
+  as `flow-98`.
+
+Documentation only: no behavior, config, or default changes, and no version
+bump (this batches with the next release). Skill, command, and agent prose is
+untouched, so the Codex mirror is unchanged.
+
 ## [flow-next 3.18.0] - 2026-08-08
 
 The flow-efficiency release: five disciplines measured in a replay campaign

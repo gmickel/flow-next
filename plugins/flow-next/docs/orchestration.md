@@ -4,7 +4,7 @@ flow-next is an orchestration layer, not a single-agent workflow. The host agent
 
 The pattern this page serves: use your smartest model to orchestrate and judge, route mechanical or token-hungry work to faster/cheaper models, and pick reviewers from a different family than the writer. flow-next was built in this shape — this page maps the dials.
 
-**None of this is required.** The skills and subagents ship pre-tuned to work well out of the box for everyone — model tiers A/B-verified before every downgrade, review defaults sensible, the pipeline complete with zero routing config. Steering is a capability, not a prerequisite: reach for the dials below when your model mix, subscriptions, or taste differ from the defaults, and ignore this page entirely until they do.
+**None of this is required.** The skills and subagents ship pre-tuned to work well out of the box for everyone — model tiers A/B-verified before every downgrade, review defaults sensible, the pipeline complete with zero routing config. Steering is a capability, not a prerequisite: reach for the dials below when your model mix, subscriptions, or taste differ from the defaults, and ignore this page entirely until they do. The same doctrine applied to subsystems rather than models — which layers to switch on at all, and what each costs — is [`running-lean.md`](running-lean.md).
 
 ## Two ways to route
 
@@ -76,6 +76,8 @@ Do not use `config get work.delegateModel` for the effective delegate model: the
 
 ### Review backends — cross-model review
 
+> **Optional.** flow-next runs fully without this; `review.backend` is unset by default and reviews run in-host. It costs an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds; turn it on when agent-written diffs get merged without a human reading them line by line, or invoke it manually with `/flow-next:impl-review` on the changes that warrant it. See [`running-lean.md`](running-lean.md#cross-model-review-backend).
+
 The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | host | none` (`host` is bare-only — no model/effort rungs). The three CLI review backends (`codex` / `copilot` / `cursor`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
 
 ```bash
@@ -126,6 +128,8 @@ review, so injection is the default everywhere it is not provably unnecessary.
 **Cursor backend — ambient-injection caveat + persona override (fn-90).** `cursor-agent` has **no system-prompt mechanism**: the flow-next reviewer rubric travels as a plain user prompt *on top of* Cursor's own built-in persona (which carries its OWN review rubric and an end-to-end-thoroughness bias), and `cursor-agent` auto-attaches the workspace `AGENTS.md` / `CLAUDE.md`, skill catalogs, and MCP instruction blocks into the reviewer's context. That ambient guidance dilutes the in-scope anchor and biases the reviewer toward always-produce-findings — a real contributor to review-loop non-convergence (it *amplifies*, it is not the root cause). There is no CLI knob to suppress the auto-attach, so flow-next prepends an explicit **persona-override preamble** on every cursor review path: it declares that any ambient rubric/persona/severity-ordering from the environment is *superseded* and the ONLY rubric + verdict contract is the flow-next one that follows. This is documented, not configurable — nothing to set; it rides automatically on `review.backend cursor:*`. The structured-findings ratchet and deterministic convergence terminals (unchanged-artifact refusal, early escalation when the reviewer explicitly marks the same finding `not-fixed` in two consecutive rounds, the round cap, and reviewer-emitted `NEEDS_HUMAN`) apply to every backend — see [`flowctl.md`](flowctl.md#codex-impl-review).
 
 ### Implementation delegation — `work` → `codex exec`
+
+> **Deprecated.** The agentic route supersedes this packaged subsystem: `/flow-next:setup`'s model-routing scaffold writes standing routing prose into `CLAUDE.md` / `AGENTS.md` that is loaded every turn — including unattended pilot, land, and Ralph runs — and `.flow/usage.md` carries the bridge recipes for driving a second CLI directly. That covers what `work.delegate*` was built for without a second config surface duplicating the role map. Nothing is removed and existing `work.delegate` setups keep working; removal is specced separately as `flow-98-remove-packaged-codex-delegation`. Prefer the scaffold plus a bridge recipe for new work — see [Prompted orchestration](#prompted-orchestration--routing-with-judgment) below and [`running-lean.md`](running-lean.md#packaged-codex-delegation-deprecated).
 
 Opt-in offload of the token-heavy part (writing code) to a second CLI while the host keeps all judgment:
 
@@ -328,6 +332,7 @@ Steering is broad but not unbounded — these hold no matter what the routing ta
 
 - [`platforms.md`](platforms.md) — install matrix, Codex model mapping, cross-platform patterns.
 - [`flowctl.md`](flowctl.md) — `review.backend` grammar, `work.delegate*` keys, `spec set-backend`.
-- [`../skills/flow-next-work/references/codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md) — the delegation contract.
-- [`ralph.md`](ralph.md) — autonomous-mode internals; delegation under Ralph.
+- [`running-lean.md`](running-lean.md) — which layers to run at all, what each costs, and the human-driven vs autonomous profiles.
+- [`../skills/flow-next-work/references/codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md) — the delegation contract (deprecated; see above).
+- [`ralph.md`](ralph.md) — autonomous-mode internals; delegation under Ralph (both deprecated).
 - [`teams.md`](teams.md) — the handover objects that make cross-model hand-offs safe.

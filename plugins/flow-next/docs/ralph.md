@@ -1,5 +1,9 @@
 # Ralph — Autonomous Loop
 
+> **Deprecated.** A shell script that calls the orchestration primitives — `/flow-next:pilot` to build, `/flow-next:land` to ship, driven by a host loop or `cron` — does what this harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Ralph predates those primitives; it is no longer the way to get an unattended run.
+>
+> **Nothing is removed and nothing breaks.** Existing installs keep working exactly as documented on this page, and this page stays maintained as their reference. New adopters should start at [pilot + land](#host-driven-loop-vs-ralph) instead — see [`running-lean.md`](running-lean.md#ralph-deprecated) for where the two profiles sit.
+
 Ralph is Flow-Next's repo-local **hardened** autonomous harness. It exists because long-lived autonomous sessions accumulate failed attempts and stale assumptions — Ralph instead starts a *fresh* session per iteration, re-anchors, and gates every transition on receipts. It consumes **fully planned** specs only (it never plans), applies multi-model review gates, and produces production-quality code overnight.
 
 > **Unchanged-artifact review terminal:** `NOT_RETRYABLE: artifact unchanged

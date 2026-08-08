@@ -50,7 +50,13 @@ DESCRIPTIONS: dict[str, str] = {
         "Plan-sync settings (downstream task-spec reconciliation after each "
         "completed task)."
     ),
-    "planSync.enabled": "Enable plan-sync after task completion.",
+    "planSync.enabled": (
+        "Enable plan-sync after task completion. On by default and "
+        "droppable: it costs a reconciliation pass after each completed "
+        "task, and earns that on specs with dependent tasks. Turn it off "
+        "and run /flow-next:sync manually when a task invalidates a "
+        "downstream assumption. See docs/running-lean.md."
+    ),
     "planSync.crossSpec": (
         "Cross-spec plan-sync: scan other open specs for stale references "
         "after each task (opt-in; increases sync time)."
@@ -61,7 +67,13 @@ DESCRIPTIONS: dict[str, str] = {
         "spec form backend[:model[:effort]], e.g. codex:gpt-5.4:high. cursor "
         "folds effort into the model name (no :effort rung); rp, host, and "
         "none are bare-only. copilot accepts no none/minimal effort. If "
-        "unset, review commands require --review or FLOW_REVIEW_BACKEND."
+        "unset, review commands require --review or FLOW_REVIEW_BACKEND. "
+        "Optional: flow-next runs fully without a standing backend. It "
+        "costs an out-of-host review pass per round plus a second CLI to "
+        "install and authenticate; set it when agent-written diffs merge "
+        "without a human reading them line by line, or invoke "
+        "/flow-next:impl-review manually instead. See "
+        "docs/running-lean.md."
     ),
     "review.maxIterations": (
         "Cumulative review-round cap per scope (default 8, minimum 1 - the cap "
@@ -80,7 +92,13 @@ DESCRIPTIONS: dict[str, str] = {
     "tracker.enabled": (
         "Enable the tracker-sync bridge. The bridge is active iff raw "
         "tracker.enabled == true OR raw tracker.type is one of "
-        "linear/github/gitlab/jira."
+        "linear/github/gitlab/jira. Optional: flow-next runs fully without "
+        "it. It costs a bidirectional round-trip per enabled lifecycle "
+        "event plus a conflict policy and a second place state can be "
+        "wrong; enable it when other people need to read or edit status "
+        "where they already work, or run /flow-next:tracker-sync manually "
+        "and leave the bridge off in between. Spec-only is a first-class "
+        "mode. See docs/running-lean.md."
     ),
     "tracker.type": "Tracker backend: linear, github, gitlab, or jira.",
     "tracker.provenance": (
@@ -278,9 +296,17 @@ DESCRIPTIONS: dict[str, str] = {
         "Non-null only when all required destination fields, required "
         "normalized slots, and capability booleans are present."
     ),
-    "work": "/flow-next:work implementation-delegation settings (fn-55).",
+    "work": (
+        "/flow-next:work implementation-delegation settings (fn-55). "
+        "DEPRECATED - every work.delegate* key below is superseded by the "
+        "agentic route: the /flow-next:setup model-routing scaffold in "
+        "CLAUDE.md / AGENTS.md plus the .flow/usage.md bridge recipes. "
+        "Nothing is removed and existing setups keep working; removal is "
+        "specced as flow-98. See docs/running-lean.md."
+    ),
     "work.delegate": (
-        "Opt-in delegation of implementation to a local codex exec. Only the "
+        "DEPRECATED - see the work group description for the replacement "
+        "route. Opt-in delegation of implementation to a local codex exec. Only the "
         "literal string codex activates (any other value, including bool "
         "true, is OFF). Resolution: arg token delegate:codex / "
         "delegate:local > this config > hard default OFF."
@@ -361,14 +387,23 @@ DESCRIPTIONS: dict[str, str] = {
     "artifacts.html.enabled": (
         "Enable optional HTML artifacts: participating skills emit "
         "self-contained lenses at .flow/artifacts/<spec-id>/. OFF by "
-        "default - markdown stays the sole source of truth."
+        "default - markdown stays the sole source of truth. It costs an "
+        "extra render step on capture, plan, and make-pr plus an artifact "
+        "tree to commit or ignore; enable it when specs go to business "
+        "reviewers, or ask for a render in conversation when you need one. "
+        "See docs/running-lean.md."
     ),
     "pipeline": "Pilot pipeline stage gates.",
     "pipeline.qa": (
         "Optional QA pipeline stage (fn-72). String-enum, NOT a bool: only "
         "the literal on activates; any other value, including bool true, is "
         "OFF. With it on, pilot inserts one live /flow-next:qa pass at the "
-        "all-tasks-done juncture before make-pr."
+        "all-tasks-done juncture before make-pr. Optional: flow-next runs "
+        "fully without it. It costs a live-app drive pass per spec plus a "
+        "running deploy and a configured driver; enable it when nobody "
+        "will exercise the app before merge, or invoke /flow-next:qa "
+        "manually on the changes that deserve it. See "
+        "docs/running-lean.md."
     ),
     "chart": (
         "Chart discovery settings (fn-135): size ceiling at charting time "

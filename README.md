@@ -160,7 +160,9 @@ droid plugin marketplace add \
 /flow-next:resolve-pr <PR#>          # 5. Fetch review threads → triage → resolve
 ```
 
-That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:chart` when one oversized idea is still unclear - optional pre-capture discovery, never mandatory - `/flow-next:guide` when you're unsure which path is smallest, `/flow-next:interview` for structured discovery on an existing spec), branch out (`/flow-next:pilot` + `/flow-next:land` for the autonomous assembly line, `/flow-next:ralph-init` for hardened overnight runs, `/flow-next:audit` for memory garbage collection).
+That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:chart` when one oversized idea is still unclear - optional pre-capture discovery, never mandatory - `/flow-next:guide` when you're unsure which path is smallest, `/flow-next:interview` for structured discovery on an existing spec), branch out (`/flow-next:pilot` + `/flow-next:land` for the autonomous assembly line, `/flow-next:audit` for memory garbage collection).
+
+**You do not have to run all of it.** The base loop is spec → plan → work; every other subsystem is a layer with a stated cost, a trigger, and a manual invocation. [Running lean](plugins/flow-next/docs/running-lean.md) prices each one and frames the two ways to run: **human-driven** (you are present, so you can be the reviewer, the tracker, the QA — run lean) and **autonomous** (nobody is watching, so those layers are what replace you — run gated). Neither is the real mode.
 
 ### After every update
 
@@ -343,7 +345,7 @@ flowctl spec ready fn-12          # bless work (or move its issue on the tracker
 
 Run both concurrently (two instances, **separate clones**) and you have the full assembly line: board → pilot → draft PR → land → released. The `ready` flag (or your tracker's board state) is the consent boundary: humans bless specs, loops drain them. 📖 **[Going autonomous](https://flow-next.dev/autonomous/overview)**
 
-**Ralph** is the hardened harness for **fully planned** specs (it never plans): an external shell loop drives a *fresh* session per iteration, so failed attempts die with the session instead of polluting the next one, under hook-enforced guardrails with receipts on disk. Reach for it when a run outlasts a session or prose guardrails aren't enough.
+**Ralph** is the hardened harness for **fully planned** specs (it never plans): an external shell loop drives a *fresh* session per iteration, so failed attempts die with the session instead of polluting the next one, under hook-enforced guardrails with receipts on disk. **Ralph is deprecated** — a script calling `/flow-next:pilot` and `/flow-next:land` on a loop or a `cron` does the same job without the scaffold and the guard hooks. Nothing is removed and existing installs keep working; new setups should use pilot + land. ([Why](plugins/flow-next/docs/running-lean.md#ralph-deprecated).)
 
 ```bash
 /flow-next:ralph-init           # One-time setup
@@ -421,7 +423,8 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Skills catalog: all 30 skills, triggers, one-liners | [`docs/skills.md`](plugins/flow-next/docs/skills.md) | n/a |
 | Adopting in a team, handover objects, Spec-as-PR, adoption ladder | [`docs/teams.md`](plugins/flow-next/docs/teams.md) | [Teams guide](https://flow-next.dev) |
 | Full `flowctl` CLI reference: every command, every flag | [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) | n/a |
-| Ralph autonomous mode internals: hooks, receipts, DCG | [`docs/ralph.md`](plugins/flow-next/docs/ralph.md) | n/a |
+| Which layers to run at all: human-driven vs autonomous profiles, every optional layer priced | [`docs/running-lean.md`](plugins/flow-next/docs/running-lean.md) | n/a |
+| Ralph autonomous mode internals (**deprecated**): hooks, receipts, DCG | [`docs/ralph.md`](plugins/flow-next/docs/ralph.md) | n/a |
 | Optional HTML render lenses: spec visualizer + PR review instrument | [`docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md) | n/a |
 | Live-app QA: `/flow-next:qa`, spec-derived scenarios, P0/P1/P2 findings, `qa_verdict` receipt | [`skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) | n/a |
 | `.flow/` directory layout, spec-first task model, ID format | [`docs/architecture.md`](plugins/flow-next/docs/architecture.md) | n/a |
