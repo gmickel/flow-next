@@ -1,11 +1,19 @@
 {
   "branch_name": "fn-178-stage-receipts-ran-skipped-failed",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-08T09:15:33.470852Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-178-stage-receipts-ran-skipped-failed",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-178-stage-receipts-ran-skipped-failed.md",
   "status": "open",
   "title": "Stage receipts: ran, skipped, failed visibility for every pipeline stage",
@@ -20,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T11:10:20.549379Z"
+  "updated_at": "2026-08-08T11:29:01.678113Z"
 }
