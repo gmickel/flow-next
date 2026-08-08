@@ -2560,7 +2560,7 @@ def _setup_block_markers(block_id: str) -> tuple[str, str]:
 
 
 def _setup_block_normalize_id(raw_id: Optional[str], use_json: bool) -> str:
-    """Validate and normalize a setup-block id; None/empty -> default.
+    """Validate and normalize a setup-block id; None -> default.
 
     Rejects (never sanitizes): length > 64, charset outside
     ``[A-Z0-9][A-Z0-9._-]*``, or a ``--`` substring. Explicit ``FLOW-NEXT``
