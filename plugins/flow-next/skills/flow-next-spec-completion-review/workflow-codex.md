@@ -2,6 +2,12 @@
 
 Use when `BACKEND="codex"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and `SPEC_ID`.
 
+## Critical rules (codex backend)
+
+1. Use `$FLOWCTL codex completion-review` exclusively
+2. Pass `--receipt` for session continuity on re-reviews
+3. Parse verdict from command output
+
 ## Step 1: Identify Spec
 
 ```bash

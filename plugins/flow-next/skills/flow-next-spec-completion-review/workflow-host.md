@@ -262,7 +262,9 @@ Persist it in this order:
 
 ## Step 4: Continue through the shared fix loop and status owner
 
-Continue into SKILL.md's shared Fix Loop in this same skill run. The shared
+Continue into the shared Fix Loop — [workflow-common.md](workflow-common.md)
+§"Fix Loop (INTERNAL - do not exit to Ralph)", reached from SKILL.md Step 3 —
+in this same skill run. The shared
 terminal checkpoint re-reads the latest completion verdict and cap counters
 from `review-rounds attempts`; it never relies on shell variables surviving a
 tool call. The journaled `record --status-target completion` leg owns this

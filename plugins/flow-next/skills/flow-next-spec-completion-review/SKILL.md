@@ -57,42 +57,11 @@ No `--review` flag → `$BACKEND` comes from [workflow-common.md](workflow-commo
 
 ### Backend at a glance
 
-When `RP_ELIGIBLE=0`, omit the **rp** line below from any guidance you surface (explicit `--review=rp` still honored):
-
-- **rp** — RepoPrompt (macOS GUI); builder auto-selects context. Primary backend.
-- **codex** — Codex CLI (cross-platform); uses OpenAI models (default `gpt-5.5`). `FLOW_CODEX_MODEL` / `FLOW_CODEX_EFFORT` env vars, or `--spec codex:gpt-5.4:xhigh`.
-- **copilot** — GitHub Copilot CLI (cross-platform); supports Claude Opus/Sonnet/Haiku 4.5 and GPT-5.2 families via a Copilot subscription. `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, or `--spec copilot:claude-opus-4.5:xhigh`.
-- **cursor** — Cursor CLI (`cursor-agent`, cross-platform); reaches `gpt-5.5-high` (1M-ctx default), the `gpt-5.3-codex` family, `composer-2.5`, and `claude-opus-4-8-thinking-high` via a Cursor subscription. `FLOW_CURSOR_MODEL` env var, or `--spec cursor:gpt-5.5-high`. Cursor folds reasoning effort into the model name — **no effort field**.
-- **host** — Bare-only non-executable selection sentinel; selected mechanics
-  live in [workflow-host.md](workflow-host.md).
-
-**Spec grammar:** `backend[:model[:effort]]` — `FLOW_REVIEW_BACKEND` and `.flow/config.json review.backend` both accept this. Examples: `codex`, `codex:gpt-5.2`, `copilot:claude-opus-4.5:xhigh`, `cursor:gpt-5.5-high` (cursor takes model only — no `:effort`), `host` (bare only). Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
+The per-backend summary (models, env vars, `--spec` forms) and the `backend[:model[:effort]]` spec grammar live in [references/backend-at-a-glance.md](references/backend-at-a-glance.md). Read it **only** when you surface backend guidance to the user (ASK branch, recommendation, override hint) — routing does not need it.
 
 ## Critical Rules
 
-**For rp backend:**
-1. **DO NOT REVIEW CODE YOURSELF** - you coordinate, RepoPrompt reviews
-2. **MUST WAIT for actual RP response** - never simulate/skip the review
-3. **MUST use `setup-review`** - handles window selection + builder atomically
-4. **DO NOT add --json flag to chat-send** - it suppresses the review response
-5. **Re-reviews MUST stay in SAME chat** - omit `--new-chat` after first review
-
-**For codex backend:**
-1. Use `$FLOWCTL codex completion-review` exclusively
-2. Pass `--receipt` for session continuity on re-reviews
-3. Parse verdict from command output
-
-**For copilot backend:**
-1. Use `$FLOWCTL copilot completion-review` exclusively
-2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
-3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
-4. Parse verdict from command output
-
-**For cursor backend:**
-1. Use `$FLOWCTL cursor completion-review` exclusively
-2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
-3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
-4. Parse verdict from command output
+Per-backend critical rules live in the backend file you route to (`workflow-codex.md`, `workflow-copilot.md`, `workflow-cursor.md`, `workflow-rp.md`) — each opens with its own **Critical rules** section. The host safety invariant and the all-backends rules stay here because they gate routing itself.
 
 **For host backend (fn-123 R5 / fn-126):**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
@@ -106,10 +75,7 @@ model family and fail closed when no cross-family pin is available.
   manually reset the review counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops
   automatic retries until the backend is repaired.
 
-**FORBIDDEN**:
-- Self-declaring SHIP without actual backend verdict
-- Mixing backends mid-review (stick to one)
-- Skipping review silently (must inform user and exit cleanly when backend is "none")
+The **FORBIDDEN** list (self-declaring SHIP, mixing backends, skipping review silently) lives with the shared anti-patterns in [workflow-common.md](workflow-common.md) §"Anti-patterns (all backends)".
 
 ## Input
 
@@ -296,43 +262,6 @@ if [[ -n "$TERMINAL_STATUS" \
 fi
 ```
 
-### Step 1: Load Backend Workflow
-
-1. `$BACKEND` was already resolved by workflow-common.md Phase 0 (Preamble) — do NOT re-run it.
-2. Read **only** the file for that backend:
-
-| `$BACKEND` | File to read |
-|------------|--------------|
-| `codex`    | [workflow-codex.md](workflow-codex.md) |
-| `copilot`  | [workflow-copilot.md](workflow-copilot.md) |
-| `cursor`   | [workflow-cursor.md](workflow-cursor.md) |
-| `host`     | [workflow-host.md](workflow-host.md) |
-| `rp`       | [workflow-rp.md](workflow-rp.md) |
-
-**Do not read the other backend files.** Each is self-contained for its backend; loading the others wastes context.
-
-### Step 2: Execute the backend workflow
-
-Follow the phases in the per-backend file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps (and, for RP, the full Phase 1-4 setup-review / chat-send / receipt build).
-
-## Fix Loop (INTERNAL - do not exit to Ralph)
-
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
-
-**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
-The codex/copilot/cursor handlers reserve a round before dispatch; the selected
-rp/host workflows call the same `review-rounds` reserve/record surface.
-Verdict-bearing attempts consume the reservation; no-verdict transport failures
-are recorded and refunded.
-
-When a delivered `NEEDS_WORK` consumes round
-`${MAX_REVIEW_ITERATIONS:-8}`, it is the terminal capped verdict:
-
-- codex/copilot/cursor already self-wrote `needs_work` while handling that
-  verdict; do not duplicate it.
-- host/rp continue to Step 3 immediately, write `needs_work` exactly once, then
-  emit `ESCALATE:` and exit 4. Do not attempt another reserve/dispatch first.
-
 An exit-4 cap refusal before this run has delivered a completion verdict is
 non-terminal for completion status: surface `ESCALATE:` / `NEEDS_HUMAN` and do
 not invent a `needs_work` write. More than
@@ -344,48 +273,20 @@ reset the verdict counter for transport health.
 use `--force`, or redispatch autonomously. A human may edit the exact artifact,
 explicitly reset, or deliberately apply `--force`.
 
-**ANTI-PATTERN (never do either):** (1) a delivered verdict is never a
-transport failure. Once flowctl parses `VERDICT=...` the round is consumed and
-recorded; do not re-dispatch or re-frame a `NEEDS_WORK` as a backend/sandbox
-problem to claim a refund. (2) Never widen the reviewer sandbox. Reviewers are
-read-only by contract; a sandbox-blocked reviewer means something asked it to
-mutate the workspace. Fix that, do not pass `--sandbox workspace-write` /
-`danger-full-access` or set `CODEX_SANDBOX` (Windows resolves via `auto`).
+### Step 1: Load Backend Workflow
 
-If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
+1. `$BACKEND` was already resolved by workflow-common.md Phase 0 (Preamble) — do NOT re-run it.
+2. Read **only** the file for that backend, per the routing table at the top of this file.
 
-1. **Parse issues** from reviewer feedback (missing requirements, incomplete implementations)
-2. **Fix code** and run tests/lints
-3. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`)
-4. **Re-review**:
-   - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
-   - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
-   - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
-   - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
-     re-review path.
-   - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
-5. **Repeat** until `<verdict>SHIP</verdict>` — or a delivered `NEEDS_WORK`
-   consumes the final round. On that final host/rp verdict, run Step 3 before
-   the cap terminal; never rely on a later step after exit 4.
+**Do not read the other backend files.** Each is self-contained for its backend; loading the others wastes context.
 
-**CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
+### Step 2: Execute the backend workflow
 
-## Step 3: Record the terminal verdict exactly once
+Follow the phases in the per-backend file end-to-end. Each file owns its own Identify → Execute → Verdict → Receipt steps (and, for RP, the full Phase 1-4 setup-review / chat-send / receipt build).
 
-`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
+### Step 3: Fix loop and terminal status
 
-For host/rp, execute the Step 0.5 checkpoint again now. The just-recorded
-terminal attempt is newer than the stored status, so that shared checkpoint is
-the sole writer and emits the terminal only after persistence succeeds.
-Codex/copilot/cursor handlers already self-write status; their next invocation
-also runs Step 0.5 first, so a handler-side write failure recovers without
-another reviewer dispatch.
+Both are backend-agnostic and live in [workflow-common.md](workflow-common.md) — already in context from Phase 0:
 
-For host and rp, write once on every delivered terminal path — Step 0.5 maps
-SHIP → `ship` (exit 0), capped-NEEDS_WORK → `needs_work` (exit 4), and
-NEEDS_HUMAN → `needs_human` (exit 4, `ESCALATE: reviewer requested human
-review`). A delivered NEEDS_HUMAN is terminal at ANY round: never reserve or
-dispatch another review for it. The write happens immediately after the
-final verdict is recorded and before `ESCALATE:` / exit 4; no later control
-flow is assumed. Transport failure, malformed verdict, and retry outcomes are
-non-terminal and never write completion status.
+- §"Fix Loop (INTERNAL - do not exit to Ralph)" — the round cap, the anti-patterns, and the parse → fix → commit → re-review cycle.
+- §"Record the terminal verdict exactly once" — who writes `completion_review_status`, and when host/rp re-run the Step 0.5 checkpoint above.
