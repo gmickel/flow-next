@@ -179,18 +179,19 @@ Pristine state is keyed per `(path, id)` in `meta.json` (`setup.block_hashes`), 
 
 Byte-equality is checked first, matching `apply`'s order: a block that's byte-identical to the template reads `unchanged`/exit 0 even if `meta.json` still carries a `"customized"` sentinel from an earlier hand-edit that has since been reverted. CRLF-only differences are never drift (same normalization as `apply`). **Argparse usage errors (bad flags, missing required args) also exit 2** - the same code as the `drift` tier - so a CI recipe that must tell "someone hand-edited the block" apart from "the command was invoked wrong" should key off the JSON `action` field, not the bare exit code, whenever that distinction matters.
 
-CI recipe (works in a `setup_mode: copy` repo, where the block is an ordinary tracked file and a hand-edit is a normal reviewable diff; no `jq` required to gate):
+CI recipe (works in a `setup_mode: copy` repo, where the block is an ordinary tracked file and a hand-edit is a normal reviewable diff; no `jq` required to gate). Prerequisite: `check` compares against a template file, so commit the snippet you applied somewhere tracked first - e.g. `cp <the-template-you-passed-to-apply> .flow/templates/claude-block.md` - no setup mode ships that file for you:
 
 ```bash
-flowctl setup-block check --file CLAUDE.md --template .flow/templates/claude-block.md
-# exit 0: pristine, nothing to do
-# exit 2: drift (see --json .action for template-drift / customized / hash-absent)
-# exit 3: structural problem (missing file/markers, corrupt block)
-if [ $? -ne 0 ]; then
+# .flow/templates/claude-block.md = YOUR committed copy of the applied template (see prerequisite above)
+# exit 0: pristine · exit 2: drift (--json .action: template-drift / customized / hash-absent)
+# exit 3: structural (missing file/markers, corrupt block)
+if ! flowctl setup-block check --file CLAUDE.md --template .flow/templates/claude-block.md; then
   echo "setup-block drift detected - run /flow-next:setup or flowctl setup-block apply/resolve"
   exit 1
 fi
 ```
+
+(The `if !` form is `set -e`-safe - GitHub Actions' default shell would otherwise abort before reporting.)
 
 Serialization locks live under `.flow/locks/` (auto-gitignored).
 
