@@ -223,17 +223,67 @@ class SetupBlockFixtureTest(unittest.TestCase):
                 self.assertEqual(target.read_bytes(), before)
                 self.assertEqual(self.meta_path.read_bytes(), meta_before)
 
-    def test_duplicate_marker_pairs_replace_first_block_only(self) -> None:
+    def test_duplicate_marker_pairs_fail_closed(self) -> None:
+        # fn-171 R2 review hardening: TWO full pairs for the operated id make
+        # the block state ambiguous (which span is "the" block?) - check
+        # exits 3 corrupt; apply and resolve fail closed with no writes.
         target = self.repo / "CLAUDE.md"
         second = "<!-- BEGIN FLOW-NEXT -->\nsecond\n<!-- END FLOW-NEXT -->\n"
         target.write_text(self.v1.read_text(encoding="utf-8") + "middle\n" + second, encoding="utf-8")
-        self._result(self._flowctl("apply", "CLAUDE.md", self.v1))  # records v1 hash
-        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", self.v2))
-        self.assertEqual(refreshed["action"], "refreshed")
-        self.assertEqual(
-            target.read_text(encoding="utf-8"),
-            self.v2.read_text(encoding="utf-8") + "middle\n" + second,
+        before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+
+        checked = self._flowctl("check", "CLAUDE.md", self.v1)
+        self.assertEqual(checked.returncode, 3, checked.stdout + checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["action"], "corrupt")
+
+        rejected = self._flowctl("apply", "CLAUDE.md", self.v2)
+        self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
+        self.assertIn("corrupt", (rejected.stdout + rejected.stderr).lower())
+
+        resolved = self._flowctl("resolve", "CLAUDE.md", self.v2, "--choice", "keep")
+        self.assertEqual(resolved.returncode, 1, resolved.stdout + resolved.stderr)
+
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_trailing_stray_same_id_marker_fails_closed_other_id_opaque(self) -> None:
+        # fn-171 R2 review hardening: a valid A pair followed by a stray
+        # same-id BEGIN A is corruption for A - the whole target is scanned,
+        # not just up to the first END. B's markers stay opaque: B's own pair
+        # in the same file still checks clean.
+        a_tmpl = self.repo / "a.md"
+        a_tmpl.write_text("<!-- BEGIN A -->\na-body\n<!-- END A -->\n", encoding="utf-8")
+        b_tmpl = self.repo / "b.md"
+        b_tmpl.write_text("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", encoding="utf-8")
+        target = self.repo / "CLAUDE.md"
+        target.write_text(
+            "<!-- BEGIN A -->\na-body\n<!-- END A -->\n"
+            "<!-- BEGIN B -->\nb-body\n<!-- END B -->\n"
+            "<!-- BEGIN A -->\n",
+            encoding="utf-8",
         )
+        before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+
+        checked = self._flowctl("check", "CLAUDE.md", a_tmpl, "--id", "A")
+        self.assertEqual(checked.returncode, 3, checked.stdout + checked.stderr)
+        self.assertEqual(json.loads(checked.stdout)["action"], "corrupt")
+
+        rejected = self._flowctl("apply", "CLAUDE.md", a_tmpl, "--id", "A")
+        self.assertEqual(rejected.returncode, 1, rejected.stdout + rejected.stderr)
+        self.assertIn("corrupt", (rejected.stdout + rejected.stderr).lower())
+
+        resolved = self._flowctl("resolve", "CLAUDE.md", a_tmpl, "--id", "A", "--choice", "keep")
+        self.assertEqual(resolved.returncode, 1, resolved.stdout + resolved.stderr)
+
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+        # A's stray marker is opaque to B: B's pair still reads clean.
+        check_b = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(check_b.returncode, 0, check_b.stdout + check_b.stderr)
+        self.assertEqual(json.loads(check_b.stdout)["action"], "unchanged")
 
     @unittest.skipIf(os.name == "nt", "POSIX permission bits required")
     def test_write_preserves_existing_mode_and_umask_for_new_files(self) -> None:

@@ -2588,15 +2588,21 @@ def _setup_block_hash(content: str) -> str:
 
 
 def _setup_block_span(content: str, block_id: str) -> Optional[tuple[int, int]]:
-    """Return marker-line indexes for *block_id*, or fail on unpaired BEGIN.
+    """Return marker-line indexes for *block_id*, or fail on marker corruption.
 
     Scans ONLY this id's derived markers; markers for other ids are opaque
     byte-preserved content and never trigger fail-close. A marker counts ONLY
     as a standalone line (stripped equality). Replacing whole lines that
     merely CONTAIN a marker would delete surrounding user content (violates
-    R3/R12 outside-marker preservation), so when no standalone BEGIN exists
-    but this id's marker token appears embedded in other content, the block
-    state is ambiguous and we refuse to write.
+    R3/R12 outside-marker preservation), so when this id's marker token
+    appears embedded in other content the block state is ambiguous and we
+    refuse to write.
+
+    The WHOLE content is scanned for the operated id's markers, not just the
+    first pair: a stray same-id marker after a valid pair, or a second full
+    same-id pair, makes the block state ambiguous (which span is "the"
+    block?), so anything other than exactly one standalone BEGIN/END pair
+    fails closed (fn-171 R2 review hardening).
     """
     begin_marker, end_marker = _setup_block_markers(block_id)
     lines = content.splitlines(keepends=True)
@@ -2604,30 +2610,32 @@ def _setup_block_span(content: str, block_id: str) -> Optional[tuple[int, int]]:
     def _is_marker(line: str, marker: str) -> bool:
         return line.strip() == marker
 
-    begin_index = next(
-        (i for i, line in enumerate(lines) if _is_marker(line, begin_marker)),
-        None,
-    )
-    if begin_index is None:
-        if any(begin_marker in line or end_marker in line for line in lines):
-            raise ValueError(
-                "corrupt flow-next marker block: marker must be on its own line"
-            )
+    begin_indexes = [i for i, line in enumerate(lines) if _is_marker(line, begin_marker)]
+    end_indexes = [i for i, line in enumerate(lines) if _is_marker(line, end_marker)]
+    marker_lines = set(begin_indexes) | set(end_indexes)
+    if any(
+        begin_marker in line or end_marker in line
+        for i, line in enumerate(lines)
+        if i not in marker_lines
+    ):
+        raise ValueError(
+            "corrupt flow-next marker block: marker must be on its own line"
+        )
+    if not begin_indexes and not end_indexes:
         return None
-    end_index = next(
-        (
-            index
-            for index in range(begin_index + 1, len(lines))
-            if _is_marker(lines[index], end_marker)
-        ),
-        None,
-    )
-    if end_index is None:
-        if any(end_marker in line for line in lines[begin_index + 1 :]):
-            raise ValueError(
-                "corrupt flow-next marker block: marker must be on its own line"
-            )
+    if len(begin_indexes) == 1 and not end_indexes:
         raise ValueError("corrupt flow-next marker block: BEGIN marker has no END marker")
+    if (
+        len(begin_indexes) != 1
+        or len(end_indexes) != 1
+        or begin_indexes[0] >= end_indexes[0]
+    ):
+        raise ValueError(
+            "corrupt flow-next marker block: expected exactly one BEGIN/END "
+            f"marker pair for id {block_id}"
+        )
+    begin_index = begin_indexes[0]
+    end_index = end_indexes[0]
     start = sum(len(line) for line in lines[:begin_index])
     end = sum(len(line) for line in lines[: end_index + 1])
     return start, end
