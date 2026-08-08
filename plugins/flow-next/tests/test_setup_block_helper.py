@@ -540,6 +540,106 @@ class SetupBlockFixtureTest(unittest.TestCase):
         self.assertEqual(target.read_bytes(), target_before)
         self.assertEqual(self.meta_path.read_bytes(), meta_before)
 
+    def test_template_with_outside_prose_rejected_no_writes(self) -> None:
+        # fn-171 review tightening: a template must be EXACTLY the managed
+        # span. Prose outside the pair would be applied+hashed by `apply` but
+        # never compared by `check` (whole-template-vs-span skew).
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        prosed = self.repo / "prosed-template.md"
+        prosed.write_text(
+            "intro prose\n"
+            "<!-- BEGIN FLOW-NEXT -->\nbody\n<!-- END FLOW-NEXT -->\n"
+            "outro prose\n",
+            encoding="utf-8",
+        )
+        for command in ("apply", "check"):
+            with self.subTest(command=command):
+                rejected = self._flowctl(command, "CLAUDE.md", str(prosed))
+                self.assertEqual(rejected.returncode, 1)
+                combined = rejected.stdout + rejected.stderr
+                self.assertIn(
+                    "template must contain exactly the marker-pair block for "
+                    "id FLOW-NEXT (BEGIN first line, END last line, "
+                    "trailing newline)",
+                    combined,
+                )
+                self.assertEqual(target.read_bytes(), target_before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_template_missing_trailing_newline_rejected_no_writes(self) -> None:
+        # A template ending at the END marker without a terminator would eat
+        # the END line's newline on refresh, concatenating an adjacent
+        # block's BEGIN onto it.
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        unterminated = self.repo / "unterminated-template.md"
+        unterminated.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\nbody\n<!-- END FLOW-NEXT -->",
+            encoding="utf-8",
+        )
+        for command in ("apply", "check"):
+            with self.subTest(command=command):
+                rejected = self._flowctl(command, "CLAUDE.md", str(unterminated))
+                self.assertEqual(rejected.returncode, 1)
+                combined = rejected.stdout + rejected.stderr
+                self.assertIn(
+                    "template must contain exactly the marker-pair block for "
+                    "id FLOW-NEXT (BEGIN first line, END last line, "
+                    "trailing newline)",
+                    combined,
+                )
+                self.assertEqual(target.read_bytes(), target_before)
+                self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_adjacent_blocks_refresh_keeps_neighbor_intact(self) -> None:
+        # Happy-path guard for the two failure modes above: with blocks A and
+        # B directly adjacent (no blank line between), refreshing A must keep
+        # B's span byte-intact and `check --id B` at exit 0; and a check right
+        # after a first apply is `unchanged` exit 0.
+        a_v1 = self.repo / "a-v1.md"
+        a_v1.write_text("<!-- BEGIN A -->\na-v1\n<!-- END A -->\n", encoding="utf-8")
+        a_v2 = self.repo / "a-v2.md"
+        a_v2.write_text("<!-- BEGIN A -->\na-v2\n<!-- END A -->\n", encoding="utf-8")
+        b_tmpl = self.repo / "b.md"
+        b_tmpl.write_text("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", encoding="utf-8")
+        target = self.repo / "CLAUDE.md"
+        # Construct direct adjacency by hand (apply's append path inserts a
+        # separator, so adjacency arises from hand-arranged files): A's END
+        # line immediately followed by B's BEGIN line. The two applies then
+        # take the byte-equal `unchanged` path, recording both hashes.
+        target.write_text(
+            a_v1.read_text(encoding="utf-8") + b_tmpl.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "<!-- END A -->\n<!-- BEGIN B -->", target.read_text(encoding="utf-8")
+        )
+        self._result(self._flowctl("apply", "CLAUDE.md", a_v1, "--id", "A"))
+        self._result(self._flowctl("apply", "CLAUDE.md", b_tmpl, "--id", "B"))
+
+        # apply-then-check == unchanged exit 0 immediately after first apply.
+        first_check = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(first_check.returncode, 0, first_check.stdout + first_check.stderr)
+        self.assertEqual(json.loads(first_check.stdout)["action"], "unchanged")
+
+        refreshed = self._result(self._flowctl("apply", "CLAUDE.md", a_v2, "--id", "A"))
+        self.assertEqual(refreshed["action"], "refreshed")
+        text = target.read_text(encoding="utf-8")
+        self.assertIn("<!-- BEGIN B -->\nb-body\n<!-- END B -->\n", text)
+        self.assertIn("<!-- END A -->\n<!-- BEGIN B -->", text)
+
+        check_b = self._flowctl("check", "CLAUDE.md", b_tmpl, "--id", "B")
+        self.assertEqual(check_b.returncode, 0, check_b.stdout + check_b.stderr)
+        self.assertEqual(json.loads(check_b.stdout)["action"], "unchanged")
+        check_a = self._flowctl("check", "CLAUDE.md", a_v2, "--id", "A")
+        self.assertEqual(check_a.returncode, 0, check_a.stdout + check_a.stderr)
+        self.assertEqual(json.loads(check_a.stdout)["action"], "unchanged")
+
     # -- fn-171.2: read-only `check` verdict verb -----------------------
 
     def test_check_unchanged_pristine_exit_zero_and_writes_nothing(self) -> None:

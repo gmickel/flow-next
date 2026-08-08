@@ -2636,21 +2636,43 @@ def _setup_block_span(content: str, block_id: str) -> Optional[tuple[int, int]]:
 def _setup_block_require_template_pair(
     content: str, block_id: str, use_json: bool
 ) -> None:
-    """Fail closed when the template lacks exactly one standalone pair for id."""
+    """Fail closed unless the template is EXACTLY one managed span for id.
+
+    Two-stage validation (fn-171 review tightening):
+
+    1. Exactly one standalone BEGIN/END pair for the operated id.
+    2. The template IS the span: the BEGIN marker line is the first line, the
+       END marker line is the last line, and the template ends with a line
+       terminator. Content outside the span would let ``apply`` write bytes
+       the span-based refresh/``check`` comparison never sees (comparison
+       skew reporting a pristine block as customized), and a template
+       missing its trailing newline would eat the END marker's terminator on
+       refresh, concatenating an adjacent managed block's BEGIN onto it.
+       Reject-never-sanitize: no silent span extraction.
+    """
     begin_marker, end_marker = _setup_block_markers(block_id)
     lines = content.splitlines(keepends=True)
     begin_indexes = [i for i, line in enumerate(lines) if line.strip() == begin_marker]
     end_indexes = [i for i, line in enumerate(lines) if line.strip() == end_marker]
-    if (
+    if not (
         len(begin_indexes) == 1
         and len(end_indexes) == 1
         and begin_indexes[0] < end_indexes[0]
     ):
-        return
-    error_exit(
-        f"template does not contain the marker pair for id {block_id}",
-        use_json=use_json,
-    )
+        error_exit(
+            f"template does not contain the marker pair for id {block_id}",
+            use_json=use_json,
+        )
+    if (
+        begin_indexes[0] != 0
+        or end_indexes[0] != len(lines) - 1
+        or not content.endswith("\n")
+    ):
+        error_exit(
+            "template must contain exactly the marker-pair block for id "
+            f"{block_id} (BEGIN first line, END last line, trailing newline)",
+            use_json=use_json,
+        )
 
 
 def _setup_block_is_nested_hashes(entry: object) -> bool:
