@@ -15,7 +15,7 @@
   "plan_reviewed_at": "2026-08-08T17:46:42.151285Z",
   "ready": true,
   "spec_path": ".flow/specs/fn-176-same-spec-concurrent-waves-with.md",
-  "status": "open",
+  "status": "done",
   "title": "Same-spec concurrent waves with reviewer overlap (prose-only)",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T17:50:08.548249Z"
+  "updated_at": "2026-08-08T19:43:17.559277Z"
 }

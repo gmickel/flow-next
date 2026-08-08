@@ -294,7 +294,9 @@ HANDOVER_EVIDENCE: <task-unique evidence path>
 Follow your phases in worker.md exactly.
 ```
 
-Set `PARALLEL_WAVE: true` only for a concurrently dispatched multi-task wave.
+Set `PARALLEL_WAVE: true` for a concurrently dispatched multi-task wave AND
+for a reviewer-overlap dispatch (fn-176's one-task wave — the overlapped
+worker must return the parallel handover, never self-complete).
 Those workers implement, test, commit, and return their workspace, commits, and
 the exact handover paths. They do **not** call `flowctl done`, project tracker
 state, invoke plan-sync, run impl-review, or integrate their own commit. This
@@ -360,7 +362,12 @@ today (fail-closed: the status quo is the failure mode). **The schedule point
 is the sequential single-worker path**: when worker N has returned and its
 impl-review is about to be dispatched, the conductor MAY claim and dispatch
 N+1's worker (isolated workspace, wave rules apply) before or while running
-review(N) — instead of leaving the reviewer as the only live agent. The
+review(N) — instead of leaving the reviewer as the only live agent. This
+schedule point exists for review modes the CONDUCTOR runs after the worker
+returns (`host` / host-deferred); with worker-owned review backends (rp,
+codex, copilot, cursor) the review finishes inside the worker, so there is
+nothing to overlap post-return — concurrency there comes from the wave
+dispatch rule itself. The
 overlapped worker is a ONE-TASK WAVE: it returns the parallel-wave handover
 (workspace, commits, summary/evidence paths; no `flowctl done`), and the
 conductor joins, reviews, and completes it through the standard 3d machinery
