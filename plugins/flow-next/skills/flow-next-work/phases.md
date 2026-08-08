@@ -78,21 +78,13 @@ Detect input type in this order (first match wins):
 **Track the mode** — it controls looping in Phase 3.
 
 **Original-input-kind capture (ONLY when `delegation_requested` — Phase 0).** A bare
-idea-text input (match #5 above — not a Flow id, not a resolvable handle, not an
-existing `.md` spec path) gets promoted into a spec+task by the steps below, so
-its original kind must be recorded **before** that promotion. Set the flag here,
-on the ORIGINAL input, immediately after detection and **before** running any
-"Spec file start" / "Spec-less start" promotion step:
-
-```bash
-# Runs ONLY when delegation_requested (resolved in Phase 0). On the default
-# (delegation-off) path this step does not exist — Phase 0 already returned.
-if <original input matched #5 idea text>; then
-  INPUT_WAS_BARE_PROMPT=1   # promoted bare prompt → NOT eligible for delegation (Gate 5)
-else
-  INPUT_WAS_BARE_PROMPT=0   # Flow id / resolvable handle / existing .md spec → eligible
-fi
-```
+idea-text input (match #5 above) gets promoted into a spec+task by the steps below, so
+its original kind must be recorded **before** that promotion. Read
+[references/codex-delegation-selection.md](references/codex-delegation-selection.md) now and
+execute its `Gate 0 — original input kind` block: set `INPUT_WAS_BARE_PROMPT` here, on the
+ORIGINAL input, immediately after detection and **before** running any "Spec file start" /
+"Spec-less start" promotion step. On the default (delegation-off) path this step does not
+exist — Phase 0 already returned.
 
 ---
 
@@ -269,12 +261,7 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
-**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker, and the completion contract changes:
-
-1. The worker skips its in-worker review dispatch in Phase 4 (never self-certifies SHIP) **and defers Phase 5's `flowctl done`**: it implements, commits, writes its summary + evidence files to the handover paths, and returns WITHOUT calling `flowctl done` (the task stays `in_progress`).
-2. The conductor then runs `/flow-next:impl-review <task-id> --review=host` itself — this is the mandatory gate; `rg host-deferred` in this file must always find it.
-3. On `SHIP`: the conductor runs `flowctl done <task-id> --summary-file <worker summary> --evidence-json <worker evidence>` (append the review receipt path/model to the evidence). On `NEEDS_WORK`: drive the impl-review fix loop (bounded by the standard cap) and only `done` after a SHIP verdict — so review fixes land INSIDE the task's evidence, never after it.
-4. Mirror this exact contract on the Codex mirror path (`$flow-next-work` / `spawn_agent` worker): host-deferred defers `done` there too.
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `/flow-next:impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](references/host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
 
 All other backends keep the worker-owned review dispatch + worker-owned `flowctl done` unchanged.
 
@@ -308,21 +295,11 @@ internal handoff, not a public CLI or stored schema.
 passed AND — for `work.delegateDecision=ask` interactive — the host confirmed
 this task).** Append the resolved flags to the worker prompt; the worker
 delegates its Phase 2 implementation to `codex exec` per
-[references/codex-delegation.md](references/codex-delegation.md). Omit them
+[references/codex-delegation.md](references/codex-delegation.md) — whose
+`Gate outcome — the resolved flags passed to each worker` block is the exact
+set to append (model resolved via `flowctl models resolve delegate`). Omit them
 entirely (or pass `DELEGATE: local`) when delegation is off or a gate failed —
 the worker then runs standard in-session implementation, unchanged. The flags are PROVISIONAL - the worker owns the final per-task call: its thin-task valve (worker.md Phase 2) may still run the task standard in-session, emitting no `DELEGATION_*` lines (counter untouched).
-
-```
-# Resolve model via role map (fn-115): do NOT use `config get work.delegateModel`
-# (merged default bypasses models.roles.delegate). Precedence: raw on-disk
-# work.delegateModel > models.roles.delegate.codex > baseline gpt-5.6-terra.
-DELEGATE_MODEL="$($FLOWCTL models resolve delegate --json | jq -r '.model')"
-DELEGATE: codex
-DELEGATE_MODEL: <resolved above>
-DELEGATE_SANDBOX: <yolo|full-auto>            # from consent (work.delegateSandbox)
-DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-run escalation floors here)
-DELEGATE_DECISION: <auto|ask>
-```
 
 **Worker returns**: Summary of implementation, files changed, test results,
 review verdict on the single-worker path; or task ID, workspace, commits, and
@@ -330,94 +307,14 @@ task-unique handover paths on the parallel path.
 
 ### 3d. Join, Integrate, and Verify
 
-For a parallel wave, wait for every dispatched worker before selecting more
-work or running plan-sync. Report each worker outcome and the completed join:
-
-```text
-Worker outcomes:
-- fn-X.1: success — <commit/workspace>
-- fn-X.2: failed — <typed reason or ground-truth state>
-Join: complete (2/2 returned)
-```
-
-Use the host's chosen integration mechanism to bring each successful worker's
-commits onto the target branch.
-
-**Join collision handling (fn-176 — never auto-resolve).** A merge conflict at
-the join means the wave dispatch rule's declared `**Touches:**` sets were
-wrong. Never resolve conflict hunks by hand and never drop the losing commits:
-abort the conflicted integration, keep the clean side joined, then SERIALLY
-re-run the losing task from the joined state (fresh worker, current tree).
-Record the collision in the receipt surface — a stage-outcome line per fn-178:
-`stage: wave-join - failed(collision: <task-ids> on <paths>)` — so plan review
-sees which `**Touches:**` declarations were wrong.
-
-**Reviewer overlap (fn-176).** review(N) may run concurrently with
-implement(N+1) ONLY when ALL hold: N+1 is dep-independent of N (transitive,
-same walk as the dispatch rule); AND `planSync.enabled` is NOT true — Phase
-3e's actual target set is EVERY remaining `todo` task, so with plan-sync on,
-a claimed N+1 would dodge the sync it is entitled to; with plan-sync enabled
-the overlap path is OFF and dispatch of N+1 waits for plan-sync(N) exactly as
-today (fail-closed: the status quo is the failure mode). **The schedule point
-is the sequential single-worker path**: when worker N has returned and its
-impl-review is about to be dispatched, the conductor MAY claim and dispatch
-N+1's worker (isolated workspace, wave rules apply) before or while running
-review(N) — instead of leaving the reviewer as the only live agent. This
-schedule point exists for review modes the CONDUCTOR runs after the worker
-returns (`host` / host-deferred); with worker-owned review backends (rp,
-codex, copilot, cursor) the review finishes inside the worker, so there is
-nothing to overlap post-return — concurrency there comes from the wave
-dispatch rule itself. The
-overlapped worker is a ONE-TASK WAVE: it returns the parallel-wave handover
-(workspace, commits, summary/evidence paths; no `flowctl done`), and the
-conductor joins, reviews, and completes it through the standard 3d machinery
-before 3f recomputes the ready frontier — never left dangling. On the
-parallel-wave path the existing join-then-review order stands unchanged.
-**Plan-sync remains the barrier before any dependent work anchors**: done(N)
-still precedes plan-sync(N), which still precedes any anchor that could read
-N's downstream updates — overlap is scheduling only and never reorders
-receipts.
-
-Reuse the existing per-task review contract in
-two passes:
-
-1. confirm the task's code, tests, commit, and handover files;
-2. normalize each task's evidence to the integrated commit IDs and retain its
-   exact task-specific normalized integrated base **and head**;
-3. when its resolved `REVIEW_MODE` is not `none`, run
-   `/flow-next:impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
-   from a safe review context whose `HEAD` is that task's normalized integrated
-   head. The host chooses that context and isolation mechanism; it must not use
-   the wave target's later `HEAD` when peer commits extend it. Apply the existing
-   bounded fix loop, integrate any review-fix commits onto the target branch,
-   and append them to that task's evidence.
-
-After every successful task has the required SHIP verdict (or review is `none`)
-and all review-fix commits are integrated:
-
-4. run the existing Phase 5 Verify contract once on the final integrated target
-   **immediately before tasks are marked done**. This verification is mandatory
-   even when every worker was green in isolation: classify the combined diff,
-   honor only valid integrated-HEAD receipts, otherwise run the required suite,
-   and fix + re-commit any failure. Append verification-fix commits (distinct
-   from review-fix commits) plus the integrated-target verification's exact
-   commands/results to every affected task's evidence;
-5. for each successful task, run `flowctl done` with the updated task-unique
-   summary/evidence;
-6. verify `flowctl show <task-id> --json` reports `done`, then run the existing
-   3d.1 tracker touchpoint.
-
-Partial failures use the existing ground-truth recovery rules below, but first
-diagnose each failed or missing-result worker **inside its assigned workspace**.
-The conductor already knows that workspace plus the task-unique
-`HANDOVER_SUMMARY` and `HANDOVER_EVIDENCE` paths from dispatch; enter and
-physically verify the workspace, inspect those handovers, and run
-`flowctl show`, `git log`, and `git status` there before classifying the
-failure. Never infer "nothing landed" from the wave target or conductor
-checkout when the worker used an isolated workspace. Successful tasks may be
-integrated and completed, but the wave is not resolved until each failed task
-has been continued, retried within the existing cap, or surfaced as blocked.
-No batch state is introduced.
+**Parallel wave or reviewer-overlap dispatch** (3a `Dispatch count` > 1, or an
+fn-176 overlapped one-task wave): read
+[references/wave-join.md](references/wave-join.md) and execute it — it owns the
+join report, integration, collision handling (never auto-resolve), the
+reviewer-overlap schedule point and its plan-sync barrier, the per-task review
+passes, the mandatory integrated-target verification before `done`, completion,
+and workspace-first partial-failure diagnosis. Do not select more work or run
+plan-sync until every dispatched worker has returned and the wave is resolved.
 
 On the single-worker path, verify completion as before:
 
@@ -427,18 +324,7 @@ $FLOWCTL show <task-id> --json
 
 #### 3d.0 host-deferred gate (runs FIRST on the single-worker path when this task's REVIEW_MODE was `host-deferred`)
 
-A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification:
-
-1. Re-read the task's base FIRST — shell vars never survive across contexts: `BASE_COMMIT=$(cat .flow/tmp/base_commit)` (the worker persisted it in Phase 1). If the file is missing/empty, derive it from the worker's reported base or `$FLOWCTL show` metadata — never run the gate with an unset base (an empty `--base` silently widens the review beyond the task diff).
-2. Confirm the worker's handover: commits present since `$BASE_COMMIT`, summary + evidence files at the handover paths it reported. (Missing handover WITH `in_progress` status = genuine worker failure — fall through to the failure path below.)
-3. Run the mandatory gate: `/flow-next:impl-review <task-id> --base $BASE_COMMIT --review=host`.
-4. On `SHIP`: UPDATE the evidence JSON before completing — append the review receipt path + reviewer model, AND when the fix loop committed changes (step 5), add those commits and any test commands run during fixes (the worker's pre-review evidence alone omits exactly the changes that earned the SHIP). Then run `$FLOWCTL done <task-id> --summary-file <worker summary> --evidence-json <updated evidence>` and re-run `$FLOWCTL show` — status is now `done`; continue to 3d.1/plan-sync as normal.
-5. On `NEEDS_WORK`: drive the impl-review fix loop (standard bounded cap); `done` only after a SHIP verdict (whose evidence update in step 4 captures the fix commits). On cap exhaustion: escalate exactly like the failure path below (NEEDS_HUMAN under autonomy; surface and stop interactively).
-
-Review-counter reset and `--force` review dispatch/increment are human-only
-recovery tools; on escalation, surface the terminal rather than using either.
-
-Only after this gate does the standard rule below apply to host-deferred tasks.
+A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `/flow-next:impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
 
 If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker failed. Diagnose from ground truth (below) then retry — but **BOUNDED**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). After **2** consecutive non-`done` returns for the *same task* (a worker that keeps aborting early or a persistently red Quick command), STOP retrying and escalate — do NOT respawn unboundedly. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.
 
@@ -501,37 +387,11 @@ $FLOWCTL config get planSync.enabled --json
 
 Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip) — but a skip still records its outcome line (`stage: plan-sync - skipped(config: planSync.enabled != true)`, see the stage-outcome block below) before advancing to 3f.
 
-Get remaining `todo` task IDs (the JSON is an envelope - the list lives under `.tasks`):
-
-```bash
-DOWNSTREAM=$($FLOWCTL tasks --spec <spec-id> --status todo --json | jq -r '[.tasks[].id] | join(",")') || DOWNSTREAM=EXTRACT_FAILED
-```
-
-Skip if empty (no downstream tasks to update) — recording `stage: plan-sync - skipped(empty: no downstream todo tasks)` per the stage-outcome block below before advancing. `EXTRACT_FAILED` means the extraction itself broke (shape mismatch) - report it, record `stage: plan-sync - failed(EXTRACT_FAILED: <detail>)`, and re-derive the IDs from the raw JSON; never treat it as "nothing to do".
-
-Note: Only sync to `todo` tasks. `in_progress` tasks are already being worked on - updating them mid-flight could cause confusion.
-
-Read the cross-spec flag (single config-leaf read — plan-sync.md documents `CROSS_SPEC` as a caller-provided input):
-
-```bash
-CROSS_SPEC=$($FLOWCTL config get planSync.crossSpec --json | jq -r '.value')
-```
-
-Use the Task tool to spawn the `plan-sync` subagent with this prompt:
-
-```
-Sync downstream tasks after implementation.
-
-COMPLETED_TASK_ID: fn-X.Y
-SPEC_ID: fn-X
-FLOWCTL: /path/to/flowctl
-DOWNSTREAM_TASK_IDS: fn-X.3,fn-X.4,fn-X.5
-CROSS_SPEC: <the $CROSS_SPEC value read above — literal "true" or "false", NOT the string "true|false">
-
-Follow your phases in plan-sync.md exactly.
-```
-
-Plan-sync returns summary. Log it but don't block - task updates are best-effort.
+Downstream target extraction, the `planSync.crossSpec` read, and the `plan-sync`
+subagent dispatch live in [references/plan-sync-dispatch.md](references/plan-sync-dispatch.md)
+— read it and execute it now, then record the stage-outcome line below. Its skip
+and failure branches (`skipped(empty: ...)`, `failed(EXTRACT_FAILED: ...)`) feed
+that same line.
 
 **Stage-outcome line (mandatory — fn-178).** Whatever happened above, record ONE
 outcome line for the plan-sync stage in the completed task's done evidence (the
@@ -696,16 +556,12 @@ EVENTS="work.firstClaim,work.done"   # ← substitute the actual triggered set
 
 (Nothing triggered at all — no claims, no dones, no 3g, e.g. a resumed no-op run — skip the check; the slot is vacuously `OK`.)
 
-**Retro-fire on MISSING — exactly ONE cycle, never blocking:**
-
-1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
-2. For each MISSING event, invoke the **inline flow-next-tracker-sync wrapper directly**. It prepares the same approved inputs as the missed touchpoint and makes exactly one facade call with the event tag. NEVER invoke this check block as a wrapper:
-   - `work.firstClaim` → `flowctl tracker sync <spec-id> --op push --status-only --event work.firstClaim <legal file flags>`
-   - `work.done` → Work re-synthesizes the task done summary plus tests, commits, and PR evidence; the 0600 body starts with the same stable per-task `evidence=<task-id>@<final-evidence-commit-sha>` (or task-evidence fingerprint) required by the primary touchpoint, then Work calls `flowctl tracker sync <spec-id> --op comment --event work.done --body-file <0600-file>`
-   - completion review: Work re-synthesizes the verdict plus R-ID coverage; the 0600 body starts with `evidence=<reviewed-head-sha>`, then Work calls `flowctl tracker sync <spec-id> --op comment --event completionReview --body-file <0600-file>`. This is comment-shaped and NEVER terminal (fn-66). Event key is the TOP-LEVEL `completionReview` (matches the `tracker.perEvent.completionReview` leaf; a `work.`-prefixed tag resolves no leaf and the audit can never clear or miss it)
-3. Re-check the missed events only, `--since` = the step-1 anchor:
-   `"$FLOWCTL" sync check "$SPEC_ID" --events "<missed-csv>" --since "<retro-fire-start>" --json`
-4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the work is already done; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
+**Retro-fire on MISSING — exactly ONE cycle, never blocking.** When `.missing` is
+non-empty, read [references/tracker-retro-fire.md](references/tracker-retro-fire.md)
+and execute its cycle (anchor → per-event inline tracker-sync wrapper call → re-check
+the missed events only → record the final state in the summary slot). Still MISSING
+after the one cycle is a recorded, visible outcome — never a second retro-fire, never
+a block.
 
 **Final summary (mandatory template).** End the run with this block. `Tracker sync:` is a REQUIRED field with exactly four states — an explicit `n/a` proves the check ran; an absent field is a skipped check. Under Ralph, the summary goes to the summary block / stderr, never stdout. The `Gates:` slot is where host-layer gate skips surface - emit ONE `Gates:` line per accumulated Phase 4 outcome (repeat the line for each skip/honor so none is overwritten); worker-layer skips live in each task's evidence `tests[]`.
 

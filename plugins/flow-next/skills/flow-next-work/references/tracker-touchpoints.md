@@ -12,6 +12,7 @@ Contents:
 - [First claim](#first-claim) — phases.md 3b.1: first task claimed → issue In-Progress (`work.firstClaim`)
 - [Task done](#task-done) — phases.md 3d.1: task done → status comment + evidence (`work.done`)
 - [Completion review](#completion-review) — phases.md 3g: SHIP → verdict comment, never terminal Done (`completionReview`)
+- [Unlink / re-link lifecycle](#unlink--re-link-lifecycle) — detaching a spec from its issue (no work-run step)
 
 ## Bridge overview
 
@@ -127,3 +128,7 @@ if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
   :
 fi
 ```
+
+## Unlink / re-link lifecycle
+
+Detaching a spec from its tracker issue is done via `/flow-next:tracker-sync unlink <id>` — that ceremony (in the tracker-sync skill) clears the tracker id + `lastSyncedAt` + merge-base atomically (`flowctl sync clear`) and posts a one-line "detached" comment to the issue. After unlink, all lifecycle touchpoints above no-op for that spec (no linked id). A later re-link re-seeds the merge base from the current issue body (so re-link does not resurrect stale state). The spec/task ids, branch, and files are NEVER touched by unlink (no rename).

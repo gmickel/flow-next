@@ -6,15 +6,32 @@ skill. Any failed, unavailable, or declined gate sets
 `delegation_active=false`, continues in standard in-session mode, and does not
 load `codex-delegation.md`.
 
+```text
+delegation_requested = host_is_claude_code && (arg delegate:codex | work.delegate == "codex") && not arg delegate:local
+delegation_active = delegation_requested && Phase 1.5 selection passed
+```
+
+The executable request check and fail-open selection stay beside their
+consuming phases in `phases.md`. Once selected, the host (NOT the worker) reads
+the active reference once and follows its complete path-handoff, safety,
+worker-signal, and circuit-breaker contract.
+
 ## Gate 0 — original input kind
 
-Phase 1 must capture the original input before promoting a bare idea:
+**Original-input-kind capture (ONLY when `delegation_requested` — Phase 0).** A bare
+idea-text input (phases.md Phase 1 match #5 — not a Flow id, not a resolvable handle, not an
+existing `.md` spec path) gets promoted into a spec+task by the Phase 1 steps, so
+its original kind must be recorded **before** that promotion. Set the flag in Phase 1,
+on the ORIGINAL input, immediately after detection and **before** running any
+"Spec file start" / "Spec-less start" promotion step:
 
 ```bash
-if <original input is idea text — none of: Flow id, resolvable handle, existing .md spec path>; then
-  INPUT_WAS_BARE_PROMPT=1
+# Runs ONLY when delegation_requested (resolved in Phase 0). On the default
+# (delegation-off) path this step does not exist — Phase 0 already returned.
+if <original input matched #5 idea text — none of: Flow id, resolvable handle, existing .md spec path>; then
+  INPUT_WAS_BARE_PROMPT=1   # promoted bare prompt → NOT eligible for delegation (Gate 5)
 else
-  INPUT_WAS_BARE_PROMPT=0
+  INPUT_WAS_BARE_PROMPT=0   # Flow id / resolvable handle / existing .md spec → eligible
 fi
 ```
 
