@@ -62,9 +62,8 @@ Copies + mirrors:
 - [ ] Parity chain green: fallback constant, dual copy, both hashes, fixtures; focused suite passes
 - [ ] sync-codex.sh idempotent; .flow/templates/spec.md refreshed; commit message carries prompt rationale
 ## Done summary
-TBD
-
+Transplanted 5a54d5f0 scope-minimality prose to all four canonical sites plus the workflow-rp.md criteria copy (criterion 7). Extended every site's rigor-exemption clause to name both error-case enumeration and filesystem-identity/permission/concurrency guards (R2). Synced PLAN_REVIEW_PROMPT_FALLBACK byte-for-byte (criterion 6 single-lined so the byte-pinned codex mirror survives the sync transform's continuation dedent), updated both SHA pins, rebaselined rendered fixtures (evidence generator script is stale vs current build_review_prompt signature - fixtures regenerated with the parity test's own inputs), refreshed .flow/bin/flowctl.py and .flow/templates/spec.md copies, regenerated the codex mirror idempotently. Focused suite (55 tests) green; ruff clean. Deviation: delegation to grok-4.5 via cursor-agent failed silently 3x (empty output, no edits); conductor self-implemented per goal fallback.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 64ab506a
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_template_parity test_review_prompt_constraints test_dogfood_template_parity test_template_canonical -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py, ./scripts/sync-codex.sh x2 idempotent
 - PRs:
