@@ -839,9 +839,18 @@ class MakePrIntegrationTests(unittest.TestCase):
             REPO_ROOT
             / "plugins/flow-next/skills/flow-next-make-pr/workflow.md"
         ).read_text(encoding="utf-8")
+        # Branch disclosure moved the per-mode expected-behavior list off the
+        # always-loaded workflow into a maintainer-only reference; the workflow
+        # must still name it.
+        self.assertIn("references/manual-smoke.md", workflow)
+        smoke = (
+            REPO_ROOT
+            / "plugins/flow-next/skills/flow-next-make-pr"
+            / "references/manual-smoke.md"
+        ).read_text(encoding="utf-8")
         html_off = next(
             line
-            for line in workflow.splitlines()
+            for line in smoke.splitlines()
             if "`artifacts.html.enabled` unset/false" in line
         )
         self.assertIn("Phase 1.5b performs one config read", html_off)
