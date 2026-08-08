@@ -108,12 +108,11 @@ export const claudeBackend: WorkerBackend = {
 ### ✅ GOOD: Task as delegation payload
 
 ```markdown
-# fn-2.3: Implement claude backend
-
 ---
 satisfies: [R2]
-touches: [src/lib/backends/claude.ts, src/lib/backend.ts]
 ---
+
+# fn-2.3: Implement claude backend
 
 ## Description
 Create the claude backend adapter (R2). Split from fn-2.2 because each
@@ -121,6 +120,7 @@ backend is an independent adapter behind the interface fn-2.1 landed.
 
 **Size:** S
 **Files:** `src/lib/backends/claude.ts`, `src/lib/backend.ts` (registration)
+**Touches:** [src/lib/backends/claude.ts, src/lib/backend.ts]
 
 ## Approach
 - Follow codex backend pattern at `src/lib/backends/codex.ts:15-40`
@@ -152,7 +152,7 @@ backend is an independent adapter behind the interface fn-2.1 landed.
   decisions
 - References R2 instead of restating what R2 says — the executor reads the
   spec alongside the task
-- `touches:` declares the write surface for later concurrency planning
+- `**Touches:**` declares the write surface for later concurrency planning
 - Points to pattern to follow (`codex.ts:15-40`); notes key decision (prompt
   via `-p` flag)
 - Implementer has freedom to write the actual code; acceptance is testable

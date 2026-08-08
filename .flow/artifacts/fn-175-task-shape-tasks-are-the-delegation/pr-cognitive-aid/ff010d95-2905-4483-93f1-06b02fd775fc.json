@@ -1,0 +1,412 @@
+{
+  "artifactId": "ff010d95-2905-4483-93f1-06b02fd775fc",
+  "baseSha": "c6af1e5401dc1a4b155099ac3ff76a79d32b3279",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "Replay agents wrote tasks at 2.9-3.3x the fleet norm; the bloat was paraphrased spec context that drifts. Root cause: shipped prose claimed plan-time knowledge reaches executors through the task file and no other channel - false since fn-83, because the anchor bundle delivers the full parent spec verbatim alongside every task.",
+        "taskIds": [],
+        "title": "Tasks bloated with paraphrased spec context"
+      },
+      {
+        "files": [
+          {
+            "additions": 27,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-plan/steps.md",
+            "rIds": [
+              "R1",
+              "R2",
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r1",
+              "s-r2",
+              "s-r4",
+              "s-t1"
+            ],
+            "summary": "Artifact-split preamble, corrected both-channels Files line, Description rewrite, touches: scaffold + guidance",
+            "taskIds": [
+              "fn-175-task-shape-tasks-are-the-delegation.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-r1",
+          "s-r2",
+          "s-r4",
+          "s-t1"
+        ],
+        "summary": "Tested 7295ac5a block: the SPEC is the human record of what/why; the TASK is the delegation payload - named files, concrete approach, ordering, task-scoped acceptance. Never restate spec content; reference R-IDs and spec sections. Description capped at ten lines; the HOW lives in Approach. Plus the touches: frontmatter line (repo-relative modify-globs, omit = always-serial downstream, inert to flowctl).",
+        "taskIds": [
+          "fn-175-task-shape-tasks-are-the-delegation.1"
+        ],
+        "title": "Artifact-split doctrine in the plan skill"
+      },
+      {
+        "files": [
+          {
+            "additions": 33,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/skills/flow-next-plan/examples.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r3",
+              "s-t1"
+            ],
+            "summary": "BAD restatement example, delegation-payload GOOD example, Summary table row",
+            "taskIds": [
+              "fn-175-task-shape-tasks-are-the-delegation.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-c3",
+          "s-r3",
+          "s-t1"
+        ],
+        "summary": "Calibration beats instruction (three be-brief instructions measured ignored while few-shots size real output): new BAD spec-restatement example, GOOD example reshaped to the delegation-payload shape with satisfies + touches and R-ID references, Summary table aligned. Kept within the prose-diet cap on BAD anchors.",
+        "taskIds": [
+          "fn-175-task-shape-tasks-are-the-delegation.1"
+        ],
+        "title": "Few-shot recut in examples.md"
+      },
+      {
+        "files": [
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r5",
+              "s-t1"
+            ],
+            "summary": "Parenthetical amended; template untouched",
+            "taskIds": [
+              "fn-175-task-shape-tasks-are-the-delegation.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-c3",
+          "s-r5",
+          "s-t1"
+        ],
+        "summary": "R5 check: the codex delegate template already reads the task AND the parent spec together - verified, no template change. The stale parenthetical beside it carried the same false no-other-channel claim; amended while keeping the pinned path-handoff contract phrase.",
+        "taskIds": [
+          "fn-175-task-shape-tasks-are-the-delegation.1"
+        ],
+        "title": "Delegate brief verified + second false-claim site amended"
+      },
+      {
+        "files": [
+          {
+            "additions": 9,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r6",
+              "s-t2"
+            ],
+            "summary": "Task-shape Unreleased bullet",
+            "taskIds": [
+              "fn-175-task-shape-tasks-are-the-delegation.2"
+            ]
+          },
+          {
+            "additions": 27,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          },
+          {
+            "additions": 33,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/examples.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/references/codex-delegation.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-r6",
+          "s-t1",
+          "s-t2"
+        ],
+        "summary": "Codex mirror regenerated idempotently; Unreleased CHANGELOG bullet with cost/quality framing.",
+        "taskIds": [
+          "fn-175-task-shape-tasks-are-the-delegation.1",
+          "fn-175-task-shape-tasks-are-the-delegation.2"
+        ],
+        "title": "Mirrors + CHANGELOG"
+      },
+      {
+        "files": [
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/specs/fn-175-task-shape-tasks-are-the-delegation.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Spec state",
+            "taskIds": []
+          },
+          {
+            "additions": 45,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 14,
+            "path": ".flow/specs/fn-175-task-shape-tasks-are-the-delegation.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Spec plan",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-175-task-shape-tasks-are-the-delegation.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 41,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-175-task-shape-tasks-are-the-delegation.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task spec + done summary",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-175-task-shape-tasks-are-the-delegation.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 29,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-175-task-shape-tasks-are-the-delegation.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task spec + done summary",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "s-c3"
+        ],
+        "summary": "Full parallel suite 4273 green (two behavioral guards initially caught the recut - prose-diet BAD-anchor cap and the pinned path-handoff phrase - both honored, not weakened); ruff clean; sync-codex idempotent; smoke 135/136 (pre-existing live-copilot flake).",
+        "taskIds": [],
+        "title": "Verification"
+      }
+    ],
+    "proof": [
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-r1",
+          "s-r2",
+          "s-r3",
+          "s-r4",
+          "s-r5",
+          "s-r6",
+          "s-c1",
+          "s-c2",
+          "s-c3"
+        ],
+        "value": "6/6 satisfied (R1-R5 commit c7aa8ed1 + fix 025348b2; R6 commits c7aa8ed1 + 61845a95)"
+      },
+      {
+        "label": "Gates",
+        "sourceRefs": [
+          "s-c3",
+          "s-spec"
+        ],
+        "value": "full suite 4273 green; ruff clean; sync-codex idempotent; smoke 135/136 (pre-existing flake)"
+      }
+    ],
+    "thesis": "Makes the task the delegation payload and the spec the record of intent: tasks carry the concrete HOW (files, approach, ordering, task-scoped acceptance) and reference the spec's R-IDs instead of restating its context - safe because executors always receive the task together with the full parent spec via the anchor bundle, whose prose previously denied exactly that."
+  },
+  "generatedAt": "2026-08-08T16:26:27Z",
+  "headSha": "025348b25f50b94f9a836b32d52af5f836e2ac4b",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-175-task-shape-tasks-are-the-delegation"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-175-task-shape-tasks-are-the-delegation.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-175-task-shape-tasks-are-the-delegation.2"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "c7aa8ed19f11c11e8a13a0051c9ab0cf25a855b0"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "61845a950f7ccf7242afea65c5b13e524bcd69bb"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "025348b25f50b94f9a836b32d52af5f836e2ac4b"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "c6af1e5401dc1a4b155099ac3ff76a79d32b3279..025348b25f50b94f9a836b32d52af5f836e2ac4b"
+    }
+  ],
+  "specId": "fn-175-task-shape-tasks-are-the-delegation"
+}

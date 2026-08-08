@@ -524,7 +524,6 @@ Default to standard unless complexity demands more or less.
  ```markdown
  ---
  satisfies: [R1, R3]
- touches: [src/auth/**, src/routes/auth.ts]
  ---
 
  ## Description
@@ -533,6 +532,7 @@ Default to standard unless complexity demands more or less.
 
  **Size:** S/M (L tasks should be split)
  **Files:** list expected files. Task files carry the task-specific contract - named files, named test cases, named acceptance - because downstream executors receive the task file as the brief alongside the parent spec.
+ **Touches:** [src/auth/**, src/routes/auth.ts] — repo-relative paths/globs this task expects to MODIFY (body line, not frontmatter — the batch create API renders frontmatter from `satisfies` only)
 
  ## Approach
  - Follow pattern at `src/example.ts:42`
@@ -585,10 +585,13 @@ Default to standard unless complexity demands more or less.
  - Use bare R-ID tokens (`--satisfies R1,R3`; rendered as `satisfies: [R1, R3]`), not quoted strings.
  - Frontmatter is additive — tasks created without it parse unchanged.
 
- **`touches:` frontmatter rules (optional, additive):**
+ **`**Touches:**` line rules (optional, additive):**
  - Repo-relative paths/globs the task expects to MODIFY (not merely read),
  authored at plan time from the `**Files:**` analysis and checked at plan
- review. Example: `touches: [src/auth/**, src/routes/auth.ts]`.
+ review. Example: `**Touches:** [src/auth/**, src/routes/auth.ts]`.
+ - A BODY line beside `**Files:**`, not YAML frontmatter — the one-call
+ `task create --from-json` route renders frontmatter from `satisfies`
+ only, so a frontmatter `touches:` would silently land in the body anyway.
  - Unknown or hard to predict → OMIT the line entirely; downstream
  concurrency planning treats omission as always-serial, which is the safe
  default by design.

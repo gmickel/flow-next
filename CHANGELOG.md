@@ -44,7 +44,7 @@ declined that machinery explicitly and delivered 43% fewer output tokens at
   restating its context - replay agents wrote tasks at roughly three times
   the fleet norm, and the bloat was paraphrased spec context that drifts.
   Nothing is lost: executors always receive the task together with the full
-  parent spec. Tasks can also declare a touches: line (the paths they expect
+  parent spec. Tasks can also declare a Touches: line (the paths they expect
   to modify) for later concurrency planning; leaving it out is safe and
   simply means serial scheduling.
 - Workers run focused tests for the code under change while iterating; the
