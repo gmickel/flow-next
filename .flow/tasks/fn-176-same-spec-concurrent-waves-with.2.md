@@ -23,9 +23,10 @@ Extend the Unreleased CHANGELOG with the fn-176 entry.
 - [ ] TBD
 
 ## Done summary
-TBD
+Added the concurrent-waves Unreleased bullet (fail-closed rule, collision handling, reviewer overlap, equivalence verification), no em dashes, no speed-percentage claims, no version manifests. OWED AT BATCHED RELEASE: flow-next.dev changelog + docs/README.md notable-updates line.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bea8ad83
+- Tests: docs-only; register read-through
 - PRs:

@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-176-same-spec-concurrent-waves-with",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-08T17:50:08.548101Z",
   "created_at": "2026-08-08T09:15:30.845554Z",
   "default_impl": null,
   "default_review": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T17:46:42.151425Z"
+  "updated_at": "2026-08-08T17:50:08.548249Z"
 }

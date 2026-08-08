@@ -30,9 +30,14 @@ Land the explicit wave-dispatch rule and reviewer overlap in the work skill (R1-
 - [ ] TBD
 
 ## Done summary
-TBD
+Landed the fail-closed wave dispatch rule in work 3a (six conditions, error paths stated, structural-backstop rationale), join collision handling in 3d (never auto-resolve, serial re-run from joined state, fn-178 collision stage line), the reviewer-overlap rule with the plan-sync barrier, and the Touches: plausibility/overlap check in both rubric copies (full parity chain for the pinned prompt). Executed the R5 sequential-equivalence gate: two-task sandbox spec with disjoint Touches: run serially and as a worktree wave - identical outcomes (2/2 OK both), byte-identical touched files, clean join.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
+stage: impl-review - skipped(policy: maintainer waived in-host review for this series; bot review on the PR is the gate)
+stage: wave-dispatch - skipped(policy: fn-176.2 depends on fn-176.1 - dep path forces serial per the rule this task lands)
+
+RECEIPT NOTE (goal): plan authored on the new prose - scope-minimal (2 tasks, no new machinery; the python checker was declined in Decision Context per the yagni discipline), tasks how-shaped without spec restatement (R-ID references, Touches: body lines, HOW in Approach). The dispatch rule itself correctly forced THIS spec serial: its two tasks share a dep edge.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b3afe093
+- Tests: python3 -m unittest test_prompt_text_pinned test_review_prompt_template_parity test_review_prompt_constraints test_work_reached_path_routes test_skill_prose_diet -q, R5 gate: sandbox serial vs wave replay - EQUIVALENT (2/2 OK both, identical trees), ./scripts/sync-codex.sh x2 idempotent
 - PRs:
