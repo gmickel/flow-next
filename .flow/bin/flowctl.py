@@ -2566,7 +2566,7 @@ def _setup_block_normalize_id(raw_id: Optional[str], use_json: bool) -> str:
     ``[A-Z0-9][A-Z0-9._-]*``, or a ``--`` substring. Explicit ``FLOW-NEXT``
     is the default id (same state key as omitting ``--id``).
     """
-    if raw_id is None or raw_id == "":
+    if raw_id is None:
         return SETUP_BLOCK_DEFAULT_ID
     if (
         len(raw_id) > 64

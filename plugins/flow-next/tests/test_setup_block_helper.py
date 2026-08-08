@@ -275,6 +275,7 @@ class SetupBlockFixtureTest(unittest.TestCase):
         target_before = target.read_bytes()
         meta_before = self.meta_path.read_bytes()
         invalid_ids = (
+            "",
             "x" * 65,
             "lowercase",
             "_LEADING",
@@ -485,6 +486,29 @@ class SetupBlockFixtureTest(unittest.TestCase):
                 )
                 self.assertEqual(target.read_bytes(), target_before)
                 self.assertEqual(self.meta_path.read_bytes(), meta_before)
+
+    def test_template_id_consistency_rejects_duplicated_marker_pair(self) -> None:
+        target = self.repo / "CLAUDE.md"
+        target.write_text("header\n", encoding="utf-8")
+        target_before = target.read_bytes()
+        meta_before = self.meta_path.read_bytes()
+        # "Exactly one" upper bound: a template with TWO derived pairs for the
+        # operated id is rejected the same as zero pairs.
+        doubled = self.repo / "doubled-template.md"
+        doubled.write_text(
+            "<!-- BEGIN FLOW-NEXT -->\none\n<!-- END FLOW-NEXT -->\n"
+            "<!-- BEGIN FLOW-NEXT -->\ntwo\n<!-- END FLOW-NEXT -->\n",
+            encoding="utf-8",
+        )
+        rejected = self._flowctl("apply", "CLAUDE.md", str(doubled))
+        self.assertEqual(rejected.returncode, 1)
+        combined = rejected.stdout + rejected.stderr
+        self.assertIn(
+            "template does not contain the marker pair for id FLOW-NEXT",
+            combined,
+        )
+        self.assertEqual(target.read_bytes(), target_before)
+        self.assertEqual(self.meta_path.read_bytes(), meta_before)
 
 
 if __name__ == "__main__":
