@@ -37,7 +37,8 @@ All changes are point fixes in existing code paths:
 - **R5:** On Claude Code, the setup platform cascade classifies `claude-code` via `CLAUDECODE`, with a fixture covering the plugin-skill env (no `CLAUDE_PLUGIN_ROOT`). Droid/Cursor/codex fixture outcomes unchanged.
 - **R6:** After `tracker resolve --select <slot>=<id>`, all unambiguously resolvable REQUIRED slots are filled and persisted; a REQUIRED-incomplete result is a CONFLICT, never a fresh stamp. The issue #308 five-step repro ends with a complete map at step 3.
 - **R7:** `flowctl start <id> --reclaim` rewrites the claimant with a repair claim note distinct from the `--force` takeover note; `--force` behavior unchanged.
-- **R8:** Mirrors, dual flowctl copies, docs touched where user-facing behavior changed, CHANGELOG Unreleased entries crediting @sn-furali per issue. Errors: parity red blocks merge.
+- **R8:** Gate-classify docs (#313 answer, promised on the issue): a short documentation statement that the path taxonomy is deliberately closed to config, that per-repo gate policy belongs in the consumer's conductor instructions (CLAUDE.md/AGENTS.md, with `pilot.gateClasses` as the open vocabulary), and that classifier reason strings are not a stable contract. Docs only, no code change.
+- **R9:** Mirrors, dual flowctl copies, docs touched where user-facing behavior changed, CHANGELOG Unreleased entries crediting @sn-furali per issue. Errors: parity red blocks merge.
 
 ## Boundaries
 
