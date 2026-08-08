@@ -19,7 +19,7 @@ Add the read-only `check` verb: same classification apply computes, byte-equalit
 - Byte-equality FIRST (apply's order): byte-pristine block -> `unchanged`, exit 0 - even when the recorded hash carries the `customized` sentinel.
 - Verdict/exit table (spec Architecture item 4): 0 `unchanged`; 2 drift (`template-drift`, `customized`, `hash-absent`); 3 structural (`missing-file`, `missing-markers`, `corrupt`); 1 ordinary errors. Shared states reuse apply's vocabulary; structural verdicts are check-only names.
 - Zero writes in EVERY branch: no target write, no meta.json mutation, no hash re-record (apply re-records in the unchanged-with-drifted-hash and refresh branches - check must not). Acquire `_setup_block_lock` briefly for a consistent meta read; never mutate under it.
-- JSON: `_setup_block_emit` shape (`target`/`action`/`reason`/`hash`), action = verdict; result envelope's `command` field distinguishes check from apply.
+- JSON: `_setup_block_emit` shape (`target`/`action`/`reason`/`hash`), action = verdict. NO `command` field exists in setup-block emissions and none is added - the verdict vocabulary alone disambiguates check output. Docs must note argparse usage errors also exit 2, so CI recipes distinguishing drift from usage errors key on the JSON verdict.
 - CRLF parity with `_setup_block_hash` (2557-2560): CRLF-only diff is not drift. Mixed-line-ending two-span fixture preserves bytes outside the operated span.
 - Update the `test_flowctl_surface.py:163-164` help pin with the `check` line.
 
