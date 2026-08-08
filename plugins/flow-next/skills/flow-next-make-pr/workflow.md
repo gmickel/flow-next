@@ -406,17 +406,7 @@ The body sections appear in this exact order. Skip any section whose source cont
 
 (The spec link is a `.flow/*` artifact → blob, SHA-pinned per §2.4b. Same for every `.flow/tasks/*` / `.flow/memory/*` link below.)
 
-**Render-lens line (only when Phase 1.5 recorded one).** Append it as a fifth blockquote line — committed artifact (`LINK_MODE=repo`):
-
-```markdown
-> **Render lens:** [`.flow/artifacts/<spec-id>/pr.html`](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/artifacts/<spec-id>/pr.html) — GitHub renders committed HTML as source; open locally in a browser. Regenerable; markdown is the record.
-```
-
-Local artifacts (`LINK_MODE=local`) get local-open guidance only — either
-`` > **Render lens:** `.flow/artifacts/<spec-id>/pr.html` (v1 currentness preserved — open locally in a browser; regenerable) ``
-or the existing `gitignored — open locally` variant — never a blob link that
-404s. With the mode off/unset (or `--dry-run`, or Phase 1.5b failed) this line
-is absent entirely.
+**Render-lens line (only when Phase 1.5b recorded one).** Append it as a fifth blockquote line, in the exact `LINK_MODE=repo` / `LINK_MODE=local` shapes given in [html-lens.md](html-lens.md) step 6 — never a blob link that 404s. With the mode off/unset (or `--dry-run`, or Phase 1.5b failed) this line is absent entirely and `html-lens.md` was never read.
 
 All four values come from the payload directly:
 
@@ -931,83 +921,26 @@ Bullets emit in source order: A (spec open questions) → B (deferred review fin
 
 Render `## Live QA` **only when** the QA receipt exists at `.flow/review-receipts/qa-<spec-id>.json` (the `/flow-next:qa` skill's default committed path; written when QA ran — via the opt-in pilot stage or a manual `/flow-next:qa` pass). With no receipt the section is omitted entirely (the §2.6 rule — most specs have no QA pass, so this is the common case and the body is byte-identical to today). This is the **R7 surfacing owner**: the QA stage advances even on `NEEDS_WORK`, so the findings reach a human only if make-pr renders them here.
 
-**Read the receipt (guarded — a malformed/absent file omits the section, never aborts the body):**
+**Gate before loading the receipt-path instructions.** This presence probe is the ONLY addition when no QA receipt exists:
 
 ```bash
+QA_ACTIVE=0
 QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json"
-QA_PRESENT=0
-if [ -f "$QA_RECEIPT" ] && jq -e . "$QA_RECEIPT" >/dev/null 2>&1; then
-  QA_PRESENT=1
-  QA_OUTCOME="$(jq -r '.qa_outcome // "unknown"' "$QA_RECEIPT")"
-  QA_HEAD_SHA="$(jq -r '.head_sha // ""' "$QA_RECEIPT")"
-  QA_BLOCKED_REASON="$(jq -r '.blocked_reason // ""' "$QA_RECEIPT")"
-  QA_NA_REASON="$(jq -r '.na_reason // ""' "$QA_RECEIPT")"
-  QA_COV_COVERED="$(jq -r '.rid_coverage.covered // "?"' "$QA_RECEIPT")"
-  QA_COV_TOTAL="$(jq -r '.rid_coverage.total // "?"' "$QA_RECEIPT")"
+if [ -f "$QA_RECEIPT" ]; then
+  # NO pipelines in the probe — a failed producer masked by a healthy consumer
+  # fails CLOSED. Capture raw first, rc-checked; parse separately.
+  QA_RAW="$(cat "$QA_RECEIPT" 2>/dev/null)" || QA_ACTIVE=1          # read ERROR ⇒ ACTIVE (fail open)
+  if [ "$QA_ACTIVE" = "0" ]; then
+    QA_PROBE="$(printf '%s' "$QA_RAW" | jq -r '.qa_outcome // empty' 2>/dev/null)" || QA_ACTIVE=1   # parse ERROR ⇒ ACTIVE
+    [ -n "$QA_PROBE" ] && QA_ACTIVE=1
+  fi
 fi
-
-# Freshness — the receipt carries head_sha for exactly this reason. The QA receipt is
-# keyed to the CODE head; Phase 1.5 may have already committed the pr.html artifact,
-# which advanced HEAD — so compare against the PRE-ARTIFACT head (HEAD^ when HEAD is the
-# artifact commit), never the post-artifact HEAD, or a fresh pass reads as stale.
-# The receipt's head_sha is the head AT QA TIME. Bookkeeping commits land ABOVE the code
-# head AFTER QA — pilot's `chore(flow): qa verdict <spec>` receipt commit, then Phase 1.5's
-# `chore(flow): pr artifact <spec>`. So the branch tip is NOT the code head. Accept the
-# receipt if its head_sha matches the tip OR any commit reached by peeling those leading
-# bookkeeping commits (the code head and everything above it). Fail CLOSED on empty.
-QA_FRESH_OK=0
-if [ "$QA_PRESENT" = "1" ] && [ -n "$QA_HEAD_SHA" ]; then
-  _s="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
-  while [ -n "$_s" ]; do
-    [ "$_s" = "$QA_HEAD_SHA" ] && { QA_FRESH_OK=1; break; }
-    git -C "$REPO_ROOT" log -1 --format='%s' "$_s" 2>/dev/null \
-      | grep -qE '^chore\(flow\): (qa verdict|pr artifact) ' || break
-    _s="$(git -C "$REPO_ROOT" rev-parse "$_s^" 2>/dev/null || echo "")"
-  done
+if [ "$QA_ACTIVE" = "1" ]; then
+  echo "GATE ACTIVE — STOP. Read references/live-qa-section.md before continuing."
 fi
-[ "$QA_FRESH_OK" = 1 ] || QA_PRESENT=0   # stale or empty head_sha → omit the section
 ```
 
-Read directly with `jq` (do NOT compose any free-form receipt field into shell-built JSON — surface the values as rendered markdown only). The receipt fields are exactly those task .1 added (`qa_outcome`, `head_sha`, `branch`, `rid_coverage`, `open_p0p1` as **objects**, plus the scoped `blocked_reason` / `na_reason`).
-
-**Section body (when `QA_PRESENT=1`):**
-
-```markdown
-## Live QA
-
-> **Outcome:** <qa_outcome> · **Ran against:** `<head_sha short>` · **R-ID coverage:** <covered>/<total>
-
-<conditional outcome line — see field rules>
-
-<open P0/P1 list — one checkbox bullet per open_p0p1[] object, only when the array is non-empty>
-```
-
-Field rules:
-
-- **`<qa_outcome>`** — verbatim from `qa_outcome` (one of `SHIP` / `NEEDS_WORK` / `NA` / `BLOCKED`). Render the four-outcome value, **NOT** the Ralph-guard `verdict` projection (a `BLOCKED` receipt projects `verdict=NEEDS_WORK`; surfacing `verdict` here would mislabel "couldn't verify" as "found problems"). Read `qa_outcome`, never `verdict`.
-- **`<head_sha short>`** — first 8 chars of `head_sha`; omit the "Ran against" clause if empty.
-- **R-ID coverage** — `rid_coverage.covered`/`rid_coverage.total`; omit the clause if either is `?`.
-- **Conditional outcome line:**
-  - `SHIP` → `> Live QA passed: all derived scenarios passed on the running app with captured evidence; zero open P0/P1.`
-  - `NA` → `> Live QA not applicable: <na_reason>` (no driveable user-visible AC — the common backend/CLI case).
-  - `BLOCKED` → `> Live QA could not run: <blocked_reason>` (no local app reachable / no driver — **not** a failure; the augmenting pass was skipped).
-  - `NEEDS_WORK` → `> Live QA found issues — see the open P0/P1 list below. (Advisory: this does not block merge; the human reviewer + land gate decide.)`
-- **Open P0/P1 list** — only when `open_p0p1[]` is non-empty (typically the `NEEDS_WORK` outcome). One checkbox bullet per object, using its structured fields (`severity` ∈ `{P0,P1}`, `reason` one-line symptom, `file` surface/route, `id` finding id):
-
-  ```markdown
-  - [ ] **<severity>** — <reason> (`<file>`) — QA finding `<id>`
-  ```
-
-  Render the objects' fields verbatim as markdown text; never invent or paraphrase. If `open_p0p1` is empty, emit no list (a `SHIP`/`NA`/`BLOCKED` receipt has none).
-
-**What this section MUST NOT do:**
-
-- MUST NOT mark the PR blocked or change its draft/ready state on a `NEEDS_WORK` outcome — QA is advisory (fn-72 R7). It surfaces findings; merge stays the human's + land's decision.
-- MUST NOT read `verdict` in place of `qa_outcome` — the projection collapses `BLOCKED` into `NEEDS_WORK`.
-- MUST NOT inline free-form receipt text into any shell-composed JSON — render it as markdown only (the receipt was written safely by the QA skill; make-pr only *reads* it).
-- MUST NOT fabricate a Live QA section when no receipt is present — absence of the receipt means QA never ran; the section is omitted (no sentinel line).
-
-**Section purpose framing** — this is the live-app verification signal a static-review PR never carries: "does the running product actually work?" The QA stage advances the build loop on every outcome (including `NEEDS_WORK`), so this section is the only place a `NEEDS_WORK` live-QA result reaches the human reviewer before merge. It complements (never replaces) CI/staging/manual QA.
+When the sentinel prints, STOP and Read [references/live-qa-section.md](references/live-qa-section.md) in full before any further step — it carries the guarded receipt read, the bookkeeping-commit freshness peel, the section body shape, the field rules (`qa_outcome` never the `verdict` projection), and the MUST-NOT list. When it does not print, emit no `## Live QA` heading, no sentinel line, and no QA-related output; the §2.13 omission row already records that state.
 
 ### 2.13 — Section-omission rule (extended for context sections)
 
@@ -1103,7 +1036,7 @@ The host agent evaluates the five trigger conditions below against the export pa
 | 4 | Removed top-level directory (all files of dir in `--diff-filter=D`) | `diff_summary.files[]` filtered to `status == "D"` and grouped by top-level dir | `graph TB` |
 | 5 | High-fan-out spec — `>15 files in >3 distinct modules` | `len(diff_summary.files) > 15 AND len(diff_summary.modules_touched) > 3` | `graph TB` |
 
-When **multiple triggers fire**, the host agent picks shape per the diagram (one diagram per logical concern) but stays under the §3.2 caps. Triggers 1+2 commonly co-occur (a refactor that adds a new module and exports new functions from it) — the agent emits one `flowchart LR` showing both the new module and its imports.
+When **multiple triggers fire**, the host agent picks shape per the diagram (one diagram per logical concern) but stays under the §3.2 caps (`mermaid-rules.md` §4). Triggers 1+2 commonly co-occur (a refactor that adds a new module and exports new functions from it) — the agent emits one `flowchart LR` showing both the new module and its imports.
 
 ### 3.1a — Skip rules (within trigger evaluation)
 
@@ -1115,115 +1048,11 @@ Even when a trigger fires, Phase 3 is **skipped** (section omitted, no diagrams,
 
 When skip rules engage, the host agent emits a stderr breadcrumb: `Phase 3 skipped: <reason>`. Useful for the user to debug "why didn't I get a diagram?" without re-running.
 
-### 3.2 — Hard caps (enforce on every diagram)
+### 3.2 — Emission rules (read [mermaid-rules.md](mermaid-rules.md) before the first codefence)
 
-| Cap | Value | Enforced where |
-|-----|-------|----------------|
-| Diagrams per PR | 3 | When more than 3 triggers would emit, collapse to **one** `graph TB` overview |
-| Nodes per diagram | 12 | When a diagram would exceed, group by module/abstraction (`scouts (5)` instead of five sibling nodes) |
-| Edges per diagram | 25 | Same readability cliff as nodes; group when exceeded |
-| Characters per codefence | 12,000 | Count chars between opening ` ```mermaid ` and closing ` ``` `; collapse / split when above |
+At least one trigger fired and no skip rule applies — a codefence WILL be emitted. **STOP and read [`mermaid-rules.md`](mermaid-rules.md) in full now**, before writing any diagram. It carries the rules this phase runs on: reserved words (§1), special-character escapes (§2), shape selection per diagram (§3), the hard caps + allocation rule (§4 — 3 diagrams / 12 nodes / 25 edges / 12K chars per codefence), the prose-summary-precedes-diagram rule (§5, R13, load-bearing), the pre-emission validation checklist + re-render loop (§6), and the Phase-3 hallucination guardrails (§7 — no invented modules / edges / symbols). Do not emit a codefence from memory; the failure mode is silent (the diagram renders as a code block, not as a diagram).
 
-**Allocation rule when triggers exceed 3 diagrams:**
-
-```
-Triggers 1+2 fire (cross-module + public exports) → emit 1 flowchart LR combining both
-Triggers 3+4 fire (new dir + removed dir) → emit 1 graph TB showing both as additions/removals
-Trigger 5 fires alone → emit 1 graph TB overview
-Triggers 1+2+3 fire → 1 flowchart LR + 1 graph TB (still under cap)
-Triggers 1+2+3+5 fire → 1 graph TB overview only (cap collapses 4 candidate diagrams to one)
-```
-
-The collapse-to-one rule prefers `graph TB` when the alternative is more than 3 separate diagrams — overview beats fragmented detail.
-
-**Node-cap grouping rule:** when a flowchart or classDiagram would have >12 nodes, group siblings by abstraction. `flowchart LR` example:
-
-````
-Bad (15 nodes):
-  skill --> agent_A
-  skill --> agent_B
-  skill --> agent_C
-  skill --> agent_D
-  skill --> agent_E
-  ... (11 more)
-
-Good (3 nodes):
-  skill --> scouts["scouts (5)"]
-  skill --> workers["workers (3)"]
-  skill --> validators["validators (2)"]
-````
-
-The grouped label keeps the fan-out signal without burying it in 15 visually-similar nodes.
-
-### 3.3 — Shape selection per diagram
-
-The host agent picks shape from the four documented in `mermaid-rules.md` §3:
-
-| Shape | When |
-|-------|------|
-| `flowchart LR` | Module-level dependency changes (default for trigger 1). Function-shape additions in `public_exports_changed[]`. |
-| `classDiagram` | Type / class additions or removals (when `public_exports_changed[]` includes class symbols — e.g. `class Foo`, `class Bar(Base)`). |
-| `sequenceDiagram` | New API endpoint or protocol flow (route handlers added — paths in `diff_summary.files[]` matching `routes/`, `handlers/`, `api/`, route-definition keywords in changed-file content). |
-| `graph TB` | High-level "spec touches these N areas" overview (default for trigger 5; default when collapsing 4+ diagrams to one). |
-
-**Rule of thumb:** if you can't decide between `flowchart LR` and `graph TB`, pick `flowchart LR` for "A depends on B" stories and `graph TB` for "spec touched these areas" stories. The reader's mental model is different — left-to-right reads as flow, top-to-bottom reads as decomposition.
-
-### 3.4 — Prose-summary-precedes-diagram rule (R13, load-bearing)
-
-**Every** mermaid codefence is preceded by a one-paragraph prose summary in plain language, three to five sentences, anchored to file paths from `diff_summary.files[]`. The diagram is supplementary; the prose is load-bearing.
-
-This serves two readers:
-
-1. **Forges that don't render mermaid** (older self-hosted Gitea / Bitbucket / GitHub Enterprise). The prose preserves the structural-change signal even when the codefence renders as a code block.
-2. **Reviewers who skim diagrams.** A diagram is a glance, not a read. The prose tells the reviewer what they're looking at and why.
-
-**Pattern:**
-
-```markdown
-## Structural changes
-
-[Paragraph 1: 3-5 sentences in plain language describing what changed structurally
-and why it matters. Anchored to file paths from `diff_summary.files[]`. No jargon.]
-
-​```mermaid
-[diagram 1]
-​```
-
-[Paragraph 2 (only if more than one diagram): same shape — plain-language structural
-description, anchored to paths.]
-
-​```mermaid
-[diagram 2]
-​```
-```
-
-**Prose rules:**
-
-- **Three to five sentences.** Shorter = doesn't justify a diagram; longer = the diagram itself becomes redundant.
-- **Plain language.** No jargon ("the IoC container ratifies the dependency injection contract" — no). The reader includes reviewers who didn't write the spec.
-- **Anchored.** Every file path mentioned in the prose appears in `diff_summary.files[]`. Same hallucination guardrail as Critical changes (rule 1 of §2.5).
-- **Self-contained.** If you removed the diagram, the prose alone should still convey the structural change.
-- **Not a caption.** Don't write "Figure 1: Module dependencies." Write the explanation directly.
-- **Never quote diff content.** Same rule as the rest of the body — paths, churn, modules; no code.
-
-When `--no-mermaid` is set the section is omitted entirely (R14, §3.0); prose summaries are NOT emitted standalone — they exist to frame the diagrams, not replace them. (See §3.0 for the rationale.)
-
-### 3.5 — Pre-emission validation (each codefence)
-
-Before committing a codefence to the body, the host agent runs the `mermaid-rules.md` §6 validation checklist on the rendered output. **If any check fails, re-render with the issue corrected.** Do NOT emit a known-broken diagram and hope the reviewer catches it — mermaid breaks silently (the codefence renders as code, not as a diagram), so the reviewer's "the diagram looks weird" feedback is the only signal.
-
-The `mermaid-rules.md` §6 checklist (full text in the ref file — recapped here):
-
-1. Quotes balanced.
-2. No bare reserved word (`end`, `default`, `subgraph`, `class`, `state`, `direction`, `click`, `style`, `o`, `x`) as a node id.
-3. No emoji in labels.
-4. No MathJax / LaTeX syntax.
-5. No relative or internal-anchor links in `click` directives.
-6. classDiagram: no inheritance cycles.
-7. flowchart: arrow-character preference (`-->` / `-.->` / `==>` over `--o` / `--x`).
-8. Total chars ≤12K per codefence.
-
-**Re-render loop:** if validation fails, the agent identifies which rule failed, applies the fix from the ref file (e.g. rule 1 says "quote labels containing parens" — agent re-renders with `A["Label with (parens)"]` instead of `A(Label with parens)`), then re-runs the checklist. Loop until all 8 rules pass. **Do not emit a partial fix and proceed.**
+When zero triggers fire, a skip rule engages, or `--no-mermaid` is set, that file is never read — §3.6 below is the whole of Phase 3 on those paths.
 
 ### 3.6 — Section omission
 
@@ -1231,26 +1060,15 @@ When zero triggers fire (§3.1) OR a skip rule engages (§3.1a) OR `--no-mermaid
 
 Phase 3 has no fallback bullet equivalent to Critical changes' "Limited churn" line. Critical changes always renders because the section is mandatory; Structural changes is optional. The signal of "no diagram" is the absence of the heading; reviewers who notice the absence infer correctly: no module-boundary, no public-interface, no fan-out — the diff is structurally local.
 
-### 3.7 — Hallucination guardrails (Phase 3 specifics)
-
-The §2.5 hallucination guardrails apply to Phase 3 with these specific reinforcements:
-
-- **No invented modules.** Every node in a diagram representing a module must correspond to a path in `diff_summary.modules_touched[]` or to a path in `diff_summary.files[]`. **Never** invent a "Helper module" that doesn't appear in the diff.
-- **No invented edges.** Every edge in `flowchart`/`classDiagram` must correspond to a real signal: an entry in `cross_module_changes[]` (for "A imports B"), or a real composition relationship visible in `public_exports_changed[]` content, or a route → handler relationship visible in the diff. **Never** infer a `A --> B` edge from "it would make sense if A used B."
-- **No invented symbol names.** Class members in `classDiagram` come from `public_exports_changed[].added[]` only. Never derive from spec language.
-- **No "for clarity" embellishment.** If a diagram has 6 real nodes and the agent thinks "adding 2 more would explain it better" — don't. The 6 are what changed. Adding context nodes that didn't change in this diff dilutes the signal.
-
-When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes and 3 edges that all trace to the diff is a better cognitive aid than one with 12 nodes where 6 of them are inferred context.
-
 ### Done when
 
 - `--no-mermaid` short-circuits before any trigger evaluation; the body has no `## Structural changes` heading.
 - Trigger evaluation walks the 5 conditions ((1) `cross_module_changes[]` non-empty, (2) `public_exports_changed[]` non-empty, (3) new top-level dir, (4) removed top-level dir, (5) >15 files in >3 modules) and the skip rules; emits Phase 3 only when ≥1 trigger fires AND no skip rule applies. When a skip rule engages, the stderr breadcrumb `Phase 3 skipped: <reason>` is emitted.
 - Hard caps enforced (max 3 diagrams, max 12 nodes, max 25 edges, max 12K chars per codefence). Excess collapses to a `graph TB` overview; node excess groups by module/abstraction.
-- Shape selection picks from the 4 documented shapes (`flowchart LR` / `classDiagram` / `sequenceDiagram` / `graph TB`) per the §3.3 rules.
+- Shape selection picks from the 4 documented shapes (`flowchart LR` / `classDiagram` / `sequenceDiagram` / `graph TB`) per the `mermaid-rules.md` §3 rules.
 - Every codefence is preceded by a 3-5 sentence plain-language prose summary anchored to `diff_summary.files[]` paths. The diagram is supplementary; prose is load-bearing.
 - Each codefence passes the `mermaid-rules.md` §6 validation checklist (8 rules: quotes balanced, no reserved-word bare ids, no emoji, no MathJax, no relative click links, no inheritance cycles, arrow-char preference, ≤12K chars) before being emitted. Re-render loop on any failure — never emit a known-broken codefence.
-- `mermaid-rules.md` ref file present with: §1 reserved words, §2 special-character escapes + HTML-entity fallback (decimal codes only), §3 shape decision matrix, §4 hard-caps recap, §5 prose-summary rule, §6 validation checklist.
+- `mermaid-rules.md` ref file present with: §1 reserved words, §2 special-character escapes + HTML-entity fallback (decimal codes only), §3 shape selection + decision matrix, §4 hard caps + allocation rule, §5 prose-summary rule, §6 validation checklist, §7 Phase-3 hallucination guardrails.
 - Section omission honored: zero triggers OR skip rule OR `--no-mermaid` → no `## Structural changes` heading at all.
 - Hallucination guardrails honored: no invented modules / edges / symbols; "fewer nodes, more honest" over "context nodes for clarity."
 
@@ -1319,24 +1137,6 @@ This skill is the autonomous-loop terminus, which means it's also the most-tempt
 These anti-patterns are documented in skill prose (not just in the spec) so v2 enhancements have to consciously violate them. If a future enhancement seems to require any of the above, stop and reconsider the design — chances are the value is achievable without crossing these lines.
 
 ---
-
 ## Manual smoke
 
-The skill itself is markdown — no unit-test surface. Phase 0 validation is exercised via the smoke test and by manual invocation in a real session. Expected behavior:
-
-- `command -v gh` missing → exit 1 with install instructions.
-- `gh auth status` failing → exit 1 with login instructions.
-- `--base <bad-ref>` → exit 1 with `git rev-parse --verify` failure message.
-- Branch with no `branch_name` match in any `.flow/specs/*.json` AND no positional spec id → interactive `AskUserQuestion`; Ralph hard-errors with exit 2.
-- Tasks not all done + interactive → warn on stderr + proceed (open items force a draft via §4.2); Ralph exits 2; `--dry-run` warns and continues. No `AskUserQuestion` for open tasks.
-- Branch with an OPEN PR → exit 1 with `/flow-next:resolve-pr` hint.
-- Branch with a CLOSED or MERGED PR (no OPEN) → continues cleanly. **This is the load-bearing check** — fn-42 spike validated empirically that bare `gh pr view --json url` rc=0 for closed/merged PRs would false-positive without the `select(.state == "OPEN")` filter.
-- Branch with no PR history at all (`gh pr view` exits 1) → continues cleanly.
-- Ralph mode (`FLOW_RALPH=1`) → no `AskUserQuestion` calls in Phase 0; deterministic exit codes on missing context.
-- `artifacts.html.enabled` unset/false → Phase 1.5b performs one config read; no HTML-reference load, no `pr.html` write or commit, and no render-lens body line. Phase 1.5 still persists the structured PR cognitive-aid and renders its supported current walkthrough into the body.
-- `artifacts.html.enabled` true + supported current v1 input → `.flow/artifacts/<spec-id>/pr.html` written with the exact semantic carrier, self-check grep prints `OK: self-contained`, no artifact commit advances `HEAD`, and the body carries local-open guidance.
-- `artifacts.html.enabled` true + labeled legacy fallback + tracked artifact → exactly one `chore(flow): pr artifact <spec-id>` commit (artifact file only — `git show --stat` lists one path) before `gh pr create`, and the blob link resolves on the remote branch.
-- `artifacts.html.enabled` true + `--dry-run` → no artifact written, no commit, no render-lens line in the stdout body.
-- `artifacts.html.enabled` true + the artifact file ignored by ANY rule (`.flow/artifacts/`, `.flow/artifacts/**`, `*.html`, or the exact path) → no commit, body carries local-open guidance, no blob link.
-- `artifacts.html.enabled` true + artifact commit fails (e.g. rejecting pre-commit hook) → PR still created, no render-lens body line, exactly one stderr note.
-- `artifacts.html.enabled` true + Ralph → artifact may generate, but stdout is still exactly `PR_URL=<url>`; all artifact messaging on stderr; no `lavish-axi` invocation in the transcript (interactive or autonomous — the PR lens never opens a session).
+The skill itself is markdown — no unit-test surface. Phase 0 validation is exercised via the smoke test and by manual invocation in a real session. The expected-behavior list (gh preflight, base-ref, spec-detection, tasks-done, existing-PR state filtering, Ralph, and every `artifacts.html.enabled` combination) lives in [references/manual-smoke.md](references/manual-smoke.md) — a maintainer checklist, never read on a render path.

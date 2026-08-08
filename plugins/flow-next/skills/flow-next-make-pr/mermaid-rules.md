@@ -4,6 +4,8 @@ Reference for Phase 3 of `/flow-next:make-pr`. The host agent reads this file on
 
 The ref file is structured for fast lookup during emission, not for narrative reading. Sections are ordered so the agent can skim top-down: reserved words first (most common silent break), then escapes (second most common), then shape selection (when in doubt), then the final validation checklist (run before emitting).
 
+**Contents:** [§1 reserved words](#1-reserved-words) · [§2 special-character escapes](#2-special-character-escapes) · [§3 shape selection](#3-shape-selection) · [§4 hard caps + allocation](#4-hard-caps) · [§5 prose-summary rule](#5-prose-summary-precedes-diagram-rule-r13) · [§6 pre-emission validation](#6-pre-emission-validation-checklist) · [§7 Phase-3 hallucination guardrails](#7-hallucination-guardrails-phase-3-specifics)
+
 ---
 
 ## 1. Reserved words
@@ -59,7 +61,20 @@ The leading `#` plus decimal digits and trailing `;` is mermaid's documented esc
 
 ---
 
-## 3. Shape decision matrix
+## 3. Shape selection
+
+The host agent picks shape from the four documented below:
+
+| Shape | When |
+|-------|------|
+| `flowchart LR` | Module-level dependency changes (default for trigger 1). Function-shape additions in `public_exports_changed[]`. |
+| `classDiagram` | Type / class additions or removals (when `public_exports_changed[]` includes class symbols — e.g. `class Foo`, `class Bar(Base)`). |
+| `sequenceDiagram` | New API endpoint or protocol flow (route handlers added — paths in `diff_summary.files[]` matching `routes/`, `handlers/`, `api/`, route-definition keywords in changed-file content). |
+| `graph TB` | High-level "spec touches these N areas" overview (default for trigger 5; default when collapsing 4+ diagrams to one). |
+
+**Rule of thumb:** if you can't decide between `flowchart LR` and `graph TB`, pick `flowchart LR` for "A depends on B" stories and `graph TB` for "spec touched these areas" stories. The reader's mental model is different — left-to-right reads as flow, top-to-bottom reads as decomposition.
+
+### Shape decision matrix
 
 The four shapes the skill emits, with one canonical example per shape so the host agent doesn't have to invent syntax from memory:
 
@@ -152,7 +167,7 @@ graph TB
 
 ---
 
-## 4. Hard caps (recap from workflow.md §3.2)
+## 4. Hard caps
 
 | Cap | Value | Why |
 |-----|-------|-----|
@@ -163,9 +178,40 @@ graph TB
 
 When trigger conditions would emit more than 3 diagrams, **collapse to one high-level overview** (`graph TB`). When a single diagram would exceed 12 nodes, **group by module / abstraction** (e.g. "5 scout agents" → one node labeled `scouts (5)`). Do not silently truncate — that loses signal; explicit grouping preserves it.
 
+**Allocation rule when triggers exceed 3 diagrams:**
+
+```
+Triggers 1+2 fire (cross-module + public exports) → emit 1 flowchart LR combining both
+Triggers 3+4 fire (new dir + removed dir) → emit 1 graph TB showing both as additions/removals
+Trigger 5 fires alone → emit 1 graph TB overview
+Triggers 1+2+3 fire → 1 flowchart LR + 1 graph TB (still under cap)
+Triggers 1+2+3+5 fire → 1 graph TB overview only (cap collapses 4 candidate diagrams to one)
+```
+
+The collapse-to-one rule prefers `graph TB` when the alternative is more than 3 separate diagrams — overview beats fragmented detail.
+
+**Node-cap grouping rule:** when a flowchart or classDiagram would have >12 nodes, group siblings by abstraction. `flowchart LR` example:
+
+````
+Bad (15 nodes):
+  skill --> agent_A
+  skill --> agent_B
+  skill --> agent_C
+  skill --> agent_D
+  skill --> agent_E
+  ... (11 more)
+
+Good (3 nodes):
+  skill --> scouts["scouts (5)"]
+  skill --> workers["workers (3)"]
+  skill --> validators["validators (2)"]
+````
+
+The grouped label keeps the fan-out signal without burying it in 15 visually-similar nodes.
+
 ---
 
-## 5. Prose-summary-precedes-diagram rule (R13)
+## 5. Prose-summary-precedes-diagram rule (R13, load-bearing)
 
 Every mermaid codefence is preceded by a one-paragraph prose summary in plain language describing the structural change. The diagram is **supplementary**; the prose is **load-bearing**.
 
@@ -174,19 +220,38 @@ This is for two distinct readers:
 1. **Forges that don't render mermaid.** Some self-hosted Gitea / Bitbucket installs / older GitHub Enterprise versions don't render mermaid codefences. The prose ensures the structural change still lands.
 2. **Reviewers who skim diagrams.** A diagram is a glance, not a read. The prose tells the reviewer what they're looking at and why; the diagram lets them verify it visually. Together, both surfaces serve different cognitive modes.
 
-**Pattern:**
+Prose is not a caption ("Figure 3: Module dependencies"). It is a self-contained explanation. If you removed the diagram, the prose alone should still convey the structural change.
+
+**Pattern (the full section shape — one prose paragraph per codefence):**
 
 ```markdown
-[One-paragraph prose summary describing what changed structurally and why it matters.
-Three to five sentences. Plain language, no jargon. Anchored to file paths from
-`diff_summary.files[]`.]
+## Structural changes
+
+[Paragraph 1: 3-5 sentences in plain language describing what changed structurally
+and why it matters. Anchored to file paths from `diff_summary.files[]`. No jargon.]
 
 ​```mermaid
-[diagram]
+[diagram 1]
+​```
+
+[Paragraph 2 (only if more than one diagram): same shape — plain-language structural
+description, anchored to paths.]
+
+​```mermaid
+[diagram 2]
 ​```
 ```
 
-Prose is not a caption ("Figure 3: Module dependencies"). It is a self-contained explanation. If you removed the diagram, the prose alone should still convey the structural change.
+**Prose rules:**
+
+- **Three to five sentences.** Shorter = doesn't justify a diagram; longer = the diagram itself becomes redundant.
+- **Plain language.** No jargon ("the IoC container ratifies the dependency injection contract" — no). The reader includes reviewers who didn't write the spec.
+- **Anchored.** Every file path mentioned in the prose appears in `diff_summary.files[]`. Same hallucination guardrail as Critical changes (rule 1 of §2.5).
+- **Self-contained.** If you removed the diagram, the prose alone should still convey the structural change.
+- **Not a caption.** Don't write "Figure 1: Module dependencies." Write the explanation directly.
+- **Never quote diff content.** Same rule as the rest of the body — paths, churn, modules; no code.
+
+When `--no-mermaid` is set the section is omitted entirely (R14, §3.0); prose summaries are NOT emitted standalone — they exist to frame the diagrams, not replace them. (See §3.0 for the rationale.)
 
 ---
 
@@ -205,3 +270,20 @@ The host agent runs this checklist on every codefence before committing it to th
 9. **Total chars ≤12K per codefence.** Count the characters between the opening `​```mermaid` and closing `​````. If above, collapse / group / split.
 
 The checklist is the agent's last line of defense before silent rendering failure. **Run it on every codefence, every time.** A 30-second checklist run is cheaper than a reviewer comment that says "the diagram didn't render."
+
+Run it *before* committing a codefence to the body. Do NOT emit a known-broken diagram and hope the reviewer catches it — mermaid breaks silently (the codefence renders as code, not as a diagram), so the reviewer's "the diagram looks weird" feedback is the only signal.
+
+**Re-render loop:** if validation fails, the agent identifies which rule failed, applies the fix from the rule's section above (e.g. rule 1 says "quote labels containing parens" — agent re-renders with `A["Label with (parens)"]` instead of `A(Label with parens)`), then re-runs the checklist. Loop until all 8 rules pass. **Do not emit a partial fix and proceed.**
+
+---
+
+## 7. Hallucination guardrails (Phase 3 specifics)
+
+The §2.5 hallucination guardrails apply to Phase 3 with these specific reinforcements:
+
+- **No invented modules.** Every node in a diagram representing a module must correspond to a path in `diff_summary.modules_touched[]` or to a path in `diff_summary.files[]`. **Never** invent a "Helper module" that doesn't appear in the diff.
+- **No invented edges.** Every edge in `flowchart`/`classDiagram` must correspond to a real signal: an entry in `cross_module_changes[]` (for "A imports B"), or a real composition relationship visible in `public_exports_changed[]` content, or a route → handler relationship visible in the diff. **Never** infer a `A --> B` edge from "it would make sense if A used B."
+- **No invented symbol names.** Class members in `classDiagram` come from `public_exports_changed[].added[]` only. Never derive from spec language.
+- **No "for clarity" embellishment.** If a diagram has 6 real nodes and the agent thinks "adding 2 more would explain it better" — don't. The 6 are what changed. Adding context nodes that didn't change in this diff dilutes the signal.
+
+When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes and 3 edges that all trace to the diff is a better cognitive aid than one with 12 nodes where 6 of them are inferred context.
