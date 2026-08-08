@@ -2,7 +2,9 @@
 
 ## The Golden Rule in Practice
 
-Plans describe WHAT to build and WHERE to look — not HOW to implement.
+Plans never contain implementation CODE. The spec describes WHAT to build and
+why; the task describes the concrete approach — named files, patterns,
+ordering (the HOW) — but stops short of writing the implementation itself.
 
 ---
 
