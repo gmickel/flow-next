@@ -19832,14 +19832,15 @@ def cmd_init(args: argparse.Namespace) -> None:
         print(message)
 
 
-# fn-178: stage-outcome line grammar (prose convention, parsed leniently).
-# `stage: <name> - ran|skipped(...)|failed(...)` at line start; anything that
-# opens with `stage:` but does not parse lands in the `unknown` bucket — the
-# summarizer never crashes on a malformed line (R5).
+# fn-178: stage-outcome line grammar. Full-line match; `skipped`/`failed`
+# REQUIRE a (reason); `ran` takes an optional [start..end] bracket. Anything
+# that opens with `stage:` but does not fully parse lands in the `unknown`
+# bucket — the summarizer surfaces malformed/truncated lines instead of
+# counting them as valid outcomes, and never crashes (R5).
 _STAGE_LINE_RE = re.compile(
     r"^stage:\s*(?P<name>[A-Za-z0-9_.-]+)\s*[-—]\s*"
-    r"(?P<outcome>ran|skipped|failed)\s*"
-    r"(?:\((?P<reason>[^)]*)\))?",
+    r"(?:(?P<ran>ran)(?:\s*\[[^\]]*\])?"
+    r"|(?P<outcome>skipped|failed)\s*\((?P<reason>[^)]*)\))\s*$",
 )
 
 
@@ -19861,8 +19862,13 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
     stages: dict[str, dict] = {}
 
     def bucket(name: str) -> dict:
+        # Normalize receipt `type` spellings (impl_review) onto the prose
+        # stage names (impl-review) so one review never splits across two
+        # buckets.
         return stages.setdefault(
-            name, {"ran": 0, "skipped": 0, "failed": 0, "unknown": 0, "reasons": []}
+            name.replace("_", "-"),
+            {"ran": 0, "skipped": 0, "failed": 0, "unknown": 0,
+             "receipts": 0, "reasons": []},
         )
 
     unknown_lines = 0
@@ -19881,7 +19887,7 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
                 unknown_lines += 1
                 continue
             entry = bucket(match.group("name"))
-            entry[match.group("outcome")] += 1
+            entry["ran" if match.group("ran") else match.group("outcome")] += 1
             reason = match.group("reason")
             if reason:
                 entry["reasons"].append(reason.strip())
@@ -19896,8 +19902,11 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
                 continue
             if not isinstance(receipt, dict) or not receipt.get("verdict"):
                 continue
+            # A receipt is the same review attempt a prose `stage:` line may
+            # already describe — count it under its own `receipts` key, never
+            # a second `ran`, so one review is never double-counted.
             kind = str(receipt.get("type") or "review")
-            bucket(kind)["ran"] += 1
+            bucket(kind)["receipts"] += 1
 
     result = {
         "success": True,
@@ -19915,7 +19924,8 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
         entry = stages[name]
         counts = (
             f"ran={entry['ran']} skipped={entry['skipped']} "
-            f"failed={entry['failed']} unknown={entry['unknown']}"
+            f"failed={entry['failed']} unknown={entry['unknown']} "
+            f"receipts={entry['receipts']}"
         )
         print(f"  {name}: {counts}")
         for reason in entry["reasons"]:

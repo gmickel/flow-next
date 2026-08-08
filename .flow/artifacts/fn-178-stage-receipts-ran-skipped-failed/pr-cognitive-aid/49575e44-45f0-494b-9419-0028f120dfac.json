@@ -1,0 +1,470 @@
+{
+  "artifactId": "49575e44-45f0-494b-9419-0028f120dfac",
+  "baseSha": "c1266b5b0457ccf1ce214f2f721cf3d5592c5354",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "Issue #293: plan-sync silently no-oped for weeks - errors went to stderr and the empty result was indistinguishable from nothing-to-do. The pipeline also cannot see its own stage outcomes or timings without hand-built external analyzers.",
+        "taskIds": [],
+        "title": "Silent stage no-ops are invisible"
+      },
+      {
+        "files": [
+          {
+            "additions": 34,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-work/phases.md",
+            "rIds": [
+              "R1",
+              "R2",
+              "R3",
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r1",
+              "s-r2",
+              "s-r3",
+              "s-r4",
+              "s-t1"
+            ],
+            "summary": "Convention block + plan-sync outcome lines incl. failed(EXTRACT_FAILED)",
+            "taskIds": [
+              "fn-178-stage-receipts-ran-skipped-failed.1"
+            ]
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/agents/worker.md",
+            "rIds": [
+              "R1",
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r1",
+              "s-r3",
+              "s-t1"
+            ],
+            "summary": "Done-summary stage lines for worker-owned stages",
+            "taskIds": [
+              "fn-178-stage-receipts-ran-skipped-failed.1"
+            ]
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-pilot/workflow.md",
+            "rIds": [
+              "R1",
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r1",
+              "s-r3",
+              "s-t1"
+            ],
+            "summary": "Evidence-echo stage-outcome line",
+            "taskIds": [
+              "fn-178-stage-receipts-ran-skipped-failed.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2",
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-r1",
+          "s-r2",
+          "s-r3",
+          "s-r4",
+          "s-t1"
+        ],
+        "summary": "work phases.md gains the convention block (line grammar, skipped-is-an-event, no-line-is-failed inversion, timestamps where known, token telemetry out of scope) and the plan-sync 3e dispatch records ran/skipped(reason)/failed(EXTRACT_FAILED); worker.md summaries carry lines for worker-owned stages; pilot's evidence echo carries the dispatched stage's line.",
+        "taskIds": [
+          "fn-178-stage-receipts-ran-skipped-failed.1"
+        ],
+        "title": "Stage-outcome lines at the three orchestrator sites"
+      },
+      {
+        "files": [
+          {
+            "additions": 106,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r5",
+              "s-t1"
+            ],
+            "summary": "_usage_stage_summary + --stages/--json argparse on the existing verb; no new verb",
+            "taskIds": [
+              "fn-178-stage-receipts-ran-skipped-failed.1"
+            ]
+          },
+          {
+            "additions": 122,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_usage_stages.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r5",
+              "s-t1"
+            ],
+            "summary": "6 cases: ran/skipped/failed reasons, malformed->unknown, empty, receipt-as-ran, bare-usage unchanged, unknown spec",
+            "taskIds": [
+              "fn-178-stage-receipts-ran-skipped-failed.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-r5",
+          "s-t1"
+        ],
+        "summary": "Flag-gated extension of the existing verb: parses stage lines from the spec's committed task done summaries plus review receipts with verdicts, prints per-stage ran/skipped/failed/unknown counts with reasons, plain and JSON. Malformed lines count as unknown, never a crash; bare usage output unchanged. Focused 6-case table-driven test.",
+        "taskIds": [
+          "fn-178-stage-receipts-ran-skipped-failed.1"
+        ],
+        "title": "flowctl usage --stages (the one approved python change)"
+      },
+      {
+        "files": [
+          {
+            "additions": 9,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r6",
+              "s-t2"
+            ],
+            "summary": "Stage-receipts Unreleased bullet",
+            "taskIds": [
+              "fn-178-stage-receipts-ran-skipped-failed.2"
+            ]
+          },
+          {
+            "additions": 106,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Manifest regen",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Manifest regen",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/agents/worker.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-r6",
+          "s-t1",
+          "s-t2"
+        ],
+        "summary": "Dual flowctl.py copy, tracker manifest regen, codex mirror x2 idempotent, Unreleased CHANGELOG bullet.",
+        "taskIds": [
+          "fn-178-stage-receipts-ran-skipped-failed.1",
+          "fn-178-stage-receipts-ran-skipped-failed.2"
+        ],
+        "title": "Propagation + CHANGELOG"
+      },
+      {
+        "files": [
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/specs/fn-178-stage-receipts-ran-skipped-failed.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Spec state",
+            "taskIds": []
+          },
+          {
+            "additions": 42,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 13,
+            "path": ".flow/specs/fn-178-stage-receipts-ran-skipped-failed.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Spec plan",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-178-stage-receipts-ran-skipped-failed.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 41,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-178-stage-receipts-ran-skipped-failed.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task spec + done summary (carries live stage: lines)",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-178-stage-receipts-ran-skipped-failed.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 32,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-178-stage-receipts-ran-skipped-failed.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task spec + done summary",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 4,
+        "rIds": [],
+        "sourceRefs": [
+          "s-c1"
+        ],
+        "summary": "test_usage_stages 6/6; full parallel suite 4279 green; ruff clean; sync-codex idempotent; smoke 135/136 (pre-existing live-copilot flake).",
+        "taskIds": [],
+        "title": "Verification"
+      }
+    ],
+    "proof": [
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-r1",
+          "s-r2",
+          "s-r3",
+          "s-r4",
+          "s-r5",
+          "s-r6",
+          "s-c1",
+          "s-c2"
+        ],
+        "value": "6/6 satisfied (R1-R5 commit f7a929c7; R6 commits f7a929c7 + 0ba41b46)"
+      },
+      {
+        "label": "Gates",
+        "sourceRefs": [
+          "s-c1",
+          "s-spec"
+        ],
+        "value": "test_usage_stages 6/6; full suite 4279 green; ruff clean; smoke 135/136 (pre-existing flake)"
+      }
+    ],
+    "thesis": "Makes stage outcomes explicit and cheaply observable: every optional or delegated pipeline stage records ran / skipped(reason) / failed(reason) in the receipts it already writes - so no record can never again masquerade as nothing to do (the issue #293 class) - and flowctl usage --stages summarizes them per spec with no new stores, no new verbs, and token telemetry explicitly out of scope."
+  },
+  "generatedAt": "2026-08-08T17:19:54Z",
+  "headSha": "f7f905a6636a06dac440c7dc9294c8c9a8606fab",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-178-stage-receipts-ran-skipped-failed"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-178-stage-receipts-ran-skipped-failed.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-178-stage-receipts-ran-skipped-failed.2"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "f7a929c7860ed6ef97f6bbf996ea5265921c385c"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "0ba41b4603ea499b1557172e1351abcb003cd17a"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "c1266b5b0457ccf1ce214f2f721cf3d5592c5354..f7f905a6636a06dac440c7dc9294c8c9a8606fab"
+    }
+  ],
+  "specId": "fn-178-stage-receipts-ran-skipped-failed"
+}

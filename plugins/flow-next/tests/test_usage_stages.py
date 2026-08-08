@@ -81,10 +81,14 @@ class UsageStagesTest(unittest.TestCase):
     def test_malformed_lines_count_as_unknown_and_exit_zero(self) -> None:
         self.append_summary(
             "stage: plan-sync exploded without an outcome word\n"
-            "stage: ???"
+            "stage: ???\n"
+            "stage: qa - skipped\n"
+            "stage: qa - failed(\n"
+            "stage: qa - ran trailing junk"
         )
         data = self.stages_json()
-        self.assertEqual(data["unknown_lines"], 2)
+        self.assertEqual(data["unknown_lines"], 5)
+        self.assertNotIn("qa", data["stages"])
         self.assertTrue(data["success"])
 
     def test_no_lines_at_all_is_empty_not_an_error(self) -> None:
@@ -95,7 +99,11 @@ class UsageStagesTest(unittest.TestCase):
         self.assertEqual(plain.returncode, 0, plain.stderr)
         self.assertIn("no stage-outcome lines recorded", plain.stdout)
 
-    def test_review_receipt_with_verdict_counts_as_ran(self) -> None:
+    def test_review_receipt_counts_separately_and_names_normalize(self) -> None:
+        # A prose line and a receipt describe the SAME review attempt: they
+        # share one hyphen-normalized bucket, with the receipt under its own
+        # key so nothing is double-counted as ran.
+        self.append_summary("stage: plan-review - ran")
         receipts = self.repo / ".flow" / "review-receipts"
         receipts.mkdir(parents=True, exist_ok=True)
         (receipts / f"plan-{self.spec_id}.json").write_text(
@@ -103,7 +111,10 @@ class UsageStagesTest(unittest.TestCase):
             encoding="utf-8",
         )
         data = self.stages_json()
-        self.assertEqual(data["stages"]["plan_review"]["ran"], 1)
+        self.assertNotIn("plan_review", data["stages"])
+        entry = data["stages"]["plan-review"]
+        self.assertEqual(entry["ran"], 1)
+        self.assertEqual(entry["receipts"], 1)
 
     def test_bare_usage_still_prints_the_guide(self) -> None:
         result = run_flowctl(["usage"], self.repo)

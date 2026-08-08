@@ -445,7 +445,7 @@ Check if plan-sync should run:
 $FLOWCTL config get planSync.enabled --json
 ```
 
-Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip).
+Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip) — but a skip still records its outcome line (`stage: plan-sync - skipped(config: planSync.enabled != true)`, see the stage-outcome block below) before advancing to 3f.
 
 Get remaining `todo` task IDs (the JSON is an envelope - the list lives under `.tasks`):
 
@@ -453,7 +453,7 @@ Get remaining `todo` task IDs (the JSON is an envelope - the list lives under `.
 DOWNSTREAM=$($FLOWCTL tasks --spec <spec-id> --status todo --json | jq -r '[.tasks[].id] | join(",")') || DOWNSTREAM=EXTRACT_FAILED
 ```
 
-Skip if empty (no downstream tasks to update). `EXTRACT_FAILED` means the extraction itself broke (shape mismatch) - report it and re-derive the IDs from the raw JSON; never treat it as "nothing to do".
+Skip if empty (no downstream tasks to update) — recording `stage: plan-sync - skipped(empty: no downstream todo tasks)` per the stage-outcome block below before advancing. `EXTRACT_FAILED` means the extraction itself broke (shape mismatch) - report it, record `stage: plan-sync - failed(EXTRACT_FAILED: <detail>)`, and re-derive the IDs from the raw JSON; never treat it as "nothing to do".
 
 Note: Only sync to `todo` tasks. `in_progress` tasks are already being worked on - updating them mid-flight could cause confusion.
 
