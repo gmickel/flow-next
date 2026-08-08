@@ -296,8 +296,10 @@ Rules:
   enumeration missed.
 - **Tiered runs during the loop:** while iterating, run the FOCUSED tests for
   the code under change (per-task Quick commands convention). The FULL suite
-  runs at the gates that already require it — the pre-edit baseline and the
-  pre-review/pre-commit verification — not after every edit.
+  runs exactly where the existing gates already require it (whatever the
+  spec's Quick commands and the Verify block define — full or focused per
+  gate) — never as a mid-loop reflex after every edit. This changes no gate's
+  definition; it only removes redundant mid-loop re-runs.
 - If you break something mid-implementation, fix it before continuing
 
 ## Phase 3: Commit
