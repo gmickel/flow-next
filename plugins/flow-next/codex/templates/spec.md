@@ -76,6 +76,14 @@ concurrency guards (realpath/symlink containment, lock-guarded writes, forced
 excludes of runtime state) — an eliminated guard is not an eliminated feature.
 -->
 
+<!--
+EXAMPLES ARE EXHAUSTIVE (applies to every shape this spec shows):
+When the spec shows an output, event, or API shape, the fields shown ARE the
+contract — implementations must not add fields to a shown shape. If a field is
+intended, show it in the example. A deviation the example doesn't license is a
+review finding, not implementer discretion.
+-->
+
 # <spec-id> <Title>
 
 ## Goal & Context

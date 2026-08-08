@@ -1,0 +1,381 @@
+{
+  "artifactId": "555262c7-2fa7-4d8d-8a28-f13cbe37cda4",
+  "baseSha": "624e6b531cbb9d37f40185c0f04e6401aa42a7a9",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "Three replay-campaign findings: plans re-emitted wholesale inside heredocs on every revision (one benchmark checkpoint rewrote plan.md 7 times), implementers extended shown output shapes past the spec (defect class caught twice), and 54% of full-suite runs were redundant mid-loop re-runs at about 3x targeted cost.",
+        "taskIds": [],
+        "title": "Re-emitted heredocs, extended examples, redundant suite runs"
+      },
+      {
+        "files": [
+          {
+            "additions": 26,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 30,
+            "path": "plugins/flow-next/skills/flow-next-plan/steps.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r1",
+              "s-t1"
+            ],
+            "summary": "Efficiency note, Route A revise path, Route B compose, task-batch compose all Write/Edit-based; scaffold fence de-heredoced",
+            "taskIds": [
+              "fn-177-authoring-hygiene-author-as-file.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-r1",
+          "s-t1"
+        ],
+        "summary": "Documents are composed with the Write tool at a literal path and revised with Edit, never inside a bash heredoc (transient payloads of about ten lines stay legal). Kills the same-block heredoc rule and the re-emission channel. Two corrections to the tested wording: the phantom 'flowctl spec cat --plan' verb becomes the real 'flowctl cat', and the Route B scaffold's stale heredoc framing is reframed to the Write tool.",
+        "taskIds": [
+          "fn-177-authoring-hygiene-author-as-file.1"
+        ],
+        "title": "Author-as-file in the plan skill"
+      },
+      {
+        "files": [
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/agents/worker.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r3",
+              "s-t1"
+            ],
+            "summary": "Test-mass discipline + tiered-runs bullets inserted; baseline/pre-review/pre-commit gate prose textually intact",
+            "taskIds": [
+              "fn-177-authoring-hygiene-author-as-file.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-r3",
+          "s-t1"
+        ],
+        "summary": "Two bullets: focused tests for the code under change while iterating with the full suite exactly at the existing gates (pre-edit baseline, pre-review, pre-commit - gate prose untouched), and test mass follows the error enumeration (one focused test per AC/error case, table-driven, no re-testing covered branches).",
+        "taskIds": [
+          "fn-177-authoring-hygiene-author-as-file.1"
+        ],
+        "title": "Tiered test runs + test-mass discipline in worker rules"
+      },
+      {
+        "files": [
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/templates/spec.md",
+            "rIds": [
+              "R2"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r2",
+              "s-t1"
+            ],
+            "summary": "EXAMPLES ARE EXHAUSTIVE comment block",
+            "taskIds": [
+              "fn-177-authoring-hygiene-author-as-file.1"
+            ]
+          },
+          {
+            "additions": 17,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-diff",
+              "s-r4",
+              "s-t2"
+            ],
+            "summary": "Three Unreleased bullets, cost/quality framing, no speed claims",
+            "taskIds": [
+              "fn-177-authoring-hygiene-author-as-file.2"
+            ]
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/templates/spec.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Setup-managed template copy refreshed",
+            "taskIds": []
+          },
+          {
+            "additions": 26,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 30,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/agents/worker.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen (md-to-toml)",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/templates/spec.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R2",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-r2",
+          "s-r4",
+          "s-t1",
+          "s-t2"
+        ],
+        "summary": "Fresh EXAMPLES ARE EXHAUSTIVE comment beside the SCOPE DISCIPLINE block: shown fields ARE the contract, implementations must not add fields to a shown shape, no length budgets anywhere. Codex mirror regenerated idempotently; setup-managed template copy refreshed; Unreleased CHANGELOG bullets carry cost/quality framing only - no speed claims (falsified by the campaign).",
+        "taskIds": [
+          "fn-177-authoring-hygiene-author-as-file.1",
+          "fn-177-authoring-hygiene-author-as-file.2"
+        ],
+        "title": "Examples-are-exhaustive template contract + mirrors + CHANGELOG"
+      },
+      {
+        "files": [
+          {
+            "additions": 5,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/specs/fn-177-authoring-hygiene-author-as-file.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Spec state: tasks done, review statuses",
+            "taskIds": []
+          },
+          {
+            "additions": 42,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": ".flow/specs/fn-177-authoring-hygiene-author-as-file.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Spec plan",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-177-authoring-hygiene-author-as-file.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 43,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-177-authoring-hygiene-author-as-file.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task spec + done summary",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-177-authoring-hygiene-author-as-file.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 30,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-177-authoring-hygiene-author-as-file.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task spec + done summary",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 4,
+        "rIds": [],
+        "sourceRefs": [
+          "s-c1",
+          "s-c2"
+        ],
+        "summary": "Full parallel suite 4273 tests green; focused template/mirror/prompt suites green; ruff clean; sync-codex idempotent on second run; smoke 135/136 with the single failure the pre-existing live-copilot re-review e2e (external CLI, unrelated).",
+        "taskIds": [],
+        "title": "Verification"
+      }
+    ],
+    "proof": [
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-r1",
+          "s-r2",
+          "s-r3",
+          "s-r4",
+          "s-c1",
+          "s-c2"
+        ],
+        "value": "4/4 satisfied (R1-R3 commit 1d3731e9; R4 commits 1d3731e9 + c272225c)"
+      },
+      {
+        "label": "Gates",
+        "sourceRefs": [
+          "s-c1",
+          "s-spec"
+        ],
+        "value": "full suite 4273 green; ruff clean; sync-codex idempotent; smoke 135/136 (pre-existing flake)"
+      }
+    ],
+    "thesis": "One hygiene pass landing three replay-tested prose disciplines: planning documents are authored as files and revised with span edits instead of re-emitted heredocs, spec examples become the exhaustive contract for any shown shape, and workers run focused tests mid-loop with the full suite exactly at the existing gates - cheaper runs and one fewer deviation class, with no gate weakened and no speed claims."
+  },
+  "generatedAt": "2026-08-08T14:12:42Z",
+  "headSha": "d1efb20e9dd67463506cf6180723d5fff399dba5",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-177-authoring-hygiene-author-as-file"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-177-authoring-hygiene-author-as-file.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-177-authoring-hygiene-author-as-file.2"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "1d3731e9fd38db3eeed65adf6347491a95954112"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "c272225ce7c607a56143dfee3b5365eef1be4c39"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "624e6b531cbb9d37f40185c0f04e6401aa42a7a9..d1efb20e9dd67463506cf6180723d5fff399dba5"
+    }
+  ],
+  "specId": "fn-177-authoring-hygiene-author-as-file"
+}

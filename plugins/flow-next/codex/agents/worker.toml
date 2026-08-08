@@ -286,6 +286,19 @@ Rules:
   runtime state) — never trim a guard as scope.
 - Add tests if spec requires them
 - Required tests cover every error case enumerated in the ACs (R-IDs) the task satisfies; done summary references those tests. Specs with no enumerated error cases trigger nothing (not retroactive).
+- **Test mass discipline:** one focused test per AC and per enumerated error
+  case — coverage comes from the enumeration, not from volume. Use table-driven
+  / parametrized cases instead of copy-pasted variants; do not re-test branches
+  an existing test already covers; test the behavior the diff changes, not the
+  whole file it lives in. Redundant test mass is generation cost at authoring
+  time AND suite cost on every later run, and it catches nothing the
+  enumeration missed.
+- **Tiered runs during the loop:** while iterating, run the FOCUSED tests for
+  the code under change (per-task Quick commands convention). The FULL suite
+  runs exactly where the existing gates already require it (whatever the
+  spec's Quick commands and the Verify block define — full or focused per
+  gate) — never as a mid-loop reflex after every edit. This changes no gate's
+  definition; it only removes redundant mid-loop re-runs.
 - If you break something mid-implementation, fix it before continuing
 
 ## Phase 3: Commit

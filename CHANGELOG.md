@@ -28,6 +28,24 @@ declined that machinery explicitly and delivered 43% fewer output tokens at
   filesystem-identity, permission, and concurrency guards (symlink
   containment, lock-guarded writes, runtime-state excludes) are explicitly
   exempt - an eliminated guard is not an eliminated feature.
+- Planning documents are now authored as files and revised with span edits
+  instead of re-emitted bash heredocs - a plan that goes through review fix
+  loops is edited in place rather than regenerated wholesale (measured 13%
+  cheaper in both replay A/B pairs; short transient payloads of about ten
+  lines may still use heredocs).
+- Spec examples are now the contract: when a spec shows an output, event, or
+  API shape, the fields shown are exhaustive - implementations may not add
+  fields the example does not show. This closes a deviation class caught
+  twice in benchmark and field runs (an implementer "helpfully" extending a
+  shown shape past the spec).
+- Workers run focused tests for the code under change while iterating; the
+  full suite runs only where an existing gate's Quick commands already
+  require it, never as a mid-loop reflex - in the replay campaign 54% of
+  full-suite runs were redundant mid-loop re-runs at roughly three times the
+  targeted-test cost. No gate definition changes. Test mass follows the
+  spec's error enumeration: one focused test per acceptance criterion and
+  error case, table-driven over copy-paste, no re-testing already-covered
+  branches.
 
 ## [flow-next 3.17.0] - 2026-08-08
 
