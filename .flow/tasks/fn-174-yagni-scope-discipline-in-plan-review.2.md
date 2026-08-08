@@ -25,9 +25,8 @@ Stage the user-facing release notes for fn-174 under `## Unreleased` and walk th
 - [ ] No version manifests touched
 - [ ] Docs re-scan result + owed docs-site entry recorded in done summary
 ## Done summary
-TBD
-
+Added the Unreleased CHANGELOG entry: user-outcome-first paragraph (replay-campaign evidence: unguided runs invented 500-900-line unneeded subsystems; guided run -43% tokens/-57% cost at above-baseline quality), then Changed bullets for plan binding, review finding, worker rule, and the rigor exemption. No em dashes; no version manifests touched. Docs re-scan result: no repo docs need updates (spec-template.md documents scaffold structure, not discipline prose; docs/README.md notable-updates line rides the batched release). OWED AT BATCHED RELEASE: flow-next.dev changelog entry + docs/README.md notable-updates line for the release this ships in.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6ea66c01
+- Tests: docs-only change; CHANGELOG lint by read-through
 - PRs:
