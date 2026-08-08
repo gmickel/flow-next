@@ -2,7 +2,65 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.19.0] - 2026-08-09
+
+Every skill invocation now loads a lean universal spine and reads the rest
+only when its path actually needs it. That makes sessions cheaper - and, more
+importantly, an agent mid-branch no longer wades through instructions for
+branches it is not on, which is where instruction-following quietly erodes in
+long, condition-heavy prose.
+
+flow-next committed to progressive disclosure from its very first commit -
+slim command prose, scout subagents returning digests instead of raw context -
+and shipped stub commands before harnesses merged commands with skills or
+learned to load skill bodies on demand. Since then, dozens of releases of
+features our users needed grew the big skills many-branched, and we were
+derelict in our duty to keep the disclosure discipline current with that
+growth. This release fixes that, and adds the harness that keeps it fixed:
+every skill now has a **conduct checklist** (`agent_docs/conduct/` - four to
+six falsifiable observables per skill) that prose changes are reviewed and
+dogfooded against, so the discipline can no longer rot silently.
+
+### Changed
+
+- **Ten skills refactored to branch-disclosure shape.** What every invocation
+  needs stays inline; what only some paths reach moved verbatim into
+  `references/*.md` read at the branch point, behind fail-open probe gates
+  where a config decides the branch. Always-loaded prose drops up to 63%
+  where modes are truly exclusive (chart), 15-40% across the heavy skills
+  (capture -37%, impl-review -25% to -34% per backend path, work -18.5%,
+  audit -15.6%), smaller but real cuts on plan, interview, qa, prospect,
+  make-pr, and spec-completion-review. Every safety net, every-run contract,
+  and calibration block stays inline - the refactor moved prose, it did not
+  reword it, and each skill was verified against its conduct checklist.
+- **Prose-contract tests now pin content and reachability, not file
+  location.** A verbatim move to a reachable reference no longer breaks the
+  suite; what breaks it is content disappearing or becoming unreachable. The
+  rule new tests follow is documented in `agent_docs/adding-skills.md`, and a
+  new encoding guard keeps every reference file (and its Codex mirror twin)
+  clean UTF-8.
+
+### Removed
+
+- **The rp-explorer skill and the context-scout planning agent.** Nothing
+  dispatched rp-explorer, and planning always used repo-scout in practice -
+  removing context-scout also removes an entire research-mode question branch
+  from plan. RepoPrompt remains fully supported as a review backend
+  everywhere it was before.
+
+### Fixed
+
+- interview's doc-aware autodetect probe was fail-closed (a probe failure
+  silently disabled doc-aware behavior); rewritten to the canonical fail-open
+  gate skeleton.
+- make-pr's inline mermaid recap had drifted to 8 rules while the canonical
+  checklist carries 9 (the subgraph/node-id collision rule, validated on a
+  real PR, was missing from the recap); the duplicate recap is gone.
+- sync-codex now applies the actionable impl-review invocation rewrite to
+  work's reference files, not just phases.md - Codex hosts no longer receive
+  the Claude-only slash form on the wave-join and host-deferred paths.
+- Stale cross-links in impl-review's backend files (optional-phase dispatch
+  pointed at content's old home).
 
 ### Running lean is now a documented choice, not a guess
 
@@ -62,9 +120,9 @@ reference pages stay maintained for current users.
   second config surface duplicating the role map. Removal is specced separately
   as `flow-98`.
 
-Documentation only: no behavior, config, or default changes, and no version
-bump (this batches with the next release). Skill, command, and agent prose is
-untouched, so the Codex mirror is unchanged.
+Documentation only: no behavior, config, or default changes from these two
+sections. Removal of packaged codex delegation stays specced separately as
+`flow-98`.
 
 ## [flow-next 3.18.0] - 2026-08-08
 
