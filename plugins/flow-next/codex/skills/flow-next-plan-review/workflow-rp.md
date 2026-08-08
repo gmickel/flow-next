@@ -209,7 +209,7 @@ Conduct a John Carmack-level review:
 
 1. **Completeness** - All requirements covered? Missing edge cases?
 2. **Feasibility** - Technically sound? Dependencies clear?
-3. **Parallelizability** - Do independent tasks touch disjoint files? Flag overlapping file scopes that will cause merge conflicts.
+3. **Parallelizability** - Do independent tasks touch disjoint files? Flag overlapping file scopes that will cause merge conflicts. Check each task's `**Touches:**` declaration for plausibility against its Files/Approach, and flag any pair of dep-independent tasks whose Touches sets overlap (overlaps force serial dispatch).
 4. **Clarity** - Specs unambiguous? Acceptance criteria testable?
 5. **Architecture** - Right abstractions? Clean boundaries?
 6. **Risks** - Blockers identified? Security gaps? Mitigation?

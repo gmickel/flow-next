@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-08T17:46:41.353365Z",
+  "depends_on": [
+    "fn-176-same-spec-concurrent-waves-with.1"
+  ],
+  "id": "fn-176-same-spec-concurrent-waves-with.2",
+  "priority": null,
+  "spec": "fn-176-same-spec-concurrent-waves-with",
+  "spec_path": ".flow/tasks/fn-176-same-spec-concurrent-waves-with.2.md",
+  "status": "todo",
+  "title": "CHANGELOG Unreleased entry (concurrent waves)",
+  "updated_at": "2026-08-08T17:46:41.353365Z"
+}

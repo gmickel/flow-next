@@ -169,17 +169,30 @@ $FLOWCTL ready --spec <spec-id> --json
 
 If no ready tasks, check for completion review gate (see 3g below).
 
-In SPEC_MODE, consider every returned task. Prefer concurrent dispatch when a
-useful subset is meaningfully disjoint and the host can safely isolate mutable
-workspaces and integrate their results. Dependencies and `**Files:**` are
-evidence; also consider shared lockfiles, generated outputs, migrations,
-fixtures, services, and other hidden coupling. The host chooses eligibility,
-worker count, isolation mechanism, and integration mechanism from its available
-capabilities. Never run concurrent writers in one checkout.
+In SPEC_MODE, consider every returned task and apply the **wave dispatch rule
+(fail-closed — fn-176)**. Tasks are dispatched CONCURRENTLY iff ALL of:
 
-If safety, host capacity, or integration is uncertain, select one task and
-continue sequentially. An explicit request to parallelize strengthens the
-preference but never overrides safety.
+1. same spec;
+2. wave size ≤ 3;
+3. no dependency path between any pair, in either direction, TRANSITIVELY
+ (walk `flowctl dep` / `depends_on` closure — a direct-only check is wrong);
+4. every dispatched task HAS a `**Touches:**` declaration, and the declared
+ sets are pairwise DISJOINT (`touches(A) ∩ touches(B) = ∅`, glob-aware);
+5. no task touches the always-serial set: `.flow/`, lockfiles, migration
+ dirs, codegen/generated outputs (in this repo: `plugins/flow-next/codex/**`,
+ `.flow/bin` dual copies), or spec/task files.
+
+The error paths ARE the rule: a task with NO `**Touches:**` declaration →
+serial; any intersection → serial; any doubt about a glob, a hidden coupling
+(shared fixtures, services), or host capacity → serial. The failure mode is
+today's behavior — sequential dispatch — never a risky wave. This replaces
+judgment with declared intent: the same trust model as `deps` (fn-83's
+decision record untouched; no semantic prediction anywhere). Safety is
+structural, not the check — workers run in isolated worktrees, so a wrong
+dispatch surfaces at the join as a merge conflict (3d), costing one serial
+retry, never correctness. Never run concurrent writers in one checkout. An
+explicit request to parallelize strengthens the preference but never
+overrides the rule.
 
 Report the decision before claiming:
 
@@ -292,7 +305,26 @@ Join: complete (2/2 returned)
 ```
 
 Use the host's chosen integration mechanism to bring each successful worker's
-commits onto the target branch. Reuse the existing per-task review contract in
+commits onto the target branch.
+
+**Join collision handling (fn-176 — never auto-resolve).** A merge conflict at
+the join means the wave dispatch rule's declared `**Touches:**` sets were
+wrong. Never resolve conflict hunks by hand and never drop the losing commits:
+abort the conflicted integration, keep the clean side joined, then SERIALLY
+re-run the losing task from the joined state (fresh worker, current tree).
+Record the collision in the receipt surface — a stage-outcome line per fn-178:
+`stage: wave-join - failed(collision: <task-ids> on <paths>)` — so plan review
+sees which `**Touches:**` declarations were wrong.
+
+**Reviewer overlap (fn-176).** review(N) may run concurrently with
+implement(N+1) ONLY when both hold: N+1 is dep-independent of N (transitive,
+same walk as the dispatch rule), AND N+1 is outside N's plan-sync target set
+(the spec-level reading of the same dep graph). **Plan-sync remains the
+barrier before any dependent work anchors**: done(N) still precedes
+plan-sync(N), which still precedes any anchor that could read N's downstream
+updates — overlap is scheduling only and never reorders receipts.
+
+Reuse the existing per-task review contract in
 two passes:
 
 1. confirm the task's code, tests, commit, and handover files;
