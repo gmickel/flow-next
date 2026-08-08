@@ -23,9 +23,8 @@ Extend the existing `## Unreleased` CHANGELOG section with the fn-177 entry.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Extended the Unreleased CHANGELOG section with three bullets (author-as-file, examples-are-exhaustive, tiered test runs), cost/quality framing only, zero speed claims, no em dashes, no version manifests touched. Docs re-scan: no repo docs beyond CHANGELOG (spec-template.md documents scaffold structure; the new template comment needs no doc-site page change until the batched release). OWED AT BATCHED RELEASE: flow-next.dev changelog entry.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c272225c
+- Tests: docs-only; read-through against agent_docs/releasing.md register rules
 - PRs:

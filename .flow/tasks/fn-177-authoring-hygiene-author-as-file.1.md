@@ -36,9 +36,8 @@ Apply `c354e78f` (plan steps.md author-as-file) and `570b2fa7` (worker.md tiered
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Transplanted c354e78f (author-as-file across the plan skill's Route A/B compose sites and task-batch compose) and 570b2fa7 (worker test-mass discipline + tiered runs bullets; baseline/pre-review/pre-commit full-suite gate prose verified textually intact). Authored the EXAMPLES ARE EXHAUSTIVE template comment fresh (contract language, zero budget language). Two corrections to tested wording, both recorded in the commit: phantom `spec cat --plan` verb -> real `cat`; stale Route B scaffold heredoc framing reframed to Write-tool (the tested commit missed its own rule there). Mirrors idempotent; template copy refreshed; focused suite green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1d3731e9
+- Tests: python3 -m unittest test_dogfood_template_parity test_template_canonical test_review_prompt_constraints test_prompt_text_pinned test_review_prompt_template_parity -q, ./scripts/sync-codex.sh x2 idempotent, uvx ruff@0.16.0 check .
 - PRs:

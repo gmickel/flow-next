@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-177-authoring-hygiene-author-as-file",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-08T13:58:01.314947Z",
   "created_at": "2026-08-08T09:15:32.395812Z",
   "default_impl": null,
   "default_review": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T13:53:59.237126Z"
+  "updated_at": "2026-08-08T13:58:01.315150Z"
 }
