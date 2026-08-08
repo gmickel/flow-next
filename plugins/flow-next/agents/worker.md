@@ -277,7 +277,9 @@ Rules:
 - Small, focused changes
 - Follow existing code style
 - **Build to the AC, not past it (YAGNI):** no public surface, command, config
-  knob, or abstraction the task spec doesn't name. If mid-implementation you
+  knob, or public abstraction the task spec doesn't name (internal helpers
+  that are the smallest way to satisfy the ACs are implementation, not added
+  scope). If mid-implementation you
   see a capability worth adding, note it in the done summary as a follow-up —
   do not build it. Error handling enumerated in the ACs is NOT extra — it is
   the spec. Neither are filesystem-identity, permission, or concurrency guards
