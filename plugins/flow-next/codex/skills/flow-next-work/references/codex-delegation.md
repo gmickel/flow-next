@@ -499,9 +499,9 @@ issues). In Ralph it routes to the Ralph log / receipt (no human in the loop).
 The per-run prompt (`prompt-batch-1.md`) is a FIXED template. Filling it is
 purely mechanical - exactly **3 slots**: task id, spec id, allowed-file list.
 Nothing else is composed: no pattern or approach sections, no restated
-contract, no line anchors - the template hands the executor the task file AND
-the parent spec together; the task file carries the task-specific contract
-and the spec carries the what/why.
+contract, no line anchors - the task file IS the brief's task-specific
+contract, and the template hands the executor the task file AND the parent
+spec together (the spec carries the what/why).
 
 ```
 Read .flow/tasks/<task-id>.md and .flow/specs/<spec-id>.md. Implement exactly

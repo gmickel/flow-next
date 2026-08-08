@@ -34,9 +34,8 @@ Land the artifact-split doctrine in the plan skill, recalibrate examples.md few-
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Transplanted 7295ac5a into the plan skill task-content block (artifact split, never-restate, HOW mandatory, Description ≤10 lines, corrected both-channels Files line). Added touches: frontmatter to the scaffold with authoring guidance (omit = always-serial; inert to flowctl). Recut examples.md: new BAD spec-restatement example, GOOD example reshaped to delegation payload with satisfies+touches and R-ID references, Summary table aligned. R5: verified the codex delegate template reads task + parent spec together; amended its stale no-other-channel parenthetical (same false claim, second site). Mirrors idempotent; focused suite green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c7aa8ed1
+- Tests: python3 -m unittest test_review_prompt_constraints test_template_canonical -q, ./scripts/sync-codex.sh x2 idempotent
 - PRs:

@@ -74,22 +74,14 @@ bun test src/lib/backend.test.ts
 # fn-2.3: Implement claude backend
 
 ## Description
-The worker pool currently supports only the codex backend, which limits
-teams standardizing on Claude. Per the spec's architecture decision, we use
-a pluggable WorkerBackend interface so each CLI is an adapter; this task adds
-the claude adapter. The acceptance criteria R2 requires spawn/isAlive/kill
-semantics because the pool's liveness loop depends on them, and the design
-rejected a subprocess-per-poll approach for cost reasons...
+The worker pool only supports codex today... [spec's problem framing,
+architecture rationale, and re-told R2 acceptance — retold at task length]
 ```
 
 **Problems:**
-- Everything above is the PARENT SPEC retold — problem framing, architecture
-  rationale, re-told acceptance criteria
-- Executors receive the task TOGETHER with the full parent spec (the anchor
-  bundle delivers both verbatim), so this content is generated twice,
-  delivered twice in every anchor, and drifts — plan-sync then has to chase it
-- Reference R-IDs and spec sections instead: `Implements R2 (see spec
-  §Architecture)` is the whole context a task needs
+- Everything above is the PARENT SPEC retold — framing, rationale, re-told acceptance
+- Executors get the task TOGETHER with the full parent spec (anchor bundle), so restated content is generated twice, delivered twice, and drifts — plan-sync then chases it
+- Reference R-IDs and spec sections instead: `Implements R2 (see spec §Architecture)` is the whole context a task needs
 
 ### ❌ BAD: Task with full implementation
 

@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-175-task-shape-tasks-are-the-delegation",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-08T16:08:17.889841Z",
   "created_at": "2026-08-08T09:15:29.755979Z",
   "default_impl": null,
   "default_review": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T16:05:37.899664Z"
+  "updated_at": "2026-08-08T16:08:17.889985Z"
 }

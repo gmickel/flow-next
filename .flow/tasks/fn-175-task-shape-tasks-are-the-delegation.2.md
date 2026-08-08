@@ -22,9 +22,8 @@ Extend the Unreleased CHANGELOG section with the fn-175 entry.
 - [ ] TBD
 
 ## Done summary
-TBD
-
+Added the task-shape Unreleased bullet (delegation payload, R-ID references over restatement, both-channels guarantee, touches: line), cost/quality framing, no em dashes, no version manifests. OWED AT BATCHED RELEASE: flow-next.dev changelog entry.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 61845a95
+- Tests: docs-only; register read-through
 - PRs:
