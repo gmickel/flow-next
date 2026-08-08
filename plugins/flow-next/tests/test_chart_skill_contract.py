@@ -423,7 +423,7 @@ class ChartRegistryEntries(unittest.TestCase):
         `.agents/plugins/marketplace.json` does not enumerate command/skill
         counts - it only lists the plugin - so it is checked for presence only.
         """
-        expected_snippet = "25 commands, 30 skills"
+        expected_snippet = "25 commands, 29 skills"
         count_surfaces = (
             REPO_ROOT / ".claude-plugin" / "marketplace.json",
             PLUGIN / ".claude-plugin" / "plugin.json",

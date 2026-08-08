@@ -57,4 +57,3 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 ## Skills without a checklist
 
 - `flow-next-worktree-kit` — wrapper; all behavior lives in `scripts/worktree.sh`, not in prose.
-- `flow-next-rp-explorer` — wrapper; a `rpce-cli` command reference with no conduct of its own.

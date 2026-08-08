@@ -93,7 +93,7 @@ The `.clawpatch/features/*.json` index produced by `clawpatch map` and consumed 
 
 ## features_anchored
 
-Optional scout output field listing feature slices from the feature map that overlap the current scope. Emitted by `repo-scout` and `context-scout` when `.clawpatch/features/*.json` is present; omitted when absent. Each entry carries a `last_mapped` timestamp so downstream skills can flag staleness (informational signal, not a block).
+Optional scout output field listing feature slices from the feature map that overlap the current scope. Emitted by `repo-scout` when `.clawpatch/features/*.json` is present; omitted when absent. Each entry carries a `last_mapped` timestamp so downstream skills can flag staleness (informational signal, not a block).
 
 ## Receipt
 

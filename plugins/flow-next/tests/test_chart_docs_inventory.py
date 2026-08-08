@@ -251,16 +251,16 @@ class ChartRegistryCounts(unittest.TestCase):
         # base flow-next is phrase-triggered too
         phrase_count = len(phrase) + (1 if "flow-next" in skill_dirs else 0)
 
-        self.assertEqual(len(skill_dirs), 30, f"skills dirs: {skill_dirs}")
+        self.assertEqual(len(skill_dirs), 29, f"skills dirs: {skill_dirs}")
         self.assertEqual(len(commands), 25, f"commands: {commands}")
         self.assertIn("flow-next-chart", skill_dirs)
         self.assertIn("flow-next-guide", skill_dirs)
         self.assertIn("chart", commands)
         self.assertIn("guide", commands)
         self.assertEqual(len(slash_skills), 24, f"slash skills: {slash_skills}")
-        self.assertEqual(phrase_count, 6, f"phrase skills expected 6, got {phrase_count}")
+        self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
-        expected_snippet = "25 commands, 30 skills"
+        expected_snippet = "25 commands, 29 skills"
         for path in REGISTRY_COUNT_FILES:
             text = _read(path)
             self.assertIn(
@@ -271,9 +271,9 @@ class ChartRegistryCounts(unittest.TestCase):
 
         # Docs surfaces that publish counts
         for path, needles in (
-            (DOCS / "skills.md", ("30 skills", "24 slash-command", "6 phrase")),
-            (DOCS / "README.md", ("30 skills",)),
-            (REPO_ROOT / "README.md", ("30 skills",)),
+            (DOCS / "skills.md", ("29 skills", "24 slash-command", "5 phrase")),
+            (DOCS / "README.md", ("29 skills",)),
+            (REPO_ROOT / "README.md", ("29 skills",)),
         ):
             text = _read(path)
             for n in needles:

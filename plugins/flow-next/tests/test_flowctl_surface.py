@@ -516,18 +516,6 @@ class ActiveReferenceContractTest(unittest.TestCase):
         ):
             self.assertIn(canonical_label, smoke)
 
-    def test_direct_rp_exploration_targets_community_edition(self) -> None:
-        paths = (
-            PLUGIN / "skills" / "flow-next-rp-explorer" / "SKILL.md",
-            PLUGIN / "skills" / "flow-next-rp-explorer" / "cli-reference.md",
-            PLUGIN / "agents" / "context-scout.md",
-        )
-        for path in paths:
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("rpce-cli", text)
-            self.assertNotRegex(text, r"(?m)^\s*rp-cli\s")
-
-
 class RepoPromptCapabilityProbeTest(unittest.TestCase):
     PROBE_PATHS = (
         "skills/flow-next-plan/SKILL.md",

@@ -8,7 +8,7 @@ This is the plugin source directory. The canonical README for flow-next lives at
 
 - Install + 5-command happy path → [root README](../../README.md#quick-start)
 - How the flow works (workflow narrative) → [root README → How the flow works](../../README.md#how-the-flow-works)
-- Skills catalog (all 28 skills) → [`docs/skills.md`](docs/skills.md)
+- Skills catalog (all 29 skills) → [`docs/skills.md`](docs/skills.md)
 - Adopting in a team → [`docs/teams.md`](docs/teams.md)
 - `flowctl` CLI reference → [`docs/flowctl.md`](docs/flowctl.md)
 - Going autonomous (pilot / land / Ralph) → [root README → Going autonomous](../../README.md#going-autonomous) · [`docs/ralph.md`](docs/ralph.md)

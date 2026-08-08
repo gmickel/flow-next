@@ -166,37 +166,18 @@ fi
 
 When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy content. When `STRATEGY_PRESENT=false` (no STRATEGY.md or husk), the plan skips the `## Strategy Alignment` section and any drift-surfacing entirely (Step 5) — absence is fine, no signal to align to.
 
-**Based on user's choice in SKILL.md setup:**
-
----
-
 **CRITICAL: run every scout in the DEPTH-appropriate set below, in parallel. The set is keyed on `--depth` (a DETERMINISTIC, user-signaled tier), NOT on your judgment of "what seems relevant" — that judgment-skip is the anti-pattern.**
 
 Only the **three web-research scouts** are depth-tiered — everything else (the codebase-grounding scouts AND the Step-3 `flow-gap-analyst`) runs at EVERY depth, because a missing requirement or an ungrounded plan is bad at any size (worst on the thinnest short specs):
 
 | `--depth` | Web-research scouts (`practice-scout`, `docs-scout`, `github-scout`) | Always-run (both depths) |
 |-----------|------|------|
-| **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`/`context-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
+| **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
 | **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same |
 
-Within the chosen tier you MUST run ALL of that tier's scouts (the anti-pattern below still binds — no cherry-picking). The tables below list the full set; on a SHORT plan, run every row EXCEPT the three web-research scouts. **NOTE:** SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
+Within the chosen tier you MUST run ALL of that tier's scouts (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row EXCEPT the three web-research scouts. **NOTE:** SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
 ---
-
-**If user chose context-scout (RepoPrompt)**:
-
-Run ALL of these scouts in parallel:
-| Scout | Purpose | Required |
-|-------|---------|----------|
-| `flow-next:context-scout` | RepoPrompt AI file discovery | YES |
-| `flow-next:practice-scout` | Best practices + pitfalls | YES |
-| `flow-next:docs-scout` | External documentation | YES |
-| `flow-next:github-scout` | Cross-repo patterns via gh CLI | IF scouts.github |
-| `flow-next:memory-scout` | Project memory entries | IF memory.enabled |
-| `flow-next:spec-scout` | Dependencies on open specs | YES |
-| `flow-next:docs-gap-scout` | Docs needing updates | YES |
-
-**If user chose repo-scout (default/faster)** OR no supported RepoPrompt CLI is available:
 
 Run ALL of these scouts in parallel:
 | Scout | Purpose | Required |
@@ -217,7 +198,7 @@ Must capture:
 - Similar patterns / prior work
 - External docs links
 - Project conventions (CLAUDE.md, CONTRIBUTING, etc)
-- Architecture patterns and data flow (especially with context-scout)
+- Architecture patterns and data flow
 - Spec dependencies (from spec-scout)
 - Doc updates needed (from docs-gap-scout) - add to task acceptance criteria
 - DESIGN.md design system tokens (if repo-scout found one)
@@ -573,9 +554,9 @@ Default to standard unless complexity demands more or less.
    **Investigation targets rules:**
    - Max 5-7 targets per task (focus, don't flood)
    - Use exact file paths with optional line ranges — not descriptions alone
-   - Validate paths exist at plan time (repo-scout/context-scout already found them)
+   - Validate paths exist at plan time (repo-scout already found them)
    - "Required" = must read before implementing. "Optional" = helpful reference
-   - Targets come from repo-scout/context-scout findings in Step 1
+   - Targets come from repo-scout findings in Step 1
 
    **`satisfies` frontmatter rules (optional, additive):**
    - Populate `--satisfies` only when the task obviously advances specific R-IDs from the spec's `## Acceptance Criteria` section.

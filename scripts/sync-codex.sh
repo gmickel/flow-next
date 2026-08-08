@@ -92,7 +92,7 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC
 # verified A/B (fn-84 fleet review — sonnet held quality). Codex has only INTELLIGENT/FAST,
 # and FAST (gpt-5.4-mini) was NOT tested, so keep them INTELLIGENT (gpt-5.5) here = no Codex
 # regression; the Claude-side opus→sonnet cut is the verified saving.
-INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout repo-scout context-scout docs-scout github-scout practice-scout plan-sync flow-gap-analyst"
+INTELLIGENT_SCOUTS="spec-scout agents-md-scout docs-gap-scout repo-scout docs-scout github-scout practice-scout plan-sync flow-gap-analyst"
 # Agents that stay on opus in Claude Code (bug/gap detection = horsepower; failures invisible)
 OPUS_AGENTS="quality-auditor"
 
@@ -163,7 +163,6 @@ nicknames_for() {
   case "$name" in
     build-scout)          echo '["Foreman", "Constructor", "Assembler"]' ;;
     agents-md-scout)      echo '["Archivist", "Scribe", "Librarian"]' ;;
-    context-scout)        echo '["Navigator", "Cartographer", "Pathfinder"]' ;;
     docs-gap-scout)       echo '["Inspector", "Reviewer", "Auditor"]' ;;
     docs-scout)           echo '["Scholar", "Researcher", "Curator"]' ;;
     env-scout)            echo '["Provisioner", "Configurer", "Warden"]' ;;
@@ -554,7 +553,6 @@ fi
 plan_steps="$CODEX_DIR/skills/flow-next-plan/steps.md"
 if [ -f "$plan_steps" ]; then
   sed -i.bak \
-    -e 's|`flow-next:context-scout`|the `context_scout` agent|g' \
     -e 's|`flow-next:repo-scout`|the `repo_scout` agent|g' \
     -e 's|`flow-next:practice-scout`|the `practice_scout` agent|g' \
     -e 's|`flow-next:docs-scout`|the `docs_scout` agent|g' \
@@ -1516,7 +1514,6 @@ generate_openai_yaml "flow-next-ralph-init" "Flow Ralph Init" "Scaffold the repo
 generate_openai_yaml "flow-next-drive"          "Flow Drive [internal]"          "Browser/app driver used by Flow QA"                 "#9CA3AF" false
 generate_openai_yaml "flow-next-sync"           "Flow Plan-Sync [internal]"      "Downstream task-spec sync used by Flow Work"        "#9CA3AF" false
 generate_openai_yaml "flow-next-export-context" "Flow Export Context [internal]" "Context bundle export used by reviews"              "#9CA3AF" false
-generate_openai_yaml "flow-next-rp-explorer"    "Flow RP Explorer [internal]"    "RepoPrompt exploration helper used by reviews"      "#9CA3AF" false
 generate_openai_yaml "flow-next-worktree-kit"   "Flow Worktree Kit [internal]"   "Worktree helper used by Flow Work"                  "#9CA3AF" false
 generate_openai_yaml "flow-next-deps"           "Flow Deps [internal]"           "Dependency-graph helper used by planning skills"    "#9CA3AF" false
 
@@ -1623,7 +1620,6 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-drive"
   "flow-next-sync"
   "flow-next-export-context"
-  "flow-next-rp-explorer"
   "flow-next-worktree-kit"
   "flow-next-deps"
 )
@@ -1699,7 +1695,7 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # expansion resolves to `/scripts/flowctl` — broken. Mirror the skill-side
   # rewrite (line ~183) here so generated `.toml` agent bodies use the direct
   # runtime Codex form plus the local `.flow/bin/flowctl` fallback. fn-50.3 added the
-  # repo-scout / context-scout `repo-map` probes that surfaced this gap.
+  # repo-scout `repo-map` probes that surfaced this gap.
   body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/scripts/flowctl|${CODEX_HOME:-$HOME/.codex}/scripts/flowctl|g')"
   # Rewrite skill-file paths in agent bodies: neither plugin-root variable
   # resolves inside Codex; the installed mirror lives at CODEX_HOME/skills/.
@@ -1713,7 +1709,7 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # IDEMPOTENT: canonical agent bodies may ALREADY carry the
   # `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"` fallback on the line
   # directly after the FLOWCTL= assignment (fn-50.3 hardening added it to
-  # repo-scout / context-scout for the Claude/Droid path). Only inject when
+  # repo-scout for the Claude/Droid path). Only inject when
   # the next line is NOT already that fallback — otherwise we emit a duplicate.
   body="$(echo "$body" | awk '
     function flush_pending(   stripped) {

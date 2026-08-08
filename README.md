@@ -397,9 +397,9 @@ Scope honesty, because the architecture depends on it:
 
 Every skill is invocable as `/flow-next:<name>` or in plain language. The inner loop is `capture` → `plan` → `work` → `make-pr` → `resolve-pr`. Upstream of it sit `strategy`, `prospect`, optional `chart` (pre-capture decision map for oversized unclear ideas), `guide` (smallest-sufficient router), and `interview`; around it, the review gates (`plan-review`, `impl-review`, `spec-completion-review`, `qa`); after it, the loops (`pilot`, `land`, `ralph-init`) and the maintenance skills (`audit`, `sync`, `memory-migrate`). `setup`, `prime`, `tracker-sync`, and `map` handle the project itself.
 
-**Phrase-triggered skills** (no slash command, just ask): `flow-next-deps` ("what's blocking what?", dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-rp-explorer` (token-efficient codebase exploration via RepoPrompt), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?").
+**Phrase-triggered skills** (no slash command, just ask): `flow-next-deps` ("what's blocking what?", dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?").
 
-Full catalog of all 30 skills (24 slash-command, 6 phrase-triggered), with triggers, one-liners, and every flag: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every command, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it, from model routing to review backends, delegation, and loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
+Full catalog of all 29 skills (24 slash-command, 5 phrase-triggered), with triggers, one-liners, and every flag: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every command, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it, from model routing to review backends, delegation, and loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
 
 ---
 
@@ -420,7 +420,7 @@ The repo holds the offline-resilient reference. [flow-next.dev](https://flow-nex
 | Looking for… | Repo file | Website |
 |---|---|---|
 | 5-minute pitch + install | `README.md` (this page) | [flow-next.dev](https://flow-next.dev) |
-| Skills catalog: all 30 skills, triggers, one-liners | [`docs/skills.md`](plugins/flow-next/docs/skills.md) | n/a |
+| Skills catalog: all 29 skills, triggers, one-liners | [`docs/skills.md`](plugins/flow-next/docs/skills.md) | n/a |
 | Adopting in a team, handover objects, Spec-as-PR, adoption ladder | [`docs/teams.md`](plugins/flow-next/docs/teams.md) | [Teams guide](https://flow-next.dev) |
 | Full `flowctl` CLI reference: every command, every flag | [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) | n/a |
 | Which layers to run at all: human-driven vs autonomous profiles, every optional layer priced | [`docs/running-lean.md`](plugins/flow-next/docs/running-lean.md) | n/a |

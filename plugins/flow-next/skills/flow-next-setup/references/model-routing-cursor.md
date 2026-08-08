@@ -32,7 +32,7 @@ _Scaffolded by `/flow-next:setup` on Cursor (<YYYY-MM-DD>). Model ids are volati
 
 ### Routing rules
 
-- Read-only scouts (repo-scout, context-scout, and any read-only Explore-class subagent): pin `<SCOUT_PIN>` (cheap).
+- Read-only scouts (repo-scout and any read-only Explore-class subagent): pin `<SCOUT_PIN>` (cheap).
 - Host review (`review.backend host`): pin `<REVIEW_PIN>` (cross-family; never same-family self-review).
 - Implementation, plan, judgment, and all other work: **inherit** the session model unless the user pins otherwise.
 - Reviews prefer a different family than the writer — uncorrelated blind spots.

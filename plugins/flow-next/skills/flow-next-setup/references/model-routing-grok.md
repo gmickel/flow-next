@@ -31,7 +31,7 @@ _Scaffolded by `/flow-next:setup` on Grok (<YYYY-MM-DD>). Grok is single-native-
 
 ### Routing rules
 
-- Read-only scouts (repo-scout, context-scout, and any read-only Explore-class subagent): pin `<SCOUT_PIN>` (cheap).
+- Read-only scouts (repo-scout and any read-only Explore-class subagent): pin `<SCOUT_PIN>` (cheap).
 - Host review (`review.backend host`): pin `<REVIEW_PIN>` only when it is a **different family than the writer**. Grok's only native family is grok — native host review **fails closed** for a Grok writer (interactive → ask for a bridge/replacement pin; autonomous → NEEDS_HUMAN). Cross-family review comes through `codex` / `cursor` / `copilot`.
 - Implementation, plan, judgment, and all other work: **inherit** the session model unless the user pins otherwise.
 - Reviews prefer a different family than the writer — uncorrelated blind spots.

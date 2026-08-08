@@ -83,7 +83,7 @@ Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none
 Parse `$ARGUMENTS` for the literal token `mode:autonomous` (strip it, same shape as capture's `mode:autofix` — a NEW parse branch, never overloading that token). Also honor the env var `FLOW_AUTONOMOUS=1` as a secondary signal (process-level drivers). Either signal → `AUTONOMOUS=1`.
 
 Under `AUTONOMOUS=1`:
-- **Ask NO setup questions.** Explicit passthrough flags (`--depth`, `--research`, `--review`) win as usual; for anything unset, apply the autonomous defaults: depth = `short`, research = `grep` (repo-scout), review = configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
+- **Ask NO setup questions.** Explicit passthrough flags (`--depth`, `--research`, `--review`) win as usual; for anything unset, apply the autonomous defaults: depth = `short`, research = `repo-scout`, review = configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
 - **Never hang on a question.** If a genuinely unanswerable ambiguity remains (e.g. empty input), stop cleanly with a one-line `NEEDS_HUMAN: <reason>` report instead of asking.
 - Autonomy ≠ Ralph: neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt path — they gate question suppression only.
 
@@ -91,9 +91,7 @@ Under `AUTONOMOUS=1`:
 
 Parse the arguments for these patterns. If found, use them and skip questions:
 
-**Research approach**:
-- `--research=rp` or `--research rp` or "use rp" or "context-scout" or "use repoprompt" → context-scout (errors at runtime if no supported RepoPrompt CLI resolves)
-- `--research=grep` or `--research grep` or "use grep" or "repo-scout" or "fast" → repo-scout
+**Research approach**: always `repo-scout` — there is no research-backend choice. `--research=grep` is accepted as a no-op; any other `--research` value is ignored.
 
 **Review mode**:
 - `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.5 High)
@@ -118,7 +116,7 @@ else
 fi
 ```
 
-Suppression governs *proposals only* — an explicit `--research=rp` / `--review=rp` argument (parsed above) is always honored and errors at runtime if no supported RepoPrompt CLI resolves.
+Eligibility governs *review-backend proposals only* — an explicit `--review=rp` argument (parsed above) is always honored and errors at runtime if no supported RepoPrompt CLI resolves.
 
 **Plan depth** (parse from args or ask):
 - `--depth=short` or "quick" or "minimal" → SHORT
@@ -128,22 +126,13 @@ Suppression governs *proposals only* — an explicit `--research=rp` / `--review
 
 **If `AUTONOMOUS=1`:** skip every question below — apply the autonomous defaults above and continue.
 
-**If REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none** (already configured): Only ask research question. Show override hint.
-
-When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): do NOT ask about RepoPrompt — context-scout cannot run here. Research = `repo-scout`; ask nothing in this branch and continue.
-
-When `RP_ELIGIBLE=1`:
+**If REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none** (already configured): ask nothing — depth defaults apply unless passed, research is `repo-scout`, review is the configured backend. Show the override hint:
 
 ```
-Quick setup: Use RepoPrompt for deeper context?
-a) Yes, context-scout (slower, thorough)
-b) No, repo-scout (faster)
-
-(Reply: "a", "b", or just tell me)
 (Tip: --depth=short|standard|deep, --review=rp|codex|host|none)
 ```
 
-**If REVIEW_BACKEND is ASK** (not configured): Ask all questions (do NOT use AskUserQuestion tool).
+**If REVIEW_BACKEND is ASK** (not configured): ask the setup questions below (do NOT use AskUserQuestion tool).
 
 When `RP_ELIGIBLE=1`:
 
@@ -155,20 +144,16 @@ Quick setup before planning:
    b) Standard (default) — + approach, risks, test notes
    c) Deep — + phases, alternatives, rollout plan
 
-2. **Research** — Use RepoPrompt for deeper context?
-   a) Yes, context-scout (slower, thorough)
-   b) No, repo-scout (faster)
-
-3. **Review** — Run Carmack-level review after?
+2. **Review** — Run Carmack-level review after?
    a) Codex CLI
    b) RepoPrompt
    c) Export for external LLM
    d) None (configure later)
 
-(Reply: "1a 2b 3d", or just tell me naturally)
+(Reply: "1a 2d", or just tell me naturally)
 ```
 
-When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): omit the Research question entirely (research = `repo-scout`) and drop the RepoPrompt review option:
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): drop the RepoPrompt review option:
 
 ```
 Quick setup before planning:
@@ -190,7 +175,7 @@ Wait for response. Parse naturally — user may reply terse ("1a 2b") or ramble 
 
 **Defaults when empty/ambiguous:**
 - Depth = `standard` (balanced detail)
-- Research = `grep` (repo-scout)
+- Research = `repo-scout`
 - Review = configured backend if set, else `none`
 
 ## Spec-id scheme (team default)

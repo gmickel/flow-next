@@ -162,7 +162,7 @@ Run `/flow-next:plan-review <spec-id>` before handover. A different model (RepoP
 
 ### [4] Implementation plan — Handover #3
 
-`/flow-next:plan <spec-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, context-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the spec into ordered tasks with explicit dependencies. Its summary shows the resulting execution waves so the parallel candidates are visible before work starts.
+`/flow-next:plan <spec-id>` reads the spec, scans the codebase via parallel scouts (repo-scout, docs-scout, practice-scout, github-scout, ...), and decomposes the spec into ordered tasks with explicit dependencies. Its summary shows the resulting execution waves so the parallel candidates are visible before work starts.
 
 Tasks are sized to fit one `/flow-next:work` iteration (~100k tokens of fresh context). If a task wouldn't fit, the planner splits it. R-IDs from the spec are propagated into per-task `satisfies: [R1, R3]` frontmatter — a task says exactly which acceptance criteria it advances.
 

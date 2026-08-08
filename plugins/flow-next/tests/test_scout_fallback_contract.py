@@ -1,9 +1,9 @@
 """Static contract test for scout `.clawpatch/` fallback (fn-50.3).
 
-Verifies the two-layer fallback discipline for `repo-scout` and
-`context-scout`:
+Verifies the two-layer fallback discipline for `repo-scout` (the sole
+planning research scout since `context-scout` was retired):
 
-  Layer 1a — prose contract: both agent files document an explicit
+  Layer 1a — prose contract: the agent file documents an explicit
   fallback path when `.clawpatch/` is absent, document the
   `features_anchored` output schema (with the `kind` and `confidence`
   enums from clawpatch's `featureRecordSchema` — see
@@ -95,11 +95,10 @@ def _run(
 
 
 class ProsContract(unittest.TestCase):
-    """Both scout agent files document the fallback + schema."""
+    """The scout agent file documents the fallback + schema."""
 
     def setUp(self) -> None:
         self.repo_scout = _read(AGENTS_DIR / "repo-scout.md")
-        self.context_scout = _read(AGENTS_DIR / "context-scout.md")
 
     # ─── repo-scout ───────────────────────────────────────────────────
 
@@ -186,111 +185,6 @@ class ProsContract(unittest.TestCase):
         """Agent prose must invoke the centralized reader, not parse JSON."""
         self.assertIn(
             "flowctl repo-map list --json", self.repo_scout
-        )
-
-    # ─── context-scout ────────────────────────────────────────────────
-
-    def test_context_scout_documents_features_anchored_field(self) -> None:
-        self.assertIn("features_anchored", self.context_scout)
-        for field in (
-            "feature_id",
-            "title",
-            "kind",
-            "confidence",
-            "owned_files",
-            "last_mapped",
-        ):
-            self.assertIn(
-                field,
-                self.context_scout,
-                msg=(
-                    f"context-scout.md missing schema subfield: {field}"
-                ),
-            )
-
-    def test_context_scout_kind_values_mirror_clawpatch_enum(self) -> None:
-        for kind in CLAWPATCH_FEATURE_KINDS:
-            self.assertIn(
-                kind,
-                self.context_scout,
-                msg=(
-                    f"context-scout.md `kind` enum drift — '{kind}' from "
-                    "upstream featureKinds not documented"
-                ),
-            )
-
-    def test_context_scout_confidence_values_mirror_clawpatch_enum(
-        self,
-    ) -> None:
-        for level in CLAWPATCH_CONFIDENCE_LEVELS:
-            self.assertIn(
-                level,
-                self.context_scout,
-                msg=(
-                    f"context-scout.md `confidence` enum drift — "
-                    f"'{level}' from upstream Zod enum not documented"
-                ),
-            )
-
-    def test_context_scout_documents_fallback_path(self) -> None:
-        text = self.context_scout.lower()
-        self.assertIn(".clawpatch/", self.context_scout)
-        self.assertTrue(
-            "absent" in text or "absence" in text,
-            msg=(
-                "context-scout.md should document `.clawpatch/` absence "
-                "as the graceful-degrade trigger"
-            ),
-        )
-
-    def test_context_scout_no_required_clawpatch_language(self) -> None:
-        text = self.context_scout
-        forbidden = (
-            re.compile(r"MUST[^\n]{0,80}\.clawpatch", re.IGNORECASE),
-            re.compile(r"required[^\n]{0,80}\.clawpatch", re.IGNORECASE),
-            re.compile(r"\.clawpatch[^\n]{0,80}MUST", re.IGNORECASE),
-            re.compile(r"\.clawpatch[^\n]{0,80}required", re.IGNORECASE),
-        )
-        for pat in forbidden:
-            m = pat.search(text)
-            self.assertIsNone(
-                m,
-                msg=(
-                    f"context-scout.md has required-`.clawpatch/` "
-                    f"language: {m.group(0) if m else ''!r}"
-                ),
-            )
-
-    def test_context_scout_calls_flowctl_repo_map_list(self) -> None:
-        self.assertIn(
-            "flowctl repo-map list --json", self.context_scout
-        )
-
-    def test_context_scout_fallback_section_mentions_clawpatch(
-        self,
-    ) -> None:
-        """`Fallback: Standard Tools` section explicitly names
-        `.clawpatch/` absence so users reading the fallback idiom land on
-        the same graceful-degrade story Step 0 documents."""
-        # Slice from `## Fallback: Standard Tools` to the next H2.
-        marker = "## Fallback: Standard Tools"
-        idx = self.context_scout.find(marker)
-        self.assertNotEqual(
-            idx,
-            -1,
-            msg="context-scout.md missing `## Fallback: Standard Tools` section",
-        )
-        rest = self.context_scout[idx:]
-        # Cut at the next H2 heading; the section is the chunk in between.
-        next_h2 = re.search(r"\n## ", rest[len(marker):])
-        section = rest if next_h2 is None else rest[: len(marker) + next_h2.start()]
-        self.assertIn(
-            ".clawpatch/",
-            section,
-            msg=(
-                "`Fallback: Standard Tools` section must mention "
-                "`.clawpatch/` absence as a graceful-degrade trigger"
-            ),
         )
 
 

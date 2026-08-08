@@ -123,7 +123,7 @@ In Codex, skills appear with display names in the `$` dropdown (e.g. **Flow Setu
 2. **Direct name**: Type `$flow-next-setup` in your prompt
 3. **Implicit**: Just describe the task — Codex matches the skill description automatically (for skills with `allow_implicit_invocation: true`)
 
-All user-facing skills ship `allow_implicit_invocation: true`, so prose like "plan this feature", "pilot fn-12 to completion", or "open a PR" resolves the matching skill from the model's skill catalog — Codex's naming rule then *requires* it to use that skill. Internal skills that only other skills dispatch (`drive`, `sync`, `export-context`, `rp-explorer`, `worktree-kit`, `deps`) ship `false`: they stay out of the shared skill-catalog context budget (min of 8,000 chars and 2% of the context window, shared with every other skill on your machine) but remain fully invocable by name. The mirror's catalog descriptions are dieted to ≤200 chars each for the same reason — the full skill body loads on invocation either way.
+All user-facing skills ship `allow_implicit_invocation: true`, so prose like "plan this feature", "pilot fn-12 to completion", or "open a PR" resolves the matching skill from the model's skill catalog — Codex's naming rule then *requires* it to use that skill. Internal skills that only other skills dispatch (`drive`, `sync`, `export-context`, `worktree-kit`, `deps`) ship `false`: they stay out of the shared skill-catalog context budget (min of 8,000 chars and 2% of the context window, shared with every other skill on your machine) but remain fully invocable by name. The mirror's catalog descriptions are dieted to ≤200 chars each for the same reason — the full skill body loads on invocation either way.
 
 | Claude Code | Codex (dropdown) | Codex (direct) |
 |-------------|-------------------|----------------|
@@ -142,7 +142,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 ### What works
 
 - Planning, work execution, interviews, reviews — full workflow.
-- Multi-agent roles: 21 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
+- Multi-agent roles: 20 agents as `.toml` files with subagent optimizations (`sandbox_mode`, `nickname_candidates`).
 - Cross-model reviews (Codex as review backend).
 - flowctl CLI (`${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`).
 - Setup skill (`$flow-next-setup`) — detects Codex platform, copies agents/flowctl to project; Ralph hooks only if the Ralph ceremony answers yes.
@@ -156,7 +156,7 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 | Tier | Codex Model | Reasoning | Agents |
 |------|-------------|-----------|--------|
 | Review-shaped | `gpt-5.5` | `high` | quality-auditor |
-| Scout / editorial | `gpt-5.5` | `medium` | flow-gap-analyst, context-scout, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
+| Scout / editorial | `gpt-5.5` | `medium` | flow-gap-analyst, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
 | Fast scouts | `gpt-5.4-mini` | n/a | build, env, testing, tooling, observability, security, workflow, memory scouts |
 | Worker (default) | *inherit (session model)* | *session default* | worker |
 | Inherited | parent model | parent | pr-comment-resolver |

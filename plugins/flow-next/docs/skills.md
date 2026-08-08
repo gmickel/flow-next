@@ -1,6 +1,6 @@
 # Skills catalog
 
-Every skill flow-next ships, in one table. 30 skills: 24 slash-command-triggered (`/flow-next:<name>`), 6 phrase-triggered (no command file - describe what you want and the host agent matches the skill description). Each row links the canonical `SKILL.md`.
+Every skill flow-next ships, in one table. 29 skills: 24 slash-command-triggered (`/flow-next:<name>`), 5 phrase-triggered (no command file - describe what you want and the host agent matches the skill description). Each row links the canonical `SKILL.md`.
 
 > Lifecycle position and narrative for the core commands: [root README - How the flow works](../../../README.md#how-the-flow-works). Slash commands also appear in the [root README - Commands table](../../../README.md#commands) with flags and opt-in notes.
 
@@ -55,7 +55,6 @@ No slash command — just describe what you want.
 | [`flow-next-deps`](../skills/flow-next-deps/SKILL.md) | "what's blocking what?", "execution order", "critical path" | Spec dependency graph and execution order — which specs can run in parallel. |
 | [`flow-next-drive`](../skills/flow-next-drive/SKILL.md) | "drive the app", "verify the deployed UI" | Drive any UI surface like a real user — web, Electron/WebView2 over CDP, or native via the Cua Driver (MIT, provider-agnostic, background) / Computer Use, with a Cua Sandbox rung for headless/CI native runs. Surface-aware driver ladder; powers `/flow-next:qa`. |
 | [`flow-next-export-context`](../skills/flow-next-export-context/SKILL.md) | "export context for external review" | Export RepoPrompt context to markdown for review with an external LLM (ChatGPT, Claude web, …). |
-| [`flow-next-rp-explorer`](../skills/flow-next-rp-explorer/SKILL.md) | "use rp to find …" | Token-efficient codebase exploration through the RepoPrompt CLI. |
 | [`flow-next-worktree-kit`](../skills/flow-next-worktree-kit/SKILL.md) | "create a worktree for …" | Git worktree create/list/switch/cleanup + `.env` copying — parallel feature work, isolated review; initializes or safely extends `.worktrees/.gitignore` so nested worktrees cannot be staged as gitlinks. |
 
 ## See also
