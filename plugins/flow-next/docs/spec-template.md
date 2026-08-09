@@ -109,6 +109,26 @@ Canonical headings untouched, one section added, scope marker set so the busines
 
 We benchmarked adding user-story and test-seam sections to the bundled scaffold. A first pass looked positive; a pre-registered replication did not hold up, and the larger scaffold cost roughly a third more spec length - paid on every downstream read by every worker and reviewer. So the default stays lean and the override stays available. Section preferences are project-specific and the cascade is the right place to express them.
 
+## Durability — contracts, not coordinates
+
+**A spec states contracts: types, signatures, behaviors, invariants.** It does not state file paths or line numbers. Coordinates rot on the first refactor, and a spec full of rotted coordinates is what turns plan-sync into churn — every downstream task spec gets rewritten because a file moved, not because anything was decided differently.
+
+One carved exception: **a decision-rich snippet whose exact location is the decision** — the case where "here, not there" is the content, and a reader who lands anywhere else has misread the spec. Name the location then, and only then.
+
+**Tasks are exempt and unchanged.** `**Files:**` / `**Touches:**` are a task's job under the task-shape doctrine: a task is a work order pointed at a place, and pointing at the place is the point. The boundary is the artifact, not the topic — the same repo, the same feature, one rule for specs and another for the tasks under them.
+
+## Parked unknowns — the optional fog slot
+
+`## Parked unknowns` is an optional auxiliary section. It holds what the spec genuinely does not know yet, one bullet per item, so fog is visible instead of dressed up as a decision.
+
+Each bullet must pass the **fog-or-ticket test**:
+
+- **Decidable now** → decide it. It belongs in the canonical section that owns it, not here.
+- **Resolvable by scheduled work** → make it a task or a ticket. A known unknown with a known way to find out is work, not fog.
+- **Genuinely unknown** — needs a decision nobody has made, an experiment nobody has run, or an answer from outside the repo — → park it here in one line, naming what would resolve it.
+
+**Graduate-on-resolution.** When an interview or plan resolves a parked item, the answer moves into the section that owns it and the bullet is deleted from `## Parked unknowns`. A bullet that outlives its own answer reads as an open question on a spec that has in fact closed it — the failure this section exists to prevent. An empty section is omitted, never left as a heading.
+
 ## Acceptance criteria — R-ID rules
 
 R-IDs are numbered acceptance criteria written as `**R1:** ...`, `**R2:** ...` in plain markdown prose under the `## Acceptance Criteria` section (the canonical section name; the scaffold heading is the authoritative source).

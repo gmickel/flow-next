@@ -134,6 +134,10 @@ Per-term: user-wording vs. canonical term, the resolution chosen (use-canonical 
 (optional — only when STRATEGY_AWARE=1 surfaced behavior-(e) hits during the interview)
 Per-line: user-wording vs. canonical-strategy-wording (track name or approach), STRATEGY.md path, resolution chosen (align-with-strategy / flag-as-drift / this-is-different). Lets reviewers see where the spec aligns or pushes back on strategic intent. Read-only signal for plan-sync — the interview never edits STRATEGY.md.
 
+## Parked unknowns
+(optional — only when the interview surfaced fog nothing in this pass could resolve)
+One bullet per genuinely-unknown item, each naming what would resolve it. Fog-or-ticket test: decidable now → decide it in the section that owns it; resolvable by scheduled work → it is a task, not fog; genuinely unknown → park it here. Omit the heading when the list is empty.
+
 ## Open Questions
 Unresolved items that need research during planning, plus every skipped interview question (owner hint + the agent's unconfirmed leaning — SKILL.md skip contract). When the write-back checkpoint chose fill-assumptions, the filled prose carries inline `*(assumed — unconfirmed)*` markers and one entry here points at them.
 ```
@@ -189,9 +193,18 @@ Per-term: user-wording vs. canonical term, the resolution chosen, file:line of t
 (optional — only when STRATEGY_AWARE=1 surfaced behavior-(e) hits during the interview)
 Per-line: user-wording vs. canonical-strategy-wording, STRATEGY.md path, resolution chosen.
 
+## Parked unknowns
+(optional — the pre-existing list minus every bullet this pass resolved, plus any new fog; omit the heading when empty)
+
 ## Open Questions
 Unresolved items, plus every skipped interview question (owner hint + unconfirmed leaning; `*(assumed — unconfirmed)*` markers when fill-assumptions was chosen)
 ```
+
+### Parked unknowns — the one auxiliary section a pass takes from
+
+Read `## Parked unknowns` before composing the merged body. For each bullet: **this pass resolved it** → move the answer into the canonical section that owns it (under this scope's writable list) and DELETE the bullet from `## Parked unknowns`; **still unknown** → carry the bullet back byte-for-byte. Never leave a parked bullet standing next to its own answer — that is the stale fog this section exists to prevent. New fog the interview surfaced is appended as a bullet naming what would resolve it. The section empties out to nothing → drop the heading with it.
+
+A parked item is not a skipped question: a skip is a question the user declined to answer and belongs in `## Open Questions` with its owner hint. Fog is a question nobody can answer yet.
 
 Then hand flowctl the draft file — the literal path typed verbatim:
 

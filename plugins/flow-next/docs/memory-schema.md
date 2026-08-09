@@ -17,13 +17,14 @@ Persistent learnings that survive context compaction. Opt-in, categorized — v0
 │   ├── integration/
 │   ├── data/
 │   └── ui/
-└── knowledge/
-    ├── architecture-patterns/
-    ├── conventions/
-    ├── tooling-decisions/
-    ├── workflow/
-    ├── best-practices/
-    └── decisions/                          # v0.39.0+ — load-bearing architectural choices
+├── knowledge/
+│   ├── architecture-patterns/
+│   ├── conventions/
+│   ├── tooling-decisions/
+│   ├── workflow/
+│   ├── best-practices/
+│   └── decisions/                          # v0.39.0+ — load-bearing architectural choices
+└── declined/                               # declined-scope ledger — one file per concept, agent-written prose
 ```
 
 ## Frontmatter schema (bug track)
@@ -75,6 +76,32 @@ superseded_by: null                 # set when decision_status = superseded
 ```
 
 Decision body convention: 1–3 sentence floor describing trade-offs, irreversibility, and surprise factor. The three decision-specific fields (`decision_status`, `superseded_by`, `alternatives_considered`) are permitted on any knowledge entry but specifically intended for the `decisions/` subtree. Constants `MEMORY_DECISION_FIELDS` / `MEMORY_DECISION_STATUSES` (alongside `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_STATUS`).
+
+## Declined scope — `.flow/memory/declined/`
+
+A ledger of scope the project decided **not** to build. One file per concept: `.flow/memory/declined/<concept-slug>.md`. It sits outside the two tracks — no frontmatter schema, no `flowctl memory` subcommand, no status lifecycle, and no dependence on `memory.enabled`; `memory init` does not create it and the audit sweep does not walk it. Agents write these files directly, the same way they write any memory prose, creating the directory on the first refusal. A repo that never declined anything has no directory, and every read site treats that as "nothing declined" and moves on.
+
+**The write filter is a policy refusal.** A file is created the first time a feature or scope is declined **as a matter of product judgment** — we could build this, and we are choosing not to. Plan's YAGNI rejections that are policy-level, an interview decline, and a spec closed as won't-do are the three moments that qualify.
+
+**Anti-poisoning rule: never write a file for "declined because it already exists."** A request answered by pointing at the shipped feature is not a refusal, and recording it as one teaches every future planner that a capability the repo *has* is scope the repo *rejected*. Same for "declined because it's already planned", "declined because it belongs in another spec", and "declined because the request was a misunderstanding". The ledger holds product judgment, nothing else.
+
+File shape:
+
+```markdown
+# Bulk export
+
+**Decision:** Not building bulk export.
+
+Single-item export covers the actual workflow; bulk export drags in job
+queues, progress state, and partial-failure semantics for a case no user
+has hit yet.
+
+## Prior requests
+- 2026-05-02 — asked during planning for fn-71 (CSV dump of all specs).
+- 2026-07-19 — raised again in the fn-88 interview (nightly archive).
+```
+
+**The file is the recurrence state.** `## Prior requests` is a dated append-list, and nothing else tracks how often the concept comes back — three entries under one decision is the signal that the decision deserves a fresh look, and it is visible by reading the file. Appending a request never reopens the decision on its own; only the user does that.
 
 ## Enable + init
 

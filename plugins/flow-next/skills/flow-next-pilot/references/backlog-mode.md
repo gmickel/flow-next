@@ -322,6 +322,8 @@ For a **signalled** item, route it to exactly one class. **First match wins — 
 | **ready-but-thin / ambiguous** | signal present, deps satisfied, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) — kick back the gap; **never build, never auto-author** |
 | **needs-human** | signal present, deps satisfied, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |
 
+**Check `.flow/memory/declined/` by concept before triaging an item as workable.** One `ls` of the directory (one file per concept, `<concept-slug>.md`); read any file whose concept the item touches. On a hit, the item is **not** workable however ready it looks — append the item as a dated line under that file's `## Prior requests`, cite the file, and route to `ask` (Phase 3) so a human decides whether the decision still holds. **Only the user reopens a declined concept**; pilot never reopens one on its own read, and never on its own tick. No directory means nothing was declined: continue silently.
+
 **The completeness read may only WITHHOLD, never FORCE.** A promoted-but-thin item is
 kicked back with a question (`ask`) — it is **never** built into a slop PR. But the
 read **never overrides an explicit ready signal to *force* work** on an item the

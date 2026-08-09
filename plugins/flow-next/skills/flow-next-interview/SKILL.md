@@ -344,7 +344,15 @@ The policy JSON shape:
 
 ### Auxiliary-sections rule (applies to every pass)
 
-The auxiliary sections — `Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs` — are preserved byte-for-byte across passes and scope changes: no pass deletes or rewrites an auxiliary section another pass wrote. Each pass only ADDS its own: the biz pass adds `Resolved via Project Docs`; the tech pass adds `Resolved via Codebase`.
+The auxiliary sections — `Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs` / `Parked unknowns` — are preserved byte-for-byte across passes and scope changes: no pass deletes or rewrites an auxiliary section another pass wrote. Each pass only ADDS its own: the biz pass adds `Resolved via Project Docs`; the tech pass adds `Resolved via Codebase`.
+
+`Parked unknowns` is the one auxiliary section a pass may take FROM, and only in the one way described in [`references/write-back.md`](references/write-back.md) § Parked unknowns: a bullet this pass resolved graduates into the canonical section that owns it and is deleted here. Every other bullet comes back byte-for-byte, and no pass rewrites, reorders, or rewords a bullet it did not resolve.
+
+### Declined-scope ledger (applies to every pass)
+
+When the user declines a feature or scope **as product judgment** — we could build this, we are choosing not to — record it in `.flow/memory/declined/<concept-slug>.md` on the FIRST such refusal: title, the decision in one line, short reasoning, then `## Prior requests` opened with today's date and the request that just came in. File already there → append the dated line to `## Prior requests` and leave the decision untouched. Agent-written prose, like the rest of `.flow/memory/` — no flowctl verb.
+
+**Never write one for scope declined because it already exists**, is already planned, or lives in another spec. That is an answer, not a refusal, and filing it teaches the next planner that shipped capability is rejected scope. A skipped question is not a decline either — skips go to `## Open Questions` per the skip contract.
 
 ### Acceptance-criteria rule (applies to every pass)
 

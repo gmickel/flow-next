@@ -3,7 +3,7 @@ cross-linking (fn-44.9, covers R11 / R17 / R21).
 
 Asserts:
   - `plugins/flow-next/templates/spec.md` exists at canonical path.
-  - Frontmatter declares the 7 canonical sections + 6 auxiliary sections with
+  - Frontmatter declares the 7 canonical sections + 7 auxiliary sections with
     scope-owner annotations.
   - The body uses `<!-- scope: business|technical|both -->` HTML-comment
     owner markers under each canonical section heading.
@@ -51,6 +51,7 @@ AUXILIARY_SECTIONS = [
     "Conversation Evidence",
     "Resolved via Codebase",
     "Resolved via Project Docs",
+    "Parked unknowns",
 ]
 
 

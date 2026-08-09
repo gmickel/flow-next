@@ -192,6 +192,8 @@ Must capture:
 - Doc updates needed (from docs-gap-scout) - add to task acceptance criteria
 - DESIGN.md design system tokens (if repo-scout found one)
 
+**Check `.flow/memory/declined/` by concept before proposing scope.** One `ls` (the directory is one file per concept, `<concept-slug>.md`); read any file whose concept the request touches. On a hit: cite the file in `## Decision Context`, append this request to that file's `## Prior requests` as a dated line, and keep the scope out of the plan. **Only the user reopens a declined concept** — say it was declined before, say what would change, and wait; a plan that quietly re-proposes declined scope is the failure this ledger exists to stop. No directory (or an empty one) means nothing was ever declined: continue silently.
+
 ## Step 2: Stakeholder & scope check
 
 Before diving into gaps, identify who's affected:
@@ -200,6 +202,8 @@ Before diving into gaps, identify who's affected:
 - **Operations** — New config, monitoring, deployment changes?
 
 This shapes what the plan needs to cover. A pure backend refactor needs different detail than a user-facing feature.
+
+**Before deciding, can you state the open question precisely — not answer it?** If the question itself will not come out sharp, that is an interview or chart signal, not a planning input: planning a fog is how a plan acquires scope nobody asked for. Recommend `/flow-next:interview` (a spec that needs sharpening) or `/flow-next:chart` (an idea that needs shaping) and stop, rather than deciding through the blur.
 
 **Scope minimality (YAGNI — binding on the plan you write):**
 - Every task must trace to an R-ID, and every R-ID must trace to the REQUEST.
@@ -214,6 +218,20 @@ This shapes what the plan needs to cover. A pure backend refactor needs differen
   elimination is usually less code, fewer failure modes, and no new state.
 - Rejected bigger designs get ONE line each in `## Decision Context`
   ("rejected X as overkill: <why>"), never tasks.
+- **A policy-level rejection also gets a file in `.flow/memory/declined/`.**
+  When the rejection is product judgment — we could build this, we are choosing
+  not to — write `.flow/memory/declined/<concept-slug>.md` on its FIRST
+  refusal: title, the decision in one line, short reasoning, and a
+  `## Prior requests` list opened with today's date and this request. The file
+  already exists → append the dated line to `## Prior requests` instead; never
+  rewrite the decision. **Never write one for scope declined because it already
+  exists**, is already planned, or belongs to another spec — that is not a
+  refusal, and recording it as one teaches the next planner that shipped
+  capability is rejected scope. Size-and-sequencing trims ("not this task",
+  "not this milestone") are ordinary YAGNI lines, not ledger entries. The
+  ledger file is memory prose written directly, like the rest of
+  `.flow/memory/` — it is not a plan artifact and changes nothing about the
+  rule that every spec and task goes through `flowctl` into `.flow/`.
 - One collection/surface/format now beats N configurable ones later; ship the
   single concrete case the request names.
 - This discipline trims SCOPE, never rigor: error/negative-case enumeration
@@ -396,6 +414,10 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    - R-IDs are plain markdown prose, not YAML — the reviewer matches them via LLM reasoning, not strict parsing.
    - When `.flow/criteria.md` exists, do not restate its standing criteria (G-IDs) as R-IDs - completion review already judges every G-ID against the spec. Reference a relevant G-ID in prose when useful; write an R only for what this spec adds beyond the standing rule.
    - Each behavioral R-ID enumerates its error/invalid-input/boundary cases inside the bullet (malformed input, missing files, conflicting state, limits), or records "no error surface beyond X"; silence is incomplete. Applies to spec-added R-IDs only — never to standing G-IDs from `.flow/criteria.md`.
+
+   **Spec durability rule:** the spec states **contracts** — types, signatures, behaviors, invariants — and **never file paths or line numbers**. Coordinates rot on the first refactor and every rotted one feeds plan-sync churn. One exception: a decision-rich snippet whose exact location IS the decision. **The tasks you write under this spec are exempt** — `**Files:**` / `**Touches:**` stay a task's job per the task-shape doctrine, and the repo-scout `file:line` refs belong there, in the task spec, not in the spec body.
+
+   **Parked-unknowns consumption:** when the spec carries `## Parked unknowns`, read it before writing anything. Each bullet is one of three things: resolved by this planning pass (move the answer into the canonical section that owns it and DELETE the bullet), turned into scheduled work (it becomes a task; delete the bullet), or still genuinely unknown (leave it parked, verbatim). Never leave a bullet standing next to its own answer. Empty the section out entirely and the heading goes with it.
 
    **Source-tag consumption:** a capture-authored spec carries provenance tags on its acceptance criteria. Route A sessions handle them per [`references/route-a-refine.md`](references/route-a-refine.md); Route B specs have no tags to consume.
 
