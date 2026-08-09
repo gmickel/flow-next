@@ -726,13 +726,16 @@ class DelegationProseContractTestCase(unittest.TestCase):
     def test_worker_thin_task_valve(self) -> None:
         self.assertIn("Thin-task valve", self.worker)
         self.assertIn("provisional", self.worker.lower())
-        self.assertIn("do NOT delegate", self.worker)
-        self.assertIn("EMPTY after removing orchestrator-owned", self.worker)
+        # The valve's terminal: a thin task runs in-session instead of being
+        # delegated (prose de-shouted 2026-08-09; same contract, new spelling).
+        self.assertIn("implemented in-session as a standard task", self.worker)
+        self.assertRegex(self.worker, r"empty after removing\s+orchestrator-owned")
         self.assertIn("DELEGATION_*", self.worker)
         self.assertIn("not a failure, not a strike", self.worker)
 
     def test_phases_delegate_flags_provisional(self) -> None:
-        self.assertIn("PROVISIONAL", self.phases)
+        # Prose de-shouted 2026-08-09: "PROVISIONAL" → "flags are provisional".
+        self.assertIn("flags are provisional", self.phases)
         self.assertIn("worker owns the final per-task call", self.phases)
         self.assertIn("thin-task valve", self.phases)
 

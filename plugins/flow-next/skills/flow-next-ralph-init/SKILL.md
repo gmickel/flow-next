@@ -18,12 +18,12 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 
 ## Rules
 
-- Only create/update `scripts/ralph/` in the current repo.
+- **Every write lands under `scripts/ralph/` in the current repo.** A file written anywhere else has broken this.
 - If `scripts/ralph/` already exists, offer to update (preserves config.env).
 - Copy templates from `templates/` into `scripts/ralph/` (includes `ralphctl.py` for pause/resume/stop/status).
-- Copy `flowctl`, `flowctl.cmd`, `flowctl.py`, `flowctl_bootstrap.py`, `flowctl-help.txt`, and the `flowctl_tracker/` package (from `$PLUGIN_ROOT/scripts/`) and `pick-python.sh` (from `$PLUGIN_ROOT/scripts/lib/`) into `scripts/ralph/` — flat, so the resolver lands at `scripts/ralph/pick-python.sh` (NOT `scripts/ralph/lib/`) where `ralph.sh` and the hook wrapper source it.
+- Copy `flowctl`, `flowctl.cmd`, `flowctl.py`, `flowctl_bootstrap.py`, `flowctl-help.txt`, and the `flowctl_tracker/` package (from `$PLUGIN_ROOT/scripts/`) and `pick-python.sh` (from `$PLUGIN_ROOT/scripts/lib/`) into `scripts/ralph/` — **flat, so the resolver lands at `scripts/ralph/pick-python.sh`** where `ralph.sh` and the hook wrapper source it. A `pick-python.sh` that landed under `scripts/ralph/lib/` has broken this.
 - Set executable bit on `scripts/ralph/ralph.sh`, `scripts/ralph/ralph_once.sh`, `scripts/ralph/flowctl`, and `scripts/ralph/ralphctl.py`.
-- **Hook registration is agent-driven skill prose only.** The plugin ships ZERO hooks by default. You (the host agent) merge the guard entries into the project's host settings via Read+Edit. Never clobber unrelated hooks. Idempotent on re-run. **HARD BOUNDARY: no flowctl subcommand for hook install/remove/status — zero hook machinery in Python.**
+- **Hook registration is agent-driven skill prose only.** The plugin ships no hooks by default; you (the host agent) merge the guard entries into the project's host settings via Read+Edit, idempotently, without clobbering unrelated hooks. **The boundary is hard: there is no flowctl subcommand for hook install/remove/status and no hook machinery in Python.** A settings file whose hooks object now holds only flow-next entries, or a hook-install subcommand added to the CLI, has broken this.
 
 ## Workflow
 
@@ -47,8 +47,8 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    ```
 
 4. Determine review backend (skip if UPDATE_MODE=1):
-   - If MULTIPLE available, ask user (do NOT use AskUserQuestion tool). Only
-     show the options whose CLIs were detected:
+   - If several are available, ask the user (do NOT use AskUserQuestion tool).
+     Show only the options whose CLIs were detected:
      ```
      Multiple review backends available. Which one?
      a) RepoPrompt (macOS, visual builder)
@@ -65,7 +65,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    - If only cursor-agent available: use `cursor`
    - If none available: use `none`
 
-5. Copy files using bash (MUST use cp, NOT Write tool):
+5. Copy files using bash — **the copies run through `cp`, never the Write tool.** A template reproduced by writing its contents has broken this:
 
    **If UPDATE_MODE=1 (updating):**
    ```bash
@@ -114,7 +114,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 
 7. **Register project hooks (agent-driven; required for the guard to fire).**
 
-   Detect host (same signals as `/flow-next:setup` Step 0 when available; otherwise probe the settings paths below). Then **Read** the target file, **merge** the flow-next Ralph guard entries, **Edit/Write** the result. Never replace the whole hooks object with only our entries. Idempotent: if an entry's `command` already contains `scripts/ralph/hooks/ralph-guard`, leave that matcher group alone (or refresh the command string to the canonical form below if it drifted).
+   Detect host (same signals as `/flow-next:setup` Step 0 when available; otherwise probe the settings paths below). Then **Read** the target file, **merge** the flow-next Ralph guard entries, **Edit/Write** the result. **The host's existing hooks survive the merge** — a settings file whose hooks object now contains only flow-next entries has broken this. Idempotent: if an entry's `command` already contains `scripts/ralph/hooks/ralph-guard`, leave that matcher group alone (or refresh the command string to the canonical form below if it drifted).
 
    **Fingerprint** for "this is a flow-next Ralph guard entry": the hook `command` string contains `scripts/ralph/hooks/ralph-guard` (wrapper and/or `.py` fallback).
 
@@ -174,7 +174,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
    | `PostToolUse` | `Bash\|Execute` |
    | `Stop` | *(no matcher)* |
 
-   Top-level JSON must be **only** `{"hooks":{...}}` — no sibling `description` key (Codex rejects unknown fields and disables all hooks).
+   **The top-level JSON is exactly `{"hooks":{...}}`** — a sibling `description` key has broken this (Codex rejects unknown fields and disables all hooks).
 
    If `.codex/config.toml` exists, ensure exactly one `hooks = true` under `[features]` (drop deprecated `codex_hooks`). Same normalization intent as setup's historical Codex hooks step; do it with a careful edit, not a second copy of setup's python block unless you need it.
 
@@ -187,7 +187,9 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
 
    On UPDATE_MODE=1 still re-merge hooks so a project that had scaffold but lost settings entries is repaired. Skip only when every required event already has a fingerprinted entry with the canonical command.
 
-8. Print next steps (run from terminal, NOT inside the agent session):
+   Done when: the host's registered event set matches its platform (Codex without `SubagentStop` or file-tool matchers; Droid with its own file-tool matchers; Cursor scaffold-only plus the printed will-not-fire note), every entry carries the canonical command, and unrelated hooks are still present.
+
+8. Print next steps — **the run ends by printing them, never by starting the loop inside the session.** A session that executed `ralph.sh` has broken this:
 
    **If UPDATE_MODE=1:**
    ```

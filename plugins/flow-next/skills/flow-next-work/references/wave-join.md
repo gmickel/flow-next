@@ -42,9 +42,9 @@ sees which `**Touches:**` declarations were wrong.
 ## Reviewer overlap
 
 **Reviewer overlap (fn-176).** review(N) may run concurrently with
-implement(N+1) ONLY when ALL hold: N+1 is dep-independent of N (transitive,
-same walk as the dispatch rule); AND `planSync.enabled` is NOT true — Phase
-3e's actual target set is EVERY remaining `todo` task, so with plan-sync on,
+implement(N+1) **only when both hold**: N+1 is dep-independent of N (transitive,
+same walk as the dispatch rule), and `planSync.enabled` is not true — Phase
+3e's actual target set is every remaining `todo` task, so with plan-sync on,
 a claimed N+1 would dodge the sync it is entitled to; with plan-sync enabled
 the overlap path is OFF and dispatch of N+1 waits for plan-sync(N) exactly as
 today (fail-closed: the status quo is the failure mode). **The schedule point

@@ -14,7 +14,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, codex, copilot, cursor, or host-deferred (host review runs at the conductor level AFTER you return - you cannot dispatch subagents. Under host-deferred: skip Phase 4 review dispatch, do NOT report the task as review-passed, and DEFER Phase 5's `flowctl done` - write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself)
+- `REVIEW_MODE` - none, rp, codex, copilot, cursor, or host-deferred (host review runs at the conductor level after you return - you cannot dispatch subagents. Under host-deferred you skip the Phase 4 review dispatch, claim no review verdict, and defer Phase 5's `flowctl done`: write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself. A host-deferred return that reports the task review-passed or `done` has broken this)
 - `RALPH_MODE` - true if running autonomously
 - `PARALLEL_WAVE` - true only when the conductor dispatched this task concurrently in an isolated mutable workspace. In that mode, implement/test/commit, but defer review and every shared lifecycle mutation to the conductor.
 - `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
@@ -42,9 +42,13 @@ Before any `flowctl` or git operation, baseline test, file read, or edit:
   checkout.
 - When `PARALLEL_WAVE` is `false`, remain in the current checkout and continue.
 
-## Phase 1: Re-anchor (CRITICAL - DO NOT SKIP)
+Done when: `pwd -P` equals the resolved `WORKSPACE` (parallel-wave), or the run is still in the conductor's checkout (single-worker) — before any flowctl, git, test, read, or edit.
 
-Use the FLOWCTL path and IDs from your prompt. ONE call fetches the whole re-anchor bundle:
+## Phase 1: Re-anchor (never skipped)
+
+**Every task starts from a re-read of its own spec.** A worker that edited a file before running the anchor call has broken this.
+
+Use the FLOWCTL path and IDs from your prompt. One call fetches the whole re-anchor bundle:
 
 ```bash
 <FLOWCTL> anchor <TASK_ID> --md
@@ -57,7 +61,7 @@ as a failure. Implement only the prompted task and leave Flow state untouched.
 
 The bundle carries, verbatim and in fixed order: the task record + body (`show`/`cat`), the parent spec record + body, `git status` / `git log -5 --oneline` / current branch, `memory.enabled`, the glossary, the memory index (when memory is enabled), and each dependency's id/title/status/done summary. If a section reports `(section unavailable: ...)`, run that one command directly — the bundle is fail-open.
 
-**The bundle is a FLOOR, not a ceiling.** It replaces the discrete Phase-1 reads — it does not cap your context. Query further whenever useful:
+**The bundle is a floor, not a ceiling.** It replaces the discrete Phase-1 reads — it does not cap your context. Query further whenever useful:
 
 ```bash
 <FLOWCTL> memory search "<keyword>" --json   # by task keyword / module / tag
@@ -69,7 +73,7 @@ Legacy `.flow/memory/pitfalls.md` / `conventions.md` / `decisions.md` still surf
 
 From the bundle's memory index, look for entries relevant to your task's technology/domain/module — then `memory search` / `memory read` the ones that matter.
 
-**Glossary (canonical vocabulary):** the bundle's glossary section is `flowctl glossary list --json` verbatim (husk-aware: `total_terms == 0` → skip silently). When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the task title/description (case-insensitive, whitespace-collapsed) and keep ONLY the matching entries' definitions — they are the canonical meanings for naming and concepts in this task; implementations must not contradict them. Never pull the whole glossary into context. No glossary, a husk, or zero matches → skip, zero change.
+**Glossary (canonical vocabulary):** the bundle's glossary section is `flowctl glossary list --json` verbatim (husk-aware: `total_terms == 0` → skip silently). When `total_terms > 0`, match each entry's `term` + `avoid` aliases against the task title/description (case-insensitive, whitespace-collapsed). **Only the matching entries' definitions are kept** — they are the canonical meanings for naming and concepts in this task, and the implementation must not contradict them. Pulling the whole glossary into context has broken this. No glossary, a husk, or zero matches → skip, zero change.
 
 Parse the spec carefully. Identify:
 - Acceptance criteria
@@ -113,7 +117,9 @@ BASE_COMMIT=$(git rev-parse HEAD)
 printf '%s\n' "$BASE_COMMIT" > .flow/tmp/base_commit
 echo "BASE_COMMIT=$BASE_COMMIT (persisted to .flow/tmp/base_commit — gitignored)"
 ```
-`BASE_COMMIT` scopes the impl-review diff (Phase 4), anchors delegation git-ownership (Phase 2), and is recorded with the full commit list in the done evidence (Phase 5). **In EVERY later Bash block that references it, re-read from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — the Phase-1 assignment does not carry across tool calls.
+`BASE_COMMIT` scopes the impl-review diff (Phase 4), anchors delegation git-ownership (Phase 2), and is recorded with the full commit list in the done evidence (Phase 5). **Every later Bash block that references it re-reads it from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — the Phase-1 assignment does not carry across tool calls, so a block that used the bare variable has broken this.
+
+Done when: the anchor bundle has been read, the baseline result is recorded (`green` / `red (<cmd>)` / `none`), and `.flow/tmp/base_commit` holds the pre-edit HEAD.
 
 ## Phase 1.5: Pre-implementation Investigation
 
@@ -158,22 +164,25 @@ If DESIGN.md is missing or the path is wrong, note it and proceed — design con
 
 4. Continue to Phase 2 only after investigation is complete.
 
+Done when: every Required file named by `## Investigation targets` has been read, the similar-code search has been reported (reuse / extend / new), and no code has been written yet.
+
 ## Phase 2: Implement
 
 **`BASE_COMMIT` was captured at Phase-1 end (before any edit).** You'll pass it to impl-review so it only reviews THIS task's changes. (It is also the git-ownership anchor for the delegation path below.)
 
-**Delegation hook — ONLY when `DELEGATE: codex` is in your prompt.** If `DELEGATE`
+**Delegation hook — reached only when `DELEGATE: codex` is in your prompt.** If `DELEGATE`
 is absent or `local`, skip this entire hook and implement in-session as usual
 (the rest of Phase 2 is unchanged). When `DELEGATE: codex` is set, the host has
 already run the pre-flight gates and one-time consent — your job is to delegate
 THIS task's implementation to `codex exec`:
 
 **Thin-task valve (you own the final call - the host's `DELEGATE:` flags are
-provisional).** Read the task file first: if it does not name its files and its
-acceptance, OR the allowed-file list is EMPTY after removing orchestrator-owned
-artifacts (the codex mirror, `.flow/bin` dual-copies), do NOT delegate -
-implement in-session as a standard task (emit no `DELEGATION_*` lines; the
-host's counter stays untouched - not a failure, not a strike).
+provisional).** Read the task file first. **A task that does not name its files
+and its acceptance, or whose allowed-file list is empty after removing
+orchestrator-owned artifacts (the codex mirror, `.flow/bin` dual-copies), is
+implemented in-session as a standard task** — emitting no `DELEGATION_*` lines, so
+the host's counter stays untouched (not a failure, not a strike). Delegating such
+a task, or emitting a `DELEGATION_*` line for it, has broken this.
 
 1. Read `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-work/references/codex-delegation.md`
    — the "Invocation / result schema / background-launch+poll / per-run effort"
@@ -281,7 +290,7 @@ Rules:
   that are the smallest way to satisfy the ACs are implementation, not added
   scope). If mid-implementation you
   see a capability worth adding, note it in the done summary as a follow-up —
-  do not build it. Error handling enumerated in the ACs is NOT extra — it is
+  do not build it. Error handling enumerated in the ACs is not extra — it is
   the spec. Neither are filesystem-identity, permission, or concurrency guards
   (realpath/symlink containment, lock-guarded writes, forced excludes of
   runtime state) — never trim a guard as scope.
@@ -294,13 +303,15 @@ Rules:
   whole file it lives in. Redundant test mass is generation cost at authoring
   time AND suite cost on every later run, and it catches nothing the
   enumeration missed.
-- **Tiered runs during the loop:** while iterating, run the FOCUSED tests for
-  the code under change (per-task Quick commands convention). The FULL suite
+- **Tiered runs during the loop:** while iterating, run the **focused** tests for
+  the code under change (per-task Quick commands convention). The **full** suite
   runs exactly where the existing gates already require it (whatever the
   spec's Quick commands and the Verify block define — full or focused per
   gate) — never as a mid-loop reflex after every edit. This changes no gate's
   definition; it only removes redundant mid-loop re-runs.
 - If you break something mid-implementation, fix it before continuing
+
+Done when: every AC the task names is implemented, its enumerated error cases have a focused test each, and nothing outside the AC surface was added.
 
 ## Phase 3: Commit
 
@@ -316,7 +327,7 @@ Task: <TASK_ID>"
 
 Use conventional commits. Scope from task context.
 
-**Mixed-model attribution — ONLY on a delegated commit (`DELEGATE: codex` AND
+**Mixed-model attribution — only on a delegated commit (`DELEGATE: codex` and
 Codex wrote this commit's code).** Append these two trailers so `/flow-next:make-pr`
 can credit both models. Put them in their own paragraph (blank line before the
 `Task:` trailer) — `<model>` = `DELEGATE_MODEL`, `<effort>` = the per-run
@@ -333,25 +344,27 @@ AI-Implementer: codex <DELEGATE_MODEL> (<effective_effort>)
 Task: <TASK_ID>"
 ```
 
-Do this ONLY when delegation actually produced the code. A standard in-session
-commit (no delegation, or a `partial` you finished locally) carries **no**
-`AI-Implementer` trailer — attribute honestly.
+**The `AI-Implementer` trailer appears only when delegation actually produced the
+code.** A standard in-session commit (no delegation, or a `partial` you finished
+locally) carrying that trailer has broken this — attribute honestly.
 
-## Phase 4: Review (MANDATORY if REVIEW_MODE != none)
+Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`, and the attribution trailers match who actually wrote the code.
 
-**If `PARALLEL_WAVE` is `true`, SKIP this phase's review dispatch entirely.**
+## Phase 4: Review (runs whenever REVIEW_MODE is not `none`)
+
+**Under `PARALLEL_WAVE: true` this phase's review dispatch does not run.**
 The conductor reviews only after it joins the wave and integrates this commit
-onto the target branch. Do not report a review verdict; continue to Phase 5's
-parallel-wave handover branch.
+onto the target branch. A parallel-wave worker that reported a review verdict has
+broken this; continue to Phase 5's parallel-wave handover branch.
 
 **If REVIEW_MODE is `none`, skip to Phase 5.** (When `DELEGATE: codex` is also set,
 there is no independent impl-review gate, so Phase 5 below runs its own
-verification on the delegated diff — `verification_summary` from Codex is NOT
-trusted as the sole gate. See Phase 5.)
+verification on the delegated diff — Codex's `verification_summary` is never the
+sole gate. See Phase 5.)
 
-**If REVIEW_MODE is `host-deferred`, SKIP this phase's review dispatch entirely** — you cannot dispatch subagents and the conductor runs the host review after you return. Do NOT invoke impl-review, do NOT report a review verdict, and (critically) do NOT run Phase 5's `flowctl done` — see the Phase 5 host-deferred branch.
+**Under `REVIEW_MODE: host-deferred` this phase's review dispatch does not run** — you cannot dispatch subagents and the conductor runs the host review after you return. A host-deferred worker that invoked impl-review, reported a verdict, or ran Phase 5's `flowctl done` has broken this — see the Phase 5 host-deferred branch.
 
-**If REVIEW_MODE is any other non-`none` value (`rp`, `codex`, `copilot`, or `cursor`), you MUST invoke impl-review and receive SHIP before proceeding.**
+**Under any other non-`none` value (`rp`, `codex`, `copilot`, `cursor`), impl-review is invoked and a SHIP verdict received before this phase ends.** Proceeding on anything short of SHIP has broken this.
 (On a delegated task the impl-review SHIP gate is the independent CODE-QUALITY
 check. The Phase 5 Verify block still runs in every mode — it is the authoritative
 gate discipline (classify → tier-B or full gates → receipts → GATE_SKIPPED
@@ -359,7 +372,7 @@ evidence). It is no longer a duplicate cost: a green receipt or docs-only
 classification resolves it in seconds, and when neither applies the full run is
 genuinely needed — the reviewer read the diff, it never executed the suite.)
 
-Use the Skill tool to invoke impl-review (NOT flowctl directly). If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
+Invoke impl-review through the Skill tool, never `flowctl` directly. If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
 
 ```
 /flow-next:impl-review <TASK_ID> --base $BASE_COMMIT --review=$REVIEW_MODE
@@ -379,11 +392,13 @@ re-resolving from config. The skill still handles everything else:
 
 **Foreground rule (do not background the review).** When the impl-review workflow shells a `flowctl <backend> …` review command, run it as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). Never launch it with `run_in_background` + a monitor — a background completion does not reliably resume your (subagent) context, and you would idle on an already-finished review. Blocking is safe: the call is bounded. (This does NOT apply to codex-delegation's `codex exec` launch in Phase 2 — that pattern deliberately backgrounds and polls a result file in foreground calls.)
 
-**impl-review runs its OWN internal fix loop** (fix + re-review up to `MAX_REVIEW_ITERATIONS`, default 8). Do **NOT** wrap it in your own re-invoke-until-SHIP loop — that resets the skill's iteration counter every round and makes the cap unbounded in aggregate. Invoke it **once** and act on the **terminal verdict** it returns:
+**impl-review owns its internal fix loop** (fix + re-review up to `MAX_REVIEW_ITERATIONS`, default 8). **impl-review is invoked exactly once per task, and you act on the terminal verdict it returns.** A second invocation wrapping it in a re-invoke-until-SHIP loop resets the skill's iteration counter every round and makes the cap unbounded in aggregate — that has broken this.
 
 - **SHIP** → proceed to Phase 4.5.
-- **NEEDS_WORK** → the skill already fixed + re-reviewed `MAX_REVIEW_ITERATIONS` times and findings still survive. Do NOT re-invoke. Escalate: under `SPEC_MODE` / autonomous, stop with a typed `BLOCKED: <surviving-findings summary>` (the escalation format below); interactively, surface the surviving findings to the caller.
+- **NEEDS_WORK** → the skill already fixed + re-reviewed `MAX_REVIEW_ITERATIONS` times and findings still survive. Escalate rather than re-invoke: under `SPEC_MODE` / autonomous, stop with a typed `BLOCKED: <surviving-findings summary>` (the escalation format below); interactively, surface the surviving findings to the caller.
 - **MAJOR_RETHINK** → the design/approach is wrong, not patchable. Escalate `BLOCKED: DESIGN_CONFLICT` with the reviewer's rationale — never patch it, never re-invoke.
+
+Done when: one impl-review invocation has returned a terminal verdict, and the task either holds a SHIP or has been escalated with a typed `BLOCKED:` line.
 
 ## Phase 4.5: Auto-capture on successful fix (after NEEDS_WORK → SHIP)
 
@@ -495,7 +510,7 @@ BASE_COMMIT=$(cat .flow/tmp/base_commit)
 If verification fails, fix and re-commit before proceeding.
 
 **Sandbox-blocked commit:** if the environment's sandbox denies `git commit`,
-do NOT stall or loop retrying. On the standard single-worker path, still write
+neither stall nor loop retrying. On the standard single-worker path, still write
 the evidence file and complete `flowctl done`, recording the restriction in
 the done summary so the orchestrator can commit on your behalf. On a
 parallel-wave or host-deferred path, never call `flowctl done`: write the
@@ -503,11 +518,11 @@ assigned handovers, return `in_progress`, and report the exact workspace plus
 uncommitted state so the conductor can recover and commit it. A blocked commit
 is never a reason to discard finished work.
 
-**Delegation verification backstop — `DELEGATE: codex` AND `REVIEW_MODE: none`.**
-When delegation was active AND no impl-review gate ran (Phase 4 skipped), you MUST
-run the Phase 5 Verify block yourself on the delegated diff before the standard
-path's `flowctl done` or the parallel path's handover — do NOT trust Codex's
-`verification_summary` as the sole gate. Delegated tasks route through this SAME Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
+**Delegation verification backstop — `DELEGATE: codex` with `REVIEW_MODE: none`.**
+When delegation was active and no impl-review gate ran (Phase 4 skipped), **the
+Phase 5 Verify block runs on the delegated diff before the standard path's
+`flowctl done` or the parallel path's handover.** Treating Codex's
+`verification_summary` as the sole gate has broken this. Delegated tasks route through this same Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
 authoritative here too: classify first, honor green receipts, and run the full
 tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
 with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +
@@ -538,9 +553,11 @@ cat > "$EVIDENCE_FILE" << EOF
 EOF
 ```
 
-**Delegation evidence — ONLY when `DELEGATE: codex` produced this task's code.**
-INLINE the result fields into `evidence.delegation` (NOT a scratch-file pointer —
-the `.flow/tmp/codex-*` dir is cleaned post-commit, so a path would dangle). The
+**Delegation evidence — written only when `DELEGATE: codex` produced this task's code.**
+**The result fields are inlined into `evidence.delegation`**, never left as a
+scratch-file pointer — the `.flow/tmp/codex-*` dir is cleaned post-commit, so a
+recorded path would dangle. Evidence carrying a `.flow/tmp/codex-*` path instead of
+the fields has broken this. The
 `status`/`files_modified`/`issues`/`summary`/`verification_summary` come from the
 Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
 `model`/`effort` are the `DELEGATE_MODEL` + per-run `effective_effort` you ran:
@@ -604,7 +621,8 @@ Verify completion:
 ```bash
 <FLOWCTL> show <TASK_ID> --json
 ```
-Status must be `done`. If not, debug and retry.
+
+Done when: on the standard path `flowctl show` reports `done`; on the parallel-wave or host-deferred paths the handover files exist at the exact assigned paths and the task is still `in_progress`. Any other terminal state is debugged and retried, never reported as complete.
 
 ## Phase 6: Return
 
@@ -617,7 +635,7 @@ Return a concise summary to the main conversation:
   handover paths and `in_progress` status instead; it must not claim a review
   verdict.
 
-**Delegation signal — ONLY when `DELEGATE: codex` was active for this task.** Emit
+**Delegation signal — emitted only when `DELEGATE: codex` was active for this task.** Emit
 these as the **last two lines** of your return summary so the host circuit breaker
 (`phases.md` Phase 3) can update its counter without re-reading the scratch dir.
 Both values come straight from `flowctl codex classify-result` (`.class` /
@@ -630,9 +648,12 @@ DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
 
 The host bridges them: `rollback_and_disable` → disable delegation IMMEDIATELY for
 all remaining tasks; `rollback`/`finish_locally` → `consecutive_failures++`
-(disable at 3); `commit` → reset to 0. When delegation was NOT active (gates
-failed, the task ran standard, or `DELEGATE: local`), emit **no** `DELEGATION_*` lines
-— a missing signal tells the host the counter is untouched.
+(disable at 3); `commit` → reset to 0. **When delegation was not active** (gates
+failed, the task ran standard, or `DELEGATE: local`), **no `DELEGATION_*` line is
+emitted** — a missing signal tells the host the counter is untouched. A
+`DELEGATION_*` line on a non-delegated task has broken this.
+
+Done when: the summary names what was implemented, the files changed, the tests run, and — where the path allows it — the review verdict; plus the two `DELEGATION_*` lines last, on a delegated task only.
 
 ## Rules
 
@@ -643,11 +664,11 @@ with status still `in_progress`. Do not run impl-review or `flowctl done`; the
 conductor owns both after integration. The existing host-deferred exception
 likewise returns `in_progress` for the conductor's review.
 
-- **Re-anchor first** - always read spec before implementing
-- **Investigate first** - if task spec has investigation targets, read them before coding
-- **No TodoWrite** - flowctl tracks tasks
-- **git add -A** - never list files explicitly
-- **One task only** - implement only the task you were given
+- **Re-anchor first** - the spec is read before anything is implemented
+- **Investigate first** - a task spec with investigation targets has them read before any code
+- **No TodoWrite** - flowctl tracks tasks; a TodoWrite task list has broken this
+- **git add -A** - staging is never an explicit file list
+- **One task only** - a commit implementing a task you were not given has broken this
 - **Review before done (standard single-worker only)** - if
   `PARALLEL_WAVE` is `false` and `REVIEW_MODE` is neither `none` nor
   `host-deferred`, get a SHIP verdict before `flowctl done`

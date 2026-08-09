@@ -443,8 +443,17 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
                 text.count('[ "$VAL" = "true" ] && ACTIVE=1'),
                 3,
             )
-            self.assertIn("After **2** consecutive non-`done` returns", text)
-            self.assertIn("STOP retrying and escalate", text)
+            # Bounded standard-failure retry. Prose de-shouted 2026-08-09 in the
+            # canonical; the codex mirror still carries the pre-diet spelling
+            # until its next regen, so both wordings satisfy the pin.
+            self.assertRegex(
+                text, r"After \*{0,2}2\*{0,2} consecutive non-`done` returns"
+            )
+            self.assertRegex(
+                text,
+                r"STOP retrying and escalate"
+                r"|retrying stops and the failure escalates",
+            )
         for path in both_copies("flow-next-plan-review/SKILL.md"):
             text = read(path)
             self.assertIn("<promise>RETRY</promise>` and stops", text)

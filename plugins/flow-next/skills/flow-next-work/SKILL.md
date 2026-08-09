@@ -22,20 +22,23 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 ```
 
 **Hard requirements (non-negotiable):**
-- You MUST run `flowctl done` for each completed task and verify the task status is `done`.
-- You MUST stage with `git add -A` (never list files). This ensures `.flow/` and `scripts/ralph/` (if present) are included.
-- Do NOT claim completion until `flowctl show <task>` reports `status: done`.
-- Do NOT invoke `/flow-next:impl-review` until tests/Quick commands are green.
+- **Every completed task passes through `flowctl done` and a verified `done` status.** A task treated as finished while `flowctl show <task>` still reads `todo` or `in_progress` has broken this.
+- **Staging is `git add -A`, never an explicit file list** — that is what pulls `.flow/` and `scripts/ralph/` (when present) into the commit. A commit whose diff omits the run's `.flow/` writes has broken this.
+- **Completion is claimed only after `flowctl show <task>` reports `status: done`.** A completion claim printed ahead of that read has broken this.
+- **`/flow-next:impl-review` is dispatched only on a green tree.** A review sent while tests or Quick commands are red has broken this.
 
 **Role**: execution lead, plan fidelity first.
 **Goal**: complete every task in order with tests.
 
 ## Ralph Mode Rules (always follow)
 
-If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`:
-- **Must** use `flowctl done` and verify task status is `done` before committing.
-- **Must** stage with `git add -A` (never list files).
-- **Do NOT** use TodoWrite for tracking.
+If `REVIEW_RECEIPT_PATH` is set or `FLOW_RALPH=1`, the Hard requirements above are
+the receipt contract, plus:
+
+- **The verified `done` status precedes the commit that carries the task.** A commit landing ahead of its verified `flowctl done` has broken this.
+- **Tracking stays in `.flow/` via `flowctl` — TodoWrite is never the task record.** A Ralph iteration whose task list lives in TodoWrite has broken this.
+
+Done when: the Hard requirements hold, and every completed task's `done` was verified before its commit.
 
 ## Autonomous Mode (questions off, no receipt obligations)
 
@@ -52,7 +55,7 @@ all else verbatim (spaces/quotes/globs). Set/export `AUTONOMOUS=1` if found or
 Continue with `WORK_ARGS`; carry the exported marker into later shell fragments.
 If `AUTONOMOUS=1`:
 
-- **Ask NO setup questions** (branch + review questions below are suppressed).
+- **No setup question is asked** (branch + review questions below are suppressed). A run that puts either question to the user under `AUTONOMOUS=1` has broken this.
 - **Branch defaults deterministically to `--branch=new`** when no explicit branch option is present — under autonomy "the user's answer" never exists, and defaulting to the current branch could commit straight to main. **Name the new branch exactly the spec's `branch_name` field** (`$FLOWCTL show <spec-id> --json | jq -r '.branch_name'`) — pilot's branch matrix, its all-done PR probe, and make-pr's branch-match spec detection all key on that name; an ad-hoc name breaks multi-tick continuity.
 - **Review** = explicit `--review` passthrough if present, else the configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
 - **Autonomy ≠ Ralph.** Neither signal sets `FLOW_RALPH`, implies `REVIEW_RECEIPT_PATH` receipt obligations, or activates ralph-guard hooks. The Ralph rules above apply only under their own markers (the done/`git add -A`/no-TodoWrite discipline is universal anyway).
@@ -111,11 +114,11 @@ configured/overridden backend — codex, copilot, cursor, rp, or host — itself
 **Autonomous mode**:
 - `AUTONOMOUS=1` → suppress all setup questions; use the defaults above.
 
-### If options NOT found in arguments
+### If the options are absent from the arguments
 
 **If `AUTONOMOUS=1` (autonomous mode):** ask nothing — apply the autonomous defaults and continue to the workflow.
 
-**Otherwise (interactive)**: the branch question MUST be answered before anything else. Read
+**Otherwise (interactive)**: **the branch question is answered before anything else happens.** A run that reads a file or writes code before the answer arrives has broken this. Read
 [references/setup-questions.md](references/setup-questions.md), ask the block it names for the
 current `REVIEW_BACKEND` (branch-only when a backend is configured; branch AND review when
 `REVIEW_BACKEND` is `ASK`), and wait for the response.
@@ -124,7 +127,7 @@ current `REVIEW_BACKEND` (branch-only when a backend is configured; branch AND r
 - Branch = `new`
 - Review = configured backend if set, else `none` (no auto-detect fallback)
 
-**Do NOT read files or write code until user responds.**
+Done when: the branch mode (and, under `REVIEW_BACKEND=ASK`, the review mode) is resolved from arguments, the user's answer, or the autonomous defaults — and no file has been read and no code written before that point.
 
 ## Workflow
 
@@ -138,7 +141,7 @@ If user chose review, pass the review mode to the worker. The worker invokes `/f
 
 ## Tracker sync (opt-in, off by default)
 
-**The no-tracker path is the documented default and is behaviorally unchanged.** Every tracker touchpoint runs ONLY when the bridge is **active** AND the specific event is opted in (the **shared gating predicate**); otherwise it is a silent no-op (no new steps, no new prerequisites). The bridge is active iff `flowctl sync active --json` reports `active: true`. The touchpoint mechanics — the perEvent table, the shared gating predicate, and the three dispatch payloads (phases.md 3b.1 first-claim, 3d.1 done, 3g completion-review) — live in [references/tracker-touchpoints.md](references/tracker-touchpoints.md), read ONLY when a phases.md tracker gate prints its active read/execute/continue sentinel (bridge active, or the gate's probe errored — fail open). A default (bridge-inactive) run never loads it. Phase 5's end-of-run `sync check` + retro-fire + the mandatory four-state `Tracker sync:` summary slot stay inline in phases.md Phase 5 — they run on EVERY run (the slot reads `n/a (bridge inactive)` when no tracker is configured).
+**The no-tracker path is the documented default and is behaviorally unchanged.** **A tracker touchpoint fires only when the bridge is active *and* its specific event is opted in** (the **shared gating predicate**); otherwise it is a silent no-op — no new steps, no new prerequisites. A run that adds a tracker step with the bridge inactive has broken this. The bridge is active iff `flowctl sync active --json` reports `active: true`. The touchpoint mechanics — the perEvent table, the shared gating predicate, and the three dispatch payloads (phases.md 3b.1 first-claim, 3d.1 done, 3g completion-review) — live in [references/tracker-touchpoints.md](references/tracker-touchpoints.md). **That reference is read only when a phases.md tracker gate prints its active read/execute/continue sentinel** (bridge active, or the gate's probe errored — fail open); a default bridge-inactive run that loaded it has broken this. Phase 5's end-of-run `sync check` + retro-fire + the mandatory four-state `Tracker sync:` summary slot stay inline in phases.md Phase 5 and run on every run (the slot reads `n/a (bridge inactive)` when no tracker is configured).
 
 **Handle recognition (R16):** `/flow-next:work wor-17` / `work wor-17.1` resolve the existing linked spec/task — the Phase 1 input grammar routes any single-token arg through `flowctl show` (which resolves tracker handles via fn-52.10) before treating it as idea text, so a tracker key is never re-created as a new spec.
 
@@ -154,10 +157,11 @@ With delegation off — the default — Work performs one cheap request check
 
 **Activation is disambiguated from the review backend.** `/flow-next:work`
 already maps the generic fuzzy "use codex" to the **review backend** (Review-mode
-parsing above). Delegation activates ONLY via the explicit arg token
-`delegate:codex` (off-switch `delegate:local`), the flow config
+parsing above). **Delegation activates on exactly three signals**: the explicit arg
+token `delegate:codex` (off-switch `delegate:local`), the flow config
 `work.delegate=codex`, or an unambiguous "use codex **for implementation**" /
-"delegate implementation to codex" — **never** bare "use codex".
+"delegate implementation to codex". A run that turned delegation on from bare
+"use codex" has broken this.
 
 **Resolution chain (precedence):** arg token (`delegate:codex` / `delegate:local`)
 > flow config `work.delegate` > hard default OFF. Phase 0 combines that value
@@ -171,9 +175,8 @@ selection failure runs the standard path and leaves the active reference cold.
 
 ## Guardrails
 
-- Don't start without asking branch question
-- Don't start without plan/spec
-- Don't skip tests
-- Don't leave tasks half-done
-- Never use TodoWrite for task tracking
-- Never create plan files outside `.flow/`
+- **The branch question is answered before the run starts.** A run that began on an unresolved branch choice has broken this.
+- **A plan or spec exists before implementation starts.** A run that began with no `.flow/` spec has broken this.
+- **Tests run.** A task marked done with its spec's Quick commands unrun has broken this.
+- **No task is left half-done.** A run that ends with a task still `in_progress` and no `NEEDS_HUMAN`/blocked report has broken this.
+- **Task tracking lives in `.flow/` via `flowctl`.** A run tracking tasks in TodoWrite, or writing a plan file outside `.flow/`, has broken this.
