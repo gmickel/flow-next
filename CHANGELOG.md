@@ -2,6 +2,57 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 3.21.0] - 2026-08-09
+
+A single code reviewer covering everything has a failure mode this release
+removes: attention gets captured by whichever problem class surfaces first, and
+a hygiene pass that turns up plenty of nits can leave a behavioral defect
+unremarked. The in-host quality audit now runs as two parallel reviewers with
+disjoint charters — one judging whether the change does what the spec pins, one
+judging code shape and standards — so neither territory can spend the other's
+attention, and neither report can bury the other's findings.
+
+### Changed
+
+- **The Phase 4 quality audit is two axis-scoped reviews, not one generalist
+  pass.** When the work skill judges a change large or risky, it dispatches the
+  quality-auditor agent twice in a single message — `AXIS: correctness` and
+  `AXIS: standards` — and the two reports are presented verbatim under two
+  headings, never merged, reranked, or interleaved. The correctness axis owns
+  spec conformance, interpretation gaps, silent regressions of earlier work,
+  assertion weakening in existing tests, security, and test coverage; the
+  standards axis owns simplicity, duplication, dead code, over-engineering,
+  naming, vocabulary drift, and performance shape, and carries its review
+  rubric inline so it needs no repo docs at dispatch time.
+- **Hygiene cannot inflate the fix loop.** The standards axis's highest tier is
+  Should Fix — it structurally cannot emit a Critical finding or a Ship
+  verdict; if it believes it found an outage-grade issue it hands the
+  observation across as an untiered line for the conductor to route (at most
+  two). Each axis also carries a hard finding cap (eight tiered on
+  correctness, five on standards, at most three Considers each) with overflow
+  declared in the suppressed-findings line rather than dropped silently. Only
+  correctness-axis Criticals block; Considers never do.
+- **A dispatch without an axis fails toward the higher-value axis, visibly.**
+  A prompt with no `AXIS:` line runs the correctness charter and opens its
+  report with an explicit `Axis defaulted:` notice — never a silent
+  both-axes pass, which would recreate the single-reviewer failure.
+
+### Under the hood
+
+- The two-axis contract is pinned by `test_two_axis_audit_contract.py`
+  (axis selection, standards severity ceiling, per-axis caps, one-message
+  dispatch, verbatim aggregation — canonical and Codex mirror), and by conduct
+  checklists for the auditor and the work skill in `agent_docs/conduct/`.
+  Any reviewer-behavior change is additionally gated on replaying a banked
+  reviewer-regression corpus: two historical review catches (an
+  interpretation-gap miss and an assertion-weakening regression) must survive
+  the new reviewer before it ships; both did.
+- The shared audit machinery — fail-closed diff resolution, discrete
+  confidence anchors, the suppression gate, and the protected-artifacts
+  filter — is unchanged and now single-owner above both charters. The
+  standards axis's inline smell baseline is a superset of the review fleet's
+  pinned baseline.
+
 ## [flow-next 3.20.0] - 2026-08-09
 
 Declined scope stays declined, unknowns stop masquerading as content, and the
