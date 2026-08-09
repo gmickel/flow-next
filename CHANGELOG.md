@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.23.0] - 2026-08-09
 
 A wrong answer you can recognize costs a glance; a wrong answer dressed as a
 right one costs review rounds. Status reads now say where their answer came
