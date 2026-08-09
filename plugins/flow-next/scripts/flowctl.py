@@ -33629,11 +33629,14 @@ def upstream_behind() -> Optional[tuple]:
 
     `git status --porcelain=v2 --branch` reports the upstream ref name and
     the ahead/behind pair in a single spawn, so the advisory never needs a
-    second `rev-parse` to name the ref. `-uno` skips the untracked walk.
+    second `rev-parse` to name the ref. `-uno` skips the untracked walk;
+    `--no-optional-locks` keeps the probe strictly read-only (no opportunistic
+    index.lock refresh under a concurrent git process).
     """
     try:
         result = subprocess.run(
-            ["git", "status", "--porcelain=v2", "--branch", "-uno"],
+            ["git", "--no-optional-locks", "status", "--porcelain=v2",
+             "--branch", "-uno"],
             capture_output=True,
             text=True, encoding="utf-8",
             check=True,
