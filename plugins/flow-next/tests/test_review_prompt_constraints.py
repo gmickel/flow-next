@@ -200,6 +200,10 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "_export_run_git"): 1,
                 ("subprocess.run", "_export_read_base_blobs"): 1,
                 ("subprocess.run", "_psp_run_git"): 1,
+                # fn-181 R3/R5: the behind-upstream advisory for ready/anchor -
+                # ONE deterministic `git status --porcelain=v2 --branch` read
+                # per invocation, never a fetch, never an execution bridge.
+                ("subprocess.run", "upstream_behind"): 1,
                 # fn-169 R3/R4: `--numstat --no-renames` for the prompt's scope
                 # map and the full diff for the artifact identity, both through
                 # ONE runner that raises rather than returning "" — an empty

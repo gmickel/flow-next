@@ -121,6 +121,11 @@ PROMPT_HASHES = {
     # when .flow/criteria.md exists; empty otherwise.
     "_GLOBAL_CRITERIA_BLOCK_TEMPLATE":
         "58eece8cecd3cfb56f6a3a2105bf1c9287258a25950d37a3e541f1cf8cdaabdd",
+    # fn-181 R1: printed on plain `show`/`list` when the runtime state store
+    # is absent. Agents read it and decide whether to trust the status they
+    # were just given, so its wording is deliberate-change territory.
+    "STATUS_SOURCE_ABSENT_NOTE":
+        "0f6697e1ed3d099666d5be48252bacfb5172871dd4e2e4bfc1d2e99268e6ac24",
     # Lands in the receipt `note` field and on stdout; agents read receipts.
     "HOST_JUDGES_NOTE":
         "47b75b60635754b4267077dc782a7b026af6dce3669619c4ffca6ec920c5d878",

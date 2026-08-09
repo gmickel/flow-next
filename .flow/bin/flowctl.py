@@ -298,6 +298,17 @@ RUNTIME_FIELDS = {
     "blocked_reason",
 }
 
+# fn-181 R1: provenance of the `status` a read surface just answered with.
+# "flow-state" = the runtime state store answered (authoritative).
+# "committed"  = no runtime entry; the answer came from the tracked task
+#                definition file, which is a snapshot and may be stale.
+STATUS_SOURCE_FLOW_STATE = "flow-state"
+STATUS_SOURCE_COMMITTED = "committed"
+STATUS_SOURCE_ABSENT_NOTE = (
+    "note: runtime state absent; task status read from committed files "
+    "and may be stale"
+)
+
 
 # --- Helpers ---
 
@@ -1044,15 +1055,46 @@ def load_task_with_state(task_id: str, use_json: bool = True) -> dict:
 
 
 def merge_task_runtime(definition: dict, runtime: Optional[dict]) -> dict:
-    """Merge one tracked task definition with its authoritative runtime state."""
+    """Merge one tracked task definition with its authoritative runtime state.
+
+    fn-181 R1: the merge already knows which store answered, so it stamps
+    `status_source` — "flow-state" when the runtime store had an entry,
+    "committed" when the answer came from the tracked definition file (the
+    legacy fallback, which can be arbitrarily stale). Provenance only: no
+    merge semantics change. The key is stripped on every persisted write
+    (`canonicalize_task_for_write`) so it never lands in a tracked file.
+    """
+    source = STATUS_SOURCE_FLOW_STATE
     if runtime is None:
+        source = STATUS_SOURCE_COMMITTED
         # Backward compat: extract runtime fields from definition.
         runtime = {k: definition[k] for k in RUNTIME_FIELDS if k in definition}
         if not runtime:
             runtime = {"status": "todo"}
 
     # Merge: runtime overwrites definition for runtime fields.
-    return normalize_task({**definition, **runtime})
+    merged = normalize_task({**definition, **runtime})
+    merged["status_source"] = source
+    return merged
+
+
+def runtime_state_absent() -> bool:
+    """True when the runtime state directory does not exist (fn-181 R1).
+
+    Read surfaces use this for ONE plain-output advisory per invocation.
+    No new git spawn: `get_state_dir` is memoized and every caller of this
+    helper has already resolved the state dir to merge runtime state.
+    """
+    try:
+        return not get_state_dir().exists()
+    except OSError:
+        return False
+
+
+def print_status_source_advisory() -> None:
+    """Print the one-per-invocation stale-status advisory when warranted."""
+    if runtime_state_absent():
+        print(STATUS_SOURCE_ABSENT_NOTE)
 
 
 def save_task_runtime(task_id: str, updates: dict) -> None:
@@ -3716,6 +3758,10 @@ def canonicalize_task_for_write(task_data: dict) -> dict:
     if "spec" not in task_data and "epic" in task_data:
         task_data["spec"] = task_data["epic"]
     task_data.pop("epic", None)
+    # fn-181 R1: `status_source` is a read-surface annotation stamped by
+    # merge_task_runtime — never persisted. Stripping it here keeps every
+    # write path (which may start from a merged task) free of it.
+    task_data.pop("status_source", None)
     # Same shape for the historic _id form (very few callers use it; cheap to handle).
     if "spec_id" not in task_data and "epic_id" in task_data:
         task_data["spec_id"] = task_data["epic_id"]
@@ -29533,6 +29579,10 @@ def cmd_show(args: argparse.Namespace) -> None:
                     "id": task_data["id"],
                     "title": task_data["title"],
                     "status": task_data["status"],
+                    # fn-181 R1: same field, same merge — not a parallel path.
+                    "status_source": task_data.get(
+                        "status_source", STATUS_SOURCE_COMMITTED
+                    ),
                     "priority": task_data.get("priority"),
                     "depends_on": task_data.get(
                         "depends_on", task_data.get("deps", [])
@@ -29552,6 +29602,7 @@ def cmd_show(args: argparse.Namespace) -> None:
         if args.json:
             json_output(result)
         else:
+            print_status_source_advisory()
             print(f"Spec: {epic_data['id']}")
             print(f"Title: {epic_data['title']}")
             print(f"Status: {epic_data['status']}")
@@ -29577,6 +29628,7 @@ def cmd_show(args: argparse.Namespace) -> None:
         if args.json:
             json_output(task_data)
         else:
+            print_status_source_advisory()
             print(f"Task: {task_data['id']}")
             print(f"Spec: {spec_value}")
             print(f"Title: {task_data['title']}")
@@ -29764,6 +29816,10 @@ def cmd_list(args: argparse.Namespace) -> None:
                 "spec": spec_value,
                 "title": task_data["title"],
                 "status": task_data["status"],
+                # fn-181 R1: provenance of the status above; always present.
+                "status_source": task_data.get(
+                    "status_source", STATUS_SOURCE_COMMITTED
+                ),
                 "priority": task_data.get("priority"),
                 "depends_on": task_data.get(
                     "depends_on", task_data.get("deps", [])
@@ -29797,6 +29853,7 @@ def cmd_list(args: argparse.Namespace) -> None:
             }
         )
     else:
+        print_status_source_advisory()
         if not specs:
             print("No specs or tasks found.")
             return
@@ -33553,6 +33610,68 @@ def _task_set_section(
         print(f"Task {task_id} {section} updated")
 
 
+# --- fn-181 R3/R4/R5: behind-upstream staleness advisory ---
+#
+# INSPECTION NOTE (R4): the ONLY call sites are `cmd_ready` / `cmd_ready_all`
+# and `cmd_anchor` — the ask-before-work commands. `list`, `status`, and
+# `next` deliberately do NOT call it: they are the high-frequency polls fn-109
+# made 60x faster, and a git spawn there regresses that win. Adding a call
+# site is a spec change, not a refactor (guarded by
+# `test_upstream_advisory.py`).
+#
+# ONE git spawn per invocation (R5), never a fetch, never blocking. Any git
+# failure — no upstream, detached HEAD, not a repo, git missing, offline —
+# degrades to "no advisory", never to a command failure (R3 error clause).
+
+
+def upstream_behind() -> Optional[tuple]:
+    """Return ``(behind_count, upstream_ref)`` when HEAD is behind, else None.
+
+    `git status --porcelain=v2 --branch` reports the upstream ref name and
+    the ahead/behind pair in a single spawn, so the advisory never needs a
+    second `rev-parse` to name the ref. `-uno` skips the untracked walk.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain=v2", "--branch", "-uno"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError, ValueError):
+        return None
+
+    upstream = None
+    behind = 0
+    for line in result.stdout.splitlines():
+        if not line.startswith("# branch."):
+            # Branch headers precede all file entries; nothing left to read.
+            if not line.startswith("#"):
+                break
+            continue
+        if line.startswith("# branch.upstream "):
+            upstream = line[len("# branch.upstream "):].strip()
+        elif line.startswith("# branch.ab "):
+            for token in line.split()[2:]:
+                if token.startswith("-"):
+                    try:
+                        behind = int(token[1:])
+                    except ValueError:
+                        return None
+    if not upstream or behind <= 0:
+        return None
+    return behind, upstream
+
+
+def upstream_stale_note(behind: int, upstream: str) -> str:
+    """The one advisory line printed by ready/anchor when behind upstream."""
+    plural = "" if behind == 1 else "s"
+    return (
+        f"note: checkout is {behind} commit{plural} behind {upstream}; "
+        f"spec-level state may be stale"
+    )
+
+
 def cmd_ready_all(args: argparse.Namespace) -> None:
     """Spec-level eligibility FACTS for the whole backlog (fn-68.1, R1/R8/R9).
 
@@ -33581,6 +33700,7 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
     Done specs are skipped — the backlog is the open frontier.
     """
     flow_dir = get_flow_dir()
+    stale = upstream_behind()  # fn-181 R3/R5: one check per invocation.
 
     rows = []
     for spec_file in iter_spec_json_files(flow_dir):
@@ -33633,8 +33753,13 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
     rows.sort(key=lambda r: id_sort_key(r["id"]))
 
     if args.json:
-        json_output({"success": True, "specs": rows, "count": len(rows)})
+        payload = {"success": True, "specs": rows, "count": len(rows)}
+        if stale:
+            payload["stale_vs_upstream"] = stale[0]
+        json_output(payload)
     else:
+        if stale:
+            print(upstream_stale_note(*stale))
         if not rows:
             print("No open specs.")
         else:
@@ -33661,6 +33786,10 @@ def cmd_ready(args: argparse.Namespace) -> None:
     if getattr(args, "all", False):
         cmd_ready_all(args)
         return
+
+    # fn-181 R3/R5: one upstream check per invocation, AFTER the --all
+    # dispatch so the two branches never both run it.
+    stale = upstream_behind()
 
     spec_id = resolve_spec_arg(args, get_flow_dir())
     if not spec_id or not is_spec_id(spec_id):
@@ -33699,17 +33828,20 @@ def cmd_ready(args: argparse.Namespace) -> None:
             blocked_by_specs.append(dep)
     if blocked_by_specs:
         if args.json:
-            json_output(
-                {
-                    "spec": spec_id,
-                    "actor": current_actor,
-                    "ready": [],
-                    "in_progress": [],
-                    "blocked": [],
-                    "blocked_by_specs": blocked_by_specs,
-                }
-            )
+            payload = {
+                "spec": spec_id,
+                "actor": current_actor,
+                "ready": [],
+                "in_progress": [],
+                "blocked": [],
+                "blocked_by_specs": blocked_by_specs,
+            }
+            if stale:
+                payload["stale_vs_upstream"] = stale[0]
+            json_output(payload)
         else:
+            if stale:
+                print(upstream_stale_note(*stale))
             print(f"Spec {spec_id} is blocked by: {', '.join(blocked_by_specs)}")
         return
 
@@ -33777,29 +33909,32 @@ def cmd_ready(args: argparse.Namespace) -> None:
     blocked.sort(key=lambda x: sort_key(x["task"]))
 
     if args.json:
-        json_output(
-            {
-                "spec": spec_id,
-                "actor": current_actor,
-                "ready": [
-                    {"id": t["id"], "title": t["title"], "depends_on": t["depends_on"]}
-                    for t in ready
-                ],
-                "in_progress": [
-                    {"id": t["id"], "title": t["title"], "assignee": t.get("assignee")}
-                    for t in in_progress
-                ],
-                "blocked": [
-                    {
-                        "id": b["task"]["id"],
-                        "title": b["task"]["title"],
-                        "blocked_by": b["blocked_by"],
-                    }
-                    for b in blocked
-                ],
-            }
-        )
+        payload = {
+            "spec": spec_id,
+            "actor": current_actor,
+            "ready": [
+                {"id": t["id"], "title": t["title"], "depends_on": t["depends_on"]}
+                for t in ready
+            ],
+            "in_progress": [
+                {"id": t["id"], "title": t["title"], "assignee": t.get("assignee")}
+                for t in in_progress
+            ],
+            "blocked": [
+                {
+                    "id": b["task"]["id"],
+                    "title": b["task"]["title"],
+                    "blocked_by": b["blocked_by"],
+                }
+                for b in blocked
+            ],
+        }
+        if stale:
+            payload["stale_vs_upstream"] = stale[0]
+        json_output(payload)
     else:
+        if stale:
+            print(upstream_stale_note(*stale))
         print(f"Ready tasks for {spec_id} (actor: {current_actor}):")
         if ready:
             for t in ready:
@@ -35495,16 +35630,18 @@ def cmd_anchor(args: argparse.Namespace) -> None:
 
     sections = _anchor_sections(task_id, spec_id)
     dependencies = _anchor_dependencies(flow_dir, task_data)
+    stale = upstream_behind()  # fn-181 R3/R5: one check per invocation.
 
     if use_json:
-        json_output(
-            {
-                "task": task_id,
-                "spec": spec_id,
-                "sections": sections,
-                "dependencies": dependencies,
-            }
-        )
+        payload = {
+            "task": task_id,
+            "spec": spec_id,
+            "sections": sections,
+            "dependencies": dependencies,
+        }
+        if stale:
+            payload["stale_vs_upstream"] = stale[0]
+        json_output(payload)
         return
 
     # Markdown render (default): worker-facing, clear banners, same order
@@ -35520,6 +35657,9 @@ def cmd_anchor(args: argparse.Namespace) -> None:
         "available.",
         "",
     ]
+    if stale:
+        lines.append(upstream_stale_note(*stale))
+        lines.append("")
     for i, s in enumerate(sections, start=1):
         lines.append(f"===== [{i}/{total}] {s['name']}: `{s['command']}` =====")
         if s.get("note"):
