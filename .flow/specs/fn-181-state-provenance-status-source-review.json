@@ -15,7 +15,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-181-state-provenance-status-source-review.md",
-  "status": "open",
+  "status": "done",
   "title": "State provenance: status_source, review-skill lifecycle rule, ready/anchor staleness advisory",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:07:43.693293Z"
+  "updated_at": "2026-08-09T14:17:16.310238Z"
 }
