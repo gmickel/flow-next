@@ -138,7 +138,7 @@
     },
     "specIds": "tracker",
     "staleAfterHours": 24,
-    "type": "linear",
+    "type": null,
     "version": 1
   },
   "work": {
