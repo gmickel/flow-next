@@ -67,7 +67,7 @@
   "tracker": {
     "charts": "off",
     "conflictTiebreak": "flow-wins",
-    "enabled": true,
+    "enabled": false,
     "perEvent": {
       "capture": "reconcile",
       "completionReview": "reconcile",
