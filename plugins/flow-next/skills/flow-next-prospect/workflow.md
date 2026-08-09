@@ -24,7 +24,7 @@ done
 [ -n "$PY" ] || { echo "prospect: no working Python 3.11+ interpreter found" >&2; exit 1; }
 ```
 
-`jq` and Python 3.11+ (`python3`, `python`, or `py -3` on Windows) must be on PATH. **Bash vars do NOT survive across tool calls** — any later bash block that uses `$PY` (Phase 0 §0.2, Phase 2 §2.4, Phase 5 §5.2) must re-declare the Preamble picker block VERBATIM at its top before invoking `$PY`. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
+`jq` and Python 3.11+ (`python3`, `python`, or `py -3` on Windows) must be on PATH. **Bash vars do not survive across tool calls.** Any later bash block that uses `$PY` (Phase 0 §0.2, Phase 2 §2.4, Phase 5 §5.2) re-declares the Preamble picker block verbatim at its top before invoking `$PY`; a block that invoked `$PY` without that re-declaration has broken this. The skill prefers stdlib-only Python for any frontmatter parsing — see Phase 0.
 
 ---
 
@@ -65,6 +65,11 @@ fi
 ```
 
 When the sentinel prints, STOP and Read [references/resume-artifacts.md](references/resume-artifacts.md) before any further step — it carries §0.2 parse + classify, §0.3 surface rules, §0.4 the frozen `fresh | extend N | open N` blocking question, and §0.5 routing (including the `EXTEND_TARGET` Phase 5 appends to). When the sentinel does not print, `.flow/prospects/` holds no artifacts: skip the rest of Phase 0 — go straight to Phase 1.
+
+### Done when
+
+- The gate has been evaluated, and — when it fired — the reference's routing has resolved to fresh or to a named `EXTEND_TARGET`.
+- Corrupt artifacts, if any, are listed with `status: corrupt` and excluded from extension.
 
 ---
 
@@ -266,6 +271,12 @@ EOF
 
 In the flow-next plugin repo: `prospect DX` should produce a readable snapshot listing recently-modified files, open specs, CHANGELOG entries from the last few releases, memory hits if memory is initialised, and `scanned: none (...)` lines for any absent source. The snapshot must fit in roughly 30-50 lines of output and must not contain raw file bodies.
 
+### Done when
+
+- All six sources have contributed a block or a `scanned: none (<reason>)` line, in the fixed order.
+- The snapshot fits 30-50 lines and carries titles + tags only — no raw file bodies.
+- `FOCUS_KIND` is resolved, and a path hint that resolves to nothing on disk was answered by the user rather than silently downgraded.
+
 ---
 
 ## Phase 2: Generate (R2, R18) — divergent-convergent + persona seeding
@@ -406,15 +417,21 @@ Phase 2 produced only K valid candidates (target was M-N). Options:
 
 The `loosen` path keeps the run going but flags the under-volume in the eventual artifact frontmatter (`generation_under_volume: true`) so downstream readers know the spread was narrow.
 
+### Done when
+
+- `CANDIDATES_YAML` holds a validated flat list, every entry carrying `title`, `summary`, and at least one `affected_areas` value.
+- The count meets the resolved generation target, or the under-volume question was answered and `generation_under_volume` recorded.
+- No ranking, score, or self-critique field leaked into the generated list.
+
 ---
 
 ## Phase 3: Critique (R3, R12) — separate prompt, rejection floor enforced
 
-**Goal:** evaluate every candidate from Phase 2 with explicit `keep|drop` verdicts plus a fixed taxonomy reason. The critique must NOT see Phase 2's system prompt, the personas, or the focus hint — otherwise it is self-critique of one's own generations, the exact sycophancy this pass exists to prevent ("the generator wanted X, the critic finds reasons to keep X").
+**Goal:** evaluate every candidate from Phase 2 with explicit `keep|drop` verdicts plus a fixed taxonomy reason. **The critique never sees Phase 2's system prompt, the personas, or the focus hint.** A critique dispatch carrying any of the three has broken this — it becomes self-critique of one's own generations, the exact sycophancy this pass exists to prevent ("the generator wanted X, the critic finds reasons to keep X").
 
-**The exclusion is STRUCTURAL, not an instruction.** The critique runs as a **fresh-context read-only subagent** (a single `Task` dispatch — `subagent_type: Explore`, or `general-purpose` if unavailable, or the host's generic read-only dispatch on hosts with neither builtin (e.g. Cursor); `sync-codex.sh` rewrites `Task` → `spawn_agent`) whose prompt contains ONLY the grounding snapshot + the candidate list + the taxonomy/floor instructions below. A separate context window physically cannot attend to the personas / focus hint / generation prompt — where a same-window "separate prompt" section could. This is the **one** subagent dispatch in this otherwise-inline skill, and it is safe: the critique is non-interactive (it emits verdicts, asks nothing), so `AskUserQuestion` reachability — the reason the rest of the skill stays inline — is unaffected; the floor-violation question (§3.2) runs on the main thread after the subagent returns.
+**The exclusion is structural, not an instruction.** The critique runs as a **fresh-context read-only subagent** (a single `Task` dispatch — `subagent_type: Explore`, or `general-purpose` if unavailable, or the host's generic read-only dispatch on hosts with neither builtin (e.g. Cursor); `sync-codex.sh` rewrites `Task` → `spawn_agent`) whose prompt contains only the grounding snapshot + the candidate list + the taxonomy/floor instructions below. A separate context window physically cannot attend to the personas / focus hint / generation prompt — where a same-window "separate prompt" section could. This is the **one** subagent dispatch in this otherwise-inline skill, and it is safe: the critique is non-interactive (it emits verdicts, asks nothing), so `AskUserQuestion` reachability — the reason the rest of the skill stays inline — is unaffected; the floor-violation question (§3.2) runs on the main thread after the subagent returns.
 
-### 3.1 — Build the critique prompt (the subagent's ONLY inputs)
+### 3.1 — Build the critique prompt (the subagent's only inputs)
 
 Inputs handed to the critique subagent: `CANDIDATES_YAML` (Phase 2 §2.4) + the Phase 1 grounding snapshot + the taxonomy + the target rejection rate. **Never included in the dispatch:** `FOCUS_HINT`, persona texts, the Phase 2 prompt (they live in THIS context, not the subagent's — the point of the split). The subagent returns the per-candidate `keep|drop|taxonomy|reason` YAML, which §3.2 parses on the main thread.
 
@@ -519,6 +536,12 @@ Critique rejected every candidate. Options:
 
 No third option here — shipping zero survivors produces a useless artifact.
 
+### Done when
+
+- Every candidate has exactly one verdict, and every `drop` carries a taxonomy slug from the frozen list plus a one-sentence reason.
+- The rejection rate clears the floor, or the floor-violation question was answered and `floor_violation` recorded.
+- `SURVIVORS` is non-empty and `DROPS` is materialized for Phase 5.
+
 ---
 
 ## Phase 4: Rank survivors (R2) — bucketed, prose-only
@@ -610,6 +633,12 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 3. If you have the time entries by position
 
 `RANKED` plus `DROPS` (Phase 3 §3.3) is the input to Phase 5 — the artifact writer.
+
+### Done when
+
+- Every survivor sits in exactly one bucket with a unique, sequential position; `high_leverage` holds at most 3.
+- Every leverage sentence matches the forced format, and no numeric score survived the §4.2 checks.
+- `RANKED` carries each survivor's full candidate record joined by `original_index`.
 
 ---
 
@@ -738,6 +767,12 @@ Each survivor block:
 
 Empty buckets render `_(none)_`. Empty `## Rejected` renders `_(none)_`.
 
+### Done when
+
+- `.flow/prospects/<artifact-id>.md` exists on disk, written through `write_prospect_artifact` (never hand-rolled YAML), with no `.tmp.*` file left behind.
+- Frontmatter validated; `floor_violation` / `generation_under_volume` present only when upstream set them.
+- The artifact is on disk before Phase 6 fires.
+
 ---
 
 ## Phase 6: Handoff prompt (R9, R19)
@@ -793,3 +828,9 @@ Normalize the reply (strip whitespace, lowercase). Route by exact match:
 ### 6.4 — Exit cleanly regardless
 
 The artifact is on disk. Phase 6 does not retry, does not extend, does not delete. If `flowctl prospect promote` errors, surface its stderr verbatim and exit non-zero — the user can re-run promote manually with the artifact id printed in the saved-to line.
+
+### Done when
+
+- The user was offered the choice once (blocking tool or the frozen numbered fallback) and the reply was routed per §6.3.
+- Chart and interview were suggested, never auto-invoked.
+- The artifact path was printed on every exit path.

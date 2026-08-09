@@ -85,7 +85,7 @@ When citing GitHub sources, prefer:
 ## Output Format
 
 **Output budget (hard).** This flows into the planner's context — be a **pointer, not a paste**. Keep it **under ~450 tokens**. The full page / example / option list lives at the link, one WebFetch away for the implementer; your job is to say WHICH docs + the key API + the critical pitfalls, not to reproduce them:
-- Surface every must-have doc (with URL) and **name the key API signature INLINE** (e.g. `rateLimit({windowMs, limit, statusCode}) → middleware`). **NEVER drop the primary doc/API or a critical gotcha** — those are the load-bearing output.
+- Surface every must-have doc (with URL) and **name the key API signature INLINE** (e.g. `rateLimit({windowMs, limit, statusCode}) → middleware`). **Never drop the primary doc/API or a critical gotcha** — those are the load-bearing output.
 - **No fenced code blocks. No multi-line `>` excerpt blocks.** One line per doc/source/gotcha.
 - **Known Issues: top 3–5 implementation-critical gotchas only**, one line each (the bugs that bite) — not an exhaustive option/config dump (link the reference for that).
 - Repo-relative paths for Source References; omit any section with no entries.

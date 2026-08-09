@@ -5,16 +5,16 @@ sentinel (`READINESS_WARN=true`): the input resolved to an existing SPEC that is
 not marked ready, in a repo that has adopted readiness. Ready specs, task ids,
 freeform ideas (Route B), and non-adopting repos never reach this file.
 
-- **Non-interactive / Ralph / autonomous** (any non-interactive marker: `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, `FLOW_AUTONOMOUS=1`, or the `mode:autonomous` token parsed in SKILL.md — treat the marker *family* as the gate, not a rigid two-var list): auto-proceed with ONE stderr line, never block:
+- **Non-interactive / Ralph / autonomous** (any non-interactive marker: `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, `FLOW_AUTONOMOUS=1`, or the `mode:autonomous` token parsed in SKILL.md — treat the marker *family* as the gate, not a rigid two-var list): auto-proceed with one stderr line, never block:
   ```bash
   echo "[READINESS]: spec <id> not marked ready — proceeding (non-interactive)" >&2
   ```
-- **Interactive**: ask ONE question (MUST use `AskUserQuestion` tool; lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
-  - **`tracker.readyState` NOT configured** (local readiness):
+- **Interactive**: ask exactly one question via the `AskUserQuestion` tool (lead with recommendation; default proceed — planning is non-destructive and often part of getting a spec ready). The option set splits by tracker mode:
+  - **`tracker.readyState` not configured** (local readiness):
     - **header**: `Spec not ready`
     - **body**: `<spec-id> is not marked ready (readiness is in use in this repo). Recommended: proceed — planning is non-destructive and refining a draft is normal. Confidence: [high].`
     - **options** (frozen): `proceed` (default — continue to research), `mark-ready-then-proceed` (run `$FLOWCTL spec ready <id> --json`, then continue), `abort` (exit 0 — no spec or task changes made; re-run /flow-next:plan once the spec is blessed)
-  - **`tracker.readyState` configured** (tracker-authoritative readiness — one-way pull; NEVER offer local mark-ready, the next sync would silently revert it):
+  - **`tracker.readyState` configured** (tracker-authoritative readiness — one-way pull; never offer local mark-ready — the next sync would silently revert it):
     - **header**: `Spec not ready`
     - **body**: `<spec-id> is not marked ready; readiness projects from the tracker (state: <readyState>). Recommended: proceed — planning is non-destructive. Confidence: [high].`
     - **options** (frozen): `proceed` (default — continue to research), `abort` (exit 0 — no spec or task changes made), `update-tracker-state-then-rerun` (exit 0 with guidance: move the linked issue to "<readyState>" on the board, pull via /flow-next:tracker-sync, re-run /flow-next:plan)

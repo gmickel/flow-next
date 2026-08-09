@@ -73,11 +73,11 @@ If DESIGN.md exists and the feature involves UI:
 
 ## Output Format
 
-**Output budget.** This flows straight into the planner's context, so every token is paid downstream — but **exhaustive coverage is the job: list EVERY gap you would flag. A dropped gap is a failure; an omitted security / data-integrity / permission gap is the worst kind.** Get lean by KILLING DUPLICATION AND PADDING, never by enumerating fewer gaps:
+**Output budget.** This flows straight into the planner's context, so every token is paid downstream — but **exhaustive coverage is the job: list every gap you would flag. A dropped gap is a failure; an omitted security / data-integrity / permission gap is the worst kind.** Get lean by killing duplication and padding, never by enumerating fewer gaps:
 - **One terse line per gap / flow / question** — no multi-line Steps+Missing prose; state each gap as one short question.
-- **Each gap appears in exactly ONE section** — do NOT restate the same gap as a flow *and* an edge case *and* a state question *and* a priority question. List it once, where it fits best. (This — not dropping gaps — is where the tokens come from.)
-- **Priority Questions just NAMES the top 3–5 already-listed gaps** (by short name) — it does not re-describe them.
-- **Nice-to-Clarify holds ONLY genuinely-new lower-priority gaps** — never repeat a gap already named in Edge Cases / Error / State / Integration / Priority above. If it is already listed, it does not reappear here.
+- **Each gap appears in exactly one section** — never restate the same gap as a flow *and* an edge case *and* a state question *and* a priority question. List it once, where it fits best. (This — not dropping gaps — is where the tokens come from.)
+- **Priority Questions just names the top 3–5 already-listed gaps** (by short name) — it does not re-describe them.
+- **Nice-to-Clarify holds only genuinely-new lower-priority gaps** — never repeat a gap already named in Edge Cases / Error / State / Integration / Priority above. If it is already listed, it does not reappear here.
 - **Repo-relative paths only** (never absolute `/Users/...`); **no fenced code blocks**; omit any section with no gaps.
 - A fully de-duplicated, one-line-per-gap analysis for a feature this size lands around **450–650 tokens** — that's the natural result of the rules above, not a ceiling to hit by cutting gaps. If full coverage needs a few more lines, keep them.
 

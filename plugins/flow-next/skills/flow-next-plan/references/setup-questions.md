@@ -4,7 +4,7 @@ Load this reference only when the SKILL.md setup gate fired — `REVIEW_BACKEND`
 is `ASK` (not configured) and the run is not autonomous. Configured backends and
 `AUTONOMOUS=1` never reach this file.
 
-Ask the setup questions below (do NOT use AskUserQuestion tool).
+Ask the setup questions below as plain text — never via the `AskUserQuestion` tool.
 
 **RepoPrompt eligibility** (compute once, before any question below):
 

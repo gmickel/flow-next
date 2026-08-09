@@ -151,6 +151,8 @@ workflow. Any state not matched by the table is unsafe to classify: leave the
 file unchanged and exit 0 with the same safe-classification stderr line from
 Phase 0.2.
 
+**Done when:** the Ralph guard has passed, `STATUS_JSON` has validated, the selected path was announced, and exactly one of `references/first-run.md` / `references/update.md` has been read — or the run exited 0 leaving `STRATEGY.md` untouched.
+
 ### Phase 3: Downstream handoff
 
 After writing (first-run or update), surface the file's role to the user in one paragraph:
@@ -159,6 +161,8 @@ After writing (first-run or update), surface the file's role to the user in one 
 - If `.flow/` is populated: `Strategy doc written. Downstream skills (/flow-next:prospect, /flow-next:plan, /flow-next:interview, /flow-next:capture, /flow-next:sync) will read STRATEGY.md as grounding on next invocation.`
 
 One paragraph max. No follow-up questions.
+
+**Done when:** `STRATEGY.md` is on disk at the repo root with the sections the interview filled, and exactly one handoff paragraph has been surfaced — nothing else printed at exit.
 
 ## What this skill does not do
 

@@ -1,6 +1,6 @@
 # Flow Plan Steps
 
-**IMPORTANT**: Steps 1-3 (research, gap analysis, depth) ALWAYS run regardless of input type.
+**Steps 1-3 (research, gap analysis, depth) run on every input type.** A plan that skipped one of them because the input "looked like a refine" has broken this.
 
 **CRITICAL**: If you are about to create:
 - a markdown TODO list,
@@ -100,7 +100,7 @@ echo "$SHOW_JSON"                        # command substitution hides stdout —
 
 **Unshaped oversized freeform (fn-135):** if Route B input is one large idea with unclear boundaries and several consequential unknowns, stop and recommend `/flow-next:chart` (or `/flow-next:guide`) instead of planning through the fog. Ready specs stay on Route A.
 
-**Readiness soft-check (adoption-gated; warn-not-block; fn-58):** runs right after the spec resolves and BEFORE the scout fan-out (warn before spending research tokens on a half-baked spec). Applies ONLY when the input resolved to an existing SPEC (Route A, canonical id without a `.M` suffix) — task ids and freeform ideas (Route B) skip this entirely.
+**Readiness soft-check (adoption-gated; warn-not-block; fn-58):** runs right after the spec resolves and before the scout fan-out (warn before spending research tokens on a half-baked spec). It applies only when the input resolved to an existing spec (Route A, canonical id without a `.M` suffix) — task ids and freeform ideas (Route B) skip this entirely.
 
 ```bash
 # Reuses $SHOW_JSON from the Step 1 fetch — SAME bash block (vars die across tool
@@ -155,7 +155,7 @@ fi
 
 When `STRATEGY_PRESENT=true`, the scouts and the plan-prompt see the strategy content; STOP and Read [`references/strategy-alignment.md`](references/strategy-alignment.md) before any further step — it owns the `## Strategy Alignment` and `## Strategy drift flagged for review` sections Step 5 renders. When `STRATEGY_PRESENT=false` (no STRATEGY.md or husk), the plan skips the `## Strategy Alignment` section and any drift-surfacing entirely (Step 5) — absence is fine, no signal to align to; load no reference.
 
-**CRITICAL: run every scout in the DEPTH-appropriate set below, in parallel. The set is keyed on `--depth` (a DETERMINISTIC, user-signaled tier), NOT on your judgment of "what seems relevant" — that judgment-skip is the anti-pattern.**
+**Every scout in the depth-appropriate set below runs, in parallel.** The set is keyed on `--depth` — a deterministic, user-signaled tier — never on your judgment of "what seems relevant". A fan-out that dropped a scout because it seemed irrelevant has broken this; that judgment-skip is the anti-pattern.
 
 Only the **three web-research scouts** are depth-tiered — everything else (the codebase-grounding scouts AND the Step-3 `flow-gap-analyst`) runs at EVERY depth, because a missing requirement or an ungrounded plan is bad at any size (worst on the thinnest short specs):
 
@@ -164,7 +164,7 @@ Only the **three web-research scouts** are depth-tiered — everything else (the
 | **SHORT** | **skipped** — pointer-shaped web signal the implementer can re-fetch (WebFetch) during work; a small change is grounded by the codebase scouts | `repo-scout`, `spec-scout`, `memory-scout`, `docs-gap-scout` (honoring `IF …` config gates) + `flow-gap-analyst` (Step 3) |
 | **STANDARD / DEEP** | **run** — feature-sized plans need external best-practice / framework-doc / cross-repo signal | same |
 
-Within the chosen tier you MUST run ALL of that tier's scouts (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row EXCEPT the three web-research scouts. **NOTE:** SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
+Within the chosen tier, every one of that tier's scouts runs (the anti-pattern below still binds — no cherry-picking). The table below lists the full set; on a SHORT plan, run every row except the three web-research scouts. SHORT is often a *fallback* default (the depth question is skipped for configured backends; pilot defaults to short), so the only thing a fallback-short plan loses is the recoverable web-research signal — never a requirement (flow-gap-analyst) or codebase grounding.
 
 ---
 
@@ -193,6 +193,8 @@ Must capture:
 - DESIGN.md design system tokens (if repo-scout found one)
 
 **Check `.flow/memory/declined/` by concept before proposing scope.** One `ls` (the directory is one file per concept, `<concept-slug>.md`); read any file whose concept the request touches. On a hit: cite the file in `## Decision Context`, append this request to that file's `## Prior requests` as a dated line, and keep the scope out of the plan. **Only the user reopens a declined concept** — say it was declined before, say what would change, and wait; a plan that quietly re-proposes declined scope is the failure this ledger exists to stop. No directory (or an empty one) means nothing was ever declined: continue silently.
+
+**Done when:** every scout in the depth-appropriate set has returned, the capture list above is populated with file paths and line refs, and `.flow/memory/declined/` has been checked for every concept the request touches.
 
 ## Step 2: Stakeholder & scope check
 
@@ -241,12 +243,16 @@ This shapes what the plan needs to cover. A pure backend refactor needs differen
   containment, lock-guarded writes, forced excludes of runtime state) — an
   eliminated guard is not an eliminated feature.
 
+**Done when:** the affected stakeholders are named, and every capability that survived into scope traces to the request (everything else is a one-line `## Boundaries` entry, and any policy-level refusal has its `.flow/memory/declined/` file).
+
 ## Step 3: Flow gap check
 
 Run the gap analyst subagent:
 - Task flow-next:flow-gap-analyst(<request>, research_findings)
 
 Fold gaps + questions into the plan.
+
+**Done when:** the analyst has returned, and each gap it raised is either folded into the plan or listed as an open question.
 
 ## Step 4: Pick depth
 
@@ -406,7 +412,7 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    - Table goes at the bottom of the spec (after Acceptance Criteria + Early proof point)
    - Keep Req IDs simple (R1, R2...) — they're local to this spec
 
-   **R-ID rule (MANDATORY for new specs):**
+   **R-ID rule (binding on new specs):**
    - Number acceptance criteria as `R1`, `R2`, `R3`, ... in creation order using the `- **Rn:** ...` prose prefix format shown in the template above.
    - Once a review cycle has run against an R-ID, **never renumber**. Reordering is fine (R1, R3, R5 after R2/R4 deletion is correct).
    - New criteria take the next unused number. Gaps are fine — do not compact.
@@ -559,7 +565,9 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 
    Use `dep add` when you need to add dependencies to existing tasks or fix missed dependencies.
 
-   Do NOT re-fetch the spec after writing (no post-write `show`/`cat` — you just authored this state; Step 6 validates it, and pilot judges the plan stage from flowctl state, not this skill's stdout). The Step 7 fix-loop re-anchor is the deliberate exception.
+   **The spec is never re-fetched after writing** (no post-write `show`/`cat` — you just authored this state; Step 6 validates it, and pilot judges the plan stage from flowctl state, not this skill's stdout). A post-write `show`/`cat` outside the Step 7 fix-loop re-anchor — the one deliberate exception — has broken this.
+
+**Done when:** the spec exists in `.flow/` with its plan body, every task was created in the one `task create --from-json` call, dependencies are recorded in both directions, and no plan artifact was written outside `.flow/`.
 
 ## Step 6: Validate
 
@@ -568,6 +576,8 @@ $FLOWCTL validate --spec <spec-id> --json
 ```
 
 Fix any errors before proceeding.
+
+**Done when:** `validate` returns clean for the spec, and the execution waves below are derived from the validated DAG.
 
 ### Step 6.1: Derive execution waves
 

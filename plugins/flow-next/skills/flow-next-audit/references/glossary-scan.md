@@ -9,7 +9,7 @@
 
 Contents:
 
-- [Phase 0.5: Glossary scan](#phase-05-glossary-scan) — goal, when the phase applies
+- [Phase 0.5: Glossary scan](#phase-05-glossary-scan) — pointer to the goal / when-it-applies rule in workflow.md
 - [0.5.1 — Enumerate glossaries](#051--enumerate-glossaries) — `flowctl glossary list --json` shape
 - [0.5.2 — Per-term code search](#052--per-term-code-search) — corpus, whole-word match, decision table
 - [0.5.3 — Stale-marking via Edit tool](#053--stale-marking-via-edit-tool) — HTML comment, idempotency, never delete
@@ -20,9 +20,7 @@ Contents:
 
 ## Phase 0.5: Glossary scan
 
-**Goal:** for every glossary file on the ancestor chain, verify each term has at least one usage in tracked code (term itself or any `_Avoid_` alias). Mark stale on absence; surface alias-creep as a Phase 3 signal.
-
-This phase runs in parallel concept to the memory walk — same audit invocation, separate scope. Glossary files are project state (not flow-next bookkeeping; see fn-38 R18). Skip the phase entirely when `flowctl glossary list --json` reports zero files.
+The goal and the when-this-applies rule are stated once, in workflow.md §Phase 0.5 — the section you were reading when this gate fired. This file owns the execution.
 
 ### 0.5.1 — Enumerate glossaries
 
