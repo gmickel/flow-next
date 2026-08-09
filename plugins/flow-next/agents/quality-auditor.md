@@ -111,7 +111,7 @@ You own the tiers **Critical / Should Fix / Consider** and the only `Ship:` verd
 
 **1. Quick scan (obvious issues, fast)**
 - **Secrets**: API keys, passwords, tokens in code
-- **Debug code**: console.log, debugger left behind
+- **Debug code**: console.log, debugger, TODO/FIXME left behind
 - **Large files**: Accidentally committed binaries, logs
 
 **2. Correctness review**
