@@ -2,6 +2,82 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 3.20.0] - 2026-08-09
+
+Declined scope stays declined, unknowns stop masquerading as content, and the
+prose that steers agents now states its rules as checkable failure signatures
+instead of shouting. This release is the style-and-structure half of the
+disclosure work in 3.19.0: leaner spec artifacts (paid back on every anchor,
+review, and plan-sync read), and skill prose whose force comes from being
+falsifiable rather than capitalized.
+
+### Added
+
+- **A declined-scope ledger.** The first time a feature is refused on policy
+  grounds, the refusal gets a file in `.flow/memory/declined/` — decision,
+  reasoning, and a dated `## Prior requests` list that accumulates recurrence
+  evidence. Plan checks it before proposing scope and only the user reopens a
+  declined concept; "declined because it already exists" never gets a file
+  (the ledger records judgment, not history). Kills the re-litigated scope
+  debate at the source.
+- **A `## Parked unknowns` spec section.** Genuinely-unknown items pass the
+  fog-or-ticket test (decidable now → decide; schedulable → task; unknown →
+  park) and graduate into real sections when interview or plan resolves them.
+  Unknowns stop being written up as half-specified content.
+- **Spec durability rule.** Specs state contracts — types, signatures,
+  behaviors — never file paths or line numbers, which rot on the first
+  refactor and turn plan-sync into churn. One carved exception for
+  decision-rich snippets whose location is the decision. Tasks are exempt by
+  design: `**Files:**`/`**Touches:**` remain a task's job.
+- **`Done when:` bounds on procedure steps.** ~60 new completion bounds
+  across qa, map, setup, drive, work, pilot, land, prospect, plan, and the
+  small skills — each carrying demand ("every X accounted for"), not just
+  clarity. The corpus now holds 133 Done-when blocks.
+- **An experimental skill tier.** Experimental skills ship in the plugin but
+  stay out of the tables and counts; retirement is deletion. Shipping an
+  experiment costs a folder, not a support commitment.
+
+### Changed
+
+- **Failure-signature declaratives replace ALL-CAPS shouting.** Hundreds of
+  CRITICAL/MUST/FORBIDDEN blocks across the skill corpus rewritten as bolded
+  declaratives with checkable failure signatures ("A SHIP with no backend
+  response behind it has broken this"), meaning-preserving line by line. What
+  survives in caps is load-bearing by proof: test-pinned literals, executed
+  fences, mirror-transform anchors, and eval-guarded blocks each kept with a
+  named reason.
+- **The repo glossary is now a vocabulary dictionary.** 41k characters of
+  encyclopedia became ~100 lines: 12 load-bearing terms, one definition and
+  an `Avoid:` synonym ban each (spec, not epic/ticket/story; plan-sync, not
+  tracker-sync). Full text archived at `agent_docs/archive/GLOSSARY-full.md`.
+  The glossary product feature is untouched.
+- **Guide carries a router-staleness rule** — a router that recommends a
+  removed skill or misses an existing one is a defect, and skill
+  additions/removals must update guide in the same change. The rule caught
+  its first gap on arrival: guide now routes "no written direction" to
+  `/flow-next:strategy`.
+- **Install instructions are single-sourced** from the root README with
+  instance pointers, and judgment-boundary prose in plan, chart, and guide
+  names the pull-to-just-do-the-work as the signal you're at a boundary.
+
+### Fixed
+
+- The Codex mirror's plan rewrite had been a silent no-op since the
+  depth-tier rework — its sed anchors targeted prose that no longer existed.
+  Anchors revived; Codex hosts again get multi-agent phrasing instead of the
+  Claude-specific Task-tool wording.
+- memory-migrate's report skeleton had drifted from its canonical copy
+  (two sections missing); the duplicate is now a pointer to the one source.
+- Two orphaned `flowctl-reference.md` files (unlinked from any skill or
+  test) deleted from impl-review and spec-completion-review.
+
+### Under the hood
+
+Every conversion was grepped against the test corpus and the mirror-transform
+script before editing; test pins were retargeted in the same commits, never
+weakened. Prose-contract tests, conduct checklists, and the full suite gated
+each wave.
+
 ## [flow-next 3.19.0] - 2026-08-09
 
 Every skill invocation now loads a lean universal spine and reads the rest
