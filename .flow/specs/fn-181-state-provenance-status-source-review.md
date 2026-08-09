@@ -20,6 +20,7 @@ Wrong answers become marked answers: status output carries its provenance, revie
 - The advisory never fetches and never blocks; a stale checkout still gets its computed answer, now qualified.
 - Skill-prose additions are one to two sentences per skill (fn-82 token budget respected; the saved review rounds dwarf the cost).
 - Prose changes ride sync-codex twice + mirror commit; flowctl changes ride dual-copy propagation.
+- Post-capture drift (2026-08-09, 3.19-3.21): SKILL.md routers no longer carry judgment prose (route-don't-carry diet), so the reviewer-visible home for the R2 sentences is the shared prompt references: `flow-next-plan-review/references/plan-review-prompt.md` and `flow-next-spec-completion-review/references/completion-review-prompt.md`. Both are SHA-pinned by `test_prompt_text_pinned` and byte-mirrored as `PLAN_REVIEW_PROMPT_FALLBACK` / `COMPLETION_REVIEW_PROMPT_FALLBACK` in flowctl.py (guarded by `test_review_prompt_template_parity`), so R2's edit carries: hash-pin updates + fallback parity + dual flowctl copies + codex mirror, and the prompt rationale stated in the commit message.
 - Not the tracker local-authority rule: `_resolve_dep_link()` deliberately never consults the remote tracker; this spec touches only the git-checkout axis.
 
 ## Acceptance Criteria

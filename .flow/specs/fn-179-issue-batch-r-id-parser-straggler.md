@@ -27,6 +27,7 @@ All changes are point fixes in existing code paths:
 - #308: never auto-fill the secondary `started` slot (`in_review`); the two-state case genuinely needs the human tiebreak. That design is right and stays.
 - #316: no validation of which identities are legitimate (governance belongs to the consuming repo); no sibling-identity warning heuristic.
 - workflow.md changes require `./scripts/sync-codex.sh` twice + mirror diff committed; flowctl.py changes require dual-copy propagation + `test_prompt_text_pinned` awareness.
+- Post-capture drift (2026-08-09, 3.18-3.21 landed since baseline 6a187734): the style wave added `### Done when` blocks to setup workflow.md; the Step 0 block and the detection-fixtures matrix both name `CLAUDE_PLUGIN_ROOT` as the Claude signal and must be updated in the same #306 edit or the prose contradicts itself. `CLAUDECODE=1` is inherited by child processes (same class as the documented `CURSOR_AGENT` misfire in Step 0), so the branch should pair it with a positive discriminator per the workflow's own inherited-env doctrine. If flow-98 (packaged-delegation removal, blessed 2026-08-08) lands first, the codex-delegation guard cited above as the idiom's prior art disappears; the idiom remains valid without it.
 
 ## Acceptance Criteria
 
@@ -50,4 +51,4 @@ All changes are point fixes in existing code paths:
 
 ## Decision Context
 
-Issues #305/#306 could have been folded into fn-160 (which splits the same workflow.md prose), but landing them as one-line fixes first means fn-160's split carries corrected prose instead of sequencing bugfixes behind a larger refactor. #316's optional sibling-identity warning was dropped as heuristic creep; the record-integrity half is the part prose cannot fix. All six fixes take the reporter's own suggested design where one was offered, because each was verified correct against main this session.
+Issues #305/#306 could have been folded into fn-160 (which splits the same workflow.md prose), but landing them as one-line fixes first means fn-160's split carries corrected prose instead of sequencing bugfixes behind a larger refactor. #316's optional sibling-identity warning was dropped as heuristic creep; the record-integrity half is the part prose cannot fix. All six fixes take the reporter's own suggested design where one was offered, because each was verified correct against main this session. #316's dropped sibling-identity warning is recorded in the declined ledger at `.flow/memory/declined/reclaim-sibling-identity-warning.md` (2026-08-09).

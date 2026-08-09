@@ -20,6 +20,7 @@ Make the coverage payload answer both real questions (declared at the plan gate,
 - Merge-gate semantics unchanged: evidenced coverage still counts done tasks only. Loosening to todo tasks was considered and rejected in the issue; agreed.
 - The existing `merge-base --is-ancestor` in the payload guards gate-receipt reuse; do not entangle the two.
 - make-pr must not render an evidence link for an orphaned SHA without marking it; exact rendering (omit vs annotate) is the implementer's call, abort is not acceptable.
+- Post-capture drift (2026-08-09, 3.19 branch-disclosure): make-pr's prose is now split across workflow.md / create-and-finalize.md / phases.md + references. The unrenderable-abort to re-key lives in workflow.md's rendering step (the goal_and_context-empty AND no-done_summary condition, routed through the §2.7 abort conditions); the coverage line renders from `tasks_summary.uncovered_r_ids` in the same file. Task 2 edits the restructured files; new prose-contract fixtures follow the pin-shape rule in agent_docs/adding-skills.md (content + reachability, never bare location).
 
 ## Acceptance Criteria
 

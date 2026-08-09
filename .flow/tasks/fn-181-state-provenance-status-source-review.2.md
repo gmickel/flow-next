@@ -6,6 +6,8 @@ satisfies: [R2]
 ## Description
 Spec fn-181 item 2 (#304 half 2, the load-bearing half). Plan-review + completion-review prose: committed .flow/tasks/<id>.json status is not authoritative; lifecycle lives in git-common-dir flow-state (unreachable from a diff-scoped sandbox); task lifecycle is not the reviewer's to judge (completion review = spec compliance only). One to two sentences per skill (fn-82 budget). sync-codex twice.
 
+Post-capture (3.19-3.21, see spec Edge Cases): routers no longer carry judgment prose; land the sentences in references/plan-review-prompt.md + references/completion-review-prompt.md. Both are SHA-pinned (test_prompt_text_pinned) and byte-mirrored as FALLBACK constants in flowctl.py (test_review_prompt_template_parity): update hash pins + fallback parity + dual copies + codex mirror, and state the prompt rationale in the commit message. Conduct checklists: agent_docs/conduct/plan-review.md + spec-completion-review.md.
+
 ## Acceptance
 R2 of the spec. Occurrence-3 shape (sidecar read while flow-state says done) is ruled out by prose a skill-following reviewer cannot miss.
 

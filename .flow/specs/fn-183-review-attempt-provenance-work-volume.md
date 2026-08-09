@@ -19,7 +19,7 @@ Three fields on the attempt row make a verdict identifiable and credible: a work
 - `session_id` is explicitly NOT the fix: the codex resume path returns the same thread id for the fabricating round and the real one. Copying it onto the row is welcome but cannot answer the question.
 - No new verdict-validity rules, no re-review policy, no reviewer behavior change, no new command: the consumer asks the question; flowctl only makes it askable.
 - Rows written by older versions lack the fields; readers must treat absence as unknown, never as zero.
-- DEPENDS ON fn-178 (stage receipts) landing first: same receipts/ledger neighborhood; sequencing avoids churn and lets this spec reuse any shared conventions fn-178 establishes.
+- DEPENDS ON fn-178 (stage receipts) landing first - SATISFIED 2026-08-08: fn-178 merged as PR #321. Its stage-outcome lines live in task done summaries + review-receipts (`_usage_stage_summary`), a different store than the `review_attempts` sidecar rows this spec extends; no shared code path, nothing further to wait on. Keep stage-name spellings consistent with fn-178's normalization (impl_review vs impl-review) where the two surfaces meet in docs.
 - Ledger schema changes ride the existing `hash_epoch` / architecture-notes discipline; dual copies + mirrors as always.
 
 ## Acceptance Criteria
