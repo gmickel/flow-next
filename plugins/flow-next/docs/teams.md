@@ -81,7 +81,7 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 | 5 | Cross-model code review | `.flow/review-receipts/<branch>.json` | `/flow-next:impl-review` | `/flow-next:spec-completion-review` |
 | 6 | PR-as-cognitive-aid | rendered PR body (9 input streams) | `/flow-next:make-pr` | human reviewer + `/flow-next:resolve-pr` |
 
-All six properties of a real handover object hold:
+All five properties of a real handover object hold:
 
 1. **Reviewable on its own.** A spec without code, a plan without an implementation, a PR body without a diff — each artefact stands alone as a reviewable unit.
 2. **Cross-model reviewed.** `/flow-next:plan-review` and `/flow-next:impl-review` run a *different* model (RepoPrompt / Codex / Copilot / Cursor) over the artefact before handover. See the [root README — Commands](../../../README.md#commands) for review backends, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
