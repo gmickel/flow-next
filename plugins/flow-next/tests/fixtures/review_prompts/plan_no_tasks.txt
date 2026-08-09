@@ -68,6 +68,11 @@ Do NOT mark NEEDS_WORK for:
 - Pre-existing codebase issues unrelated to this plan
 - Suggestions for features outside the plan scope
 - "While we're at it" improvements
+- Task lifecycle: a task looking not-started or not-done in committed files
+
+Committed `.flow/tasks/<id>.json` `status` fields are snapshots, not authoritative; live
+lifecycle state is runtime state in the git-common-dir flow-state store, outside the diff and
+unreachable from this review context. Read task files for their content, never for their status.
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 

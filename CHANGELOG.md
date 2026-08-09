@@ -2,6 +2,38 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+A wrong answer you can recognize costs a glance; a wrong answer dressed as a
+right one costs review rounds. Status reads now say where their answer came
+from, reviewers stop judging task lifecycle from files that were never the
+authority, and the pre-work commands warn when the checkout itself is behind.
+Fixes #304 and #307 — thanks @sn-furali for the measured reports.
+
+### Added
+
+- **Status output carries its provenance.** `flowctl show` and `list` task
+  entries under `--json` now include `status_source` — `"flow-state"` when the
+  authoritative runtime store answered, `"committed"` when the answer came from
+  a tracked snapshot that may be stale — and plain output prints one advisory
+  line when the runtime state directory is absent. A fresh clone or diff-scoped
+  sandbox can no longer present a stale snapshot as a confident answer. (#304)
+- **The pre-work commands notice a stale checkout.** `ready` (including
+  `--all`) and `anchor` warn once per invocation when HEAD is behind its
+  upstream (`stale_vs_upstream` under `--json`), because a wrong answer just
+  before starting work is the most expensive one. One read-only git probe,
+  never a fetch, never blocking — and deliberately NOT added to `list`,
+  `status`, or `next`, whose fast-poll performance stays untouched. (#307)
+
+### Changed
+
+- **Reviewers no longer judge task bookkeeping.** Both shared review prompts
+  (plan review, completion review) now state that committed task-file `status`
+  fields are snapshots — live lifecycle state lives outside a diff-scoped
+  review context — and that a task looking not-started in committed files is
+  never grounds for a finding. Closes the measured failure where a compliant
+  spec ate three review rounds over sidecar staleness. (#304)
+
 ## [flow-next 3.22.0] - 2026-08-09
 
 When one agent hands work to the next — a worker returning to its conductor, a

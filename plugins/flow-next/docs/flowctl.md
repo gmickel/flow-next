@@ -574,6 +574,8 @@ flowctl show fn-1.2 [--json]   # Task only
 
 Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (1.12.0+ — absent on-disk key reads `false`, so consumers always see a stable boolean).
 
+Task entries under `--json` always carry `status_source`: `"flow-state"` when the runtime state store answered (authoritative), `"committed"` when the answer came from the tracked task file — a snapshot that can be arbitrarily stale in a fresh or diff-scoped checkout. Plain output prints one advisory line per invocation when the runtime state directory is absent entirely (`note: runtime state absent; task status read from committed files and may be stale`). Provenance only — no status semantics change, and the field is never persisted.
+
 ### specs
 
 List all specs.
@@ -612,6 +614,8 @@ Output:
 List all specs with their tasks grouped together.
 
 Perf: repo-root/state-dir git lookups are memoized per process (fn-109), so listing hundreds of tasks costs a handful of subprocess spawns instead of two per task (30.8s -> <1s at 400 tasks).
+
+Task entries under `--json` carry the same `status_source` provenance field as `show`, and plain output prints the same absent-runtime advisory (one line per invocation). `list`, `status`, and `next` deliberately perform NO upstream-staleness check — they are the high-frequency polls the fn-109 win protects; the behind-upstream advisory below belongs to `ready`/`anchor` only.
 
 ```bash
 flowctl list [--json]
@@ -700,6 +704,8 @@ List tasks ready to start, in progress, and blocked.
 ```bash
 flowctl ready --spec fn-1 [--json]
 ```
+
+As an ask-before-work command, `ready` (including `--all`) also checks once per invocation whether HEAD is behind its configured upstream: when behind, plain output appends `note: checkout is N commits behind <upstream>; spec-level state may be stale` and `--json` carries `stale_vs_upstream: <N>`. One read-only git spawn, never a fetch, never blocking; no upstream, detached HEAD, or any git failure means the advisory is silently absent. `anchor` carries the same advisory.
 
 Output:
 ```json
