@@ -112,8 +112,8 @@ When data is missing, the body says so honestly (e.g. `*No decision-track memory
 
 ## Forbidden
 
-- **Ralph-blocking the skill.** This skill IS the autonomous-loop terminus per spec R24. Detect Ralph but proceed (with `--draft` forced). Do NOT add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill.
-- **Re-adding a confirm gate.** make-pr creates the PR without prompting; do NOT reintroduce a "create / dry-run / abort" `plain-text numbered prompt` before push. The escape hatch is `--dry-run`, not a question.
+- **Ralph-blocking the skill.** This skill is the autonomous-loop terminus per spec R24. Detect Ralph but proceed (with `--draft` forced). A `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill has broken this.
+- **Re-adding a confirm gate.** make-pr creates the PR without prompting. A run that asks "do you want to create it?" before push has broken this — the escape hatch is `--dry-run`, not a question.
 - **Pushing or creating PRs in `--dry-run` mode.** Phase 4 short-circuits before any `git push` or `gh pr create`. The body lands on stdout only.
 - **Squashing the existing-PR check.** A bare `gh pr view --json url 2>/dev/null` returns rc=0 for CLOSED and MERGED PRs as readily as OPEN. Filter `.state == "OPEN"` via `jq` (validated empirically during fn-42 spike). Closed/merged PRs on a reused branch must NOT trigger refusal.
 - **Manual `git push` workflows when `gh` is missing.** When `gh` isn't installed or authenticated, surface the install / `gh auth login` instructions and exit. Don't try to fall back to half-baked PR creation.

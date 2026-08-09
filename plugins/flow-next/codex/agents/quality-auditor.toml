@@ -149,7 +149,7 @@ If DESIGN.md exists and diff contains frontend files (.jsx, .tsx, .vue, .svelte,
 
 ## Output Format
 
-**Output budget (hard).** Keep the whole audit **under ~500 tokens** — it flows into the reviewer's context, so every token is paid downstream. **Coverage is the job: NEVER drop a real finding or weaken a severity/confidence to save tokens** — leanness comes from terser wording, not fewer findings:
+**Output budget (hard).** Keep the whole audit **under ~500 tokens** — it flows into the reviewer's context, so every token is paid downstream. **Coverage is the job.** An audit that drops a real finding, or weakens a severity/confidence to save tokens, has broken this — leanness comes from terser wording, not fewer findings:
 - **One line per finding.** Format: `**file:line** (Conf N): issue — fix.` A Critical finding may add ONE `Risk:` line when the blast radius isn't self-evident; Should-Fix / Consider stay single lines.
 - **No fenced code blocks**; repo-relative paths only; name the symbol inline.
 - **Terse trailing sections.** Test Gaps / Test Budget / Security Notes / What's Good: ≤2 bullets each, one line each; omit any section with nothing real to say. Always keep the `Suppressed findings:` line when anything was suppressed.

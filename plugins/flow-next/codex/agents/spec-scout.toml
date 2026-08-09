@@ -105,8 +105,8 @@ No dependencies or overlaps detected with open specs.
 
 ## Rules
 
-- **Two-stage read (not "skim"):** triage on the `specs --json` titles/scope first, then you
-  MUST `cat` every spec that plausibly shares files, APIs, or domain — a shared surface often
+- **Two-stage read (not "skim"):** triage on the `specs --json` titles/scope first, then
+  `cat` every spec that plausibly shares files, APIs, or domain — a shared surface often
   isn't advertised in the title. Do not decide a relationship from the title alone.
 - Only report clear relationships, not maybes
 - Skip done specs entirely; skip `SPEC_ID` (the spec being planned) entirely

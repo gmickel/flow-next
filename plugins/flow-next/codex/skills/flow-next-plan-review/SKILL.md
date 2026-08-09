@@ -91,8 +91,10 @@ Format: `<flow-spec-id> [focus areas] [--review=<mode>]`
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid
-issues and re-review. Never use the plain-text numbered prompt in this loop.**
+**The fix loop never pauses for user confirmation.** Every valid finding is
+fixed and re-reviewed automatically. A loop that stops to ask, or that exits
+with a valid finding unfixed, has broken this. Never use plain-text numbered prompt in this
+loop.
 
 `MAJOR_RETHINK` is not a fix-loop input. Surface the reviewer's rationale and
 stop with `BLOCKED: DESIGN_CONFLICT` (Ralph: `<promise>RETRY</promise>`). Only
@@ -135,6 +137,13 @@ When the verdict is `NEEDS_WORK`:
  another backend. Codex/Copilot/Cursor resume only through a same-mode receipt;
  host uses a fresh read-only subagent; rp stays in the same chat.
 5. Repeat until `SHIP`, `MAJOR_RETHINK`, backend failure, or deterministic cap.
+
+**Done when:** the round ends in one of exactly four states — a `SHIP` from the
+backend, a `MAJOR_RETHINK` escalated as `BLOCKED: DESIGN_CONFLICT`, a
+`<promise>RETRY</promise>` from a backend/transport failure, or flowctl's
+`ESCALATE:` cap refusal with the surviving findings surfaced. A round that ends
+with a `NEEDS_WORK` neither fixed in the current spec nor re-entered into the
+same backend has broken this.
 
 Recovery after context compaction:
 

@@ -66,7 +66,7 @@ Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one
 
 ## Phase 0.5 — Autonomy mode + backlog safety invariants (R1, R6)
 
-`PILOT_AUTONOMY` was resolved in SKILL.md Mode Detection (strict scalar `pilot.autonomy == "backlog"`, or the `--backlog` / `--auto` override). **Everything backlog-specific — the autonomy export AND the safety-invariant helpers — lives inside a single `if [ "$PILOT_AUTONOMY" = backlog ]` branch**, so ready mode incurs **zero** side effects (no `FLOW_AUTONOMOUS` export, no helper definitions, no backlog-mode.md load):
+`PILOT_AUTONOMY` was resolved in SKILL.md Mode Detection (strict scalar `pilot.autonomy == "backlog"`, or the `--backlog` / `--auto` override). **Everything backlog-specific — the autonomy export and the safety-invariant helpers alike — lives inside a single `if [ "$PILOT_AUTONOMY" = backlog ]` branch**, so ready mode incurs zero side effects. A ready-mode tick that exported `FLOW_AUTONOMOUS`, defined a helper, or loaded backlog-mode.md has broken this:
 
 ```bash
 if [ "${PILOT_AUTONOMY:-ready}" != "backlog" ]; then
@@ -116,7 +116,7 @@ fi
 
 **Ready mode is byte-for-byte unchanged** — the gate-off branch is a bare `:` no-op: no backlog block below runs, `references/backlog-mode.md` is never loaded, `FLOW_AUTONOMOUS` is never exported, and the verdict grammar/stage set match today's pilot exactly (R1).
 
-### Backlog safety invariants — ENFORCING guards, not prose (R6)
+### Backlog safety invariants — enforcing guards, not prose (R6)
 
 The four invariants are **hard bash branches enforced inline at their real site** (an executing agent — and a reviewer — reads the snippet as authoritative). Each short-circuits a forbidden action with a parseable terminal line; none is advisory prose. The two assert helpers above are defined only in the backlog branch and called inline at the dispatch and ask sites; invariants #3/#4 are enforced where selection happens (Phase 1.5):
 
@@ -127,7 +127,7 @@ The four invariants are **hard bash branches enforced inline at their real site*
 
 ## Phase 1 — SELECT (two-pass)
 
-**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default). In **backlog mode** it is REPLACED by Phase 1.5's wide SELECT (which reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 when `PILOT_AUTONOMY=backlog`.
+**Ready mode only.** This two-pass selection runs when `PILOT_AUTONOMY=ready` (the default). In **backlog mode** Phase 1.5's wide SELECT replaces it entirely (it reuses the same dependency / claim / re-bless checks but widens the candidate set and acts on the skip pile instead of dropping it to `NO_WORK`). Skip directly to Phase 1.5 when `PILOT_AUTONOMY=backlog`.
 
 Pass 1 enumerates minimal candidates:
 
@@ -155,18 +155,20 @@ Apply the full predicate:
 
 1. Dependencies: every `depends_on_epics[]` value is satisfied iff `$FLOWCTL show <dep> --json` reports `status == "done"`. Any unsatisfied dependency skips the candidate and records `deps unsatisfied: <ids>`.
 2. Collision avoidance: no task may be `in_progress` and assigned to another actor. The minimal `tasks --spec` listing carries no `assignee` — for every task with `status == "in_progress"`, fetch `$FLOWCTL show <task-id> --json` and read its `assignee` field. Resolve this session's actor identity exactly as `flowctl.get_actor()` does: `$FLOW_ACTOR` env var, else `git config user.email`, else `git config user.name`, else `$USER`, else `unknown`. If resolution bottoms out at `unknown`, any non-empty assignee counts as another actor.
-3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear in the classification report instead. **EXCEPTION — active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every tick**, so a "ready again" under a configured `tracker.readyState` is MECHANICAL, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every tick forever — the strike limit's entire purpose, defeated. So when `tracker.readyState` is set, **do NOT clear a `count >= 2` strike on projection-set ready**; the strikeout stands (skip the candidate as still-struck) until a genuine human signal clears it — the human answering the surfaced failure, or an explicit re-ready made after the failure is understood (not a projection echo). The `BLOCKED spec=… reason="strike 2/2"` terminal already surfaces the failure for that human.
-4. No gh here. PR state belongs exclusively to the all-done classification branch.
+3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear in the classification report instead. **Exception — active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every tick**, so a "ready again" under a configured `tracker.readyState` is mechanical, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every tick forever — the strike limit's entire purpose, defeated. **So with `tracker.readyState` set, a `count >= 2` strike survives a projection-set ready**: the strikeout stands (skip the candidate as still-struck) until a genuine human signal clears it — the human answering the surfaced failure, or an explicit re-ready made after the failure is understood (not a projection echo). A cleared strike whose only "re-bless" was a projection echo has broken this. The `BLOCKED spec=… reason="strike 2/2"` terminal already surfaces the failure for that human.
+4. **No gh touch here.** PR state belongs exclusively to the all-done classification branch; a gh call in SELECT has broken this.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
 ```
 
+Done when: exactly one candidate has passed the full predicate, or none has and the terminal above applies.
+
 ## Phase 1.5 — SELECT (wide, backlog mode only) — R2, R3, R7, R16
 
 **Active only when `PILOT_AUTONOMY=backlog`.** Execute the SELECT workflow in [references/backlog-mode.md](references/backlog-mode.md) Phase 1 (1a–1g) — its mechanics are authoritative and single-sourced there. What stays here is the workflow's enforcing bash: the dry-run gate, the guarded dispatches, and the invariants.
 
-**`--dry-run` is dispatch-free.** A `--dry-run` backlog tick is inspection-only: it MUST dispatch nothing and mutate nothing (no readiness projection, no receipts). So when `PILOT_DRY_RUN=1`, **skip the tracker-sync `reconcile` (1a) and `list-open` (1c) dispatches entirely** and select from the **flow-side `ready --all` facts alone** — then Phase 1.6 classifies and the tick stops with the diagnostic `TRIAGED` line (no `ask`, no pilot-log row). The gate below wraps every Phase 1.5 dispatch:
+**`--dry-run` is dispatch-free.** A `--dry-run` backlog tick is inspection-only: **it dispatches nothing and mutates nothing** — no readiness projection, no receipts. A dry-run tick that fired a tracker-sync op has broken this. So when `PILOT_DRY_RUN=1`, **skip the tracker-sync `reconcile` (1a) and `list-open` (1c) dispatches entirely** and select from the **flow-side `ready --all` facts alone** — then Phase 1.6 classifies and the tick stops with the diagnostic `TRIAGED` line (no `ask`, no pilot-log row). The gate below wraps every Phase 1.5 dispatch:
 
 ```bash
 DRY="${PILOT_DRY_RUN:-0}" # 1 ⇒ inspection-only: no tracker-sync dispatch, flow-side facts only
@@ -253,6 +255,8 @@ fi
 
 A `SELECTED_COUNT` of 0 (empty `SUBJECT_ID` — no candidate survived 1f/1g) falls through to the terminal split below (`NO_WORK`); exactly 1 proceeds to Phase 1.6.
 
+Done when: `SELECTED_COUNT` is 0 or 1, `SPEC_PATH` / `HAS_SPEC` are resolved for the picked subject, and no dispatch happened under `--dry-run`.
+
 Fall through to the existing terminal split **only when the pool is genuinely empty of a selectable candidate** — verbatim, backlog mode adds neither verdict:
 
 - **`NO_WORK`** — no signalled, unparked candidate exists at all (and no dep wait to report):
@@ -281,11 +285,11 @@ GATE_CLASSES="$(jq -r '(.value.pilot.gateClasses // empty) | if type=="array" th
 
 An empty/unset `gateClasses` (the default) gates nothing — full-auto is unconditional. A scalar `flowctl config set pilot.gateClasses risky` is read as the single class `risky`; multiple classes use a JSON array.
 
-**The completeness read may only WITHHOLD, never FORCE** (R3): a promoted-but-thin item is kicked back with a question, never built into a slop PR — but the read never overrides an explicit ready signal to *force* work, never sets the ready flag, never promotes.
+**The completeness read may only withhold, never force** (R3): a promoted-but-thin item is kicked back with a question, never built into a slop PR — but the read never overrides an explicit ready signal to *force* work, never sets the ready flag, never promotes. A read that started work the human had not promoted has broken this.
 
 **A live triage always resolves to a state-changing terminal** (R10): `ADVANCED` / `ASKED` / `BLOCKED` / `NEEDS_HUMAN`. It never ends on a bare `TRIAGED` no-op line — `TRIAGED <id> <class>` is diagnostic / dry-run only. Append the matching decision-log row at the resolving terminal (Phase 6).
 
-**Dry-run is the ONLY case that emits `TRIAGED`, and it short-circuits ALL routing.** Under `--dry-run` (`PILOT_DRY_RUN=1`), backlog triage classifies the subject and STOPS — it never reaches Phase 2 CLASSIFY, Phase 3.5 ASK, the `BLOCKED` terminal, or the Phase 6 pilot-log row. This branch runs immediately after the class is resolved, before any routing:
+**Dry-run is the only case that emits `TRIAGED`, and it short-circuits every route.** Under `--dry-run` (`PILOT_DRY_RUN=1`), backlog triage classifies the subject and stops — a dry-run tick that reached Phase 2 CLASSIFY, Phase 3.5 ASK, the `BLOCKED` terminal, or the Phase 6 pilot-log row has broken this. This branch runs immediately after the class is resolved, before any routing:
 
 ```bash
 if [ "${PILOT_DRY_RUN:-0}" = "1" ]; then
@@ -366,7 +370,7 @@ Classification outcomes for the all-done branch (the all-done invariant: an all-
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists (and no MERGED PR): this spec is **deferred to land** — land owns the open PR, not pilot — so record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the tick terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
-- No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` (the optional QA stage runs before make-pr); otherwise `make-pr`. This is the FLOW-15 case (all-done, no PR — make-pr never ran or its PR was lost); it MUST classify `qa`/`make-pr` and never fall through to `NO_WORK`.
+- No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` (the optional QA stage runs before make-pr); otherwise `make-pr`. This is the FLOW-15 case (all-done, no PR — make-pr never ran or its PR was lost); **it always classifies `qa` or `make-pr`**, and a fall-through to `NO_WORK` here has broken this.
 - CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 - MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
 
@@ -375,6 +379,8 @@ Dry-run stops after classification. It prints selected spec, stage, review backe
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"
 ```
+
+Done when: exactly one stage from `{plan, plan-review, work, qa, make-pr}` is named — or the tick has resolved to a `NEEDS_HUMAN` / `DEFERRED_TO_LAND` terminal — with the consulted status fields, task counts, and any PR-probe result echoed.
 
 ## Phase 3 — Branch resolution matrix
 
@@ -404,6 +410,8 @@ Matrix:
 The plan/plan-review checkout matters in multi-spec loops: a prior tick's make-pr leaves the worktree on that spec's PR branch, and planning state written there would mutate the already-open PR.
 
 If branch checkout fails (any matrix row, including the default-branch checkout), stop with `NEEDS_HUMAN`; do not dispatch and do not strike.
+
+Done when: the worktree is on the branch this stage's matrix row names, or the tick has already terminated `NEEDS_HUMAN` without dispatching.
 
 ## Phase 4 — DISPATCH exactly one sub-skill
 
@@ -435,6 +443,8 @@ Dispatch exactly one existing stage skill (slash-command invocation), with `mode
 Setter convention call-out: plan-review sets `plan_review_status` itself in its workflow Phase 4, and pilot only re-reads the field. Completion review is reached through work's Phase 3g; the spec-completion-review skill writes terminal `completion_review_status` through its backend-aware shared owner, and Work only handles its caller-owned tracker projection afterward. Pilot must not dispatch completion review directly.
 
 If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
+
+Done when: exactly one stage skill has been invoked and has returned — a tick that dispatched a second stage has broken the single-tick contract.
 
 ## Phase 5 — VERIFY + evidence echo
 
@@ -482,7 +492,7 @@ completion_review_status.after=<value>
 advanced=<true|false>
 ```
 
-For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt** — observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**: the gate routes on `qa_outcome` (the four-outcome field), NOT the Ralph-guard `verdict` projection (the QA skill projects `BLOCKED→verdict=NEEDS_WORK`, so reading `verdict` would wrongly conflate "couldn't verify" with "found problems"). QA is advisory — it never hard-blocks the build loop; the human reviewer + the land gate act on its findings.
+For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt** — observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**, and **the gate routes on `qa_outcome` (the four-outcome field), never on the Ralph-guard `verdict` projection** — the QA skill projects `BLOCKED→verdict=NEEDS_WORK`, so a tick that read `verdict` conflated "couldn't verify" with "found problems" and has broken this. QA is advisory — it never hard-blocks the build loop; the human reviewer + the land gate act on its findings.
 
 Read the receipt fresh after dispatch. The QA skill commits its own handoff in autonomous mode (qa §6.3b), so `HEAD` is now the `chore(flow): qa verdict` commit — peel it to the **code head** and match the receipt's `head_sha` against that (the pr-artifact commit can't exist yet — that's the next tick's make-pr):
 
@@ -546,6 +556,8 @@ advanced=<url present>
 If the post-dispatch tree is dirty outside `.flow/`, stop with `NEEDS_HUMAN` and leave state for diagnosis. This is a crash-class outcome, not a strike.
 
 If the sub-skill emitted a `Tracker sync:` summary line, pass that line through in the evidence echo. Pilot never re-checks the tracker itself.
+
+Done when: the stage's before/after evidence block and its `stage:` outcome line are in the transcript, and `advanced` was decided from re-read state rather than sub-skill narration.
 
 ## Phase 3.5 — ASK (backlog mode only, non-workable subjects) — R4, R7, R15
 
@@ -652,7 +664,7 @@ PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
 
 An all-done spec with an **open** PR is *not* crash-class — it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged, missing-branch, and merged-but-open-spec all-done states are `NEEDS_HUMAN`. An all-done spec with **no** PR is never terminal at all — it classifies `make-pr` and dispatches.
 
-Terminal verdict when no spec was dispatched, split by why — the two cases are distinct and must never be conflated:
+Terminal verdict when no spec was dispatched, split by why. **The two cases stay distinct** — a tick that reported an all-done-with-open-PR spec as `NO_WORK` has broken this:
 
 - **No selectable candidate at all** (none open+ready, or all skipped for unsatisfied deps / other-actor claims) yields `NO_WORK`:
 
@@ -660,7 +672,7 @@ Terminal verdict when no spec was dispatched, split by why — the two cases are
  PILOT_VERDICT=NO_WORK spec=- stage=- reason="no ready spec with satisfied deps"
  ```
 
-- **Every remaining candidate was deferred to land** (each all-done with an existing OPEN PR — the only reason they weren't dispatched) yields the distinct, greppable `DEFERRED_TO_LAND` verdict, naming the deferred spec so a transcript-only driver can hand it to `/flow-next:land`. This case MUST NOT collapse to `NO_WORK`: a `DONE`-but-open-PR spec is real outstanding work that land owns, not absence of work.
+- **Every remaining candidate was deferred to land** (each all-done with an existing OPEN PR — the only reason they weren't dispatched) yields the distinct, greppable `DEFERRED_TO_LAND` verdict, naming the deferred spec so a transcript-only driver can hand it to `/flow-next:land`. A `DONE`-but-open-PR spec is real outstanding work that land owns, not absence of work.
 
  ```text
  PILOT_VERDICT=DEFERRED_TO_LAND spec=<id> stage=land reason="all tasks done, open PR <url> — land owns the merge"
@@ -686,6 +698,8 @@ $FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE
 
 A `NO_WORK` / `DEFERRED_TO_LAND` tick selected no subject, so it writes **no** row (there is nothing to log against). A `--dry-run` tick writes no row (classification/inspection only). The single-tick contract holds: exactly one row per acting backlog tick.
 
-**The dep-wait `BLOCKED` terminal above already emits its own `--action blocked` row inline** — that IS its single decision-log row, so do NOT append a second one here for that path. This generic block covers the other resolving terminals (`advanced` / `asked` / `needs-human`) and the strike-based `BLOCKED`. Whichever terminal resolves the tick writes exactly **one** `blocked` row, never two.
+**The dep-wait `BLOCKED` terminal above already emits its own `--action blocked` row inline** — that is its single decision-log row, so this generic block adds none for that path. It covers the other resolving terminals (`advanced` / `asked` / `needs-human`) and the strike-based `BLOCKED`. Whichever terminal resolves the tick writes exactly **one** row; two rows for one tick has broken this.
+
+Done when: the ledger reflects this tick (cleared on `ADVANCED`, incremented on healthy-no-advance, untouched on crash-class), at most one decision-log row was appended, and the terminal verdict line is printed.
 
 The `PILOT_VERDICT` line is always the last line of the tick output. Print nothing after it.

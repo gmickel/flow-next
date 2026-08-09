@@ -151,4 +151,4 @@ Glossary proposals approved at read-back? (interactive only; gate: total_terms >
 Print next-step footer. Done.
 ```
 
-In autofix mode, every "ask" branch becomes "exit 2". Capture cannot guess on must-ask cases. Glossary term-adds are never written in autofix — proposals print as suggestions only.
+The autofix collapse of every "ask" branch — and what autofix never writes — is stated once in [references/autofix-mode.md](references/autofix-mode.md) § Autofix exit summary, which the `mode:autofix` gate loads.

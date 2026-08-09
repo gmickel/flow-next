@@ -227,9 +227,15 @@ fi
 - `NEEDS_INVESTIGATION=0` (has `last_audited`, `module` is an existing tracked path, zero commits to it since, not already `stale`) → **auto-Keep**: `flowctl memory mark-fresh "$entry_id"` (re-stamps `last_audited`), record `auto-Kept — <module> untouched since <last_audited>` in the Phase-5 report, and **exclude the entry from the Phase-1 investigation set**.
 - Otherwise (never audited → no `last_audited`; no `module` or a logical name → can't change-detect; module path gone → possible Delete; module changed; or already `stale`) → keep it in the Phase-1 investigation set.
 
-**Auto-Kept entries STILL flow into Phase 1.75 cross-doc analysis and the Phase-5 report** — the pre-filter skips only the expensive per-entry investigation, never the cheap pairwise contradiction scan, so an entry that went stale because a *different* entry changed is still caught. Autofix always applies the pre-filter; interactive mode may offer "re-investigate all anyway" (rare, user-driven).
+**Auto-Kept entries still flow into Phase 1.75 cross-doc analysis and the Phase-5 report.** An auto-Kept entry missing from the contradiction scan or from the report has broken this — the pre-filter skips only the expensive per-entry investigation, never the cheap pairwise contradiction scan, so an entry that went stale because a *different* entry changed is still caught. Autofix always applies the pre-filter; interactive mode may offer "re-investigate all anyway" (rare, user-driven).
 
 A recurrence-qualified entry (§0.75.1) is never auto-Kept, even when its module is untouched.
+
+### Done when
+
+- Every discovered entry carries a recurrence verdict from §0.75.1 (qualified, with the reason recorded, or not).
+- Every `status: hardened` entry has its gate-liveness result (still-hardened / un-graduation proposal / re-`mark-hardened`).
+- Every remaining entry is either auto-Kept (stamped `mark-fresh`, reason recorded for the Phase-5 report) or in the Phase-1 investigation set.
 
 ## Phase 1: Investigate (per entry)
 
@@ -393,15 +399,15 @@ For each entry, the recommendation from Phase 1 + cross-doc context from Phase 1
 
 Apply [phases.md](phases.md) §Outcome precedence: **correctness (Replace / Delete) > Consolidate > Harden**. A wrong lesson is never graduated into a gate, and a `related_to` cluster is consolidated before the merged entry is considered — the cluster, not each member, is the Harden unit. An entry classified Consolidate this run may be re-evaluated for Harden once, as the merged canonical entry.
 
-### Harden gate (both conditions, AND)
+### Harden gate (both conditions required)
 
-A Harden classification requires BOTH a recurrence signal from §0.75.1 (`>= 2` `## Update` headings OR `>= 4` entry-file commits; `related_to >= 3` corroborates only) AND an LLM judgment that the lesson is mechanizable. Missing either → Keep. The duplication guard runs before the candidate reaches Phase 3: an already-enforced-and-active class becomes a pointer-demotion proposal with no new artifact; a matched-but-inactive rule is a broken gate, so the entry stays `active` and the finding is reported. **In autofix mode, Harden candidates are never applied** — they are classified and reported under Recommended only.
+**A Harden classification rests on two independent conditions.** A Harden proposed on one of them alone has broken this: it needs both a recurrence signal from §0.75.1 (`>= 2` `## Update` headings or `>= 4` entry-file commits; `related_to >= 3` corroborates only) and an LLM judgment that the lesson is mechanizable. Missing either → Keep. The duplication guard runs before the candidate reaches Phase 3: an already-enforced-and-active class becomes a pointer-demotion proposal with no new artifact; a matched-but-inactive rule is a broken gate, so the entry stays `active` and the finding is reported. **In autofix mode, Harden candidates are never applied** — they are classified and reported under Recommended only.
 
 ### Replace evidence sufficiency check
 
 Replace requires writing a trustworthy successor. Apply the **Evidence sufficiency check** in [phases.md](phases.md) §Replace (the gate): sufficient → Phase 4 Replace flow; insufficient → Phase 4 stale flow. In autofix mode, "insufficient evidence" always routes to mark-stale, never to a half-baked Replace.
 
-### Auto-Delete criteria (must meet ALL)
+### Auto-Delete criteria (all four required)
 
 - The referenced files are gone (Glob confirms).
 - No Grep hits for class / function names from the body.
@@ -496,7 +502,7 @@ git rm "$REPO_ROOT/.flow/memory/<entry-path>"
 
 Do not archive. Do not move. Git history preserves every deleted file. Recovery: `git log --diff-filter=D -- .flow/memory/`.
 
-Only execute Delete when ALL auto-Delete criteria hold (Phase 2 §Auto-Delete). Otherwise downgrade to Replace or mark-stale.
+**Delete executes only when all four auto-Delete criteria hold** (Phase 2 §Auto-Delete). A `git rm` on an entry that met three of the four has broken this — that entry downgrades to Replace or mark-stale.
 
 ### 4.6 — Mark-stale flow (autofix ambiguous + Replace-insufficient)
 

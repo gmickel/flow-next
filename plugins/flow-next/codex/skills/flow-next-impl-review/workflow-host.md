@@ -6,7 +6,7 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 
 ## Critical rules
 
-1. **DO NOT REVIEW CODE YOURSELF** — you coordinate; a fresh-context host-native subagent reviews
+1. **The coordinator never reviews code itself** — you coordinate; a fresh-context host-native subagent reviews. A verdict formed without that subagent's response has broken this
 2. Pin the subagent to a **cross-family** model slug (family that did **not** write the diff)
 3. Every re-review is a **fresh subagent** — no context reuse, no fabricated resume ids
 4. Receipt records actual reviewer model + `"mode": "host"`
@@ -184,7 +184,7 @@ Write a receipt compatible with existing consumers:
 }
 ```
 
-`session_id` is literal `null` — deliberate: host re-reviews are always fresh subagents, and `null` distinguishes "no resumable session by design" from an accidentally incomplete receipt. `review` carries the reviewer's full output — the re-review ratchet reads it to inject prior findings into the next fresh subagent (convergence), so it is REQUIRED, not optional.
+`session_id` is literal `null` — deliberate: host re-reviews are always fresh subagents, and `null` distinguishes "no resumable session by design" from an accidentally incomplete receipt. `review` carries the reviewer's full output — the re-review ratchet reads it to inject prior findings into the next fresh subagent (convergence), so a host receipt that omits `review` has broken the convergence ratchet.
 
 Write that base JSON to a temporary input file and persist the full reviewer
 output to a second temporary file. Finalize the captured reservation first,

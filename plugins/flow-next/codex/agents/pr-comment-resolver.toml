@@ -62,7 +62,7 @@ review waves.
 When the feedback questions an *approach* rather than a fact — "why this design?", "why is X not handled?", "shouldn't this be Y instead?" — the answer is often already **recorded**, not something to reconstruct from code archaeology. If `spec_id` is set, before deciding: read the spec's `## Decision Context` (`spec_path`) and scan `decisions[]` (each `{id, title, path}`) for one that covers the questioned choice; read the full entry at its `path` when a thread turns on it.
 
 - A recorded decision explains the approach → `replied`, **citing the decision** (its title / the entry / the Decision Context), not a code-archaeology guess.
-- The suggestion contradicts a **deliberate** decision (e.g. reviewer wants X; a decision records "chose not-X because …") → **NEVER `fixed`** it into the code — that silently reverses an intentional choice. Use `replied` (explain the decision) or `needs-human` if the reviewer may have context the decision predates.
+- The suggestion contradicts a **deliberate** decision (e.g. reviewer wants X; a decision records "chose not-X because …") → **never `fixed`** it into the code — that silently reverses an intentional choice. Use `replied` (explain the decision) or `needs-human` if the reviewer may have context the decision predates.
 - No matching decision / no spec → proceed on code evidence as normal (unchanged behavior).
 
 ### 3. Decide verdict

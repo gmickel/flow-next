@@ -31,11 +31,11 @@ Use when `BACKEND="rp"`. Prerequisite: Phase 0 backend detection in [workflow-co
 
 ## Critical rules (rp backend)
 
-1. **DO NOT REVIEW CODE YOURSELF** - you coordinate, RepoPrompt reviews
-2. **MUST WAIT for actual RP response** - never simulate/skip the review
-3. **MUST use `setup-review`** - handles window selection + builder atomically
-4. **DO NOT add --json flag to chat-send** - it suppresses the review response
-5. **Re-reviews MUST stay in SAME chat** - omit `--new-chat` after first review
+1. **The coordinator never reviews code itself** - you coordinate, RepoPrompt reviews. A verdict with no RP response behind it has broken this.
+2. **Every verdict comes from an actual RP response** - a simulated or skipped review has broken this.
+3. **Window selection and the builder run through `setup-review`** - calling the builder directly has broken this.
+4. **`chat-send` carries no `--json` flag** - it suppresses the review response; a `{"chat": null}` result has broken this.
+5. **Re-reviews stay in the same chat** - omit `--new-chat` after the first review; a re-review carrying it has broken this.
 
 ## Phase 1: Gather Context (RP)
 
@@ -735,9 +735,9 @@ fi
 
 ## Fix Loop (RP)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use the plain-text numbered prompt in this loop.**
+**The fix loop never pauses for user confirmation.** Every valid finding is fixed and re-reviewed automatically — the goal is complete spec compliance. A loop that stops to ask, or that exits with a valid finding unfixed, has broken this. Never use the plain-text numbered prompt in this loop.
 
-**CRITICAL: You MUST fix the code BEFORE re-reviewing. Never re-review without making changes.**
+**Committed code changes land before every re-review.** A re-review dispatched with no change since the last verdict has broken this — the reviewer just returns NEEDS_WORK again.
 
 **MAX ITERATIONS**: Limit fix+re-review cycles to
 **${MAX_REVIEW_ITERATIONS:-8}** iterations (default 8, configurable in Ralph's
@@ -760,7 +760,7 @@ If verdict is NEEDS_WORK:
  ```
 3. **Fix the code** - Implement missing functionality
 4. **Run tests/lints** - Verify fixes don't break anything
-5. **Commit fixes with snapshot-scoped staging** (MANDATORY before re-review — NEVER blanket-stage with `git add --all`):
+5. **Commit fixes with snapshot-scoped staging** (required before re-review — a blanket `git add --all` has broken this):
 
  **Pre-dirty collision rule:** if a path you edited during the fix already appears in the PRE snapshot, do NOT stage it — path-level staging cannot separate pre-existing hunks from fix hunks. Surface the collision, defer/escalate that finding (report it in the re-review request or final summary), and never sweep pre-existing changes into a review-fix commit.
 
@@ -786,7 +786,7 @@ If verdict is NEEDS_WORK:
 
 6. **Request re-review** (only AFTER step 5):
 
- **IMPORTANT**: Do NOT re-add files already in the selection. RepoPrompt auto-refreshes
+ **Files already in the selection are never re-added.** RepoPrompt auto-refreshes
  file contents on every message. Only use `select-add` for NEW files created during fixes:
  ```bash
  # Only if fixes created new files not in original selection
@@ -797,7 +797,7 @@ If verdict is NEEDS_WORK:
 
  Then send re-review request (NO --new-chat, stay in same chat).
 
- **CRITICAL: Do NOT summarize fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
+ **The re-review request carries no summary of the fixes.** RP auto-refreshes file contents - reviewer sees your changes automatically. Just request re-review. Any summary wastes tokens and duplicates what reviewer already sees.
 
  Redirect the re-review response to the SAME literal response file from Phase 3 (overwrite), then Read it once — the single-entry rule applies to every round.
 
@@ -895,7 +895,7 @@ If verdict is NEEDS_WORK:
 ## Anti-patterns (RP backend)
 
 - **Calling builder directly** - Must use `setup-review` which wraps it
-- **Skipping setup-review** - Window selection MUST happen via this command
+- **Skipping setup-review** - window selection happens only through this command
 - **Hard-coding window IDs** - Never write `--window 1`
 - **Missing task specs** - Add ALL task specs to selection
 - **Blanket staging (`git add --all`) in the fix loop** - Sweeps pre-existing dirty paths into review-fix commits; use the snapshot-scoped staging

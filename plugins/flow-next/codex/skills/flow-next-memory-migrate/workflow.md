@@ -367,7 +367,7 @@ Autofix: skip the gate; default-decline cleanup; surface as a recommendation in 
 
 ## Phase 4: Optional cleanup
 
-**Goal:** rename originals to `.flow/memory/_migrated/<filename>.bak` for traceability. Self-ignoring directory pattern. NEVER auto-delete.
+**Goal:** rename originals to `.flow/memory/_migrated/<filename>.bak` for traceability, under a self-ignoring directory pattern. **Legacy originals are renamed only after consent, and are never deleted.** A run where a legacy file is gone from disk instead of sitting under `_migrated/` has broken this.
 
 ### 4.1 — When to run
 
@@ -400,7 +400,7 @@ mv "$MEMORY_DIR/$filename" "$MIGRATED_DIR/${filename}.bak"
 
 Use `mv`, not `cp + rm`. Preserves filesystem inode for any reflinks.
 
-### 4.4 — What NOT to do
+### 4.4 — Bounds on the rename
 
 - **Do not `git rm`** the originals. Rename only — leaves them on disk for the user to inspect.
 - **Do not delete `_migrated/`** on subsequent runs. The presence of `<filename>.bak` is what Phase 0's idempotency check uses to skip already-migrated files.

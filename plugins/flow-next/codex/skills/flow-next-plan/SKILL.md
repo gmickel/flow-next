@@ -10,7 +10,7 @@ Turn a rough idea into a spec with tasks in `.flow/`. This skill does not write 
 
 Follow this skill and linked workflows exactly. Deviations cause drift, bad gates, retries, and user frustration.
 
-**IMPORTANT**: This plugin uses `.flow/` for ALL task tracking. Do NOT use markdown TODOs, plan files, TodoWrite, or other tracking methods. All task state must be read and written via `flowctl`.
+**`.flow/` is the only task tracker.** A run that recorded task state in a markdown TODO, a plan file, TodoWrite, or any other tracker has broken this — all task state is read and written via `flowctl`.
 
 ### Chart boundary (fn-135)
 
@@ -37,21 +37,23 @@ Before Step 0, read `.flow/meta.json` and `${CODEX_HOME:-$HOME/.codex}/plugin.js
 
 ## The Golden Rule: No Implementation Code
 
-**Plans are specs, not implementations.** Do NOT write the code that will be implemented.
+**Plans are specs, not implementations.** Never write the code that will be implemented.
 
-### Code IS allowed:
+### Code the plan may contain:
 - **Signatures/interfaces** (what, not how): `function validate(input: string): Result`
 - **Patterns from this repo** (with file:line ref): "Follow pattern at `src/auth.ts:42`"
 - **Recent/surprising APIs** (from docs-scout): "React 19 changed X — use `useOptimistic` instead"
 - **Non-obvious gotchas** (from practice-scout): "Must call `cleanup()` or memory leaks"
 
-### Code is FORBIDDEN:
+### Code the plan never contains:
 - Complete function implementations
 - Full class/module bodies
 - "Here's what you'll write" blocks
 - Copy-paste ready snippets (>10 lines)
 
-**Why:** Implementation happens in `/flow-next:work` with fresh context. Writing it here wastes tokens in planning, review, AND implementation — then causes drift when the implementer does it differently anyway.
+**A spec that already contains the implementation is not a spec.** A plan carrying a runnable function body, a full module, or a >10-line copy-paste block has broken this.
+
+**Why:** Implementation happens in `/flow-next:work` with fresh context. Writing it here wastes tokens in planning, review, and implementation — then causes drift when the implementer does it differently anyway.
 
 ## Input
 
@@ -79,7 +81,7 @@ If empty, ask: "What should I plan? Give me the feature or bug in 1-5 sentences.
 Parse `$ARGUMENTS` for the literal token `mode:autonomous` (strip it, same shape as capture's `mode:autofix` — a NEW parse branch, never overloading that token). Also honor the env var `FLOW_AUTONOMOUS=1` as a secondary signal (process-level drivers). Either signal → `AUTONOMOUS=1`.
 
 Under `AUTONOMOUS=1`:
-- **Ask NO setup questions.** Explicit passthrough flags (`--depth`, `--research`, `--review`) win as usual; for anything unset, apply the autonomous defaults: depth = `short`, research = `repo-scout`, review = configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
+- **No setup question is asked.** A question surfaced under `AUTONOMOUS=1` has broken this. Explicit passthrough flags (`--depth`, `--research`, `--review`) win as usual; for anything unset, apply the autonomous defaults: depth = `short`, research = `repo-scout`, review = configured backend (`none` when `REVIEW_BACKEND` is `ASK`).
 - **Never hang on a question.** If a genuinely unanswerable ambiguity remains (e.g. empty input), stop cleanly with a one-line `NEEDS_HUMAN: <reason>` report instead of asking.
 - Autonomy ≠ Ralph: neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt path — they gate question suppression only.
 
@@ -149,7 +151,7 @@ interactive next-steps menu, and the HTML render lens after their existing
 config/choice/route signals. Their references stay cold when the path is not
 taken; Step 0 remains the only config snapshot.
 
-**CRITICAL — Step 1 (Research)**: You MUST launch ALL scouts in the **depth-appropriate set** (steps.md tier table — the full set at STANDARD/DEEP; the full set MINUS the three web-research scouts at SHORT) in ONE parallel Task call. Do NOT skip scouts within that set or run them sequentially. Each scout in the set provides unique signal.
+**Step 1 (Research) launches every scout in the depth-appropriate set as parallel multi-agent threads (Codex spawns them concurrently).** The set is the steps.md tier table — the full set at STANDARD/DEEP, the full set minus the three web-research scouts at SHORT. A plan whose research skipped a scout inside its own tier, or ran the set sequentially, has broken this. Each scout in the set provides unique signal.
 
 ## Output
 

@@ -32,7 +32,11 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
 fi
 ```
 
-The skill MUST NOT write to `$REVIEW_RECEIPT_PATH` — that's the upstream review caller's receipt; corrupting it is worse than declining.
+**Nothing is written to `$REVIEW_RECEIPT_PATH`** — that file is the upstream review caller's receipt, and corrupting it is worse than declining. A Ralph run that leaves a byte there has broken this.
+
+### Done when
+
+- With `FLOW_RALPH` or `REVIEW_RECEIPT_PATH` set, the run declined on its first line with exit 2 and named the trigger, and `$REVIEW_RECEIPT_PATH` is byte-unchanged.
 
 ---
 
@@ -135,6 +139,12 @@ EOF
 
 The four-line block ordering matches R12 spec wording: clawpatch version + `--source`, `CLAWPATCH_PROVIDER`, flow-next review backend, `.clawpatch/` last-mapped.
 
+### Done when
+
+- `SOURCE` is set (defaulting to `heuristic`) and any `--`-terminated passthrough tokens are captured.
+- **The four-line config-state echo has been emitted before any other work.** A transcript whose first output is `clawpatch map` has broken this.
+- The review-backend line is labelled informational and no `CLAWPATCH_PROVIDER` was written from it.
+
 ---
 
 ## Phase 1: Install detection (R1, R11)
@@ -194,6 +204,11 @@ fi
 
 Tolerant `(\d+\.\d+\.\d+)` regex — matches `0.4.0`, `clawpatch 0.4.0`, `clawpatch/0.4.0 (node 22)`, etc.
 
+### Done when
+
+- `clawpatch` resolved on PATH, or the run printed the `pnpm add -g clawpatch` instructions (plus the PNPM_HOME hint when the pnpm probe warranted it) and exited 1. **The skill never installs it.** A transcript showing the skill running `pnpm add -g` has broken this.
+- `CP_VER` holds a parsed triple, or the unparseable-version warning was emitted and the run continued.
+
 ---
 
 ## Phase 2: Version-range guard (R10)
@@ -230,7 +245,11 @@ if [[ -n "$CP_VER" ]]; then
 fi
 ```
 
-**Outside-range → warn one line and continue. Never block.** clawpatch is pre-1.0 — strict pinning would create friction every minor release.
+**Outside-range warns one line and continues.** clawpatch is pre-1.0 — strict pinning would create friction every minor release.
+
+### Done when
+
+- An in-range version produced no warning; an outside-range version produced exactly one stderr line naming expected vs found. **The map still ran either way.** A run blocked on a pre-1.0 minor bump has broken this.
 
 ---
 
@@ -250,7 +269,7 @@ fi
 
 ### 3.1 — Write `.clawpatch/.gitignore` skeleton (decision lock-in #1)
 
-The skeleton lives **self-contained inside `.clawpatch/`** so deleting that directory removes both data and ignore rules in one step. We do NOT append to the repo `.gitignore`.
+The skeleton lives **self-contained inside `.clawpatch/`** so deleting that directory removes both data and ignore rules in one step. **The repo `.gitignore` is left byte-unchanged** — a run that appended an ignore rule there has broken this.
 
 The skill owns this write — STRATEGY zero-dep means flowctl never references clawpatch (no `_ensure_clawpatch_gitignore` helper in flowctl.py).
 
@@ -283,6 +302,11 @@ git check-ignore -v .clawpatch/features/foo.json # → .clawpatch/.gitignore:N:*
 git check-ignore -v .clawpatch/.gitignore # → no output, exit 1 (NOT ignored — the negation is intentional)
 ```
 
+### Done when
+
+- `.clawpatch/` exists (created by `clawpatch init` when it was absent) with `project.json` + `config.json`.
+- Any ignore rules written land in `.clawpatch/.gitignore`; **an existing customized skeleton is left alone** and the repo `.gitignore` is unchanged.
+
 ---
 
 ## Phase 4: Map invocation (R1)
@@ -309,6 +333,11 @@ fi
 clawpatch streams stdout live during the filesystem walk; we don't buffer. Ctrl+C kills cleanly via subprocess group (no skill-side timeout — large-repo maps can take a minute).
 
 For `--source auto` / `--source agent`, clawpatch enforces its own `CLAWPATCH_PROVIDER` requirement. If unconfigured, clawpatch's own error surfaces; the skill propagates it verbatim.
+
+### Done when
+
+- `clawpatch map` ran with `--source` passed explicitly at the value Phase 0 resolved. **The skill never upgrades `heuristic` to `auto` or `agent` on the user's behalf.** A silent opt-up has broken this.
+- `clawpatch map`'s stdout reached the user live, and a non-zero exit was propagated as the skill's exit code.
 
 ---
 
@@ -364,6 +393,11 @@ else
  echo "Warning: clawpatch map exited 0 but .clawpatch/features/ is missing. Inspect $CLAWPATCH_DIR directly." >&2
 fi
 ```
+
+### Done when
+
+- The summary names `.clawpatch/features/`, the feature-file count, and the last-mapped timestamp, followed by the `flowctl repo-map list` / `/flow-next:plan` / `/flow-next:capture` next steps.
+- **A zero-feature heuristic result surfaces the `--source=auto|agent` suggestion** rather than an opt-up. A run that re-invoked clawpatch at a higher source has broken this.
 
 ---
 

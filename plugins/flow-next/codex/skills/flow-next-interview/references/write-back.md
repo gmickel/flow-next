@@ -19,9 +19,11 @@ After interview complete, write everything back — **scope depends on input typ
 
 **Edit-cycle rule:** if the user picks `edit`, apply revisions via the Edit tool (deltas only), then **Read the FULL draft file**, **reprint the full revised draft as ordinary markdown**, and re-issue the short approval ask. The full-file Read also satisfies Edit's read-before-edit for the next cycle. Loop until `approve` or `abort`.
 
+Done when: exactly one input-type branch below has run; the body was Written once to its literal path, printed in full, and approved; flowctl consumed that same literal path; and every section the write-policy listed as preserved is byte-identical to the copy read at Detect Input Type.
+
 The canonical spec section structure lives in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) (the single source of truth — never re-embed the section list inline per R17). The templates below show the additional **interview audit sections** that layer onto the canonical structure; the underlying spec sections (`## Goal & Context`, `## Architecture & Data Models`, ...) come from the template.
 
-Section-write rules from the scope-aware pass behavior (SKILL.md, plus the pass reference read for the resolved scope) MUST be honored — the write-policy result from `flowctl scope write-policy` is the source of truth for which sections this scope writes vs preserves. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
+**The `flowctl scope write-policy` result is the source of truth for which sections this scope writes and which it preserves** — it governs the whole write-back, together with the section-write rules from the scope-aware pass behavior (SKILL.md plus the pass reference read for the resolved scope). A section rewritten that this pass's `writable` list does not name has broken this. The `## Decision Context` substructure / FLAT-vs-substructured promotion logic is in the write-policy; do not invent inline.
 
 **Project-added sections.** `write-policy` enumerates the canonical sections only, so a spec may contain sections this project added via its own repo-root `SPEC.md` scaffold (a risk register, user stories, a rollout runbook). Never treat a section's absence from the write-policy lists as permission to drop it. Decide ownership from the section's own scope-owner marker in the body, and default to caution:
 
@@ -57,7 +59,7 @@ Hard rules:
 
 ### For NEW IDEA (text input, no Flow ID)
 
-Create spec with interview output. **DO NOT create tasks** — that's `/flow-next:plan`'s job.
+Create spec with interview output. **This branch writes a spec and zero tasks** — task creation is `/flow-next:plan`'s job. A run that leaves `flowctl tasks --spec <id>` non-empty has broken this.
 
 The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` is **NOT** the seed here — it returns a 1.0.2-shape skeleton (`Overview` / `Scope` / `Approach` / `Quick commands` / `Acceptance` / `References`) for R22 byte-for-byte backward-compat with the pre-1.1.0 `flowctl spec create` output, which uses different section names than the new canonical template. Reading from `flowctl spec skeleton` here would seed sections the scope-aware write-policy doesn't recognize. Read the template file directly. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
@@ -136,6 +138,10 @@ Per-term: user-wording vs. canonical term, the resolution chosen (use-canonical 
 (optional — only when STRATEGY_AWARE=1 surfaced behavior-(e) hits during the interview)
 Per-line: user-wording vs. canonical-strategy-wording (track name or approach), STRATEGY.md path, resolution chosen (align-with-strategy / flag-as-drift / this-is-different). Lets reviewers see where the spec aligns or pushes back on strategic intent. Read-only signal for plan-sync — the interview never edits STRATEGY.md.
 
+## Parked unknowns
+(optional — only when the interview surfaced fog nothing in this pass could resolve)
+One bullet per genuinely-unknown item, each naming what would resolve it. Fog-or-ticket test: decidable now → decide it in the section that owns it; resolvable by scheduled work → it is a task, not fog; genuinely unknown → park it here. Omit the heading when the list is empty.
+
 ## Open Questions
 Unresolved items that need research during planning, plus every skipped interview question (owner hint + the agent's unconfirmed leaning — SKILL.md skip contract). When the write-back checkpoint chose fill-assumptions, the filled prose carries inline `*(assumed — unconfirmed)*` markers and one entry here points at them.
 ```
@@ -175,25 +181,20 @@ Refine canonical sections under your scope's writable list (per write-policy) wh
  Acceptance criteria: newly appended R-IDs carry a trailing source tag;
  pre-existing bullets keep their tag, or stay untagged, byte-for-byte>
 
-## Resolved via Codebase
-(optional — written by the technical pass when codebase-investigation resolved items)
-Items the agent answered via Read / Grep / Glob, with file:line evidence. Separate from items the user answered.
-
-## Resolved via Project Docs
-(optional — written by the business pass per R26 when project-docs investigation resolved items)
-Items the agent answered via README / CHANGELOG / STRATEGY / GLOSSARY / knowledge decisions / .flow specs / docs, with `path` or `path:line` evidence.
-
-## Glossary Conflicts
-(optional — only when DOC_AWARE=1 surfaced behavior-(a) hits during the interview)
-Per-term: user-wording vs. canonical term, the resolution chosen, file:line of the canonical entry.
-
-## Strategy Conflicts
-(optional — only when STRATEGY_AWARE=1 surfaced behavior-(e) hits during the interview)
-Per-line: user-wording vs. canonical-strategy-wording, STRATEGY.md path, resolution chosen.
-
-## Open Questions
-Unresolved items, plus every skipped interview question (owner hint + unconfirmed leaning; `*(assumed — unconfirmed)*` markers when fill-assumptions was chosen)
+<then the auxiliary interview-audit sections — same headings, same contents,
+ and same only-when conditions as the NEW IDEA branch above (Resolved via
+ Codebase / Resolved via Project Docs / Glossary Conflicts / Strategy
+ Conflicts / Parked unknowns / Open Questions); emit only those that fired.
+ One difference on this branch: `## Parked unknowns` is the pre-existing list
+ minus every bullet this pass resolved, plus any new fog — omit the heading
+ when it empties out.>
 ```
+
+### Parked unknowns — the one auxiliary section a pass takes from
+
+Read `## Parked unknowns` before composing the merged body. For each bullet: **this pass resolved it** → move the answer into the canonical section that owns it (under this scope's writable list) and DELETE the bullet from `## Parked unknowns`; **still unknown** → carry the bullet back byte-for-byte. Never leave a parked bullet standing next to its own answer — that is the stale fog this section exists to prevent. New fog the interview surfaced is appended as a bullet naming what would resolve it. The section empties out to nothing → drop the heading with it.
+
+A parked item is not a skipped question: a skip is a question the user declined to answer and belongs in `## Open Questions` with its owner hint. Fog is a question nobody can answer yet.
 
 Then hand flowctl the draft file — the literal path typed verbatim:
 

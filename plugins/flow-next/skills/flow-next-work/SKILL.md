@@ -10,7 +10,7 @@ Execute a plan systematically. Focus on finishing.
 
 Follow this skill and linked workflows exactly. Deviations cause drift, bad gates, retries, and user frustration.
 
-**IMPORTANT**: This plugin uses `.flow/` for ALL task tracking. Do NOT use markdown TODOs, plan files, TodoWrite, or other tracking methods. All task state must be read and written via `flowctl`.
+**`.flow/` is the only task tracker.** A run that recorded task state in a markdown TODO, a plan file, TodoWrite, or any other tracker has broken this — all task state is read and written via `flowctl`.
 
 ## Preamble
 

@@ -29,6 +29,8 @@ Capture treats an admitted briefing as **attributable evidence**, not as pre-tag
 5. **Write order after approval:** `spec create` → `spec set-plan` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
 6. **Retry / partial multi-spec:** on retry, first check `produced_specs[]` (and existing specs) for this B-ID+cluster identity; if a link already exists, link/use that spec instead of minting a duplicate. Partial multi-spec capture records only successful links and resumes the failed cluster without duplicating the first. Shared-context D-IDs stay attributable in each handoff but become acceptance requirements only where read-back confirms the target spec needs that guarantee.
 
+Done when: the briefing was admitted or refused on its own `status` (no forced draft treated as final, no stale B-ID admitted without a read-back naming every unresolved D-ID); its chart id, B-ID, cluster key, D-ID links, and approved assets all appear in the evidence surface as untagged links; and every spec this run created carries exactly one matching `chart link-spec` call, made after its own successful `spec create` + `spec set-plan`.
+
 ---
 
 ## 0.5b — Chart briefing admission

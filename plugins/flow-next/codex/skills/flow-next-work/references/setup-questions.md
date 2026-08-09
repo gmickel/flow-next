@@ -5,8 +5,9 @@
 > is `ASK`, no review) option. An autonomous run never reads this file: it asks
 > nothing and applies the autonomous defaults in SKILL.md.
 
-Ask ONE of the two blocks below, then wait for the response. Parse naturally —
-user may reply terse or ramble via voice.
+**Exactly one of the two blocks below is asked, then the run waits for the response.**
+A run that asks both blocks, or continues before an answer, has broken this. Parse
+naturally — the user may reply terse or ramble via voice.
 
 ## REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none (already configured)
 
@@ -43,7 +44,6 @@ Quick setup before starting:
 
 ## Defaults when empty/ambiguous
 
-- Branch = `new`
-- Review = configured backend if set, else `none` (no auto-detect fallback)
-
-**Do NOT read files or write code until user responds.**
+SKILL.md's `Defaults when empty/ambiguous` block is the single source (branch `new`;
+review = configured backend if set, else `none`), and its `Done when:` bound governs
+this file too: nothing is read and no code is written until the answer arrives.

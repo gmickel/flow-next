@@ -22,9 +22,13 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 ## Phase 0: Delegation request check (cheap, single step)
 
-**This is the ONLY step the Codex-delegation feature adds to the default work
-path.** With delegation off (the default), it resolves to a no-op and Work's
-observable lifecycle remains unchanged (R1/R3).
+**Codex delegation adds exactly this one step to the default work path.** With
+delegation off (the default) it resolves to a no-op and Work's observable
+lifecycle is unchanged (R1/R3). A default run that gained a second delegation
+step, or that read a delegation reference, has broken this.
+
+Done when: `delegation_requested` is resolved to true or false, and — when false —
+nothing else in this phase ran.
 
 ```bash
 # Cheap host short-circuit FIRST — delegation is Claude-Code-only. On a non-Claude
@@ -73,11 +77,11 @@ Detect input type in this order (first match wins):
 4. **Spec file** `.md` path that exists on disk → **SPEC_MODE**
 5. **Idea text** everything else → **SPEC_MODE**
 
-**Handle-recognition rule (R16):** do **not** gate on a hard "must start with `fn-`" check. Before treating a single-token arg as idea text, route it through `$FLOWCTL show <arg> --json` — if it resolves (rc 0), it is an existing spec/task (use the canonical id from the JSON), never a new idea. Only a non-resolving token that isn't an `.md` path falls through to idea text. So `work wor-17` / `work wor-17.1` resolve the existing spec/task; they are never re-created.
+**Handle-recognition rule (R16):** **every single-token arg goes through `$FLOWCTL show <arg> --json` before it can be treated as idea text.** If it resolves (rc 0) it is an existing spec/task — use the canonical id from the JSON. Only a non-resolving token that isn't an `.md` path falls through to idea text. A run that gated on a "starts with `fn-`" check, or that re-created `wor-17` / `wor-17.1` as a new spec, has broken this.
 
 **Track the mode** — it controls looping in Phase 3.
 
-**Original-input-kind capture (ONLY when `delegation_requested` — Phase 0).** A bare
+**Original-input-kind capture — runs only when `delegation_requested` (Phase 0).** A bare
 idea-text input (match #5 above) gets promoted into a spec+task by the steps below, so
 its original kind must be recorded **before** that promotion. Read
 [references/codex-delegation-selection.md](references/codex-delegation-selection.md) now and
@@ -115,7 +119,9 @@ exist — Phase 0 already returned.
 3. Create single task: `$FLOWCTL task create --spec <spec-id> --title "Implement <idea>" --json`
 4. Continue with spec-id
 
-## Phase 1.5: Select the Codex-delegation path (ONLY when requested)
+Done when: the input is classified into exactly one of the five kinds, the mode (`SPEC_MODE` / `SINGLE_TASK_MODE`) is recorded, and a spec id exists to carry into Phase 2.
+
+## Phase 1.5: Select the Codex-delegation path (runs only when requested)
 
 **Skip unless `delegation_requested=true`.** When requested, **read
 [references/codex-delegation-selection.md](references/codex-delegation-selection.md)
@@ -143,6 +149,8 @@ git merge-base HEAD <base-branch> > .flow/tmp/spec_base # <base-branch> = the br
 ```
 Like the worker `BASE_COMMIT`, bash variables do not survive across prompt turns, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls.
 
+Done when: the run is on the branch the choice named (under autonomy, exactly the spec's `branch_name`) and `.flow/tmp/spec_base` holds the merge-base.
+
 ## Phase 3: Task Wave Loop
 
 In SPEC_MODE, inspect the whole ready frontier and prefer a concurrent safe
@@ -162,21 +170,23 @@ $FLOWCTL ready --spec <spec-id> --json
 If no ready tasks, check for completion review gate (see 3g below).
 
 In SPEC_MODE, consider every returned task and apply the **wave dispatch rule
-(fail-closed — fn-176)**. Tasks are dispatched CONCURRENTLY iff ALL of:
+(fail-closed — fn-176)**. **Concurrent dispatch requires all five conditions
+together; any one unmet sends the wave serial.** A wave dispatched with a missing
+or overlapping `**Touches:**` declaration has broken this.
 
 1. same spec;
 2. wave size ≤ 3;
-3. no dependency path between any pair, in either direction, TRANSITIVELY
+3. no dependency path between any pair, in either direction, **transitively**
  (walk the `depends_on` closure from `$FLOWCTL show <task-id> --json` /
  `$FLOWCTL tasks --spec <spec-id> --json` — `flowctl dep` only writes edges,
  it has no read verb; a direct-only check is wrong);
-4. every dispatched task HAS a `**Touches:**` declaration, and the declared
- sets are pairwise DISJOINT (`touches(A) ∩ touches(B) = ∅`, glob-aware);
+4. every dispatched task carries a `**Touches:**` declaration, and the declared
+ sets are pairwise **disjoint** (`touches(A) ∩ touches(B) = ∅`, glob-aware);
 5. no task touches the always-serial set: `.flow/`, lockfiles, migration
  dirs, codegen/generated outputs (in this repo: `plugins/flow-next/codex/**`,
  `.flow/bin` dual copies), or spec/task files.
 
-The error paths ARE the rule: a task with NO `**Touches:**` declaration →
+The error paths are the rule: a task with no `**Touches:**` declaration →
 serial; any intersection → serial; any doubt about a glob, a hidden coupling
 (shared fixtures, services), or host capacity → serial. The failure mode is
 today's behavior — sequential dispatch — never a risky wave. This replaces
@@ -198,6 +208,8 @@ Dispatch count: 2
 Sequential fallback: <reason> # only when multiple tasks were ready but one selected
 ```
 
+Done when: the four report lines are printed (plus `Sequential fallback:` when one applies) and the selected wave satisfies all five conditions above.
+
 ### 3b. Claim the Selected Wave
 
 Claim every selected task before dispatch:
@@ -211,6 +223,8 @@ claimed task in the selected wave and recompute only the failed/unclaimed
 membership from ground truth; never abandon a task that this conductor already
 moved to `in_progress`. A successful atomic claim prevents duplicate ownership;
 it does not make shared-checkout Git or filesystem mutations safe.
+
+Done when: every task in the selected wave reads `in_progress` under this actor, and any task whose claim failed has been dropped from the wave rather than dispatched.
 
 #### 3b.1 Tracker sync (opt-in) — first claim → In-Progress
 
@@ -307,7 +321,7 @@ $FLOWCTL show <task-id> --json
 
 A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `/flow-next:impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
 
-If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker agent failed. Diagnose from ground truth (below) then retry — but **BOUNDED**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). After **2** consecutive non-`done` returns for the *same task* (a worker that keeps aborting early or a persistently red Quick command), STOP retrying and escalate — do NOT respawn unboundedly. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would rerun worker agents forever); interactively, surface the failure and stop.
+If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker agent failed. Diagnose from ground truth (below) then retry — **but the retry is bounded**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). **After 2 consecutive non-`done` returns for the *same task*** (a worker that keeps aborting early or a persistently red Quick command), retrying stops and the failure escalates. A third respawn of the same task has broken this. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would rerun worker agents forever); interactively, surface the failure and stop.
 
 **Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
 
@@ -321,6 +335,8 @@ Classify and act:
 - **Already `done`** (status `done`, clean worktree at HEAD) — the report was lost but the task finished. Proceed to plan-sync (3e) as normal.
 - **Code present but not finalized** (commits and/or uncommitted changes exist, but status is still `in_progress` and build/review/`flowctl done` never ran) — spawn a **re-anchoring continuation worker** that re-reads the spec + current task status + `git status`/`git diff` and resumes from the late phase (verify build → review → `flowctl done`), rather than restarting the task from scratch.
 - **Nothing landed** (no commits, clean worktree, still `in_progress`) — the worker aborted early; retry the task normally.
+
+Done when: every dispatched task in the wave reads `done`, or has been escalated with a typed reason after its second consecutive failure — and no task is left silently `in_progress`.
 
 #### 3d.1 Tracker sync (opt-in) — task done → status comment + evidence
 
@@ -342,7 +358,7 @@ fi # default branch: bare no-op — NO link, NO read path
 
 When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Task done` section (`work.done` leaf check + best-effort dispatch), then continue with Phase 3d.2. When the gate is silent (bridge inactive), continue — nothing fires here.
 
-#### 3d.2 Delegated worker signal (ONLY when `delegation_active`)
+#### 3d.2 Delegated worker signal (runs only when `delegation_active`)
 
 Apply the already-loaded delegation reference's host circuit-breaker contract
 after each returned delegated worker. A missing `DELEGATION_*` signal leaves
@@ -351,7 +367,7 @@ consecutive task misses disable it; success resets the streak. Once disabled,
 omit `DELEGATE:*` flags from later workers and continue standard mode. Preserve
 the inlined delegation evidence as the durable Ralph/log receipt surface.
 
-### 3e. Plan Sync After the Resolved Wave (if enabled) — BOTH MODES
+### 3e. Plan Sync After the Resolved Wave (if enabled) — both modes
 
 **Runs in SINGLE_TASK_MODE and SPEC_MODE.** Only the loop-back in 3f differs by mode.
 
@@ -383,16 +399,20 @@ next `flowctl done` summary when the wave is still resolving):
 stage: plan-sync - ran [<start>..<end>] | skipped(config: planSync.enabled != true) | skipped(empty: no downstream todo tasks) | failed(EXTRACT_FAILED: <detail>) | failed(error: <detail>)
 ```
 
-A skipped stage is an EVENT with a reason, never an absence — `DOWNSTREAM=EXTRACT_FAILED`
-MUST yield a `failed(EXTRACT_FAILED...)` line (the #293 class becomes visible on
-first occurrence), and "no downstream tasks" yields `skipped(empty...)`, which is
-distinguishable from a broken extraction. Include start..end timestamps when this
-orchestrator knows them.
+**A skipped stage is an event with a reason, never an absence.** `DOWNSTREAM=EXTRACT_FAILED`
+yields a `failed(EXTRACT_FAILED...)` line (the #293 class becomes visible on
+first occurrence) and "no downstream tasks" yields `skipped(empty...)`, which is
+distinguishable from a broken extraction; a run that recorded a broken extraction as
+"nothing to do", or omitted the line entirely, has broken this. Include start..end
+timestamps when this orchestrator knows them.
+
+Done when: each `done` task in the resolved wave carries exactly one `stage: plan-sync - …` line in its evidence.
 
 ### 3f. Loop or Finish
 
-**IMPORTANT**: Steps 3d and 3e ALWAYS run after the whole selected wave returns,
-regardless of mode. Only the loop-back behavior differs:
+**Steps 3d and 3e run after the whole selected wave returns, in both modes.** A run
+that skipped either because it was in `SINGLE_TASK_MODE` has broken this. Only the
+loop-back behavior differs:
 
 **SINGLE_TASK_MODE**: After 3d→3e, go to Phase 4 (Quality). No loop.
 
@@ -421,7 +441,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
  `completion_review_status` through its backend-aware shared owner
 
 2. After skill returns with SHIP:
- - **Tracker sync (opt-in) — SHIP → verdict comment, NEVER terminal Done (fn-66):** runs only when the tracker bridge is active AND `completionReview` is opted in. With no tracker configured this is a no-op:
+ - **Tracker sync (opt-in) — SHIP posts a verdict comment, never a terminal `Done` (fn-66):** runs only when the tracker bridge is active and `completionReview` is opted in. With no tracker configured this is a no-op:
 
  ```bash
  ACTIVE=0
@@ -437,14 +457,14 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
  fi # default branch: bare no-op — NO link, NO read path
  ```
 
- When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Completion review` section (`completionReview` leaf check + comment-shaped verdict/R-ID-coverage dispatch), then continue with Phase 4. The dispatch never sends terminal `Done`/`verified` — `land.merged` is the SOLE Done driver. When the gate is silent (bridge inactive), continue — nothing fires here.
+ When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Completion review` section (`completionReview` leaf check + comment-shaped verdict/R-ID-coverage dispatch), then continue with Phase 4. **`land.merged` is the only driver that writes terminal `Done`/`verified`** — a dispatch from here that flipped the issue terminal has broken this. When the gate is silent (bridge inactive), continue — nothing fires here.
  - Go to Phase 4 (Quality)
 
 **Note:** The spec-completion-review skill owns the terminal
 `completion_review_status` write. Work never writes that status again. After
 the skill returns SHIP, Work only posts the opt-in verdict / R-ID-coverage
-comment to the linked tracker issue here. That comment does **NOT** flip the
-issue to `Done`/`verified` (fn-66: that is gated on a `MERGED` PR and driven
+comment to the linked tracker issue here. **That comment never flips the
+issue to `Done`/`verified`** (fn-66: that is gated on a `MERGED` PR and driven
 solely by `land.merged`).
 
 **Fix loop behavior**: Same as impl-review. If reviewer returns NEEDS_WORK:
@@ -455,6 +475,8 @@ solely by `land.merged`).
 5. Repeat until SHIP
 
 Only after SHIP does control return here. If skill outputs `<promise>RETRY</promise>`, there was a backend error - retry the skill invocation.
+
+Done when: `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
 
 ---
 
@@ -483,7 +505,9 @@ After all tasks complete (or periodically for large specs):
  - Use the quality_auditor agent("Review recent changes")
 - Fix critical issues
 
-Host skips cannot land in task evidence because tasks are already done by Phase 4. Accumulate EVERY skip/honor outcome as it happens (gate_id, plus the receipt `<sha8>` where one was honored) and surface each as its OWN `Gates:` line in the Phase 5 final summary - never silently skip, and never collapse mixed outcomes into one line (a periodic Phase 4 pass can produce several: some gates receipt-reused, some run full, a later pass docs-only).
+Host skips cannot land in task evidence because tasks are already done by Phase 4. **Every skip/honor outcome is accumulated as it happens** (gate_id, plus the receipt `<sha8>` where one was honored) **and surfaces as its own `Gates:` line in the Phase 5 final summary.** A silent skip, or several mixed outcomes collapsed into one line, has broken this (a periodic Phase 4 pass can produce several: some gates receipt-reused, some run full, a later pass docs-only).
+
+Done when: lint/format ran, every full gate either ran green or was receipt-honored, and one `Gates:` line is queued per outcome.
 
 ## Phase 5: Ship
 
@@ -501,8 +525,9 @@ git diff --staged
 git commit -m "<final summary>"
 ```
 
-**Do NOT close the spec here** unless the user explicitly asked.
-Ralph closes done specs at the end of the loop.
+**The spec is left open unless the user explicitly asked for it to be closed** —
+Ralph closes done specs at the end of the loop. A run that closed the spec on its
+own initiative has broken this.
 
 Then push + open PR if user wants.
 
@@ -544,7 +569,7 @@ the missed events only → record the final state in the summary slot). Still MI
 after the one cycle is a recorded, visible outcome — never a second retro-fire, never
 a block.
 
-**Final summary (mandatory template).** End the run with this block. `Tracker sync:` is a REQUIRED field with exactly four states — an explicit `n/a` proves the check ran; an absent field is a skipped check. Under Ralph, the summary goes to the summary block / stderr, never stdout. The `Gates:` slot is where host-layer gate skips surface - emit ONE `Gates:` line per accumulated Phase 4 outcome (repeat the line for each skip/honor so none is overwritten); worker-layer skips live in each task's evidence `tests[]`.
+**Final summary (mandatory template).** End the run with this block. **`Tracker sync:` is a required field carrying exactly one of its four states** — an explicit `n/a` proves the check ran, and an absent field reads as a skipped check. A summary printed without the slot has broken this. Under Ralph, the summary goes to the summary block / stderr, never stdout. The `Gates:` slot is where host-layer gate skips surface — one `Gates:` line per accumulated Phase 4 outcome (repeat the line for each skip/honor so none is overwritten); worker-layer skips live in each task's evidence `tests[]`.
 
 ```
 Spec: <spec-id> — <title>
@@ -565,14 +590,17 @@ summary` for task-scoped stages, this final summary for run-scoped ones:
 stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)
 ```
 
-Rules: a SKIPPED stage is an event with a reason, never an absence — review
-treats a stage with no line as failed (that inversion is the point: "no
-record" can never again masquerade as "nothing to do", the #293 class).
-Timestamps ride the line only where this orchestrator knows them; there is no
-separate timing store. Token/cost telemetry is explicitly OUT of scope — it is
-host-side data flowctl cannot observe (a future host integration could report
-it; nothing here does). Reading them back: `flowctl usage --stages <spec-id>`
-summarizes ran/skipped/failed counts + reasons from the committed receipts.
+**A skipped stage is an event with a reason, never an absence** — review treats a
+stage with no line as failed (that inversion is the point: "no record" can never
+again masquerade as "nothing to do", the #293 class). A stage this run reached
+that left no line has broken this. Timestamps ride the line only where this
+orchestrator knows them; there is no separate timing store. Token/cost telemetry
+is out of scope — it is host-side data flowctl cannot observe (a future host
+integration could report it; nothing here does). Reading them back:
+`flowctl usage --stages <spec-id>` summarizes ran/skipped/failed counts + reasons
+from the committed receipts.
+
+Done when: all tasks read `done`, `flowctl validate` passes, the tracker-sync check has run, and the final summary block is printed with its `Tracker sync:` slot and one `Gates:` line per Phase 4 outcome.
 
 ## Definition of Done
 

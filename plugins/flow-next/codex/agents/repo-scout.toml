@@ -87,7 +87,7 @@ git log --oneline --all -- "*/auth*" | head -5  # history of similar features
 ## Output Format
 
 **Output budget (hard).** Keep the whole findings block **under ~500 tokens**:
-- **Repo-relative paths only** (`plugins/.../x.py:42`) — NEVER absolute `/Users/...` paths.
+- **Repo-relative paths only** (`plugins/.../x.py:42`) — never absolute `/Users/...` paths.
 - **Top 3–5 items per section**, ranked by relevance; drop the rest.
 - **One line per finding** — no bold sub-headers, no grouping prose between bullets.
 - **No code blocks** — name the signature inline (e.g. `set_config(key, value)`), never paste bodies.
@@ -158,7 +158,7 @@ When `DESIGN.md` (or `.stitch/DESIGN.md`) is found, validate it is a design syst
 
 - Speed over completeness - find the 80% fast
 - Always include file:line references
-- Flag code that MUST be reused (don't reinvent)
+- Flag code that must be reused (don't reinvent)
 - Note any CLAUDE.md rules that apply
 - Skip deep analysis - that's for other agents
 - **Confidence tags** — append `[VERIFIED]` (confirmed via Read/Grep) or `[INFERRED]` (derived from naming/imports/structure) to findings. VERIFIED = tool output confirmed it. INFERRED = reasonable deduction, not mechanically confirmed.
@@ -167,6 +167,6 @@ When `DESIGN.md` (or `.stitch/DESIGN.md`) is found, validate it is a design syst
 
 - Show signatures, not full implementations
 - Keep code snippets to <10 lines illustrating the pattern shape
-- DO NOT output complete function bodies for the planner to copy
+- Never output complete function bodies for the planner to copy
 - Focus on "where to look" not "what to write"
 """

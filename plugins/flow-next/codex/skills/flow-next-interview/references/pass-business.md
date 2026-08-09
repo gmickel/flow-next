@@ -20,7 +20,7 @@ Run BEFORE the first plain-text numbered prompt call:
 Per-section write behavior (per the write-policy):
 
 - **Writable biz sections** (`Goal & Context`, `Boundaries`, outcome-AC, `### Motivation` under `## Decision Context`): write/refine from interview answers.
-- **Preserved tech sections** (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`): MUST be preserved byte-for-byte. If a tech section is EMPTY (listed in `placeholder_write`), write the placeholder line `*Pending technical-scope interview pass.*` under its heading so the read-back makes the intentional emptiness visible. If a tech section has content, leave it untouched (refine-mode for a re-run on an already-tech-populated spec).
+- **Preserved tech sections** (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`): **come back byte-for-byte.** A single reworded, reordered, or re-wrapped line in any of the three is a broken pass. If a tech section is EMPTY (listed in `placeholder_write`), write the placeholder line `*Pending technical-scope interview pass.*` under its heading so the read-back makes the intentional emptiness visible. If a tech section has content, leave it untouched (refine-mode for a re-run on an already-tech-populated spec).
 - **`## Decision Context`** (per `decision_context` shape):
  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
@@ -29,7 +29,7 @@ Per-section write behavior (per the write-policy):
 
 ## Investigate Project Docs Before Asking (R26)
 
-Symmetric to the "Investigate Before Asking" codebase rule for the tech pass (SKILL.md, under "Interview Process"). When `SCOPE == business` (or the biz phase of `both`), the agent MUST investigate project documentation BEFORE drafting any biz question — regardless of doc-aware autodetect state.
+Symmetric to the "Investigate Before Asking" codebase rule for the tech pass (SKILL.md, under "Interview Process"). **When `SCOPE == business` (or the biz phase of `both`), the project documentation below is investigated before any biz question is drafted** — regardless of doc-aware autodetect state. A first round drafted before the read list has been walked has broken this.
 
 Read — in order, with the bounded reads called out so this doesn't balloon into a multi-hour scan:
 

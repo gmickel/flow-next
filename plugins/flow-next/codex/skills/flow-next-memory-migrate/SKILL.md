@@ -94,23 +94,14 @@ Execute the phases in [workflow.md](workflow.md) in order:
 1. **Classify (one entry per prompt turn)** — for each entry: read title + body + filename context, default to mechanical `(track, category)`, override only with body-driven evidence. Interactive: ask on ambiguity. Autofix: take mechanical default + log `needs-review`.
 2. **Write categorized entries** — invoke `flowctl memory add --track <t> --category <c> --title "..." --body-file <tmpfile>` per classified entry. Slug uniqueness handled by existing helper.
 3. **Verify + Report** — re-read newly created entries, print summary (legacy files processed, entries migrated, overrides, needs-review).
-4. **Optional cleanup** — interactive: ask whether to rename originals to `.flow/memory/_migrated/<filename>.bak`. Autofix: default-decline + surface as recommendation. On first cleanup, write `.flow/memory/_migrated/.gitignore` containing `*` (self-ignoring directory pattern). NEVER auto-delete.
+4. **Optional cleanup** — interactive: ask whether to rename originals to `.flow/memory/_migrated/<filename>.bak`. Autofix: default-decline + surface as recommendation. On first cleanup, write `.flow/memory/_migrated/.gitignore` containing `*` (self-ignoring directory pattern). **Legacy originals are renamed, never deleted** — a run that removed a legacy file has broken this.
 
 ## Output rules
 
 The full report is the deliverable — print it as markdown to stdout. Do not summarize internally and emit a one-liner.
 
-Report structure (see [workflow.md](workflow.md) §3 for full schema):
+The report's exact shape lives in one place — [workflow.md](workflow.md) §3.2 (summary skeleton) and §3.3 (the autofix Applied / Recommended split). Render it from there; this file does not restate it.
 
-```text
-Memory Migration Summary
-========================
-Legacy files processed: <N> (skipped: <K> already migrated)
-Entries migrated: <M>
-Overrides (mechanical → agent-decided): <P>
-Needs review (ambiguous, took mechanical default): <Q>
-```
+What the report must carry either way: files processed, entries migrated, overrides, needs-review, plus per-entry detail (id, source filename, mechanical default, final classification, override rationale) and, for each `needs-review` entry, why the agent could not decide.
 
-Then per-entry detail (id, source filename, mechanical default, final classification, override rationale if any). For `needs-review` entries: why the agent couldn't decide.
-
-Autofix mode splits actions into **Applied** (writes succeeded) and **Recommended** (writes failed — e.g. permission denied, schema validation failed). The structure is the same; only the bucket differs. Phase 4 cleanup is always **Recommended** in autofix.
+**Done when:** the full report reached stdout as markdown. A run that summarized internally and emitted a one-liner has broken this.

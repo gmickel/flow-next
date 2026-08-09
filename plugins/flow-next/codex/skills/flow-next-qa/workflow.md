@@ -55,7 +55,7 @@ When the sentinel prints, STOP and Read [references/autonomy.md](references/auto
 
 ### 1.1 — Resolve the spec id
 
-`SPEC_ID` may arrive from the argument list. When empty, resolve it from the current branch, then fall back to an info prompt. Match the branch against each spec's stored `branch_name` (NOT against the branch literal — a flow branch name need not equal the spec id), reusing the make-pr pattern (`flow-next-make-pr/workflow.md` §0.2). Scan `.flow/specs/*.json` (canonical) and `.flow/epics/*.json` (legacy alias dir):
+`SPEC_ID` may arrive from the argument list. When empty, resolve it from the current branch, then fall back to an info prompt. Match the branch against each spec's stored `branch_name` — **never against the branch literal**, since a flow branch name need not equal the spec id; a resolver comparing the branch string to spec ids has broken this. Reuse the make-pr pattern (`flow-next-make-pr/workflow.md` §0.2). Scan `.flow/specs/*.json` (canonical) and `.flow/epics/*.json` (legacy alias dir):
 
 ```bash
 if [[ -z "$SPEC_ID" ]]; then
@@ -171,6 +171,12 @@ The `spec.spec_sections` object carries the fields Phase 2 maps:
 
 If `acceptance_criteria` is empty, there is nothing to derive scenarios from — emit a clean **N/A verdict** in Phase 6 (no driveable intent), never crash.
 
+### Done when
+
+- `SPEC_ID` names a spec (`.tasks != null`), resolved from the argument, the `branch_name` match, or an info prompt. Under `NO_PROMPT=1` an unresolved id ended the run as the documented hard error rather than a default.
+- `BASE_REF` resolved through the cascade and validated, **or** the autonomous no-base path set `QA_OUTCOME=BLOCKED` with a `blocked_reason` and short-circuited to §6.3. A hang or a prompt on the autonomous path has broken this.
+- `$PAYLOAD` holds one `spec export-cognitive-aid` result carrying both `spec.spec_sections` and the top-level `tasks[]`. **Phase 2 reads that payload.** A second export call, or a `flowctl show` used as the evidence source, has broken this.
+
 ---
 
 ## Phase 2: derive
@@ -181,7 +187,7 @@ If `acceptance_criteria` is empty, there is nothing to derive scenarios from —
 
 `work` already verifies a lot — it runs the spec's tests/lints and (for UI tasks) drives the app agentically while building. Don't re-run what `work` *deterministically* proved; do re-run everything whose satisfaction is runtime/UI/integration behavior, even if `work` narrated it done. **The subtraction keys on evidence *type*, not presence.** This runs **before** §2.1 so the AC → scenario mapping starts from the already-narrowed set.
 
-**Read the evidence from the cognitive-aid payload — NOT the spec-level task objects.** The Phase 1 `$PAYLOAD` (`spec export-cognitive-aid`) carries a top-level `tasks[]`, each with `satisfies` (the R-ID map) and `evidence` (`{commits, tests, files_touched}`):
+**The evidence is read from the cognitive-aid payload, never from the spec-level task objects.** Those objects are `{id,title,status,priority,depends_on}` — a subtraction decided from them has broken this, because they carry no `evidence` and no `satisfies` to decide on. The Phase 1 `$PAYLOAD` (`spec export-cognitive-aid`) carries a top-level `tasks[]`, each with `satisfies` (the R-ID map) and `evidence` (`{commits, tests, files_touched}`):
 
 ```bash
 # CONSERVATIVE subtraction. Each tasks[] entry: {id, status, title, satisfies, done_summary, evidence}.
@@ -196,7 +202,7 @@ TASKS_EVIDENCE="$(printf '%s' "$PAYLOAD" | jq -c '[.tasks[]? | {id, satisfies: (
 Then, per R-ID in the coverage spine, decide subtract-vs-live with **all three** conditions true to subtract — otherwise keep the live scenario:
 
 1. **`satisfies`-mapped** — a `tasks[]` entry's `satisfies` array contains this AC's R-ID. (A task that doesn't claim the R-ID can't vouch for it.)
-2. **Deterministic, specific, re-runnable** — that task's `evidence.tests` holds a command **directly tied to this R-ID / a non-live criterion** (a named test/lint/build target you could re-run and get the same answer: `python3 -m unittest …test_x`, `pnpm test src/foo.test.ts`, a specific Quick target). A **broad/ambiguous** command (bare `pnpm test`, `make`, `npm run build`) does **NOT** prove a *specific* AC ⇒ keep the live scenario.
+2. **Deterministic, specific, re-runnable** — that task's `evidence.tests` holds a command **directly tied to this R-ID / a non-live criterion** (a named test/lint/build target you could re-run and get the same answer: `python3 -m unittest …test_x`, `pnpm test src/foo.test.ts`, a specific Quick target). A **broad/ambiguous** command (bare `pnpm test`, `make`, `npm run build`) proves no *specific* AC ⇒ keep the live scenario. A row `subtracted` on the strength of a bare `pnpm test` has broken this.
 3. **Not a runtime/UI/integration AC** — the criterion is a non-live, statically-verifiable property (a unit-tested pure function, a build/typecheck gate, a CLI exit code with a deterministic test). **Any** AC whose satisfaction is observable-in-the-running-app behavior (a UI flow, a rendered state, a request round-trip, an integration with an external surface) is **always live-run**, never subtracted — even when the task narrated it done.
 
 **Never subtract on:**
@@ -251,6 +257,12 @@ S<n>:
 
 Scenarios carry forward to Phase 3 (prepare) and Phase 4 (execute). At least one scenario (or an explicit "no UI-observable AC → N/A" determination) must exist before leaving Phase 2.
 
+### Done when
+
+- Every `acceptance_criteria[].id` is a row of the §2.2 table, in spec order with gaps preserved, and each row carries exactly one of `live`, `subtracted (<task-id> · <test-cmd>)`, `backend/CLI — not live-QA-able`, or `⚠️ no live scenario`. **A runtime or UI criterion marked `subtracted` has broken this.**
+- Every scenario record carries `r_ids`, persona, goal, steps, and expected — with each write-path scenario paired with an error-path variant.
+- Each `boundaries[]` entry is recorded as an exclusion, so a "missing" feature a boundary declares out of scope is not filed in Phase 5.
+
 ---
 
 ## Phase 3: prepare
@@ -294,6 +306,13 @@ When a later scenario reads data an earlier scenario creates (a group, org, work
 
 After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), its fresh-vs-returning storage requirement, and the resolved target URL — everything Phase 4 needs to drive it via the fn-51 read-and-drive contract.
 
+### Done when
+
+- A target URL resolved from the four-step priority order, **never a silent `localhost` default**; an unreachable target carries forward to the Phase 6 BLOCKED outcome rather than ending the run here.
+- Auth-dependent scenarios have documented credentials, or are recorded as blocked. **Credentials are never guessed and never committed.** A password in the repo has broken this.
+- Under `NO_PROMPT=1` nothing was asked: an undocumented target URL or undocumented accounts became a BLOCKED receipt (§6.3) plus a clean exit.
+- Write-path scenarios are ordered ahead of the scenarios that read what they create, with the created ids recorded in the run notes.
+
 ---
 
 ## Phase 4: execute
@@ -304,7 +323,7 @@ After Phase 3, each scenario carries: its persona (+ suffix), its viewport(s), i
 
 Execute the contract per scenario:
 
-1. **Read fn-51's driving flow** — `plugins/flow-next/skills/flow-next-drive/SKILL.md` (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. Do NOT duplicate that prose here.
+1. **Read fn-51's driving flow** — `plugins/flow-next/skills/flow-next-drive/SKILL.md` (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this.
 2. **Resolve a target.** A live deploy URL or a localhost app. If none is reachable, jump to the BLOCKED routing (§4.2) — the R13 graceful-surface path.
 3. **Drive the scenario** via fn-51's universal flow (`observe → snapshot fresh refs → act → verify → capture`), using whatever driver rung the environment resolves (agent-browser is the only assumed-present driver; everything else is probe-and-degrade).
 4. **Capture evidence.** Screenshot + console at the moment of interest to `.flow/tmp/qa-<spec-id>/`, and record the evidence tuple.
@@ -324,6 +343,11 @@ BLOCKED_REASON="<no live deploy reachable | no driver available>"
 ```
 
 A missing live target is an expected, surfaced limitation — never a fabricated PASS.
+
+### Done when
+
+- Every scenario that ran has an evidence tuple `{driver_rung, target_url, viewport, screenshot_path, console_path}`, with the artifacts on disk under `.flow/tmp/qa-<spec-id>/` and referenced by path.
+- **No live target or no available driver set `QA_OUTCOME=BLOCKED` and fell through to §6.3.** A run that stopped in Phase 4 without writing a receipt has broken this — the pilot stage then finds no fresh receipt and strikes the spec.
 
 ---
 
@@ -360,13 +384,19 @@ Evidence lives under `.flow/tmp/` (gitignored) and is **referenced by path**, ne
 
 ### 5.4 — File the finding to bug memory (immediately; host owns update-vs-create)
 
-On a confirmed FAIL — and only then; a run with zero findings never reaches this step — file at once via `memory add --track bug` **with overlap scoring left ON** (**NEVER** `--no-overlap-check`). STOP and Read [references/bug-filing.md](references/bug-filing.md) — its §"Filing to bug memory" carries the finding body template, and §"Host filing skeleton" carries the exact command sequence to execute (memory-disabled no-op, the fn-113.2 high-overlap fold that drops the just-created duplicate, and the `QA_FILED_MEMORY` path tracking §6.3b commits from).
+On a confirmed FAIL — and only then; a run with zero findings never reaches this step — file at once via `memory add --track bug` **with overlap scoring left on** — a filing carrying `--no-overlap-check` has broken this. STOP and Read [references/bug-filing.md](references/bug-filing.md) — its §"Filing to bug memory" carries the finding body template, and §"Host filing skeleton" carries the exact command sequence to execute (memory-disabled no-op, the fn-113.2 high-overlap fold that drops the just-created duplicate, and the `QA_FILED_MEMORY` path tracking §6.3b commits from).
 
 `memory add` emits `matches` as the retrieval signal (per `docs/memory-schema.md`); the host decides update-vs-create. A re-run of QA that already knows the prior entry id should pass `--update <id>` so the body folds in rather than creating a sibling. When memory is disabled the filing is a clean no-op — **still record the finding in the run notes** so Phase 6 counts it toward the verdict. Findings can be **promoted to a flow spec/task** for the fix (compose from `flowctl spec create` / `/flow-next:capture`) — that is the spec↔scenario↔finding↔R-ID loop closing; see the reference.
 
 Track every finding (including P2) in `QA_FINDINGS`, with id, severity, discrete confidence
 (`0|25|50|75|100`), classification (`introduced|pre_existing`), reason, and
-surface/file in a running list for Phase 6. **Read source to assert a PASS is forbidden (R1)** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
+surface/file in a running list for Phase 6. **A PASS asserted from reading source has broken R1** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
+
+### Done when
+
+- Every filed finding was reproduced a second time before filing, and carries severity, persona, steps to reproduce, expected-vs-actual, and evidence pointers (screenshot path, console path, full URL, plus the persisted write side-effect on a write path).
+- **Severity rests on observed user impact.** A P0 relabelled P1 to keep the verdict green has broken this.
+- Filing ran with overlap scoring on, and a memory-disabled repo still recorded the finding in the run notes so Phase 6 counts it.
 
 ---
 
@@ -627,6 +657,13 @@ The `chore(flow): qa verdict` subject is what the pilot + make-pr freshness gate
 ### 6.4 — Surface the verdict to the user
 
 Print the YES/NO call, the `qa_outcome`, the open P0/P1 list (with finding ids + severities), and the R-ID coverage table (reused from Phase 2.2, now annotated with pass/fail per scenario). The verdict is shaped to feed `spec-completion-review` ("does the *live app* satisfy the AC, not just the code") — documented-only in v1; completion-review does not yet read the qa receipt.
+
+### Done when
+
+- Exactly one `qa_verdict` receipt exists at the resolved path (`--receipt` / `REVIEW_RECEIPT_PATH`, else `.flow/review-receipts/qa-<spec-id>.json`) carrying `qa_outcome`, the projected `verdict`, `head_sha`, `branch`, `rid_coverage`, and `open_p0p1`.
+- `blocked_reason` is set only on BLOCKED and `na_reason` only on NA; neither appears on the other two outcomes.
+- **A `SHIP` with an empty `.flow/tmp/qa-<spec-id>/` was force-downgraded to BLOCKED by §6.1b.** A SHIP receipt with no captured artifact has broken this.
+- Every run ends with the receipt written — including the no-target and no-driver paths. **A silent stop before the receipt, or a fabricated pass, has broken this.**
 
 ---
 

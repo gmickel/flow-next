@@ -4,7 +4,9 @@ Load this reference only when the SKILL.md setup gate fired — `REVIEW_BACKEND`
 is `ASK` (not configured) and the run is not autonomous. Configured backends and
 `AUTONOMOUS=1` never reach this file.
 
-Ask the setup questions below.
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+
+Ask the setup questions below as plain text — never via the `plain-text numbered prompt` tool.
 
 **RepoPrompt eligibility** (compute once, before any question below):
 

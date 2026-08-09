@@ -73,10 +73,10 @@ model family and fail closed when no cross-family pin is available.
 - If `REVIEW_RECEIPT_PATH` set: write receipt after review (any verdict)
 - Any failure → output `<promise>RETRY</promise>` and stop
 
-**FORBIDDEN**:
-- Self-declaring SHIP without actual backend verdict
-- Mixing backends mid-review (stick to one)
-- Skipping review when backend is "none" without user consent
+**Hard invariants:**
+- **The coordinator never authors a verdict.** A SHIP with no backend response behind it has broken this.
+- **One backend per review.** A transcript that dispatches a second backend after the first answered has broken this.
+- **Review is never skipped without consent.** A `none` backend that ends the run without the user's consent has broken this.
 
 ## Input
 
@@ -219,7 +219,7 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use the plain-text numbered prompt in this loop.**
+**The fix loop never pauses for user confirmation.** Every valid finding is fixed and re-reviewed automatically — the goal is production-grade world-class software and architecture. A loop that stops to ask, or that exits with a valid finding unfixed, has broken this. Never use the plain-text numbered prompt in this loop.
 
 **MAJOR_RETHINK is NOT a fix-loop input.** Every backend can emit `MAJOR_RETHINK` (a valid verdict tag), but it means the *design/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`** (Ralph mode: output `<promise>RETRY</promise>`). A re-approach is a human/worker decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
 

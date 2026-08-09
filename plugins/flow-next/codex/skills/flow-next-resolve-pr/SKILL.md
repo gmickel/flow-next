@@ -33,7 +33,7 @@ Format: `[PR number | PR URL | comment URL | blank] [--dry-run] [--no-cluster] [
 - **Comment URL** → targeted mode: resolve only the single thread containing that comment.
 - `--dry-run` → fetch + plan + print, no edits / commits / replies.
 - `--no-cluster` → skip cross-invocation cluster analysis (Phase 3).
-- `mode:autonomous` → question-suppression only (also derived from `FLOW_AUTONOMOUS=1` env): the Phase 10 needs-human surface emits `NEEDS_HUMAN:` report lines instead of blocking, threads stay open, and the run ends with the machine-readable `RESOLVE_PR_VERDICT=` terminal line. Sets `AUTONOMOUS=1` only — NEVER `RALPH`, no receipt paths. All other phases identical.
+- `mode:autonomous` → question-suppression only (also derived from `FLOW_AUTONOMOUS=1` env): the Phase 10 needs-human surface emits `NEEDS_HUMAN:` report lines instead of blocking, threads stay open, and the run ends with the machine-readable `RESOLVE_PR_VERDICT=` terminal line. Sets `AUTONOMOUS=1` only — never `RALPH`, no receipt paths. All other phases identical.
 
 ## Workflow
 

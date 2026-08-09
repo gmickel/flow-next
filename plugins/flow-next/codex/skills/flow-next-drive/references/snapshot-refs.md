@@ -70,7 +70,7 @@ agent-browser click @e12 # Submit form
 
 ## Ref Lifecycle
 
-**IMPORTANT**: Refs are invalidated when the page changes!
+**Refs are invalidated the moment the page changes.** Acting on a ref taken before a navigation, click, or submit has broken this — re-snapshot first.
 
 ```bash
 agent-browser snapshot -i

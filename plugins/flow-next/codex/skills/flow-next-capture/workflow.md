@@ -134,7 +134,7 @@ If no compaction signal is detected, or signals exist but the relevant evidence 
 
 ### 0.5 — Duplicate branch gate
 
-Silent overwrite is never an option (R8) — when 0.2 found matches, the branch below MUST run.
+**Silent overwrite is never an option (R8) — when 0.2 found matches, the branch below runs before anything is drafted.** A capture that reaches Phase 1 with ≥2 strong matches unresolved has broken this.
 
 - **0-1 strong matches** and no prior-capture artifact id in the conversation → no branch; continue to 0.5b.
 - **≥2 strong matches AND `REWRITE_TARGET` empty** → GATE ACTIVE — STOP. Read [references/duplicate-branch.md](references/duplicate-branch.md) and run its §0.5 branch (interactive: `extend` / `supersede` / `proceed-anyway` / `abort`; autofix: exit 2) before continuing. It also owns the §0.6 prior-capture-artifact branch below. When unsure whether the matches are strong, treat the gate as ACTIVE.
@@ -235,6 +235,9 @@ Auxiliary section rules layered on the template:
 - **`## Decision Context`** substructure (FLAT vs `### Motivation` / `### Implementation Tradeoffs` per the template's "(A) FLAT" vs "(B) SUBSTRUCTURED" branches) is governed by §2.6 — capture only emits SUBSTRUCTURED when biz-context routing has content for `### Motivation`; otherwise stays FLAT.
 - **`## Acceptance Criteria`** R-IDs allocate sequentially from R1 — capture creates fresh specs, no renumber concern. Outcome-AC entries (user-facing "what success looks like") route via biz-context signal category 3 (§2.6); other criteria stay generic.
 - **`## Requirement coverage`** appended after the template body — table mapping each R-ID to `fn-N.M (TBD — populate via /flow-next:plan)` placeholders. Capture ships unbroken-down specs; `/flow-next:plan` does the breakdown later.
+- **`## Parked unknowns`** (optional) — fog the conversation left genuinely open. One bullet per item, each naming what would resolve it, each passing the fog-or-ticket test: decidable now → decide it in the section that owns it; resolvable by scheduled work → it is a task for `/flow-next:plan`, not fog; genuinely unknown → park it. No fog → no section. This is the honest home for "we did not settle this", and it is not a dumping ground for everything the conversation did not spell out — `[inferred]` fill-in stays tagged fill-in.
+
+**Spec durability rule.** The drafted spec states **contracts** — types, signatures, behaviors, invariants — and **never file paths or line numbers**; coordinates rot on the first refactor and feed plan-sync churn downstream. One exception: a decision-rich snippet whose exact location IS the decision. When Phase 1.2 verified a user-named file or component, that verification upgrades the source tag; it does not license pasting the path into the spec body as a contract. **Tasks are exempt and unchanged** — `**Files:**` / `**Touches:**` are a task's job, and capture writes no tasks.
 
 ### 2.3 — R-ID allocation rules (R15)
 
@@ -386,7 +389,7 @@ The **draft file** contains the spec body (what `spec set-plan` consumes — it 
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-**Print-then-ask contract (interactive — R13):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so multi-paragraph drafts/diffs/criteria lists inside `plain-text numbered prompt` are unreadable. Skills that show a draft/diff for approval MUST:
+**Print-then-ask contract (interactive — R13):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so multi-paragraph drafts/diffs/criteria lists inside `plain-text numbered prompt` are unreadable. **A draft or diff shown for approval is printed once as ordinary markdown and only pointed at from the ask.** An ask body carrying the multi-paragraph draft, the diff, or the criteria list has broken this. The two steps:
 
 1. **Print the FULL draft markdown as an ordinary assistant message FIRST** (the user-visible read-back — real markdown, real newlines). When `REWRITE_TARGET` is set, also print the existing → proposed **diff** (unified style; changed sections in full) as ordinary markdown in the same message or a second message immediately after the draft — never only inside the ask.
 2. **Then** issue a **short** `plain-text numbered prompt` whose body is only: one-line pointer to the printed draft above + compact `[inferred]` tally / warnings + recommendation + options. **Never embed multi-paragraph drafts, diffs, or criteria lists in the ask body.**

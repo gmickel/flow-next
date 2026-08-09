@@ -13,7 +13,7 @@ Land is the ship loop to pilot's build loop: pilot (`/goal`-shaped) drains ready
 
 Land and Ralph are alternative autonomous drivers. Never nest them, and never reuse Ralph harness state inside land.
 
-**Auto-merge override (confined).** Land intentionally overrides the standing "no `gh pr merge` from skills" rule — confined to this one opt-in skill. Land itself is the gate: it merges explicitly (`--squash --delete-branch --match-head-commit`) only after every gate passes in-tick, and NEVER uses `gh pr merge --auto` (on a repo with no branch protection `--auto` merges instantly; server-side gating adds nothing). Every other skill keeps the no-auto-merge rule.
+**Auto-merge override (confined).** Land intentionally overrides the standing "no `gh pr merge` from skills" rule — confined to this one opt-in skill. Land itself is the gate: **it merges explicitly (`--squash --delete-branch --match-head-commit`) only after every gate passes in-tick, and never through `gh pr merge --auto`** (on a repo with no branch protection `--auto` merges instantly, so server-side gating adds nothing). A merge that rode `--auto`, or that landed before a gate passed, has broken this. Every other skill keeps the no-auto-merge rule.
 
 ## Preamble
 
@@ -63,7 +63,7 @@ done
 export LAND_DRY_RUN
 ```
 
-`--dry-run` stops after GATE: full discovery + per-PR classification report (CI tri-state read, review-signal state, would-be action) and the aggregated terminal line, with ZERO mutations — no checkout, no push, no label, no merge, no resolve-pr dispatch, no ledger write.
+`--dry-run` stops after GATE: full discovery + per-PR classification report (CI tri-state read, review-signal state, would-be action) and the aggregated terminal line, **with zero mutations**. A dry-run tick that checked out, pushed, labelled, merged, dispatched resolve-pr, or wrote the ledger has broken this.
 
 ## The verdict contract (read this before the workflow)
 
@@ -90,10 +90,10 @@ Driver condition examples:
 
 - Asking the user anything in the tick path. Land is autonomous; ambiguity maps to `NEEDS_HUMAN`.
 - Authoring PRs, choosing/planning/implementing specs — that is the build loop (pilot). Land only babysits existing PRs.
-- Acting on a PR without BOTH authorship signals (branch matches a spec's `branch_name` AND the structural authorship probe - the make-pr machine marker in footer position, with the anchored dated-footer fallback for pre-marker PRs; workflow.md Phase 1). Branch-only matches are reported `NEEDS_HUMAN`, never mutated.
+- Acting on a PR without both authorship signals (branch matches a spec's `branch_name` **and** the structural authorship probe — the make-pr machine marker in footer position, with the anchored dated-footer fallback for pre-marker PRs; workflow.md Phase 1). Branch-only matches are reported `NEEDS_HUMAN`, never mutated.
 - `gh pr merge --auto`, merge-queue enrollment, or any merge without `--match-head-commit`.
 - Hand-resolving merge-conflict hunks. The conflict path is mechanical rebase only; any conflict hunk aborts → `BLOCKED`.
-- Inventing release steps. Release-follow runs deterministic, non-interactive commands from the project's discovered release docs ONLY, or stops at merge.
+- Inventing release steps. Release-follow runs deterministic, non-interactive commands from the project's discovered release docs, and nothing else; with no such docs it stops at merge.
 - `git add -A` in the CI-fix path — stage only the files edited for the fix.
 - Dispatching any skill other than `flow-next-resolve-pr` (with `mode:autonomous`) and `flow-next-tracker-sync` (opt-in `land.merged` touchpoint).
 - Printing anything after the `LAND_VERDICT` line.
@@ -103,12 +103,12 @@ Driver condition examples:
 
 Execute [workflow.md](workflow.md) in order:
 
-1. **guards** — refuse Ralph nesting, refuse dirty non-`.flow/` start state, resolve the `.git` land ledger (read-only at this point), read `land.*` config.
-2. **discover** — open specs with all tasks done → `gh pr list --head <branch_name> --state all`, OPEN-state filter, dual authorship signals, merged-but-unclosed re-entry candidates.
-3. **gate** — per-PR read-only classification: durable-label skip, CI tri-state over ALL checks, patience window anchored to last push, unresolved review threads, review signal (`land.reviewSignal`), stale-approval detection, `mergeStateStatus`. `--dry-run` stops here.
+1. **guards** — refuse Ralph nesting, refuse dirty non-`.flow/` start state, resolve the `.git` land ledger (read-only at this point), read `land.*` config. *Done when: both guards passed, `LAND_CFG` is captured with its fallbacks applied, and the ledger is loaded without a write.*
+2. **discover** — open specs with all tasks done → `gh pr list --head <branch_name> --state all`, OPEN-state filter, dual authorship signals, merged-but-unclosed re-entry candidates. *Done when: every candidate spec has a classification (babysit / re-entry / `NEEDS_HUMAN` / skipped) and the discovery table is echoed.*
+3. **gate** — per-PR read-only classification: durable-label skip, CI tri-state over every check, patience window anchored to last push, unresolved review threads, review signal (`land.reviewSignal`), stale-approval detection, `mergeStateStatus`. `--dry-run` stops here. *Done when: each PR carries one planned action class plus a provisional verdict, and nothing has been mutated.*
  - Under the default `silence` signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate — land scans `issues/<n>/comments` for an automated-reviewer comment matching `land.cleanReviewCommentPattern` (a structured built-in default) that names the **current head SHA**. It only ever *adds* this evidence; CI, unresolved-thread, and window gates are unchanged, and a stale-SHA or non-automated comment is ignored. Set `land.cleanReviewCommentPattern` to an explicit empty string `""` to **disable** the comment path (pure reviews-API behavior); leaving it unset uses the built-in default.
-4. **act** — at most one action class per PR: CI fix, resolve-pr dispatch, mechanical rebase/update, or ready→merge→post-merge tail (spec close → tracker touchpoint → release-follow).
-5. **report** — per-PR verdict evidence, ledger writes, and the terminal `LAND_VERDICT` line (worst-severity rule).
+4. **act** — at most one action class per PR: CI fix, resolve-pr dispatch, mechanical rebase/update, or ready→merge→post-merge tail (spec close → tracker touchpoint → release-follow). *Done when: each PR has had exactly one action class executed, the worktree is back on `ORIG_BRANCH` (or the merged base), and the non-`.flow/` tree is clean.*
+5. **report** — per-PR verdict evidence, ledger writes, and the terminal `LAND_VERDICT` line (worst-severity rule). *Done when: one evidence block per processed PR is echoed and the terminal line is the last line of the response.*
 
 ## Unattended runs
 

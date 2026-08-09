@@ -13,7 +13,7 @@ the 18-reference port.
 > never-downgrade-a-P0 rule** are the *other* half of the same borrow — they live in
 > **[bug-filing.md](bug-filing.md)** (do not duplicate them here; cross-link).
 
-## What this reference covers (and what it does NOT)
+## What this reference covers, and what lives elsewhere
 
 | In this reference | Elsewhere |
 |-------------------|-----------|

@@ -575,8 +575,7 @@ fi
 plan_skill="$CODEX_DIR/skills/flow-next-plan/SKILL.md"
 if [ -f "$plan_skill" ]; then
   sed -i.bak \
-    -e 's/launch ALL scouts listed in steps.md in ONE parallel Task call/launch ALL scout agents listed in steps.md in parallel/g' \
-    -e 's/Do NOT skip scouts or run them sequentially/Do NOT skip scouts or run them sequentially. Codex will spawn them as parallel multi-agent threads/g' \
+    -e 's/launches every scout in the depth-appropriate set, in ONE parallel Task call/launches every scout in the depth-appropriate set as parallel multi-agent threads (Codex spawns them concurrently)/g' \
     "$plan_skill"
   rm -f "${plan_skill}.bak"
 fi

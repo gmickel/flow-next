@@ -46,7 +46,7 @@ flowctl rp prompt-export --window "$W" --tab "$T" --out ~/Desktop/export.md
 - `select-add --paths ...` → WRONG, use `select-add --window "$W" --tab "$T" <path>`
 - `chat-send --json` → WRONG, suppresses review text; if you see `{"chat": null}` you used --json incorrectly
 
-## Re-Review Rule (CRITICAL)
+## Re-Review Rule
 
 First review: `chat-send ... --new-chat --chat-name "..."`
 Re-reviews: `chat-send ... --message-file "${TMPDIR:-/tmp}/flow-<skill>-rereview-<id>-<suffix>.md"` — the literal re-review path composed in the fix loop (NO --new-chat)
