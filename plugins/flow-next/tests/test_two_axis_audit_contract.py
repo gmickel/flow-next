@@ -101,7 +101,7 @@ class ConductChecklist(unittest.TestCase):
     def test_checklist_exists_and_is_indexed(self) -> None:
         text = _read(CONDUCT)
         self.assertIn("AXIS:", text)
-        self.assertIn("Should Fix", text)
+        self.assertIn("tiered Critical", text)
         self.assertIn("quality-auditor.md", _read(CONDUCT_INDEX))
 
 
