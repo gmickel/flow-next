@@ -75,7 +75,7 @@ model family and fail closed when no cross-family pin is available.
   manually reset the review counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops
   automatic retries until the backend is repaired.
 
-The **FORBIDDEN** list (self-declaring SHIP, mixing backends, skipping review silently) lives with the shared anti-patterns in [workflow-common.md](workflow-common.md) §"Anti-patterns (all backends)".
+The three **hard invariants** (never self-declare SHIP, never mix backends, never skip review silently) live with the shared anti-patterns in [workflow-common.md](workflow-common.md) §"Anti-patterns (all backends)".
 
 ## Input
 

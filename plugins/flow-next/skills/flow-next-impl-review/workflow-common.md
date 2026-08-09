@@ -131,8 +131,8 @@ The default per-task review (no flags) never loads any of this — ~5.4k tokens 
 ## Anti-patterns (all backends)
 
 - **Reviewing yourself** - You coordinate; the backend reviews
-- **No receipt** - If REVIEW_RECEIPT_PATH is set, you MUST write receipt
-- **Ignoring verdict** - Must extract and act on verdict tag
+- **No receipt** - when `REVIEW_RECEIPT_PATH` is set, every verdict writes a receipt; a verdict reported with no receipt at that path has broken this
+- **Ignoring verdict** - the verdict tag is extracted from the backend response and acted on; a run that continues without reading it has broken this
 - **Mixing backends** - Stick to one backend for the entire review session
 - **Backgrounding the review CLI** - Never `run_in_background` + monitor/poll a `flowctl <backend>` review call; run it as one blocking foreground Bash call with a long timeout (Foreground rule, Phase 0)
 

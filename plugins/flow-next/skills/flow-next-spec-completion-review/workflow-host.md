@@ -6,7 +6,7 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 
 ## Critical rules
 
-1. **DO NOT REVIEW COMPLETION YOURSELF** — you coordinate; a fresh-context host-native subagent reviews
+1. **The coordinator never judges completion itself** — you coordinate; a fresh-context host-native subagent reviews. A verdict formed without that subagent's response has broken this
 2. Pin the subagent to a **cross-family** model slug (family that did **not** write the implementation)
 3. Every re-review is a **fresh subagent** — no context reuse, no fabricated resume ids
 4. Receipt records actual reviewer model + `"mode": "host"`

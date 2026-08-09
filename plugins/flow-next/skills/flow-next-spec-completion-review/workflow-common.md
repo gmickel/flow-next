@@ -97,7 +97,7 @@ Only the file for the active backend should enter context. Do not read the other
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is complete spec compliance. Never use AskUserQuestion in this loop.**
+**The fix loop never pauses for user confirmation.** Every valid finding is fixed and re-reviewed automatically — the goal is complete spec compliance. A loop that stops to ask, or that exits with a valid finding unfixed, has broken this. Never use AskUserQuestion in this loop.
 
 **MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
 The codex/copilot/cursor handlers reserve a round before dispatch; the selected
@@ -143,7 +143,7 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
    status step below before the cap terminal; never rely on a later step after
    exit 4.
 
-**CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
+**RP re-reviews stay in the same chat.** `--new-chat` belongs to the first review only — a re-review carrying it drops the reviewer's context and has broken this.
 
 ## Record the terminal verdict exactly once
 
@@ -167,14 +167,14 @@ non-terminal and never write completion status.
 
 ## Anti-patterns (all backends)
 
-**FORBIDDEN**:
-- Self-declaring SHIP without actual backend verdict
-- Mixing backends mid-review (stick to one)
-- Skipping review silently (must inform user and exit cleanly when backend is "none")
+**Hard invariants:**
+- **The coordinator never authors a verdict.** A SHIP with no backend response behind it has broken this.
+- **One backend per review.** A transcript that dispatches a second backend after the first answered has broken this.
+- **Review is never skipped silently.** A `none` backend that ends the run without informing the user and exiting cleanly has broken this.
 
 - **Reviewing yourself** - You coordinate; the backend reviews
-- **No receipt** - If REVIEW_RECEIPT_PATH is set, you MUST write receipt
-- **Ignoring verdict** - Must extract and act on verdict tag
+- **No receipt** - when `REVIEW_RECEIPT_PATH` is set, every verdict writes a receipt; a verdict reported with no receipt at that path has broken this
+- **Ignoring verdict** - the verdict tag is extracted from the backend response and acted on; a run that continues without reading it has broken this
 - **Mixing backends** - Stick to one backend for the entire review session
 - **Checking code quality** - That's impl-review's job; focus on spec compliance
 - **Backgrounding the review CLI** - Never `run_in_background` + monitor/poll a `flowctl <backend>` review call; one blocking foreground Bash call with a long timeout (Foreground rule, Phase 0)

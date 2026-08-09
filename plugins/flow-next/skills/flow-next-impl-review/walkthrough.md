@@ -233,8 +233,9 @@ and records decisions.
 - **Running walkthrough in Ralph mode** — hard error at skill entry; never
   silently downgrade to non-interactive.
 - **Skipping the blocking tool load** — on Claude Code, `ToolSearch
-  select:AskUserQuestion` MUST succeed before the loop or the fallback
-  chat-prompt path is used. Do not simulate decisions.
+  select:AskUserQuestion` must succeed before the loop, or the fallback
+  chat-prompt path is used instead. A walkthrough that records a decision the
+  user never made has broken this.
 - **Rewriting the defer file** — append-only. Users may have added manual
   context between sessions.
 - **Committing before the user chooses "Apply"** — the fixer runs only for

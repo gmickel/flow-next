@@ -327,6 +327,8 @@ Phase 3's cross-round clustering; it does not weaken the cluster gate.
 
 See `agents/pr-comment-resolver.md` — fields: `verdict`, `feedback_id`, `feedback_type`, `reply_text`, `files_changed`, `reason`, optional `cluster_assessment`, optional `decision_context` (for `needs-human`).
 
+**Done when:** every unit in `UNITS` has exactly one verdict object in `VERDICTS`, each carrying one of `fixed` / `fixed-differently` / `replied` / `not-addressing` / `needs-human` plus the evidence or rationale behind it. A unit dispatched but never collected, or a unit collected with no verdict, has broken this — re-dispatch it once (Error handling) rather than proceeding with a short `VERDICTS`.
+
 ---
 
 ## Phase 6: Validate combined state
@@ -415,6 +417,8 @@ line; `while read -r` keeps each object intact through the pipe.
 
 Reply body already carries `> quoted feedback\n\n<response>` from the resolver — the orchestrator does not rewrap.
 
+**Done when:** every verdict has produced one posted reply quoting the feedback it answers, and every `review_thread` unit except the `needs-human` ones is resolved via GraphQL. A resolved `needs-human` thread, or a thread resolved with no reply posted, has broken this.
+
 ---
 
 ## Phase 9: Verify + loop
@@ -441,6 +445,8 @@ If `REMAINING > 0` **and** some of those threads aren't in the `needs-human` set
   ```
 
 The 2-cycle bound is identical in both modes. Under `AUTONOMOUS=1` the escalation still stops the loop here; Phase 10 then reports it as part of the `NEEDS_HUMAN` verdict instead of waiting on the user.
+
+**Done when:** either `REMAINING` holds only `needs-human` threads, or the run has completed two fix-verify cycles and printed the recurring-theme summary. A third pass through Phase 2 has broken this.
 
 ---
 

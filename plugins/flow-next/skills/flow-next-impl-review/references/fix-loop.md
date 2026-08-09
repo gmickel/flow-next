@@ -6,7 +6,7 @@ enters this loop (see [../SKILL.md](../SKILL.md) § Fix Loop for the verdict
 contract, the iteration cap, and the two anti-patterns — those stay in force
 here).
 
-**CRITICAL: Do NOT ask user for confirmation. Automatically fix ALL valid issues and re-review — our goal is production-grade world-class software and architecture. Never use AskUserQuestion in this loop.**
+**The fix loop never pauses for user confirmation.** Every valid finding is fixed and re-reviewed automatically — the goal is production-grade world-class software and architecture. A loop that stops to ask, or that exits with a valid finding unfixed, has broken this. Never use AskUserQuestion in this loop.
 
 Loop internally until SHIP or the iteration cap:
 
@@ -42,4 +42,4 @@ Loop internally until SHIP or the iteration cap:
    - **RepoPrompt CE**: `$FLOWCTL rp chat-send --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file <literal re-review path>` (`T` is the canonical context binding, not visible-tab projection; NO `--tab`; same response-file rule)
 7. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap breaks the loop (escalate with surviving findings)
 
-**CRITICAL**: For RP, re-reviews must stay in the SAME chat so reviewer has context. Only use `--new-chat` on the FIRST review.
+**RP re-reviews stay in the same chat.** `--new-chat` belongs to the first review only — a re-review carrying it drops the reviewer's context and has broken this.

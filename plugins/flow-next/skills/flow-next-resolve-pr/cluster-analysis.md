@@ -90,7 +90,7 @@ Both outcomes are valid. The resolver's `cluster_assessment` field reports which
 
 ## Dispatch boundary for previously-resolved threads
 
-Previously-resolved threads provide **cluster-brief context only**. They are NEVER individually re-dispatched — they were already resolved in prior rounds and should stay that way.
+Previously-resolved threads provide **cluster-brief context only**. They are never individually re-dispatched — they were already resolved in prior rounds and should stay that way.
 
 If a previously-resolved thread doesn't cluster with any new thread, it is dropped silently — it provided candidate context but no cross-round pattern emerged.
 
