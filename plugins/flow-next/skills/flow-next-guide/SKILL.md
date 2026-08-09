@@ -39,6 +39,7 @@ Match the **starting state**. First clear match wins. Chart only when one oversi
 
 | Starting state | Route | Positive signal | Safe skip / narrow |
 |---|---|---|---|
+| No written direction - target problem, users, or key metrics are not stated anywhere | `/flow-next:strategy` | Repeated arguments about what matters; no `STRATEGY.md` to ground prospect/capture/plan | Skip when `STRATEGY.md` exists or the effort is small enough that direction is not in question |
 | Looking for candidate investments across a domain | `/flow-next:prospect` | Domain search; need ranked candidates | Skip prospect when the idea is already singular. After selection: chart **only if** the candidate remains singular + oversized + unclear; otherwise capture |
 | One large idea, unclear boundaries, several consequential unknowns | `/flow-next:chart` then briefing then capture | Singular effort too big for one capture; unknowns block stating intent | Skip chart (`signal absent`) when intent and boundaries are already stateable - go capture or author the spec directly. Chart is never mandatory |
 | A theme or direction rather than one effort ("make X more Y") | `/flow-next:prospect`, or narrow to a single effort | No nameable end state, so no Outcome and no scope boundary | Chart cannot take this (`signal absent` for chart): it needs a destination whose route is unknown, not a direction. Narrow first, or prospect when the real ask is which effort to pick |
@@ -52,6 +53,8 @@ Match the **starting state**. First clear match wins. Chart only when one oversi
 
 There is **no** fixed prospect -> chart -> capture conveyor. Each hop re-evaluates the matrix.
 
+**Router staleness is a defect, not drift.** This table is the router's inventory of what ships. Recommending a skill that no longer exists, or failing to know one that does, is a broken router - the recommendation looks confident and sends the user nowhere. Adding or removing a flow-next skill updates this table in the same change (`agent_docs/adding-skills.md`).
+
 ## Prompt-first behavior
 
 1. Infer starting state from `$ARGUMENTS` + conversation (and optional read-only probes).
@@ -59,6 +62,8 @@ There is **no** fixed prospect -> chart -> capture conveyor. Each hop re-evaluat
 3. If two routes would materially change cost, consent, or discovery vs build path, ask **at most one** blocking question via bare `AskUserQuestion` (or the plain-text numbered fallback). Then recommend.
 4. Never present chart as required onboarding, a pipeline stage, or the default after prospect.
 5. Never mutate `.flow/` or invoke write-capable flowctl subcommands.
+
+When the situation reads as a concrete task, the pull is to just answer it - the fix is one edit away, the question has an obvious response. That pull is the tell that a route exists and you are about to skip naming it. Name the route instead; a guide that does the work has stopped being a router.
 
 ## Recommendation shape (template)
 

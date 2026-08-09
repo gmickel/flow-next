@@ -14,7 +14,7 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 
 6. **Run `./scripts/sync-codex.sh`** — verify zero errors, all REQUIRED skills have `agents/openai.yaml`, and the Codex mirror has the rewritten tool names. Commit the regenerated `plugins/flow-next/codex/` directory.
 
-7. **Commands list** updated in:
+7. **Commands list** updated in (experimental skills skip this step - see the experimental tier below):
    - `CLAUDE.md` (where the `<!-- BEGIN FLOW-NEXT -->` template block lives, OR the project guide's command count)
    - Root `README.md` — the "Commands" table is the canonical user-facing surface (plugin `plugins/flow-next/README.md` is now a thin stub pointing at the root)
    - `~/work/mickel.tech/app/apps/flow-next/page.tsx` (commands array + lede count + FAQ if applicable) — **maintainer-only; external contributors skip per the contributing guide**
@@ -24,6 +24,23 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 9. **Smoke test** if the skill has any flowctl plumbing (atomic file writes, schema additions). Pure-skill additions (markdown-only) get verified by manual invocation in a real session.
 
 10. **Conduct checklist** at [`agent_docs/conduct/<skill>.md`](conduct/README.md) plus an index row in `conduct/README.md`: 4–6 falsifiable observable behaviors of a session running the skill correctly, each checkable from a transcript in seconds. This is the review rubric for future prose changes to the skill and the dogfood pass/fail list after edits — a skill without one has no prose regression harness. Never reference it from the skill's own files; it carries zero runtime context.
+
+11. **Guide's routing surface** (`plugins/flow-next/skills/flow-next-guide/SKILL.md`) updated in the **same change** whenever a skill is added or removed, so the router never names a skill that is gone and never omits a starting state a shipped skill now owns. Removal is this checklist run backwards - delete the skill dir (canonical + `codex/` mirror), the command shim, the `sync-codex.sh` entry and `REQUIRED_OPENAI_YAML_SKILLS` row, the conduct checklist and its index row, the listing/count surfaces from step 7, and the guide row - in one commit.
+
+## Experimental skills (tier)
+
+A skill may ship **before** it has earned the full checklist above. An experimental skill lives in the plugin and is invocable, but it is deliberately absent from every surface that promises stability:
+
+- **Excluded from** the root `README.md` commands/skills tables, `plugins/flow-next/docs/skills.md`, the docs catalog, and any published skill/command count (step 7 is skipped entirely, including the marketing site).
+- **Marked in its own frontmatter** - the SKILL.md `description` ends with ` (experimental - can change or disappear)`, so anything routing on descriptions sees the tier without a registry lookup.
+- **Retired by deletion.** There is no deprecation window, no alias, no tombstone doc. The skill dir and its shim go; the CHANGELOG line says it was experimental and is gone.
+- **Graduates by doing the full checklist** - steps 7, 8, and 10 in particular are what an experimental skill is allowed to defer, and graduation is exactly the change that pays them off.
+
+**Heuristic - use the tier when the shape is still in question, not to dodge paperwork.** If you already know the skill's contract and expect it to survive the next release, ship it normally; the tier buys iteration room, and its only real cost is that nobody is told the skill exists.
+
+**Failure signature.** A skill carrying the experimental suffix that also appears in a README table or a published count is not experimental - it is an undocumented promise. Either finish the checklist or take it out of the tables.
+
+No skill currently ships in this tier; existing skills are not demoted into it.
 
 ## Backend-split workflow.md (heuristic)
 

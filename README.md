@@ -103,6 +103,14 @@ The open-source record is linkable, so it speaks in its own words: an outside co
 
 ### Install
 
+<!-- CANONICAL INSTALL BLOCK - change here first.
+     Instanced at:
+       - plugins/flow-next/docs/platforms.md (platform matrix row + the Factory Droid install fence)
+       - https://flow-next.dev/install (site; maintainer-only, per the contributing guide)
+     agent_docs/local-dev.md is NOT an instance - it installs the local marketplace (`./`) for
+     contributors and intentionally diverges. Keep the user-facing copies as real copies: an
+     install command a reader has to click through to is a worse install command. -->
+
 <table>
 <tr>
 <td><strong>Claude Code</strong></td>

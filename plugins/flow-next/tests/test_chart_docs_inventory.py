@@ -262,6 +262,13 @@ class ChartPipelineSurfaces(unittest.TestCase):
 
 
 class ChartRegistryCounts(unittest.TestCase):
+    # Experimental-tier carve-out (agent_docs/adding-skills.md §Experimental
+    # skills): the filesystem/registry numbers below count every shipped skill
+    # dir, experimental ones included, while the published-count phrases
+    # (README.md, docs/skills.md, docs/README.md) deliberately exclude them.
+    # When an experimental skill lands, bump the filesystem/registry
+    # assertions only and leave the published phrases at the stable total;
+    # when it graduates, the two totals converge again.
     def test_counts_match_filesystem_and_registries(self) -> None:
         skill_dirs = _skill_dirs()
         commands = _command_stems()

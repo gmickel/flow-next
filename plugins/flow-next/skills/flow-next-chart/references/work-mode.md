@@ -88,6 +88,8 @@ CHART_VERDICT=NEEDS_HUMAN chart=<id> decision=<D> reason="attended decision requ
 | `interview` | One question at a time via `AskUserQuestion` (numbered fallback). Never self-answer. |
 | `task` | Perform only the enabling work; if attended, wait for human completion signal. |
 
+Midway through an evidence route the answer often starts to look obvious and the pull is to just build the thing instead of resolving the decision. That pull is the signal you are standing at the edge of the map: the decision is unresolved precisely because the route past it was unknown. Resolve the D-ID with evidence and let capture and plan own the build.
+
 Unsafe content (secrets, guard-triggering destructive commands): refuse to embed. Keep source at repository-relative path or approved HTTPS URL; store redacted summary + link. Describe dangerous operations in prose - never paste literal destructive shell command strings into answers or this skill.
 
 ### 2.7 - Prototype lifecycle (attended)

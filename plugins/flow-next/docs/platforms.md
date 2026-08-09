@@ -20,6 +20,9 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 
 ## Install matrix
 
+<!-- INSTANCE of the canonical install block in the root README.md (§Quick start → Install).
+     Change the canonical copy first, then mirror the command strings here. -->
+
 | Platform | Install command | Plugin file | Notes |
 |----------|-----------------|-------------|-------|
 | Claude Code | `/plugin marketplace add https://github.com/gmickel/flow-next && /plugin install flow-next` | `.claude-plugin/plugin.json` | Canonical environment |
@@ -70,6 +73,9 @@ Why other hosts can't have plugin mode: Cursor exposes no plugin-root env vars a
 Flow-next works natively in [Factory Droid](https://factory.ai) — no modifications needed. flow-next is a **Claude-first plugin**; Droid's documented plugin interop layer translates the format on install.
 
 **Install:**
+
+<!-- INSTANCE of the canonical install block in the root README.md (§Quick start → Install). -->
+
 ```bash
 # In Droid CLI
 droid plugin marketplace add https://github.com/gmickel/flow-next
