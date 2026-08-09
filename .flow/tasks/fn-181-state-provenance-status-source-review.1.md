@@ -12,9 +12,8 @@ Spec fn-181 item 1 (#304 half 1). status_source: "flow-state"|"committed" on sho
 R1 of the spec.
 
 ## Done summary
-TBD
-
+Added status_source provenance ("flow-state"|"committed") to show/list --json via merge_task_runtime (stamped at merge, stripped on every persisted write), plus one plain-output advisory line when the runtime state dir is absent. Field always present under --json; no merge-semantics change. 12 new tests (test_status_source.py).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 19577611
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_status_source -q
 - PRs:

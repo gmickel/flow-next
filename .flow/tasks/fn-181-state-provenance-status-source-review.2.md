@@ -14,9 +14,8 @@ Post-capture (3.19-3.21, see spec Edge Cases): routers no longer carry judgment 
 R2 of the spec. Occurrence-3 shape (sidecar read while flow-state says done) is ruled out by prose a skill-following reviewer cannot miss.
 
 ## Done summary
-TBD
-
+Both shared review prompt templates (plan-review, completion-review) now bar reviewers from judging task lifecycle from committed sidecars: status fields named as snapshots, authoritative state located in git-common-dir flow-state (unreachable from a diff-scoped context), read-for-content-never-for-status. Landed inside each template's verdict-scope framing. Byte parity with both flowctl FALLBACK constants, 4 hash pins + 4 rendered fixtures rebaselined, codex mirror regenerated, prompt rationale in commit message.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7970ef64
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_constraints test_review_prompt_template_parity -q
 - PRs:
