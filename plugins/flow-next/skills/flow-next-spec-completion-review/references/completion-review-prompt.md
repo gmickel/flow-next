@@ -35,6 +35,12 @@ All tasks are marked done. Your job is to find gaps between spec and implementat
 This is NOT a code quality review (per-task impl-review handles that).
 Focus ONLY on requirement coverage and completeness.
 
+It is also NOT a task-bookkeeping review: committed `.flow/tasks/<id>.json` `status` fields are
+snapshots, not authoritative, and live lifecycle state is runtime state in the git-common-dir
+flow-state store, outside the diff and unreachable from this review context. Never base a
+finding or verdict on a task looking not-started or not-done in committed files; judge the
+implementation's spec compliance.
+
 ## Two-Phase Review Process
 
 ### Phase 1: Extract Requirements

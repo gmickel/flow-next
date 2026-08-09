@@ -85,7 +85,7 @@ PROMPT_HASHES = {
     "CLASSIFICATION_RUBRIC_BLOCK":
         "fbde8f499ba3d82b50901b12a984912490b66c6e69f1b74c38edf80c28567a06",
     "COMPLETION_REVIEW_PROMPT_FALLBACK":
-        "6907c0b9ec683eb7d8258c86ddaaa6168a4dcefdb075b314e793a9cca65c6ea3",
+        "e952d93e24e0d780ea17f0b3ee5785a12526961c66cae3d2599bb52bd8aa39be",
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     "IMPL_REVIEW_PROMPT_FALLBACK":
@@ -93,7 +93,7 @@ PROMPT_HASHES = {
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
-        "0098e2e621f5cc434b23ca1fb816a97e36cba6a85d8d47ed8cbf86fe82f5c57e",
+        "e36bfc43b35d127576527189fcc1d813c2a1e434d71199b04f66edf61fde44be",
     "PROTECTED_ARTIFACTS_BLOCK":
         "e9b68af0cf36f6b2cb1b70c9bcc5ff67ccb86295f369d02ffcec4f25fd6f2d5e",
     "REVIEW_JSON_TALLY_BLOCK":
@@ -170,9 +170,9 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
         "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
-        "0098e2e621f5cc434b23ca1fb816a97e36cba6a85d8d47ed8cbf86fe82f5c57e",
+        "e36bfc43b35d127576527189fcc1d813c2a1e434d71199b04f66edf61fde44be",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
-        "6907c0b9ec683eb7d8258c86ddaaa6168a4dcefdb075b314e793a9cca65c6ea3",
+        "e952d93e24e0d780ea17f0b3ee5785a12526961c66cae3d2599bb52bd8aa39be",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
     # ones an unattended run depends on most. fn-159.6 clarifies that a review
     # call's tag set differs from the step's return set: NEEDS_WORK loops

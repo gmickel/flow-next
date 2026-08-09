@@ -9427,6 +9427,11 @@ Do NOT mark NEEDS_WORK for:
 - Pre-existing codebase issues unrelated to this plan
 - Suggestions for features outside the plan scope
 - "While we're at it" improvements
+- Task lifecycle: a task looking not-started or not-done in committed files
+
+Committed `.flow/tasks/<id>.json` `status` fields are snapshots, not authoritative; live
+lifecycle state is runtime state in the git-common-dir flow-state store, outside the diff and
+unreachable from this review context. Read task files for their content, never for their status.
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
@@ -9506,6 +9511,12 @@ All tasks are marked done. Your job is to find gaps between spec and implementat
 
 This is NOT a code quality review (per-task impl-review handles that).
 Focus ONLY on requirement coverage and completeness.
+
+It is also NOT a task-bookkeeping review: committed `.flow/tasks/<id>.json` `status` fields are
+snapshots, not authoritative, and live lifecycle state is runtime state in the git-common-dir
+flow-state store, outside the diff and unreachable from this review context. Never base a
+finding or verdict on a task looking not-started or not-done in committed files; judge the
+implementation's spec compliance.
 
 ## Two-Phase Review Process
 
