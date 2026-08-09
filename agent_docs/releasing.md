@@ -193,7 +193,7 @@ a schema/type name, or an internal artifact name.
 - **Heading is `### X.Y.Z - title`** (h3). This is what makes the TOC a version index and gives visual breaks. Never use a bare bullet.
 - **Bold one-liner is mandatory** - it's the scannable summary. Keep it to one sentence.
 - **`<details>` only for verbose releases** (multi-paragraph behavior changes). Trivial patches (a one-liner fix) can skip the disclosure and just carry the bold summary + a sentence or two of plain prose.
-- **Newest at the top of `## Latest`.** When `## Latest` grows past ~4-5 entries, migrate the oldest ones down to `## Earlier releases` (same format; collapse their detail or trim to the one-liner).
+- **Newest at the top of `## Latest`.** When `## Latest` grows past ~10 entries, migrate the oldest ones down to `## Earlier releases` (same format; collapse their detail or trim to the one-liner). The threshold is deliberately generous - the release cadence is part of the story the page tells (raised from ~4-5, 2026-08-09).
 - **Don't duplicate the whole repo CHANGELOG.** The docs-site page is the public story, not every commit. The repo `CHANGELOG.md` stays canonical (linked at the top of the page). Translating repo-changelog substance into the customer register above is the actual work of this step - budget for it; a copy-paste-and-trim is the failure mode.
 - **Bump the docs-site version refs** in the same commit: `src/lib/site.ts` `FLOW_NEXT_VERSION` + `package.json` `version` → `X.Y.Z`.
 - **Gate:** `cd ~/work/flow-next.dev && pnpm build` must pass (MDX `<details>` + mermaid render). Commit separately in the `flow-next.dev` repo.
