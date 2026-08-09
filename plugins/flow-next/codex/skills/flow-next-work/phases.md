@@ -296,9 +296,9 @@ internal handoff, not a public CLI or stored schema.
 
 **Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
 
-**Worker returns**: Summary of implementation, files changed, test results,
-review verdict on the single-worker path; or task ID, workspace, commits, and
-task-unique handover paths on the parallel path.
+**Worker returns** (both paths): task id, terminal status, commit range, and the
+summary/evidence paths (plus the review receipt path when the single-worker path
+ran review). Content lives in those files — read them, never a restatement.
 
 ### 3d. Join, Integrate, and Verify
 
@@ -594,7 +594,11 @@ Tests: <commands + result>
 Review: <verdict | n/a>
 Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B> # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
+Next: /flow-next:make-pr <spec-id> # or /flow-next:qa <spec-id> first when pipeline.qa=on
 ```
+
+The `Next:` line is the executable handoff — the reader runs it, rather than
+re-deriving which command comes next from the summary above it.
 
 **Stage-outcome lines (fn-178, binding on every stage this run orchestrated).**
 Each optional or delegated stage the run reached (plan-sync, impl-review,

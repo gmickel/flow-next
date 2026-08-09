@@ -315,9 +315,9 @@ set to append (model resolved via `flowctl models resolve delegate`). Omit them
 entirely (or pass `DELEGATE: local`) when delegation is off or a gate failed —
 the worker then runs standard in-session implementation, unchanged. **The flags are provisional — the worker owns the final per-task call**: its thin-task valve (worker.md Phase 2) may still run the task standard in-session, emitting no `DELEGATION_*` lines (counter untouched). A conductor that counted an unemitted signal as a strike has broken this.
 
-**Worker returns**: Summary of implementation, files changed, test results,
-review verdict on the single-worker path; or task ID, workspace, commits, and
-task-unique handover paths on the parallel path.
+**Worker returns** (both paths): task id, terminal status, commit range, and the
+summary/evidence paths (plus the review receipt path when the single-worker path
+ran review). Content lives in those files — read them, never a restatement.
 
 ### 3d. Join, Integrate, and Verify
 
@@ -613,7 +613,11 @@ Tests: <commands + result>
 Review: <verdict | n/a>
 Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B>   # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
+Next: /flow-next:make-pr <spec-id>   # or /flow-next:qa <spec-id> first when pipeline.qa=on
 ```
+
+The `Next:` line is the executable handoff — the reader runs it, rather than
+re-deriving which command comes next from the summary above it.
 
 **Stage-outcome lines (fn-178, binding on every stage this run orchestrated).**
 Each optional or delegated stage the run reached (plan-sync, impl-review,

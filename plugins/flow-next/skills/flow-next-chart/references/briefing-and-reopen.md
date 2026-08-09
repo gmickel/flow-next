@@ -41,7 +41,7 @@ When `frontier` / completion reports **briefable** (no open decisions including 
 - A non-draft briefing sets chart `done`.
 - The same proposal over an untouched ledger is idempotent (same B-ID back, `noop`) - within one epoch. A `chart reopen` starts a new epoch: the identical proposal then mints the next B-ID, recomputes draft-vs-final from the live chart, and returns `supersedes_stale` naming the B-IDs it supersedes.
 
-6. Hand off to `/flow-next:capture` with the briefing path / B-ID. Capture owns source tags on criteria it newly authors; chart evidence stays as D-ID links.
+6. Hand off to capture by running `/flow-next:capture .flow/charts/<chart-id>-briefing.md` (paste-ready; name the B-ID alongside it when several exist). Capture owns source tags on criteria it newly authors; chart evidence stays as D-ID links.
 
 Terminal on successful final briefing:
 

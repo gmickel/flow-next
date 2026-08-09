@@ -626,14 +626,20 @@ Done when: on the standard path `flowctl show` reports `done`; on the parallel-w
 
 ## Phase 6: Return
 
-Return a concise summary to the main conversation:
-- What was implemented (1-2 sentences)
-- Key files changed
-- Tests run (if any)
-- Review verdict only on the standard single-worker path when
+Return a pointer, not a restatement. The conductor has repo access and Phase 5
+just wrote the substrate — the return names WHERE the outcome lives, never a
+second copy of what it says:
+- `TASK_ID` and the terminal status (`done` | `in_progress`)
+- The summary and evidence paths — `/tmp/summary.md` and `/tmp/evidence.json`
+  on the standard path; the exact `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE`
+  task-unique paths on the parallel-wave and host-deferred paths
+- The commit range `<BASE_COMMIT>..HEAD` — never a restated file list
+- The review receipt path, only on the standard single-worker path when
   `REVIEW_MODE != none`. A parallel-wave worker reports the task-unique
   handover paths and `in_progress` status instead; it must not claim a review
   verdict.
+- One line for anything a pointer cannot reach — a `BLOCKED:` block, a commit
+  the sandbox denied, a surprise the conductor must act on
 
 **Delegation signal — emitted only when `DELEGATE: codex` was active for this task.** Emit
 these as the **last two lines** of your return summary so the host circuit breaker
@@ -653,7 +659,7 @@ failed, the task ran standard, or `DELEGATE: local`), **no `DELEGATION_*` line i
 emitted** — a missing signal tells the host the counter is untouched. A
 `DELEGATION_*` line on a non-delegated task has broken this.
 
-Done when: the summary names what was implemented, the files changed, the tests run, and — where the path allows it — the review verdict; plus the two `DELEGATION_*` lines last, on a delegated task only.
+Done when: the return names the task id, the terminal status, the summary and evidence paths, the commit range, and — where the path allows it — the review receipt path; plus the two `DELEGATION_*` lines last, on a delegated task only.
 
 ## Rules
 
@@ -674,7 +680,7 @@ likewise returns `in_progress` for the conductor's review.
   `host-deferred`, get a SHIP verdict before `flowctl done`
 - **Verify terminal state** - standard single-worker `flowctl show` must report
   `done`; parallel-wave and host-deferred handovers must report `in_progress`
-- **Return summary** - main conversation needs outcome
+- **Return points, never restates** - the return carries the task id, status, summary/evidence paths, and commit range so the conductor reads current truth; a return that restates summary content the files already carry has broken this
 - **Typed escalation** — when blocking a task, use this format:
   ```
   BLOCKED: <category>

@@ -407,9 +407,9 @@ internal handoff, not a public CLI or stored schema.
 
 **Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE done.** When the resolved review mode is \`host\`, pass \`REVIEW_MODE: host-deferred\`: the worker skips review dispatch AND defers \`flowctl done\` (returns with the task still in_progress + summary/evidence files written). The conductor then runs \`$flow-next-impl-review <task-id> --review=host\` as the mandatory gate and only on SHIP runs \`flowctl done\` with the worker-prepared summary/evidence plus the review receipt; NEEDS_WORK drives the bounded fix loop before done.
 
-**Worker returns**: Summary of implementation, files changed, test results,
-review verdict on the single-worker path; or task ID, workspace, commits, and
-task-unique handover paths on the parallel path.
+**Worker returns** (both paths): task id, terminal status, commit range, and the
+summary/evidence paths (plus the review receipt path when the single-worker path
+ran review). Content lives in those files — read them, never a restatement.
 
 SECTION3C
     tail -n +$end_line "$phases" >> "${phases}.tmp"
