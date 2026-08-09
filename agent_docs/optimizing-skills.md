@@ -167,7 +167,8 @@ for these must measure *fidelity + respect-for-override*, never "is the skill's 
 
 **Empirical note (which scouts the output-budget lever actually pays on):** the lever pays on the
 **free-form, local** scouts whose prose flows into the planner — `repo-scout` ✅ and `context-scout`
-✅ are both done (60–70% leaner, accuracy held). It has **little headroom on the prime scouts**
+✅ were both done (60–70% leaner, accuracy held; `context-scout` itself removed in 3.19.0 — planning
+is repo-scout-only now). It has **little headroom on the prime scouts**
 (`build`/`testing`/`security`/`tooling`/`env`/`observability`/`workflow`/`docs`/`agents-md`): their
 output is still a **bounded template** (fixed sections, ✅/❌ flags, a scores checklist) even after
 fn-92 rebuilt them onto a substance rubric that consumes per-stack rows - so the output-budget lever
@@ -177,7 +178,7 @@ a reflexively-low-ROI target - but any win is in prompt weight, not scout output
 **research scouts** (`practice-scout`, `github-scout`) are **external/non-deterministic** (live
 web/`gh` search, sources are URLs not local files) — noisy to score and not groundable against a
 fixed repo; treat them as smoke-test territory, not this loop. Net: the scout-tier budget prizes
-are `repo-scout` + `context-scout`; don't burn a loop re-confirming the templated/external ones.
+was `repo-scout` (+ `context-scout` until its 3.19.0 removal); don't burn a loop re-confirming the templated/external ones.
 
 **Field-tested lesson — accuracy-critical & heavy prompts resist trimming (proximity is load-bearing).**
 Two findings from running the loop on `capture` (R5) and `make-pr` (R6):
