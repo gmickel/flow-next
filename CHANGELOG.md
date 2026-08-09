@@ -2,6 +2,46 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 3.22.0] - 2026-08-09
+
+When one agent hands work to the next — a worker returning to its conductor, a
+chart handing a briefing to capture, a finished run handing you the follow-up —
+the handover now carries pointers and the next runnable command instead of a
+second copy of the content. Restated content is written twice, drifts the moment
+the artifact moves, and is re-read at full length by every consumer; a pointer
+is stable, and the consumer reads the current truth.
+
+### Changed
+
+- **Worker returns point at the outcome instead of retelling it.** A finished
+  worker reports the task id, terminal status, the summary and evidence file
+  paths, the commit range, and — where its path allows — the review verdict; it
+  no longer restates what was implemented, which files changed, or which tests
+  ran, because the files it just wrote already say so and the conductor reads
+  them directly. Parallel-wave workers additionally name their assigned
+  workspace and gate results for the join. A return that restates summary
+  content the files already carry now reads as a contract break.
+- **Every finished run ends with a runnable next step.** The work skill's final
+  summary gains an executable `Next:` line (open the PR, or run QA first when
+  the pipeline asks for it), and the chart-to-capture handoff is now a
+  paste-ready command carrying the briefing path — the reader runs the handoff
+  rather than reconstructing it.
+- **The handover doctrine is written down where teams read it.** The teams page
+  gains a fifth handover property — pointer-shaped, not restated — with its two
+  deliberate carve-outs: consumers without repo access get content because
+  content is the transport there, and bounded control signals (a verdict enum,
+  an id, a strike class inlined so a transcript-only driver need not re-read a
+  file) count as pointers, not content.
+
+### Under the hood
+
+- The worker-return shape and the `Next:` line are pinned by prose-contract
+  tests alongside the existing final-summary pins, and the conduct checklist
+  for the work skill states both as checkable failure signatures. The Codex
+  mirror rewrites the `Next:` line to its executable skill form. The one
+  cross-copy sentence shared by the canonical prose and the mirror generator's
+  section template is content-pinned so the copies must move together.
+
 ## [flow-next 3.21.0] - 2026-08-09
 
 A single code reviewer covering everything has a failure mode this release
