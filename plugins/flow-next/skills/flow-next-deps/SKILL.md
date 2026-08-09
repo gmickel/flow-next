@@ -25,7 +25,7 @@ command -v jq >/dev/null 2>&1 && echo "OK: jq installed" || echo "ERROR: brew in
 
 ## Step 1: Gather Spec Data
 
-Build a consolidated view of all specs with their dependencies — ONE heavy per-spec loop for the whole skill. Steps 2 and 3 reuse the cached file (bash vars do not survive across tool calls, so the cache is a file at a literal agent-composed path — compose `<suffix>` once, e.g. 4 random chars, and reuse the SAME literal path in every later block):
+Build a consolidated view of all specs with their dependencies — a single heavy per-spec loop for the whole skill. Steps 2 and 3 reuse the cached file (bash vars do not survive across tool calls, so the cache is a file at a literal agent-composed path — compose `<suffix>` once, e.g. 4 random chars, and reuse the same literal path in every later block):
 
 ```bash
 # ONE gather — Steps 2 and 3 read this file; never re-run the per-spec loop
@@ -41,6 +41,11 @@ $FLOWCTL specs --json | jq -r '.specs[].id' | while read id; do
 done | jq -s '.' > "$SPECS_FILE"
 cat "$SPECS_FILE"
 ```
+
+### Done when
+
+- `$SPECS_FILE` exists at the composed literal path and parses as a JSON array with one object per spec returned by `flowctl specs --json`.
+- The per-spec `flowctl show` loop has run exactly once for this invocation. **Steps 2 and 3 read that file.** A second run of the gather loop has broken this.
 
 ## Step 2: Identify Blocking Chains
 
@@ -69,6 +74,11 @@ jq -r '
   end
 ' "$SPECS_FILE"
 ```
+
+### Done when
+
+- Every non-`done` spec in `$SPECS_FILE` emitted exactly one `READY:` or `BLOCKED:` line, and each `BLOCKED:` line names the specific deps holding it.
+- The jq ran against the cached file, not a fresh `flowctl show` sweep.
 
 ## Step 3: Compute Execution Phases
 
@@ -116,6 +126,11 @@ jq '
 ' "$SPECS_FILE"
 ```
 
+### Done when
+
+- The jq result carries both `.phases` and `.deadlocked`, and every open spec appears in exactly one of them.
+- **The report is rendered from `.phases` and `.deadlocked`.** Phases narrated from a reading of the spec titles have broken this.
+
 ## Output Format
 
 Present results as:
@@ -143,8 +158,8 @@ Render from the jq result's `.phases`:
 
 ### ⚠️ Deadlocked / Unresolvable
 
-**Only render this section when `.deadlocked` is non-empty** — but when it is, it is the
-most important part of the report. Each entry is an OPEN spec that could not be placed in
+**This section renders exactly when `.deadlocked` is non-empty** — and when it does, it is the
+most important part of the report. Each entry is an open spec that could not be placed in
 any phase: a dependency **cycle**, a dep on a **missing/closed** spec, or a chain deeper
 than 10. These are invisible to `ready`/pilot (they just never become ready) — this is the
 one place the graph surfaces them.
@@ -155,15 +170,16 @@ one place the graph surfaces them.
 
 For each, state the likely cause: if two deadlocked specs list each other → **cycle** (fix
 with `flowctl spec rm-dep`); if an unresolved dep isn't among the open specs → **missing or
-closed dependency**. Never omit a deadlocked spec.
+closed dependency**. **Every entry of `.deadlocked` reaches the report.** A report that lists phases while silently dropping an open spec has broken this.
 
 ### Critical Path
 
 fn-1-add-auth → fn-2-add-oauth → fn-3-user-profile (3 phases)
 ```
 
-**Edit dependencies** with `flowctl spec add-dep <spec> <dep>` / `rm-dep <spec> <dep>`
-(this skill is read-only inspection; those commands mutate the edges).
+**This skill is read-only inspection.** Edge changes are reported as commands for the
+operator to run — `flowctl spec add-dep <spec> <dep>` / `rm-dep <spec> <dep>`. A run that
+executes either command itself, or edits a spec file, has broken this.
 
 ## Quick One-Liner
 

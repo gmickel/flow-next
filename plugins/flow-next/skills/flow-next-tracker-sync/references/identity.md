@@ -41,7 +41,7 @@ $FLOWCTL sync set-tracker-id "fn-42-foo" "$ISSUE_UUID" --identifier "WOR-99" --u
 
 Now `work wor-99`, `show wor-99`, etc. resolve to `fn-42-foo` **without renaming it**. The issue carries the flow id back via a **`flow:fn-42-foo` label** — the *primary, linkify-safe* back-reference (label text is never auto-linkified). A `[fn-42-foo]` title prefix is an optional secondary; avoid it when the flow id carries a tracker key (e.g. a tracker-first `wor-21-slug`), since the tracker auto-linkifies the key substring in the title — see the "Linkify hazard" note in [comments-sync.md](comments-sync.md). Body-embedded back-references (HTML comments) suffer the same mangle; the label is the durable form.
 
-## Resolution (fn-52.10 — the scaffold does NOT reimplement this)
+## Resolution (fn-52.10 — the scaffold calls it, never reimplements it)
 
 - The tracker key is a **first-class, resolvable handle**, not just a stored label: `work wor-17`, `plan wor-17`, `show wor-17`, tasks `wor-17.M` all resolve. flowctl widened `is_spec_id` / `expand_bare_spec_id` so every command inherits resolution.
 - **Case:** `tracker.identifier` stores the display form (`WOR-17`); the canonical id derives from the lowercase key (`wor-17-slug`); alias resolution is case-insensitive.
@@ -72,7 +72,7 @@ A retry after partial failure (remote create ok, local mint fail) finds that fil
 ## Hard rules — never violate
 
 - **No rename-on-push.** Existing spec/task ids, branches, and dep edges are never mutated when a spec is synced; the tracker key is added as a resolvable handle/alias, not a replacement.
-- **`spec set-title` on a tracker-linked spec updates the title only** — it does NOT re-slug / rename the canonical id, branch, or files (that would desync the linkage). Unlinked specs keep today's rename behavior.
+- **`spec set-title` on a tracker-linked spec updates the title only** — the canonical id, branch, and files are never re-slugged. A renamed id after a title change has broken this and desynced the linkage. Unlinked specs keep today's rename behavior.
 - **Surface `identifier` in sync listings** so users see both handles (the canonical flow id and the board-facing `WOR-17`).
 - **Create-first never renames and never mints.** It returns the adapter identifier as-is; the caller mints and attaches. A retry never creates a second issue (recovery file + retry lookup key).
-- This is **additive** — it does NOT require the separate `fn-NN`-deprecation id-scheme change to land first; that change, when it comes, only governs *removing* `fn-NN`, not *also accepting* the tracker key.
+- This is **additive** — it does not require the separate `fn-NN`-deprecation id-scheme change to land first; that change, when it comes, only governs *removing* `fn-NN`, not *also accepting* the tracker key.

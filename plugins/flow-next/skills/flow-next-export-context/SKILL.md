@@ -77,7 +77,7 @@ $FLOWCTL rp select-add --window "$W" --tab "$T" <files>
 
 ### Step 5: Build Review Prompt (file composition — no content re-typing)
 
-**Path-persistence rule:** bash vars do NOT survive across tool calls. Compose a literal unique prompt path in agent context — `${TMPDIR:-/tmp}/flow-export-prompt-<target>-<agent-chosen 4-char suffix>.md` — and type it verbatim in every block that references it.
+**Path-persistence rule:** bash vars do not survive across tool calls. **The prompt path is composed once as a literal and typed verbatim in every block that touches it** — `${TMPDIR:-/tmp}/flow-export-prompt-<target>-<agent-chosen 4-char suffix>.md`. A run that carries the path in a shell variable across tool calls has broken this: the later block writes to an empty path.
 
 Build the prompt by deterministic composition — the handoff is captured via redirection, never pasted into a heredoc; only the static review criteria (same criteria as plan-review or impl-review) are typed, once, in the quoted heredoc:
 
@@ -95,6 +95,12 @@ EOF
 
 $FLOWCTL rp prompt-set --window "$W" --tab "$T" --message-file "$PROMPT_FILE"
 ```
+
+#### Done when
+
+- `$PROMPT_FILE` names the same literal path in all three commands above.
+- **The builder handoff reached the file by redirection from `flowctl rp prompt-get`.** A run that reconstructs that content inside a heredoc has broken this.
+- The only typed content is the static review criteria block for this export type, appended once via the quoted heredoc.
 
 ### Step 6: Export
 
@@ -121,4 +127,8 @@ After receiving feedback, return here to implement fixes.
 
 ## Note
 
-This skill is for **manual** external review only. It does not work with Ralph autonomous mode (no receipts, no status updates).
+**This skill is manual-only.** It produces no receipts and no status updates, so an autonomous Ralph invocation is declined rather than served — a run that reports success to a Ralph caller has broken this.
+
+#### Done when
+
+- The run ended with `flowctl rp prompt-export` to a timestamped output file, and told the user that exact path plus what the file contains.

@@ -5,7 +5,8 @@ R11 + R13): detect-once Ralph routing, the opt-in `tracker.perEvent.qa` verdict
 post, and the graceful-degradation matrix when no live deploy / driver is present.
 `workflow.md` Phase A is the entry point; this is the detail it folds.
 
-> **The skill is NOT Ralph-blocked.** QA runs in interactive AND autonomous loops.
+> **The skill is not Ralph-blocked — QA runs in interactive and autonomous loops alike.**
+> A run that exits 2 on detecting Ralph has broken this.
 > There is **no** top-of-skill `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard — the
 > make-pr §0.0 precedent ([flow-next-make-pr/SKILL.md](../../flow-next-make-pr/SKILL.md)
 > "Forbidden"). Detect Ralph once, then route deterministically; never re-probe per phase.

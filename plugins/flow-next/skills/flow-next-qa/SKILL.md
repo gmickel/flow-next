@@ -21,7 +21,7 @@ The differentiator vs spec-less QA tools is **the spec is the source of intent**
 
 ## The hard rule — PASS is forbidden from source inspection
 
-**QA must NEVER mark PASS (SHIP) by reading source code.** A live-app QA pass is the gap that all other flow-next review already covers statically. The verdict rests on **captured evidence from the running app** — screenshots, console dumps, observed state — never on agent narration, never on "the code looks correct", never on inferring behavior from the diff. If no live app is reachable (no deploy or no driver), the outcome is **BLOCKED** (could not verify), not PASS. This rule is load-bearing — it is what makes the skill a real-user QA pass rather than a second static review.
+**A SHIP verdict rests on captured evidence from the running app** — screenshots, console dumps, observed state. **A SHIP reached by reading source or the diff has broken this.** So has one resting on agent narration, on "the code looks correct", or on inferring behavior from the diff. A live-app QA pass is the gap that all other flow-next review already covers statically; if no live app is reachable (no deploy or no driver), the outcome is **BLOCKED** (could not verify), never PASS. This rule is load-bearing — it is what makes the skill a real-user QA pass rather than a second static review.
 
 ## Preamble
 
@@ -74,18 +74,18 @@ When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match, or by
 
 ## Autonomous mode (mode:autonomous / FLOW_AUTONOMOUS)
 
-`QA_AUTONOMOUS=1` (set above from the literal `mode:autonomous` token — stripped, same shape as plan's autonomous branch — or the `FLOW_AUTONOMOUS=1` env var) means **ask NO questions**. This is the signal the pilot QA stage passes so the build loop can't hang on an `AskUserQuestion`. The workflow honors it **at the preamble, before any prompt path** (workflow.md "Autonomous-mode gate") — not in the post-verdict preflight, because the early phases (1.1 spec id, 1.2 base, 3.1 target, 3.2 accounts) all prompt.
+`QA_AUTONOMOUS=1` (set above from the literal `mode:autonomous` token — stripped, same shape as plan's autonomous branch — or the `FLOW_AUTONOMOUS=1` env var) means **the run asks nothing**. This is the signal the pilot QA stage passes so the build loop can't hang on an `AskUserQuestion`. The workflow honors it **at the preamble, before any prompt path** (workflow.md "Autonomous-mode gate") — not in the post-verdict preflight, because the early phases (1.1 spec id, 1.2 base, 3.1 target, 3.2 accounts) all prompt.
 
 Under `QA_AUTONOMOUS=1`:
-- **Ask NO questions anywhere.** Every `AskUserQuestion` info-prompt path becomes a deterministic branch: resolve from spec / config / env, else surface a limitation — never prompt.
+- **The run asks nothing.** Every `AskUserQuestion` info-prompt path becomes a deterministic branch: resolve from spec / config / env, else surface a limitation. A prompt anywhere on this path has broken it.
 - **Undocumented target URL / required accounts / no reachable local app / undetermined spec id ⇒ emit a `BLOCKED` `qa_verdict` + clean exit** (the §6.3 writer), never an interactive prompt and never a hang.
 - **Autonomy ≠ Ralph.** Neither `mode:autonomous` nor `FLOW_AUTONOMOUS` activates ralph-guard hooks or any receipt-path gate — they gate **question suppression** only. Ralph (`FLOW_RALPH=1` / `REVIEW_RECEIPT_PATH`) is the separate, additive signal detected in Phase A; the two compose (a pilot run may be autonomous-but-not-Ralph).
 
 Ralph mode (`FLOW_RALPH=1` or `REVIEW_RECEIPT_PATH` set) is detected in workflow.md §AUTONOMY — the skill is **aware but not Ralph-blocked** (R11). Ralph independently suppresses prompts too (Phase A), so a Ralph run is implicitly autonomous; `QA_AUTONOMOUS` covers the non-Ralph autonomous caller (the pilot stage).
 
-## fn-51 consumption — a read-and-drive contract, NOT a callable API
+## fn-51 consumption — a read-and-drive contract, not a callable API
 
-A skill is not a function. QA does **NOT** "call" flow-next-drive. The host agent **reads fn-51's workflow + references and executes the universal driving flow itself** — `observe → snapshot fresh refs → act → verify → capture`. fn-51 owns the driver ladder and all actuation prose; QA owns scenario authoring, evidence capture, and the verdict. **Never duplicate CDP / agent-browser / Computer-Use prose here** — point at fn-51's references:
+A skill is not a function. **The host agent reads fn-51's workflow + references and executes the universal driving flow itself** — `observe → snapshot fresh refs → act → verify → capture`. A transcript that "calls" flow-next-drive as if it were an API has broken this. fn-51 owns the driver ladder and all actuation prose; QA owns scenario authoring, evidence capture, and the verdict. **CDP / agent-browser / Computer-Use prose stays in fn-51's references** — a copy of it in this skill has broken this too. Point at them:
 
 - Surface detection + universal flow + the web/native ladder: `plugins/flow-next/skills/flow-next-drive/SKILL.md`
 - Driver command detail (per rung): `plugins/flow-next/skills/flow-next-drive/references/` (`agent-browser.md`, `chrome-devtools-mcp.md`, `playwright.md`, `computer-use.md`, …)
@@ -97,7 +97,7 @@ Per scenario, record an **evidence tuple**: `{driver_rung, target_url, viewport,
 - **Marking PASS / SHIP from source inspection.** See "The hard rule" above. PASS requires captured live-app evidence; no live app → BLOCKED, never PASS.
 - **Re-implementing driving.** QA consumes fn-51 via the read-and-drive contract; it never reimplements CDP / agent-browser / Computer Use, and never duplicates fn-51's ladder prose.
 - **Inventing findings or evidence.** Every finding cites real captured evidence (screenshot / console / URL). No "I think this might be broken" without a reproduction.
-- **Ralph-blocking the skill.** QA is aware of Ralph but is not a hard Ralph-block (R11). Do NOT add a `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill.
+- **Ralph-blocking the skill.** QA is aware of Ralph but is not a hard Ralph-block (R11). A `FLOW_RALPH`/`REVIEW_RECEIPT_PATH` exit-2 guard at the top of the skill has broken this.
 
 ## Workflow
 

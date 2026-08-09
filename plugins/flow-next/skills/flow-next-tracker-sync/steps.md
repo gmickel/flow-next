@@ -55,6 +55,11 @@ For Jira, persist the deployment shape selected during discovery. API version
 body shape round-trips plain strings byte-exact. Discovery persists version 2;
 alternate API versions are unsupported.
 
+**Done when:** `tracker resolve` returned a destination that was shown for
+confirmation, the confirmed non-secret configuration is persisted, and no
+credential landed in `.flow/config.json`. Under `RALPH=1` discovery deferred for
+a human instead — the transcript shows no `AskUserQuestion` on this path.
+
 ## 2. Identity and linking
 
 Three supported starts share one durable locator:
@@ -115,6 +120,12 @@ is invalid input; never reuse one fallback token across repeatable events.
 The facade owns create-if-unlinked, provider calls, status and relation
 projection, marker dedup, paired snapshots, `lastSyncedAt`, and one aggregate
 receipt. Do not reproduce those steps around the facade.
+
+**Done when:** every file column matches the operation's row, each temporary
+file was mode `0600` and is deleted after the call, each synthesized comment
+file opens with a stable non-placeholder `evidence=<token>` line, and the
+lifecycle event left exactly one aggregate receipt — not a second receipt
+written around the facade.
 
 ## 4. Body preparation
 

@@ -167,7 +167,9 @@ Map the observed failure to a bug-track category (`docs/memory-schema.md`):
 
 When ambiguous, pick the most specific that fits. `--root-cause` for a live finding is genuinely unconfirmed (QA observed a symptom, not a cause) — record `(observed via live QA — unconfirmed)` rather than guessing.
 
-## Dedup — NEVER `--no-overlap-check`; caller decides update-vs-create
+## Dedup — overlap scoring stays on; the caller decides update-vs-create
+
+**Every QA filing runs with overlap scoring on.** A `memory add` carrying `--no-overlap-check` has broken this — the `matches` signal the caller decides from would be empty.
 
 `memory add` always **creates** unless you pass explicit `--update <id>` (fn-113). Overlap scoring still runs and the JSON response always emits `matches` (with scores) as a retrieval signal (`docs/memory-schema.md`):
 

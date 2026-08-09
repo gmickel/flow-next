@@ -59,6 +59,11 @@ Store `PLATFORM` for use in later steps. This determines:
 - Whether to copy Codex agents to project (hooks are **not** copied here — Ralph is opt-in via the Ralph question + `/flow-next:ralph-init`)
 - Which command-name syntax the docs snippet uses (`/flow-next:plan` for Claude Code / Droid / **Cursor** / **Grok**; `$flow-next-plan` for Codex)
 
+### Done when
+
+- `PLUGIN_ROOT` resolves to a directory containing `scripts/` and a plugin manifest, and `PLATFORM` holds exactly one of `claude-code` / `codex` / `droid` / `cursor` / `grok`.
+- **`PLATFORM` came from the host's own signals in the documented precedence, and every downstream choice matches it.** A Cursor or Grok repo that received the Codex `$flow-next-` snippet, or a Codex install misclassified as Cursor through an inherited `CURSOR_AGENT`, has broken this.
+
 ## Step 1: Initialize .flow/
 
 Use flowctl init (idempotent - safe to re-run, handles upgrades):
@@ -116,7 +121,7 @@ CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
 
 **If `CURRENT_MODE` is set (re-run):** print `Setup mode: <CURRENT_MODE>` and ask keep-or-switch (same tool): `Keep <CURRENT_MODE> (Recommended)` / `Switch to <other>` / `abort`. Keep = refresh within the current mode.
 
-**Transition table (copy → plugin), consent-gated — NEVER silent deletion:**
+**Transition table (copy → plugin) — every removal is consent-gated.** A copy artifact that disappeared without the user answering `Remove listed files` has broken this.
 
 1. Enumerate leftover copy artifacts actually present: `.flow/bin/flowctl`, `.flow/bin/flowctl.cmd`, `.flow/bin/flowctl.py`, `.flow/bin/flowctl_bootstrap.py`, `.flow/bin/flowctl-help.txt`, `.flow/bin/flowctl_tracker/`, `.flow/templates/spec.md`, `.flow/usage.md`.
 2. None present → proceed as plugin mode.
@@ -124,6 +129,12 @@ CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
 4. After removal attempt, re-enumerate. Anything still present (decline, modified-file exclusions, partial failure) → print the exact remaining paths, set `MODE=copy`, and continue as copy mode. `flowctl setup-mode set plugin` (Step 7c) would refuse anyway — the plumbing enforces this table even on prose error.
 
 **Plugin mode path through the rest of this workflow:** skip Step 3 and Step 4's copy block and Step 4's `.flow/usage.md` handling entirely (nothing is copied); Step 4a (repo-root SPEC.md offer) still runs — it seeds a user-owned file, not a `.flow/` copy. Steps 5-7 run normally with the plugin-mode adjustments marked inline (Docs template + Step 7c stamp). Copy mode = every step exactly as written.
+
+### Done when
+
+- `MODE` holds `plugin`, `plugin-kept`, or `copy`, and the mode gate ran on this pass even for a same-version re-run.
+- Any copy artifact that disappeared did so only after the user answered `Remove listed files`, and a tracked file with uncommitted modifications was surfaced and excluded rather than force-removed.
+- Plugin mode was only reached with zero copy artifacts left; anything still present set `MODE=copy` and the run continued as copy mode.
 
 ## Step 3: Create .flow/bin/ and .flow/templates/
 
@@ -137,7 +148,7 @@ mkdir -p .flow/bin .flow/templates
 
 **Copy mode only — in plugin mode skip to Step 4a.**
 
-**IMPORTANT: Do NOT read flowctl.py - it's too large. Just copy it.**
+**flowctl.py is copied, never read** — it is far too large for context. A transcript with a Read of `flowctl.py` in it has broken this.
 
 Copy using Bash `cp` with absolute paths:
 
@@ -233,7 +244,7 @@ identical = normalize(user_bytes) == normalize(canonical_bytes)
 Then:
 
 - **Identical** (after normalization): no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
-- **Customized** (any deviation after normalization): do NOT silently replace. Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+- **Customized** (any deviation after normalization): **the file is never replaced without an explicit answer** — a customized `SPEC.md` overwritten silently has broken this. Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
   - **header**: `Overwrite customized <repo-root>/$EXISTING?`
   - **body**: `<repo-root>/$EXISTING exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
   - **options**:
@@ -249,7 +260,7 @@ Then handle `.flow/usage.md` — preserve any repo-customized variant:
 2. If `.flow/usage.md` does not exist → write the canonical content.
 3. If `.flow/usage.md` exists → compare byte-for-byte with the canonical content:
    - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
-   - **Customized** (any deviation): do NOT overwrite. Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
+   - **Customized** (any deviation): **the file is never overwritten without an explicit answer.** Ask the user via `AskUserQuestion` (sync-codex.sh rewrites this to a plain-text numbered prompt for the Codex mirror):
      - **header**: `Overwrite customized .flow/usage.md?`
      - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/usage.md\`).`
      - **options**:
@@ -259,7 +270,7 @@ Then handle `.flow/usage.md` — preserve any repo-customized variant:
 
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
-**Skip this step entirely if PLATFORM is not `codex`.** (Claude Code / Droid / Cursor / Grok all skip it — Cursor and Grok drive the workflow with `/flow-next:*` slash commands and resolve `flowctl` via `.flow/bin/flowctl`, not project-scoped `.codex/` agents. Grok never copies `.codex/agents`.)
+**This step runs only when `PLATFORM` is `codex`.** A `.codex/agents/` directory created on a Claude Code, Droid, Cursor, or Grok host has broken this. (Cursor and Grok drive the workflow with `/flow-next:*` slash commands and resolve `flowctl` via `.flow/bin/flowctl`, not project-scoped `.codex/` agents. Grok never copies `.codex/agents`.)
 
 On Codex, agents live in project-scoped `.codex/` directories (not in the plugin cache). Copy them. **Do not copy or enable Ralph hooks here** — hooks are opt-in via the Ralph question (Step 6d, always asked) and `/flow-next:ralph-init` registration prose.
 
@@ -278,6 +289,12 @@ else
   echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ~/.codex/agents/"
 fi
 ```
+
+### Done when
+
+- In copy mode, `.flow/bin/` and `.flow/templates/` carry the bundled copies; where the mode skips copying, Steps 3–4's copy block ran not at all and `.flow/bin/` stayed absent.
+- **User-owned files — repo-root `SPEC.md`, `.flow/usage.md`, `.flow/criteria.md` — were compared before writing, left untouched when identical, and never overwritten without an explicit answer.** A customized one silently replaced has broken this.
+- `.codex/agents/*.toml` exists only when `PLATFORM=codex`, and no Ralph hook was copied or enabled here.
 
 ## Step 5: Update meta.json
 
@@ -409,7 +426,7 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 ### 6d: Build questions list
 
-Build the questions array dynamically. **Only include questions for config values that are NOT already set** — existing config is preserved, never overwritten. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
+Build the questions array dynamically. **The questions array is built only from keys that read raw-null in `.flow/config.json`.** A re-run with everything set that asks a config question it already knows the answer to has broken this — existing config is preserved, never silently flipped. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
 Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `AskUserQuestion` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only Docs + Star, plus Ralph when `RALPH_ASK=1`, Model Routing when its interactive platform/bridge gate passes, and Global criteria while `.flow/criteria.md` is still absent.
 
@@ -721,6 +738,11 @@ scan, question, config write, or summary noise. When `MODELS_ASK=1`, you
 until that reference reaches its terminal outcome. Unknown/malformed gate state
 fails open by reading the reference; only an explicit zero skips it.
 
+### Done when
+
+- One grouped `AskUserQuestion` call carried the questions array, and that array holds only the still-unanswered keys plus Docs / Star (and Ralph, Model Routing, Global criteria when their own gates passed).
+- **Under any autonomy marker (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS`, `mode:autonomous`) the Ralph, model-routing, and model-pin ceremonies were skipped silently** — no reference read, no probe, no question, no summary noise. A run that blocked on one of those questions under an autonomy marker has broken this.
+
 ## Step 7: Process Answers
 
 Only process answers for questions that were asked (config values that were unset). Skip processing for config that was already set.
@@ -761,7 +783,7 @@ Only process answers for questions that were asked (config values that were unse
          # Untrack any artifacts committed before this choice so state converges (no-op when none)
          git rm -r --cached --quiet .flow/artifacts 2>/dev/null || true
          ```
-  3. Print the lavish-axi offer verbatim. **NEVER auto-install** — detect-and-instruct only, same discipline as /flow-next:map (global npm installs are user-consent territory):
+  3. Print the lavish-axi offer verbatim. **The skill detects and instructs; it never installs.** A transcript showing setup running `npm i -g lavish-axi` has broken this — global installs are user-consent territory, the same discipline as /flow-next:map:
 
      ```
      HTML artifact mode enabled.
@@ -842,7 +864,7 @@ For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marke
        - `Overwrite with canonical` - run the same `setup-block resolve` command with `--choice overwrite`. This replaces the marker block with the canonical snippet and records the new pristine hash; customizations inside the markers are lost, content outside the markers is preserved.
        - `abort` - exit cleanly, no further writes. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the Model Routing scaffold, and the Star step). Re-run `/flow-next:setup` later to complete setup.
 
-The marker-block boundaries are load-bearing: pre-existing prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` is **never** modified by this step, and only the flowctl helper performs writes. Only the bytes between (and including) those markers are candidates for replacement.
+The marker-block boundaries are load-bearing: **docs snippets are written through `flowctl setup-block apply`, touching only the bytes inside the flow-next markers.** Prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` that changed, or a write made by anything other than the helper, has broken this. And **an `ask` result prompts Keep mine / Overwrite / abort** — a customized block replaced without that answer has broken this too.
 
 **Model Routing scaffold** (only if its question was asked). Run this
 after the Docs block above and before Ralph/Star. Always re-read target files from
@@ -880,17 +902,22 @@ marker, do not read either Ralph reference, do not register hooks, and set
 
 ### Step 7c: Stamp setup mode (fn-121 — stamp-last commit point)
 
-Runs after every Step 7 write, before Step 8. The stamp is the ONLY write path for `setup_mode` and lives in plumbing so a wrong prose path cannot produce an invalid stamp:
+Runs after every Step 7 write, before Step 8. **`flowctl setup-mode set` is the sole write path for `setup_mode`** — it lives in plumbing so a wrong prose path cannot produce an invalid stamp. A `setup_mode` value that reached `.flow/` any other way has broken this:
 
 ```bash
 "${PLUGIN_ROOT}/scripts/flowctl" setup-mode set <MODE> --json
 ```
 
-- `MODE=plugin-kept` (non-Claude host honoring an existing plugin stamp): do NOT run the stamp command at all — the existing `setup_mode: "plugin"` stays untouched. `MODE_OUTCOME="plugin (kept - managed from Claude Code)"`.
+- `MODE=plugin-kept` (non-Claude host honoring an existing plugin stamp): the stamp command is not run at all — the existing `setup_mode: "plugin"` stays untouched. `MODE_OUTCOME="plugin (kept - managed from Claude Code)"`.
 - `MODE=copy`: stamps unconditionally. `MODE_OUTCOME="copy"`.
 - `MODE=plugin`: the command verifies the commit-point invariants itself — CLAUDE.md carries the `<!-- BEGIN FLOW-NEXT -->` block with a current `<!-- flow-next:snippet:vN -->` sentinel AND no copy artifacts remain — and refuses with an itemized failure list otherwise. On success `MODE_OUTCOME="plugin"`. On refusal (a Docs abort, a failed write, a kept-customized block without the sentinel, or leftover artifacts slipped through): print the failures verbatim, then MATERIALIZE copy mode before stamping it (PR #227 review: never stamp copy with the copy files absent) - run the skipped Step 3 mkdir and Step 4 copies now (idempotent), then `setup-mode set copy`, and set `MODE_OUTCOME="copy (plugin refused: <first failure>)"`. Never leave `setup_mode` unset on a completed setup run.
 
 Include `Setup mode: <MODE_OUTCOME>` in the Step 8 summary.
+
+### Done when
+
+- Exactly one setup mode was stamped via `flowctl setup-mode set` (or, on the `plugin-kept` path, the existing stamp was deliberately left in place).
+- **A completed run never leaves `setup_mode` unset.** A refused plugin stamp materialized the copy-mode files first and then stamped `copy`; a run that ends with no stamp has broken this.
 
 ## Step 8: Print Summary
 

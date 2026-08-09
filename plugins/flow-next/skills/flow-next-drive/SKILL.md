@@ -29,6 +29,11 @@ How to decide:
 
 When unsure whether a desktop app exposes CDP, probe for B first (try to launch/attach with a debug port). If no port is reachable, fall to C.
 
+### Done when
+
+- The target is classified A, B, or C **before any driving starts**, and the classification is stated. A pass that started acting before naming the surface has broken this.
+- A desktop app was probed for a CDP port before being routed to C.
+
 ## Step 2 — The universal flow (all surfaces)
 
 ```
@@ -41,11 +46,18 @@ capture               → screenshot + console/errors at the moment of interest 
 release               → close the tab / end the session when fully done
 ```
 
-**`verify` is not DOM-only.** A UI that *renders* correctly while the API returned 500 or the console threw an uncaught exception is **NOT a pass** — that's exactly the silent breakage a real user hits and `/flow-next:qa` must not green-light (its `qa_verdict` rests on this evidence). On every verify, also check the console is clean and no API/network request failed — the tooling is already on the default rung (`agent-browser console`, `agent-browser network requests --filter api`; the DevTools-MCP rung has richer inspection). A failed request or console error with a green-looking DOM is a finding, not noise.
+**`verify` is not DOM-only — every verify checks the console is clean and no API/network request failed, alongside the expected text or state.** A pass declared on a green-looking DOM while a request returned 500 or the console threw an uncaught exception has broken this: that is exactly the silent breakage a real user hits, and the `/flow-next:qa` `qa_verdict` rests on this evidence. The tooling is already on the default rung (`agent-browser console`, `agent-browser network requests --filter api`; the DevTools-MCP rung has richer inspection). A failed request or console error under a green DOM is a finding, not noise.
 
 **Snapshot cost:** a full interactive `snapshot -i` before *every* act is the dominant token cost of a long flow. Re-snapshot after a DOM change, but for a single known target prefer a semantic locator (`find role|text|label … <action>` — no snapshot needed), and use `snapshot -c` / `-d <depth>` when you only need to verify one region.
 
-Refs (`@e1`, `@e2`, …) go **stale** after any navigation, click, or form submit. Re-snapshot after a DOM change. "Element X has pointer-events: none" or "ref not found" almost always means a stale snapshot, not a real bug — re-snapshot before concluding.
+Refs (`@e1`, `@e2`, …) go **stale** after any navigation, click, or form submit. **Element refs are refreshed by re-snapshotting after any navigation, click, or submit.** A "ref not found" or `pointer-events: none` result reported as a bug before a re-snapshot has broken this — it is a stale snapshot until a fresh one says otherwise.
+
+### Done when
+
+- Every act ran against refs from a snapshot taken after the last DOM change (or against a semantic locator that needs none).
+- Every verify carries three checks — expected text/state, clean console, no failed API/network request.
+- Evidence was captured at the moment of interest and on failure — screenshot plus console/network output — so a downstream `/flow-next:qa` verdict rests on artifacts rather than narration.
+- **The session or tab is released when the pass is done.** A left-open session or daemon has broken this.
 
 ## Step 3 — Web ladder (surfaces A and B)
 
@@ -59,7 +71,7 @@ Probe availability top-down and use the **highest rung that passes**; fail soft 
 | 4 | **cursor-ide-browser** MCP | Running inside Cursor with this MCP installed and you want its snapshot YAML + `browser_cdp` control. | `references/cursor-ide-browser.md` |
 | 5 (terminal) | **Manual + screenshot relay** | No browser driver available — drive yourself, paste console errors and screenshots into chat. | — |
 
-**Surface B note:** the SAME ladder drives Electron / WebView2 apps — attach to the app's remote-debugging port (`agent-browser --cdp <port>` / `--auto-connect`; chrome-devtools-mcp `--browser-url=http://127.0.0.1:<port>`). Launch the app with a dedicated debug port and a dedicated user-data-dir; treat the open debug port as a security exposure (any local app can drive that session).
+**Surface B note: an Electron / WebView2 app is driven through this same web ladder, over its CDP debug port.** Routing a Chromium-backed desktop app to the native rung has broken this. Attach to the app's remote-debugging port (`agent-browser --cdp <port>` / `--auto-connect`; chrome-devtools-mcp `--browser-url=http://127.0.0.1:<port>`). Launch the app with a dedicated debug port and a dedicated user-data-dir; treat the open debug port as a security exposure (any local app can drive that session).
 
 > **agent-browser command detail lives in the rung reference, not here.** The default-rung reference [`references/agent-browser.md`](references/agent-browser.md) is the entry point — setup/version check, the universal flow in agent-browser commands, the Chromium-desktop (Electron / WebView2) CDP driver, the `--headed` daemon-reuse gotcha, and an index into the per-topic references it folds: `commands.md`, `advanced.md` (CDP attach), `auth.md`, `snapshot-refs.md`, `session-management.md`, `proxy.md`, `debugging.md`.
 
@@ -92,8 +104,13 @@ All share the universal flow (Step 2) — `observe → act → verify → captur
    - On macOS, the Cua Driver's **Accessibility-vs-Screen-Recording permission split** means driving can work while screenshots don't — surface "AX-only evidence, no screenshot" rather than emit an empty one (`references/cua.md`).
 5. **agent-browser stays the only assumed-present driver.** No MCP server, Cua Driver, or Computer Use is ever a hard install dependency; flowctl never imports any of them.
 
+### Done when
+
+- **Every rung above `agent-browser` that the plan relies on was probed first** (`command -v`, MCP list, `uname -s`). A pass that planned around an unprobed rung has broken this.
+- An absent driver degraded to the next rung or to a documented limitation, and the pass still reached a stated outcome rather than ending there.
+
 ## Boundaries
 
-- **iOS / iPadOS app driving is out of scope** — defer to the community iOS simulator skills. Never spin up an iOS simulator for a web-only app.
+- **iOS / iPadOS app driving is out of scope — the request is declined and deferred to the community iOS simulator skills.** A pass that spun up a simulator has broken this.
 - This skill provides driver/actuation + the surface conditional. The full native-desktop QA *workflow* (scenario authoring, bug filing, verdict) is a downstream `/flow-next:qa` concern.
 - Don't reinvent what a driver already does (Playwright, Computer Use) — orchestrate, don't replace.

@@ -36,7 +36,7 @@ Format: `[--source <heuristic|auto|agent>] [-- <extra clawpatch args>]`
 
 **Passthrough boundary.** The slash-command host delivers `$ARGUMENTS` as a single string; the skill word-splits on whitespace. Passthrough is therefore **token-level (whitespace-separated), not full shell-verbatim** — tokens containing literal spaces or shell metacharacters that require shell quoting will not survive. Globs (`*`, `?`) are protected from expansion (`set -f` before the parse) so they reach clawpatch untouched. Users needing complex quoting should run `clawpatch map` directly.
 
-The skill does NOT proxy flow-next's review backend config (rp / codex / copilot / none) into clawpatch. clawpatch's provider matrix (codex / acpx / claude / cursor / grok / opencode / pi) is orthogonal.
+**flow-next's review backend config (rp / codex / copilot / none) stays out of clawpatch.** clawpatch's provider matrix (codex / acpx / claude / cursor / grok / opencode / pi) is orthogonal — a run that sets `CLAWPATCH_PROVIDER` from the flow-next backend has broken this. The Phase 0 echo reports the backend as informational only.
 
 ## Version pin
 
@@ -64,7 +64,7 @@ if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
 fi
 ```
 
-**Decline-to-run only.** The skill MUST NOT write anything to `$REVIEW_RECEIPT_PATH` — that file belongs to the upstream review caller; writing there would corrupt unrelated receipts. The skill exits at line 1 of the workflow under Ralph; install/init paths are unreachable.
+**Decline-to-run only — nothing is written to `$REVIEW_RECEIPT_PATH`.** That file belongs to the upstream review caller; a run that leaves any byte there under Ralph has corrupted an unrelated receipt and broken this. The skill exits at line 1 of the workflow under Ralph; install/init paths are unreachable.
 
 No env-var opt-in. Ralph never installs global tools or accepts interactive consent.
 
