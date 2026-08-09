@@ -6,6 +6,8 @@ satisfies: [R1]
 ## Description
 Spec fn-182 item 1 (#310). --if-absent succeeds only when the record's specId is absent (optional --expect-spec-id); race loser gets a distinct CONFLICT. Runs under the existing config lock. Without the flag, behavior unchanged. Pending-claim design and stale-claim reclaim window untouched.
 
+**Files:** plugins/flow-next/scripts/flowctl_tracker/lifecycle/ (create-first verbs) + flowctl.py dispatch + dual copies + manifest regen; tracker lifecycle tests
+
 ## Acceptance
 R1 of the spec. Two-promoter race fixture: one recorded spec, one informed loser.
 

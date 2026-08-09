@@ -6,6 +6,8 @@ satisfies: [R1]
 ## Description
 Spec fn-181 item 1 (#304 half 1). status_source: "flow-state"|"committed" on show/list --json (always present); one plain-output advisory line when the runtime dir is absent. The merge code already knows which store answered.
 
+**Files:** plugins/flow-next/scripts/flowctl.py (show/list merge path) + `.flow/bin/flowctl.py` dual copy; show/list tests
+
 ## Acceptance
 R1 of the spec.
 

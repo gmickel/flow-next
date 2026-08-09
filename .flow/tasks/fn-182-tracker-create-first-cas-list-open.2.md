@@ -6,6 +6,8 @@ satisfies: [R2]
 ## Description
 Spec fn-182 item 2 (#311 minimum option). Replace the silent {issues: [], success: true} with an explicit unresolved/capability error naming what is unresolved and how to resolve it - without telling the user to arm the projection (unset readyState is legitimate). readyState-set behavior unchanged.
 
+**Files:** plugins/flow-next/scripts/flowctl_tracker/wire/linear.py (`list_open`) + dual copies + manifest regen; wire tests
+
 ## Acceptance
 R2 of the spec. No silent-empty path remains for this condition.
 

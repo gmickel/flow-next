@@ -6,6 +6,8 @@ satisfies: [R4]
 ## Description
 Spec fn-183 (#312). review-rounds attempts --json surfaces the new fields; rows written by older versions read back with fields absent (unknown, never zero) and no crash.
 
+**Files:** plugins/flow-next/scripts/flowctl.py (`cmd_review_rounds_attempts`) + `.flow/bin/flowctl.py` dual copy; read-surface tests
+
 ## Acceptance
 R4 of the spec.
 

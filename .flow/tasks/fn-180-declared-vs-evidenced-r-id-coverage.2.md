@@ -8,6 +8,8 @@ Spec fn-180 item 1 (#301). make-pr renders per-criterion claimed-not-evidenced s
 
 Post-capture (3.19 branch-disclosure, see spec Edge Cases): make-pr is split across workflow.md / create-and-finalize.md / phases.md + references; the unrenderable-abort to re-key is workflow.md's rendering step (§2.7 abort conditions). Fixtures follow the pin-shape rule (agent_docs/adding-skills.md). Conduct checklist: agent_docs/conduct/make-pr.md.
 
+**Files:** plugins/flow-next/skills/flow-next-make-pr/workflow.md (+ any reached-path file carrying the abort/coverage prose) + codex mirror regen; make-pr prose-contract tests
+
 ## Acceptance
 R2 of the spec. #301's abort repro renders instead of aborting; undeclared-coverage state still aborts with corrected stderr advice.
 

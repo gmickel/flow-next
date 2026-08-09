@@ -6,6 +6,8 @@ satisfies: [R1]
 ## Description
 Spec fn-180 item 1 (#301). Accumulate a second set from all tasks' satisfies regardless of status; expose undeclared_r_ids in the payload. uncovered_r_ids semantics byte-identical. Tests: plan-gate state (all todo, full declaration) shows zero undeclared + full uncovered; a genuinely unassigned criterion appears in undeclared.
 
+**Files:** plugins/flow-next/scripts/flowctl.py (export-cognitive-aid payload) + `.flow/bin/flowctl.py` dual copy; export tests
+
 ## Acceptance
 R1 of the spec.
 

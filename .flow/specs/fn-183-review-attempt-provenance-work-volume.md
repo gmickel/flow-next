@@ -21,6 +21,7 @@ Three fields on the attempt row make a verdict identifiable and credible: a work
 - Rows written by older versions lack the fields; readers must treat absence as unknown, never as zero.
 - DEPENDS ON fn-178 (stage receipts) landing first - SATISFIED 2026-08-08: fn-178 merged as PR #321. Its stage-outcome lines live in task done summaries + review-receipts (`_usage_stage_summary`), a different store than the `review_attempts` sidecar rows this spec extends; no shared code path, nothing further to wait on. Keep stage-name spellings consistent with fn-178's normalization (impl_review vs impl-review) where the two surfaces meet in docs.
 - Ledger schema changes ride the existing `hash_epoch` / architecture-notes discipline; dual copies + mirrors as always.
+- The attempts ledger is the durable audit substrate for cross-model review verdicts (narrated is not verified). Any future consolidation of review-rounds counters into prose must leave this ledger machine-written - the provenance fields only answer their question on a substrate no reviewer narrates.
 
 ## Acceptance Criteria
 
