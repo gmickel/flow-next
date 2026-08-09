@@ -134,7 +134,7 @@ If no compaction signal is detected, or signals exist but the relevant evidence 
 
 ### 0.5 — Duplicate branch gate
 
-Silent overwrite is never an option (R8) — when 0.2 found matches, the branch below MUST run.
+**Silent overwrite is never an option (R8) — when 0.2 found matches, the branch below runs before anything is drafted.** A capture that reaches Phase 1 with ≥2 strong matches unresolved has broken this.
 
 - **0-1 strong matches** and no prior-capture artifact id in the conversation → no branch; continue to 0.5b.
 - **≥2 strong matches AND `REWRITE_TARGET` empty** → GATE ACTIVE — STOP. Read [references/duplicate-branch.md](references/duplicate-branch.md) and run its §0.5 branch (interactive: `extend` / `supersede` / `proceed-anyway` / `abort`; autofix: exit 2) before continuing. It also owns the §0.6 prior-capture-artifact branch below. When unsure whether the matches are strong, treat the gate as ACTIVE.
@@ -387,7 +387,7 @@ The **draft file** contains the spec body (what `spec set-plan` consumes — it 
 2. Every section drafted in Phase 2, with source tags visible.
 3. The `## Acceptance Criteria` R-ID list — bulleted, source tags shown.
 
-**Print-then-ask contract (interactive — R13):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so multi-paragraph drafts/diffs/criteria lists inside `AskUserQuestion` are unreadable. Skills that show a draft/diff for approval MUST:
+**Print-then-ask contract (interactive — R13):** question bodies render as collapsed plain text (no markdown, no newlines) on every host, so multi-paragraph drafts/diffs/criteria lists inside `AskUserQuestion` are unreadable. **A draft or diff shown for approval is printed once as ordinary markdown and only pointed at from the ask.** An ask body carrying the multi-paragraph draft, the diff, or the criteria list has broken this. The two steps:
 
 1. **Print the FULL draft markdown as an ordinary assistant message FIRST** (the user-visible read-back — real markdown, real newlines). When `REWRITE_TARGET` is set, also print the existing → proposed **diff** (unified style; changed sections in full) as ordinary markdown in the same message or a second message immediately after the draft — never only inside the ask.
 2. **Then** issue a **short** `AskUserQuestion` whose body is only: one-line pointer to the printed draft above + compact `[inferred]` tally / warnings + recommendation + options. **Never embed multi-paragraph drafts, diffs, or criteria lists in the ask body.**

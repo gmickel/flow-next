@@ -14,7 +14,7 @@ Run BEFORE the first AskUserQuestion call:
 Per-section write behavior (per the write-policy):
 
 - **Writable tech sections** (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, verifiable-AC): write/refine from interview answers. May overwrite `*Pending technical-scope interview pass.*` placeholder strings.
-- **Preserved biz sections** (`Goal & Context`, `Boundaries`): MUST be preserved byte-for-byte.
+- **Preserved biz sections** (`Goal & Context`, `Boundaries`): **come back byte-for-byte.** A single reworded, reordered, or re-wrapped line in either one is a broken pass.
 - **`## Decision Context`** (per `decision_context` shape):
   - When `shape == "flat"` (no H3s exist, no biz pass has run — default zero-flag-tech case on a fresh/legacy spec): write/refine the flat body in place. Do NOT introduce `### Motivation` / `### Implementation Tradeoffs` H3 substructure. Preserves R22 1.0.2 backward compat.
   - When `shape == "substructured"` (`### Motivation` already exists from a prior biz pass, or the existing spec has the substructure): preserve `### Motivation` body byte-for-byte; write/refine ONLY `### Implementation Tradeoffs`.

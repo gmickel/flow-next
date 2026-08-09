@@ -65,7 +65,7 @@ SCOPE_DEFAULTED=$(printf '%s' "$RESOLVED_JSON" | jq -r '.defaulted // false')
 ARGUMENTS=$(printf '%s' "$RESOLVED_JSON" | jq -r '.remaining_args | join(" ")')
 ```
 
-The skill MUST call `flowctl scope resolve` / `scope write-policy` / `scope bank` rather than re-implementing parse/policy logic inline.
+**Scope parsing, write policy, and bank selection come from `flowctl scope resolve` / `scope write-policy` / `scope bank`.** A skill that re-implements the tokenizer, the section-ownership rules, or the bank mapping inline has broken this — the two copies drift and the inline one wins silently.
 
 ### Parse `--docs` / `--no-docs` / `--strategy` / `--no-strategy` flags
 
@@ -147,6 +147,8 @@ When the sentinel prints, STOP and **read [`references/doc-aware.md`](references
    - Read file contents
    - If file doesn't exist, ask user to provide valid path
 
+Done when: the argument is classified as exactly one of the four patterns, every non-`.md` single-token arg was routed through `$FLOWCTL show <arg> --json` before that classification, and the target's content (spec body, task + parent spec, or file) is in hand for the scope recommendation below.
+
 ## Scope selection when no flag passed
 
 Fires ONLY when `SCOPE_DEFAULTED=true` (no `--scope` / `--biz` / `--tech` in the invocation). An explicit scope flag always wins and skips this section entirely.
@@ -226,11 +228,11 @@ Examples (one per tier):
 
 ### Skipped Questions Are Not Answers
 
-Leading with a recommendation NEVER implies consent. Distinguish three answer shapes:
+**Leading with a recommendation never implies consent.** Distinguish three answer shapes:
 
 - **Explicit answer** (an option picked, or a typed answer) → use it.
 - **Explicit delegation** ("you decide", "go with your recommendation") → adopt the recommendation and note it as user-delegated; that is a real decision with a named consenter.
-- **Skip / decline / no-signal** (question dismissed, "skip", "I don't know", "not my call", "ask someone else") → the question is UNRESOLVED. NEVER write the recommendation into a spec section as decided content — silently filling skipped questions with assumptions is the exact failure this rule exists to prevent.
+- **Skip / decline / no-signal** (question dismissed, "skip", "I don't know", "not my call", "ask someone else") → the question is unresolved. **A skipped question's recommendation never enters a spec section as decided content.** A spec line that reads as settled while no answer, no explicit delegation, and no `## Open Questions` entry stands behind it has broken this — silently filling skipped questions with assumptions is the exact failure this rule exists to prevent.
 
 For every skipped question:
 
@@ -265,6 +267,8 @@ Example flow:
 > A: "No persistence — ephemeral is fine. API-key auth. Errors: existing JSON convention."
 > [agent prunes the {DB choice, schema design, migration plan} sub-tree]
 > Round 2 opener: "Skipping DB questions — you said ephemeral." (frontier now: reload survival?, key-tier limits? — the questions those answers unblocked)
+
+Done when: the frontier is empty — every decision the tree opened is answered, explicitly delegated, parked under `## Open Questions`, or pruned with its abandoned branch named at a round opener — and every part of every round was actually asked (a part lost to a tool error is re-asked, never dropped).
 
 ### Investigate Before Asking
 
@@ -342,6 +346,8 @@ The policy JSON shape:
 }
 ```
 
+Done when: one `scope write-policy` call has returned per pass (two for `both`, the second computed from the post-biz state), and every canonical section present in the target appears on exactly one of this pass's `writable` / `preserved` lists. A section on neither list is project-added — its owner is its own scope-owner marker, never the absence.
+
 ### Auxiliary-sections rule (applies to every pass)
 
 The auxiliary sections — `Strategy Alignment` / `Strategy Conflicts` / `Glossary Conflicts` / `Conversation Evidence` / `Resolved via Codebase` / `Resolved via Project Docs` / `Parked unknowns` — are preserved byte-for-byte across passes and scope changes: no pass deletes or rewrites an auxiliary section another pass wrote. Each pass only ADDS its own: the biz pass adds `Resolved via Project Docs`; the tech pass adds `Resolved via Codebase`.
@@ -418,7 +424,7 @@ fi
 
 When a sentinel prints, STOP and Read the named section of [`references/post-write-back.md`](references/post-write-back.md) before any further step. With no tracker configured and readiness unadopted, neither fires and the interview behaves exactly as today.
 
-**Interview NEVER auto-resets `ready` on refinement.** The interview edits the spec in place — a previously-blessed spec stays ready unless the human unmarks it. Only `capture --rewrite` (a full re-authoring) resets readiness.
+**Interview never auto-resets `ready` on refinement.** A run that leaves a previously-ready spec unready without the human unmarking it has broken this. The interview edits the spec in place — a previously-blessed spec stays ready unless the human unmarks it. Only `capture --rewrite` (a full re-authoring) resets readiness.
 
 ## Completion
 
@@ -432,6 +438,8 @@ Show summary:
 - **Scope mode**: which pass(es) ran — biz / tech / both — and which spec sections were written vs preserved byte-for-byte (cite the write-policy result). For `--scope=business`: project-docs resolutions captured under `## Resolved via Project Docs` (R26).
 - Doc-aware mode (when `DOC_AWARE=1` was active): glossary terms added/updated via `flowctl glossary add`, decision entries written via `flowctl memory add --track knowledge --category decisions`, glossary conflicts captured under `## Glossary Conflicts`
 - Strategy-aware mode (when `STRATEGY_AWARE=1` was active): strategy conflicts captured under `## Strategy Conflicts` (read-only — interview never edits STRATEGY.md)
+
+Done when: every line above is either printed or absent because its stated ONLY-when condition did not hold — the question count, the scope mode, and the written-vs-preserved section split are unconditional and always appear.
 
 Suggest next step based on input type:
 - New idea / spec without tasks → `/flow-next:plan fn-N`
