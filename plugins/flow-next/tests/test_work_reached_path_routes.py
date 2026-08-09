@@ -95,6 +95,9 @@ class WorkReachedPathRoutes(unittest.TestCase):
             "host-deferred",
             "Do not run plan-sync while any peer worker is active",
             "Tracker sync:",
+            # Executable handoff + pointer-shaped worker return (n13 doctrine).
+            "Next: /flow-next:make-pr <spec-id>",
+            "Content lives in those files",
             # phases.md must still route to the join reference it hands off to.
             "references/wave-join.md",
         ):

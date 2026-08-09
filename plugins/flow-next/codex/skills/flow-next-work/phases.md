@@ -594,7 +594,7 @@ Tests: <commands + result>
 Review: <verdict | n/a>
 Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B> # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
-Next: /flow-next:make-pr <spec-id> # or /flow-next:qa <spec-id> first when pipeline.qa=on
+Next: $flow-next-make-pr <spec-id> # or $flow-next-qa <spec-id> first when pipeline.qa=on
 ```
 
 The `Next:` line is the executable handoff — the reader runs it, rather than

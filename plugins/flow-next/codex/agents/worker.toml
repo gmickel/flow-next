@@ -633,11 +633,14 @@ second copy of what it says:
 - The summary and evidence paths — `/tmp/summary.md` and `/tmp/evidence.json`
   on the standard path; the exact `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE`
   task-unique paths on the parallel-wave and host-deferred paths
+- The assigned workspace path and gate results, on the parallel-wave path only
+  (Phase 5's parallel-wave branch requires them at join)
 - The commit range `<BASE_COMMIT>..HEAD` — never a restated file list
-- The review receipt path, only on the standard single-worker path when
-  `REVIEW_MODE != none`. A parallel-wave worker reports the task-unique
-  handover paths and `in_progress` status instead; it must not claim a review
-  verdict.
+- The review verdict (`SHIP` — a bounded control signal, pointer-legal per the
+  handover doctrine), only on the standard single-worker path when
+  `REVIEW_MODE != none`; impl-review owns the receipt path. A parallel-wave
+  worker reports the task-unique handover paths and `in_progress` status
+  instead; it must not claim a review verdict.
 - One line for anything a pointer cannot reach — a `BLOCKED:` block, a commit
   the sandbox denied, a surprise the conductor must act on
 
@@ -659,7 +662,7 @@ failed, the task ran standard, or `DELEGATE: local`), **no `DELEGATION_*` line i
 emitted** — a missing signal tells the host the counter is untouched. A
 `DELEGATION_*` line on a non-delegated task has broken this.
 
-Done when: the return names the task id, the terminal status, the summary and evidence paths, the commit range, and — where the path allows it — the review receipt path; plus the two `DELEGATION_*` lines last, on a delegated task only.
+Done when: the return names the task id, the terminal status, the summary and evidence paths, the commit range, the workspace and gate results on a parallel-wave task, and — where the path allows it — the review verdict; plus the two `DELEGATION_*` lines last, on a delegated task only.
 
 ## Rules
 

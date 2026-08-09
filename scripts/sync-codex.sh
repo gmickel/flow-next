@@ -427,6 +427,7 @@ SECTION3C
     -e 's/spawn the `plan-sync` subagent/use the plan_sync agent/g' \
     -e 's/quality auditor subagent/quality_auditor agent/g' \
     -e 's/Task flow-next:quality-auditor/Use the quality_auditor agent/g' \
+    -e 's|Next: /flow-next:make-pr <spec-id>   # or /flow-next:qa <spec-id> first|Next: $flow-next-make-pr <spec-id>   # or $flow-next-qa <spec-id> first|g' \
     -e 's/spawn worker/run worker agent/g' \
     -e 's/\*\*For each task\*\*, spawn a worker subagent with fresh context/**For each task**, use the worker agent with fresh context/g' \
     "$phases"
