@@ -501,9 +501,25 @@ After all tasks complete (or periodically for large specs):
 - Run `$FLOWCTL gate classify --base "$(cat .flow/tmp/spec_base)"`; exit 0 means docs-only tier-B: run lint/format only and note `Gates: docs-only tier-B` for the Phase 5 final summary. On nonzero, run the full gates.
 - For each full gate (test) command that would run, first probe `$FLOWCTL gate check --gate <gate_id> --command "<cmd>"`; exit 0 means skip that re-run and note `Gates: baseline reused (green receipt <sha8>)` for the Phase 5 final summary. On nonzero, run it. After any passing full gate run here, write its receipt with `$FLOWCTL gate receipt --gate <gate_id> --command "<cmd>"`.
 - Run lint/format per repo
-- If change is large/risky, run the quality_auditor agent:
- - Use the quality_auditor agent("Review recent changes")
-- Fix critical issues
+- If change is large/risky, run the quality_auditor agent as **two axis-scoped dispatches of the same agent**, both named in ONE message:
+ - Use the quality_auditor agent("AXIS: correctness — review recent changes; base <sha>")
+ - Use the quality_auditor agent("AXIS: standards — review recent changes; base <sha>")
+
+ `<sha>` is the spec base you already resolved this phase (`cat .flow/tmp/spec_base`) — substitute the value into both dispatch strings. A dispatch that shipped the literal `<sha>` has broken this.
+
+ **Both axis dispatches go out in the same message.** A run that dispatched one axis and waited for its report before sending the other has broken this — the split exists so neither axis can spend the whole budget on the other's territory, and serializing them re-imports the cost the split removed.
+
+ **Aggregation — both reports verbatim, under two headings:**
+ - `### Correctness axis` — that report, unedited.
+ - `### Standards axis` — that report, unedited.
+
+ Never merged, never reranked, never interleaved; neither axis's findings may bury the other's. A run that folded the two reports into one ranked list, or dropped an axis because the other looked worse, has broken this. After the two reports, one line per axis: finding count + worst tier **within that axis**. There is no single winner across axes.
+
+- Fix rule:
+ - Fix **Critical** findings. Only the correctness axis can carry them — the standards axis's ceiling is Should Fix by charter, so a Critical attributed to the standards axis is a charter break, not a blocker.
+ - **Should Fix** from either axis: conductor judgment.
+ - **Consider** never blocks.
+ - When deciding fixes, read each `Out-of-axis observation:` as belonging to the named axis's territory. This is a fix-decision step only — the presented reports above stay verbatim.
 
 Host skips cannot land in task evidence because tasks are already done by Phase 4. **Every skip/honor outcome is accumulated as it happens** (gate_id, plus the receipt `<sha8>` where one was honored) **and surfaces as its own `Gates:` line in the Phase 5 final summary.** A silent skip, or several mixed outcomes collapsed into one line, has broken this (a periodic Phase 4 pass can produce several: some gates receipt-reused, some run full, a later pass docs-only).
 

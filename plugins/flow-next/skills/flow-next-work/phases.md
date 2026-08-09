@@ -524,6 +524,8 @@ After all tasks complete (or periodically for large specs):
   - Task flow-next:quality-auditor("AXIS: correctness — review recent changes; base <sha>")
   - Task flow-next:quality-auditor("AXIS: standards — review recent changes; base <sha>")
 
+  `<sha>` is the spec base you already resolved this phase (`cat .flow/tmp/spec_base`) — substitute the value into both dispatch strings. A dispatch that shipped the literal `<sha>` has broken this.
+
   **Both axis dispatches go out in the same message.** A run that dispatched one axis and waited for its report before sending the other has broken this — the split exists so neither axis can spend the whole budget on the other's territory, and serializing them re-imports the cost the split removed.
 
   **Aggregation — both reports verbatim, under two headings:**
@@ -536,7 +538,7 @@ After all tasks complete (or periodically for large specs):
   - Fix **Critical** findings. Only the correctness axis can carry them — the standards axis's ceiling is Should Fix by charter, so a Critical attributed to the standards axis is a charter break, not a blocker.
   - **Should Fix** from either axis: conductor judgment.
   - **Consider** never blocks.
-  - Route any `Out-of-axis observation:` lines to the matching axis's list before deciding.
+  - When deciding fixes, read each `Out-of-axis observation:` as belonging to the named axis's territory. This is a fix-decision step only — the presented reports above stay verbatim.
 
 Host skips cannot land in task evidence because tasks are already done by Phase 4. **Every skip/honor outcome is accumulated as it happens** (gate_id, plus the receipt `<sha8>` where one was honored) **and surfaces as its own `Gates:` line in the Phase 5 final summary.** A silent skip, or several mixed outcomes collapsed into one line, has broken this (a periodic Phase 4 pass can produce several: some gates receipt-reused, some run full, a later pass docs-only).
 
