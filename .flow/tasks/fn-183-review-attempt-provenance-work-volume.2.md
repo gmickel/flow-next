@@ -12,9 +12,8 @@ Spec fn-183 (#312). review-rounds attempts --json surfaces the new fields; rows 
 R4 of the spec.
 
 ## Done summary
-TBD
-
+R4 verified end-to-end through the real CLI (argparse -> cmd_review_rounds_attempts -> _review_attempt_summary -> json_output): rows return unprojected, so the .1 fields already surface. No code gap; pinned with 5 CLI-level tests (TestAttemptsReadSurface): writer-to-reader fallback fixture, snapshot row surfaces all four fields, measured tool_calls=0 survives read (falsy-drop guard), pre-fn-183 legacy rows read back with fields absent (assertNotIn) and exit 0 on both --json and human paths, mixed ledger clean. Mutation check confirmed tests fail if the read path starts projecting keys. Tests-only commit, no propagation needed.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0f1a016e
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap -q (182 OK)
 - PRs:

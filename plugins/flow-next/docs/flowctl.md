@@ -287,7 +287,11 @@ receipt/status work. A terminal `SHIP`, `NEEDS_WORK`, `MAJOR_RETHINK`, or
 (backend, failure class, timestamp, findings digest) to the spec sidecar.
 `NEEDS_HUMAN` persists its receipt and `needs_human` status before exiting 4
 with `ESCALATE: reviewer requested human review`. `attempts` reports
-verdict-bearing versus refunded attempts for one review scope. A `SHIP` record
+verdict-bearing versus refunded attempts for one review scope; under `--json`
+each row carries its work-volume and provenance fields (`output_bytes`,
+`tool_calls` where measured, `head_sha_observed`, `base_sha` where a snapshot
+ran - absence means unknown, never zero; see
+[architecture.md § Review bookkeeping](architecture.md#review-bookkeeping-authority-and-write-ordering)). A `SHIP` record
 resets its own counter atomically; `reset` is the human-only manual recovery
 command, while explicit re-plans use `spec reset-review-rounds`. Completion passes `--kind plan --review-type
 completion`; impl requires `--task`.
