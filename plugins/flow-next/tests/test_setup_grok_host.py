@@ -5,7 +5,9 @@ Locks:
   (a) Canonical detection bash (extracted from flow-next-setup/workflow.md)
       classifies standalone GROK_AGENT=1 as grok; higher-precedence host
       signals win when present alongside GROK_AGENT; plain shell → codex;
-      droid/claude/cursor/codex unregressed.
+      droid/claude/cursor/codex unregressed. fn-179 (#306) extends this to the
+      claude-code rung: keyed on CLAUDECODE + the .claude-plugin manifest,
+      placed below the hosts that prove themselves with their own signal.
   (b) Codex mirror Step-0 is unconditional PLATFORM=codex — even with
       GROK_AGENT=1 and every other host signal set, the mirror returns codex.
 
@@ -109,6 +111,20 @@ def _run_detection(bash_body: str, env: dict[str, str]) -> str:
     return proc.stdout.strip()
 
 
+def _build_claude_install(home: Path) -> Path:
+    """Temp Claude-format plugin tree: PLUGIN_ROOT + .claude-plugin/plugin.json.
+
+    fn-179 (#306): the claude-code rung's positive discriminator is this
+    manifest at the resolved PLUGIN_ROOT (absent from a Codex install root,
+    whose manifest is a top-level plugin.json).
+    """
+    root = home / "claude-plugins" / "flow-next"
+    manifest = root / ".claude-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text('{"name":"flow-next","version":"0.0.0"}\n', encoding="utf-8")
+    return root
+
+
 def _build_cursor_install(home: Path) -> Path:
     """Temp Cursor install tree: ~/.cursor/plugins/local/flow-next/ + manifest."""
     root = home / ".cursor" / "plugins" / "local" / "flow-next"
@@ -146,6 +162,14 @@ class TestCanonicalDetectionExecutable(unittest.TestCase):
             env = _clean_env(str(home), pr, **host_env)
             return _run_detection(self.bash, env)
 
+    def _run_claude_install(self, **host_env: str) -> str:
+        """Run with a PLUGIN_ROOT that carries .claude-plugin/plugin.json."""
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            root = _build_claude_install(home)
+            env = _clean_env(str(home), str(root), **host_env)
+            return _run_detection(self.bash, env)
+
     def test_exactly_one_step0_bash_fence(self) -> None:
         # Extraction already asserts; re-run for an explicit unit-test name.
         body = _extract_step0_detection_bash(
@@ -153,8 +177,11 @@ class TestCanonicalDetectionExecutable(unittest.TestCase):
         )
         self.assertIn("GROK_AGENT", body)
         self.assertIn("DROID_PLUGIN_ROOT", body)
-        self.assertIn("CLAUDE_PLUGIN_ROOT", body)
+        self.assertIn("CLAUDECODE", body)
         self.assertIn("CURSOR_AGENT", body)
+        # fn-179 (#306): CLAUDE_PLUGIN_ROOT never reaches a plugin skill's Bash
+        # env, so it must not key any rung.
+        self.assertNotIn("CLAUDE_PLUGIN_ROOT", body)
 
     def test_grok_agent_alone_is_grok(self) -> None:
         self.assertEqual(self._run(GROK_AGENT="1"), "grok")
@@ -168,10 +195,12 @@ class TestCanonicalDetectionExecutable(unittest.TestCase):
             "droid",
         )
 
-    def test_claude_wins_over_grok(self) -> None:
+    def test_grok_wins_over_inherited_claudecode(self) -> None:
+        # fn-179 (#306): CLAUDECODE is inherited by children, GROK_AGENT is set
+        # by the grok process itself — a grok child of a Claude shell is grok.
         self.assertEqual(
-            self._run(CLAUDE_PLUGIN_ROOT="/tmp/claude-plugin", GROK_AGENT="1"),
-            "claude-code",
+            self._run_claude_install(CLAUDECODE="1", GROK_AGENT="1"),
+            "grok",
         )
 
     def test_cursor_wins_over_grok(self) -> None:
@@ -189,10 +218,35 @@ class TestCanonicalDetectionExecutable(unittest.TestCase):
     def test_droid_alone(self) -> None:
         self.assertEqual(self._run(DROID_PLUGIN_ROOT="/tmp/droid-plugin"), "droid")
 
-    def test_claude_alone(self) -> None:
+    def test_claude_code_plugin_skill_env_is_claude_code(self) -> None:
+        # fn-179 (#306) core case: the env a running plugin skill actually sees
+        # on Claude Code — CLAUDECODE=1, CLAUDE_PLUGIN_ROOT UNSET.
+        self.assertEqual(self._run_claude_install(CLAUDECODE="1"), "claude-code")
+
+    def test_claude_plugin_root_alone_no_longer_classifies(self) -> None:
+        # The pre-#306 key is dead: it never reaches a plugin skill's Bash env,
+        # so it must not be what decides the host.
+        self.assertEqual(self._run(CLAUDE_PLUGIN_ROOT="/tmp/claude-plugin"), "codex")
+
+    def test_inherited_claudecode_without_claude_manifest_is_codex(self) -> None:
+        # codex exec child of a Claude session: inherits CLAUDECODE, resolves a
+        # Codex-home PLUGIN_ROOT with no .claude-plugin/plugin.json → codex.
+        self.assertEqual(self._run(CLAUDECODE="1"), "codex")
+
+    def test_droid_wins_over_inherited_claudecode(self) -> None:
         self.assertEqual(
-            self._run(CLAUDE_PLUGIN_ROOT="/tmp/claude-plugin"), "claude-code"
+            self._run_claude_install(CLAUDECODE="1", DROID_PLUGIN_ROOT="/tmp/droid"),
+            "droid",
         )
+
+    def test_cursor_wins_over_inherited_claudecode(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td)
+            cursor_root = _build_cursor_install(home)
+            env = _clean_env(
+                str(home), str(cursor_root), CURSOR_AGENT="1", CLAUDECODE="1"
+            )
+            self.assertEqual(_run_detection(self.bash, env), "cursor")
 
     def test_cursor_alone(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -230,6 +284,7 @@ class TestMirrorUnconditionalCodex(unittest.TestCase):
             "CURSOR_AGENT",
             "DROID_PLUGIN_ROOT",
             "CLAUDE_PLUGIN_ROOT",
+            "CLAUDECODE",
         ):
             self.assertNotIn(
                 signal,
@@ -247,6 +302,7 @@ class TestMirrorUnconditionalCodex(unittest.TestCase):
                 str(cursor_root),
                 GROK_AGENT="1",
                 CURSOR_AGENT="1",
+                CLAUDECODE="1",
                 CLAUDE_PLUGIN_ROOT="/tmp/claude-plugin",
                 DROID_PLUGIN_ROOT="/tmp/droid-plugin",
             )
