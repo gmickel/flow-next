@@ -323,9 +323,12 @@ merge-base/head, and renders. It adds no model/network call.
 When a supported current artifact renders, insert its contiguous
 `## The change, top to bottom` section before Critical changes. Its thesis,
 proof, R-ID/task links, verification claims, order, and file membership are
-authoritative: suppress the legacy R-ID coverage and Verification sections and
-derive the summary coverage ratio from the artifact. The legacy fields are
-fallback-only for those claims. **Plan-gate status is not superseded (fn-180,
+authoritative: suppress the legacy Verification section - and the legacy R-ID
+coverage section ONLY when `tasks_summary.uncovered_r_ids` is empty (with any
+unevidenced or undeclared criterion that table renders beside the walkthrough;
+§2.0 item 4 / pr-cognitive-aid.md §4 own the rule) - and derive the summary
+coverage ratio from the artifact when the table is suppressed. The legacy
+fields are fallback-only for those claims. **Plan-gate status is not superseded (fn-180,
 #301):** the artifact's `rid` source refs bind R-IDs to commits, so by
 construction it can only express *evidenced* coverage — it has no
 claimed-not-evidenced counterpart. The §2.7 coverage abort therefore runs on
@@ -477,7 +480,7 @@ Field rules:
 - **Acceptance criterion column** — `spec.spec_sections.acceptance_criteria[].text` truncated to 120 characters. If truncated, append `…` (single ellipsis character, not three dots). Never edit content; truncation is mechanical at byte boundary respecting word boundaries when feasible.
 - **Task column** — derived ONLY from `tasks[].satisfies[]`. For each R-ID, find every task whose `satisfies` array contains that R-ID. Render as a comma-separated list of **blob** links (task spec is an artifact to read): `[fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md)` (per §2.4b). **Never infer from task title.** Never infer from commit message text. Task status does NOT filter this column: a claiming task that is still `todo`/`in_progress` renders its link exactly like a done one (that is the plan-gate state above). Only when NO task claims the R-ID — it is in `tasks_summary.undeclared_r_ids` — does the cell render `⚠️ uncovered`.
 - **Evidence column** — for each linked task, emit an absolute whole-commit-diff link `[\`<sha7>\`](https://github.com/<owner>/<repo>/commit/<sha40>)` for every entry in `tasks[].evidence.commits` (per §2.4b — NOT the bare `../../commit/` relative form). SHAs come from the payload only; never invent. If a task has multiple commits, list all of them comma-separated. If the task has no evidence commits but is `done`, emit `—` (em-dash) in that slot. When every claiming task is non-done, emit `⏳ claimed, not yet evidenced` — never a commit link, never `—`, never `⚠️`. For undeclared R-IDs, emit a single `—`.
-- **Orphaned-SHA marking (fn-180, #302 / PR #327 finding).** During Phase 1, after the export call, run ONE `"$FLOWCTL" validate --spec "$SPEC_ID" --json` and collect the tokens from warnings matching `evidence commit <token> is not reachable from HEAD`. Any evidence SHA in that set renders as bare inline code annotated `` `<sha7>` (orphaned by a history rewrite) `` — NEVER a commit link (the object was often never pushed, so the link 404s and the body would present dead evidence as live). Non-orphaned SHAs keep the normal link. Validate failing or unavailable → no orphan set, links render as before (the marking degrades, the body never blocks).
+- **Orphaned-SHA marking (fn-180, #302 / PR #327 finding).** During Phase 1, after the export call, run ONE `"$FLOWCTL" validate --spec "$SPEC_ID" --json` and collect the tokens from warnings matching `evidence commit <token> is not reachable from HEAD`. Any evidence SHA in that set renders as bare inline code annotated `` `<sha7>` (orphaned by a history rewrite) `` — NEVER a commit link (the object was often never pushed, so the link 404s and the body would present dead evidence as live). Non-orphaned SHAs keep the normal link. Use the warnings from any PARSEABLE validate JSON regardless of exit code - a structural error elsewhere in the spec must not discard the orphan set; only absent or unparseable output degrades to no orphan set, links rendering as before (the marking degrades, the body never blocks).
 
 After the table, append at most two follow-up lines — the warning line only for the undeclared set:
 
