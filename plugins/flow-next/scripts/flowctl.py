@@ -34431,18 +34431,34 @@ def cmd_start(args: argparse.Namespace) -> None:
                 use_json=args.json,
             )
 
-        # Check if claimed by someone else (unless --force)
-        if not args.force and existing_assignee and existing_assignee != current_actor:
+        # fn-179.4 (#316): --reclaim is a deliberate identity repair. It relaxes
+        # exactly the two identity gates below (claimed-by-other, in_progress
+        # owned by another) and nothing else - dependency, blocked and done
+        # gates stay where they are, and --force keeps its takeover meaning.
+        reclaiming = bool(
+            args.reclaim and existing_assignee and existing_assignee != current_actor
+        )
+
+        # Check if claimed by someone else (unless --force / --reclaim)
+        if (
+            not args.force
+            and not args.reclaim
+            and existing_assignee
+            and existing_assignee != current_actor
+        ):
             error_exit(
                 f"Cannot start task {args.id}: claimed by '{existing_assignee}'. "
-                f"Use --force to override.",
+                f"Use --force to override, or --reclaim to repair the claimant.",
                 use_json=args.json,
             )
 
         # Validate task is in todo status (unless --force or resuming own task)
         if not args.force and status != "todo":
-            # Allow resuming your own in_progress task
-            if not (status == "in_progress" and existing_assignee == current_actor):
+            # Allow resuming your own in_progress task, or repairing the
+            # claimant of an in_progress task via --reclaim.
+            resuming_own = status == "in_progress" and existing_assignee == current_actor
+            repairing = bool(args.reclaim) and status == "in_progress"
+            if not (resuming_own or repairing):
                 error_exit(
                     f"Cannot start task {args.id}: status is '{status}', expected 'todo'. "
                     f"Use --force to override.",
@@ -34456,6 +34472,17 @@ def cmd_start(args: argparse.Namespace) -> None:
             runtime_updates["claimed_at"] = now_iso()
         if args.note:
             runtime_updates["claim_note"] = args.note
+            if reclaiming:
+                runtime_updates["assignee"] = current_actor
+                runtime_updates["claimed_at"] = now_iso()
+        elif reclaiming:
+            # Identity repair: distinct from the --force takeover note so the
+            # record says which one happened.
+            runtime_updates["assignee"] = current_actor
+            runtime_updates["claimed_at"] = now_iso()
+            runtime_updates["claim_note"] = (
+                f"Reclaimed from {existing_assignee} (identity repair)"
+            )
         elif args.force and existing_assignee and existing_assignee != current_actor:
             # Force override: note the takeover
             runtime_updates["assignee"] = current_actor
@@ -50325,6 +50352,11 @@ def main() -> None:
     p_start.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_start.add_argument(
         "--force", action="store_true", help="Skip status/dependency/claim checks"
+    )
+    p_start.add_argument(
+        "--reclaim",
+        action="store_true",
+        help="Rewrite the claimant of a task claimed by another identity (identity repair, not a takeover)",
     )
     p_start.add_argument("--note", help="Claim note (e.g., reason for taking over)")
     p_start.add_argument("--json", action="store_true", help="JSON output")
