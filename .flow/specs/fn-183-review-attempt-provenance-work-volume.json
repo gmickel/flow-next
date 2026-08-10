@@ -17,7 +17,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-183-review-attempt-provenance-work-volume.md",
-  "status": "open",
+  "status": "done",
   "title": "Review attempt provenance: work volume, head_sha origin, base_sha",
   "tracker": {
     "baseHashFlow": null,
@@ -30,5 +30,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:07:44.524068Z"
+  "updated_at": "2026-08-10T14:45:10.722097Z"
 }
