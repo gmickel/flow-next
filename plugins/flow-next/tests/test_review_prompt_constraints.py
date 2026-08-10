@@ -200,6 +200,17 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "_export_run_git"): 1,
                 ("subprocess.run", "_export_read_base_blobs"): 1,
                 ("subprocess.run", "_psp_run_git"): 1,
+                # fn-180.3 / #302: the evidence-commit reachability pass. TWO
+                # deterministic git reads for the WHOLE validate invocation -
+                # one batched `cat-file --batch-check` fed every recorded token
+                # over stdin, one `rev-list HEAD` membership walk. Spec R4 makes
+                # the batching an acceptance criterion: a per-SHA spawn loop in
+                # a land-loop-called verb would claw back the fn-109 wins, so
+                # any growth of these two entries is the regression to catch.
+                # The walk STREAMS so it can be abandoned the moment every
+                # candidate oid is accounted for.
+                ("subprocess.run", "_batch_check"): 1,
+                ("subprocess.Popen", "_reachable_oids"): 1,
                 # fn-181 R3/R5: the behind-upstream advisory for ready/anchor -
                 # ONE deterministic `git status --porcelain=v2 --branch` read
                 # per invocation, never a fetch, never an execution bridge.
