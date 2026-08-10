@@ -108,6 +108,12 @@ order, and file membership. Suppress the legacy R-ID coverage and Verification
 sections; their content is rendered from the artifact inside the walkthrough.
 Derive the summary block's coverage ratio from the artifact links. Existing
 fields are fallback-only; never merge stale/legacy values into those claims.
+`rid` source refs bind an R-ID to a commit, so the artifact expresses evidenced
+coverage only — it has no claimed-not-evidenced or undeclared counterpart. The
+declared-coverage abort and the plan-gate qualifier clauses (workflow §2.7,
+§2.1) keep reading `tasks_summary.undeclared_r_ids` / `uncovered_r_ids` on this
+path too; that is not a legacy merge, because no artifact value is being
+overridden.
 Other established sections remain: boundaries, Critical changes, How to review,
 Review plan, decisions, memory, glossary/strategy, open items, QA, and footer.
 
