@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.25.0] - 2026-08-10
 
 Six small defects, one pass - every one arrived as a measured report with a
 verified repro from @sn-furali (thanks!), and each fix takes the reporter's own
