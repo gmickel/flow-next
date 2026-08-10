@@ -2633,6 +2633,165 @@ class TestCodexToolCallCount(unittest.TestCase):
             self.assertIsNone(flowctl.count_codex_tool_calls(output))
 
 
+class TestAttemptsReadSurface(unittest.TestCase):
+    """fn-183 R4 (#312): `review-rounds attempts --json` is the audit surface.
+
+    The consumer asks "was this verdict measured?" of the CLI, not of an
+    internal helper - so these go through argparse and the real command. The
+    read path returns whole rows (no projection); that is the property being
+    pinned, so a later "tidy up the payload" refactor cannot silently drop the
+    provenance fields. Rows written before fn-183 must come back with the
+    fields ABSENT - unknown, never zero - and exit 0.
+    """
+
+    NEW_FIELDS = ("output_bytes", "tool_calls", "head_sha_observed", "base_sha")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self._old_env = os.environ.pop("MAX_REVIEW_ITERATIONS", None)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        if self._old_env is not None:
+            os.environ["MAX_REVIEW_ITERATIONS"] = self._old_env
+        self._tmp.cleanup()
+
+    def _spec_path(self) -> Path:
+        return self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+
+    def _run(self, *argv: str) -> "tuple[int, str, str]":
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with mock.patch.object(sys, "argv", ["flowctl", *argv]):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                try:
+                    flowctl.main()
+                except SystemExit as e:
+                    code = int(e.code or 0)
+        return code, out.getvalue(), err.getvalue()
+
+    def _row(self, **overrides) -> dict:
+        row = {
+            "timestamp": flowctl.now_iso(),
+            "scope": flowctl._review_attempt_scope("plan", None, "plan"),
+            "backend": "codex",
+            "kind": "plan",
+            "counter_kind": "plan",
+            "task": None,
+            "outcome": "verdict",
+            "verdict": "SHIP",
+            "output_sha256": "0" * 64,
+            "round_consumed": True,
+            "head_sha": "d" * 40,
+        }
+        row.update(overrides)
+        return row
+
+    def _seed(self, *rows: dict) -> None:
+        data = json.loads(self._spec_path().read_text())
+        data["review_attempts"] = list(rows)
+        self._spec_path().write_text(json.dumps(data))
+
+    def _attempts_json(self) -> dict:
+        code, out, _ = self._run(
+            "review-rounds", "attempts", self.spec_id,
+            "--kind", "plan", "--review-type", "plan", "--json",
+        )
+        self.assertEqual(code, 0)
+        return json.loads(out)
+
+    def test_written_row_reaches_the_cli_read_surface(self):
+        """End to end: the writer's fields survive the CLI read, unprojected.
+
+        The `review-rounds record` path is the rp/host fixture - it measures
+        output bytes and marks head_sha as the finalize-time fallback, and
+        genuinely knows neither tool_calls nor base_sha.
+        """
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        output_path = self.root / "review.txt"
+        output_path.write_text("<verdict>NEEDS_WORK</verdict> éé", encoding="utf-8")
+        code, _, _ = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--backend", "rp", "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0)
+        row = self._attempts_json()["attempts"][-1]
+        self.assertEqual(
+            row["output_bytes"],
+            len(output_path.read_text(encoding="utf-8").encode("utf-8")),
+        )
+        self.assertIs(row["head_sha_observed"], False)
+        self.assertNotIn("tool_calls", row)
+        self.assertNotIn("base_sha", row)
+
+    def test_snapshot_row_surfaces_every_new_field(self):
+        self._seed(
+            self._row(
+                output_bytes=151_000,
+                tool_calls=22,
+                head_sha_observed=True,
+                head_sha="a" * 40,
+                base_sha="c" * 40,
+            )
+        )
+        row = self._attempts_json()["attempts"][-1]
+        self.assertEqual(row["output_bytes"], 151_000)
+        self.assertEqual(row["tool_calls"], 22)
+        self.assertIs(row["head_sha_observed"], True)
+        self.assertEqual(row["base_sha"], "c" * 40)
+        self.assertEqual(row["head_sha"], "a" * 40)
+
+    def test_measured_zero_tool_calls_survives_the_read(self):
+        """The #312 signal itself: a measured 0 must not be dropped as falsy."""
+        self._seed(self._row(output_bytes=1_180, tool_calls=0, head_sha_observed=True))
+        row = self._attempts_json()["attempts"][-1]
+        self.assertEqual(row["tool_calls"], 0)
+        self.assertEqual(row["output_bytes"], 1_180)
+
+    def test_pre_fn183_rows_read_back_with_fields_absent(self):
+        self._seed(self._row())
+        payload = self._attempts_json()
+        self.assertEqual(payload["verdict_attempts"], 1)
+        row = payload["attempts"][-1]
+        for field in self.NEW_FIELDS:
+            self.assertNotIn(field, row)
+        # Human-readable path over the same legacy ledger: also exit 0.
+        code, _, _ = self._run(
+            "review-rounds", "attempts", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+        )
+        self.assertEqual(code, 0)
+
+    def test_mixed_legacy_and_new_ledger_reads_cleanly(self):
+        self._seed(
+            self._row(verdict="NEEDS_WORK"),
+            self._row(
+                verdict="SHIP",
+                output_bytes=248_000,
+                tool_calls=20,
+                head_sha_observed=True,
+                base_sha="c" * 40,
+            ),
+        )
+        payload = self._attempts_json()
+        self.assertEqual(payload["verdict_attempts"], 2)
+        old, new = payload["attempts"][0], payload["attempts"][1]
+        for field in self.NEW_FIELDS:
+            self.assertNotIn(field, old)
+        self.assertEqual(new["tool_calls"], 20)
+        self.assertEqual(new["output_bytes"], 248_000)
+        self.assertEqual(new["base_sha"], "c" * 40)
+        self.assertIs(new["head_sha_observed"], True)
+
+
 class TestFindingsDigestConvergenceTerminal(unittest.TestCase):
     """fn-159.2: bounded receipt digests drive a fail-inert early terminal."""
 
