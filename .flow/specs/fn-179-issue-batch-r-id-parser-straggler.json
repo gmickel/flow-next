@@ -15,7 +15,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-179-issue-batch-r-id-parser-straggler.md",
-  "status": "open",
+  "status": "done",
   "title": "Issue batch: R-ID parser straggler, criteria parser drops, setup detection, resolve --select, claim reclaim",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:07:38.412200Z"
+  "updated_at": "2026-08-10T20:56:53.765664Z"
 }
