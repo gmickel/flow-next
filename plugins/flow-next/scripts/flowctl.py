@@ -4874,6 +4874,19 @@ def count_codex_tool_calls(output: str) -> Optional[int]:
     return count if is_stream else None
 
 
+def measured_tool_calls(backend: str, output: str) -> Optional[int]:
+    """Tool-call count for the attempt row, or None when nothing was measured.
+
+    Gated on the codex backend: ``count_codex_tool_calls`` is content-sniffing,
+    and a copilot/cursor review whose plain text QUOTES codex-shaped event
+    lines must not get a fabricated measurement (PR #324 bot finding). Only
+    codex ``exec --json`` output is a stream the dispatcher genuinely measured.
+    """
+    if backend != "codex":
+        return None
+    return count_codex_tool_calls(output)
+
+
 def parse_codex_verdict(output: str) -> Optional[str]:
     """Extract verdict from codex output.
 
@@ -41675,7 +41688,7 @@ def _finish_backend_exec(
     # fn-183 (#312): measured from the raw event stream this function was
     # handed. None for a backend/path that returns plain text - the row then
     # carries no tool_calls at all rather than a fabricated 0.
-    tool_calls = count_codex_tool_calls(output)
+    tool_calls = measured_tool_calls(backend, output)
     if verdict:
         if spec_id and review_kind:
             summary = record_review_attempt(

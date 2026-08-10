@@ -2632,6 +2632,16 @@ class TestCodexToolCallCount(unittest.TestCase):
         for output in ("", "<verdict>SHIP</verdict>\nplain resumed stdout"):
             self.assertIsNone(flowctl.count_codex_tool_calls(output))
 
+    def test_non_codex_backend_never_measures_even_stream_shaped_text(self) -> None:
+        """PR #324 bot finding: the counter is content-sniffing, so a
+        copilot/cursor review whose plain text QUOTES codex event lines must
+        not get a fabricated measurement. Only the codex backend is gated in."""
+        stream_shaped = self._stream({"type": "command_execution", "command": "ls"})
+        for backend in ("copilot", "cursor", "rp", "host"):
+            self.assertIsNone(flowctl.measured_tool_calls(backend, stream_shaped))
+        self.assertEqual(flowctl.measured_tool_calls("codex", stream_shaped), 1)
+        self.assertIsNone(flowctl.measured_tool_calls("codex", "plain text"))
+
 
 class TestAttemptsReadSurface(unittest.TestCase):
     """fn-183 R4 (#312): `review-rounds attempts --json` is the audit surface.
