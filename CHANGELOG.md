@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.24.0] - 2026-08-10
 
 A review verdict you cannot audit is a verdict you have to take on faith. A
 resumed reviewer session can answer from its previous round's context in ~1 KB
@@ -24,7 +24,10 @@ trusting narration. Fixes #312 - thanks @sn-furali for the measured report.
   `head_sha` wherever the review snapshot ran, so the judged diff can be
   located and re-rendered. `review-rounds attempts --json` surfaces all of
   it; rows written by older versions read back with the fields absent -
-  absence means unknown, never zero. (#312)
+  absence means unknown, never zero. The measurement is gated to the codex
+  backend (a copilot/cursor review quoting codex-shaped event lines never gets
+  a fabricated count), and crash replay preserves the journaled provenance
+  instead of degrading to the finalize-time fallback. (#312)
 
 ## [flow-next 3.23.0] - 2026-08-09
 
