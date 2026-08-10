@@ -123,27 +123,14 @@ class _RepoFixture:
         self.shim_dir.mkdir(exist_ok=True)
         real_git = shutil.which("git")
         assert real_git
-        if os.name == "nt":
-            # Windows resolves `git` via PATHEXT; an extensionless POSIX
-            # script never runs, which left the log empty and failed the
-            # budget assertions with "0 != 1" on windows-latest CI.
-            shim = self.shim_dir / "git.bat"
-            shim.write_text(
-                "@echo off\r\n"
-                f'echo %* >> "{self.git_log}"\r\n'
-                f'"{real_git}" %*\r\n'
-                "exit /b %errorlevel%\r\n",
-                encoding="utf-8",
-            )
-        else:
-            shim = self.shim_dir / "git"
-            shim.write_text(
-                "#!/bin/sh\n"
-                f'printf "%s\\n" "$*" >> {self.git_log}\n'
-                f'exec {real_git} "$@"\n',
-                encoding="utf-8",
-            )
-            shim.chmod(0o755)
+        shim = self.shim_dir / "git"
+        shim.write_text(
+            "#!/bin/sh\n"
+            f'printf "%s\\n" "$*" >> {self.git_log}\n'
+            f'exec {real_git} "$@"\n',
+            encoding="utf-8",
+        )
+        shim.chmod(0o755)
         env = dict(os.environ)
         env["PATH"] = f"{self.shim_dir}{os.pathsep}{env['PATH']}"
         return env
@@ -225,6 +212,13 @@ class EvidenceReachabilityBlackBoxTest(unittest.TestCase):
         self.assertEqual(shown["evidence"]["commits"], [self.orphan_sha[:8]])
 
 
+@unittest.skipIf(
+    os.name == "nt",
+    "Windows CreateProcess resolves list-form subprocess spawns straight to "
+    "git.exe, never consulting PATHEXT - a PATH shim (script or .bat) cannot "
+    "observe the spawns. The budget property is OS-independent Python logic, "
+    "covered on the POSIX CI legs.",
+)
 class EvidenceReachabilitySpawnBudgetTest(unittest.TestCase):
     """R4: constant git spawns regardless of how many commits are recorded."""
 
