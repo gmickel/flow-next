@@ -243,7 +243,7 @@ chmod +x .flow/bin/flowctl
 
 **Instruction files (probe-verified):** Grok loads **both** `CLAUDE.md` and `AGENTS.md` into context (seeded-codename probe, 2026-07-22). Setup therefore writes the lifecycle docs snippet to **CLAUDE.md** by default (`/flow-next:` slash syntax, not Codex `$flow-next-`) and the model-routing scaffold to **AGENTS.md** (where host-review workflows resolve pins). A pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form (marker-scoped).
 
-**Known nesting edge (Droid → Grok) - NEEDS-HUMAN:** if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Nested Droid→Grok is **unsupported** pending a this-process-is-grok discriminator, unless a live smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Claude/Cursor launched from a grok shell still classify correctly via their own higher-precedence signals. The probe disproved `CLAUDE_PLUGIN_ROOT` propagation into a grok child.
+**Known nesting edge (Droid → Grok) - NEEDS-HUMAN:** if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Nested Droid→Grok is **unsupported** pending a this-process-is-grok discriminator, unless a live smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Claude/Cursor launched from a grok shell still classify correctly via their own higher-precedence signals. The probe disproved `CLAUDE_PLUGIN_ROOT` propagation into a grok child - and #306 later showed the same variable never reaches a plugin skill's Bash env on Claude Code itself, which is why the cascade keys the Claude rung on `CLAUDECODE` + the plugin manifest instead.
 
 ### Install (pick one)
 
