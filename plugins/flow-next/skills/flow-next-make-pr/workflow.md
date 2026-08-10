@@ -413,7 +413,7 @@ All four values come from the payload directly:
 - `<spec-id>` from `spec.id`
 - `<branch>` from `PHASE0_CONTEXT.branch`, `<base>` from `PHASE0_CONTEXT.base`
 - `<done>` / `<open>` from `tasks_summary.done` / `tasks_summary.open`
-- `<covered>` = `len(acceptance_criteria) - len(tasks_summary.uncovered_r_ids)`; `<total>` = `len(acceptance_criteria)`. When `spec.spec_sections.acceptance_criteria_residue` is non-zero, append ` (<N> unparsed)` to the ratio - the denominator is short by that many criterion-shaped bullets the parser could not read (fn-179, #303); never silently present a short denominator as complete.
+- `<covered>` = `len(acceptance_criteria) - len(tasks_summary.uncovered_r_ids)`; `<total>` = `len(acceptance_criteria)`. When `spec.spec_sections.acceptance_criteria_residue` is non-zero, append ` (<N> unparsed)` to the ratio - the denominator is short by that many criterion-shaped bullets the parser could not read (fn-179, #303); never silently present a short denominator as complete. This qualifier applies on BOTH ratio paths - artifact-derived (Phase 1.5's supersession covers the coverage *claims*, but the residue count has no artifact counterpart and comes from the same export payload, so appending it is not a legacy-field merge) and legacy fallback alike.
 
 A 2-line natural-language summary appears between the H1 and the blockquote, drawn from `spec.spec_sections.goal_and_context` first paragraph, truncated to ~240 characters with sentence-boundary respect. Never invent — if `goal_and_context` is empty the summary is omitted.
 
