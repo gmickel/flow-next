@@ -101,7 +101,7 @@ claim.
 
 - `.flow/artifacts/<spec-id>/pr.html` exists at the fixed path, derived from the export payload + real diff (**never commit messages**), pre-publish checklist (reference §8) passed incl. the self-containment grep → `OK: self-contained`, staleness stamp present.
 - Supported current v1 input, when present, remains authoritative for identity/currentness, sources, ordered groups, file membership, change/attention dimensions, file-level links, deliberate non-changes, and verification; its HTML contains the verbatim deterministic semantic carrier, remains local-only, and leaves `HEAD` unchanged. Fallback is visibly labeled and never mixed.
-- R-ID verification ran: payload-vs-diff mismatches (claimed evidence outside the diff range, uncovered R-IDs, evidence touching no diff files) render as visibly flagged rows (red R-ID cell + `mismatch` chip + reason) — warn-in-artifact, never blocks make-pr.
+- R-ID verification ran: payload-vs-diff mismatches (claimed evidence outside the diff range, undeclared R-IDs, evidence touching no diff files) render as visibly flagged rows (claimed-but-not-evidenced criteria are NOT mismatches - fn-180) (red R-ID cell + `mismatch` chip + reason) — warn-in-artifact, never blocks make-pr.
 - Ignore probe ran against the EXACT artifact file (`git check-ignore --no-index -q "$ARTIFACT_PATH"` — `--no-index` so an already-tracked artifact still honors a later ignore rule), not the directory.
 - `HTML_AID_STATUS=current`: `LINK_MODE=local`, no artifact commit, and `git rev-parse HEAD` still equals the cognitive aid's `headSha`.
 - Legacy fallback with `LINK_MODE=repo`: exactly one narrow pathspec commit (`chore(flow): pr artifact <spec-id>` `--` artifact file only); byte-identical regeneration makes no empty commit.
