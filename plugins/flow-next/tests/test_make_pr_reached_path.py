@@ -76,18 +76,12 @@ class MakePrReachedPathTests(unittest.TestCase):
         return text[head : text.index(end, head)]
 
     def test_coverage_abort_is_keyed_on_undeclared_not_uncovered(self) -> None:
-        """Contract tokens only (repo rule: no sentence-level prose pins).
-
-        The abort's stderr message IS an output contract and is pinned
-        verbatim; everything else pins the smallest distinctive token."""
+        """Contract tokens only (repo rule: no sentence-level prose pins)."""
         aborts = self._section(self.workflow, "### 2.7 — Abort conditions", "### Done when")
         self.assertIn("`tasks_summary.undeclared_r_ids` length", aborts)
-        self.assertIn(
-            "Undeclared R-ID coverage (no task's satisfies frontmatter claims any "
-            "spec R-ID). Add satisfies entries to the spec's tasks, or re-run "
-            "/flow-next:plan to regenerate them.",
-            aborts,
-        )
+        # Distinctive condition token of the abort's stderr contract - the
+        # advice wording is free to evolve (no sentence pins).
+        self.assertIn("Undeclared R-ID coverage", aborts)
         # The retired condition + its unfollowable advice must not survive anywhere.
         self.assertNotIn("Empty R-ID coverage", self.workflow)
         self.assertNotIn(
