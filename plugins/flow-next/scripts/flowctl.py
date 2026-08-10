@@ -34435,14 +34435,17 @@ def cmd_start(args: argparse.Namespace) -> None:
         # exactly the two identity gates below (claimed-by-other, in_progress
         # owned by another) and nothing else - dependency, blocked and done
         # gates stay where they are, and --force keeps its takeover meaning.
+        # getattr: internal callers build a synthetic Namespace without the
+        # CLI-only flag; absence means False, never an AttributeError.
+        reclaim_flag = bool(getattr(args, "reclaim", False))
         reclaiming = bool(
-            args.reclaim and existing_assignee and existing_assignee != current_actor
+            reclaim_flag and existing_assignee and existing_assignee != current_actor
         )
 
         # Check if claimed by someone else (unless --force / --reclaim)
         if (
             not args.force
-            and not args.reclaim
+            and not reclaim_flag
             and existing_assignee
             and existing_assignee != current_actor
         ):
@@ -34457,7 +34460,7 @@ def cmd_start(args: argparse.Namespace) -> None:
             # Allow resuming your own in_progress task, or repairing the
             # claimant of an in_progress task via --reclaim.
             resuming_own = status == "in_progress" and existing_assignee == current_actor
-            repairing = bool(args.reclaim) and status == "in_progress"
+            repairing = reclaim_flag and status == "in_progress"
             if not (resuming_own or repairing):
                 error_exit(
                     f"Cannot start task {args.id}: status is '{status}', expected 'todo'. "
