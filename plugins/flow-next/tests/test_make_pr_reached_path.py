@@ -76,13 +76,12 @@ class MakePrReachedPathTests(unittest.TestCase):
         return text[head : text.index(end, head)]
 
     def test_coverage_abort_is_keyed_on_undeclared_not_uncovered(self) -> None:
-        """The abort fires when NO task claims any R-ID - not when none is evidenced."""
+        """Contract tokens only (repo rule: no sentence-level prose pins).
+
+        The abort's stderr message IS an output contract and is pinned
+        verbatim; everything else pins the smallest distinctive token."""
         aborts = self._section(self.workflow, "### 2.7 — Abort conditions", "### Done when")
-        self.assertIn(
-            "Every R-ID undeclared (`tasks_summary.undeclared_r_ids` length "
-            "== `len(acceptance_criteria)`)",
-            aborts,
-        )
+        self.assertIn("`tasks_summary.undeclared_r_ids` length", aborts)
         self.assertIn(
             "Undeclared R-ID coverage (no task's satisfies frontmatter claims any "
             "spec R-ID). Add satisfies entries to the spec's tasks, or re-run "
@@ -94,34 +93,23 @@ class MakePrReachedPathTests(unittest.TestCase):
         self.assertNotIn(
             "Every R-ID uncovered (`tasks_summary.uncovered_r_ids` length", self.workflow
         )
+        # The abort condition never keys on the evidenced set.
+        self.assertNotIn("`tasks_summary.uncovered_r_ids` length == `len(acceptance_criteria)`", aborts)
         # Reachable from the table section too, where the check is described inline.
         table = self._section(
             self.workflow, "### 2.3 — R-ID coverage table", "### 2.3b — Verification"
         )
         self.assertIn("`tasks_summary.undeclared_r_ids` length equals", table)
 
-    def test_plan_gate_repro_renders_instead_of_aborting(self) -> None:
-        """#301: all tasks todo + full declaration is a render, explicitly not an abort."""
-        aborts = self._section(self.workflow, "### 2.7 — Abort conditions", "### Done when")
-        self.assertIn("keyed on DECLARED coverage, never on evidenced coverage", aborts)
-        self.assertIn("every task `todo`, every criterion declared", aborts)
-        self.assertIn("`undeclared_r_ids == []`", aborts)
-        self.assertIn("it RENDERS", aborts)
-        done_when = self.workflow.index("- Abort conditions (§2.7) checked before writing")
-        self.assertIn(
-            "the coverage abort keys on `undeclared_r_ids`, never on `uncovered_r_ids`",
-            self.workflow[done_when : done_when + 900],
-        )
-
     def test_claimed_not_evidenced_renders_in_table_and_ratio(self) -> None:
+        """Rendered-output literals: table cells, follow-up markers, ratio shape."""
         table = self._section(
             self.workflow, "### 2.3 — R-ID coverage table", "### 2.3b — Verification"
         )
         self.assertIn("| Claimed, not yet evidenced |", table)
         self.assertIn("`⏳ claimed, not yet evidenced`", table)
-        self.assertIn("Task status does NOT filter this column", table)
         self.assertIn("⏳ **<M> criterion(a) claimed but not yet evidenced:**", table)
-        # The warning line stays bound to the undeclared set only.
+        # The warning marker stays bound to the undeclared set only.
         self.assertIn("⚠️ **<N> undeclared acceptance criterion(a):**", table)
         self.assertNotIn("⚠️ **<N> uncovered acceptance criterion(a):**", self.workflow)
 
@@ -134,23 +122,25 @@ class MakePrReachedPathTests(unittest.TestCase):
             summary,
         )
         self.assertIn("`len(uncovered_r_ids) - len(undeclared_r_ids)`", summary)
-        self.assertIn("Omit each clause when its count is zero", summary)
 
-    def test_artifact_path_states_how_plan_gate_applies(self) -> None:
-        """Supersession must not leave the declared-coverage rule dead on the artifact path."""
-        aid = (SKILL / "pr-cognitive-aid.md").read_text(encoding="utf-8")
-        for needle in (
-            "expresses evidenced\ncoverage only",
-            "tasks_summary.undeclared_r_ids",
-        ):
-            self.assertIn(needle, aid)
-        phase15 = self._section(
-            self.workflow,
-            "## Phase 1.5: Structured PR cognitive-aid",
-            "## Phase 1.5b",
+    def test_orphaned_evidence_shas_render_marked_never_linked(self) -> None:
+        """fn-180 #302 / PR #327: an orphaned SHA is annotated, not a live link."""
+        table = self._section(
+            self.workflow, "### 2.3 — R-ID coverage table", "### 2.3b — Verification"
         )
-        self.assertIn("Plan-gate status is not superseded", phase15)
-        self.assertIn("before any artifact\nrendering (artifact-independent)", phase15)
+        self.assertIn("(orphaned by a history rewrite)", table)
+        self.assertIn("evidence commit <token> is not reachable from HEAD", table)
+
+    def test_artifact_path_keeps_per_criterion_state_visible(self) -> None:
+        """PR #327: the legacy coverage table is suppressed only on fully
+        evidenced coverage; with any gap it renders beside the artifact."""
+        aid = (SKILL / "pr-cognitive-aid.md").read_text(encoding="utf-8")
+        self.assertIn("tasks_summary.undeclared_r_ids", aid)
+        self.assertIn("`tasks_summary.uncovered_r_ids` is empty", aid)
+        order = self._section(
+            self.workflow, "### 2.0 — Section order", "### 2.1 — Title + summary block"
+        )
+        self.assertIn("ONLY when `tasks_summary.uncovered_r_ids` is empty", order)
 
     def test_codex_mirror_carries_the_coverage_contract(self) -> None:
         mirror_workflow = MIRROR / "workflow.md"

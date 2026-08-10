@@ -34807,8 +34807,12 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 
 # Only unambiguous hex tokens are ever handed to git. Anything else (tracker
 # UUIDs with hyphens, PR URLs, free text) is ignored without a probe, so no
-# recorded value can be resolved as a ref name by accident.
-_EVIDENCE_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+# recorded value can be resolved as a ref name by accident. Case-insensitive
+# and sized up to 64 so hand-recorded uppercase SHAs and SHA-256-repo object
+# ids are classified rather than silently skipped (PR #327 bot findings); a
+# 64-hex digest that is not a commit here still lands on `ignored` via the
+# batch-check miss.
+_EVIDENCE_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,64}$")
 
 EVIDENCE_STATE_IGNORED = "ignored"
 EVIDENCE_STATE_REACHABLE = "reachable"

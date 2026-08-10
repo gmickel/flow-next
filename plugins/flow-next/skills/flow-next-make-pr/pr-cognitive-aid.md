@@ -104,12 +104,19 @@ artifact `headSha`; on mismatch, treat it as stale and use the labeled fallback.
 
 When `PR_AID_MARKDOWN` is non-empty, the current v1 object is authoritative for
 the thesis, proof metrics, R-ID/task links, verification claims, walkthrough
-order, and file membership. Suppress the legacy R-ID coverage and Verification
-sections; their content is rendered from the artifact inside the walkthrough.
-Derive the summary block's coverage ratio from the artifact links. Existing
-fields are fallback-only; never merge stale/legacy values into those claims.
-`rid` source refs bind an R-ID to a commit, so the artifact expresses evidenced
-coverage only — it has no claimed-not-evidenced or undeclared counterpart. The
+order, and file membership. Suppress the legacy Verification section, and
+suppress the legacy R-ID coverage section ONLY when
+`tasks_summary.uncovered_r_ids` is empty (fully evidenced coverage - the state
+the artifact can fully express); their content is then rendered from the
+artifact inside the walkthrough. **When any criterion is unevidenced or
+undeclared, the legacy R-ID coverage section RENDERS alongside the artifact**
+(PR #327 finding): `rid` source refs bind an R-ID to a commit, so the artifact
+expresses evidenced coverage only - it has no claimed-not-evidenced or
+undeclared counterpart, and the §2.3 table is the sole carrier of the
+per-criterion `⏳` / `⚠️` state. Derive the summary block's coverage ratio from
+the artifact links when the table is suppressed, from `tasks_summary`
+otherwise. Existing fields are fallback-only for the claims the artifact does
+carry; never merge stale/legacy values into those claims. The
 declared-coverage abort and the plan-gate qualifier clauses (workflow §2.7,
 §2.1) keep reading `tasks_summary.undeclared_r_ids` / `uncovered_r_ids` on this
 path too; that is not a legacy merge, because no artifact value is being

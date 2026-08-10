@@ -279,6 +279,18 @@ class EvidenceReachabilityUnitTest(unittest.TestCase):
         self.assertEqual(flowctl.evidence_commit_tokens({}), [])
         self.assertEqual(flowctl.evidence_commit_tokens({"evidence": "nope"}), [])
 
+    def test_uppercase_and_sha256_length_tokens_are_candidates(self) -> None:
+        """PR #327 bot findings: hand-recorded uppercase SHAs and SHA-256-repo
+        object ids (64 hex) must be classified, not silently skipped; 65+ hex
+        and mixed junk stay out."""
+        checker = flowctl.EvidenceReachability(Path("/nonexistent"))
+        seen: list[list[str]] = []
+        checker._batch_check = lambda tokens: seen.append(tokens) or {}  # type: ignore[assignment]
+        upper = FOREIGN_SHA.upper()
+        sha256_len = "a" * 64
+        checker.prime([upper, sha256_len, "b" * 65, "not-hex"])
+        self.assertEqual(seen, [sorted([upper, sha256_len])])
+
     def test_non_hex_tokens_never_reach_git(self) -> None:
         checker = flowctl.EvidenceReachability(Path("/nonexistent"))
         spawned: list[Any] = []
