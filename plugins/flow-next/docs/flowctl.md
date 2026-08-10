@@ -417,6 +417,15 @@ flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 - `removed_export_refs` — top-level list of symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: removed top-level definitions are word-boundary `git grep`-ed against the working tree (the removals are already gone from HEAD, so they never self-match), bounded to the source extensions the diff touched. Each entry is `{symbol, defined_in, refs: [{path, line, text}]}`. Empty list ⇒ the render states "no removed symbols still referenced (checked at export time)". False positives are acceptable (they steer a human look); completeness is never claimed.
 - `tasks[].evidence.files` — each task's claimed files (recorded at `flowctl done` time) surfaced verbatim, so the render maps task → files → commits without re-deriving. Sits alongside the existing `commits` / `tests` / `files_touched` evidence keys.
 
+**Declared vs evidenced coverage (fn-180, #301).** `tasks_summary` answers two
+distinct questions with two sets: `uncovered_r_ids` (existing, unchanged) is
+the *evidenced* gap - R-IDs no DONE task satisfies (the merge-gate question) -
+and `undeclared_r_ids` is the *declared* gap - R-IDs no task claims at ANY
+status (the plan-gate question). A fully-planned spec with every task still
+todo reports full uncovered but zero undeclared; make-pr renders those criteria
+as claimed-not-evidenced and keys its coverage abort on the undeclared set.
+`acceptance_criteria_residue` (fn-179, #303) qualifies both denominators.
+
 
 ### spec skeleton
 
@@ -844,6 +853,17 @@ Validate spec structure (specs, deps, cycles).
 flowctl validate --spec fn-1 [--json]
 flowctl validate --all [--json]
 ```
+
+Validate also reports **orphaned evidence commits** (fn-180, #302): a warning
+per `evidence.commits[]` entry that exists in the object store but is no
+longer an ancestor of HEAD - the state a rebase, amend, or squash-merge leaves
+behind. Reachable commits are silent; tokens that are not commits in this repo
+(tracker UUIDs, foreign SHAs) are ignored **by design** - flagging them would
+corrupt exactly the evidence the record exists to hold. Read-only: validate
+never rewrites a recorded SHA and the warning never fails the run. Cost: two
+batched git reads per invocation regardless of commit or spec count
+(`cat-file --batch-check` + one streamed `rev-list`), so the land loop can
+call it freely.
 
 Single spec output:
 ```json

@@ -2,6 +2,46 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Two integrity gaps in what the pipeline tells you about your own work, both
+from measured @sn-furali reports (thanks!). A fully-planned spec that had not
+shipped code yet looked like 0% coverage and make-pr refused to open the draft
+with advice you could not follow; and a rebase could orphan every evidence
+commit a spec recorded while validate stayed green over the dead links.
+
+### Fixed
+
+- **make-pr opens draft PRs at the plan gate.** The coverage abort fired
+  whenever no criterion was *evidenced*, which is every spec before work
+  starts - the repro was a fully-planned, fully-declared spec refused with
+  "run /flow-next:work" while make-pr itself blocked the way there. The abort
+  now keys on *undeclared* coverage (no task's `satisfies` claims any
+  criterion - the one state where the advice is actionable), and a plan-gate
+  body renders honestly: the coverage table gains a third state (`claimed,
+  not yet evidenced` beside evidenced and undeclared), the warning marker
+  belongs only to genuinely unclaimed criteria, and the summary ratio stays
+  evidenced-only with claimed/undeclared clauses appended when non-zero.
+  (#301)
+
+### Added
+
+- **The export payload separates declared from evidenced coverage.**
+  `tasks_summary.undeclared_r_ids` (R-IDs no task claims at any status) lands
+  beside the unchanged `uncovered_r_ids` (R-IDs no done task satisfies), so
+  consumers can ask the plan-gate and merge-gate questions separately;
+  nothing reading the existing field changes. (#301)
+- **`flowctl validate` notices orphaned evidence commits.** A rebase, amend,
+  or squash-merge leaves recorded `evidence.commits[]` SHAs present in the
+  object store but unreachable from HEAD; validate now reports each as a
+  warning ("orphaned by a history rewrite; recorded value left as-is") while
+  reachable commits stay silent and tokens that are not commits in this repo
+  (tracker UUIDs, foreign SHAs) are ignored by design - flagging them would
+  corrupt exactly the evidence the record exists to hold. Read-only: nothing
+  is rewritten, the run never fails, and the whole pass costs two batched git
+  reads regardless of commit count, so the land loop can keep calling
+  validate freely. (#302)
+
 ## [flow-next 3.25.0] - 2026-08-10
 
 Six small defects, one pass - every one arrived as a measured report with a
