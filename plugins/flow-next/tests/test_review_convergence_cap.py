@@ -1480,6 +1480,30 @@ class TestReviewRoundsCLI(unittest.TestCase):
         self.assertEqual(payload["refunded_attempts"], 1)
         self.assertEqual(payload["attempts"][0]["backend"], "rp")
 
+    def test_record_cli_row_is_the_head_sha_fallback_fixture(self):
+        """fn-183 (#312): the rp/host `review-rounds record` path has no
+        pre-dispatch snapshot, so its row must mark head_sha as UNOBSERVED,
+        carry no base_sha and no tool_calls, and still record output bytes."""
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        output_path = self.root / "review.txt"
+        output_path.write_text("<verdict>NEEDS_WORK</verdict>", encoding="utf-8")
+        code, _, _ = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--backend", "rp", "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0)
+        row = self._spec_json()["review_attempts"][-1]
+        self.assertIs(row["head_sha_observed"], False)
+        self.assertNotIn("base_sha", row)
+        self.assertNotIn("tool_calls", row)
+        self.assertEqual(
+            row["output_bytes"],
+            len(output_path.read_text(encoding="utf-8").encode("utf-8")),
+        )
+
     def test_record_real_verdict_does_not_refund(self):
         self._run(
             "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
@@ -2440,6 +2464,173 @@ class TestReviewedHeadShaBinding(TestCombinedFinalizeWrite):
         self.assertEqual(
             self._spec_data()["review_attempts"][-1]["head_sha"], "a" * 40
         )
+
+
+class TestAttemptRowWorkVolumeAndProvenance(TestCombinedFinalizeWrite):
+    """fn-183 (#312): a row must say how the verdict was produced.
+
+    Work volume (output bytes, and a tool-call count only where one was
+    genuinely measured), head_sha provenance (observed snapshot vs
+    finalize-time fallback), and base_sha beside head_sha. Absence is
+    UNKNOWN on every new field - never coerced to zero.
+    """
+
+    def _row(self) -> dict:
+        return self._spec_data()["review_attempts"][-1]
+
+    def test_output_bytes_recorded_on_every_row(self) -> None:
+        output = "<verdict>SHIP</verdict> éé"  # multibyte: bytes != chars
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="codex", output=output, verdict="SHIP",
+        )
+        row = self._row()
+        self.assertEqual(row["output_bytes"], len(output.encode("utf-8")))
+        self.assertGreater(row["output_bytes"], len(output))
+        # The output itself is never retained - only its size and its hash.
+        self.assertNotIn("output", row)
+
+    def test_output_bytes_recorded_on_refunded_transport_row(self) -> None:
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp", output="",
+            failure_class="empty_output",
+        )
+        row = self._row()
+        self.assertEqual(row["outcome"], "transport_failure")
+        self.assertEqual(row["output_bytes"], 0)
+
+    def test_tool_calls_absent_unless_supplied(self) -> None:
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+        )
+        self.assertNotIn("tool_calls", self._row())
+
+    def test_tool_calls_recorded_when_measured_including_zero(self) -> None:
+        """A measured 0 is the whole point (#312): it is recorded, not dropped."""
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="codex",
+            output="<verdict>SHIP</verdict>", verdict="SHIP", tool_calls=0,
+        )
+        self.assertEqual(self._row()["tool_calls"], 0)
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="codex",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            tool_calls=22,
+        )
+        self.assertEqual(self._row()["tool_calls"], 22)
+
+    def test_head_sha_observed_marks_snapshot_vs_fallback(self) -> None:
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="codex",
+            output="<verdict>SHIP</verdict>", verdict="SHIP",
+            reviewed_head_sha="a" * 40,
+        )
+        observed = self._row()
+        self.assertEqual(observed["head_sha"], "a" * 40)
+        self.assertIs(observed["head_sha_observed"], True)
+
+        self._reserve()
+        with mock.patch.object(flowctl, "_review_head_sha", return_value="b" * 40):
+            flowctl.record_review_attempt(
+                self.spec_id, "plan", backend="rp",
+                output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            )
+        fallback = self._row()
+        self.assertEqual(fallback["head_sha"], "b" * 40)
+        self.assertIs(fallback["head_sha_observed"], False)
+
+    def test_base_sha_present_only_when_snapshot_supplied_it(self) -> None:
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="codex",
+            output="<verdict>SHIP</verdict>", verdict="SHIP",
+            reviewed_head_sha="a" * 40, reviewed_base_sha="c" * 40,
+        )
+        self.assertEqual(self._row()["base_sha"], "c" * 40)
+
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+        )
+        self.assertNotIn("base_sha", self._row())
+
+    def test_pre_fn183_rows_read_back_without_crash(self) -> None:
+        """Old rows carry none of the new fields; nothing may crash or read 0."""
+        spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        data = json.loads(spec_path.read_text())
+        legacy = {
+            "timestamp": flowctl.now_iso(),
+            "scope": flowctl._review_attempt_scope("plan", None, "plan"),
+            "backend": "codex",
+            "kind": "plan",
+            "counter_kind": "plan",
+            "task": None,
+            "outcome": "verdict",
+            "verdict": "SHIP",
+            "output_sha256": "0" * 64,
+            "round_consumed": True,
+            "head_sha": "d" * 40,
+        }
+        data["review_attempts"] = [legacy]
+        spec_path.write_text(json.dumps(data))
+
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="codex",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+            reviewed_head_sha="a" * 40, reviewed_base_sha="c" * 40, tool_calls=7,
+        )
+        summary = flowctl._review_attempt_summary(
+            self._spec_data(), "plan", None, review_type="plan"
+        )
+        old, new = summary["attempts"][0], summary["attempts"][-1]
+        self.assertEqual(summary["verdict_attempts"], 2)
+        for field in ("output_bytes", "tool_calls", "base_sha", "head_sha_observed"):
+            self.assertNotIn(field, old)
+        self.assertEqual(new["tool_calls"], 7)
+        self.assertEqual(new["base_sha"], "c" * 40)
+
+
+class TestCodexToolCallCount(unittest.TestCase):
+    """fn-183 (#312): tool calls are counted from the real codex event stream
+    and are None - never 0 - when no stream was returned."""
+
+    def _stream(self, *items: dict) -> str:
+        lines = ['{"type":"thread.started","thread_id":"t1"}']
+        lines += [
+            json.dumps({"type": "item.completed", "item": item}) for item in items
+        ]
+        return "\n".join(lines) + "\n"
+
+    def test_counts_work_items_and_ignores_talk_and_thought(self) -> None:
+        output = self._stream(
+            {"type": "command_execution", "command": "rg foo"},
+            {"type": "reasoning", "text": "thinking"},
+            {"type": "mcp_tool_call", "server": "x"},
+            {"type": "agent_message", "text": "<verdict>SHIP</verdict>"},
+            {"type": "file_change", "path": "a.py"},
+        )
+        self.assertEqual(flowctl.count_codex_tool_calls(output), 3)
+
+    def test_stream_with_no_tool_items_counts_zero(self) -> None:
+        output = self._stream({"type": "agent_message", "text": "SHIP"})
+        self.assertEqual(flowctl.count_codex_tool_calls(output), 0)
+
+    def test_unknown_item_type_counts_as_work(self) -> None:
+        """A future item type must not silently under-report work."""
+        output = self._stream({"type": "web_search_2", "query": "x"})
+        self.assertEqual(flowctl.count_codex_tool_calls(output), 1)
+
+    def test_plain_text_and_empty_output_are_unknown(self) -> None:
+        for output in ("", "<verdict>SHIP</verdict>\nplain resumed stdout"):
+            self.assertIsNone(flowctl.count_codex_tool_calls(output))
 
 
 class TestFindingsDigestConvergenceTerminal(unittest.TestCase):

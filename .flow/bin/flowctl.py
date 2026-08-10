@@ -4823,6 +4823,57 @@ def extract_codex_final_message(output: str) -> str:
     return output
 
 
+# The only ``item.completed`` item types that are the reviewer TALKING or
+# THINKING rather than doing work. Everything else on the stream (command
+# execution, file change, MCP tool call, web search, ...) is work, so an
+# unrecognized future item type counts as work: under-reporting work is the
+# failure that would falsely accuse a real review of fabricating (issue #312).
+_CODEX_NON_TOOL_ITEM_TYPES = frozenset({"agent_message", "reasoning"})
+
+
+def count_codex_tool_calls(output: str) -> Optional[int]:
+    """Tool calls a codex ``exec --json`` stream actually performed, or None.
+
+    fn-183 (#312): work volume is the only signal that separates a review that
+    measured the repo from one that answered from a resumed session's context.
+    The fresh-dispatch path runs with ``--json``, so the event stream carries
+    every tool call the reviewer made and the count is a MEASURED fact.
+
+    Returns ``None`` - never 0 - when ``output`` is not a recognizable codex
+    event stream (a resumed session's plain-text stdout, another backend's
+    text, a synthetic dispatch-error string). Absence means unknown; a
+    recorded 0 means the reviewer genuinely touched nothing.
+    """
+    if not output:
+        return None
+    is_stream = False
+    count = 0
+    for line in output.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        event_type = data.get("type")
+        if not isinstance(event_type, str):
+            continue
+        if event_type == "thread.started" or event_type.startswith("item."):
+            is_stream = True
+        if event_type != "item.completed":
+            continue
+        item = data.get("item")
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if isinstance(item_type, str) and item_type not in _CODEX_NON_TOOL_ITEM_TYPES:
+            count += 1
+    return count if is_stream else None
+
+
 def parse_codex_verdict(output: str) -> Optional[str]:
     """Extract verdict from codex output.
 
@@ -10707,6 +10758,8 @@ def _record_review_attempt_locked(
     finalize_status_kind: Optional[str] = None,
     reset_rounds_on_ship: bool = False,
     reviewed_head_sha: Optional[str] = None,
+    reviewed_base_sha: Optional[str] = None,
+    tool_calls: Optional[int] = None,
     reservation_id: Optional[str] = None,
     receipt_target: Optional[str] = None,
     receipt_payload: Optional[dict] = None,
@@ -11058,6 +11111,17 @@ def _record_review_attempt_locked(
         # The sha the review OBSERVED (pre-dispatch snapshot) when the caller
         # has it; finalize-time HEAD is only the fallback (rp/refund paths).
         "head_sha": reviewed_head_sha or _review_head_sha(),
+        # fn-183 (#312) work volume: how much output the verdict actually cost.
+        # Bytes only - the output itself is never retained (see output_sha256).
+        "output_bytes": len((output or "").encode("utf-8", errors="replace")),
+        # fn-183 (#312) provenance MARKER (not omission): True when a
+        # pre-dispatch snapshot supplied head_sha, False when the finalize-time
+        # `git rev-parse HEAD` fallback did (the rp/host `review-rounds record`
+        # CLI path, and the dispatch-error refund paths). A row with NO
+        # head_sha_observed key predates fn-183 and means unknown - which is
+        # exactly why this is a marker and not an omission: omission would make
+        # "fallback" and "old row" indistinguishable.
+        "head_sha_observed": bool(reviewed_head_sha),
         "reservation_id": reservation_id,
         "hash_epoch": (metadata or {}).get(
             "epoch",
@@ -11073,6 +11137,13 @@ def _record_review_attempt_locked(
             }
         ),
     }
+    # fn-183 (#312): absent, never zero and never guessed. `tool_calls` is
+    # written only where the dispatcher genuinely measured one; `base_sha` only
+    # where a review snapshot supplied it.
+    if tool_calls is not None:
+        row["tool_calls"] = int(tool_calls)
+    if reviewed_base_sha:
+        row["base_sha"] = reviewed_base_sha
     if findings_built and findings_digest is not None:
         row["findings_digest"] = dict(findings_digest)
     if (
@@ -41131,6 +41202,7 @@ def _dispatch_backend_review(
     review_type: str,
     task_id: Optional[str] = None,
     reviewed_head_sha: Optional[str] = None,
+    reviewed_base_sha: Optional[str] = None,
     reservation_id: Optional[str] = None,
     injected_prompt: Optional[str] = None,
 ) -> tuple[str, Optional[str], int, str]:
@@ -41199,6 +41271,7 @@ def _dispatch_backend_review(
                 failure_class="dispatch_error",
                 task_id=task_id,
                 reviewed_head_sha=reviewed_head_sha,
+                reviewed_base_sha=reviewed_base_sha,
                 review_type=review_type,
                 use_json=args.json,
                 reservation_id=reservation_id,
@@ -41227,6 +41300,7 @@ def _dispatch_backend_review(
                 failure_class="dispatch_exception",
                 task_id=task_id,
                 reviewed_head_sha=reviewed_head_sha,
+                reviewed_base_sha=reviewed_base_sha,
                 review_type=review_type,
                 use_json=args.json,
                 reservation_id=reservation_id,
@@ -41399,6 +41473,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         review_type="impl",
         task_id=None if standalone else task_id,
         reviewed_head_sha=reviewed_head_sha,
+        reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         injected_prompt=injected_prompt,
     )
@@ -41465,6 +41540,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         reset_rounds_on_ship=not standalone,
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
+        reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -41580,6 +41656,7 @@ def _finish_backend_exec(
     reset_rounds_on_ship: bool = False,
     attempt_out: Optional[dict] = None,
     reviewed_head_sha: Optional[str] = None,
+    reviewed_base_sha: Optional[str] = None,
     reservation_id: Optional[str] = None,
     findings_container: Optional[dict] = None,
     findings_digest: Optional[dict] = None,
@@ -41595,6 +41672,10 @@ def _finish_backend_exec(
     the transport attempt is recorded before the existing error is surfaced.
     """
     verdict = parse_codex_verdict(output)
+    # fn-183 (#312): measured from the raw event stream this function was
+    # handed. None for a backend/path that returns plain text - the row then
+    # carries no tool_calls at all rather than a fabricated 0.
+    tool_calls = count_codex_tool_calls(output)
     if verdict:
         if spec_id and review_kind:
             summary = record_review_attempt(
@@ -41610,6 +41691,8 @@ def _finish_backend_exec(
                 deferred_status_target=deferred_status_target,
                 reset_rounds_on_ship=reset_rounds_on_ship,
                 reviewed_head_sha=reviewed_head_sha,
+                reviewed_base_sha=reviewed_base_sha,
+                tool_calls=tool_calls,
                 reservation_id=reservation_id,
                 findings_container=findings_container,
                 findings_digest=findings_digest,
@@ -41650,6 +41733,8 @@ def _finish_backend_exec(
             failure_class=failure_class,
             task_id=task_id,
             reviewed_head_sha=reviewed_head_sha,
+            reviewed_base_sha=reviewed_base_sha,
+            tool_calls=tool_calls,
             review_type=review_type,
             use_json=args.json,
             reservation_id=reservation_id,
@@ -41838,6 +41923,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         review_kind="plan",
         review_type="plan",
         reviewed_head_sha=reviewed_head_sha,
+        reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         injected_prompt=injected_prompt,
     )
@@ -41901,6 +41987,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         reset_rounds_on_ship=True,
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
+        reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -42137,6 +42224,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         review_kind="plan",
         review_type="completion",
         reviewed_head_sha=reviewed_head_sha,
+        reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         injected_prompt=injected_prompt,
     )
@@ -42205,6 +42293,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         reset_rounds_on_ship=True,
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
+        reviewed_base_sha=reviewed_base_sha,
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
