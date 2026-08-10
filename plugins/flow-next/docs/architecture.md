@@ -129,6 +129,31 @@ finalize-time HEAD is the fallback where no snapshot exists, e.g. rp). `plan_rev
 `*_reviewed_at` stamps) are a denormalized read model derived from that
 ledger; when the two ever diverge, the ledger wins.
 
+Each row also answers "was this verdict measured, and against what?"
+(fn-183, #312):
+
+- `output_bytes` - how much output the verdict cost. A ~1 KB SHIP that claims
+  fresh measurement is the fabrication signature the field exists to expose;
+  only the size is recorded, never the output text (its `output_sha256` is the
+  identity).
+- `tool_calls` - present only where the backend's event stream let the
+  dispatcher genuinely count them (codex `exec --json`); a recorded `0` means
+  the reviewer touched nothing, which is the signal, not an error. Plain-text
+  paths (resumed sessions, rp/host) carry no key at all.
+- `head_sha_observed` - `true` when a pre-dispatch snapshot supplied
+  `head_sha`, `false` when the finalize-time `git rev-parse HEAD` fallback did
+  (always the case on the `review-rounds record` CLI path). A marker, not an
+  omission, so a fallback row stays distinguishable from a pre-fn-183 row.
+- `base_sha` - beside `head_sha` wherever the review snapshot ran, so the
+  judged diff can be located and re-rendered; absent, never guessed,
+  elsewhere.
+
+On every one of these fields, **absence means unknown - never zero**: rows
+written by older versions carry none of them and read back untouched.
+`session_id`-style identity is deliberately NOT a work-evidence signal - a
+resumed backend session reuses the same thread id for a fabricated round and a
+real one, so only work volume separates them.
+
 Write-ordering differs by path, on purpose:
 
 - **In-process plan review** (`flowctl codex|copilot|cursor plan-review`)

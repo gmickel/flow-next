@@ -2,6 +2,30 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+A review verdict you cannot audit is a verdict you have to take on faith. A
+resumed reviewer session can answer from its previous round's context in ~1 KB
+with zero tool calls while asserting "measured" facts - and the verdict text
+looks identical to a real one. Attempt rows now record how the verdict was
+produced, so a consumer (or a human) can ask "was this measured?" instead of
+trusting narration. Fixes #312 - thanks @sn-furali for the measured report.
+
+### Added
+
+- **Review-attempt rows carry work volume and provenance.** Every new
+  `review_attempts[]` row records `output_bytes` (size only - the output is
+  never retained); `tool_calls` where the backend's event stream let the
+  dispatcher genuinely count them (codex `exec --json`) - a measured `0` is
+  recorded, the fabrication signal itself, while plain-text paths carry no
+  key; `head_sha_observed` marking whether `head_sha` came from the
+  pre-dispatch snapshot or the finalize-time fallback (the `review-rounds
+  record` CLI path always takes the fallback); and `base_sha` beside
+  `head_sha` wherever the review snapshot ran, so the judged diff can be
+  located and re-rendered. `review-rounds attempts --json` surfaces all of
+  it; rows written by older versions read back with the fields absent -
+  absence means unknown, never zero. (#312)
+
 ## [flow-next 3.23.0] - 2026-08-09
 
 A wrong answer you can recognize costs a glance; a wrong answer dressed as a

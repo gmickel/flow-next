@@ -10,9 +10,8 @@ Spec fn-183 R5. Architecture notes: what each field answers; absence means unkno
 R5 of the spec. Full gate green; no version bump.
 
 ## Done summary
-TBD
-
+R5 closed out. architecture.md "Review bookkeeping" section documents each new attempt-row field and what it answers (output_bytes = did the verdict cost measured work; tool_calls = measured-only, recorded 0 is the fabrication signal; head_sha_observed = snapshot vs finalize-time fallback, marker not omission so fallback rows stay distinguishable from pre-fn-183 rows; base_sha = locate and re-render the judged diff), states absence means unknown never zero, and documents session_id as NOT a work-evidence signal (resume reuses the thread id). flowctl.md attempts surface links to the schema notes. CHANGELOG Unreleased entry, user-outcome-first, credits @sn-furali (#312). Full gate green; no version bump (batched release).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 17fe7a7b
+- Tests: python3 scripts/run_tests_parallel.py (4340 OK, 0 failures), uvx ruff@0.16.0 check . (clean), ./scripts/sync-codex.sh x2 (idempotent, no diff)
 - PRs:
