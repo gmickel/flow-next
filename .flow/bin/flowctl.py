@@ -33042,18 +33042,31 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     total = len(task_entries)
     done_count = sum(1 for t in task_entries if t["status"] == "done")
     open_count = total - done_count
+    # fn-180.1 (#301): two distinct coverage questions, two distinct sets.
+    #   covered_rids   -> evidenced: satisfied by a DONE task (merge gate).
+    #   declared_rids  -> declared: claimed by ANY task, any status (plan gate).
+    # `uncovered_r_ids` keeps its existing evidenced-only meaning; readers of
+    # it are unaffected. `undeclared_r_ids` answers "no task even claims this
+    # criterion", so a plan-gate spec (all tasks todo, fully declared) reports
+    # zero undeclared instead of looking like 0% coverage.
     covered_rids: set[str] = set()
+    declared_rids: set[str] = set()
     for t in task_entries:
+        satisfied = t.get("satisfies", [])
+        for rid in satisfied:
+            declared_rids.add(rid)
         if t["status"] == "done":
-            for rid in t.get("satisfies", []):
+            for rid in satisfied:
                 covered_rids.add(rid)
     spec_rids = [c["id"] for c in acceptance_criteria]
     uncovered = [rid for rid in spec_rids if rid not in covered_rids]
+    undeclared = [rid for rid in spec_rids if rid not in declared_rids]
     tasks_summary = {
         "total": total,
         "done": done_count,
         "open": open_count,
         "uncovered_r_ids": uncovered,
+        "undeclared_r_ids": undeclared,
     }
 
     # --- Memory during spec lifecycle ---
