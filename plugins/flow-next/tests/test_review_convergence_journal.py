@@ -262,6 +262,53 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         row = self._data()["review_attempts"][-1]
         self.assertEqual(row["finalized"]["receipt"], "pending")
 
+    def test_crash_replay_preserves_provenance_fields(self):
+        """fn-183 (#312), PR #324 bot finding: a crash between the journal
+        write and the sidecar row write must not degrade the recovered row's
+        provenance - the journal carries reviewed_head_sha / reviewed_base_sha
+        / tool_calls and the replay forwards them, so the recovered row keeps
+        the observed snapshot and measured count instead of falling back to
+        replay-time HEAD and unknown."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        real_write = flowctl.atomic_write_json
+
+        def crash_before_sidecar(path, data):
+            if str(path).endswith(f"{self.spec_id}.json"):
+                raise RuntimeError("crash before sidecar write")
+            return real_write(path, data)
+
+        with mock.patch.object(
+            flowctl, "atomic_write_json", side_effect=crash_before_sidecar
+        ):
+            with self.assertRaises(RuntimeError):
+                flowctl.record_review_attempt(
+                    self.spec_id, "plan", backend="codex",
+                    output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+                    review_type="plan", reservation_id=reservation_id,
+                    receipt_target=str(target),
+                    receipt_payload=self._payload(),
+                    reviewed_head_sha="a" * 40,
+                    reviewed_base_sha="c" * 40,
+                    tool_calls=22,
+                )
+        # Crash boundary is real: journal persisted, row never landed.
+        journal = json.loads(self._journal_path(reservation_id).read_text())
+        self.assertEqual(journal["reviewed_head_sha"], "a" * 40)
+        self.assertEqual(journal["reviewed_base_sha"], "c" * 40)
+        self.assertEqual(journal["tool_calls"], 22)
+        self.assertEqual(self._data().get("review_attempts", []), [])
+
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(result.get("replayed"))
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["head_sha"], "a" * 40)
+        self.assertIs(row["head_sha_observed"], True)
+        self.assertEqual(row["base_sha"], "c" * 40)
+        self.assertEqual(row["tool_calls"], 22)
+
     def test_gate_replays_receipt_typed_result_zero_dispatch(self):
         reservation_id = self._reserve()
         target = self.root / "receipt.json"

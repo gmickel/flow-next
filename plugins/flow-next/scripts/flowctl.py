@@ -10974,6 +10974,13 @@ def _record_review_attempt_locked(
             "reservation_id": reservation_id,
             "response": output,
             "response_sha256": output_sha256,
+            # fn-183 (#312), PR #324 bot finding: the provenance inputs are in
+            # hand at journal time - carry them so a crash between this write
+            # and the sidecar row replays the row with its measured provenance
+            # instead of degrading to the finalize-time fallback / unknown.
+            "reviewed_head_sha": reviewed_head_sha,
+            "reviewed_base_sha": reviewed_base_sha,
+            "tool_calls": tool_calls,
             "receipt_payload": receipt_payload,
             "receipt_target": receipt_target,
             "status_target": (
@@ -11837,6 +11844,12 @@ def _enforce_and_increment_review_cap_locked(
                 receipt_payload=(journal.get("receipt_payload") if isinstance(journal.get("receipt_payload"), dict) else None),
                 status_target=(journal.get("status_target") if isinstance(journal.get("status_target"), str) else None),
                 reset_rounds_on_ship=bool(journal.get("reset_rounds_on_ship", False)),
+                # fn-183 (#312): journaled provenance rides the replay so the
+                # recovered row keeps the observed snapshot and measured count
+                # (absent from pre-fn-183 journals -> honest fallback/unknown).
+                reviewed_head_sha=(journal.get("reviewed_head_sha") if isinstance(journal.get("reviewed_head_sha"), str) else None),
+                reviewed_base_sha=(journal.get("reviewed_base_sha") if isinstance(journal.get("reviewed_base_sha"), str) else None),
+                tool_calls=(journal.get("tool_calls") if isinstance(journal.get("tool_calls"), int) and not isinstance(journal.get("tool_calls"), bool) else None),
                 # Journaled evidence is authoritative: the crashed process
                 # bound the criteria and built the findings container from the
                 # reviewer MESSAGE, which is gone. `response` is the transport
