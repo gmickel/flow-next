@@ -381,6 +381,50 @@ class ValidationTests(unittest.TestCase):
                     flowctl.validate_pr_cognitive_aid(value)
 
 
+class SuffixedRIdTests(unittest.TestCase):
+    """Issue #300: the sub-scoped sibling form (`R4a`) is a canonical R-ID.
+
+    The spec parser (`_export_parse_acceptance_criteria`) emits `R5a` and the
+    review-output extractor accepts it; this validator was the straggler, so
+    the producer and the consumer disagreed inside one process. Because an
+    `rIds[]` entry needs a same-record `rid` source, a single rejected suffix
+    emptied every `rIds[]` array in the artifact.
+    """
+
+    @staticmethod
+    def _artifact_with_rid(r_id: str) -> dict:
+        """`artifact()` with every `R6` occurrence retyped - both call sites."""
+        return json.loads(json.dumps(artifact()).replace("R6", r_id))
+
+    def test_suffixed_rid_accepted_at_both_call_sites(self) -> None:
+        value = self._artifact_with_rid("R6a")
+        # Guard: the fixture really does exercise both checked sites.
+        self.assertEqual(value["sources"][2]["ref"], "R6a")
+        self.assertIn(
+            "R6a", value["changeWalkthrough"]["groups"][2]["files"][0]["rIds"]
+        )
+        self.assertIs(flowctl.validate_pr_cognitive_aid(value), value)
+
+    def test_multi_letter_suffix_and_separator_forms_stay_rejected(self) -> None:
+        for r_id in ("R6ab", "R-6"):
+            with self.subTest(r_id=r_id):
+                with self.assertRaisesRegex(
+                    flowctl.PrCognitiveAidValidationError, "canonical R-ID"
+                ):
+                    flowctl.validate_pr_cognitive_aid(
+                        self._artifact_with_rid(r_id)
+                    )
+
+    def test_rids_array_rejects_suffix_overrun_independently(self) -> None:
+        """The `rIds[]` site rejects `R6ab` even with a legal `rid` source."""
+        value = artifact()
+        value["changeWalkthrough"]["groups"][2]["files"][0]["rIds"] = ["R6ab"]
+        with self.assertRaisesRegex(
+            flowctl.PrCognitiveAidValidationError, r"rIds\[0\].*canonical R-ID"
+        ):
+            flowctl.validate_pr_cognitive_aid(value)
+
+
 class PersistenceAndCurrentnessTests(unittest.TestCase):
     def test_immutable_generations_form_a_materialized_supersedes_chain(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

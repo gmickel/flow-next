@@ -27876,7 +27876,13 @@ PR_COGNITIVE_AID_ATTENTION_CLASSES = frozenset(
 )
 _PR_COGNITIVE_AID_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 _PR_COGNITIVE_AID_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
-_PR_COGNITIVE_AID_RID_RE = re.compile(r"^R[1-9][0-9]*$")
+# Canonical R-ID grammar, in lockstep with the spec parser
+# (`_export_parse_acceptance_criteria`) and the review-output extractor
+# (`parse_unaddressed_rids`): a single-letter suffix (`R4a`, `R4b`) is the
+# sub-scoped sibling form the spec template emits. Multi-letter suffixes
+# (`R4ab`) and separators (`R-4`) stay rejected. Both call sites (the
+# `sources[].ref` kind==rid check and the `rIds[]` check) use this constant.
+_PR_COGNITIVE_AID_RID_RE = re.compile(r"^R[1-9][0-9]*[a-z]?$")
 _PR_COGNITIVE_AID_WINDOWS_RESERVED = frozenset(
     {
         "CON",
@@ -31462,21 +31468,78 @@ def _export_resolve_merge_base(base_ref: str) -> Optional[str]:
     return sha if sha else None
 
 
-def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
-    """Extract R-ID acceptance criteria from an epic spec.
+# A criterion bullet starts at column 0 with `-`/`*` (indented bullets are
+# sub-bullets of a criterion, never criteria themselves).
+_AC_BULLET_START_RE = re.compile(r"^[-*]\s+")
+# Token anchor: the R-ID must open the bold run, and the character after it
+# must be a boundary - so `R4ab` (multi-letter suffix) and `R-4` (separator)
+# stay rejected, while `R4a` is the canonical sub-scoped sibling form.
+_AC_TOKEN_RE = re.compile(r"^[-*]\s+\*\*\s*(R\d+[a-z]?)(?![0-9A-Za-z])")
+# Residue probe: a bullet that *looks* like a criterion (`- **R…`) - anything
+# matching this but not parsing is counted, never silently dropped. The digit
+# is required so an ordinary bold word starting with R (`- **Renumber-…**`)
+# is not mistaken for a dropped criterion; a separator before it keeps the
+# deliberately-rejected spellings (`R-4`) visible rather than silent.
+_AC_RESIDUE_RE = re.compile(r"^[-*]\s+\*\*\s*R[-_ ]?\d")
+# One leading separator between the R-ID (or its bold close) and the text.
+_AC_LEAD_SEP_RE = re.compile(r"^\s*[:\-–—]\s*")
+_AC_TAG_RE = re.compile(r"\[([^\]]+)\]\s*$")
+
+
+def _export_parse_acceptance_criterion(bullet: str) -> Optional[dict[str, Any]]:
+    """Parse one already-joined criterion bullet, or None if it does not parse.
+
+    Anchors on the R-ID token and stops at the first `**` or `:` boundary, so
+    bold runs that continue past the token still yield the criterion:
+
+        - **R1:** canonical form.
+        - **R14 - the pause protocol survives a restart** and its body.
+        - **R15 (a parenthetical):** body text.
+    """
+    m = _AC_TOKEN_RE.match(bullet)
+    if not m:
+        return None
+    rest = bullet[m.end() :]
+    close = rest.find("**")
+    if close < 0:
+        # Unterminated bold run - not a criterion we can read.
+        return None
+    head = rest[:close].rstrip()
+    tail = rest[close + 2 :].strip()
+    text_raw = (head + " " + tail).strip() if head and tail else (head or tail)
+    text_raw = _AC_LEAD_SEP_RE.sub("", text_raw, count=1).strip()
+    if not text_raw:
+        return None
+    tag = ""
+    tm = _AC_TAG_RE.search(text_raw)
+    if tm:
+        tag = tm.group(1).strip()
+        # Trim the trailing tag from text.
+        text_raw = text_raw[: tm.start()].rstrip()
+    return {"id": m.group(1), "text": text_raw, "tag": tag}
+
+
+def _export_scan_acceptance_criteria(
+    spec_text: str,
+) -> tuple[list[dict[str, Any]], int]:
+    """Return `(criteria, residue)` for an epic spec's acceptance section.
 
     Canonical heading is `## Acceptance Criteria` (since 1.1.4). For
     back-compat, also tolerates `## Acceptance criteria` (older lowercase
-    form) and bare `## Acceptance` (plan template pre-1.1.4). Parses bullets
-    matching `- **R<N>:** <text>`. Source-tag suffixes like `[user]` /
-    `[paraphrase]` / `[inferred]` / `[strategy:track]` are extracted into
-    the `tag` field (last `[...]` token in the bullet).
+    form) and bare `## Acceptance` (plan template pre-1.1.4).
 
-    Returns list of `{"id": "R1", "text": "...", "tag": "..."}`. Empty list
-    if no acceptance section or no R-IDs.
+    A criterion bullet runs until the next bullet or a blank line, so text
+    wrapped across lines keeps its continuation (joined with single spaces).
+    Source-tag suffixes like `[user]` / `[paraphrase]` / `[inferred]` /
+    `[strategy:track]` are extracted into the `tag` field (last `[...]`
+    token in the bullet).
+
+    `residue` counts bullets shaped like criteria (`- **R…`) that did not
+    parse - a non-zero residue is a visible discrepancy instead of a silent
+    drop. It never aborts anything.
     """
     if not spec_text:
-        return []
+        return [], 0
 
     # Find the section heading. Tolerate canonical + 2 legacy forms.
     heading_re = re.compile(
@@ -31485,7 +31548,7 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
     )
     m = heading_re.search(spec_text)
     if not m:
-        return []
+        return [], 0
     body_start = m.end()
     # Section ends at the next H2 or end-of-file.
     next_h2 = re.search(r"^##\s+", spec_text[body_start:], re.MULTILINE)
@@ -31495,30 +31558,49 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
         body_end = len(spec_text)
     body = spec_text[body_start:body_end]
 
-    # Bullet pattern: `- **R<N>:** <text>` or `- **R<N><a-z>:** <text>`.
-    # Tolerate optional whitespace between the bullet marker and the bold token.
-    # The single-letter suffix form (`R4a`, `R4b`) lets capture-driven specs
-    # sub-scope criteria sharing a logical parent; siblings sort lexically
-    # (`R4` < `R4a` < `R4b` < `R5`) via Python's default string ordering.
-    # Multi-letter suffixes (`R4ab`) and separators (`R-4`) remain rejected
-    # by design — broader format support waits for a real need.
-    bullet_re = re.compile(
-        r"^[-*]\s+\*\*(R\d+[a-z]?)\:?\*\*\s*:?\s*(.+?)$",
-        re.MULTILINE,
-    )
-    tag_re = re.compile(r"\[([^\]]+)\]\s*$")
     entries: list[dict[str, Any]] = []
-    for bm in bullet_re.finditer(body):
-        rid = bm.group(1)
-        text_raw = bm.group(2).strip()
-        tag = ""
-        tm = tag_re.search(text_raw)
-        if tm:
-            tag = tm.group(1).strip()
-            # Trim the trailing tag from text.
-            text_raw = text_raw[: tm.start()].rstrip()
-        entries.append({"id": rid, "text": text_raw, "tag": tag})
-    return entries
+    residue = 0
+
+    def flush(lines: list[str]) -> None:
+        nonlocal residue
+        if not lines:
+            return
+        joined = " ".join(
+            [lines[0].rstrip()] + [ln.strip() for ln in lines[1:]]
+        )
+        entry = _export_parse_acceptance_criterion(joined)
+        if entry is None:
+            if _AC_RESIDUE_RE.match(lines[0]):
+                residue += 1
+            return
+        entries.append(entry)
+
+    current: list[str] = []
+    for line in body.splitlines():
+        if _AC_BULLET_START_RE.match(line):
+            flush(current)
+            current = [line]
+        elif not line.strip():
+            flush(current)
+            current = []
+        elif current and line.lstrip().startswith(("- ", "* ", "+ ")):
+            # An indented sub-bullet ends the criterion's own text.
+            flush(current)
+            current = []
+        elif current:
+            current.append(line)
+    flush(current)
+    return entries, residue
+
+
+def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
+    """Extract R-ID acceptance criteria from an epic spec.
+
+    Returns list of `{"id": "R1", "text": "...", "tag": "..."}`. Empty list
+    if no acceptance section or no R-IDs. See `_export_scan_acceptance_criteria`
+    for the shapes recognized and for the residue count.
+    """
+    return _export_scan_acceptance_criteria(spec_text)[0]
 
 
 def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
@@ -32824,7 +32906,10 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         except OSError:
             spec_text = ""
 
-    acceptance_criteria = _export_parse_acceptance_criteria(spec_text)
+    (
+        acceptance_criteria,
+        acceptance_criteria_residue,
+    ) = _export_scan_acceptance_criteria(spec_text)
     goal_and_context = _export_parse_spec_section(
         spec_text,
         re.compile(r"^##\s+Goal\s+&?\s*[Cc]ontext\s*$", re.MULTILINE),
@@ -32886,6 +32971,11 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
             "goal_and_context": goal_and_context,
             "architecture_overview": architecture_overview,
             "acceptance_criteria": acceptance_criteria,
+            # Bullets shaped like criteria (`- **R…`) that did not parse.
+            # Non-zero means the spec authored a shape this parser cannot
+            # read: the coverage denominator is short by that many. Never
+            # aborts the export.
+            "acceptance_criteria_residue": acceptance_criteria_residue,
             "boundaries": boundaries,
             "decision_context": decision_context,
             "open_questions": open_questions,
@@ -33038,9 +33128,14 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     if "spec" in payload:
         print(f"  Title: {spec_section['title']}")
         print(f"  Status: {spec_section['status']}")
+        residue_note = (
+            f", {acceptance_criteria_residue} unparsed"
+            if acceptance_criteria_residue
+            else ""
+        )
         print(
             f"  R-IDs: {len(acceptance_criteria)} "
-            f"({len(uncovered)} uncovered)"
+            f"({len(uncovered)} uncovered{residue_note})"
         )
     if "tasks" in payload:
         print(
