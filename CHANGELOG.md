@@ -2,6 +2,60 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Six small defects, one pass - every one arrived as a measured report with a
+verified repro from @sn-furali (thanks!), and each fix takes the reporter's own
+suggested design where one was offered. A criterion your spec wrote should
+never vanish silently, a wrong platform guess should not survive on our primary
+host, and a half-resolved tracker map should never read as resolved.
+
+### Fixed
+
+- **Suffixed R-IDs accepted by the PR cognitive aid.** `pr-cognitive-aid
+  validate` now accepts the canonical sub-scoped sibling form (`R4a`) at both
+  call sites via the one shared constant; `R4ab` and `R-4` stay rejected.
+  (#300)
+- **Acceptance-criteria shapes stop being dropped silently.** The export
+  parser reads title-form (`**R14 - title**`) and parenthetical-form
+  (`**R15 (note):**`) bullets and keeps wrapped continuation lines; the issue
+  repro parses 5/5, and 25 criteria were recovered across this repo's own
+  specs. Criterion-shaped bullets that still do not parse are now counted and
+  surfaced as `acceptance_criteria_residue` in the export payload - a short
+  coverage denominator is visible, never silent, and residue never aborts the
+  export. (#303)
+- **Setup counts SPEC.md files by inode, not by name.** On a case-insensitive
+  filesystem a single `SPEC.md` no longer counts twice and prints a bogus
+  both-files warning; case-sensitive dual-file repos still take the two-file
+  branch. (#305)
+- **Claude Code detects as Claude Code.** The setup platform cascade keyed its
+  Claude branch on `CLAUDE_PLUGIN_ROOT`, which never reaches a plugin skill's
+  Bash env - so our primary host fell through to the codex fallback and got
+  `$flow-next-` snippets. The branch now keys on `CLAUDECODE` paired with the
+  Claude plugin manifest as a positive discriminator, and sits below
+  Droid/Cursor/Grok so those hosts' own signals outrank the child-inherited
+  marker. (#306)
+- **`tracker resolve --select` finishes the job.** Picking one ambiguous slot
+  now runs the normal assignment over the remaining slots and persists the
+  union; a map still missing a required slot is kept but reported as CONFLICT
+  and left unstamped, so a later plain `resolve` repairs it instead of
+  skipping a fresh-looking scope. `in_review` still never auto-fills. Configs
+  already half-stamped by this bug self-repair on the next `--select`. (#308)
+
+### Added
+
+- **`flowctl start --reclaim` - identity repair, distinct from takeover.**
+  Rewrites the claimant of a task held by a stale or wrong identity and
+  records `Reclaimed from <identity> (identity repair)`, so `--force` keeps
+  its takeover meaning and the record says which one happened. Only the
+  claim-ownership gates relax; dependency/blocked/done still require
+  `--force`. (#316)
+- **Gate-classify extensibility documented as deliberately closed.** The path
+  taxonomy takes no config key by design; per-repo gate policy belongs in the
+  consumer's conductor instructions with `pilot.gateClasses` as the open
+  vocabulary, and classifier reason strings are not a stable contract.
+  (#313, docs)
+
 ## [flow-next 3.24.1] - 2026-08-10
 
 ### Fixed

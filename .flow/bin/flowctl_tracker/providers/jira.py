@@ -239,11 +239,12 @@ def _migrated_status_map(config: dict, live: dict) -> tuple[dict, list]:
     return migrated, warnings
 
 
-def resolve_status_ids(config: dict, execute: Callable) -> Union[Assignment, TrackerError]:
-    fetched = fetch_statuses(config, execute)
-    if isinstance(fetched, TrackerError):
-        return fetched
-    pools, live = fetched
+def assign_slots_from_pools(config: dict, pools: dict, live: dict) -> Assignment:
+    """The PURE half of `resolve_status_ids` - no network.
+
+    `--select` reuses it: after merging one human tiebreak it must run the same
+    assignment over the REMAINING slots, against the same pools it already
+    fetched for validation (fn-179.3, #308)."""
     resolved = ((config.get("tracker") or {}).get("resolved") or {})
     existing = (resolved.get("destination") or {}).get("statusIds") or {}
     migrated, warnings = _migrated_status_map(config, live)
@@ -253,6 +254,14 @@ def resolve_status_ids(config: dict, execute: Callable) -> Union[Assignment, Tra
     assignment = assign_slots(pools, live, seed)
     assignment.warnings = warnings + assignment.warnings
     return assignment
+
+
+def resolve_status_ids(config: dict, execute: Callable) -> Union[Assignment, TrackerError]:
+    fetched = fetch_statuses(config, execute)
+    if isinstance(fetched, TrackerError):
+        return fetched
+    pools, live = fetched
+    return assign_slots_from_pools(config, pools, live)
 
 
 def resolve_capabilities(config: dict, execute: Callable) -> dict:

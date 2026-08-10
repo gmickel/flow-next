@@ -793,8 +793,10 @@ The `--require-completion-review` flag gates spec closure on completion review. 
 Start task (set status=in_progress). Sets assignee to current actor.
 
 ```bash
-flowctl start fn-1.2 [--force] [--note "..."] [--json]
+flowctl start fn-1.2 [--force] [--reclaim] [--note "..."] [--json]
 ```
+
+`--reclaim` rewrites the claimant when a task is held by a stale or wrong identity and records `Reclaimed from <identity> (identity repair)` - distinct from `--force`, which records `Taken over from <identity>`, so the record says which one happened. It relaxes only the claim-ownership gates (claimed-by-another, and `in_progress` owned by another); dependency, `blocked`, and `done` gates still require `--force`. On an unclaimed or self-claimed task it is a plain claim with no repair note; `--note` overrides the generated note; `--reclaim --force` writes the repair note. No identity validation is performed - which identities are legitimate is the consuming repo's governance (#316).
 
 Validates:
 - Status is `todo` (or `in_progress` if resuming own task)
@@ -1387,7 +1389,13 @@ flowctl tracker resolve \
 ```
 
 `resolve` fills or refreshes `tracker.resolved`. `--select` persists one
-validated human tiebreak for an ambiguous Linear state or Jira status slot.
+validated human tiebreak for an ambiguous Linear state or Jira status slot -
+and then runs the normal assignment over the REMAINING slots, persisting the
+union: the tiebreak resolves one slot, it does not excuse the others (#308). A
+map still missing a REQUIRED slot is persisted (progress kept) but reported as
+CONFLICT and left unstamped, so a later plain `resolve` repairs it instead of
+skipping a fresh-looking scope. `in_review` never auto-fills - the two-state
+case genuinely needs the human tiebreak.
 The normalized slots are `todo`, `in_progress`, and `done`; optional provider
 slots may also be retained. The persisted shape is:
 
@@ -1905,6 +1913,8 @@ Callers fail closed on both outcomes.
 Exit `0` (tier-B) only for a non-empty diff where every path is SAFE. Empty diffs and any forcing path exit `1`; errors exit `2+`. `--json` emits per-path `{path, class, reason}` entries for evidence lines. Tier-B runs configured lint/format gates only, and nothing else.
 
 Lint and format commands are always-run and never receipted in v1. Remote CI gates, including land's tri-state and GitHub Actions, are out of scope: a green receipt never means CI can be skipped. Receipts under `.flow/tmp/` are per checkout, so worktree-mode workers never share them across worktrees, correctly because their HEADs differ. Scope guard: every predicate is commit-hash equality, worktree cleanliness, receipt age, or path membership. There is no semantic skipping: fn-83's deterministic-plan-sync-skip ban remains in force; see decision record `plan-sync-skip-gate-not-viable-2026-07-03`.
+
+**The path taxonomy is deliberately closed to config (#313).** The classifier's prefix/extension tables encode flow-next's own repository layout and take no config key by design: a config-extensible taxonomy would make the docs-only fast path a per-repo policy surface whose misconfiguration silently skips gates. Per-repo gate policy belongs in the consumer repository's conductor instructions (CLAUDE.md / AGENTS.md) - the host agent reading them decides when a "safe" classification still deserves the full gate - with `pilot.gateClasses` as the open, config-owned vocabulary for forcing surfacing in autonomous backlog mode. A consumer repo whose highest-risk changes are documents should say so in its conductor instructions rather than expect the classifier to learn its layout. The per-path `reason` strings in `--json` output are diagnostics for evidence lines, not a stable contract: match on `class`, never on `reason` text.
 
 ### rp
 

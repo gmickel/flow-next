@@ -27,11 +27,18 @@ PLATFORM="codex"
 
 **Positive path discriminator — `PLUGIN_ROOT` under `~/.cursor/` (never `codex/` absence).** The manifest + env checks alone are not enough when Codex runs from the **checked-in plugin source** inside a Cursor shell (Codex marketplace points at `./plugins/flow-next`, which carries `.cursor-plugin/`, `.codex-plugin/`, and the `codex/` mirror) — there the Cursor manifest is present in the workspace tree, so env+manifest would misfire. The positive signal is that a **real Cursor install** resolves `PLUGIN_ROOT` under `~/.cursor/` — local `install-cursor.sh`/`.ps1` → `~/.cursor/plugins/local/flow-next/`; team-marketplace repo-import → Cursor's marketplace plugin cache under `~/.cursor/` (and that cache **may contain `codex/`** because the whole plugin source is imported; explicit component paths in `.cursor-plugin/plugin.json` keep Cursor from loading the mirror as skills). A genuine Codex install resolves under `$CODEX_HOME` (default `~/.codex`); the shared source tree resolves to a workspace path. Neither is under `~/.cursor/`, so both correctly fall through to `codex` even with inherited `CURSOR_AGENT`. **Do not** key detection on the `codex/` directory being absent — that misclassifies marketplace repo-imports as Codex.
 
-**Grok ordering matters (fn-126).** Grok Build (xAI's `grok` CLI) reads the canonical Claude plugin format AS-IS and drives with `/flow-next-*` / `/flow-next:` slash commands — not the Codex `$flow-next-` mirror. Without a positive signal it fell through to `else → codex` and setup wrote Codex-shaped `$flow-next-` snippets into AGENTS.md (dogfood 2026-07-22). **Probe-verified signal:** `GROK_AGENT=1` is set BY grok in its agent shell (absent from a plain-shell control on the same machine). **Rejected non-signals:** `~/.grok/` exists on the machine regardless (install dir), and `~/.grok/bin` on `PATH` is profile-level — neither distinguishes a grok session. The `GROK_AGENT` branch MUST come after Droid / Claude / Cursor (so a real Claude/Cursor/Droid host that merely inherited `GROK_AGENT` from a parent grok shell still classifies by its own higher-precedence signal) and BEFORE the `else → codex` fallback.
+**Claude Code signal - `CLAUDECODE` + the Claude plugin manifest, and why the rung sits low (#306).** `CLAUDE_PLUGIN_ROOT` is **never set in the Bash environment of a running plugin skill** on Claude Code (probe-verified against 2.1.221 and re-verified at v3.16.3), so the branch that keyed on it could not fire on our PRIMARY host: every rung failed and setup fell through to `else -> codex`, writing Codex `$flow-next-` snippets into a repo driven by `/flow-next:` slash commands. The signal that IS present is `CLAUDECODE=1` - the same marker the codex-delegation platform gate keys on. It is set by Claude Code itself, in every install mode (marketplace cache, local marketplace, `--plugin-dir` dev load), so it needs no plugin-root env var; `PLUGIN_ROOT` is already resolved from this file's own location.
 
-**Known nesting edge (Droid → Grok) — NEEDS-HUMAN.** The probe disproved `CLAUDE_PLUGIN_ROOT` propagation into a grok child, so Claude-from-parent does not misfire. It did **not** disprove `DROID_PLUGIN_ROOT` propagation: if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Treat nested Droid→Grok as **unsupported pending a this-process-is-grok discriminator** unless a NEEDS-HUMAN smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Claude/Cursor-from-grok remain correct via higher-precedence signals.
+`CLAUDECODE` is **inherited by child processes** - same class as the `CURSOR_AGENT` misfire above - so it is paired with a positive discriminator and a lowered position, never used bare:
 
-**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Claude (`CLAUDE_PLUGIN_ROOT`) / Droid (`DROID_PLUGIN_ROOT`) still win first — precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CLAUDE_PLUGIN_ROOT` / `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`.
+- **Positive discriminator:** the Claude plugin manifest `.claude-plugin/plugin.json` must exist at the resolved `PLUGIN_ROOT`. That is present in every Claude-format install and **absent** from a Codex install root (`$CODEX_HOME`, whose manifest is a top-level `plugin.json`), so a `codex exec` child that inherited `CLAUDECODE` from its Claude parent still classifies `codex`.
+- **Position: after Droid / Cursor / Grok, before the `codex` fallback.** Each of those hosts proves itself with a signal set by its OWN process (`DROID_PLUGIN_ROOT`, `CURSOR_AGENT` + a `~/.cursor/` install, `GROK_AGENT`), and all of them read the canonical Claude plugin format - so a Cursor or Grok agent launched **from** a Claude Code shell inherits `CLAUDECODE` and would be misclassified `claude-code` by a higher rung. Ordering is what keeps an inherited marker from outranking a host's own signal. This is a deliberate precedence change from the pre-#306 cascade, where the Claude rung sat second: that position only ever protected the `CLAUDE_PLUGIN_ROOT` reading, which on Claude Code is never there.
+
+**Grok ordering matters (fn-126).** Grok Build (xAI's `grok` CLI) reads the canonical Claude plugin format AS-IS and drives with `/flow-next-*` / `/flow-next:` slash commands — not the Codex `$flow-next-` mirror. Without a positive signal it fell through to `else → codex` and setup wrote Codex-shaped `$flow-next-` snippets into AGENTS.md (dogfood 2026-07-22). **Probe-verified signal:** `GROK_AGENT=1` is set BY grok in its agent shell (absent from a plain-shell control on the same machine). **Rejected non-signals:** `~/.grok/` exists on the machine regardless (install dir), and `~/.grok/bin` on `PATH` is profile-level — neither distinguishes a grok session. The `GROK_AGENT` branch MUST come after Droid / Cursor (so a real Cursor/Droid host that merely inherited `GROK_AGENT` from a parent grok shell still classifies by its own higher-precedence signal), BEFORE the inherited-marker `CLAUDECODE` rung, and BEFORE the `else → codex` fallback.
+
+**Known nesting edge (Droid → Grok) — NEEDS-HUMAN.** A grok child inherits `CLAUDECODE` from a Claude parent, and the Claude rung now sits BELOW grok, so Claude-from-parent does not misfire. It did **not** disprove `DROID_PLUGIN_ROOT` propagation: if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Treat nested Droid→Grok as **unsupported pending a this-process-is-grok discriminator** unless a NEEDS-HUMAN smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Cursor-from-grok remains correct via its higher-precedence signal. The mirror-image nesting edge is Claude-from-Grok / Claude-from-Cursor: a Claude Code session launched inside a grok or Cursor agent shell inherits that host's marker and classifies as the parent host. That trade is deliberate - both markers are set by the parent's own process, and the reverse (Claude outranking them on an inherited `CLAUDECODE`) is the far more common nesting, since Claude sessions routinely spawn grok / cursor-agent bridges.
+
+**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Droid (`DROID_PLUGIN_ROOT`) still wins first — Droid/Cursor precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`; (8) Claude Code plugin skill — `CLAUDECODE=1`, `CLAUDE_PLUGIN_ROOT` **unset** (it never reaches a skill's Bash env), `PLUGIN_ROOT` carrying `.claude-plugin/plugin.json` → `claude-code`; (9) `CLAUDECODE=1` inherited by a Cursor / Grok / Droid child → that host's own signal wins (Claude rung is last before the fallback); (10) `CLAUDECODE=1` with a Codex-home `PLUGIN_ROOT` (no `.claude-plugin/plugin.json`) → `codex`.
 
 Store `PLATFORM` for use in later steps. This determines:
 - Which manifest to read for version (`plugin.json`)
@@ -42,7 +49,7 @@ Store `PLATFORM` for use in later steps. This determines:
 ### Done when
 
 - `PLUGIN_ROOT` resolves to a directory containing `scripts/` and a plugin manifest, and `PLATFORM` holds exactly one of `claude-code` / `codex` / `droid` / `cursor` / `grok`.
-- **`PLATFORM` came from the host's own signals in the documented precedence, and every downstream choice matches it.** A Cursor or Grok repo that received the Codex `$flow-next-` snippet, or a Codex install misclassified as Cursor through an inherited `CURSOR_AGENT`, has broken this.
+- **`PLATFORM` came from the host's own signals in the documented precedence, and every downstream choice matches it.** A Cursor or Grok repo that received the Codex `$flow-next-` snippet, a Codex install misclassified as Cursor through an inherited `CURSOR_AGENT`, or a Claude Code run classified `codex` because the cascade looked for `CLAUDE_PLUGIN_ROOT` instead of `CLAUDECODE` (#306), has broken this.
 
 ## Step 1: Initialize .flow/
 
@@ -139,7 +146,20 @@ The spec-template discovery cascade prefers a customized scaffold at the repo ro
 **Detect what's already at the repo root** (case-insensitive FS handling — macOS APFS, Windows NTFS):
 
 ```bash
-HITS=$(ls -1 SPEC.md spec.md 2>/dev/null | sort -u | wc -l | tr -d ' ')
+# Count DISTINCT FILES, not argument names. `ls -1 SPEC.md spec.md` echoes each
+# existing argument back, so on a case-insensitive FS one file prints as two
+# names and `sort -u` de-duplicates nothing (#305: HITS=2 on APFS for a repo
+# holding only SPEC.md, firing the bogus both-files warning). Inodes answer the
+# question the branches actually ask.
+# Portable stat, per candidate: GNU form FIRST (`stat -c %i` -> inode; on BSD
+# `-c` is unsupported and errors, so it falls through), BSD form second
+# (`stat -f %i` -> inode). Order matters: GNU reads `-f` as --file-system and
+# would print one shared filesystem id for BOTH files, collapsing a genuine
+# two-file repo to HITS=1.
+HITS=$(for f in SPEC.md spec.md; do
+ [ -e "$f" ] || continue
+ stat -c %i "$f" 2>/dev/null || stat -f %i "$f" 2>/dev/null
+done | sort -u | wc -l | tr -d ' ')
 ```
 
 Then branch:
@@ -159,7 +179,7 @@ On `Copy template`: write the file via Bash `cp` with absolute paths.
 cp "${PLUGIN_ROOT}/templates/spec.md" SPEC.md
 ```
 
-**2. `HITS=1` (single hit OR case-insensitive FS collapsing both to one)** — capture whichever filename actually exists into `EXISTING` (no prompt). Both the read-for-compare and the overwrite target route through `EXISTING` so lowercase `spec.md` repos do not silently fall back to a missing `SPEC.md`:
+**2. `HITS=1` (one file: a single name, OR a case-insensitive FS where both names resolve to one inode)** — capture whichever filename actually exists into `EXISTING` (no prompt). Both the read-for-compare and the overwrite target route through `EXISTING` so lowercase `spec.md` repos do not silently fall back to a missing `SPEC.md`:
 
 ```bash
 EXISTING=$(ls -1 SPEC.md spec.md 2>/dev/null | head -1)

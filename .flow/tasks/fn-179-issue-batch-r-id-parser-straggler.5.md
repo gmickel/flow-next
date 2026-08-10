@@ -10,9 +10,8 @@ Spec fn-179 R8-R9. Docs: state the gate-classify path taxonomy is deliberately c
 R8, R9 of the spec. Full gate green; no version bump (batched releases).
 
 ## Done summary
-TBD
-
+R8-R9 closed out. flowctl.md gate-classify section now states the taxonomy is deliberately closed to config (misconfigured taxonomy would silently skip gates), per-repo gate policy belongs in the consumer's conductor instructions with pilot.gateClasses as the open vocabulary, and reason strings are diagnostics, not a stable contract (#313 answer, to be posted on the issue). Worker-flagged doc lines landed: start --reclaim (flags, gate semantics, note wordings), tracker resolve --select (union, CONFLICT-unstamped, in_review never auto-fills), platforms.md CLAUDE_PLUGIN_ROOT note tied to #306, make-pr coverage ratio surfaces acceptance_criteria_residue with a never-silent rule. CHANGELOG Unreleased credits @sn-furali per issue (#300 #303 #305 #306 #308 #316) plus the #313 docs entry. Full gate green; no version bump.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 794df792
+- Tests: python3 scripts/run_tests_parallel.py (4385 OK, 0 failures), uvx ruff@0.16.0 check . (clean), ./scripts/sync-codex.sh x2 (idempotent)
 - PRs:

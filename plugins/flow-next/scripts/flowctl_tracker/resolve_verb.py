@@ -8,7 +8,9 @@ distinct from a consuming verb meeting an absent block - that returns
 `--scope` re-resolves only the named nested path (its own timestamp).
 `--refresh` forces re-resolution of already-fresh scopes.
 `--select slot=id` persists ONE human tiebreak, validated against live
-candidates; repeatable; re-select overwrites.
+candidates; repeatable; re-select overwrites. It then runs the normal
+assignment over the REMAINING slots and persists the union - the tiebreak
+resolves one slot, it does not excuse the others (#308).
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from .executor import execute as default_execute
 from .providers import resolver_for
 from .resolved_cache import (SCOPES, apply_capability_probe, capabilities_stale,
                              resolve_transaction)
-from .states import Assignment, is_alias, validate_select
+from .states import REQUIRED_SLOTS, Assignment, is_alias, validate_select
 from .types import ErrorClass, TrackerError
 
 #: Scopes each provider resolves, in dependency order (destination first: the
@@ -303,7 +305,7 @@ def _run_select(flow_dir: Path, config: dict, mod, provider: str,
 
     ids_scope = _IDS_SCOPE[provider]
     key = ids_scope.split(".", 1)[1]
-    seen = {}  # pools captured by network_fn for the alias verdict
+    seen = {}  # pools/live captured by network_fn; assignment by finalize_fn
 
     def network_fn(cfg: dict) -> object:
         # Fetch + validate INSIDE the transaction's network step, against the
@@ -317,7 +319,7 @@ def _run_select(flow_dir: Path, config: dict, mod, provider: str,
         error = validate_select(slot, chosen, pools, live)
         if error:
             return TrackerError(ErrorClass.INVALID_INPUT, error, subtype="select")
-        seen["pools"] = pools
+        seen["pools"], seen["live"] = pools, live
         return {slot: chosen}
 
     def finalize_fn(current_cfg: dict, data: dict) -> dict:
@@ -325,19 +327,55 @@ def _run_select(flow_dir: Path, config: dict, mod, provider: str,
         # clobbered by a whole-map replace computed from a stale read.
         existing = _dict(_dict(_dict(_dict(current_cfg.get("tracker"))
                                      .get("resolved")).get("destination")).get(key))
-        return {**existing, **data}
+        merged = {**existing, **data}
+        # The selection is a tiebreak for ONE ambiguous slot, not a reason to
+        # skip the others (#308): run the normal assignment over the remaining
+        # slots and persist the union. `in_review` still never auto-fills - the
+        # policy in states.py owns that, and it stays.
+        assignment = mod.assign_slots_from_pools(
+            _with_ids(current_cfg, key, merged), seen["pools"], seen["live"])
+        seen["assignment"] = assignment
+        return dict(assignment.mapping)
 
-    result = resolve_transaction(flow_dir, ids_scope, network_fn,
-                                 finalize_fn=finalize_fn)
+    result = resolve_transaction(
+        flow_dir, ids_scope, network_fn, finalize_fn=finalize_fn,
+        # A REQUIRED-incomplete map is persisted but NEVER stamped fresh: a
+        # stamp here would make a later plain `resolve` skip the scope and
+        # report success over a map that cannot satisfy REQUIRED_SLOTS.
+        stamp=lambda final: all(s in final for s in REQUIRED_SLOTS))
     if isinstance(result, TrackerError):
         return envelope.failure(result)
+
+    assignment = seen["assignment"]
+    # The union now flows through the SAME guard as the full-assignment path:
+    # an ambiguous or candidate-less REQUIRED slot is a CONFLICT, not a success.
+    guarded = _assignment_to_data(assignment)
+    if isinstance(guarded, TrackerError):
+        return envelope.failure(guarded)
+
     aliased = is_alias(slot, chosen, seen.get("pools", {}))
     final_map = _dict(_dict(_dict(_dict(result.get("tracker"))
                                  .get("resolved")).get("destination")).get(key))
+    warnings = list(assignment.warnings)
+    if aliased:
+        warnings.append(f"{slot!r} aliases a state outside its natural "
+                        "candidates (recorded, not silent)")
     return envelope.success({
         "selected": {slot: chosen},
         "alias": aliased,
         key: final_map,
-        "warnings": ([f"{slot!r} aliases a state outside its natural candidates "
-                      f"(recorded, not silent)"] if aliased else []),
+        "warnings": warnings,
     })
+
+
+def _with_ids(config: dict, key: str, mapping: dict) -> dict:
+    """A config VIEW carrying `mapping` as the resolved slot map - the seed the
+    provider's assignment reads as `existing`. Copied, never mutated in place:
+    the transaction owns the real config document."""
+    tracker = dict(_dict(config.get("tracker")))
+    resolved = dict(_dict(tracker.get("resolved")))
+    destination = dict(_dict(resolved.get("destination")))
+    destination[key] = dict(mapping)
+    resolved["destination"] = destination
+    tracker["resolved"] = resolved
+    return {**config, "tracker": tracker}

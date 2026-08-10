@@ -663,5 +663,110 @@ class TestBatchedRemovedRefsGrep(_BatchedRefsGitBase):
         self.assertEqual(len(by_sym["busy_fn"]), cap)
 
 
+# --------------------------------------------------------------------------
+# fn-179.1 / issue #303 - `acceptance_criteria_residue` in the payload
+# --------------------------------------------------------------------------
+class TestAcceptanceCriteriaResiduePayload(unittest.TestCase):
+    """The export payload carries the count of unparsed criterion bullets.
+
+    `acceptance_criteria` feeds `tasks_summary.uncovered_r_ids` and make-pr's
+    `<covered>/<total>` ratio, so a dropped criterion is missing from the
+    DENOMINATOR too and coverage reads better than reality. The residue count
+    sits beside the criteria so the discrepancy is visible; it never aborts
+    the export.
+    """
+
+    def _export(self, plan: str) -> dict:
+        import json as _json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _git(root, "init")
+            subprocess.run(
+                [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), "init", "--json"],
+                cwd=str(root),
+                capture_output=True,
+                check=True,
+            )
+            _git(root, "add", "-A")
+            _git(root, "commit", "-m", "base")
+            created = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "flowctl.py"),
+                    "spec",
+                    "create",
+                    "--title",
+                    "Residue probe",
+                    "--json",
+                ],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            spec_id = _json.loads(created.stdout)["id"]
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "flowctl.py"),
+                    "spec",
+                    "set-plan",
+                    spec_id,
+                    "--file",
+                    "-",
+                    "--json",
+                ],
+                cwd=str(root),
+                input=plan,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            out = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS_DIR / "flowctl.py"),
+                    "spec",
+                    "export-cognitive-aid",
+                    spec_id,
+                    "--base",
+                    "HEAD",
+                    "--json",
+                ],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return _json.loads(out.stdout)
+
+    def test_residue_counts_unparsed_bullets_beside_the_criteria(self) -> None:
+        payload = self._export(
+            "## Acceptance Criteria\n\n"
+            "- **R1:** parsed. [user]\n"
+            "- **R2ab:** an unreadable id. [user]\n"
+            "\n## Boundaries\n\n- None.\n"
+        )
+        sections = payload["spec"]["spec_sections"]
+        self.assertEqual(
+            [c["id"] for c in sections["acceptance_criteria"]], ["R1"]
+        )
+        self.assertEqual(sections["acceptance_criteria_residue"], 1)
+
+    def test_residue_zero_when_every_bullet_parses(self) -> None:
+        payload = self._export(
+            "## Acceptance Criteria\n\n"
+            "- **R1:** parsed. [user]\n"
+            "- **R2 - a title form** with a body. [user]\n"
+            "\n## Boundaries\n\n- None.\n"
+        )
+        sections = payload["spec"]["spec_sections"]
+        self.assertEqual(
+            [c["id"] for c in sections["acceptance_criteria"]], ["R1", "R2"]
+        )
+        self.assertEqual(sections["acceptance_criteria_residue"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

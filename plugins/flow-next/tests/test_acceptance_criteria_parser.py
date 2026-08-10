@@ -187,5 +187,191 @@ class TestAcceptanceCriteriaRIdSuffix(unittest.TestCase):
         )
 
 
+class TestAcceptanceCriteriaBoldRunShapes(unittest.TestCase):
+    """Issue #303: bold runs that continue past the R-ID token still parse.
+
+    The old pattern required the bold run to close immediately after the
+    token, so title-form (`**R14 - title**`) and parenthetical-form
+    (`**R15 (note):**`) bullets were dropped entirely - not flagged, not
+    counted. Recognition now anchors on the token and stops at the first
+    `**` or `:` boundary.
+    """
+
+    # The reporter's five-bullet repro, verbatim in shape.
+    REPRO = (
+        "## Acceptance Criteria\n"
+        "\n"
+        "- **R1:** the canonical form, accepted.\n"
+        "- **R5a:** a qualified sibling id, also accepted here.\n"
+        "- **R14 - the pause protocol must survive a restart** and this is "
+        "its body.\n"
+        "- **R15 (the parenthetical form):** body text.\n"
+        "- **R16:** a criterion whose text\n"
+        "  wraps onto a second line that the parser never sees.\n"
+        "\n"
+        "## Next section\n"
+    )
+
+    def test_issue_303_repro_parses_five_of_five(self) -> None:
+        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        self.assertEqual(
+            [c["id"] for c in crits], ["R1", "R5a", "R14", "R15", "R16"]
+        )
+
+    def test_R5a_control_still_parses(self) -> None:
+        """The #147 positive control: this bug is about the run, not the token."""
+        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        entry = next(c for c in crits if c["id"] == "R5a")
+        self.assertEqual(
+            entry["text"], "a qualified sibling id, also accepted here."
+        )
+
+    def test_title_form_keeps_title_and_body(self) -> None:
+        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        entry = next(c for c in crits if c["id"] == "R14")
+        self.assertEqual(
+            entry["text"],
+            "the pause protocol must survive a restart and this is its body.",
+        )
+
+    def test_parenthetical_form_keeps_qualifier_and_body(self) -> None:
+        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        entry = next(c for c in crits if c["id"] == "R15")
+        self.assertEqual(entry["text"], "(the parenthetical form): body text.")
+
+    def test_wrapped_text_keeps_continuation_lines(self) -> None:
+        crits = flowctl._export_parse_acceptance_criteria(self.REPRO)
+        entry = next(c for c in crits if c["id"] == "R16")
+        self.assertEqual(
+            entry["text"],
+            "a criterion whose text wraps onto a second line that the "
+            "parser never sees.",
+        )
+
+    def test_canonical_bold_close_then_colon_unchanged(self) -> None:
+        """`**R1**: text` (colon outside the bold run) parsed before, still does."""
+        body = (
+            "## Acceptance Criteria\n\n"
+            "- **R1**: outside-colon form. [user]\n"
+            "\n## Boundaries\n\nText.\n"
+        )
+        self.assertEqual(
+            flowctl._export_parse_acceptance_criteria(body),
+            [{"id": "R1", "text": "outside-colon form.", "tag": "user"}],
+        )
+
+    def test_wrapped_capture_stops_at_next_bullet_and_blank_line(self) -> None:
+        """A criterion never swallows the next bullet or trailing prose."""
+        body = (
+            "## Acceptance Criteria\n\n"
+            "- **R1:** first\n"
+            "  continues here.\n"
+            "- **R2:** second.\n"
+            "\n"
+            "Trailing prose that belongs to nobody.\n"
+            "\n## Boundaries\n\nText.\n"
+        )
+        self.assertEqual(
+            flowctl._export_parse_acceptance_criteria(body),
+            [
+                {"id": "R1", "text": "first continues here.", "tag": ""},
+                {"id": "R2", "text": "second.", "tag": ""},
+            ],
+        )
+
+    def test_sub_bullet_ends_the_criterion_text(self) -> None:
+        """An indented sub-bullet is not criterion text and is not a criterion."""
+        body = (
+            "## Acceptance Criteria\n\n"
+            "- **R1:** parent text.\n"
+            "  - a sub-bullet.\n"
+            "- **R2:** next.\n"
+            "\n## Boundaries\n\nText.\n"
+        )
+        self.assertEqual(
+            [c["text"] for c in flowctl._export_parse_acceptance_criteria(body)],
+            ["parent text.", "next."],
+        )
+
+    def test_wrapped_tag_extraction_uses_the_joined_text(self) -> None:
+        """A source tag on the continuation line still lands in `tag`."""
+        body = (
+            "## Acceptance Criteria\n\n"
+            "- **R1:** a criterion whose text\n"
+            "  wraps before its tag. [paraphrase]\n"
+            "\n## Boundaries\n\nText.\n"
+        )
+        self.assertEqual(
+            flowctl._export_parse_acceptance_criteria(body),
+            [
+                {
+                    "id": "R1",
+                    "text": "a criterion whose text wraps before its tag.",
+                    "tag": "paraphrase",
+                }
+            ],
+        )
+
+
+class TestAcceptanceCriteriaResidue(unittest.TestCase):
+    """Issue #303 second half: unparsed criterion-shaped bullets are counted.
+
+    The residue count is the durable half of the fix - it stays correct for
+    the next unseen bullet shape, which a widened pattern does not. It never
+    aborts anything.
+    """
+
+    def _scan(self, body: str) -> tuple[list[dict], int]:
+        return flowctl._export_scan_acceptance_criteria(body)
+
+    def test_zero_when_every_bullet_parses(self) -> None:
+        crits, residue = self._scan(
+            TestAcceptanceCriteriaBoldRunShapes.REPRO
+        )
+        self.assertEqual(len(crits), 5)
+        self.assertEqual(residue, 0)
+
+    def test_counts_deliberately_rejected_spellings(self) -> None:
+        """`R4ab` / `R-4` stay rejected by design - but no longer silently."""
+        body = (
+            "## Acceptance Criteria\n\n"
+            "- **R1:** kept.\n"
+            "- **R4ab:** multi-letter suffix, rejected.\n"
+            "- **R-4:** separator form, rejected.\n"
+            "\n## Boundaries\n\nText.\n"
+        )
+        crits, residue = self._scan(body)
+        self.assertEqual([c["id"] for c in crits], ["R1"])
+        self.assertEqual(residue, 2)
+
+    def test_ordinary_bold_prose_bullet_is_not_residue(self) -> None:
+        """A bold word starting with `R` is prose, not a dropped criterion."""
+        body = (
+            "## Acceptance Criteria\n\n"
+            "- **R1:** kept.\n"
+            "- **Renumber-forbidden** after the first review cycle.\n"
+            "\n## Boundaries\n\nText.\n"
+        )
+        crits, residue = self._scan(body)
+        self.assertEqual([c["id"] for c in crits], ["R1"])
+        self.assertEqual(residue, 0)
+
+    def test_residue_never_aborts_the_parse(self) -> None:
+        """Criteria after an unreadable bullet still come through."""
+        body = (
+            "## Acceptance Criteria\n\n"
+            "- **R1:** kept.\n"
+            "- **R2 an unterminated bold run that never closes\n"
+            "- **R3:** also kept.\n"
+            "\n## Boundaries\n\nText.\n"
+        )
+        crits, residue = self._scan(body)
+        self.assertEqual([c["id"] for c in crits], ["R1", "R3"])
+        self.assertEqual(residue, 1)
+
+    def test_no_acceptance_section_has_no_residue(self) -> None:
+        self.assertEqual(self._scan("# Spec\n\n## Goal\n\nText.\n"), ([], 0))
+
+
 if __name__ == "__main__":
     unittest.main()

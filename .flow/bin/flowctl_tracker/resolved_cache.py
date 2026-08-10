@@ -143,13 +143,18 @@ def _recompute_resolved_at(resolved: dict, tracker_type: str, now: str) -> None:
 
 
 def apply_scope_result(config: dict, scope: str, data: Any, *,
-                       now: Optional[str] = None) -> dict:
+                       now: Optional[str] = None, stamp: bool = True) -> dict:
     """Pure scope merge: stamp exactly one `scopeResolvedAt` entry and touch
     ONLY that scope's data. Returns the same config object, mutated.
 
     A destination refresh must not clobber `statusIds`/`stateIds` (their own
     scopes) and must not make capabilities look fresh - scope isolation is the
     reason the map exists.
+
+    `stamp=False` persists the scope's data WITHOUT declaring it resolved, and
+    REMOVES any prior stamp: an incomplete slot map must never read fresh, or
+    freshness suppresses the very repair that would complete it (#308). It is
+    the caller's job to decide completeness.
     """
     if scope not in SCOPES:
         raise ValueError(f"unknown scope {scope!r}; canonical scopes are {SCOPES}")
@@ -185,7 +190,10 @@ def apply_scope_result(config: dict, scope: str, data: Any, *,
             raise ValueError(f"unknown capability keys: {sorted(unknown)}")
         resolved["capabilities"] = dict(data)
 
-    sra[scope] = now
+    if stamp:
+        sra[scope] = now
+    else:
+        sra.pop(scope, None)
     _recompute_resolved_at(resolved, (tracker.get("type") or ""), now)
     return config
 
@@ -279,6 +287,7 @@ def resolve_transaction(
     *,
     now: Optional[str] = None,
     finalize_fn: Optional[Callable[[dict, dict], dict]] = None,
+    stamp: Union[bool, Callable[[Any], bool]] = True,
 ) -> Union[dict, TrackerError]:
     """Run one scoped resolve with the R8 ordering. Returns the merged config,
     or a TrackerError (never raises for the specified failure modes).
@@ -291,6 +300,10 @@ def resolve_transaction(
     data is one slot merged into the current map, and computing that merge from
     the pre-lock read would let two concurrent selects clobber each other with
     whole-map replaces.
+
+    `stamp` may be a predicate over the FINAL data, evaluated inside the lock:
+    `--select` persists a still-incomplete slot map (the human's tiebreak is
+    progress worth keeping) but must not stamp it fresh (#308).
     """
     if scope not in SCOPES:
         return TrackerError(ErrorClass.INVALID_INPUT,
@@ -317,7 +330,9 @@ def resolve_transaction(
                     continue
                 migrate_config(current)
                 final_data = finalize_fn(current, data) if finalize_fn else data
-                apply_scope_result(current, scope, final_data, now=now)
+                do_stamp = stamp(final_data) if callable(stamp) else bool(stamp)
+                apply_scope_result(current, scope, final_data, now=now,
+                                   stamp=do_stamp)
                 validate_resolved_block(current["tracker"]["resolved"])
                 _atomic_write_json(config_path, current)
                 return current
