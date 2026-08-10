@@ -2,6 +2,26 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Judgment agents no longer fall to a fast tier on portable hosts.** The
+  agent files' `model:` fields are Claude family aliases; on a host that does
+  not resolve them (Cursor, Droid, Grok Build) the plan skill now states that
+  judgment-tier dispatches - the gap analyst and the sonnet-tier scouts - run
+  on the session model, never the host's fast default. A field run saw
+  `flow-gap-analyst` (requirement analysis) served by a fast tier; scanner
+  scouts may still ride the fast default.
+- **Model pins are probed ids only.** Cursor/Copilot model ids vary per
+  account and surface (the same install may serve `composer-2.5` or
+  `composer-2.5-fast`, never both); the setup model-pin ceremony now hard-
+  requires any cursor/copilot pin to appear verbatim in that CLI's probe
+  output this run (codex pins in `CODEX_ACCEPTED`), and proposes no new pin
+  when the probe failed. The routing scaffold's cursor bridge line carries the
+  same verify-before-invoking warning. A field run self-healed after invoking
+  a slug remembered from docs.
+
 ## [flow-next 3.24.0] - 2026-08-10
 
 A review verdict you cannot audit is a verdict you have to take on faith. A

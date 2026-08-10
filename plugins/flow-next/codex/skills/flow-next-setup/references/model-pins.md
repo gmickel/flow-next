@@ -63,6 +63,15 @@ Backends are `codex`, `copilot`, and `cursor`. Pin shape is `model` or
 `model:effort`; Cursor bakes effort into the model id, so prefer a bare model.
 Do not invent roles.
 
+**Probed ids only (hard rule).** A cursor or copilot pin must be an id that
+appears VERBATIM in that CLI's probe output this run (`CURSOR_MODELS` /
+`COPILOT_MODELS`); codex pins must be in `CODEX_ACCEPTED`. Ids vary per
+account and surface (the same install may serve `composer-2.5` or
+`composer-2.5-fast`, never both), so a slug remembered from docs, a seed
+direction, or a prior repo is not a valid pin - a candidate absent from the
+probe output is rejected, never written. When the probe failed or returned
+nothing, propose no new pin for that backend; keep the existing one.
+
 ## D. Propose
 
 Diff the judged map against on-disk `models.roles`. Before asking, print every
