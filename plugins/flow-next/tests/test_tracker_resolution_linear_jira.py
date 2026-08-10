@@ -424,15 +424,20 @@ class ResolveVerb(unittest.TestCase):
         self.assertEqual(out["details"]["normalized"], "in_progress")
         self.assertEqual(len(out["details"]["candidates"]), 2)
 
-    def test_select_persists_one_slot_and_records_alias_state(self) -> None:
-        states = [
-            {"id": "s-todo", "name": "Todo", "type": "unstarted"},
-            {"id": "s-a", "name": "Doing", "type": "started"},
-            {"id": "s-b", "name": "Verifying", "type": "started"},
-            {"id": "s-done", "name": "Done", "type": "completed"},
-        ]
+    #: Two started states (the #308 shape): in_progress needs a human tiebreak,
+    #: every other slot is unambiguous.
+    TWO_STARTED = [
+        {"id": "s-todo", "name": "Todo", "type": "unstarted"},
+        {"id": "s-a", "name": "Doing", "type": "started"},
+        {"id": "s-b", "name": "Verifying", "type": "started"},
+        {"id": "s-done", "name": "Done", "type": "completed"},
+    ]
+
+    def test_select_persists_the_union_of_selection_and_assignment(self) -> None:
+        """#308: the tiebreak resolves ONE slot; the remaining slots still get
+        the normal assignment, and the union is what is persisted."""
         self._write(linear_cfg())
-        ex = fake_execute({"resolve-states": linear_states(states)})
+        ex = fake_execute({"resolve-states": linear_states(self.TWO_STARTED)})
         payload, code = RV.run(self.flow, select="in_progress=s-a", execute=ex)
         self.assertEqual(code, 0, payload)
         out = json.loads(payload)["data"]
@@ -440,7 +445,125 @@ class ResolveVerb(unittest.TestCase):
         self.assertFalse(out["alias"])
         cfg = json.loads((self.flow / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(cfg["tracker"]["resolved"]["destination"]["stateIds"],
-                         {"in_progress": "s-a"})
+                         {"todo": "s-todo", "in_progress": "s-a",
+                          "done": "s-done"})
+        self.assertNotIn("in_review",
+                         cfg["tracker"]["resolved"]["destination"]["stateIds"],
+                         "the secondary started slot NEVER auto-fills - that "
+                         "design stays (#308)")
+
+    def test_issue_308_repro_ends_with_a_complete_map_at_step_three(self) -> None:
+        """The five-step repro, verbatim: resolve -> conflict, select -> the map
+        is COMPLETE, and the follow-up plain resolve has nothing left to repair.
+        """
+        self._write(linear_cfg())
+        responses = dict(self._linear_responses(),
+                         **{"resolve-states": linear_states(self.TWO_STARTED)})
+
+        # 1. scoped resolve: in_progress is ambiguous.
+        payload, code = RV.run(self.flow, scope="destination.stateIds",
+                               execute=fake_execute(responses))
+        self.assertEqual(code, 10, payload)
+        self.assertEqual(json.loads(payload)["details"]["normalized"],
+                         "in_progress")
+
+        # 2. the human tiebreak.
+        payload, code = RV.run(self.flow, select="in_progress=s-a",
+                               execute=fake_execute(responses))
+        self.assertEqual(code, 0, payload)
+
+        # 3. read the map back: every REQUIRED slot present, stamped fresh.
+        cfg = json.loads((self.flow / "config.json").read_text(encoding="utf-8"))
+        state_ids = cfg["tracker"]["resolved"]["destination"]["stateIds"]
+        for slot in ST.REQUIRED_SLOTS:
+            self.assertIn(slot, state_ids, state_ids)
+        self.assertIn("destination.stateIds",
+                      cfg["tracker"]["resolved"]["scopeResolvedAt"])
+
+        # 4. a plain resolve skips the fresh scope - and now that is correct.
+        payload, code = RV.run(self.flow, execute=fake_execute(responses))
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(
+            json.loads(payload)["data"]["resolved"]["destination"]["stateIds"],
+            state_ids)
+
+        # 5. --refresh has nothing left to add.
+        RV.run(self.flow, scope="destination.stateIds", refresh=True,
+               execute=fake_execute(responses))
+        cfg = json.loads((self.flow / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(cfg["tracker"]["resolved"]["destination"]["stateIds"],
+                         state_ids)
+
+    def test_required_incomplete_select_is_a_conflict_with_no_fresh_stamp(self) -> None:
+        """A workflow with no unstarted/completed state cannot satisfy
+        REQUIRED_SLOTS: the selection is kept (progress), the scope is NOT
+        stamped, and the caller gets the CONFLICT the full path already had."""
+        states = [
+            {"id": "s-a", "name": "Doing", "type": "started"},
+            {"id": "s-b", "name": "Verifying", "type": "started"},
+        ]
+        self._write(linear_cfg())
+        ex = fake_execute({"resolve-states": linear_states(states)})
+        payload, code = RV.run(self.flow, select="in_progress=s-a", execute=ex)
+        self.assertEqual(code, 10, payload)
+        out = json.loads(payload)
+        self.assertEqual(out["class"], "conflict")
+        self.assertEqual(out["details"]["normalized"], "todo")
+        cfg = json.loads((self.flow / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(cfg["tracker"]["resolved"]["destination"]["stateIds"],
+                         {"in_progress": "s-a"},
+                         "the human tiebreak is kept - otherwise no sequence of "
+                         "selects can ever complete the map")
+        self.assertNotIn("destination.stateIds",
+                         cfg["tracker"]["resolved"]["scopeResolvedAt"],
+                         "an incomplete map must never read fresh, or a later "
+                         "plain resolve skips the scope (#308)")
+        self.assertIsNone(cfg["tracker"]["resolved"]["resolvedAt"])
+
+    def test_a_stale_fresh_stamp_is_dropped_when_the_map_stays_incomplete(self) -> None:
+        """Configs already damaged by the #308 bug self-repair: writing an
+        incomplete map REMOVES the prior stamp rather than leaving it fresh."""
+        cfg = linear_cfg()
+        cfg["tracker"]["resolved"] = {
+            "destination": {"stateIds": {"in_progress": "s-a"}},
+            "scopeResolvedAt": {"destination.stateIds": "2020-01-01T00:00:00Z"},
+            "resolvedAt": None,
+        }
+        self._write(cfg)
+        ex = fake_execute({"resolve-states": linear_states([
+            {"id": "s-a", "name": "Doing", "type": "started"},
+            {"id": "s-b", "name": "Verifying", "type": "started"},
+        ])})
+        payload, code = RV.run(self.flow, select="in_progress=s-b", execute=ex)
+        self.assertEqual(code, 10, payload)
+        written = json.loads((self.flow / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(written["tracker"]["resolved"]["destination"]["stateIds"],
+                         {"in_progress": "s-b"})
+        self.assertNotIn("destination.stateIds",
+                         written["tracker"]["resolved"]["scopeResolvedAt"])
+
+    def test_select_leaves_another_ambiguous_required_slot_as_conflict(self) -> None:
+        """Jira: filling one slot must not paper over a second ambiguity."""
+        cfg = jira_cfg()
+        cfg["tracker"]["resolved"] = {"destination": {"issueTypeId": "10001"}}
+        self._write(cfg)
+        ex = fake_execute({"resolve-statuses": ok([{
+            "id": "10001", "name": "Task", "statuses": [
+                {"id": "1", "name": "Triage", "statusCategory": {"key": "new"}},
+                {"id": "2", "name": "Selected", "statusCategory": {"key": "new"}},
+                {"id": "3", "name": "Doing",
+                 "statusCategory": {"key": "indeterminate"}},
+                {"id": "4", "name": "Shipped", "statusCategory": {"key": "done"}},
+            ]}])})
+        payload, code = RV.run(self.flow, select="in_progress=3", execute=ex)
+        self.assertEqual(code, 10, payload)
+        out = json.loads(payload)
+        self.assertEqual(out["details"]["normalized"], "todo")
+        written = json.loads((self.flow / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            written["tracker"]["resolved"]["destination"]["statusIds"],
+            {"in_progress": "3", "done": "4"},
+            "the unambiguous slots still fill; only the ambiguous one waits")
 
     def test_reselect_overwrites(self) -> None:
         states = [
@@ -465,12 +588,16 @@ class ResolveVerb(unittest.TestCase):
 
     def test_select_outside_natural_pool_is_a_recorded_alias(self) -> None:
         self._write(linear_cfg())
-        ex = fake_execute({"resolve-states": linear_states(FIVE_STATES)})
+        ex = fake_execute({"resolve-states": linear_states(SIMPLE_STATES)})
         payload, code = RV.run(self.flow, select="in_review=s-done", execute=ex)
-        self.assertEqual(code, 0)
+        self.assertEqual(code, 0, payload)
         out = json.loads(payload)["data"]
         self.assertTrue(out["alias"])
         self.assertTrue(out["warnings"], "recorded, not silent")
+        self.assertEqual(out["stateIds"]["in_review"], "s-done")
+        self.assertEqual(out["stateIds"]["in_progress"], "s-prog",
+                         "the alias select still runs the normal assignment "
+                         "over the remaining slots (#308)")
 
     def test_jira_backfill_end_to_end(self) -> None:
         self._write(jira_cfg())
@@ -607,8 +734,10 @@ class SelectIsFingerprintProtected(unittest.TestCase):
                     (flow / "config.json").write_text(json.dumps(repointed),
                                                       encoding="utf-8")
                 return linear_states([
+                    {"id": "s-todo", "name": "Todo", "type": "unstarted"},
                     {"id": "s-a", "name": "Doing", "type": "started"},
                     {"id": "s-b", "name": "Verifying", "type": "started"},
+                    {"id": "s-done", "name": "Done", "type": "completed"},
                 ])
 
             payload, code = RV.run(flow, select="in_progress=s-a", execute=execute)

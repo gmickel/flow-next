@@ -163,15 +163,24 @@ def fetch_states(config: dict, execute: Callable) -> Union[tuple, TrackerError]:
     return pools, live
 
 
+def assign_slots_from_pools(config: dict, pools: dict, live: dict) -> Assignment:
+    """The PURE half of `resolve_state_ids` - no network.
+
+    `--select` reuses it: after merging one human tiebreak it must run the same
+    assignment over the REMAINING slots, against the same pools it already
+    fetched for validation (fn-179.3, #308)."""
+    existing = (((config.get("tracker") or {}).get("resolved") or {})
+                .get("destination") or {}).get("stateIds") or {}
+    return assign_slots(pools, live, existing if isinstance(existing, dict) else {},
+                        policy="linear")
+
+
 def resolve_state_ids(config: dict, execute: Callable) -> Union[Assignment, TrackerError]:
     fetched = fetch_states(config, execute)
     if isinstance(fetched, TrackerError):
         return fetched
     pools, live = fetched
-    existing = (((config.get("tracker") or {}).get("resolved") or {})
-                .get("destination") or {}).get("stateIds") or {}
-    return assign_slots(pools, live, existing if isinstance(existing, dict) else {},
-                        policy="linear")
+    return assign_slots_from_pools(config, pools, live)
 
 
 def resolve_capabilities(config: dict, execute: Callable) -> dict:
