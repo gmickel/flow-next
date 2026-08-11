@@ -74,6 +74,28 @@ cat scripts/ralph/runs/*/receipts/impl-fn-1.1.json
 
 Ralph reads receipts to decide whether to advance, retry, or block. A missing or malformed receipt freezes the loop. The bundled `flowctl validate --all` checks state-file shape; receipt-shape errors usually mean a backend wrote the file mid-iteration and the loop crashed.
 
+## Pilot keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)
+
+**Symptom:** `/flow-next:pilot` printed `PILOT_VERDICT=BLOCKED ... reason="no advancement (strike 2/2, spec unreadied): ..."` on an earlier tick, and now every tick skips that spec - even though the issue sits in the ready state on the board and `flowctl show <spec-id>` reports `ready: true`.
+
+**Why:** pilot records a **strike** for each healthy no-advance tick in a ledger at `<git-common-dir>/flow-next/pilot-strikes.json` (shared across worktrees, never committed - it lives under `.git/`). At strike 2/2 it runs `spec unready`. On a repo with `tracker.readyState` configured, the next tracker pull projects the board state back and re-readies the spec - but **a projection-set ready does not clear a strike** (fn-87 R7): the echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec forever. So the spec reads ready everywhere a human looks while pilot keeps it struck.
+
+**Inspect and recover:**
+
+```bash
+# What is struck, why, and when
+flowctl pilot strikes list
+flowctl pilot strikes list --json
+
+# Recognized human clear (after you have actually addressed the failure)
+flowctl pilot strikes clear <spec-id>
+
+# Wipe the whole ledger (e.g. after a batch of unrelated failures)
+flowctl pilot strikes clear --all
+```
+
+Clearing a strike **does not re-ready the spec** - the two signals are orthogonal. On a `readyState` repo the board (or the next pull) owns readiness; on a repo without it, run `flowctl spec ready <spec-id>` yourself. Fix the underlying failure first: the strike reason in `strikes list` names the stage and what did not advance.
+
 ## Review loop stalls, repeats unchanged work, or runs away (fn-90/fn-159)
 
 **Symptoms:** a plan/impl/completion review loops far more than the ~3-round cap — the field report was **~11×** on a large ticket before the reviewer and implementer converged. Most common on the **Cursor** review backend, but the underlying causes were backend-agnostic.

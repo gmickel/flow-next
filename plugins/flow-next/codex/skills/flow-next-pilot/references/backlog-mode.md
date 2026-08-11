@@ -269,8 +269,10 @@ already skipped at SELECT**, so they must run here, before triage:
  from the board every tick, so a projected "ready again" is MECHANICAL, not a human
  re-bless; clearing on it re-dispatches the same failing spec forever (the strike limit,
  defeated). With `tracker.readyState` set, do NOT clear a `count >= 2` strike on
- projection-set ready — keep the candidate struck (skipped) until a genuine human signal
- (answers the surfaced failure / an explicit non-projection re-ready) clears it
+ projection-set ready — keep the candidate struck (skipped) until the human runs
+ `flowctl pilot strikes clear <spec-id>`, which is THE recognized human clear under an
+ armed `tracker.readyState` (no board move can serve as one: a deliberate re-ready and a
+ projection echo are byte-identical in every durable artifact)
  (skip the write under `--dry-run`, report would-clear instead).
 - **No gh here** — PR state belongs only to the all-done CLASSIFY branch.
 
