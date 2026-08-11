@@ -82,10 +82,18 @@ it never creates another.
 
 After a successful remote create, immediately persist the returned identity
 with `sync create-first-put`. Keep that recovery record across any later
-failure. Only after mint, attach, merge-base seed, back-reference, and the
-normal spec-keyed receipt all succeed may the caller consume it with
-`sync create-first-clear`. These four helpers exclusively own the retry record;
-do not recompute its hash or read, write, or delete its file directly.
+failure. **After minting the local spec, record the claim with
+`sync create-first-put --spec-id <id> --if-absent` (fn-182, #310)** - the CAS
+form, so two promoters racing on the same candidate end with one recorded
+spec. On exit `10` with `subtype=spec_already_minted`, another promoter won:
+adopt `details.recordedSpecId` and discard the locally minted spec - never
+re-put. On `subtype=record_missing`, the candidate was already promoted and
+cleared (or never recorded here): locate the issue's attached spec via the
+tracker id and adopt it. Only after mint, attach, merge-base seed,
+back-reference, and the normal spec-keyed receipt all succeed may the caller
+consume the record with `sync create-first-clear`. These four helpers
+exclusively own the retry record; do not recompute its hash or read, write, or
+delete its file directly.
 
 **Back-reference:** write `flow:<spec-id>` only after the durable local link
 exists. A failed back-reference leaves the recovery record available for a

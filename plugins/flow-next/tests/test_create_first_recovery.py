@@ -602,7 +602,7 @@ class MintClaimIsCompareAndSet(unittest.TestCase):
 
     def test_expect_spec_id_conflicts_on_a_mismatch(self) -> None:
         self._put("--spec-id", "fn-1-alpha")
-        r = self._put("--spec-id", "fn-2-beta", "--expect-spec-id", "fn-9-ghost")
+        r = self._put("--spec-id", "fn-9-ghost", "--expect-spec-id", "fn-9-ghost")
         self.assertEqual(r.returncode, self.CONFLICT_EXIT)
         env = json.loads(r.stdout)
         self.assertEqual(env["class"], "conflict")
@@ -613,9 +613,32 @@ class MintClaimIsCompareAndSet(unittest.TestCase):
 
     def test_expect_spec_id_conflicts_when_nothing_is_recorded(self) -> None:
         self._put()
-        r = self._put("--spec-id", "fn-2-beta", "--expect-spec-id", "fn-1-alpha")
+        # Matching ids with NO recorded specId is a mismatch (None != the
+        # expected id): an owner asserting a claim that was never recorded
+        # must not silently create it.
+        r = self._put("--spec-id", "fn-1-alpha", "--expect-spec-id", "fn-1-alpha")
         self.assertEqual(r.returncode, self.CONFLICT_EXIT)
         self.assertIsNone(json.loads(r.stdout)["details"]["recordedSpecId"])
+
+    def test_expect_spec_id_cannot_retarget_the_claim(self) -> None:
+        """PR #328 bot finding: a matching CAS must not swap the claim to a
+        DIFFERENT spec id - the expect form updates a claim in place."""
+        self._put("--spec-id", "fn-1-alpha")
+        r = self._put("--spec-id", "fn-2-beta", "--expect-spec-id", "fn-1-alpha")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotEqual(r.returncode, self.CONFLICT_EXIT)  # misuse, not a race
+        self.assertIn("retarget", (r.stdout + r.stderr))
+        self.assertEqual(self._record()["specId"], "fn-1-alpha")
+
+    def test_if_absent_refuses_when_no_record_exists(self) -> None:
+        """PR #328 bot finding: after the winner promotes and clears, a delayed
+        loser's --if-absent must not succeed against the missing record."""
+        r = self._put("--spec-id", "fn-2-beta", "--if-absent")
+        self.assertEqual(r.returncode, self.CONFLICT_EXIT)
+        env = json.loads(r.stdout)
+        self.assertEqual(env["subtype"], "record_missing")
+        got = _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json")
+        self.assertNotEqual(got.returncode, 0)  # still no record written
 
     def test_the_two_conditional_flags_are_mutually_exclusive(self) -> None:
         r = self._put("--spec-id", "fn-1-alpha", "--if-absent",

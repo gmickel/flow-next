@@ -40228,6 +40228,33 @@ def _create_first_put_record(args: argparse.Namespace, flow_dir: Path, path: Pat
     recorded_spec_id = existing.get("specId") if existing else None
 
     if if_absent or expect_spec_id is not None:
+        if existing is None and not existing_unreadable:
+            # PR #328 bot finding: the ceremony ALWAYS records the issue at
+            # creation time, so a missing record under a conditional put means
+            # either the create was never recorded here or a winner already
+            # promoted and cleared. Succeeding would let a delayed promoter
+            # re-claim a key whose issue is already attached elsewhere - the
+            # exact double-spec outcome the CAS exists to stop.
+            _create_first_conflict_exit(
+                f"No recovery record exists for key {args.key}: the candidate "
+                "was either never recorded in this checkout or already "
+                "promoted and cleared by another promoter. Do not proceed "
+                "with this mint; locate the issue's attached spec (the "
+                "tracker id is the durable dedupe key) and adopt it.",
+                subtype="record_missing",
+                details={"key": args.key, "attemptedSpecId": spec_id},
+                use_json=use_json)
+        if (expect_spec_id is not None and spec_id
+                and spec_id != expect_spec_id):
+            # PR #328 bot finding: --expect-spec-id is the idempotent re-put
+            # of a claim you already own, not a retargeting primitive - a
+            # matching CAS must not swap the claim to a DIFFERENT spec id.
+            error_exit(
+                f"--expect-spec-id {expect_spec_id!r} with a different "
+                f"--spec-id {spec_id!r} would retarget the mint claim; the "
+                "CAS form updates a claim in place. Re-put with the same "
+                "spec id, or clear the record deliberately first.",
+                use_json=use_json)
         if existing_unreadable:
             # A corrupt record cannot be shown to be free (or to be ours). The
             # unconditional path may overwrite it; a CAS may not - overwriting
