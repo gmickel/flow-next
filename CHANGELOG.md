@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.28.0] - 2026-08-11
 
 A struck-out pilot spec on a board-armed repo could read ready everywhere a
 human looks while staying permanently invisible to pilot - and the docs
