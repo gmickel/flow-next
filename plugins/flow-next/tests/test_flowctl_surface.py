@@ -128,6 +128,8 @@ memory read
 memory search
 models resolve
 next
+pilot strikes clear
+pilot strikes list
 pilot-log append
 pr-cognitive-aid current
 pr-cognitive-aid html-input
