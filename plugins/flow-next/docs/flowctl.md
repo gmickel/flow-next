@@ -1200,11 +1200,14 @@ Pre-spec recovery records for tracker-sync `create-first`, which creates a track
 ```bash
 flowctl sync create-first-key   --type github --title "Fix login" [--body-file b.md]
 flowctl sync create-first-get   --key <k> [--json]    # exit 1 when absent (a normal branch)
-flowctl sync create-first-put   --key <k> --id … --identifier … --url … --title … --transport …
+flowctl sync create-first-put   --key <k> --id … --identifier … --url … --title … --transport … \
+                                [--spec-id <id>] [--if-absent | --expect-spec-id <id>]
 flowctl sync create-first-clear --key <k>             # after mint + attach succeed
 ```
 
 The key is the first 16 hex chars of `sha256(type NUL title NUL body)`, so a resumed run recomputes it and finds the interrupted attempt. This is what makes "a retry links, never re-creates" mechanical rather than a promise the caller has to keep. `put` is idempotent and preserves the original `createdAt`.
+
+`--if-absent` makes the post-mint put a **compare-and-set** (fn-182, #310): it records the spec id only while the claim slot is free, and the loser of a concurrent promotion exits `10` (the shared tracker CONFLICT status) with `class=conflict`, `subtype=spec_already_minted`, and `details.recordedSpecId` naming the winner to adopt. `--expect-spec-id <id>` is the CAS update of a claim you already own (mismatch: `subtype=spec_id_mismatch`); the two flags are mutually exclusive. Other refusals: `record_unreadable` (a CAS never overwrites an unverifiable claim) and `lock_timeout` (`retryable: true`). Flagless `put` is unchanged, including last-write-wins.
 
 #### memory mark-hardened
 
@@ -1471,6 +1474,10 @@ flowctl tracker wire comment-delete --locator "$LOCATOR" <comment-id> [--json]
 flowctl tracker wire label          --locator "$LOCATOR" [--add LABEL]... [--remove LABEL]... [--json]
 flowctl tracker wire assign         --locator "$LOCATOR" [--add USER]... [--remove USER]... [--json]
 flowctl tracker wire list-open      [--json]
+# Linear with tracker.readyState unset: explicit `unresolved`/`ready_state` error
+# naming the key (exit 4), never a silent empty (fn-182, #311); a refusal means
+# "no ready lane configured", not "board empty". GitHub/GitLab/Jira: transport-free
+# empty as before. Leaving readyState unset stays a valid configuration.
 flowctl tracker wire relation-list  --locator "$LOCATOR" [--json]
 flowctl tracker wire question       --locator "$LOCATOR" \
   --subject-id ID --blocked-stage STAGE --reason-code CODE \

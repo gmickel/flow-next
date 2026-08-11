@@ -15,10 +15,11 @@ from ..types import ErrorClass, TrackerError
 from .helpers import (CREATE_FIRST_KEY_RE, Execute, Result, atomic_write_json,
                       leaf_is_safe,
                       load_spec, merged_tracker, now_iso,
-                      read_config, tracker_type, write_sync_receipt)
+                      read_config, spec_project_fields, tracker_type,
+                      write_sync_receipt)
 from .helpers import locked_tracker_write as _locked_tracker_write
 from .linkstate import derive_link_state, resolve_linear_uuid
-from .providers import provider_create
+from .providers import project_capability_error, provider_create
 
 
 def _claim_spec_operation(flow_dir: Path, spec_id: str, rec_path: Path,
@@ -128,13 +129,22 @@ def _create_transaction(flow_dir, spec_id: str, *, title: str, body: str,
             f"(linkState={derive_link_state(tracker)!r}); refuse bare create",
             subtype="already_linked",
         )
+    # Read the sidecar project ids BEFORE the claim: a malformed field must
+    # fail without reserving the spec or issuing a remote mutation.
+    project = spec_project_fields(tracker)
+    if isinstance(project, TrackerError):
+        return project
+    unsupported = project_capability_error(provider, project)
+    if unsupported is not None:
+        return unsupported
     rec_path = flow_dir / "create-first" / f"spec-{spec_id}.json"
     claimed = _claim_spec_create(flow_dir, spec_id, rec_path, provider, title)
     if claimed is not None:
         return claimed
     from ..resolve_verb import bound_executor  # noqa: PLC0415
     ex = bound_executor(config, execute)
-    created = provider_create(config, ex, title=title, body=body)
+    created = provider_create(config, ex, title=title, body=body,
+                              project=project or None)
     if isinstance(created, TrackerError):
         _release_claim(rec_path)
         return created

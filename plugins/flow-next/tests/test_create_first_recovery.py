@@ -517,5 +517,164 @@ class RecoveryWritesAreContainedInFlow(unittest.TestCase):
             self.assertEqual(got.returncode, 0, got.stderr)
 
 
+class MintClaimIsCompareAndSet(unittest.TestCase):
+    """`create-first-put --if-absent` / `--expect-spec-id` (fn-182.1, #310).
+
+    The mint claim used to be an atomic write, not a compare-and-set: two
+    promoters could both read a specId-less record, both run `spec create`, then
+    race the put - last write wins and TWO specs survive for one candidate, with
+    the surviving record indistinguishable from a clean single promotion.
+    """
+
+    CONFLICT_EXIT = 10
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        _run(self.repo, "init")
+        self.key = "0123456789abcdef"
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _put(self, *extra: str, url: str = "https://example/1") -> subprocess.CompletedProcess:
+        return _run(self.repo, "sync", "create-first-put", "--key", self.key,
+                    "--id", "I_abc", "--identifier", "#1", "--url", url,
+                    "--title", "Fix login", "--transport", "gh", "--json", *extra)
+
+    def _record(self) -> dict:
+        got = _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json")
+        self.assertEqual(got.returncode, 0, got.stderr)
+        return json.loads(got.stdout)
+
+    def test_if_absent_records_the_spec_when_the_slot_is_free(self) -> None:
+        self.assertEqual(self._put().returncode, 0)
+        r = self._put("--spec-id", "fn-1-alpha", "--if-absent")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self._record()["specId"], "fn-1-alpha")
+
+    def test_if_absent_conflicts_and_leaves_the_winner_intact(self) -> None:
+        self._put()
+        self.assertEqual(self._put("--spec-id", "fn-1-alpha", "--if-absent").returncode, 0)
+        loser = self._put("--spec-id", "fn-2-beta", "--if-absent",
+                          url="https://example/hijacked")
+        self.assertEqual(loser.returncode, self.CONFLICT_EXIT,
+                         "the race loser needs a status it can branch on")
+        env = json.loads(loser.stdout)
+        self.assertFalse(env["success"])
+        self.assertEqual(env["class"], "conflict")
+        self.assertEqual(env["subtype"], "spec_already_minted")
+        self.assertEqual(env["details"]["recordedSpecId"], "fn-1-alpha")
+        self.assertEqual(env["details"]["attemptedSpecId"], "fn-2-beta")
+        record = self._record()
+        self.assertEqual(record["specId"], "fn-1-alpha", "winner was overwritten")
+        self.assertEqual(record["url"], "https://example/1",
+                         "a refused put must write NOTHING, not just skip specId")
+
+    def test_two_promoters_racing_leave_one_spec_and_one_informed_loser(self) -> None:
+        """The #310 fixture: concurrent promotion, one recorded spec."""
+        import concurrent.futures
+
+        self._put()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(self._put, "--spec-id", spec_id, "--if-absent")
+                for spec_id in ("fn-1-alpha", "fn-2-beta")
+            ]
+            results = [f.result() for f in futures]
+        codes = sorted(r.returncode for r in results)
+        self.assertEqual(codes, [0, self.CONFLICT_EXIT],
+                         "exactly one promoter may win the mint claim")
+        winner = next(r for r in results if r.returncode == 0)
+        loser = next(r for r in results if r.returncode != 0)
+        self.assertEqual(json.loads(loser.stdout)["subtype"], "spec_already_minted")
+        self.assertEqual(self._record()["specId"],
+                         json.loads(winner.stdout)["specId"])
+        self.assertEqual(
+            len(list((self.repo / ".flow" / "create-first").glob("*.json"))), 1)
+
+    def test_expect_spec_id_updates_only_on_a_match(self) -> None:
+        self._put("--spec-id", "fn-1-alpha")
+        ok = self._put("--spec-id", "fn-1-alpha", "--expect-spec-id", "fn-1-alpha",
+                       url="https://example/renamed")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertEqual(self._record()["url"], "https://example/renamed")
+
+    def test_expect_spec_id_conflicts_on_a_mismatch(self) -> None:
+        self._put("--spec-id", "fn-1-alpha")
+        r = self._put("--spec-id", "fn-9-ghost", "--expect-spec-id", "fn-9-ghost")
+        self.assertEqual(r.returncode, self.CONFLICT_EXIT)
+        env = json.loads(r.stdout)
+        self.assertEqual(env["class"], "conflict")
+        self.assertEqual(env["subtype"], "spec_id_mismatch")
+        self.assertEqual(env["details"]["recordedSpecId"], "fn-1-alpha")
+        self.assertEqual(env["details"]["expectedSpecId"], "fn-9-ghost")
+        self.assertEqual(self._record()["specId"], "fn-1-alpha")
+
+    def test_expect_spec_id_conflicts_when_nothing_is_recorded(self) -> None:
+        self._put()
+        # Matching ids with NO recorded specId is a mismatch (None != the
+        # expected id): an owner asserting a claim that was never recorded
+        # must not silently create it.
+        r = self._put("--spec-id", "fn-1-alpha", "--expect-spec-id", "fn-1-alpha")
+        self.assertEqual(r.returncode, self.CONFLICT_EXIT)
+        self.assertIsNone(json.loads(r.stdout)["details"]["recordedSpecId"])
+
+    def test_expect_spec_id_cannot_retarget_the_claim(self) -> None:
+        """PR #328 bot finding: a matching CAS must not swap the claim to a
+        DIFFERENT spec id - the expect form updates a claim in place."""
+        self._put("--spec-id", "fn-1-alpha")
+        r = self._put("--spec-id", "fn-2-beta", "--expect-spec-id", "fn-1-alpha")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotEqual(r.returncode, self.CONFLICT_EXIT)  # misuse, not a race
+        self.assertIn("retarget", (r.stdout + r.stderr))
+        self.assertEqual(self._record()["specId"], "fn-1-alpha")
+
+    def test_if_absent_refuses_when_no_record_exists(self) -> None:
+        """PR #328 bot finding: after the winner promotes and clears, a delayed
+        loser's --if-absent must not succeed against the missing record."""
+        r = self._put("--spec-id", "fn-2-beta", "--if-absent")
+        self.assertEqual(r.returncode, self.CONFLICT_EXIT)
+        env = json.loads(r.stdout)
+        self.assertEqual(env["subtype"], "record_missing")
+        got = _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json")
+        self.assertNotEqual(got.returncode, 0)  # still no record written
+
+    def test_if_absent_requires_a_spec_id(self) -> None:
+        """PR #328 bot finding: --if-absent without --spec-id would succeed
+        while claiming nothing, letting every concurrent caller succeed."""
+        self._put()
+        r = self._put("--if-absent")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotEqual(r.returncode, self.CONFLICT_EXIT)  # misuse
+        self.assertIn("--spec-id", (r.stdout + r.stderr))
+        self.assertNotIn("specId", self._record())
+
+    def test_the_two_conditional_flags_are_mutually_exclusive(self) -> None:
+        r = self._put("--spec-id", "fn-1-alpha", "--if-absent",
+                      "--expect-spec-id", "fn-1-alpha")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("Traceback", r.stderr)
+
+    def test_an_unreadable_record_refuses_rather_than_clobbers(self) -> None:
+        self._put("--spec-id", "fn-1-alpha")
+        path = self.repo / ".flow" / "create-first" / f"{self.key}.json"
+        path.write_text("{ not json", encoding="utf-8")
+        r = self._put("--spec-id", "fn-2-beta", "--if-absent")
+        self.assertEqual(r.returncode, self.CONFLICT_EXIT)
+        self.assertEqual(json.loads(r.stdout)["subtype"], "record_unreadable")
+        self.assertEqual(path.read_text(encoding="utf-8"), "{ not json")
+
+    def test_flagless_put_is_unchanged(self) -> None:
+        """No flag = the pre-CAS write, including last-write-wins on specId."""
+        self._put("--spec-id", "fn-1-alpha")
+        r = self._put("--spec-id", "fn-2-beta", url="https://example/2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        record = self._record()
+        self.assertEqual(record["specId"], "fn-2-beta")
+        self.assertEqual(record["url"], "https://example/2")
+        self.assertNotIn("class", json.loads(r.stdout))
+
+
 if __name__ == "__main__":
     unittest.main()

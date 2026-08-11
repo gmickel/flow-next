@@ -1,0 +1,678 @@
+{
+  "artifactId": "fn-182-aid-7519f7a9",
+  "baseSha": "7283f798aaf70e788a063ea532416a4b7f2b19e8",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "The create-first mint claim was an atomic write, not compare-and-set, so a promotion race left two specs for one candidate; Linear wire list-open returned a silent confidently-wrong empty when tracker.readyState was unset (confirmed live against a populated board); the Linear provider could not place an issue in a Project; and the abandon path for a never-promoted candidate was undocumented.",
+        "taskIds": [],
+        "title": "Three tracker-bridge gaps and one undocumented seam"
+      },
+      {
+        "files": [
+          {
+            "additions": 188,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 55,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Put branch split into _create_first_put_record + _create_first_conflict_exit; CAS gating under _shared_config_lock; parser flags.",
+            "taskIds": []
+          },
+          {
+            "additions": 126,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_create_first_recovery.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "MintClaimIsCompareAndSet: two-promoter race, CAS match/mismatch, flagless unchanged.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1"
+        ],
+        "summary": "create-first-put gains --if-absent (record the spec id only while the slot is free) and --expect-spec-id (CAS update of an owned claim), mutually exclusive. The loser exits 10 with class=conflict, subtype spec_already_minted / spec_id_mismatch / record_unreadable / lock_timeout, details naming the winner to adopt; a refused CAS writes nothing. Spec drift resolved on review: the put path held NO lock, so the conditional path wraps read-check-write in the existing shared config lock while the flagless path stays byte-for-byte unchanged.",
+        "taskIds": [
+          "fn-182-tracker-create-first-cas-list-open.1"
+        ],
+        "title": "CAS mint claim"
+      },
+      {
+        "files": [
+          {
+            "additions": 57,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/wire/linear.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "list_open refusal; project_set sibling issueUpdate (step 3).",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_tracker_wire.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Refusal pins: absent/null/blank readyState, zero transport calls.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_tracker_conformance.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "All-four matrix split: Linear refuses, others keep the transport-free empty.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_tracker_sync_backlog_mode.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Backlog path tolerates the refusal.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r2"
+        ],
+        "summary": "Unset tracker.readyState now returns TrackerError(UNRESOLVED, subtype ready_state, details.key tracker.readyState) naming what is unresolved and how to set it, with the leaving-it-unset-is-valid phrasing required by the spec; readyState-set behavior and the other three providers unchanged. No new enumeration verb.",
+        "taskIds": [
+          "fn-182-tracker-create-first-cas-list-open.2"
+        ],
+        "title": "Linear list-open refuses instead of lying"
+      },
+      {
+        "files": [
+          {
+            "additions": 33,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/lifecycle/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "PROJECT_SIDECAR_FIELDS + spec_project_fields (present-non-empty only; unusable value = INVALID_INPUT).",
+            "taskIds": []
+          },
+          {
+            "additions": 33,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/lifecycle/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "create_linear carries the fields; capability error for non-Linear.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/lifecycle/verbs.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Create transaction reads the sidecar pre-claim.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/syncbody/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Project reconcile before the body branch on every push outcome.",
+            "taskIds": []
+          },
+          {
+            "additions": 20,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/wire/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Cross-provider project_set entry.",
+            "taskIds": []
+          },
+          {
+            "additions": 341,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_tracker_project_sidecar.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "14 tests: payload byte-identity, never-clears, capability + invalid-input refusals.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-t3",
+          "s-c3",
+          "s-r3",
+          "s-r4"
+        ],
+        "summary": "tracker.projectId / projectMilestoneId sent on issueCreate and reconciled by a sibling wire.project_set on every sync-body push BEFORE the body branch, so converged-body pushes still reconcile membership. Absence is never translated into a value: no projectId:null can be synthesized, project_set is not called when the sidecar is empty, and the create input dict is byte-identical to before. Non-Linear trackers refuse with a capability error; a bad id surfaces Linear's own error. Verified live against the Linear sandbox including the never-clears contract, then cleaned up.",
+        "taskIds": [
+          "fn-182-tracker-create-first-cas-list-open.3"
+        ],
+        "title": "Per-spec Linear Project sidecar"
+      },
+      {
+        "files": [
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/tracker-sync.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Abandon path, CAS ceremony, refusal semantics, sidecar table row.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "CAS flags + conflict contract; list-open caveat.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Backlog enumeration: refusal = no-ready-lane, fall back to Flow-ready.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-ladder.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "list-open row caveat.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "list-open error column.",
+            "taskIds": []
+          },
+          {
+            "additions": 39,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Unreleased entries for #309/#310/#311/#315.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R5",
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-t4",
+          "s-c4",
+          "s-r5",
+          "s-r6"
+        ],
+        "summary": "tracker-sync.md documents the abandon path (remote-first ordering, consumer owns the close), the CAS promotion ceremony, the list-open refusal semantics, and the sidecar field-table row; flowctl.md carries the CAS contract and the per-provider list-open caveat; linear-ladder, adapter-interface, and the backlog-enumeration step teach the refusal handling. CHANGELOG Unreleased credits the reporter per issue.",
+        "taskIds": [
+          "fn-182-tracker-create-first-cas-list-open.4"
+        ],
+        "title": "Docs and CHANGELOG"
+      },
+      {
+        "files": [
+          {
+            "additions": 188,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 55,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 33,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 33,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/verbs.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl_tracker/syncbody/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 20,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl_tracker/wire/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 57,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/wire/linear.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/references/adapter-interface.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/references/linear-ladder.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-182-tracker-create-first-cas-list-open.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-182-tracker-create-first-cas-list-open.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-182-tracker-create-first-cas-list-open.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-182-tracker-create-first-cas-list-open.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "s-t1",
+          "s-t2",
+          "s-t3",
+          "s-t4"
+        ],
+        "summary": "Full parallel suite 4432 tests with 0 failures, ruff clean, sync-codex twice with no drift; live Linear sandbox smoke for the Project sidecar. Dual copies, manifests, and mirrors are byte-derived.",
+        "taskIds": [
+          "fn-182-tracker-create-first-cas-list-open.1",
+          "fn-182-tracker-create-first-cas-list-open.2",
+          "fn-182-tracker-create-first-cas-list-open.3",
+          "fn-182-tracker-create-first-cas-list-open.4"
+        ],
+        "title": "Gate, propagation and task evidence"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-t4"
+        ],
+        "value": "4432 tests, 0 failures; ruff clean; sync-codex idempotent"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-t2",
+          "s-t3"
+        ],
+        "value": "~47 new focused tests + live Linear sandbox smoke incl. the R4 never-clears proof"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-c3",
+          "s-c4"
+        ],
+        "value": "6/6 satisfied across four tasks"
+      }
+    ],
+    "thesis": "The tracker-bridge batch: the create-first mint claim becomes compare-and-set so a promotion race ends with one recorded spec and one informed loser (exit 10, adopt the winner), Linear wire list-open refuses with an explicit unresolved/ready_state error instead of a silent empty against a populated board, per-spec tracker.projectId/projectMilestoneId ride issueCreate and every sync-body push with absent-means-unmanaged semantics verified live against the Linear sandbox, and the never-promoted-candidate abandon path is documented remote-first (issues #309, #310, #311, #315)."
+  },
+  "generatedAt": "2026-08-11T06:43:29Z",
+  "headSha": "7519f7a9cd6359ab224d5b2b806629d4ebdfe4e9",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-182-tracker-create-first-cas-list-open"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-182-tracker-create-first-cas-list-open.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-182-tracker-create-first-cas-list-open.2"
+    },
+    {
+      "id": "s-t3",
+      "kind": "task",
+      "ref": "fn-182-tracker-create-first-cas-list-open.3"
+    },
+    {
+      "id": "s-t4",
+      "kind": "task",
+      "ref": "fn-182-tracker-create-first-cas-list-open.4"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "04677664480bc89bb2b12f284fc5eb3303dba6ab"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "96d9d8bce680c5611ec378057477ec3303ad7029"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "1334bf9b2eca104b547b9c3b839efcf9d911f90d"
+    },
+    {
+      "id": "s-c4",
+      "kind": "commit",
+      "ref": "d7d5f3930ed410365d8494bf7fb613c480fadbd2"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "7283f798aaf70e788a063ea532416a4b7f2b19e8..7519f7a9cd6359ab224d5b2b806629d4ebdfe4e9"
+    }
+  ],
+  "specId": "fn-182-tracker-create-first-cas-list-open"
+}

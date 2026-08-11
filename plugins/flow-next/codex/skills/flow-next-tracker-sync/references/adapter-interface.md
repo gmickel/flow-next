@@ -71,7 +71,7 @@ normalization, and deduplication.
 | `comment-delete` | locator, comment id | deletion result | none |
 | `label` | locator, add/remove names | normalized labels | none |
 | `assign` | locator, add/remove ids | normalized assignees | none |
-| `list-open` | resolved ready lane | normalized issue list | none |
+| `list-open` | resolved ready lane | normalized issue list | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board; fn-182 #311) |
 | `attach` | locator, file | attachment metadata | none |
 | `attach-get` | attachment id, output path | retrieved metadata | output file only |
 

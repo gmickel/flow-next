@@ -35,6 +35,7 @@ from ..executor import execute as default_execute
 from ..lifecycle.helpers import (ACTIVE, Execute, Result, atomic_write_json,
                                  dict_, leaf_is_safe, load_spec,
                                  merged_tracker, now_iso, read_config,
+                                 spec_project_fields,
                                  tracker_type, write_sync_receipt,
                                  write_tracker_block)
 from ..lifecycle.linkstate import require_durable
@@ -498,6 +499,23 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
             auto_retryable=True,
         )
 
+    # Project membership reconciles BEFORE the body branch, so it lands on
+    # every push outcome (written / no-op / seed): a spec that gained
+    # tracker.projectId while its body was already converged must still reach
+    # its Project. Absent sidecar fields = unmanaged: zero extra requests and
+    # the pre-fn-182 call sequence unchanged (R4).
+    project = spec_project_fields(tracker)
+    if isinstance(project, TrackerError):
+        return project
+    project_reconciled = False
+    if project:
+        from ..wire import project_set as wire_project_set  # noqa: PLC0415
+        applied = wire_project_set(provider, config, locator, ex,
+                                   fields=project)
+        if isinstance(applied, TrackerError):
+            return applied
+        project_reconciled = True
+
     outgoing_src = tracker_body if tracker_body is not None else flow_file_body
     outgoing = _carry_deps_forward(outgoing_src, current_body)
 
@@ -538,6 +556,11 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                     return rerr
             return {
                 "kind": "noop",
+                # PR #328 bot finding: a converged body is a noop for the BODY,
+                # but the project mutation above still ran - say so, or the
+                # result claims nothing was written when an issueUpdate just
+                # landed.
+                "projectReconciled": project_reconciled,
                 "direction": "push",
                 "side_written": "none",
                 "reason": "unchanged",
@@ -571,6 +594,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
                     auto_retryable=rerr.auto_retryable)
         return {
             "kind": "seeded",
+            "projectReconciled": project_reconciled,
             "direction": "push",
             "side_written": "none",
             "mergeBaseFlow": committed["mergeBaseFlow"],
@@ -675,6 +699,7 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
 
     return {
         "kind": "pushed",
+        "projectReconciled": project_reconciled,
         "direction": "push",
         "side_written": "tracker",
         "mergeBaseFlow": committed["mergeBaseFlow"],

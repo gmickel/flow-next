@@ -482,10 +482,10 @@ class ListOpen(unittest.TestCase):
         self.assertIn("state=opened", endpoint)
 
     def test_ready_state_unset_is_transport_free_noop_for_all_providers(self) -> None:
+        # Linear refuses instead (fn-182.2 / #311) - covered separately below.
         for name, cfg in (
             ("github", gh_cfg()),
             ("gitlab", gl_cfg()),
-            ("linear", ln_cfg()),
             ("jira", jr_cfg()),
         ):
             with self.subTest(provider=name):
@@ -493,6 +493,29 @@ class ListOpen(unittest.TestCase):
                 ex = fake_execute({})
                 out = W.dispatch("list-open", cfg, execute=ex)
                 self.assertEqual(out, {"issues": [], "truncated": False})
+                self.assertEqual(ex.calls, [])
+
+    def test_linear_list_open_unset_ready_state_refuses(self) -> None:
+        """#311: a silent empty against a populated board is unhandleable."""
+        for label, mutate in (
+            ("absent", lambda c: c["tracker"].pop("readyState")),
+            ("null", lambda c: c["tracker"].__setitem__("readyState", None)),
+            ("blank", lambda c: c["tracker"].__setitem__("readyState", " ")),
+        ):
+            with self.subTest(readyState=label):
+                cfg = ln_cfg()
+                mutate(cfg)
+                ex = fake_execute({})
+                out = W.dispatch("list-open", cfg, execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertEqual(out.cls, ErrorClass.UNRESOLVED)
+                self.assertEqual(out.subtype, "ready_state")
+                self.assertEqual(out.details, {"key": "tracker.readyState"})
+                # Names WHAT is unresolved and HOW to resolve it...
+                self.assertIn("tracker.readyState", out.message)
+                self.assertIn("flowctl config set tracker.readyState", out.message)
+                # ...without telling the user to arm the projection.
+                self.assertIn("valid configuration", out.message)
                 self.assertEqual(ex.calls, [])
 
     def test_github_and_gitlab_filter_the_exact_ready_label(self) -> None:

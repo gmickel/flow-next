@@ -40106,64 +40106,37 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
         return
 
     if action == "put":
-        record = {
-            "retryKey": args.key,
-            "id": args.id,
-            "identifier": args.identifier,
-            "url": args.url,
-            "title": args.title,
-            "createdAt": now_iso(),
-            "transport": args.transport,
-        }
-        # Recorded only once the mint succeeds. A resumed run reads this instead
-        # of rebuilding `<key>-<number>-<slug>`, which is not reconstructible
-        # when the title slugifies to empty (CJK- or emoji-only titles get a
-        # random suffix from `spec create`).
-        spec_id = getattr(args, "spec_id", None)
-        if spec_id:
-            record["specId"] = spec_id
-        existing = None
-        if path.exists():
-            try:
-                existing = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                existing = None
-        if existing and existing.get("createdAt"):
-            # Idempotent: a second put keeps the ORIGINAL creation time so the
-            # record still describes when the remote issue was actually made.
-            record["createdAt"] = existing["createdAt"]
-        if existing and existing.get("specId") and not record.get("specId"):
-            # A later put (e.g. re-recording transport) must not drop a specId
-            # an earlier post-mint put already established.
-            record["specId"] = existing["specId"]
-        # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
-        # A project whose auto-managed .flow/.gitignore predates this release
-        # would otherwise get an untracked-but-unignored recovery record, and a
-        # `git add -A` would commit it - letting another checkout computing the
-        # same retry key resume onto the first developer's issue.
-        # NOTE: `_ensure_flow_gitignore` returns False for a NO-OP (already
-        # current) as well as for a refusal, so its return value cannot be the
-        # safety signal - check the leaf explicitly.
-        if not _flow_leaf_is_safe(flow_dir, flow_dir / ".gitignore"):
-            # The ignore block cannot be ensured, so a record written now would
-            # be committable - and a committed record lets another checkout
-            # computing the same key resume onto someone else's issue. That is
-            # the exact failure the ignore prevents, so refuse rather than write
-            # an unprotected record.
+        if_absent = bool(getattr(args, "if_absent", False))
+        expect_spec_id = getattr(args, "expect_spec_id", None)
+        if if_absent and expect_spec_id is not None:
             error_exit(
-                "Refusing to write a recovery record: .flow/.gitignore could not "
-                "be ensured (unsafe or symlinked). An unignored record can be "
-                "committed and let another checkout resume onto someone else's "
-                "issue. Restore .flow/.gitignore as a regular file.",
+                "--if-absent and --expect-spec-id are mutually exclusive: one "
+                "asserts the mint slot is empty, the other asserts who already "
+                "holds it.",
                 use_json=use_json,
             )
-        _ensure_flow_gitignore(flow_dir)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(path, record)
-        if use_json:
-            json_output({"recorded": True, **record})
-        else:
-            print(f"Recovery record written: {path}")
+        if not (if_absent or expect_spec_id is not None):
+            # Unconditional put: the pre-CAS path, unchanged. Two promoters can
+            # still last-write-win here - that is exactly what the conditional
+            # forms below exist to prevent, and callers opt into them.
+            _create_first_put_record(args, flow_dir, path, use_json=use_json)
+            return
+        # Conditional (compare-and-set) put. The check and the write are one
+        # step, so both run inside the SHARED config-writer lock - the same lock
+        # `flowctl_tracker.lifecycle` takes for its spec-keyed create claims. No
+        # new lock is introduced. On a legacy named-files-only `.flow/bin` copy
+        # `_shared_config_lock` degrades to a no-op (no tracker package, so no
+        # locking peer to serialize with) and the CAS narrows the window without
+        # closing it - same degradation policy as every other flowctl writer.
+        try:
+            with _shared_config_lock(flow_dir):
+                _create_first_put_record(
+                    args, flow_dir, path, use_json=use_json,
+                    if_absent=if_absent, expect_spec_id=expect_spec_id)
+        except TimeoutError as exc:  # ConfigLockTimeout subclasses TimeoutError
+            _create_first_conflict_exit(
+                str(exc), subtype="lock_timeout",
+                details={"key": args.key}, use_json=use_json, retryable=True)
         return
 
     if action == "clear":
@@ -40181,6 +40154,182 @@ def cmd_sync_create_first_recovery(args: argparse.Namespace) -> None:
         return
 
     error_exit(f"Unknown recovery action '{action}'", use_json=use_json)
+
+
+#: Exit status for a create-first CAS refusal. Mirrors
+#: `flowctl_tracker.types.EXIT_CODES[ErrorClass.CONFLICT]` so a caller branches
+#: on the same status it already branches on for `create_in_flight`, without
+#: importing the tracker package or parsing message text.
+CREATE_FIRST_CONFLICT_EXIT = 10
+
+
+def _create_first_conflict_exit(message: str, *, subtype: str, details: dict,
+                                use_json: bool, retryable: bool = False) -> None:
+    """Refuse a conditional create-first put. Never returns.
+
+    Shape matches the tracker error envelope (`class` + `subtype` + `details`),
+    because the caller here IS the tracker-sync consumer: the loser of a
+    promotion race must recognize its loss by class/subtype/exit status, never
+    by message text.
+    """
+    if use_json:
+        print(json.dumps({
+            "success": False,
+            "class": "conflict",
+            "subtype": subtype,
+            "error": message,
+            "details": details,
+            "retryable": retryable,
+        }, indent=2, default=str))
+    else:
+        print(f"Error: conflict/{subtype}: {message}", file=sys.stderr)
+    sys.exit(CREATE_FIRST_CONFLICT_EXIT)
+
+
+def _create_first_put_record(args: argparse.Namespace, flow_dir: Path, path: Path,
+                             *, use_json: bool, if_absent: bool = False,
+                             expect_spec_id: Optional[str] = None) -> None:
+    """Write (or conditionally write) a create-first recovery record.
+
+    With neither conditional flag this is the original unconditional put. With
+    `if_absent` / `expect_spec_id` it is a compare-and-set on the record's
+    `specId` - the mint claim (#310): two promoters that both read a specId-less
+    record and both mint a spec no longer race to a last-write-wins put; exactly
+    one lands and the loser gets a distinct CONFLICT.
+    """
+    record = {
+        "retryKey": args.key,
+        "id": args.id,
+        "identifier": args.identifier,
+        "url": args.url,
+        "title": args.title,
+        "createdAt": now_iso(),
+        "transport": args.transport,
+    }
+    # Recorded only once the mint succeeds. A resumed run reads this instead
+    # of rebuilding `<key>-<number>-<slug>`, which is not reconstructible
+    # when the title slugifies to empty (CJK- or emoji-only titles get a
+    # random suffix from `spec create`).
+    spec_id = getattr(args, "spec_id", None)
+    if spec_id:
+        record["specId"] = spec_id
+    existing = None
+    existing_unreadable = False
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing = None
+            existing_unreadable = True
+    if not isinstance(existing, dict):
+        if existing is not None:
+            existing_unreadable = True
+        existing = None
+    recorded_spec_id = existing.get("specId") if existing else None
+
+    if if_absent or expect_spec_id is not None:
+        if if_absent and not spec_id:
+            # PR #328 bot finding: --if-absent exists to RECORD the mint claim;
+            # without --spec-id it would "succeed" while establishing nothing,
+            # and every concurrent caller would succeed with it.
+            error_exit(
+                "--if-absent requires --spec-id: the flag records the mint "
+                "claim, and a claim without a spec id claims nothing.",
+                use_json=use_json)
+        if existing is None and not existing_unreadable:
+            # PR #328 bot finding: the ceremony ALWAYS records the issue at
+            # creation time, so a missing record under a conditional put means
+            # either the create was never recorded here or a winner already
+            # promoted and cleared. Succeeding would let a delayed promoter
+            # re-claim a key whose issue is already attached elsewhere - the
+            # exact double-spec outcome the CAS exists to stop.
+            _create_first_conflict_exit(
+                f"No recovery record exists for key {args.key}: the candidate "
+                "was either never recorded in this checkout or already "
+                "promoted and cleared by another promoter. Do not proceed "
+                "with this mint; locate the issue's attached spec (the "
+                "tracker id is the durable dedupe key) and adopt it.",
+                subtype="record_missing",
+                details={"key": args.key, "attemptedSpecId": spec_id},
+                use_json=use_json)
+        if (expect_spec_id is not None and spec_id
+                and spec_id != expect_spec_id):
+            # PR #328 bot finding: --expect-spec-id is the idempotent re-put
+            # of a claim you already own, not a retargeting primitive - a
+            # matching CAS must not swap the claim to a DIFFERENT spec id.
+            error_exit(
+                f"--expect-spec-id {expect_spec_id!r} with a different "
+                f"--spec-id {spec_id!r} would retarget the mint claim; the "
+                "CAS form updates a claim in place. Re-put with the same "
+                "spec id, or clear the record deliberately first.",
+                use_json=use_json)
+        if existing_unreadable:
+            # A corrupt record cannot be shown to be free (or to be ours). The
+            # unconditional path may overwrite it; a CAS may not - overwriting
+            # on an unverifiable read is the clobber this flag exists to stop.
+            _create_first_conflict_exit(
+                f"Cannot verify the mint claim for key {args.key}: the existing "
+                "recovery record is unreadable. Inspect it before retrying.",
+                subtype="record_unreadable",
+                details={"key": args.key, "path": str(path)},
+                use_json=use_json)
+        if if_absent and recorded_spec_id:
+            _create_first_conflict_exit(
+                f"Mint claim for key {args.key} is already held by spec "
+                f"{recorded_spec_id!r}; refusing to overwrite it "
+                f"(attempted {spec_id!r}). Adopt the recorded spec, or use "
+                "--expect-spec-id to update a claim you already own.",
+                subtype="spec_already_minted",
+                details={"key": args.key, "recordedSpecId": recorded_spec_id,
+                         "attemptedSpecId": spec_id},
+                use_json=use_json)
+        if expect_spec_id is not None and recorded_spec_id != expect_spec_id:
+            _create_first_conflict_exit(
+                f"Mint claim for key {args.key} records spec "
+                f"{recorded_spec_id!r}, not the expected {expect_spec_id!r}; "
+                "refusing to overwrite it.",
+                subtype="spec_id_mismatch",
+                details={"key": args.key, "recordedSpecId": recorded_spec_id,
+                         "expectedSpecId": expect_spec_id,
+                         "attemptedSpecId": spec_id},
+                use_json=use_json)
+
+    if existing and existing.get("createdAt"):
+        # Idempotent: a second put keeps the ORIGINAL creation time so the
+        # record still describes when the remote issue was actually made.
+        record["createdAt"] = existing["createdAt"]
+    if existing and existing.get("specId") and not record.get("specId"):
+        # A later put (e.g. re-recording transport) must not drop a specId
+        # an earlier post-mint put already established.
+        record["specId"] = existing["specId"]
+    # Reconcile the ignore block AT WRITE TIME, not on some future `init`.
+    # A project whose auto-managed .flow/.gitignore predates this release
+    # would otherwise get an untracked-but-unignored recovery record, and a
+    # `git add -A` would commit it - letting another checkout computing the
+    # same retry key resume onto the first developer's issue.
+    # NOTE: `_ensure_flow_gitignore` returns False for a NO-OP (already
+    # current) as well as for a refusal, so its return value cannot be the
+    # safety signal - check the leaf explicitly.
+    if not _flow_leaf_is_safe(flow_dir, flow_dir / ".gitignore"):
+        # The ignore block cannot be ensured, so a record written now would
+        # be committable - and a committed record lets another checkout
+        # computing the same key resume onto someone else's issue. That is
+        # the exact failure the ignore prevents, so refuse rather than write
+        # an unprotected record.
+        error_exit(
+            "Refusing to write a recovery record: .flow/.gitignore could not "
+            "be ensured (unsafe or symlinked). An unignored record can be "
+            "committed and let another checkout resume onto someone else's "
+            "issue. Restore .flow/.gitignore as a regular file.",
+            use_json=use_json,
+        )
+    _ensure_flow_gitignore(flow_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(path, record)
+    if use_json:
+        json_output({"recorded": True, **record})
+    else:
+        print(f"Recovery record written: {path}")
 
 
 def cmd_sync_receipt(args: argparse.Namespace) -> None:
@@ -48680,6 +48829,25 @@ def main() -> None:
         default=None,
         help="Minted spec id, recorded after a successful mint so a resumed run "
         "finds it instead of reconstructing it from key/number/slug",
+    )
+    # fn-182.1 (#310): the mint claim as a compare-and-set. Without either flag
+    # the put is the original unconditional write, byte for byte.
+    p_cfp.add_argument(
+        "--if-absent",
+        dest="if_absent",
+        action="store_true",
+        help="Compare-and-set: write only while NO specId is recorded. A "
+        "concurrent promoter that lost the race exits 10 with "
+        "class=conflict subtype=spec_already_minted instead of overwriting "
+        "the winner",
+    )
+    p_cfp.add_argument(
+        "--expect-spec-id",
+        dest="expect_spec_id",
+        default=None,
+        help="Compare-and-set update: write only while the recorded specId "
+        "equals this value (else exit 10, subtype=spec_id_mismatch). "
+        "Mutually exclusive with --if-absent",
     )
     p_cfp.add_argument("--json", action="store_true", help="JSON output")
     p_cfp.set_defaults(func=cmd_sync_create_first_recovery, recovery_action="put")

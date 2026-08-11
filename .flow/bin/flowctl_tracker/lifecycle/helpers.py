@@ -179,6 +179,39 @@ def merged_tracker(spec_data: Any) -> dict:
     return merged
 
 
+#: Linear-only spec sidecar fields placing the projected issue in a Project
+#: (fn-182 / #315 option 1). They are NOT in default_tracker(): an absent field
+#: means UNMANAGED, never "none". Absent keys are omitted from every payload, so
+#: today's create/update bytes are unchanged and a Project set tracker-side is
+#: never cleared by flow-next (R4). flow-next carries the id it is given; it
+#: never creates or manages Projects.
+PROJECT_SIDECAR_FIELDS = ("projectId", "projectMilestoneId")
+
+
+def spec_project_fields(tracker_block: Any) -> Result:
+    """Present, non-empty sidecar project ids in Linear input-key form.
+
+    Returns {} when unmanaged. A present-but-unusable value (empty string,
+    non-string) is an INVALID_INPUT error rather than a dropped key - a silent
+    drop would project the issue with no Project and no complaint."""
+    block = dict_(tracker_block)
+    fields: dict = {}
+    for key in PROJECT_SIDECAR_FIELDS:
+        if key not in block:
+            continue
+        value = block[key]
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            return TrackerError(
+                ErrorClass.INVALID_INPUT,
+                f"tracker.{key} must be a non-empty string id or absent; "
+                f"got {value!r}",
+                subtype="project")
+        fields[key] = value.strip()
+    return fields
+
+
 def spec_path(flow_dir: Path, spec_id: str) -> Path:
     return Path(flow_dir) / "specs" / f"{spec_id}.json"
 

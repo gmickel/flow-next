@@ -82,10 +82,24 @@ it never creates another.
 
 After a successful remote create, immediately persist the returned identity
 with `sync create-first-put`. Keep that recovery record across any later
-failure. Only after mint, attach, merge-base seed, back-reference, and the
-normal spec-keyed receipt all succeed may the caller consume it with
-`sync create-first-clear`. These four helpers exclusively own the retry record;
-do not recompute its hash or read, write, or delete its file directly.
+failure. **After minting the local spec, record the claim with
+`sync create-first-put --spec-id <id> --if-absent` (fn-182, #310)** - the CAS
+form, so two promoters racing on the same candidate end with one recorded
+spec. On exit `10` with `subtype=spec_already_minted`, another promoter won:
+adopt `details.recordedSpecId` and retire the locally minted duplicate with
+`flowctl spec close <loser-id>` plus a one-line note naming the adopted
+winner - a closed duplicate is inert and auditable, and there is deliberately
+no spec-delete verb. Never re-put. On `subtype=record_missing`, the candidate
+was already promoted and cleared (or never recorded here): locate the issue's
+attached spec via the tracker id and adopt it. **Under any autonomy marker**
+(`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS=1`,
+`mode:autonomous`) a CAS conflict resolves to `sync defer` like every other
+collision - adopting a winner and retiring a spec is a human-confirmed
+resolution, not an autonomous one. Only after mint, attach, merge-base seed,
+back-reference, and the normal spec-keyed receipt all succeed may the caller
+consume the record with `sync create-first-clear`. These four helpers
+exclusively own the retry record; do not recompute its hash or read, write, or
+delete its file directly.
 
 **Back-reference:** write `flow:<spec-id>` only after the durable local link
 exists. A failed back-reference leaves the recovery record available for a
@@ -193,7 +207,10 @@ diagnostic prose, never a routing API.
 
 Backlog enumeration uses the deterministic `wire list-open` contract and the
 resolved ready lane. It returns normalized issues only. It does not create Flow
-specs by itself.
+specs by itself. On Linear with `tracker.readyState` unset, `list-open` refuses
+with an `unresolved`/`ready_state` error (fn-182, #311): treat that refusal as
+"no ready lane configured" and fall back to Flow-ready specs - it is not an
+empty board and not a transport failure.
 
 For each returned issue, build its locator from the same normalized row
 (`durable = issue.id`, `display = issue.identifier`). `list-comments` is the

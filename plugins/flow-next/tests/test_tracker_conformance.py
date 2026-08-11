@@ -533,11 +533,10 @@ class ConformanceMatrix(unittest.TestCase):
                         ['project = SCRUM AND status = "Ready for Work"'],
                     )
 
-    def test_list_open_unset_ready_lane_is_noop_all_four(self) -> None:
+    def test_list_open_unset_ready_lane_is_noop_except_linear(self) -> None:
         for provider, cfg in (
             ("github", gh_cfg()),
             ("gitlab", gl_cfg()),
-            ("linear", ln_cfg()),
             ("jira", jr_cfg()),
         ):
             with self.subTest(provider=provider):
@@ -546,6 +545,18 @@ class ConformanceMatrix(unittest.TestCase):
                 out = W.dispatch("list-open", cfg, execute=ex)
                 self.assertEqual(out, {"issues": [], "truncated": False})
                 self.assertEqual(ex.calls, [])
+
+    def test_list_open_unset_ready_lane_refuses_on_linear(self) -> None:
+        """fn-182.2 / #311: no silent empty on Linear - an explicit refusal."""
+        cfg = ln_cfg()
+        cfg["tracker"]["readyState"] = " "
+        ex = fake_execute({})
+        out = W.dispatch("list-open", cfg, execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+        self.assertEqual(out.subtype, "ready_state")
+        self.assertIn("tracker.readyState", out.message)
+        self.assertEqual(ex.calls, [])
 
     def test_relation_list_all_four(self) -> None:
         not_found = TrackerError(
