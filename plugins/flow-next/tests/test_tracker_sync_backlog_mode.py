@@ -10,6 +10,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from flowctl_tracker.wire import WIRE_VERBS  # noqa: E402
+from flowctl_tracker.types import ErrorClass, TrackerError  # noqa: E402
 from flowctl_tracker.wire import github, gitlab, jira, linear  # noqa: E402
 
 
@@ -63,12 +64,18 @@ class BacklogWireContractTests(unittest.TestCase):
         def forbidden_execute(_request):
             raise AssertionError("unset readyState must not execute transport")
 
-        for provider in (github, gitlab, jira, linear):
+        for provider in (github, gitlab, jira):
             with self.subTest(provider=provider.__name__):
                 self.assertEqual(
                     provider.list_open({"tracker": {}}, forbidden_execute),
                     {"issues": [], "truncated": False},
                 )
+        # Linear refuses instead of returning a silent empty (fn-182.2 / #311):
+        # a caller can handle a refusal, it cannot detect a blind enumeration.
+        out = linear.list_open({"tracker": {}}, forbidden_execute)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+        self.assertEqual(out.subtype, "ready_state")
 
     # Prose-quality pins removed 2026-08-07 - judged via .flow/criteria.md G1,
     # not grep.

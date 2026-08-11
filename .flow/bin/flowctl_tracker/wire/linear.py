@@ -572,7 +572,22 @@ def assign(config: dict, locator: dict, execute: Execute, *,
 def list_open(config: dict, execute: Execute) -> Result:
     ready_state = _ready_state(config)
     if ready_state is None:
-        return {"issues": [], "truncated": False}
+        # #311: an empty list here was indistinguishable from a genuinely empty
+        # ready lane, so a dedup query against a populated board looked healthy
+        # and was blind. A caller can handle a refusal; it cannot detect a
+        # silent empty. Leaving readyState unset stays a legitimate, deliberate
+        # configuration - this names the unresolved key, it does not ask for the
+        # projection to be armed.
+        return TrackerError(
+            ErrorClass.UNRESOLVED,
+            "linear list-open needs tracker.readyState (the workflow-state name "
+            "of the ready lane) and it is unset, so there is no lane to "
+            "enumerate; this is a refusal, not an empty board. To enumerate, "
+            "set it with `flowctl config set tracker.readyState \"<state name>\"` "
+            "or answer the readiness question during tracker setup; leaving it "
+            "unset is a valid configuration.",
+            subtype="ready_state",
+            details={"key": "tracker.readyState"})
     dest = _destination(config)
     if isinstance(dest, TrackerError):
         return dest
