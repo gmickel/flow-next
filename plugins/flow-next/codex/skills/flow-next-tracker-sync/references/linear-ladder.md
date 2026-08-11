@@ -26,7 +26,7 @@ string interpolation of user content.
 | assignees | issue assignee ids |
 | status | workflow state id |
 | relation | native issue relation |
-| list-open | team plus configured ready-state filter |
+| list-open | team plus configured ready-state filter; unset `tracker.readyState` = explicit `unresolved`/`ready_state` refusal, never a silent empty (fn-182, #311) |
 | attachment | upload negotiation followed by anonymous presigned upload |
 
 Linear bodies are Markdown. Comment responses expose parent issue identity only

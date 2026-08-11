@@ -12,9 +12,8 @@ Spec fn-182 item 2 (#311 minimum option). Replace the silent {issues: [], succes
 R2 of the spec. No silent-empty path remains for this condition.
 
 ## Done summary
-TBD
-
+Linear wire list-open per fn-182 R2 (#311 minimum option). Unset tracker.readyState now returns TrackerError(UNRESOLVED, subtype=ready_state, details.key=tracker.readyState, exit 4) naming what is unresolved and how to set it, with the "leaving it unset is a valid configuration" phrasing per the spec constraint - never an instruction to arm the projection. readyState-set behavior byte-for-byte unchanged; GitHub/GitLab/Jira untouched (Linear-only per Boundaries). No new enumeration verb. Existing all-four-noop matrices split so Linear asserts the refusal separately; new pins cover absent/null/blank readyState with zero transport calls.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 96d9d8bc
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_wire test_tracker_conformance test_tracker_sync_backlog_mode test_tracker_facade test_tracker_caller_oracle test_tracker_caller_execution -q (249 OK), test_tracker_distribution test_prompt_text_pinned (25 OK)
 - PRs:

@@ -193,7 +193,10 @@ diagnostic prose, never a routing API.
 
 Backlog enumeration uses the deterministic `wire list-open` contract and the
 resolved ready lane. It returns normalized issues only. It does not create Flow
-specs by itself.
+specs by itself. On Linear with `tracker.readyState` unset, `list-open` refuses
+with an `unresolved`/`ready_state` error (fn-182, #311): treat that refusal as
+"no ready lane configured" and fall back to Flow-ready specs - it is not an
+empty board and not a transport failure.
 
 For each returned issue, build its locator from the same normalized row
 (`durable = issue.id`, `display = issue.identifier`). `list-comments` is the

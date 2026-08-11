@@ -2,6 +2,45 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+The tracker-bridge batch from the @sn-furali 2026-08-08 reports (thanks!): a
+promotion race could leave two specs claiming one intake issue, a dedup query
+against a populated board could look healthy while blind, a Linear issue could
+not be placed in a Project, and abandoning a never-promoted candidate had no
+documented shape.
+
+### Fixed
+
+- **The create-first mint claim is compare-and-set.** `sync create-first-put
+  --if-absent` records the minted spec id only while the claim slot is free;
+  the loser of a concurrent promotion exits `10` with `class=conflict`,
+  `subtype=spec_already_minted`, and `details.recordedSpecId` naming the
+  winner to adopt - instead of silently overwriting it. `--expect-spec-id`
+  is the CAS update of a claim you already own; flagless `put` is unchanged.
+  (#310)
+- **Linear `wire list-open` refuses instead of lying.** With
+  `tracker.readyState` unset it returned `{"issues": [], "success": true}` -
+  indistinguishable from a genuinely empty board, so create-first dedup
+  queries looked healthy while blind. It now returns an explicit
+  `unresolved`/`ready_state` error naming the key and how to set it; leaving
+  it unset remains a valid, deliberate configuration, and readyState-set
+  behavior is unchanged. (#311)
+
+### Added
+
+- **Per-spec Linear Project membership.** Optional sidecar fields
+  `tracker.projectId` / `tracker.projectMilestoneId` are sent on issue
+  creation and reconciled on every sync-body push. Absent means unmanaged:
+  today's payloads stay byte-identical and a Project set tracker-side is
+  never cleared by flow-next, which carries exactly the id it is given and
+  never creates or manages Projects. Verified live against the Linear
+  sandbox, including the never-clears contract. (#315)
+- **The abandon path for a never-promoted candidate is written down.** Close
+  or cancel the remote issue first (that side is the consumer's, in the
+  tracker's own tooling), then `sync create-first-clear` - ordering stated so
+  a live intake issue is never left without a local trace. (#309, docs)
+
 ## [flow-next 3.26.0] - 2026-08-11
 
 Two integrity gaps in what the pipeline tells you about your own work, both
