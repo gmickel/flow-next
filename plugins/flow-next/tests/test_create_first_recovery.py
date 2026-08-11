@@ -640,6 +640,16 @@ class MintClaimIsCompareAndSet(unittest.TestCase):
         got = _run(self.repo, "sync", "create-first-get", "--key", self.key, "--json")
         self.assertNotEqual(got.returncode, 0)  # still no record written
 
+    def test_if_absent_requires_a_spec_id(self) -> None:
+        """PR #328 bot finding: --if-absent without --spec-id would succeed
+        while claiming nothing, letting every concurrent caller succeed."""
+        self._put()
+        r = self._put("--if-absent")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotEqual(r.returncode, self.CONFLICT_EXIT)  # misuse
+        self.assertIn("--spec-id", (r.stdout + r.stderr))
+        self.assertNotIn("specId", self._record())
+
     def test_the_two_conditional_flags_are_mutually_exclusive(self) -> None:
         r = self._put("--spec-id", "fn-1-alpha", "--if-absent",
                       "--expect-spec-id", "fn-1-alpha")

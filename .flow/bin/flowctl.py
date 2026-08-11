@@ -40228,6 +40228,14 @@ def _create_first_put_record(args: argparse.Namespace, flow_dir: Path, path: Pat
     recorded_spec_id = existing.get("specId") if existing else None
 
     if if_absent or expect_spec_id is not None:
+        if if_absent and not spec_id:
+            # PR #328 bot finding: --if-absent exists to RECORD the mint claim;
+            # without --spec-id it would "succeed" while establishing nothing,
+            # and every concurrent caller would succeed with it.
+            error_exit(
+                "--if-absent requires --spec-id: the flag records the mint "
+                "claim, and a claim without a spec id claims nothing.",
+                use_json=use_json)
         if existing is None and not existing_unreadable:
             # PR #328 bot finding: the ceremony ALWAYS records the issue at
             # creation time, so a missing record under a conditional put means
