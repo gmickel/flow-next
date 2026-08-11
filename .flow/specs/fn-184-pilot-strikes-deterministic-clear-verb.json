@@ -1,0 +1,32 @@
+{
+  "branch_name": "fn-184-pilot-strikes-deterministic-clear-verb",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-08-11T08:58:34.456672Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-184-pilot-strikes-deterministic-clear-verb",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "ready": true,
+  "spec_path": ".flow/specs/fn-184-pilot-strikes-deterministic-clear-verb.md",
+  "status": "open",
+  "title": "Pilot strikes: deterministic clear verb + fn-87 docs truth-sweep",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-11T08:58:56.669342Z"
+}

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-11T08:58:56.052443Z",
+  "depends_on": [
+    "fn-184-pilot-strikes-deterministic-clear-verb.1"
+  ],
+  "id": "fn-184-pilot-strikes-deterministic-clear-verb.2",
+  "priority": null,
+  "spec": "fn-184-pilot-strikes-deterministic-clear-verb",
+  "spec_path": ".flow/tasks/fn-184-pilot-strikes-deterministic-clear-verb.2.md",
+  "status": "todo",
+  "title": "Pilot skill prose + repo docs truth-sweep",
+  "updated_at": "2026-08-11T08:58:56.052443Z"
+}

@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-11T08:58:56.051964Z",
+  "depends_on": [],
+  "id": "fn-184-pilot-strikes-deterministic-clear-verb.1",
+  "priority": null,
+  "spec": "fn-184-pilot-strikes-deterministic-clear-verb",
+  "spec_path": ".flow/tasks/fn-184-pilot-strikes-deterministic-clear-verb.1.md",
+  "status": "todo",
+  "title": "flowctl pilot strikes list/clear verb family",
+  "updated_at": "2026-08-11T08:58:56.051964Z"
+}

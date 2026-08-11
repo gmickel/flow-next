@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-11T08:58:56.052507Z",
+  "depends_on": [
+    "fn-184-pilot-strikes-deterministic-clear-verb.1",
+    "fn-184-pilot-strikes-deterministic-clear-verb.2"
+  ],
+  "id": "fn-184-pilot-strikes-deterministic-clear-verb.3",
+  "priority": null,
+  "spec": "fn-184-pilot-strikes-deterministic-clear-verb",
+  "spec_path": ".flow/tasks/fn-184-pilot-strikes-deterministic-clear-verb.3.md",
+  "status": "todo",
+  "title": "Decision record, CHANGELOG, propagation + full gate",
+  "updated_at": "2026-08-11T08:58:56.052507Z"
+}
