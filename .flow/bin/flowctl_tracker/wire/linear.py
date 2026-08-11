@@ -257,6 +257,47 @@ def update(config: dict, locator: dict, execute: Execute, *,
     return _issue_out(issue)
 
 
+def project_set(config: dict, locator: dict, execute: Execute, *,
+                fields: dict) -> Result:
+    """Reconcile Project membership from the spec sidecar (fn-182 R3/R4).
+
+    A SIBLING of `update`, not a widening of it: `update` owns the body/title
+    merge-base contract and its no-op fence, and a spec whose body is already
+    converged must still land its Project. Only keys the sidecar actually
+    carries are sent - an absent field is never sent as null, so a Project set
+    in Linear is never cleared (absent = unmanaged, R4)."""
+    if not fields:
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            "project_set requires at least one project field",
+                            subtype="project")
+    parent = _require_parent(config, locator, execute)
+    if isinstance(parent, TrackerError):
+        return parent
+    data = _gql(execute, "wire-project-set",
+                "mutation($id: String!, $input: IssueUpdateInput!) { "
+                "issueUpdate(id: $id, input: $input) { success "
+                "issue { id identifier title description url "
+                "project { id } projectMilestone { id } } } }",
+                {"id": locator["durable"], "input": dict(fields)})
+    if isinstance(data, TrackerError):
+        return data
+    mut = _require_success(data, "issueUpdate")
+    if isinstance(mut, TrackerError):
+        return mut
+    issue = mut.get("issue")
+    if not isinstance(issue, dict):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear project set returned no issue",
+                            subtype="malformed_body")
+    err = _check_durable("linear", locator, issue)
+    if err:
+        return err
+    out = _issue_out(issue)
+    out["project"] = _dict(issue.get("project")).get("id")
+    out["projectMilestone"] = _dict(issue.get("projectMilestone")).get("id")
+    return out
+
+
 def comment_add(config: dict, locator: dict, execute: Execute, *, body: str) -> Result:
     parent = _require_parent(config, locator, execute)
     if isinstance(parent, TrackerError):

@@ -472,6 +472,26 @@ def parent_read(provider: str, config: dict, locator: dict, execute: Execute, *,
     return mod.parent_read(config, locator, execute, op=op)
 
 
+def project_set(provider: str, config: dict, locator: dict, execute: Execute, *,
+                fields: dict) -> Result:
+    """Apply the spec sidecar's Project ids to the linked issue (fn-182 R3).
+
+    Not a CLI wire verb - an internal helper on the same footing as
+    `parent_read`. Linear-only by construction: no other provider models a
+    Project this way, and refusing beats silently dropping the ids."""
+    if not fields:
+        return TrackerError(ErrorClass.INVALID_INPUT,
+                            "project_set requires at least one project field",
+                            subtype="project")
+    if provider != "linear":
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            f"spec sidecar tracker.{sorted(fields)[0]} is Linear-only; "
+            f"tracker type is {provider!r}",
+            subtype="project")
+    return linear.project_set(config, locator, execute, fields=fields)
+
+
 def validate_pr_url(url: Any) -> Optional[TrackerError]:
     """Reject malformed link content before a facade claim or provider read."""
     if not isinstance(url, str):

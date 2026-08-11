@@ -35,6 +35,7 @@ from ..executor import execute as default_execute
 from ..lifecycle.helpers import (ACTIVE, Execute, Result, atomic_write_json,
                                  dict_, leaf_is_safe, load_spec,
                                  merged_tracker, now_iso, read_config,
+                                 spec_project_fields,
                                  tracker_type, write_sync_receipt,
                                  write_tracker_block)
 from ..lifecycle.linkstate import require_durable
@@ -497,6 +498,21 @@ def _sync_body_txn(flow_dir: Path, spec_id: str, *, config: dict,
             details={"specId": spec_id, "recoverable": True},
             auto_retryable=True,
         )
+
+    # Project membership reconciles BEFORE the body branch, so it lands on
+    # every push outcome (written / no-op / seed): a spec that gained
+    # tracker.projectId while its body was already converged must still reach
+    # its Project. Absent sidecar fields = unmanaged: zero extra requests and
+    # the pre-fn-182 call sequence unchanged (R4).
+    project = spec_project_fields(tracker)
+    if isinstance(project, TrackerError):
+        return project
+    if project:
+        from ..wire import project_set as wire_project_set  # noqa: PLC0415
+        applied = wire_project_set(provider, config, locator, ex,
+                                   fields=project)
+        if isinstance(applied, TrackerError):
+            return applied
 
     outgoing_src = tracker_body if tracker_body is not None else flow_file_body
     outgoing = _carry_deps_forward(outgoing_src, current_body)

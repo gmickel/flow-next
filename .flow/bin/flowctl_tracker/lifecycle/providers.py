@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from ..types import ErrorClass, TrackerError
 from .helpers import Execute, Result, destination, tracker_type
 
@@ -73,8 +75,8 @@ def create_gitlab(config: dict, execute: Execute, *, title: str, body: str
             "bodyWritten": acknowledged}
 
 
-def create_linear(config: dict, execute: Execute, *, title: str, body: str
-                  ) -> Result:
+def create_linear(config: dict, execute: Execute, *, title: str, body: str,
+                  project: Optional[dict] = None) -> Result:
     from ..wire import _gql  # noqa: PLC0415
     dest = destination(config)
     if isinstance(dest, TrackerError):
@@ -84,11 +86,17 @@ def create_linear(config: dict, execute: Execute, *, title: str, body: str
         return TrackerError(ErrorClass.UNRESOLVED,
                             "linear destination missing teamId",
                             subtype="destination")
+    # Sidecar project ids are APPENDED only when present: with none supplied
+    # the input is byte-identical to the pre-fn-182 payload, and an invalid id
+    # comes back as Linear's own mutation error, never a dropped key.
+    inp = {"teamId": team_id, "title": title, "description": body}
+    if project:
+        inp.update(project)
     data = _gql(execute, "lifecycle-create",
                 "mutation($input: IssueCreateInput!) { "
                 "issueCreate(input: $input) { success "
                 "issue { id identifier url description } } }",
-                {"input": {"teamId": team_id, "title": title, "description": body}})
+                {"input": inp})
     if isinstance(data, TrackerError):
         return data
     payload = data.get("issueCreate")
@@ -199,9 +207,29 @@ _CREATE = {
 }
 
 
-def provider_create(config: dict, execute: Execute, *, title: str, body: str
-                    ) -> Result:
+def project_capability_error(provider: Optional[str], project: Optional[dict]
+                             ) -> Optional[TrackerError]:
+    """Sidecar project ids are Linear-only; refuse rather than drop them."""
+    if not project:
+        return None
+    if provider != "linear":
+        return TrackerError(
+            ErrorClass.CAPABILITY,
+            f"spec sidecar tracker.{sorted(project)[0]} is Linear-only; "
+            f"tracker type is {provider!r}",
+            subtype="project")
+    return None
+
+
+def provider_create(config: dict, execute: Execute, *, title: str, body: str,
+                    project: Optional[dict] = None) -> Result:
     provider = tracker_type(config)
     if provider is None:
         return TrackerError(ErrorClass.INACTIVE, "tracker bridge is inactive")
+    unsupported = project_capability_error(provider, project)
+    if unsupported is not None:
+        return unsupported
+    if project:
+        return create_linear(config, execute, title=title, body=body,
+                             project=project)
     return _CREATE[provider](config, execute, title=title, body=body)
