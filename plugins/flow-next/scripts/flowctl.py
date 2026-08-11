@@ -38506,6 +38506,16 @@ PILOT_RUNS_DIR_REL = ".flow/pilot-runs"
 PILOT_LOG_ACTIONS = ("triaged", "advanced", "asked", "blocked", "needs-human")
 PILOT_LOG_COUNTER_VERSION = 1
 
+# fn-184.1 (#325): the pilot strikes ledger. Location + schema are the pilot
+# skill's EXISTING contract, verbatim:
+# `$(git rev-parse --git-common-dir)/flow-next/pilot-strikes.json` holding
+# `{"<spec-id>": {"count": n, "stage": str, "reason": str, "ts": iso8601}}`.
+# Under the git common dir so it is shared across worktrees and can never be
+# swept into a commit by `git add -A`. flowctl owns READ + CLEAR only; the
+# skill keeps its own jq write sites for RECORDING strikes.
+PILOT_STRIKES_DIR_NAME = "flow-next"
+PILOT_STRIKES_FILE_NAME = "pilot-strikes.json"
+
 
 def _pilot_log_id_slug(raw_id: str) -> str:
     """Normalize an OPAQUE pilot-log id into a safe filename component.
@@ -40538,6 +40548,194 @@ def cmd_pilot_log_append(args: argparse.Namespace) -> None:
     else:
         cost = f", cost {row['costTokens']}" if row["costTokens"] is not None else ""
         print(f"Pilot-log row appended (tick {tick}, {action}{cost}): {row_path}")
+
+
+def _pilot_strikes_ledger_path() -> Optional[Path]:
+    """Resolve the pilot strikes ledger exactly as the pilot skill does.
+
+    The skill's contract (flow-next-pilot/workflow.md Phase 0) is verbatim
+    binding: `$(git rev-parse --git-common-dir)/flow-next/pilot-strikes.json`.
+    The common dir is used (not `--git-dir`) so the ledger is SHARED across
+    worktrees — a linked worktree's `.git` FILE resolves through to the main
+    repository's git dir. `--path-format=absolute` only pins the spelling; the
+    directory identity is the same one the skill's shell resolves.
+
+    Returns None outside a git repository (callers decide: `list` reports an
+    empty ledger with a note, `clear` errors cleanly — never a traceback).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=True,
+        )
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    common = result.stdout.strip()
+    if not common:
+        return None
+    return Path(common) / PILOT_STRIKES_DIR_NAME / PILOT_STRIKES_FILE_NAME
+
+
+def _pilot_strikes_read(path: Path, *, use_json: bool) -> dict:
+    """Read the strikes ledger. Missing / empty file reads as `{}`.
+
+    Mirrors the skill's `cat "$LEDGER" 2>/dev/null || echo '{}'` tolerance.
+    A file that exists but is not a JSON object is a clean error, not a
+    traceback — flowctl never silently discards a ledger it cannot parse.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (FileNotFoundError, NotADirectoryError):
+        return {}
+    except (OSError, UnicodeError) as e:
+        # UnicodeError: a hand-edited/corrupted ledger with invalid UTF-8 is
+        # the same clean-refusal class as malformed JSON (PR #329 bot finding).
+        error_exit(f"Cannot read strikes ledger {path}: {e}", use_json=use_json)
+    if not raw.strip():
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        error_exit(
+            f"Strikes ledger {path} is not valid JSON: {e}", use_json=use_json
+        )
+    if not isinstance(data, dict):
+        error_exit(
+            f"Strikes ledger {path} is not a JSON object "
+            '(expected {"<spec-id>": {"count": n, "stage": ..., '
+            '"reason": ..., "ts": ...}})',
+            use_json=use_json,
+        )
+    return data
+
+
+def _pilot_strikes_format_entry(spec_id: str, entry) -> str:
+    """One human-readable ledger line. Tolerates a hand-edited entry."""
+    if not isinstance(entry, dict):
+        return f"  {spec_id}: {entry}"
+    count = entry.get("count", "?")
+    stage = entry.get("stage") or "-"
+    ts = entry.get("ts") or "-"
+    reason = entry.get("reason") or "-"
+    return f"  {spec_id}  strike {count}/2  stage={stage}  ts={ts}\n      {reason}"
+
+
+def cmd_pilot_strikes_list(args: argparse.Namespace) -> None:
+    """Render the pilot strikes ledger (fn-184.1, R1).
+
+    Read-only and empty-safe: a missing ledger, an empty ledger, or a non-git
+    context all render an empty result and exit 0.
+    """
+    path = _pilot_strikes_ledger_path()
+    if path is None:
+        note = "not a git repository - no strikes ledger"
+        if args.json:
+            json_output({"ledger": None, "count": 0, "strikes": {}, "note": note})
+        else:
+            print(f"No pilot strikes ({note}).")
+        return
+
+    strikes = _pilot_strikes_read(path, use_json=args.json)
+    if args.json:
+        json_output(
+            {
+                "ledger": str(path),
+                "count": len(strikes),
+                "strikes": strikes,
+                "note": None,
+            }
+        )
+        return
+
+    if not strikes:
+        print(f"No pilot strikes recorded ({path}).")
+        return
+    print(f"Pilot strikes ({len(strikes)}) - {path}")
+    for spec_id in sorted(strikes):
+        print(_pilot_strikes_format_entry(spec_id, strikes[spec_id]))
+    print("\nClear one: flowctl pilot strikes clear <spec-id>")
+
+
+def cmd_pilot_strikes_clear(args: argparse.Namespace) -> None:
+    """Clear one strikes entry, or all of them with `--all` (fn-184.1, R1/R2).
+
+    Strikes are PILOT state, not readiness state: this never touches a spec's
+    `ready` flag in either direction (R2). It only edits the skill-owned
+    ledger, atomically (tmp + rename via `atomic_write_json`), leaving every
+    other entry byte-identical.
+
+    Spec-id matching: the ledger key is whatever the skill wrote (a canonical
+    spec id), so an EXACT key match wins first. On a miss the handle is run
+    through the normal spec resolver (`expand_bare_spec_id`) once and retried,
+    so `fn-184` finds a `fn-184-slug` key. Still no match = a distinct
+    not-found error (exit 3) that names the known keys - never silent success.
+    """
+    clear_all = getattr(args, "all", False)
+    spec_arg = getattr(args, "spec_id", None)
+    if clear_all and spec_arg:
+        error_exit(
+            "Pass either a spec id or --all, not both.", use_json=args.json
+        )
+    if not clear_all and not spec_arg:
+        error_exit(
+            "Missing spec id. Usage: flowctl pilot strikes clear <spec-id> "
+            "| --all",
+            use_json=args.json,
+        )
+
+    path = _pilot_strikes_ledger_path()
+    if path is None:
+        error_exit(
+            "Not a git repository - cannot resolve the pilot strikes ledger "
+            "(expected <git-common-dir>/flow-next/pilot-strikes.json).",
+            use_json=args.json,
+        )
+
+    strikes = _pilot_strikes_read(path, use_json=args.json)
+
+    if clear_all:
+        cleared = sorted(strikes)
+        atomic_write_json(path, {})
+        if args.json:
+            json_output(
+                {
+                    "ledger": str(path),
+                    "cleared": cleared,
+                    "remaining": 0,
+                }
+            )
+        else:
+            print(f"Cleared {len(cleared)} pilot strike(s): {path}")
+        return
+
+    key = spec_arg
+    if key not in strikes:
+        # One cheap resolver pass so a bare handle finds its canonical key.
+        resolved = expand_bare_spec_id(get_flow_dir(), key, use_json=args.json)
+        if resolved and resolved in strikes:
+            key = resolved
+    if key not in strikes:
+        known = ", ".join(sorted(strikes)) if strikes else "(ledger is empty)"
+        error_exit(
+            f"No pilot strike recorded for '{spec_arg}'. Known entries: {known}",
+            code=3,
+            use_json=args.json,
+        )
+
+    remaining = {k: v for k, v in strikes.items() if k != key}
+    atomic_write_json(path, remaining)
+    if args.json:
+        json_output(
+            {
+                "ledger": str(path),
+                "cleared": [key],
+                "remaining": len(remaining),
+            }
+        )
+    else:
+        print(f"Cleared pilot strike for {key} ({len(remaining)} remaining).")
 
 
 def cmd_sync_defer(args: argparse.Namespace) -> None:
@@ -48950,6 +49148,44 @@ def main() -> None:
     )
     p_pilot_log_append.add_argument("--json", action="store_true", help="JSON output")
     p_pilot_log_append.set_defaults(func=cmd_pilot_log_append)
+
+    # pilot — fn-184.1 (#325). ONE subgroup: `strikes` (list / clear) over the
+    # skill-owned ledger under the git common dir. Deliberately narrow: this is
+    # the deterministic human-clear signal the pilot skill's escape clause
+    # promises, not a general pilot control surface.
+    p_pilot = subparsers.add_parser(
+        "pilot", help="Pilot state helpers (strikes ledger)"
+    )
+    pilot_sub = p_pilot.add_subparsers(dest="pilot_cmd", required=True)
+
+    p_pilot_strikes = pilot_sub.add_parser(
+        "strikes", help="Pilot two-strike ledger (list / clear)"
+    )
+    pilot_strikes_sub = p_pilot_strikes.add_subparsers(
+        dest="pilot_strikes_cmd", required=True
+    )
+
+    p_pilot_strikes_list = pilot_strikes_sub.add_parser(
+        "list", help="Show recorded pilot strikes (empty-safe)"
+    )
+    p_pilot_strikes_list.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_pilot_strikes_list.set_defaults(func=cmd_pilot_strikes_list)
+
+    p_pilot_strikes_clear = pilot_strikes_sub.add_parser(
+        "clear", help="Clear one spec's strikes, or --all (never touches ready)"
+    )
+    p_pilot_strikes_clear.add_argument(
+        "spec_id", nargs="?", default=None, help="Spec id to clear"
+    )
+    p_pilot_strikes_clear.add_argument(
+        "--all", action="store_true", help="Clear every entry"
+    )
+    p_pilot_strikes_clear.add_argument(
+        "--json", action="store_true", help="JSON output"
+    )
+    p_pilot_strikes_clear.set_defaults(func=cmd_pilot_strikes_clear)
 
     # review-backend (helper for skills)
     p_review_backend = subparsers.add_parser(

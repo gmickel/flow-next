@@ -1,0 +1,465 @@
+{
+  "artifactId": "fn-184-aid-bac3f013",
+  "baseSha": "d1ddefd9a58dbabc3dce6e7a29ed143a344c4fb0",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "The docs said a board move clears a pilot two-strike strikeout; the skill said a strike survives a projection-set ready and that clearing on an echo is the defect. Both described the same path. The reporter's three-phase measurement proved the skill right AND the skill's own escape clause hollow: a deliberate out-and-back board move is byte-identical to a projection echo in every durable artifact, so under an armed tracker.readyState a struck spec read ready everywhere while staying permanently invisible to pilot, with hand-editing an undocumented ledger under .git/ as the only escape.",
+        "taskIds": [],
+        "title": "A promised recovery that could not exist"
+      },
+      {
+        "files": [
+          {
+            "additions": 234,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Ledger path/read helpers + list/clear commands + new pilot parser.",
+            "taskIds": []
+          },
+          {
+            "additions": 337,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_pilot_strikes.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "15 tests: worktree common-dir, atomicity, not-found, readiness-untouched, off-repo.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Surface leaves for the new subcommands.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_prompt_constraints.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Frozen subprocess inventory learns the one rev-parse read.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1",
+          "s-r2"
+        ],
+        "summary": "New verb family over the ledger's existing contract verbatim (git-common-dir/flow-next/pilot-strikes.json, shared across worktrees). list is empty-safe and exits 0 even off-repo with a note; clear <spec-id> is atomic tmp+rename, leaves other entries alone, reports a distinct exit-3 not-found naming known keys, and accepts bare-id expansion; clear --all empties the ledger. Clearing never mutates spec readiness - strikes are pilot state, readiness is board/spec state, pinned by test. flowctl owns read+clear; the skill keeps its recording write sites.",
+        "taskIds": [
+          "fn-184-pilot-strikes-deterministic-clear-verb.1"
+        ],
+        "title": "flowctl pilot strikes list / clear"
+      },
+      {
+        "files": [
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Escape clause, terminal reason, ledger ownership.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-pilot/references/backlog-mode.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "1g escape-clause correction.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/tracker-sync.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Pilot-interplay paragraph corrected.",
+            "taskIds": []
+          },
+          {
+            "additions": 22,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/troubleshooting.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Strikes-ledger entry: location, symptoms, recovery.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "pilot strikes reference section.",
+            "taskIds": []
+          },
+          {
+            "additions": 162,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_pilot_strikes_prose.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Reachability-shaped fixtures; retired claims pinned absent; no sentence pins.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r3",
+          "s-r4"
+        ],
+        "summary": "The pilot skill's armed-readyState escape clause now names the verb as THE recognized human clear, stating honestly that no board state can serve as one; the strike-2/2 BLOCKED terminal reason carries the clear command so the transcript names its own recovery; the ledger-ownership sentence reflects the shared contract. tracker-sync.md's Pilot-interplay paragraph is corrected (projection-set ready never clears a strike; the recovery is the verb, not the board; the board remains the readiness control plane); troubleshooting.md documents the ledger and recovery; flowctl.md gains the pilot-strikes reference both link. Sweep enumerated: three assertion sites corrected, fourteen surfaces checked clean, frozen historical records deliberately untouched.",
+        "taskIds": [
+          "fn-184-pilot-strikes-deterministic-clear-verb.2"
+        ],
+        "title": "Prose truth-sweep: every surface states the fn-87 rule"
+      },
+      {
+        "files": [
+          {
+            "additions": 29,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/knowledge/decisions/pilot-strike-recovery-is-a-cli-verb-not-2026-08-11.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Deferred-alternative decision record.",
+            "taskIds": []
+          },
+          {
+            "additions": 33,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Unreleased entries for #325.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R5",
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-t3",
+          "s-c3",
+          "s-r5",
+          "s-r6"
+        ],
+        "summary": "The board-native alternative (observed-out-of-ready-since-strike ledger bit) is recorded as a deferred decision with the tick-granularity hole, the structural-ambiguity argument from the reporter's phase C, and a reopen condition. CHANGELOG Unreleased credits the reporter.",
+        "taskIds": [
+          "fn-184-pilot-strikes-deterministic-clear-verb.3"
+        ],
+        "title": "Decision record and CHANGELOG"
+      },
+      {
+        "files": [
+          {
+            "additions": 234,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/references/backlog-mode.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Dual copy / regenerated manifest / mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-184-pilot-strikes-deterministic-clear-verb.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-184-pilot-strikes-deterministic-clear-verb.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-184-pilot-strikes-deterministic-clear-verb.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 4,
+        "rIds": [],
+        "sourceRefs": [
+          "s-t1",
+          "s-t2",
+          "s-t3"
+        ],
+        "summary": "Full parallel suite 4458 tests with 0 failures, ruff 0.16.0 clean, sync-codex twice with no drift.",
+        "taskIds": [
+          "fn-184-pilot-strikes-deterministic-clear-verb.1",
+          "fn-184-pilot-strikes-deterministic-clear-verb.2",
+          "fn-184-pilot-strikes-deterministic-clear-verb.3"
+        ],
+        "title": "Gate, propagation and task evidence"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-t3"
+        ],
+        "value": "4458 tests, 0 failures; ruff clean; sync-codex idempotent"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-t2"
+        ],
+        "value": "15 verb tests + reachability-shaped prose fixtures; retired claims pinned absent"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-c3"
+        ],
+        "value": "6/6 satisfied across three tasks"
+      }
+    ],
+    "thesis": "Pilot strikeouts on a board-armed repo get the recovery the docs promised but the system could not deliver: flowctl pilot strikes list/clear is the deterministic human clear (atomic, readiness-orthogonal, worktree-shared), every surface that still claimed a board move clears strikes now states the fn-87 rule instead, troubleshooting documents the ledger, and the board-native alternative is recorded as a deferred decision (issue #325)."
+  },
+  "generatedAt": "2026-08-11T10:11:30Z",
+  "headSha": "bac3f013db1a0ba52ac8f7757fb9ff293354e5f5",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-184-pilot-strikes-deterministic-clear-verb"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-184-pilot-strikes-deterministic-clear-verb.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-184-pilot-strikes-deterministic-clear-verb.2"
+    },
+    {
+      "id": "s-t3",
+      "kind": "task",
+      "ref": "fn-184-pilot-strikes-deterministic-clear-verb.3"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "886f0dfd61af43b3621650ba98c6090ffedd7e79"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "ea7677490ffb75b2496dd081ea2ac3f4202239e5"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "4b9d940cf3638338b9af36ef631830e03d6aa7a9"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "d1ddefd9a58dbabc3dce6e7a29ed143a344c4fb0..bac3f013db1a0ba52ac8f7757fb9ff293354e5f5"
+    }
+  ],
+  "specId": "fn-184-pilot-strikes-deterministic-clear-verb"
+}

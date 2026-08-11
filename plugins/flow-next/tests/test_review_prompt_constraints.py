@@ -215,6 +215,12 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 # ONE deterministic `git status --porcelain=v2 --branch` read
                 # per invocation, never a fetch, never an execution bridge.
                 ("subprocess.run", "upstream_behind"): 1,
+                # fn-184.1 / #325: the pilot strikes ledger lives under the git
+                # COMMON dir (shared across worktrees), so resolving it is ONE
+                # deterministic `rev-parse --git-common-dir` read per
+                # invocation - the same path the pilot skill's shell resolves,
+                # never an execution bridge.
+                ("subprocess.run", "_pilot_strikes_ledger_path"): 1,
                 # fn-169 R3/R4: `--numstat --no-renames` for the prompt's scope
                 # map and the full diff for the artifact identity, both through
                 # ONE runner that raises rather than returning "" — an empty

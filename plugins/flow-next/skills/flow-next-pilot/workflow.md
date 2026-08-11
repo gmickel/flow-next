@@ -62,7 +62,7 @@ LEDGER="$LEDGER_DIR/pilot-strikes.json"
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema: `{"<spec-id>": {"count": <n>, "stage": "<stage>", "reason": "<one line>", "ts": "<iso8601>"}}`. Ownership is shared: flowctl owns READ and CLEAR (`flowctl pilot strikes list`, `flowctl pilot strikes clear <spec-id>`, `clear --all`) so a human has a deterministic recovery that does not mean hand-editing a file under `.git/`; the skill keeps the write sites that RECORD strikes. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 ## Phase 0.5 — Autonomy mode + backlog safety invariants (R1, R6)
 
@@ -155,7 +155,7 @@ Apply the full predicate:
 
 1. Dependencies: every `depends_on_epics[]` value is satisfied iff `$FLOWCTL show <dep> --json` reports `status == "done"`. Any unsatisfied dependency skips the candidate and records `deps unsatisfied: <ids>`.
 2. Collision avoidance: no task may be `in_progress` and assigned to another actor. The minimal `tasks --spec` listing carries no `assignee` — for every task with `status == "in_progress"`, fetch `$FLOWCTL show <task-id> --json` and read its `assignee` field. Resolve this session's actor identity exactly as `flowctl.get_actor()` does: `$FLOW_ACTOR` env var, else `git config user.email`, else `git config user.name`, else `$USER`, else `unknown`. If resolution bottoms out at `unknown`, any non-empty assignee counts as another actor.
-3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear in the classification report instead. **Exception — active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every tick**, so a "ready again" under a configured `tracker.readyState` is mechanical, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every tick forever — the strike limit's entire purpose, defeated. **So with `tracker.readyState` set, a `count >= 2` strike survives a projection-set ready**: the strikeout stands (skip the candidate as still-struck) until a genuine human signal clears it — the human answering the surfaced failure, or an explicit re-ready made after the failure is understood (not a projection echo). A cleared strike whose only "re-bless" was a projection echo has broken this. The `BLOCKED spec=… reason="strike 2/2"` terminal already surfaces the failure for that human.
+3. Strikes: a ledger entry with `count >= 2` normally means the spec was unreadied after failure, but a candidate that is ready again has been human re-blessed. Clear that ledger entry (write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, then atomic `jq` plus `mv`) and treat the spec as fresh. Under `--dry-run`, do not write — report the entry as would-clear in the classification report instead. **Exception — active `tracker.readyState` projection:** backlog 1a re-projects `ready=true` from the board on **every tick**, so a "ready again" under a configured `tracker.readyState` is mechanical, not a human re-bless. Clearing the strike on it would re-dispatch the same failing spec every tick forever — the strike limit's entire purpose, defeated. **So with `tracker.readyState` set, a `count >= 2` strike survives a projection-set ready**: the strikeout stands (skip the candidate as still-struck) until the human who answered the surfaced failure runs `flowctl pilot strikes clear <spec-id>`. That verb is THE recognized human clear under an armed `tracker.readyState` - no board state can serve as one, because a deliberate out-and-back move and a projection echo are byte-identical in every durable artifact, so "an explicit re-ready" is not something this skill can detect. A cleared strike whose only "re-bless" was a board-set ready has broken this. The `BLOCKED spec=… reason="strike 2/2"` terminal names the verb, so the transcript carries its own recovery.
 4. **No gh touch here.** PR state belongs exclusively to the all-done classification branch; a gh call in SELECT has broken this.
 
 
@@ -639,8 +639,10 @@ $FLOWCTL spec unready "$SELECTED_SPEC"
 ```
 
 ```text
-PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 2/2, spec unreadied): <why>"
+PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="no advancement (strike 2/2, spec unreadied): <why>; clear with: flowctl pilot strikes clear <id>"
 ```
+
+The recovery clause is part of the reason string, not a separate line: a strikeout is the one terminal a human must undo by hand, and on a repo with `tracker.readyState` armed the board cannot undo it (Phase 1 item 3) - so the transcript-only driver or human reading this verdict gets the exact command. Keep it last in the reason, after `<why>`.
 
 ### Backlog-mode dep-wait `BLOCKED` terminal (R10 — distinct from the strike path)
 

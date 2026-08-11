@@ -2,6 +2,39 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+A struck-out pilot spec on a board-armed repo could read ready everywhere a
+human looks while staying permanently invisible to pilot - and the docs
+described a recovery that has been impossible since fn-87. @sn-furali's
+three-phase measurement (thanks!) proved both halves: a board echo re-grants
+readiness with nobody acting, and a deliberate out-and-back move is
+byte-identical to that echo in every durable artifact, so "an explicit
+re-ready" was never something pilot could detect.
+
+### Added
+
+- **`flowctl pilot strikes list` / `clear <spec-id>` / `clear --all`.** The
+  strikes ledger gets deterministic read and clear plumbing over its existing
+  contract (`<git-common-dir>/flow-next/pilot-strikes.json`, shared across
+  worktrees). `clear` is atomic, leaves other entries alone, and reports a
+  distinct not-found for unknown ids; clearing a strike never changes spec
+  readiness - strikes are pilot state, readiness is board/spec state. This is
+  THE recognized human recovery under an armed `tracker.readyState`, and the
+  `strike 2/2` verdict now names it, so the transcript carries its own way
+  out. Recovery no longer means hand-editing an undocumented file under
+  `.git/`. (#325)
+
+### Fixed
+
+- **The docs stop promising a recovery that cannot exist.** Since fn-87 a
+  projection-set ready deliberately never clears a strike (clearing on a
+  board echo would re-dispatch the same failing spec every tick forever), but
+  tracker-sync.md and the site still said the opposite. Every surface now
+  states the fn-87 rule, troubleshooting.md documents the ledger and the
+  clear verb, and the board-native alternative is recorded as a deferred
+  decision with its tick-granularity caveat. (#325, docs)
+
 ## [flow-next 3.27.0] - 2026-08-11
 
 The tracker-bridge batch from the @sn-furali 2026-08-08 reports (thanks!): a

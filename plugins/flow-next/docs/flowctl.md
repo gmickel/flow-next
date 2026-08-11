@@ -7,7 +7,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 ## Available Commands
 
 ```
-init, setup-block, detect, status, config, tracker, sync, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
+init, setup-block, detect, status, config, tracker, sync, pilot, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
 checkpoint, rp, codex, copilot, cursor,
@@ -764,6 +764,21 @@ Output:
 ```
 
 Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
+
+### pilot strikes
+
+Read and clear `/flow-next:pilot`'s **strikes ledger** - the don't-thrash counter the pilot skill writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). Ownership is split: flowctl reads and clears, the skill records.
+
+```bash
+flowctl pilot strikes list [--json]
+flowctl pilot strikes clear <spec-id> [--json]
+flowctl pilot strikes clear --all [--json]
+```
+
+- `list` is empty-safe: a missing ledger, an empty ledger, or a non-git directory all render an empty result and exit `0`.
+- `clear <spec-id>` removes exactly one entry atomically and leaves every other entry untouched. An unknown spec id is a **distinct not-found** (exit `3`) that names the known entries - never silent success. A bare handle (`fn-184`) resolves to its canonical ledger key.
+- Clearing a strike **never touches spec readiness** in either direction. Strikes are pilot state, not readiness state (fn-184, #325).
+- This is the recognized human clear on a repo with `tracker.readyState` armed, where a board-set ready is a projection echo pilot cannot distinguish from a deliberate re-ready: see [`tracker-sync.md`](tracker-sync.md#readiness-projection--trackerreadystate--local-ready-flag) and [`troubleshooting.md`](troubleshooting.md).
 
 ### pilot-log
 
