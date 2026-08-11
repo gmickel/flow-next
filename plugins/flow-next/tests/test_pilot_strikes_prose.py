@@ -113,12 +113,15 @@ class PilotStrikesProseTests(unittest.TestCase):
     def test_null_ready_state_clear_on_ready_path_survives(self) -> None:
         """The exception is scoped to an ARMED `tracker.readyState`; on a repo
         without it, a ready-again spec still clears its own ledger entry."""
-        for path, needle in (
-            (WORKFLOW, "Clear that ledger entry"),
-            (BACKLOG_MODE, "clear the entry and treat the spec as fresh"),
-        ):
-            with self.subTest(surface=path.name):
-                self.assertIn(needle, _read(path))
+        # Smallest distinctive tokens, not sentence pins: the null-path clear
+        # is characterized by its WRITE-SITE mechanism (the LEDGER_DIR write
+        # fragment in the Phase 1 item-3 clear instruction) and the armed
+        # exception by its scoping token. Prose around them is free to evolve.
+        workflow = _read(WORKFLOW)
+        self.assertIn('mkdir -p "$LEDGER_DIR"', workflow)
+        self.assertIn("with `tracker.readyState` set", workflow)
+        backlog = _read(BACKLOG_MODE)
+        self.assertIn("human re-blessed", backlog)
 
     def test_strike_two_terminal_reason_carries_the_recovery(self) -> None:
         """The strikeout verdict is the one terminal a human must undo by

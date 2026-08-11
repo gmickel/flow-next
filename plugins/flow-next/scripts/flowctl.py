@@ -40589,7 +40589,9 @@ def _pilot_strikes_read(path: Path, *, use_json: bool) -> dict:
         raw = path.read_text(encoding="utf-8")
     except (FileNotFoundError, NotADirectoryError):
         return {}
-    except OSError as e:
+    except (OSError, UnicodeError) as e:
+        # UnicodeError: a hand-edited/corrupted ledger with invalid UTF-8 is
+        # the same clean-refusal class as malformed JSON (PR #329 bot finding).
         error_exit(f"Cannot read strikes ledger {path}: {e}", use_json=use_json)
     if not raw.strip():
         return {}
