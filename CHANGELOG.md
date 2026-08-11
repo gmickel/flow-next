@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.27.0] - 2026-08-11
 
 The tracker-bridge batch from the @sn-furali 2026-08-08 reports (thanks!): a
 promotion race could leave two specs claiming one intake issue, a dedup query
