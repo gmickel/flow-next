@@ -15,7 +15,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-180-declared-vs-evidenced-r-id-coverage.md",
-  "status": "open",
+  "status": "done",
   "title": "Declared vs evidenced R-ID coverage + orphaned evidence commit findings",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:07:43.296368Z"
+  "updated_at": "2026-08-11T04:47:43.263185Z"
 }
