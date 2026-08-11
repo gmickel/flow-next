@@ -68,6 +68,83 @@ class MakePrReachedPathTests(unittest.TestCase):
         ):
             self.assertIn(needle, self.workflow)
 
+    # --- fn-180.2 (#301): declared vs evidenced R-ID coverage ---
+
+    def _section(self, text: str, start: str, end: str) -> str:
+        """Slice a reached section so a pin proves reachability, not mere presence."""
+        head = text.index(start)
+        return text[head : text.index(end, head)]
+
+    def test_coverage_abort_is_keyed_on_undeclared_not_uncovered(self) -> None:
+        """Contract tokens only (repo rule: no sentence-level prose pins)."""
+        aborts = self._section(self.workflow, "### 2.7 — Abort conditions", "### Done when")
+        self.assertIn("`tasks_summary.undeclared_r_ids` length", aborts)
+        # Distinctive condition token of the abort's stderr contract - the
+        # advice wording is free to evolve (no sentence pins).
+        self.assertIn("Undeclared R-ID coverage", aborts)
+        # The retired condition + its unfollowable advice must not survive anywhere.
+        self.assertNotIn("Empty R-ID coverage", self.workflow)
+        self.assertNotIn(
+            "Every R-ID uncovered (`tasks_summary.uncovered_r_ids` length", self.workflow
+        )
+        # The abort condition never keys on the evidenced set.
+        self.assertNotIn("`tasks_summary.uncovered_r_ids` length == `len(acceptance_criteria)`", aborts)
+        # Reachable from the table section too, where the check is described inline.
+        table = self._section(
+            self.workflow, "### 2.3 — R-ID coverage table", "### 2.3b — Verification"
+        )
+        self.assertIn("`tasks_summary.undeclared_r_ids` length equals", table)
+
+    def test_claimed_not_evidenced_renders_in_table_and_ratio(self) -> None:
+        """Rendered-output literals: table cells, follow-up markers, ratio shape."""
+        table = self._section(
+            self.workflow, "### 2.3 — R-ID coverage table", "### 2.3b — Verification"
+        )
+        self.assertIn("| Claimed, not yet evidenced |", table)
+        self.assertIn("`⏳ claimed, not yet evidenced`", table)
+        self.assertIn("⏳ **<M> criterion(a) claimed but not yet evidenced:**", table)
+        # The warning marker stays bound to the undeclared set only.
+        self.assertIn("⚠️ **<N> undeclared acceptance criterion(a):**", table)
+        self.assertNotIn("⚠️ **<N> uncovered acceptance criterion(a):**", self.workflow)
+
+        summary = self._section(
+            self.workflow, "### 2.1 — Title + summary block", "### 2.2 — TL;DR composition"
+        )
+        self.assertIn(
+            "> **R-ID coverage:** <covered>/<total> evidenced"
+            "<, <M> claimed not yet evidenced><, <N> undeclared>",
+            summary,
+        )
+        self.assertIn("`len(uncovered_r_ids) - len(undeclared_r_ids)`", summary)
+
+    def test_orphaned_evidence_shas_render_marked_never_linked(self) -> None:
+        """fn-180 #302 / PR #327: an orphaned SHA is annotated, not a live link."""
+        table = self._section(
+            self.workflow, "### 2.3 — R-ID coverage table", "### 2.3b — Verification"
+        )
+        self.assertIn("(orphaned by a history rewrite)", table)
+        self.assertIn("evidence commit <token> is not reachable from HEAD", table)
+
+    def test_artifact_path_keeps_per_criterion_state_visible(self) -> None:
+        """PR #327: the legacy coverage table is suppressed only on fully
+        evidenced coverage; with any gap it renders beside the artifact."""
+        aid = (SKILL / "pr-cognitive-aid.md").read_text(encoding="utf-8")
+        self.assertIn("tasks_summary.undeclared_r_ids", aid)
+        self.assertIn("`tasks_summary.uncovered_r_ids` is empty", aid)
+        order = self._section(
+            self.workflow, "### 2.0 — Section order", "### 2.1 — Title + summary block"
+        )
+        self.assertIn("ONLY when `tasks_summary.uncovered_r_ids` is empty", order)
+
+    def test_codex_mirror_carries_the_coverage_contract(self) -> None:
+        mirror_workflow = MIRROR / "workflow.md"
+        if not mirror_workflow.exists():
+            self.skipTest("Codex mirror regeneration is conductor-owned in parallel wave")
+        text = mirror_workflow.read_text(encoding="utf-8")
+        self.assertIn("Undeclared R-ID coverage (no task's satisfies frontmatter", text)
+        self.assertIn("`⏳ claimed, not yet evidenced`", text)
+        self.assertNotIn("Empty R-ID coverage", text)
+
     def test_codex_mirror_route_when_regenerated(self) -> None:
         """Conductor regenerates the mirror after joining the parallel wave."""
         mirror_html = MIRROR / "html-lens.md"

@@ -1,0 +1,496 @@
+{
+  "artifactId": "fn-180-aid-ff08d4a2",
+  "baseSha": "a1fcfe9255f5dcc8db1d876571c74773a9211c78",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "The coverage payload conflated planned with evidenced, so a fully-planned spec that had not shipped code reported 0% and make-pr aborted with advice that could not be followed (#301). And evidence commit SHAs were never re-checked after history rewrites - the reporter measured 15/15 orphaned on one spec after a mandatory rebase while validate stayed green (#302).",
+        "taskIds": [],
+        "title": "Coverage conflated two questions; evidence links could die silently"
+      },
+      {
+        "files": [
+          {
+            "additions": 221,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Two-set accumulation in cmd_spec_export_cognitive_aid; also carries step 3's EvidenceReachability classifier and validate wiring.",
+            "taskIds": []
+          },
+          {
+            "additions": 221,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Byte-identical dual copy, parity-tested.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Regenerated manifest.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Regenerated manifest.",
+            "taskIds": []
+          },
+          {
+            "additions": 198,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_export_traceability.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Plan-gate, unassigned-criterion, done-state, and partial-done leak tests.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1"
+        ],
+        "summary": "tasks_summary accumulates a second set from ALL tasks' satisfies regardless of status and exposes undeclared_r_ids directly after the byte-identical uncovered_r_ids. A plan-gate spec reports full uncovered but zero undeclared; a genuinely unassigned criterion appears in both; a todo task's declaration cannot leak into the evidenced set.",
+        "taskIds": [
+          "fn-180-declared-vs-evidenced-r-id-coverage.1"
+        ],
+        "title": "Payload: undeclared_r_ids beside uncovered_r_ids"
+      },
+      {
+        "files": [
+          {
+            "additions": 43,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 20,
+            "path": "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Three-state table, abort re-key + advice, ratio clauses, guardrail rule 7 sharpened.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-make-pr/pr-cognitive-aid.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Plan-gate status carved out of supersession (artifact has no claimed-not-evidenced counterpart).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Coverage anti-pattern corrected.",
+            "taskIds": []
+          },
+          {
+            "additions": 43,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 20,
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/pr-cognitive-aid.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Codex mirror regen.",
+            "taskIds": []
+          },
+          {
+            "additions": 93,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_make_pr_reached_path.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Prose-contract fixtures: abort keyed on undeclared, plan-gate render rule, repro maps to render-not-abort.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r2"
+        ],
+        "summary": "The coverage abort fires only when NO task claims ANY criterion (the one state where go-declare-coverage is actionable advice) with corrected stderr; a plan-gate body renders with a third table state - claimed, not yet evidenced - keeping the claiming task links while the warning marker belongs only to genuinely unclaimed criteria. The summary ratio stays evidenced-only with claimed/undeclared clauses appended when non-zero. The artifact-current path is documented evidenced-only by construction; the abort runs on the export payload before artifact rendering.",
+        "taskIds": [
+          "fn-180-declared-vs-evidenced-r-id-coverage.2"
+        ],
+        "title": "make-pr: three-state coverage, abort re-keyed on undeclared"
+      },
+      {
+        "files": [
+          {
+            "additions": 329,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_evidence_reachability.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "All three states in one repo, foreign-token survival, spawn-count assertions.",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_prompt_constraints.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Frozen subprocess inventory learns the two new spawns, rationale inline.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R3",
+          "R4",
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-t3",
+          "s-c3",
+          "s-r3",
+          "s-r4",
+          "s-r5"
+        ],
+        "summary": "EvidenceReachability classifies every recorded evidence token in exactly two git spawns per invocation regardless of commit or spec count: one cat-file --batch-check over stdin, one streamed rev-list HEAD abandoned once every candidate is seen. Reachable commits silent; present-but-orphaned a warning stating the recorded value is left as-is; tokens that are not commits here (UUIDs, foreign SHAs) ignored by contract and never probed as refs. Every git failure degrades to ignored - validate never crashes and never rewrites a SHA.",
+        "taskIds": [
+          "fn-180-declared-vs-evidenced-r-id-coverage.3"
+        ],
+        "title": "validate: batched evidence-commit reachability"
+      },
+      {
+        "files": [
+          {
+            "additions": 20,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "validate + export-cognitive-aid sections.",
+            "taskIds": []
+          },
+          {
+            "additions": 40,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Unreleased entries for #301/#302.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-t4",
+          "s-c4",
+          "s-r6"
+        ],
+        "summary": "flowctl.md documents the orphaned-evidence warning (three-state contract, ignore-by-design, read-only, constant cost) and the declared-vs-evidenced payload fields; CHANGELOG Unreleased credits the reporter for both issues.",
+        "taskIds": [
+          "fn-180-declared-vs-evidenced-r-id-coverage.4"
+        ],
+        "title": "Docs and CHANGELOG"
+      },
+      {
+        "files": [
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-180-declared-vs-evidenced-r-id-coverage.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-180-declared-vs-evidenced-r-id-coverage.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-180-declared-vs-evidenced-r-id-coverage.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-180-declared-vs-evidenced-r-id-coverage.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-diff"
+            ],
+            "summary": "Task-state: done summary and evidence.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "s-t1",
+          "s-t2",
+          "s-t3",
+          "s-t4"
+        ],
+        "summary": "Full parallel suite 4406 tests with 0 failures, ruff 0.16.0 clean, sync-codex twice with no drift. Dogfood: validate --all on this repo now surfaces ~40 genuine squash-merge orphans in under a second - the #302 phenomenon, correctly detected.",
+        "taskIds": [
+          "fn-180-declared-vs-evidenced-r-id-coverage.1",
+          "fn-180-declared-vs-evidenced-r-id-coverage.2",
+          "fn-180-declared-vs-evidenced-r-id-coverage.3",
+          "fn-180-declared-vs-evidenced-r-id-coverage.4"
+        ],
+        "title": "Gate and task evidence"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-t4"
+        ],
+        "value": "4406 tests, 0 failures; ruff clean; sync-codex idempotent"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-t2",
+          "s-t3"
+        ],
+        "value": "~21 new focused tests incl. spawn-count assertions and prose-contract fixtures"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-c3",
+          "s-c4"
+        ],
+        "value": "6/6 satisfied across four tasks"
+      }
+    ],
+    "thesis": "Coverage now answers both real questions instead of conflating them - undeclared_r_ids (no task claims it, the plan-gate question) lands beside the unchanged uncovered_r_ids (no done task evidences it, the merge-gate question), make-pr renders plan-gate specs with claimed-not-evidenced rows instead of aborting on a false 0%, and flowctl validate reports evidence commits orphaned by history rewrites in two batched git spawns while ignoring foreign tokens by contract and rewriting nothing (issues #301, #302)."
+  },
+  "generatedAt": "2026-08-10T22:21:49Z",
+  "headSha": "ff08d4a230583e001e2ca7eb5cd5d5ad44edc2d9",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-180-declared-vs-evidenced-r-id-coverage"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-180-declared-vs-evidenced-r-id-coverage.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-180-declared-vs-evidenced-r-id-coverage.2"
+    },
+    {
+      "id": "s-t3",
+      "kind": "task",
+      "ref": "fn-180-declared-vs-evidenced-r-id-coverage.3"
+    },
+    {
+      "id": "s-t4",
+      "kind": "task",
+      "ref": "fn-180-declared-vs-evidenced-r-id-coverage.4"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "01ec9e9c789987497ac012d63d1d2ea5a5e8415e"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "b656216b7de28efd3aac1a48ca807b45ac44fdff"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "756971cf3d56a8df879162cb87f37bb35dbe15be"
+    },
+    {
+      "id": "s-c4",
+      "kind": "commit",
+      "ref": "b8449b99ae914057ab28285f541fed5dc8058863"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "a1fcfe9255f5dcc8db1d876571c74773a9211c78..ff08d4a230583e001e2ca7eb5cd5d5ad44edc2d9"
+    }
+  ],
+  "specId": "fn-180-declared-vs-evidenced-r-id-coverage"
+}

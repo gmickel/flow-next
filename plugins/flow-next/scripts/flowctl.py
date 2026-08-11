@@ -33042,18 +33042,31 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     total = len(task_entries)
     done_count = sum(1 for t in task_entries if t["status"] == "done")
     open_count = total - done_count
+    # fn-180.1 (#301): two distinct coverage questions, two distinct sets.
+    #   covered_rids   -> evidenced: satisfied by a DONE task (merge gate).
+    #   declared_rids  -> declared: claimed by ANY task, any status (plan gate).
+    # `uncovered_r_ids` keeps its existing evidenced-only meaning; readers of
+    # it are unaffected. `undeclared_r_ids` answers "no task even claims this
+    # criterion", so a plan-gate spec (all tasks todo, fully declared) reports
+    # zero undeclared instead of looking like 0% coverage.
     covered_rids: set[str] = set()
+    declared_rids: set[str] = set()
     for t in task_entries:
+        satisfied = t.get("satisfies", [])
+        for rid in satisfied:
+            declared_rids.add(rid)
         if t["status"] == "done":
-            for rid in t.get("satisfies", []):
+            for rid in satisfied:
                 covered_rids.add(rid)
     spec_rids = [c["id"] for c in acceptance_criteria]
     uncovered = [rid for rid in spec_rids if rid not in covered_rids]
+    undeclared = [rid for rid in spec_rids if rid not in declared_rids]
     tasks_summary = {
         "total": total,
         "done": done_count,
         "open": open_count,
         "uncovered_r_ids": uncovered,
+        "undeclared_r_ids": undeclared,
     }
 
     # --- Memory during spec lifecycle ---
@@ -34766,6 +34779,176 @@ def cmd_spec_close(args: argparse.Namespace) -> None:
 # Backward-compat alias (T2 layers the deprecation warning).
 
 
+# --- Evidence-commit reachability (fn-180 / #302) ---
+#
+# A history rewrite (rebase, amend, squash-merge) silently voids every
+# `evidence.commits[]` SHA a task recorded: the object is still in the store
+# but no longer an ancestor of HEAD. `validate` reports that as a WARNING and
+# never rewrites the recorded value — a wrong remap is worse than a stale link.
+#
+# Three states per recorded token, per the #302 contract:
+#   reachable from HEAD          -> silent
+#   present in the object store,
+#     not an ancestor of HEAD    -> warning ("orphaned, remappable")
+#   not a commit in this repo    -> IGNORED, never flagged. Tracker UUIDs and
+#                                   foreign SHAs are legitimate recorded
+#                                   evidence (7 of 22 hex tokens in the
+#                                   reporter's run); a checker that flags them
+#                                   corrupts exactly the evidence the record
+#                                   exists to hold. Contract, not leniency.
+#
+# Batched by construction (spec R4): at most TWO git spawns per validate
+# invocation regardless of how many commits are recorded — one
+# `cat-file --batch-check` fed all tokens over stdin, one `rev-list HEAD`
+# membership walk that stops as soon as every candidate oid is accounted for.
+# `validate` runs on every land-loop tick; a per-SHA spawn loop would claw
+# back the fn-109 wins. Deliberately NOT entangled with the export payload's
+# `merge-base --is-ancestor` gate-receipt probe (different question).
+
+# Only unambiguous hex tokens are ever handed to git. Anything else (tracker
+# UUIDs with hyphens, PR URLs, free text) is ignored without a probe, so no
+# recorded value can be resolved as a ref name by accident. Case-insensitive
+# and sized up to 64 so hand-recorded uppercase SHAs and SHA-256-repo object
+# ids are classified rather than silently skipped (PR #327 bot findings); a
+# 64-hex digest that is not a commit here still lands on `ignored` via the
+# batch-check miss.
+_EVIDENCE_SHA_RE = re.compile(r"^[0-9a-fA-F]{7,64}$")
+
+EVIDENCE_STATE_IGNORED = "ignored"
+EVIDENCE_STATE_REACHABLE = "reachable"
+EVIDENCE_STATE_ORPHANED = "orphaned"
+
+
+def evidence_commit_tokens(task: dict) -> list[str]:
+    """Recorded `evidence.commits[]` tokens for one task, order preserved."""
+    evidence = task.get("evidence")
+    if not isinstance(evidence, dict):
+        return []
+    raw = evidence.get("commits")
+    if isinstance(raw, str):
+        return [raw] if raw else []
+    if not isinstance(raw, list):
+        return []
+    return [str(item) for item in raw if item]
+
+
+class EvidenceReachability:
+    """Three-state classifier for recorded evidence commit tokens.
+
+    One instance is shared across a whole `validate` invocation (including
+    `--all`), so the batch is taken once over every spec's tokens.
+    Every git failure mode — no git, no HEAD, unavailable `--batch-check`,
+    unreadable output — degrades to `ignored` for all tokens: validate never
+    crashes, the reachability findings are simply absent.
+    """
+
+    def __init__(self, repo_root: Path) -> None:
+        self._repo_root = repo_root
+        self._states: dict[str, str] = {}
+
+    def prime(self, tokens: Sequence[str]) -> None:
+        """Classify every not-yet-seen token. At most 2 git spawns per call."""
+        pending = sorted({token for token in tokens if token not in self._states})
+        if not pending:
+            return
+        # Default state for everything in this batch; only positive evidence
+        # from git can move a token off `ignored`.
+        for token in pending:
+            self._states[token] = EVIDENCE_STATE_IGNORED
+        candidates = [token for token in pending if _EVIDENCE_SHA_RE.match(token)]
+        if not candidates:
+            return
+        resolved = self._batch_check(candidates)
+        if not resolved:
+            return
+        reachable = self._reachable_oids(set(resolved.values()))
+        if reachable is None:
+            return
+        for token, oid in resolved.items():
+            self._states[token] = (
+                EVIDENCE_STATE_REACHABLE if oid in reachable else EVIDENCE_STATE_ORPHANED
+            )
+
+    def state(self, token: str) -> str:
+        return self._states.get(token, EVIDENCE_STATE_IGNORED)
+
+    def _batch_check(self, tokens: list[str]) -> dict[str, str]:
+        """Map token -> full oid for tokens that are commits here. One spawn."""
+        request = "".join(f"{token}\n" for token in tokens).encode()
+        try:
+            proc = subprocess.run(
+                ["git", "cat-file", "--batch-check"],
+                cwd=str(self._repo_root),
+                input=request,
+                capture_output=True,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return {}
+        if proc.returncode != 0:
+            return {}
+        lines = (proc.stdout or b"").decode("utf-8", "replace").splitlines()
+        # git emits exactly one line per input line. Any other shape means we
+        # cannot pair answers to tokens — refuse rather than guess.
+        if len(lines) != len(tokens):
+            return {}
+        resolved: dict[str, str] = {}
+        for token, line in zip(tokens, lines, strict=True):
+            parts = line.split()
+            # "<oid> commit <size>" for a hit; "<token> missing" / "<token>
+            # ambiguous" / a non-commit type for everything we must ignore.
+            if len(parts) == 3 and parts[1] == "commit":
+                resolved[token] = parts[0]
+        return resolved
+
+    def _reachable_oids(self, wanted: set[str]) -> Optional[set[str]]:
+        """Subset of `wanted` reachable from HEAD, or None if git failed.
+
+        One `rev-list HEAD` walk, abandoned the moment every wanted oid has
+        been seen — the common case (recent evidence) reads a handful of
+        lines; the worst case (a genuinely orphaned SHA) walks history once.
+        """
+        remaining = set(wanted)
+        found: set[str] = set()
+        try:
+            proc = subprocess.Popen(
+                ["git", "rev-list", "HEAD"],
+                cwd=str(self._repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        stopped_early = False
+        try:
+            stream = proc.stdout
+            if stream is None:
+                return None
+            for line in stream:
+                oid = line.strip()
+                if oid in remaining:
+                    remaining.discard(oid)
+                    found.add(oid)
+                    if not remaining:
+                        stopped_early = True
+                        break
+        except OSError:
+            return None
+        finally:
+            if proc.stdout is not None:
+                proc.stdout.close()
+            if stopped_early:
+                proc.terminate()
+            proc.wait()
+        if not stopped_early and proc.returncode not in (0, None):
+            # Unborn HEAD, not a repo, git unavailable: no verdict at all
+            # rather than a false "everything is orphaned".
+            return None
+        return found
+
+
 def validate_flow_root(flow_dir: Path) -> list[str]:
     """Validate .flow/ root invariants. Returns list of errors."""
     errors = []
@@ -34805,8 +34988,14 @@ def validate_epic(
     epic_id: str,
     use_json: bool = True,
     inventory: Optional[TaskInventory] = None,
+    reachability: Optional[EvidenceReachability] = None,
 ) -> tuple[list[str], list[str], int]:
-    """Validate a single epic. Returns (errors, warnings, task_count)."""
+    """Validate a single epic. Returns (errors, warnings, task_count).
+
+    `reachability` is the shared evidence-commit classifier (fn-180 / #302);
+    when omitted a per-call one is built, which keeps the single-spec path at
+    the same constant 2-spawn budget as `--all`.
+    """
     errors = []
     warnings = []
 
@@ -34886,6 +35075,27 @@ def validate_epic(
             if not dep.startswith(epic_id + "."):
                 errors.append(
                     f"Task {task_id}: dependency {dep} is outside epic {epic_id}"
+                )
+
+    # fn-180 / #302: evidence commits voided by a history rewrite. Warning
+    # only, never an error and never a rewrite of the recorded value.
+    if reachability is None:
+        reachability = EvidenceReachability(get_repo_root())
+    tokens_by_task = {
+        task_id: evidence_commit_tokens(task) for task_id, task in tasks.items()
+    }
+    reachability.prime([t for tokens in tokens_by_task.values() for t in tokens])
+    for task_id in tasks:
+        seen: set[str] = set()
+        for token in tokens_by_task[task_id]:
+            if token in seen:
+                continue
+            seen.add(token)
+            if reachability.state(token) == EVIDENCE_STATE_ORPHANED:
+                warnings.append(
+                    f"Task {task_id}: evidence commit {token} is not reachable "
+                    "from HEAD (orphaned by a history rewrite; recorded value "
+                    "left as-is)"
                 )
 
     # Cycle detection using DFS
@@ -44366,12 +44576,25 @@ def cmd_validate(args: argparse.Namespace) -> None:
             collect_consistency_errors=True,
         )
 
+        # fn-180 / #302 R4: take the evidence-commit batch ONCE over every
+        # spec's tokens, so `--all` costs the same 2 git spawns as a single
+        # spec no matter how many specs or commits are recorded.
+        reachability = EvidenceReachability(get_repo_root())
+        reachability.prime(
+            [
+                token
+                for task in inventory.ordered
+                for token in evidence_commit_tokens(task)
+            ]
+        )
+
         for epic_id in epic_ids:
             errors, warnings, task_count = validate_epic(
                 flow_dir,
                 epic_id,
                 use_json=args.json,
                 inventory=inventory,
+                reachability=reachability,
             )
             all_errors.extend(errors)
             all_warnings.extend(warnings)

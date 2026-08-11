@@ -190,7 +190,7 @@ fi
 
 ### 0.5 — Tasks-done validation
 
-Every task under the spec should be `done` before opening a PR. The cognitive-aid R-ID coverage table assumes done-tasks; in-progress tasks produce gaps. The single `flowctl show` capture in the combined fence below is ALSO the spec-existence validation (fn-110 — the old §0.2 validation-only `show >/dev/null` folded into it): a failed capture errors out with the spec-not-found message.
+Every task under the spec should be `done` before opening a PR. The cognitive-aid R-ID coverage table reports *evidenced* coverage from done tasks; criteria claimed by still-open tasks render as `⏳ claimed, not yet evidenced` (§2.3) rather than as gaps — a draft-early PR stays renderable. The single `flowctl show` capture in the combined fence below is ALSO the spec-existence validation (fn-110 — the old §0.2 validation-only `show >/dev/null` folded into it): a failed capture errors out with the spec-not-found message.
 
 | Context | Behavior |
 |---------|----------|
@@ -323,11 +323,23 @@ merge-base/head, and renders. It adds no model/network call.
 When a supported current artifact renders, insert its contiguous
 `## The change, top to bottom` section before Critical changes. Its thesis,
 proof, R-ID/task links, verification claims, order, and file membership are
-authoritative: suppress the legacy R-ID coverage and Verification sections and
-derive the summary coverage ratio from the artifact. The legacy fields are
-fallback-only for those claims. Keep Critical changes, How to review, and the
-risk-ranked Review plan separate. Artifact rejection prints one note and
-preserves the existing compact body without mixing stale or rejected fields.
+authoritative: suppress the legacy Verification section - and the legacy R-ID
+coverage section ONLY when `tasks_summary.uncovered_r_ids` is empty (with any
+unevidenced or undeclared criterion that table renders beside the walkthrough;
+§2.0 item 4 / pr-cognitive-aid.md §4 own the rule) - and derive the summary
+coverage ratio from the artifact when the table is suppressed. The legacy
+fields are fallback-only for those claims. **Plan-gate status is not superseded (fn-180,
+#301):** the artifact's `rid` source refs bind R-IDs to commits, so by
+construction it can only express *evidenced* coverage — it has no
+claimed-not-evidenced counterpart. The §2.7 coverage abort therefore runs on
+the export payload's `tasks_summary.undeclared_r_ids` before any artifact
+rendering (artifact-independent), and the §2.1 qualifier clauses still come
+from `tasks_summary`. Reading them there is not a legacy-field merge — same
+carve-out as the acceptance-criteria residue count, for the same reason: the
+artifact carries no counterpart value to be stale about. Keep Critical changes,
+How to review, and the risk-ranked Review plan separate. Artifact rejection
+prints one note and preserves the existing compact body without mixing stale or
+rejected fields.
 
 Done when:
 
@@ -375,7 +387,7 @@ The body sections appear in this exact order. Skip any section whose source cont
 1. **Title** + summary block (spec id link, branch / base, task counts, R-ID coverage ratio).
 2. **TL;DR** — 3-5 plain-language bullets covering the headline change.
 3. **Not in this PR (by design)** — the spec's scope boundaries (§2.2b), so scope objections don't become review threads. Only when `spec.spec_sections.boundaries[]` is non-empty.
-4. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s). On supported/current cognitive-aid output, omit this legacy section; the artifact renders its grounded R-ID/task links.
+4. **R-ID coverage** — table mapping every spec R-ID to satisfying task(s) + evidence commit(s). On supported/current cognitive-aid output, omit this legacy section ONLY when `tasks_summary.uncovered_r_ids` is empty — the artifact expresses evidenced coverage only, so whenever any criterion is unevidenced or undeclared this table renders alongside the artifact as the sole carrier of the per-criterion `⏳`/`⚠️` state (fn-180, PR #327 finding).
 5. **Verification** — per-task test evidence + the honest "no test changed alongside X" gap fact (§2.3b), so the reviewer sees what was actually checked. Only when any `tasks[].evidence.tests[]` is non-empty. On supported/current cognitive-aid output, omit this legacy section; the artifact renders its proof and provenance.
 6. **The change, top to bottom** — the contiguous deterministic v1 artifact rendering from Phase 1.5b when supported/current; omitted on labeled legacy fallback.
 7. **Critical changes** — ≤7 bullets, prioritized by churn / cross-module / public-interface / security-sensitive / behavior-visible.
@@ -401,7 +413,7 @@ The body sections appear in this exact order. Skip any section whose source cont
 > **Spec:** [<spec-id>](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/specs/<spec-id>.md)
 > **Branch:** `<branch>` → `<base>`
 > **Tasks:** <done> completed (<open> open if any — flagged in Open items)
-> **R-ID coverage:** <covered>/<total> satisfied
+> **R-ID coverage:** <covered>/<total> evidenced<, <M> claimed not yet evidenced><, <N> undeclared>
 ```
 
 (The spec link is a `.flow/*` artifact → blob, SHA-pinned per §2.4b. Same for every `.flow/tasks/*` / `.flow/memory/*` link below.)
@@ -413,7 +425,7 @@ All four values come from the payload directly:
 - `<spec-id>` from `spec.id`
 - `<branch>` from `PHASE0_CONTEXT.branch`, `<base>` from `PHASE0_CONTEXT.base`
 - `<done>` / `<open>` from `tasks_summary.done` / `tasks_summary.open`
-- `<covered>` = `len(acceptance_criteria) - len(tasks_summary.uncovered_r_ids)`; `<total>` = `len(acceptance_criteria)`. When `spec.spec_sections.acceptance_criteria_residue` is non-zero, append ` (<N> unparsed)` to the ratio - the denominator is short by that many criterion-shaped bullets the parser could not read (fn-179, #303); never silently present a short denominator as complete. This qualifier applies on BOTH ratio paths - artifact-derived (Phase 1.5's supersession covers the coverage *claims*, but the residue count has no artifact counterpart and comes from the same export payload, so appending it is not a legacy-field merge) and legacy fallback alike.
+- `<covered>` = `len(acceptance_criteria) - len(tasks_summary.uncovered_r_ids)`; `<total>` = `len(acceptance_criteria)`. The ratio keeps its evidenced (done-task) semantics — merge-gate meaning unchanged. Append the two optional qualifier clauses so a plan gate reads honestly instead of as a false 0% (fn-180, #301): `<M>` = `len(uncovered_r_ids) - len(undeclared_r_ids)` (claimed by a task that is not done yet), `<N>` = `len(tasks_summary.undeclared_r_ids)`. Omit each clause when its count is zero — an all-done spec renders the bare `<covered>/<total> evidenced` as before, and a fully-declared all-todo spec renders `0/<total> evidenced, <total> claimed not yet evidenced` rather than an unqualified `0/<total>`. When `spec.spec_sections.acceptance_criteria_residue` is non-zero, append ` (<N> unparsed)` to the ratio - the denominator is short by that many criterion-shaped bullets the parser could not read (fn-179, #303); never silently present a short denominator as complete. This qualifier applies on BOTH ratio paths - artifact-derived (Phase 1.5's supersession covers the coverage *claims*, but the residue count has no artifact counterpart and comes from the same export payload, so appending it is not a legacy-field merge) and legacy fallback alike.
 
 A 2-line natural-language summary appears between the H1 and the blockquote, drawn from `spec.spec_sections.goal_and_context` first paragraph, truncated to ~240 characters with sentence-boundary respect. Never invent — if `goal_and_context` is empty the summary is omitted.
 
@@ -450,25 +462,36 @@ Render `## R-ID coverage` as a markdown table. Exact column order, exact header 
 |------|----------------------|------|----------|
 | R1 | <criterion text, ≤120 chars + … if truncated> | [fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md) | [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha40>) |
 | R2 | <…> | [fn-N.K](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.K.md), [fn-N.L](…) | [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha40>), [`<sha7>`](…) |
+| R5 | <…> | [fn-N.P](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.P.md) | ⏳ claimed, not yet evidenced |
 | R7 | <…> | ⚠️ uncovered | — |
 ```
+
+**Three coverage states (declared vs evidenced — fn-180, #301).** A criterion is *evidenced* when a **done** task claims it (`tasks_summary.uncovered_r_ids` is the evidenced-gap set), *claimed but not yet evidenced* when only non-done tasks claim it, and *undeclared* when no task claims it at all (`tasks_summary.undeclared_r_ids`). The claimed-not-evidenced state is a plan gate, NOT a gap: render it honestly, never as `⚠️ uncovered` and never as 0%.
+
+| State | Payload test | Task column | Evidence column |
+|-------|--------------|-------------|-----------------|
+| Evidenced | R-ID ∉ `uncovered_r_ids` | claiming done task link(s) | commit link(s), or `—` when the done task recorded no commit |
+| Claimed, not yet evidenced | R-ID ∈ `uncovered_r_ids` but ∉ `undeclared_r_ids` | claiming task link(s) — same blob links, no warning marker | `⏳ claimed, not yet evidenced` |
+| Undeclared | R-ID ∈ `undeclared_r_ids` | `⚠️ uncovered` | `—` |
 
 Field rules:
 
 - **R-ID column** — every entry from `spec.spec_sections.acceptance_criteria[].id` in spec order. NEVER renumber; gaps in numbering (R1, R3, R5 — R2 deleted post-creation) are preserved verbatim per the R-ID renumber-forbidden rule. **Provenance chip:** when `acceptance_criteria[].tag` is `inferred` (weak provenance — the criterion was inferred by planning, not stated verbatim or paraphrased from the user's spec), append ` · inferred` in that row's R-ID cell (e.g. `R15 · inferred`) so the reviewer knows which criteria deserve a second look. `verbatim` / `paraphrase` / absent tags render no chip.
 - **Acceptance criterion column** — `spec.spec_sections.acceptance_criteria[].text` truncated to 120 characters. If truncated, append `…` (single ellipsis character, not three dots). Never edit content; truncation is mechanical at byte boundary respecting word boundaries when feasible.
-- **Task column** — derived ONLY from `tasks[].satisfies[]`. For each R-ID, find every task whose `satisfies` array contains that R-ID. Render as a comma-separated list of **blob** links (task spec is an artifact to read): `[fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md)` (per §2.4b). **Never infer from task title.** Never infer from commit message text. If `tasks[].satisfies[]` is empty for every task → R-ID is uncovered → render `⚠️ uncovered`.
-- **Evidence column** — for each linked task, emit an absolute whole-commit-diff link `[\`<sha7>\`](https://github.com/<owner>/<repo>/commit/<sha40>)` for every entry in `tasks[].evidence.commits` (per §2.4b — NOT the bare `../../commit/` relative form). SHAs come from the payload only; never invent. If a task has multiple commits, list all of them comma-separated. If the task has no evidence commits but is `done`, emit `—` (em-dash) in that slot. For uncovered R-IDs, emit a single `—`.
+- **Task column** — derived ONLY from `tasks[].satisfies[]`. For each R-ID, find every task whose `satisfies` array contains that R-ID. Render as a comma-separated list of **blob** links (task spec is an artifact to read): `[fn-N.M](https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/tasks/fn-N.M.md)` (per §2.4b). **Never infer from task title.** Never infer from commit message text. Task status does NOT filter this column: a claiming task that is still `todo`/`in_progress` renders its link exactly like a done one (that is the plan-gate state above). Only when NO task claims the R-ID — it is in `tasks_summary.undeclared_r_ids` — does the cell render `⚠️ uncovered`.
+- **Evidence column** — for each linked task, emit an absolute whole-commit-diff link `[\`<sha7>\`](https://github.com/<owner>/<repo>/commit/<sha40>)` for every entry in `tasks[].evidence.commits` (per §2.4b — NOT the bare `../../commit/` relative form). SHAs come from the payload only; never invent. If a task has multiple commits, list all of them comma-separated. If the task has no evidence commits but is `done`, emit `—` (em-dash) in that slot. When every claiming task is non-done, emit `⏳ claimed, not yet evidenced` — never a commit link, never `—`, never `⚠️`. For undeclared R-IDs, emit a single `—`.
+- **Orphaned-SHA marking (fn-180, #302 / PR #327 finding).** During Phase 1, after the export call, run ONE `"$FLOWCTL" validate --spec "$SPEC_ID" --json` and collect the tokens from warnings matching `evidence commit <token> is not reachable from HEAD`. Any evidence SHA in that set renders as bare inline code annotated `` `<sha7>` (orphaned by a history rewrite) `` — NEVER a commit link (the object was often never pushed, so the link 404s and the body would present dead evidence as live). Non-orphaned SHAs keep the normal link. Use the warnings from any PARSEABLE validate JSON regardless of exit code - a structural error elsewhere in the spec must not discard the orphan set; only absent or unparseable output degrades to no orphan set, links rendering as before (the marking degrades, the body never blocks).
 
-After the table, if `tasks_summary.uncovered_r_ids` is non-empty, append a single italic sentence:
+After the table, append at most two follow-up lines — the warning line only for the undeclared set:
 
 ```markdown
-⚠️ **<N> uncovered acceptance criterion(a):** R<i>, R<j>, R<k>. Reviewer should confirm these are intentional gaps before merge.
+⚠️ **<N> undeclared acceptance criterion(a):** R<i>, R<j>, R<k>. No task's `satisfies` claims these — reviewer should confirm they are intentional gaps before merge.
+⏳ **<M> criterion(a) claimed but not yet evidenced:** R<x>, R<y> — the claiming task(s) are not done yet. Expected at a plan gate; not a coverage gap.
 ```
 
-This makes the gap explicit — not silently buried in the table. The reviewer's eye lands on the `⚠️` marker and the explanatory line directly under the table reinforces it.
+Emit the `⚠️` line when `tasks_summary.undeclared_r_ids` is non-empty, and the `⏳` line when `uncovered_r_ids` minus `undeclared_r_ids` is non-empty; both may appear, either may be absent. This makes a real gap explicit without dressing planned-but-unbuilt work up as one — the reviewer's eye lands on `⚠️` only where a criterion is genuinely unclaimed.
 
-If `tasks_summary.uncovered_r_ids` length equals `len(acceptance_criteria)` (every R-ID uncovered) the body is unrenderable — abort with stderr `Empty R-ID coverage (no tasks satisfy any spec R-ID). Run /flow-next:work or check task satisfies frontmatter.` exit 1. See §2.7.
+If `tasks_summary.undeclared_r_ids` length equals `len(acceptance_criteria)` (no task claims ANY spec R-ID) the body is unrenderable — abort with stderr `Undeclared R-ID coverage (no task's satisfies frontmatter claims any spec R-ID). Add satisfies entries to the spec's tasks, or re-run /flow-next:plan to regenerate them.` exit 1. See §2.7. **An all-todo, fully-declared spec is NOT this condition** — it renders with `⏳` rows (fn-180, #301); the abort catches a spec whose tasks never declared coverage, which `/flow-next:work` cannot fix.
 
 ### 2.3b — Verification section
 
@@ -520,6 +543,7 @@ This is the one section that doesn't honor the §2.6 omission rule — even a ti
 | **Code under review** (Critical changes, Review plan must-review items) | `` [`<path>`](https://github.com/<owner>/<repo>/commit/<sha>#<anchor>) `` — per-commit **diff** + file anchor | reviewer wants the *change*; `<sha>` = the commit that changed the file (from `tasks[].evidence.commits[]`); `<anchor>` lands on that file's diff |
 | **Artifact to read** (`.flow/specs/*`, `.flow/tasks/*`, `.flow/memory/*`, a doc cited for context) | `` [`<path>`](https://github.com/<owner>/<repo>/blob/<head-sha>/<path>) `` — **blob**, SHA-pinned | read in full, not as a diff; SHA-pin so links survive branch deletion after merge |
 | **Evidence column** (R-ID table) | `` [`<sha7>`](https://github.com/<owner>/<repo>/commit/<sha>) `` — whole-commit diff | "this commit satisfied the R-ID" |
+| **Any orphaned evidence SHA** (Phase 1 validate warnings — §2.3 orphan rule) | `` `<sha7>` (orphaned by a history rewrite) `` — bare annotated code, NEVER a `commit/` or `#diff-` link | applies to EVERY link derived from `tasks[].evidence.commits[]`: the Evidence column, Critical-changes anchors, Review-plan anchors — the object was often never pushed, so any link 404s |
 | **Line ref** (rare) | `` [`<path>:L<n>`](https://github.com/<owner>/<repo>/blob/<head-sha>/<path>#L<n>) `` — blob + line, SHA-pinned | precise line; deep-links work on fresh load |
 
 **Lookup + the code-diff `<anchor>` (the host agent runs this once per PR).** The anchor is GitHub's per-file diff id: `diff-` + the lowercase SHA-256 hex of the file-path string.
@@ -574,7 +598,7 @@ Render shape (these are rendered *lines*, not sub-headings):
 
 The pipeline already verified this — you don't re-check it from scratch:
 - **Tests / gates:** <verbatim evidence from the `## Verification` section, e.g. `fn-93.1 — unit + smoke green`; or `no test evidence recorded on this PR`>
-- **R-ID coverage:** <covered>/<total> acceptance criteria satisfied<; N uncovered — see the table above>
+- **R-ID coverage:** <covered>/<total> acceptance criteria evidenced<; M claimed but not yet evidenced><; N undeclared — see the table above>
 - **Cross-model review:** <e.g. `N findings deferred, M suppressed by the review gate`; or `no cross-model review recorded on this PR`>
 
 Your job — the calls the pipeline can't make:
@@ -594,7 +618,9 @@ Field rules:
 - **Labeled legacy fallback:** mechanically-verified summary draws from two
   export signals only: `tasks[].evidence.tests[]` (the same evidence §2.3b
   Verification renders) and R-ID coverage (acceptance-criteria count minus
-  `tasks_summary.uncovered_r_ids`). `deferred_findings[]` is an open-items
+  `tasks_summary.uncovered_r_ids`, with the §2.1 claimed-not-evidenced and
+  undeclared qualifiers when non-zero — never report a plan gate as an
+  unqualified 0%). `deferred_findings[]` is an open-items
   signal, not proof that a cross-model review ran. The export carries no
   review-verdict or suppression field, so the cross-model line says
   `no cross-model review recorded on this PR` rather than inferring one.
@@ -667,7 +693,7 @@ The 11 rules below are not advisory. They define what the body MAY and MAY NOT c
 4. **No "non-breaking" weakening.** Every `public_exports_changed[].removed` entry is potentially breaking. Never reclassify as "non-breaking", "internal", "minor", "trivial", or "harmless removal." The agent doesn't have global call-graph visibility. Reviewer judgment, not author judgment.
 5. **No copy-pasted diff content.** The body talks ABOUT the diff (paths, churn, structure, modules). It NEVER quotes code. GitHub renders the diff below the body — duplication is wasted reviewer attention, AND privacy / secret-leakage risk: an LLM-generated body that quotes diff content could surface a secret the linter caught but the body grabbed.
 6. **No inflated scope.** Every claim in the body must trace to either (a) the R-ID coverage table or (b) a task's `done_summary`. If you can't anchor a claim to one of those, drop it. "We also improved overall reliability" with no concrete trace = drop.
-7. **No R-ID misattribution.** `tasks[].satisfies[]` is the source of truth. NEVER infer R-ID coverage from task titles ("This task is about validation, must be satisfying R3"). NEVER infer from commit messages alone. Empty `satisfies` → uncovered → ⚠️.
+7. **No R-ID misattribution.** `tasks[].satisfies[]` is the source of truth. NEVER infer R-ID coverage from task titles ("This task is about validation, must be satisfying R3"). NEVER infer from commit messages alone. No task claims the R-ID → undeclared → ⚠️. A non-done task claims it → `⏳ claimed, not yet evidenced` — never a ⚠️, and never an evidence link the task has not produced.
 8. **No stale references.** Cross-check against `diff_summary.files[].status`. A file with `status == "D"` (deleted) cannot appear in the body as if it still exists. A file with `status == "R"` (renamed) appears under its new path; the old path is mentioned only if the rename itself is the load-bearing change.
 9. **No invented "why".** The Decision Context section is a read-only mirror of `.flow/memory/knowledge/decisions/` + the spec's `## Decision Context`. NEVER paraphrase, never extend, never narrate a plausible-sounding rationale to fill a gap. If no decision exists for a structural change, the body says so honestly: `*No decision-track memory entry for this change. Decision context unclear — surface in PR comments if needed.*`
 10. **Trace every claim.** The meta-rule: every sentence in the body must trace to a structured field in the export payload (spec / tasks / memory / glossary / strategy / diff / reviews) or to a verbatim spec quote. If you can't point to which field a claim came from, drop the claim.
@@ -688,7 +714,7 @@ Empty content → omit the entire section heading. Never emit an empty placehold
 | Title + summary block | Always | Never (if the skill reaches Phase 2 the title is renderable from `PHASE0_CONTEXT`) |
 | TL;DR | ≥1 bullet derivable | Aborts via §2.7 if zero bullets derivable |
 | Not in this PR (by design) | `spec_sections.boundaries[]` non-empty | Empty array |
-| R-ID coverage table | ≥1 R-ID in spec | Aborts via §2.7 if every R-ID uncovered |
+| R-ID coverage table | ≥1 R-ID in spec | Aborts via §2.7 if every R-ID is *undeclared* (a plan gate — every R-ID declared, none evidenced yet — still renders) |
 | Verification | any `tasks[].evidence.tests[]` non-empty | Every task's `tests[]` empty |
 | Critical changes | Always (with fallback bullet per §2.4) | Never |
 | How to review this PR | Always (trust frame — even a one-file PR) | Never |
@@ -709,9 +735,11 @@ The skill aborts before producing a body when the content would be unrenderable:
 | Condition | Stderr message | Exit code |
 |-----------|----------------|-----------|
 | `goal_and_context` empty AND every task has empty `done_summary` | `Empty spec content (no goal_and_context, no done_summary fields populated). Run /flow-next:work to populate task done_summaries first.` | 1 |
-| Every R-ID uncovered (`tasks_summary.uncovered_r_ids` length == `len(acceptance_criteria)`) AND `len(acceptance_criteria) > 0` | `Empty R-ID coverage (no tasks satisfy any spec R-ID). Run /flow-next:work or check task satisfies frontmatter.` | 1 |
+| Every R-ID undeclared (`tasks_summary.undeclared_r_ids` length == `len(acceptance_criteria)`) AND `len(acceptance_criteria) > 0` | `Undeclared R-ID coverage (no task's satisfies frontmatter claims any spec R-ID). Add satisfies entries to the spec's tasks, or re-run /flow-next:plan to regenerate them.` | 1 |
 
-These are guard conditions, not warnings — a body with empty TL;DR or empty R-ID coverage is the cognitive-aid equivalent of a blank PR description, and shipping it would defeat the skill's purpose.
+These are guard conditions, not warnings — a body with empty TL;DR or a coverage table no task even claims is the cognitive-aid equivalent of a blank PR description, and shipping it would defeat the skill's purpose.
+
+**The coverage abort is keyed on DECLARED coverage, never on evidenced coverage (fn-180, #301).** It exists to catch a spec whose tasks never wrote `satisfies` frontmatter — the one state where the table has nothing to render and the advice ("go declare coverage") is actionable. A plan-gate spec (every task `todo`, every criterion declared) has `uncovered_r_ids == every R-ID` and `undeclared_r_ids == []`: it RENDERS, with `⏳ claimed, not yet evidenced` rows (§2.3). Keying on `uncovered_r_ids` there aborted a renderable body with advice the user could not follow — `/flow-next:work` was already the next step, and running it was impossible while make-pr refused to open the draft.
 
 `acceptance_criteria` legitimately empty (zero R-IDs because the spec is intentionally minimal) is **not** an abort — the R-ID coverage table is omitted via §2.6 and the body proceeds with a TL;DR + Critical changes pair only. This is the small-spec escape hatch.
 
@@ -720,14 +748,14 @@ These are guard conditions, not warnings — a body with empty TL;DR or empty R-
 - Body section order locked (§2.0): H1 title + summary block → TL;DR → R-ID coverage → Critical changes → How to review this PR → Review plan → (Structural changes, §Phase 3) → context sections (§Phase 2 cont) → footer breadcrumb. Sections never reorder.
 - Title + summary block renders spec id link, branch / base, task counts, R-ID coverage ratio — plus the optional ≈240-char `goal_and_context` summary and the Phase 1.5 render-lens blockquote line when one was recorded (absent entirely when the mode is off, under `--dry-run`, or when Phase 1.5 failed).
 - `## TL;DR` renders 3-5 plain-English bullets sourced from `goal_and_context` + top tasks' `done_summary`, never from invented content. Never includes R-IDs, never quotes raw diff content, never pads when fewer than 4 substantive changes shipped.
-- `## R-ID coverage` table renders every R-ID from `acceptance_criteria` in spec order (gaps preserved verbatim — never renumber), columns exactly `R-ID | Acceptance criterion | Task | Evidence`; Task column derives ONLY from `tasks[].satisfies[]` — never inferred from titles or commit messages; ⚠️ for uncovered + the italic follow-up sentence reinforcing the gap count.
+- `## R-ID coverage` table renders every R-ID from `acceptance_criteria` in spec order (gaps preserved verbatim — never renumber), columns exactly `R-ID | Acceptance criterion | Task | Evidence`; Task column derives ONLY from `tasks[].satisfies[]` — never inferred from titles or commit messages, and never filtered by task status; the three coverage states render distinctly — evidenced (commit links), `⏳ claimed, not yet evidenced` (a claiming task that is not done), `⚠️ uncovered` for `undeclared_r_ids` only — plus the matching follow-up line(s) under the table.
 - `## Critical changes` renders ≤7 bullets in 5-tier priority order (high-churn → cross-module → public-interface with `removed[]` items FIRST within tier 3 → security-sensitive → behavior-visible), with the limited-churn fallback bullet for low-signal diffs (the one section never omitted entirely).
 - `## How to review this PR` (§2.4c) renders the trust-calibration block: mechanically-verified summary (tests / R-ID coverage / cross-model review, each drawn from the payload) + honest "no … recorded on this PR" for any absent signal + the "your job" framing. ≤ ~8 lines, no-overclaim rule honored, always rendered.
 - `## Review plan` (§2.4d) renders the three risk buckets (`### Must review (~X%)` / `### Spot-check` / `### Safe to skim (~Y%)`) covering every `diff_summary.files[]` path exactly once; must-review items carry WHY (payload-traced) + WHAT-to-check (a question) + a symbol anchor; must-review ≤ ~30% with explicit carve-outs; derived files always safe-to-skim with the derivation named; tiny-PR (<~100 lines) collapses to a single honest Must-review bucket. Only when ≥2 changed files.
 - No-weakening rule honored: every `public_exports_changed[].removed` entry surfaced as "potentially breaking" / `removes \`<sym>\`` — NEVER paraphrased as "non-breaking", "internal-only", "minor", or "trivial".
 - All 11 hallucination guardrails (§2.5) hold for the rendered output — no fabricated paths (every `<path>` ∈ `diff_summary.files[]`), symbols, SHAs (every `<sha>` ∈ `tasks[].evidence.commits[]`), or risk/verification claims (every WHY + every "verified" traces to a payload signal — rule 11); every claim traces to a payload field.
 - Section-omission rule (§2.6) honored — empty headings never emitted.
-- Abort conditions (§2.7) checked before writing any body content; unrenderable bodies exit 1 with a clear stderr message rather than emitting fabricated content. (Zero R-IDs in the spec is NOT an abort — the coverage table is omitted and the body proceeds with the TL;DR + Critical changes pair.)
+- Abort conditions (§2.7) checked before writing any body content; unrenderable bodies exit 1 with a clear stderr message rather than emitting fabricated content. (Zero R-IDs in the spec is NOT an abort — the coverage table is omitted and the body proceeds with the TL;DR + Critical changes pair. A plan gate — all tasks todo, every criterion declared — is NOT an abort either: the coverage abort keys on `undeclared_r_ids`, never on `uncovered_r_ids`.)
 
 ---
 

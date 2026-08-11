@@ -768,5 +768,203 @@ class TestAcceptanceCriteriaResiduePayload(unittest.TestCase):
         self.assertEqual(sections["acceptance_criteria_residue"], 0)
 
 
+class TestDeclaredVsEvidencedCoverage(unittest.TestCase):
+    """fn-180.1 (#301): `undeclared_r_ids` answers the plan-gate question.
+
+    `uncovered_r_ids` counts only DONE tasks, so a fully-planned spec whose
+    tasks are all `todo` reads as 0% covered and make-pr aborted with advice
+    nobody could follow. `undeclared_r_ids` is the second set: R-IDs no task
+    claims at all, regardless of status. The evidenced set keeps its meaning.
+    """
+
+    PLAN = (
+        "## Acceptance Criteria\n\n"
+        "- **R1:** first. [user]\n"
+        "- **R2:** second. [user]\n"
+        "- **R3:** third. [user]\n"
+        "\n## Boundaries\n\n- None.\n"
+    )
+
+    def _run(self, root: Path, *args: str, stdin: str | None = None) -> str:
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS_DIR / "flowctl.py"), *args],
+            cwd=str(root),
+            input=stdin,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+
+    def _export(self, satisfies_per_task: list[list[str]], done: bool) -> dict:
+        """Create a spec with 3 criteria + one task per `satisfies` entry."""
+        import json as _json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _git(root, "init")
+            self._run(root, "init", "--json")
+            _git(root, "add", "-A")
+            _git(root, "commit", "-m", "base")
+            spec_id = _json.loads(
+                self._run(
+                    root, "spec", "create", "--title", "Coverage probe", "--json"
+                )
+            )["id"]
+            self._run(
+                root,
+                "spec",
+                "set-plan",
+                spec_id,
+                "--file",
+                "-",
+                "--json",
+                stdin=self.PLAN,
+            )
+            tasks = [
+                {
+                    "title": f"task {i + 1}",
+                    "description": "d",
+                    "acceptance": "a",
+                    "satisfies": rids,
+                }
+                for i, rids in enumerate(satisfies_per_task)
+            ]
+            created = _json.loads(
+                self._run(
+                    root,
+                    "task",
+                    "create",
+                    "--spec",
+                    spec_id,
+                    "--from-json",
+                    "-",
+                    "--json",
+                    stdin=_json.dumps(tasks),
+                )
+            )
+            if done:
+                for task in created["tasks"]:
+                    tid = task["id"]
+                    self._run(root, "start", tid, "--json")
+                    self._run(
+                        root,
+                        "done",
+                        tid,
+                        "--summary",
+                        "done",
+                        "--evidence",
+                        '{"commits": [], "tests": [], "prs": []}',
+                        "--json",
+                    )
+            payload = _json.loads(
+                self._run(
+                    root,
+                    "spec",
+                    "export-cognitive-aid",
+                    spec_id,
+                    "--base",
+                    "HEAD",
+                    "--json",
+                )
+            )
+            return payload["tasks_summary"]
+
+    def test_plan_gate_full_declaration_is_undeclared_empty_uncovered_full(
+        self,
+    ) -> None:
+        summary = self._export([["R1", "R2"], ["R3"]], done=False)
+        self.assertEqual(summary["undeclared_r_ids"], [])
+        self.assertEqual(summary["uncovered_r_ids"], ["R1", "R2", "R3"])
+        self.assertEqual(summary["done"], 0)
+
+    def test_unassigned_criterion_appears_in_both_sets(self) -> None:
+        summary = self._export([["R1"], ["R2"]], done=False)
+        self.assertEqual(summary["undeclared_r_ids"], ["R3"])
+        self.assertEqual(summary["uncovered_r_ids"], ["R1", "R2", "R3"])
+
+    def test_all_tasks_done_leaves_both_sets_empty(self) -> None:
+        summary = self._export([["R1", "R2"], ["R3"]], done=True)
+        self.assertEqual(summary["undeclared_r_ids"], [])
+        self.assertEqual(summary["uncovered_r_ids"], [])
+
+    def test_evidenced_semantics_unchanged_for_partial_done(self) -> None:
+        # One done task covers R1; the todo task's R2/R3 declaration must not
+        # leak into the evidenced set.
+        import json as _json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _git(root, "init")
+            self._run(root, "init", "--json")
+            _git(root, "add", "-A")
+            _git(root, "commit", "-m", "base")
+            spec_id = _json.loads(
+                self._run(root, "spec", "create", "--title", "Partial", "--json")
+            )["id"]
+            self._run(
+                root,
+                "spec",
+                "set-plan",
+                spec_id,
+                "--file",
+                "-",
+                "--json",
+                stdin=self.PLAN,
+            )
+            created = _json.loads(
+                self._run(
+                    root,
+                    "task",
+                    "create",
+                    "--spec",
+                    spec_id,
+                    "--from-json",
+                    "-",
+                    "--json",
+                    stdin=_json.dumps(
+                        [
+                            {
+                                "title": "a",
+                                "description": "d",
+                                "acceptance": "a",
+                                "satisfies": ["R1"],
+                            },
+                            {
+                                "title": "b",
+                                "description": "d",
+                                "acceptance": "a",
+                                "satisfies": ["R2", "R3"],
+                            },
+                        ]
+                    ),
+                )
+            )
+            first = created["tasks"][0]["id"]
+            self._run(root, "start", first, "--json")
+            self._run(
+                root,
+                "done",
+                first,
+                "--summary",
+                "done",
+                "--evidence",
+                '{"commits": [], "tests": [], "prs": []}',
+                "--json",
+            )
+            summary = _json.loads(
+                self._run(
+                    root,
+                    "spec",
+                    "export-cognitive-aid",
+                    spec_id,
+                    "--base",
+                    "HEAD",
+                    "--json",
+                )
+            )["tasks_summary"]
+        self.assertEqual(summary["uncovered_r_ids"], ["R2", "R3"])
+        self.assertEqual(summary["undeclared_r_ids"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
