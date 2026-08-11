@@ -113,7 +113,10 @@ class PilotStrikesTestCase(unittest.TestCase):
         self.assertEqual(payload["strikes"], {})
         self.assertEqual(payload["count"], 0)
         self.assertEqual(payload["note"], None)
-        self.assertTrue(payload["ledger"].endswith("flow-next/pilot-strikes.json"))
+        # Path separators differ on Windows - compare path components.
+        ledger = Path(payload["ledger"])
+        self.assertEqual(ledger.name, "pilot-strikes.json")
+        self.assertEqual(ledger.parent.name, "flow-next")
 
     def test_list_empty_file_is_tolerated(self) -> None:
         self.ledger.parent.mkdir(parents=True, exist_ok=True)
