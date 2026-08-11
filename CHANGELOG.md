@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.26.0] - 2026-08-11
 
 Two integrity gaps in what the pipeline tells you about your own work, both
 from measured @sn-furali reports (thanks!). A fully-planned spec that had not
