@@ -15,7 +15,7 @@
   "plan_reviewed_at": null,
   "ready": true,
   "spec_path": ".flow/specs/fn-182-tracker-create-first-cas-list-open.md",
-  "status": "open",
+  "status": "done",
   "title": "Tracker: create-first CAS, list-open capability error, per-spec Linear Project, abandon docs",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-08T12:07:44.103433Z"
+  "updated_at": "2026-08-11T08:08:46.674023Z"
 }
