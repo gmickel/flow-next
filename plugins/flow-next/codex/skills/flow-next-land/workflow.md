@@ -81,6 +81,8 @@ if [[ "$CLEAN_REVIEW_PATTERN" == "null" ]]; then
  # pre-seed flowctl (key absent) → the canonical built-in default
  CLEAN_REVIEW_PATTERN="(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit"
 fi # explicit "" stays "" → §2.6 treats empty as DISABLED (no default fallback)
+# fn-188 — opt-in repo merge-verdict gate (§2.9). unset / null / "" ALL mean OFF.
+MERGE_VERDICT_CMD="$(lcfg mergeVerdictCommand)"; [[ "$MERGE_VERDICT_CMD" == "null" ]] && MERGE_VERDICT_CMD=""
 ```
 
 Resolve the land ledger — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until an ACT/REPORT write site, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`:
@@ -385,9 +387,70 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 - `MERGE_STATE == "BEHIND"`: plan `rebase` (same mechanical update, then re-gate next tick).
 - Otherwise (`CLEAN`, `BLOCKED`, `HAS_HOOKS`, `UNSTABLE`): plan `merge`. (`BLOCKED`/`UNSTABLE` reflect server-side rules land already gates harder than — the merge attempt is authoritative; a refusal surfaces in ACT.)
 
+**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `rebase`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
+
+### 2.9 — Repo merge-verdict gate (`land.mergeVerdictCommand`, opt-in, fail-closed)
+
+On a repo with no branch protection (free-plan private repos, where rulesets and protection 403) there is no required status check, so 2.4-2.8 gate against a server that has nothing to say. This is the repo-local gate of record: one repo-authored command whose exit code decides whether land may merge. It is block-only - a green verdict grants nothing the other gates did not already grant, it can only take a merge away. Off by default: unset, `null`, and `""` ALL mean OFF and behave byte-for-byte as before this gate existed (deliberately NOT the null-vs-`""` asymmetry of `cleanReviewCommentPattern` in §2.6 - do not copy that shape here).
+
+Reached ONLY when every gate above is satisfied AND the action planned in 2.8 is `merge`. One execution per merge attempt, never one per patience tick - the verdict is freshest at the decision point. Context arrives as ENVIRONMENT only; the configured string is passed to `bash -c` verbatim and is never built from or interpolated with PR-derived text:
+
+```bash
+MERGE_VERDICT=skipped # green | refused | skipped | would-run (Phase 4 evidence)
+MERGE_VERDICT_HEAD="" # the exact head the command judged (pins 3.5's merge)
+if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
+ if [[ "$LAND_DRY_RUN" == 1 ]]; then
+ MERGE_VERDICT=would-run # R3 — --dry-run NEVER executes the command
+ elif [[ "$(git rev-parse --abbrev-ref HEAD)" != "$BASE_REF" ]]; then
+ # TRUST GUARD: the command string was read from this checkout's
+ # .flow/config.json. On a non-base checkout (e.g. the PR branch itself)
+ # that text is the PR author's, not the base's — executing it would let
+ # a PR self-approve. Refuse; never execute from an untrusted tree.
+ MERGE_VERDICT=refused
+ MV_RC=1; MV_ERR="merge-verdict gate requires the base checkout (on $(git rev-parse --abbrev-ref HEAD), base is $BASE_REF)"
+ else
+ # Bind the merge target BEFORE the command runs: a base that advances
+ # mid-run must read as moved, not as judged. Server truth via ls-remote;
+ # an empty resolution is a refusal (fail-closed), never a skipped check.
+ MERGE_VERDICT_BASE="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
+ if [[ -z "$MERGE_VERDICT_BASE" ]]; then
+ MERGE_VERDICT=refused
+ MV_RC=1; MV_ERR="merge-verdict gate cannot resolve origin/$BASE_REF (ls-remote empty/failed)"
+ else
+ # FOREGROUND RULE: ONE blocking foreground Bash call with a 600s tool
+ # timeout (the host tool's bound - the `timeout` binary is not stock on
+ # macOS). A tool-level timeout is a refusal, exactly like exit 124.
+ MV_ERR_FILE="$(mktemp)"; MV_RC=0
+ # cwd = REPO_ROOT on ORIG_BRANCH (Phase 2 does no checkout).
+ FLOW_HEAD_SHA="$HEAD_OID" FLOW_BASE_REF="$BASE_REF" \
+ FLOW_PR_NUMBER="$PR_NUMBER" FLOW_SPEC_ID="$spec" \
+ bash -c "cd \"$REPO_ROOT\" && $MERGE_VERDICT_CMD" >/dev/null 2>"$MV_ERR_FILE" || MV_RC=$?
+ MV_ERR="$(tail -n 1 "$MV_ERR_FILE" 2>/dev/null | cut -c1-200)"; rm -f "$MV_ERR_FILE"
+ [[ "$MV_RC" -eq 0 ]] && MERGE_VERDICT=green || MERGE_VERDICT=refused
+ MERGE_VERDICT_HEAD="$HEAD_OID"
+ fi
+ fi
+fi
+```
+
+| Command outcome | Land action |
+|---|---|
+| exit 0 | **green** - the merge-verdict gate is satisfied; proceed to the planned `merge` (3.5). |
+| any non-zero exit - including `124` or a host-tool timeout at the 600s bound, `126`/`127` (unexecutable / not found), `128+N` (signal death) | verdict `NEEDS_HUMAN`, action `none`, reason `merge-verdict command refused (exit <MV_RC>): <MV_ERR>` (last stderr line, ~200 chars). **No merge.** |
+
+**Fail-closed, always.** A configured command that is missing, unexecutable, times out at the 600s bound, or dies on a signal BLOCKS the merge - it is never read as "skip", "not applicable", or "gate unavailable". A tick that merged because the configured command could not run has broken this. The refusal class is `NEEDS_HUMAN`, never `BLOCKED`: `BLOCKED` stays reserved for server-side merge refusals (3.5). No `flow-next:needs-human` label is applied on refusal (same posture as 2.5b) - fix the repo-side cause and the next tick re-gates from scratch.
+
+**A verdict binds a (head, base) pair.** §2.9 records the base's remote SHA at judgment; 3.5 refuses to merge when the base has since moved (verdict `RESOLVING`, re-tick re-judges) - the common cause is an earlier PR in the same tick merging first. This mirrors the strict interpretation of a required check: the command judged one merge target, not whichever base exists later.
+
+**`MERGE_VERDICT` and `MERGE_VERDICT_HEAD` are per-PR state, not loop variables.** A tick that classifies several PRs records both values in each PR's classification record alongside its planned action; a later PR's classification never overwrites an earlier PR's verdict. 3.5 reads the values recorded for THE PR IT IS MERGING - a merge that read another iteration's (or a reset) verdict pair has broken this.
+
+**The command executes ONLY from the base checkout.** The command string and the config that carries it are read from the working tree, so a non-base checkout (the PR branch itself, a feature branch) would execute text the PR author controls - a self-approval channel. The trust guard above refuses on any checkout whose branch is not `BASE_REF`; a gate that executed the command from a non-base checkout has broken this.
+
+**The command runs on the BASE checkout, not the PR.** Phase 2 performs no checkout and land never checks out the PR branch for this gate, so a command that inspects the working tree is grading the base and would pass a broken PR. `$FLOW_HEAD_SHA` (the PR `.headRefOid` captured at the top of Phase 2) is the only thing that names the code being merged: the command must key on it - fetch it (`git fetch origin "$FLOW_HEAD_SHA"`), check it out into a scratch worktree, or read it through the API - and it must exit non-zero when it cannot see that head. `$FLOW_BASE_REF`, `$FLOW_PR_NUMBER`, and `$FLOW_SPEC_ID` carry the rest of the context.
+
 ### Dry-run stops here (R17)
 
-`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. Nothing was checked out, pushed, labeled, merged, dispatched, or written (ledger untouched).
+`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. **When `land.mergeVerdictCommand` is set and the would-be action is `merge`, the report states `mergeVerdict=would-run: <command>`** (§2.9) - the command is NOT executed, because the zero-mutation promise covers it exactly as it covers the review trigger's would-trigger. Nothing was checked out, pushed, labeled, merged, dispatched, executed, or written (ledger untouched).
 
 Done when: every discovered PR has one planned action class and a provisional verdict, and the tree, ledger, and remote are untouched.
 
@@ -476,15 +539,34 @@ Verdict `NEEDS_HUMAN` with the planned reason. Later ticks skip the PR at gate 2
 
 ### 3.5 — `merge` + post-merge tail
 
-All gates passed in-tick. Re-read the head right before merging and pin it:
+All gates passed in-tick. Pin the head right before merging. When §2.9 ran green, the pin is the exact head the verdict command judged - re-reading a fresher head here would merge a commit no verdict covered; the `--match-head-commit` guard then refuses a moved head server-side and the PR re-gates next tick (`RESOLVING`), which is the fail-closed direction:
 
 ```bash
-HEAD_OID="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
-[[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER" # idempotent flip; non-draft skips
-MERGE_RC=0
-MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
-if [[ "$MERGE_RC" -ne 0 ]]; then
+# MERGE_VERDICT / MERGE_VERDICT_HEAD / MERGE_VERDICT_BASE = THIS PR's
+# recorded values from its §2.9 classification (per-PR state).
+MV_STALE_BASE=0
+if [[ "$MERGE_VERDICT" == "green" && -n "$MERGE_VERDICT_HEAD" ]]; then
+ # A base that moved since judgment (an earlier PR in this tick merging is
+ # the common cause) means the verdict covered a different merge target.
+ BASE_NOW="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
+ if [[ -z "$BASE_NOW" || "$BASE_NOW" != "$MERGE_VERDICT_BASE" ]]; then
+ MV_STALE_BASE=1
+ fi
+ HEAD_OID="$MERGE_VERDICT_HEAD" # §2.9 judged exactly this head - never a fresher one
+else
+ HEAD_OID="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
+fi
+if [[ "$MV_STALE_BASE" == 1 ]]; then
+ echo "Evidence: merge-verdict stale (base moved since judgment: $MERGE_VERDICT_BASE -> ${BASE_NOW:-unresolvable}) - no merge"
+ # Verdict RESOLVING for this PR - the next tick re-gates and re-judges.
+ # STOP HERE for this PR: no gh pr ready, no merge, no post-merge tail.
+else
+ [[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER" # idempotent flip; non-draft skips
+ MERGE_RC=0
+ MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+ if [[ "$MERGE_RC" -ne 0 ]]; then
  echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
+ fi
 fi
 ```
 
@@ -605,7 +687,10 @@ PR <url> [<spec-id>]
  ci=<green|red|pending|none> checks=<pass>/<total> unresolved=<n> window=<AGE_MIN>/<PATIENCE_MIN>m
  signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|->
  action=<ci-fix|resolve|rebase|merge|resume-tail|label|none> verdict=<VERDICT> reason="<one line>"
+ mergeVerdict=<green|refused|skipped|would-run>
 ```
+
+`mergeVerdict` reports §2.9: `skipped` when `land.mergeVerdictCommand` is off or the planned action was not `merge`, `would-run` under `--dry-run`, `green`/`refused` from the command's exit code.
 
 When the `silence` signal was satisfied via the clean-review comment path (`AUTO_REVIEW_SOURCE == comment`, fn-65.1), append the comment evidence to the `signal=` line so the report shows the gate passed on a comment, not a formal review — e.g. `signal=silence:satisfied via=comment evidence="<AUTO_REVIEW_EVIDENCE>"`.
 

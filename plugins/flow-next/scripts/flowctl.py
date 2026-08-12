@@ -1404,6 +1404,22 @@ def get_default_config() -> dict:
                 r"(Didn'?t find any( major)? issues"
                 r"|No( major)? issues found).*Reviewed commit"
             ),
+            # fn-188 — OPT-IN repo merge-verdict gate (#330): a shell
+            # command land runs once per merge attempt, at the decision
+            # point, after every other gate is satisfied. Exit 0 = green;
+            # non-zero (including missing/unexecutable, timeout, signal
+            # death) BLOCKS the merge — fail-closed, never skip. Context
+            # reaches the command as environment only (FLOW_HEAD_SHA,
+            # FLOW_BASE_REF, FLOW_PR_NUMBER, FLOW_SPEC_ID); the configured
+            # string is never built from PR-derived text. Never executed
+            # under --dry-run.
+            #   Config contract (workflow.md §2.9):
+            #     unset / null / "" → OFF (today's behavior byte-for-byte)
+            #     other value       → run it as the merge gate of record
+            # NOTE the asymmetry with cleanReviewCommentPattern above,
+            # where null and "" mean DIFFERENT things: here all three
+            # off-states collapse to OFF. Do not copy that pattern here.
+            "mergeVerdictCommand": "",
         },
         # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
         # `config get artifacts.html.enabled` returns False (NOT null) on a

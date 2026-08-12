@@ -16,6 +16,11 @@ fresh repo, WITHOUT any prior `config set`:
         explicit ""  → comment scan DISABLED (the real off-switch,
                        distinct from the seeded default);
         other value  → used verbatim.
+  * land.mergeVerdictCommand → ""  (fn-188) — the opt-in repo
+        merge-verdict gate. CONTRACT: unset, null, AND "" all mean OFF
+        (byte-for-byte today's behavior); any other value is a shell
+        command run as the fail-closed merge gate of record. Deliberately
+        NOT the null-vs-"" asymmetry of cleanReviewCommentPattern.
 
 Plus: `config set` round-trips for the string enum and the integer knob
 (set_config auto-coerces digits), the explicit-empty-disables case, the
@@ -105,6 +110,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                     r"(Didn'?t find any( major)? issues"
                     r"|No( major)? issues found).*Reviewed commit"
                 ),
+                "mergeVerdictCommand": "",
             },
         )
 
@@ -297,6 +303,66 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
             self.EXPECTED_CLEAN_PATTERN,
         )
 
+    # ── fn-188: land.mergeVerdictCommand (R1) ────────────────────────────
+
+    def test_merge_verdict_command_seeded_default_is_empty(self) -> None:
+        # Seeded as "" (OFF) so a fresh repo behaves byte-for-byte as before
+        # the gate existed — and surfaces as "" via the defaults merge, not
+        # as a missing key.
+        defaults = self.flowctl.get_default_config()
+        self.assertEqual(defaults["land"]["mergeVerdictCommand"], "")
+
+    def test_fresh_get_merge_verdict_command_is_empty_not_null(self) -> None:
+        out = self._run_config_get_cli("land.mergeVerdictCommand")
+        self.assertEqual(out["value"], "")
+        self.assertIsNotNone(out["value"])
+
+    def test_set_merge_verdict_command_round_trips(self) -> None:
+        cmd = "scripts/merge-verdict.sh"
+        set_out = self._run_config_set_cli("land.mergeVerdictCommand", cmd)
+        self.assertEqual(set_out["value"], cmd)
+        get_out = self._run_config_get_cli("land.mergeVerdictCommand")
+        self.assertEqual(get_out["value"], cmd)
+
+    def test_set_merge_verdict_command_empty_reads_back_empty(self) -> None:
+        # All three off-states (unset / null / "") mean OFF — an explicit ""
+        # must NOT be coerced into anything else. Unlike
+        # cleanReviewCommentPattern, "" here is not a distinct mode; it is
+        # simply the same OFF as unset.
+        self._run_config_set_cli("land.mergeVerdictCommand", "make verdict")
+        set_out = self._run_config_set_cli("land.mergeVerdictCommand", "")
+        self.assertEqual(set_out["value"], "")
+        self.assertEqual(
+            self._run_config_get_cli("land.mergeVerdictCommand")["value"], ""
+        )
+
+    def test_set_merge_verdict_command_keeps_sibling_land_defaults(self) -> None:
+        self._run_config_set_cli("land.mergeVerdictCommand", "make verdict")
+        self.assertEqual(
+            self._run_config_get_cli("land.ciFixBudget")["value"], 3
+        )
+        self.assertEqual(
+            self._run_config_get_cli("land.reviewSignal")["value"], "silence"
+        )
+        self.assertIs(self._run_config_get_cli("land.release")["value"], True)
+        self.assertEqual(
+            self._run_config_get_cli("land.cleanReviewCommentPattern")["value"],
+            self.EXPECTED_CLEAN_PATTERN,
+        )
+
+    def test_set_sibling_keeps_merge_verdict_command_default(self) -> None:
+        self._run_config_set_cli("land.reviewSignal", "approve")
+        self.assertEqual(
+            self._run_config_get_cli("land.mergeVerdictCommand")["value"], ""
+        )
+
+    def test_docstring_lists_merge_verdict_command_key(self) -> None:
+        import sys as _sys
+
+        module_doc = _sys.modules[__name__].__doc__ or ""
+        self.assertIn("mergeVerdictCommand", module_doc)
+        self.assertIn("all mean OFF", module_doc)
+
     def test_docstring_lists_clean_review_pattern_key(self) -> None:
         # The module docstring is the human-facing key inventory; keep the
         # new key (and its contract verb) discoverable there.
@@ -388,6 +454,116 @@ class CommentScanWorkflowStaticTestCase(unittest.TestCase):
             'if [[ "$CLEAN_REVIEW_PATTERN" == "null" ]]; then', self.text
         )
         self.assertNotIn('-z "$CLEAN_REVIEW_PATTERN"', self.text)
+
+
+class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over flow-next-land/workflow.md §2.9 (fn-188).
+
+    Same honest harness limitation as CommentScanWorkflowStaticTestCase: the
+    merge-verdict gate is host-agent BASH inside the skill workflow, not
+    flowctl Python. Pin the load-bearing invariants of the section by
+    asserting the prose/snippet carries them: the gate exists, it is
+    fail-closed, `--dry-run` reports would-run instead of executing, and the
+    context env-var names are the documented ones.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("### 2.9 — Repo merge-verdict gate")
+        end = cls.text.find("### Dry-run stops here", start)
+        assert start != -1 and end != -1, "§2.9 merge-verdict gate not found"
+        cls.gate = cls.text[start:end]
+
+    def test_gate_section_present_between_2_8_and_dry_run_stop(self) -> None:
+        pos_28 = self.text.find("### 2.8 — Merge-state gates")
+        pos_29 = self.text.find("### 2.9 — Repo merge-verdict gate")
+        pos_dry = self.text.find("### Dry-run stops here")
+        self.assertNotEqual(pos_28, -1)
+        self.assertLess(pos_28, pos_29)
+        self.assertLess(pos_29, pos_dry)
+        self.assertIn("land.mergeVerdictCommand", self.gate)
+
+    def test_gate_reads_command_off_the_shared_lcfg_capture(self) -> None:
+        # No second `config get` probe — the key rides the Phase 0 subtree
+        # read (test_skill_prose_diet pins exactly one config get).
+        self.assertIn("MERGE_VERDICT_CMD=\"$(lcfg mergeVerdictCommand)\"", self.text)
+        self.assertNotIn("config get land.mergeVerdictCommand", self.text)
+
+    def test_gate_is_fail_closed(self) -> None:
+        # Missing/unexecutable/timeout/signal all block, never skip.
+        self.assertIn("600s tool", self.gate)
+        for token in ("124", "127", "128+N"):
+            self.assertIn(token, self.gate)
+
+    def test_planned_action_is_assigned_by_the_gate_tree(self) -> None:
+        # Both PR bots caught the unassigned-variable bypass: nothing set
+        # PLANNED_ACTION, so the gate silently skipped. The assignment
+        # instruction must exist between 2.8 and 2.9.
+        self.assertIn("PLANNED_ACTION=<the action class planned above>", self.text)
+
+    def test_merge_pins_the_judged_head(self) -> None:
+        # TOCTOU: a push after the verdict must refuse at --match-head-commit,
+        # not merge an unjudged commit under a refreshed HEAD_OID.
+        self.assertIn('HEAD_OID="$MERGE_VERDICT_HEAD"', self.text)
+        self.assertIn('MERGE_VERDICT_HEAD="$HEAD_OID"', self.gate)
+
+    def test_gate_refuses_on_non_base_checkout(self) -> None:
+        # The command string comes from the working tree's config: on a
+        # non-base checkout it is the PR author's text - a self-approval
+        # channel. The trust guard must refuse before executing.
+        self.assertIn('git rev-parse --abbrev-ref HEAD)" != "$BASE_REF"', self.gate)
+        self.assertIn("requires the base checkout", self.gate)
+
+    def test_verdict_pair_is_per_pr_state(self) -> None:
+        # Multi-PR ticks: the verdict pair rides each PR's classification
+        # record; a later iteration must not clobber an earlier PR's pinned
+        # head before 3.5 merges it.
+        self.assertIn("MV_STALE_BASE", self.text)
+        self.assertIn('HEAD_OID="$MERGE_VERDICT_HEAD"', self.text)
+
+    def test_verdict_binds_head_and_base(self) -> None:
+        # A base that moved since judgment (earlier PR merged in the same
+        # tick) invalidates the verdict: RESOLVING re-tick, never a merge
+        # against an unjudged target.
+        self.assertIn("MERGE_VERDICT_BASE=", self.gate)
+        self.assertIn('"$BASE_NOW" != "$MERGE_VERDICT_BASE"', self.text)
+        # Base bound BEFORE execution; empty resolution refuses, not skips.
+        base_bind = self.gate.index("MERGE_VERDICT_BASE=")
+        cmd_exec = self.gate.index('bash -c "cd')
+        self.assertLess(base_bind, cmd_exec)
+        self.assertIn('-z "$MERGE_VERDICT_BASE"', self.gate)
+        # Stale base structurally stops the merge (guard wraps gh pr merge).
+        self.assertIn('"$MV_STALE_BASE" == 1', self.text)
+
+    def test_gate_refusal_is_needs_human_not_blocked(self) -> None:
+        # BLOCKED stays reserved for server-side merge refusals (3.5).
+        self.assertIn("NEEDS_HUMAN`, action `none`", self.gate)
+        self.assertIn("never `BLOCKED`", self.gate)
+
+    def test_gate_dry_run_reports_would_run_and_never_executes(self) -> None:
+        self.assertIn("MERGE_VERDICT=would-run", self.gate)
+        self.assertIn('"$LAND_DRY_RUN" == 1', self.gate)
+        # the dry-run stop restates it for the classification report
+        self.assertIn("mergeVerdict=would-run", self.text)
+
+    def test_gate_passes_context_as_env_vars_only(self) -> None:
+        for var in (
+            "FLOW_HEAD_SHA",
+            "FLOW_BASE_REF",
+            "FLOW_PR_NUMBER",
+            "FLOW_SPEC_ID",
+        ):
+            self.assertIn(var, self.gate)
+        # wrong-tree trap: the command must key on the PR head, not the tree
+        self.assertIn("BASE checkout", self.gate)
+
+    def test_gate_documents_all_three_off_states(self) -> None:
+        self.assertIn('`null`, and `""` ALL mean OFF', self.gate)
+
+    def test_phase4_evidence_block_carries_merge_verdict_field(self) -> None:
+        self.assertIn("mergeVerdict=<green|refused|skipped|would-run>", self.text)
 
 
 if __name__ == "__main__":
