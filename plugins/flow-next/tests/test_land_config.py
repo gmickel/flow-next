@@ -521,7 +521,7 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         # record; a later iteration must not clobber an earlier PR's pinned
         # head before 3.5 merges it.
         self.assertIn("per-PR state, not loop variables", self.text)
-        self.assertIn("THIS PR's recorded pair", self.text)
+        self.assertIn("recorded values from its §2.9 classification", self.text)
 
     def test_verdict_binds_head_and_base(self) -> None:
         # A base that moved since judgment (earlier PR merged in the same
