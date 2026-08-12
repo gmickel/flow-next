@@ -665,6 +665,7 @@ Tracker sync: <OK | MISSING:capture → retro-fired → OK | MISSING:capture (re
 Next:
  /flow-next:plan <SPEC_ID> → research + break into tasks
  /flow-next:interview <SPEC_ID> → refine via Q&A
+ /flow-next:visual <SPEC_ID> → compact visual digest — review the spec at a glance
 ```
 
 Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired — `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise — zero noise outside the consented / enabled path.

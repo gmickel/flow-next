@@ -446,6 +446,7 @@ Suggest next step based on input type:
 - Spec with tasks → `/flow-next:work fn-N` (or more interview on specific tasks)
 - Task → `/flow-next:work fn-N.M`
 - File → `/flow-next:plan <file>`
+- Any of the above → also offer `/flow-next:visual fn-N` as a compact visual digest for reviewing the refined spec at a glance (an option the user picks, never run for them).
 
 ## Notes
 

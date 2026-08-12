@@ -658,6 +658,8 @@ Execution waves:
 - Wave 2: fn-N.3
 ```
 
+Then, under the summary, offer `/flow-next:visual fn-N-slug` in one line as a compact visual digest (task tree, planned file layout, R-ID coverage) for reviewing the plan at a glance — an option the user picks, never run for them.
+
 Then route on interactivity:
 
 ```bash
