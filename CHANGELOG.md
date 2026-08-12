@@ -2,6 +2,32 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+The worktree kit could not be driven from a script: `cleanup` - the only
+sanctioned removal path - read two answers from stdin unconditionally and
+died inside a bare `read` with no diagnostic when there was no terminal, and
+`create` left the new branch tracking the base's remote branch, so under
+`push.default=upstream` a bare `git push` aimed at the base. Fixes #333 -
+thanks @sn-furali. (The issue's fourth ask - a `commands/` wrapper - is
+answered in docs instead: the kit is already invocable by full skill name
+on hosts that surface skills as commands.)
+
+### Fixed
+
+- **`cleanup [<name>...] [--yes]`.** Names as arguments skip the prompt;
+  `--yes` skips the confirmation and is required off a terminal; both reads
+  are EOF-guarded so a no-terminal run fails loudly naming the remedy
+  instead of dying inside `read`. Interactive no-arg behavior unchanged.
+- **`create` passes `--no-track`.** An isolated per-worktree branch no
+  longer tracks the base's remote branch; first push needs
+  `git push -u origin <name>`.
+- **Invocation story told honestly.** README/skills.md no longer claim every
+  skill answers to `/flow-next:<name>`: the five phrase-triggered skills
+  answer to plain language and, on hosts that surface skills as commands,
+  their full skill name (e.g. `/flow-next:flow-next-worktree-kit`).
+  SKILL.md documents that `switch` prints the path (`cd "$(... switch x)"`).
+
 ## [flow-next 3.28.1] - 2026-08-12
 
 A memory entry edited with `memory add --update` could come back different

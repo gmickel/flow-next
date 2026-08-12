@@ -10,9 +10,8 @@ R3 - plugins/flow-next/skills/flow-next-worktree-kit/SKILL.md: document the non-
 R3 and R4 met; no count-pinning test (test_command_shim_flatten, test_chart_docs_inventory, test_chart_skill_contract) breaks; sync-codex.sh idempotent (orchestrator runs it at close-out).
 
 ## Done summary
-TBD
-
+SKILL.md: non-interactive cleanup form, switch prints-a-path + cd idiom, --no-track first-push note. README §Commands overclaim fixed (24 command-backed vs 5 phrase-triggered; full-skill-name invocation noted, verified live on Claude Code); docs/skills.md same note. Codex mirror regenerated (x2, idempotent). Count-pinning suites green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1fdfc203
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_command_shim_flatten test_chart_docs_inventory test_chart_skill_contract -q
 - PRs:
