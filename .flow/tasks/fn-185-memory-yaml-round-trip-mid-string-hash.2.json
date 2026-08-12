@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T06:32:33.146210Z",
+  "depends_on": [
+    "fn-185-memory-yaml-round-trip-mid-string-hash.1"
+  ],
+  "id": "fn-185-memory-yaml-round-trip-mid-string-hash.2",
+  "priority": null,
+  "spec": "fn-185-memory-yaml-round-trip-mid-string-hash",
+  "spec_path": ".flow/tasks/fn-185-memory-yaml-round-trip-mid-string-hash.2.md",
+  "status": "todo",
+  "title": "Repair the damaged memory entry (quote the truncating title)",
+  "updated_at": "2026-08-12T06:32:33.146210Z"
+}
