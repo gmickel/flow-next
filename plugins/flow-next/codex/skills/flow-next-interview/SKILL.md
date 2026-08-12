@@ -438,7 +438,7 @@ Suggest next step based on input type:
 - Spec with tasks → `/flow-next:work fn-N` (or more interview on specific tasks)
 - Task → `/flow-next:work fn-N.M`
 - File → `/flow-next:plan <file>`
-- Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `/flow-next:visual fn-N` for spec/task inputs, `/flow-next:visual <file-path>` for the file input (an option the user picks, never run for them).
+- Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `/flow-next:visual fn-N` for a spec input, `/flow-next:visual fn-N.M` for a task input, `/flow-next:visual <file-path>` for the file input (an option the user picks, never run for them).
 
 ## Notes
 
