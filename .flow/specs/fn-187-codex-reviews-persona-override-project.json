@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-187-codex-reviews-persona-override-project",
+  "created_at": "2026-08-12T12:47:06.320341Z",
+  "depends_on_epics": [],
+  "id": "fn-187-codex-reviews-persona-override-project",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-187-codex-reviews-persona-override-project.md",
+  "status": "open",
+  "title": "Codex reviews: persona override, project-doc suppression, plan-prompt role anchor, honest no-verdict class (#331)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-12T12:47:06.322727Z"
+}

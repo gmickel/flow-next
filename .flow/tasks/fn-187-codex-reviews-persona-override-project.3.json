@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T12:47:39.460282Z",
+  "depends_on": [
+    "fn-187-codex-reviews-persona-override-project.2"
+  ],
+  "id": "fn-187-codex-reviews-persona-override-project.3",
+  "priority": null,
+  "spec": "fn-187-codex-reviews-persona-override-project",
+  "spec_path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.3.md",
+  "status": "todo",
+  "title": "Honest no-verdict classification + actionable terminal message",
+  "updated_at": "2026-08-12T12:47:39.460282Z"
+}
