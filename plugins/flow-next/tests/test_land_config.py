@@ -509,6 +509,13 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn('HEAD_OID="$MERGE_VERDICT_HEAD"', self.text)
         self.assertIn('MERGE_VERDICT_HEAD="$HEAD_OID"', self.gate)
 
+    def test_gate_refuses_on_non_base_checkout(self) -> None:
+        # The command string comes from the working tree's config: on a
+        # non-base checkout it is the PR author's text - a self-approval
+        # channel. The trust guard must refuse before executing.
+        self.assertIn('git rev-parse --abbrev-ref HEAD)" != "$BASE_REF"', self.gate)
+        self.assertIn("requires the base checkout", self.gate)
+
     def test_gate_refusal_is_needs_human_not_blocked(self) -> None:
         # BLOCKED stays reserved for server-side merge refusals (3.5).
         self.assertIn("NEEDS_HUMAN`, action `none`", self.gate)

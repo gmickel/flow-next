@@ -403,6 +403,13 @@ MERGE_VERDICT_HEAD=""        # the exact head the command judged (pins 3.5's mer
 if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
   if [[ "$LAND_DRY_RUN" == 1 ]]; then
     MERGE_VERDICT=would-run  # R3 — --dry-run NEVER executes the command
+  elif [[ "$(git rev-parse --abbrev-ref HEAD)" != "$BASE_REF" ]]; then
+    # TRUST GUARD: the command string was read from this checkout's
+    # .flow/config.json. On a non-base checkout (e.g. the PR branch itself)
+    # that text is the PR author's, not the base's — executing it would let
+    # a PR self-approve. Refuse; never execute from an untrusted tree.
+    MERGE_VERDICT=refused
+    MV_RC=1; MV_ERR="merge-verdict gate requires the base checkout (on $(git rev-parse --abbrev-ref HEAD), base is $BASE_REF)"
   else
     # FOREGROUND RULE: ONE blocking foreground Bash call with a 600s tool
     # timeout (the host tool's bound - the `timeout` binary is not stock on
@@ -425,6 +432,8 @@ fi
 | any non-zero exit - including `124` or a host-tool timeout at the 600s bound, `126`/`127` (unexecutable / not found), `128+N` (signal death) | verdict `NEEDS_HUMAN`, action `none`, reason `merge-verdict command refused (exit <MV_RC>): <MV_ERR>` (last stderr line, ~200 chars). **No merge.** |
 
 **Fail-closed, always.** A configured command that is missing, unexecutable, times out at the 600s bound, or dies on a signal BLOCKS the merge - it is never read as "skip", "not applicable", or "gate unavailable". A tick that merged because the configured command could not run has broken this. The refusal class is `NEEDS_HUMAN`, never `BLOCKED`: `BLOCKED` stays reserved for server-side merge refusals (3.5). No `flow-next:needs-human` label is applied on refusal (same posture as 2.5b) - fix the repo-side cause and the next tick re-gates from scratch.
+
+**The command executes ONLY from the base checkout.** The command string and the config that carries it are read from the working tree, so a non-base checkout (the PR branch itself, a feature branch) would execute text the PR author controls - a self-approval channel. The trust guard above refuses on any checkout whose branch is not `BASE_REF`; a gate that executed the command from a non-base checkout has broken this.
 
 **The command runs on the BASE checkout, not the PR.** Phase 2 performs no checkout and land never checks out the PR branch for this gate, so a command that inspects the working tree is grading the base and would pass a broken PR. `$FLOW_HEAD_SHA` (the PR `.headRefOid` captured at the top of Phase 2) is the only thing that names the code being merged: the command must key on it - fetch it (`git fetch origin "$FLOW_HEAD_SHA"`), check it out into a scratch worktree, or read it through the API - and it must exit non-zero when it cannot see that head. `$FLOW_BASE_REF`, `$FLOW_PR_NUMBER`, and `$FLOW_SPEC_ID` carry the rest of the context.
 
