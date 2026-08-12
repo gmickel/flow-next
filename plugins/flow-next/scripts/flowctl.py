@@ -10033,13 +10033,15 @@ def get_max_review_transport_failures() -> int:
     return DEFAULT_MAX_REVIEW_TRANSPORT_FAILURES
 
 
-def _consecutive_failure_classes(
-    attempts: Any, scope: str, limit: int = 20
-) -> list:
+def _consecutive_failure_classes(attempts: Any, scope: str) -> list:
     """Failure classes of the trailing no-verdict streak on ``scope``.
 
     Walks the attempt rows backwards, ignoring other scopes, and stops at the
     first verdict-bearing row — the same streak the transport counter counts.
+    Unbounded on purpose: the streak is naturally capped by the transport
+    budget, and an arbitrary tail limit could hide an early real transport
+    failure from the all-missing_verdict terminal branch when the budget is
+    configured above the limit.
     """
     classes: list = []
     if not isinstance(attempts, list):
@@ -10050,8 +10052,6 @@ def _consecutive_failure_classes(
         if row.get("outcome") != "transport_failure":
             break
         classes.append(row.get("failure_class") or "unknown")
-        if len(classes) >= limit:
-            break
     classes.reverse()
     return classes
 

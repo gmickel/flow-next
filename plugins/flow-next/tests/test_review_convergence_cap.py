@@ -4044,6 +4044,26 @@ class TestNoVerdictHonestClassification(unittest.TestCase):
         )
         self.assertIn("repair the backend/environment", message)
 
+    def test_streak_walk_is_unbounded(self):
+        """An early real transport failure survives a long missing_verdict
+        tail — a truncated walk would misreport the streak as all-healthy
+        when the transport budget is configured above the old 20-row limit."""
+        attempts = [
+            {"scope": "plan", "outcome": "transport_failure",
+             "failure_class": "timeout"},
+        ] + [
+            {"scope": "plan", "outcome": "transport_failure",
+             "failure_class": "missing_verdict"}
+            for _ in range(25)
+        ]
+        classes = flowctl._consecutive_failure_classes(attempts, "plan")
+        self.assertEqual(len(classes), 26)
+        self.assertEqual(classes[0], "timeout")
+        message = flowctl.build_transport_unhealthy_message(
+            "codex", "plan", 26, 25, classes
+        )
+        self.assertIn("repair the backend/environment", message)
+
     def test_streak_classes_are_reported_on_the_summary(self):
         for _ in range(2):
             flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
