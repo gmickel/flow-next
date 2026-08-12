@@ -10,9 +10,8 @@ R2/R3/R4/R5 - In plugins/flow-next/skills/flow-next-land/workflow.md: add '### 2
 R2-R5 met; test_land_config + test_skill_prose_diet green; sync-codex idempotent; conduct item added.
 
 ## Done summary
-TBD
-
+land workflow gains §2.9 (opt-in fail-closed merge-verdict gate): reached only when all gates pass and planned action is merge; env-only context (FLOW_HEAD_SHA/BASE_REF/PR_NUMBER/SPEC_ID); exit-code contract with NEEDS_HUMAN-not-BLOCKED refusals; wrong-tree warning; all-three-off-states; would-run under --dry-run; Phase 4 mergeVerdict evidence field; SKILL bullet; conduct item; 8 static tests. Orchestrator follow-up f553f4db: time bound via the host tool's 600s timeout (ONE blocking foreground call, repo convention) instead of the timeout binary (not stock on macOS - would have refused every valid command with 127).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2e3728c5, f553f4db
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_skill_prose_diet -q
 - PRs:

@@ -10,9 +10,8 @@ R1 - Add land.mergeVerdictCommand (default "") to get_default_config()'s land bl
 R1 met; cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift -q green; schema artifact regenerated and committed; ruff clean.
 
 ## Done summary
-TBD
-
+land.mergeVerdictCommand config leaf (default "", unset/null/"" all OFF with the cleanReviewCommentPattern-contrast comment), schema generator DESCRIPTIONS + TABLE (string|null), regenerated committed schema artifact, docs/flowctl.md config row, 7 config tests. test_land_config + test_flow_config_schema_drift green (67 tests), ruff clean.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: aa1bc203
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift -q
 - PRs:

@@ -2,6 +2,42 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+On a free-plan private repo, branch protection and rulesets 403 - no required
+status check can exist - so land's gate tree read a server that had nothing to
+say, and a repo-local gate of record had no way to bind the merge. Fixes #330
+- thanks @TechupBusiness for the precise gap analysis, including the correct
+reading of `gate receipt` as an assertion warrant that must never be treated
+as proof of execution.
+
+### Added
+
+- **`land.mergeVerdictCommand` - an opt-in, fail-closed repo merge-verdict
+  gate (§2.9).** Once every other gate passes and the planned action is
+  `merge`, land runs the configured command once (one blocking foreground
+  call, 600s bound) with context in the environment only (`FLOW_HEAD_SHA`,
+  `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`). Exit 0 merges; any
+  non-zero - including missing, unexecutable, timed out, or signal death -
+  blocks with `NEEDS_HUMAN` and never skips. `--dry-run` reports `would-run`
+  and executes nothing. The command runs on the base checkout, so it must key
+  on `$FLOW_HEAD_SHA` and refuse when it cannot see that head. Unset, `null`,
+  and `""` all mean off - today's behavior byte-for-byte. Where #313 kept
+  gate-classification config closed, this key is accepted for the opposite
+  reason the classifier ask was declined: it is block-only (a misconfiguration
+  can only refuse merges, never permit one) and it guards an autonomous flow
+  where conductor prose is not fail-closed.
+
+### Docs
+
+- **`gate classify`'s known fail-open is named (#334).** A CI-guarded
+  generated doc (a code artifact wearing a `.md` name under `docs/`) classifies
+  tier-B and the work loop skips the test/smoke gates on exactly the change the
+  CI check exists to catch. The taxonomy stays closed to config per #313; the
+  documented remedy is a conductor-instructions line naming the CI-guarded
+  paths, and `docs/flowctl.md` now states the case and its blast radius (the
+  local gate diet only - the repo's own CI still fires on the PR).
+
 ## [flow-next 3.30.0] - 2026-08-12
 
 `review.backend codex` could return no verdict over and over - 13 consecutive
