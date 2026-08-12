@@ -151,7 +151,7 @@ Trimming rule: within the chosen shape, keep ONLY the calls, files, props, state
 - **Missing state degrades gracefully.** No tasks yet -> pre-plan digest. No spec -> diff or ad-hoc mode. Not a git repo / no flow install -> ad-hoc mode still works (the vocabulary needs no flowctl).
 - **Token cost.** The skill is small (target: SKILL.md + one workflow file, same order of magnitude as the vocabulary above). Closer offers in capture/plan/interview are ONE line each - a suggested next command, never auto-run.
 - **Command-surface pin.** `test_command_shim_flatten.EXPECTED_COMMANDS` pins the exact shim set - the new `visual` shim must be added there deliberately or the suite fails.
-- **make-pr guardrails carry over.** Diff-fenced sketches in `## Structural changes` obey the same hallucination rules as mermaid (nodes/paths from `diff_summary.files[]` / `cross_module_changes[]` only) and the same prose-precedes-visual rule (R13). The pr_cognitive_aid v1 schema, its validator, and its deterministic renderer are untouched.
+- **make-pr guardrails carry over.** Diff-fenced sketches in `## Structural changes` obey the same hallucination rules as mermaid (nodes/paths from `diff_summary.files[]` / `cross_module_changes[]` only) and the same prose-precedes-visual rule (make-pr's internal rule R13, `mermaid-rules.md` section 5 - not an R-ID of this spec). The pr_cognitive_aid v1 schema, its validator, and its deterministic renderer are untouched.
 
 ## Acceptance Criteria
 
