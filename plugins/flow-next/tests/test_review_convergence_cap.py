@@ -3870,3 +3870,212 @@ class TestReviewExecTimeout(unittest.TestCase):
                     )
                     self.assertEqual(kw.value.id, "review_exec_timeout")
         self.assertEqual(seen, spawners, "a backend spawn function was not found")
+
+
+class TestNoVerdictHonestClassification(unittest.TestCase):
+    """fn-187 (#331): the failure class must describe the TRANSPORT, never the
+    reviewer's prose — and when a whole streak is `missing_verdict`, the
+    terminal must stop sending operators to repair a healthy backend.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        _init_flow_repo(self.root)
+        self.spec_id = "fn-1-demo"
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self._old_env = os.environ.pop("MAX_REVIEW_ITERATIONS", None)
+
+    def tearDown(self):
+        os.chdir(self._cwd)
+        if self._old_env is not None:
+            os.environ["MAX_REVIEW_ITERATIONS"] = self._old_env
+        self._tmp.cleanup()
+
+    def _spec_data(self) -> dict:
+        return json.loads(
+            (self.root / ".flow" / "specs" / f"{self.spec_id}.json").read_text()
+        )
+
+    def _run(self, *argv: str) -> "tuple[int, str, str]":
+        out, err = io.StringIO(), io.StringIO()
+        code = 0
+        with mock.patch.object(sys, "argv", ["flowctl", *argv]):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                try:
+                    flowctl.main()
+                except SystemExit as e:
+                    code = int(e.code or 0)
+        return code, out.getvalue(), err.getvalue()
+
+    def _finish(self, *, output: str, stderr: str, exit_code: int) -> None:
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        reg = {
+            "has_sandbox": True,
+            "cli_label": "codex",
+            "no_verdict_label": "Reviewer",
+        }
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                flowctl._finish_backend_exec(
+                    backend="codex",
+                    reg=reg,
+                    args=mock.Mock(json=False),
+                    receipt_path=None,
+                    output=output,
+                    stderr=stderr,
+                    exit_code=exit_code,
+                    spec_id=self.spec_id,
+                    review_kind="plan",
+                    review_type="plan",
+                    task_id=None,
+                )
+
+    def test_reviewer_prose_mentioning_timeout_is_missing_verdict(self):
+        """Exit 0, real output, no verdict tag — the reviewer talking ABOUT a
+        timeout must not be journaled as a transport timeout."""
+        self._finish(
+            output=(
+                "The build step timed out in CI, so a timeout guard is needed "
+                "here. Overall the plan is sound."
+            ),
+            stderr="",
+            exit_code=0,
+        )
+        self.assertEqual(
+            self._spec_data()["review_attempts"][-1]["failure_class"],
+            "missing_verdict",
+        )
+
+    def test_real_transport_timeout_still_classes_timeout(self):
+        """The TimeoutExpired handlers return ("", …, 2, "<cli> timed out"),
+        so the stderr-scoped scan still catches a genuine timeout."""
+        self._finish(
+            output="", stderr="codex exec timed out (600s)", exit_code=2
+        )
+        self.assertEqual(
+            self._spec_data()["review_attempts"][-1]["failure_class"], "timeout"
+        )
+
+    def test_rp_record_demotes_contradictory_timeout_claim(self):
+        """rp ladder parity: a caller-declared `timeout` on an exit-0 run that
+        returned prose is a misread of the reviewer's own words."""
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        output_path = self.root / "review.txt"
+        output_path.write_text(
+            "Review complete; note the timeout handling.", encoding="utf-8"
+        )
+        code, _, _ = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan", "--backend", "rp",
+            "--output-file", str(output_path), "--exit-code", "0",
+            "--failure-class", "timeout", "--json",
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            self._spec_data()["review_attempts"][-1]["failure_class"],
+            "missing_verdict",
+        )
+
+    def test_missing_verdict_streak_terminal_names_instruction_contamination(self):
+        cap = flowctl.get_max_review_transport_failures()
+        for _ in range(cap):
+            self._finish(
+                output="A thorough review, no tag.", stderr="", exit_code=0
+            )
+        flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            with self.assertRaises(SystemExit) as ctx:
+                flowctl._finish_backend_exec(
+                    backend="codex",
+                    reg={
+                        "has_sandbox": True,
+                        "cli_label": "codex",
+                        "no_verdict_label": "Reviewer",
+                    },
+                    args=mock.Mock(json=False),
+                    receipt_path=None,
+                    output="A thorough review, no tag.",
+                    stderr="",
+                    exit_code=0,
+                    spec_id=self.spec_id,
+                    review_kind="plan",
+                    review_type="plan",
+                    task_id=None,
+                )
+        self.assertEqual(ctx.exception.code, flowctl.REVIEW_TRANSPORT_EXIT_CODE)
+        message = err.getvalue()
+        self.assertIn("TRANSPORT_UNHEALTHY", message)
+        self.assertIn("no verdict", message)
+        # Contract tokens: the honest cause + the actual remedies.
+        self.assertIn("persona", message)
+        self.assertIn("AGENTS.md", message)
+        self.assertNotIn("repair the backend/environment", message)
+
+    def test_transport_streak_terminal_keeps_repair_advice(self):
+        """A genuinely broken transport keeps the original advice — on the rp
+        terminal too, which shares the branching builder."""
+        cap = flowctl.get_max_review_transport_failures()
+        output_path = self.root / "empty.txt"
+        output_path.write_text("", encoding="utf-8")
+        code, out = 0, ""
+        for _ in range(cap + 1):
+            self._run(
+                "review-rounds", "increment", self.spec_id,
+                "--kind", "plan", "--json",
+            )
+            code, out, _ = self._run(
+                "review-rounds", "record", self.spec_id,
+                "--kind", "plan", "--review-type", "plan", "--backend", "rp",
+                "--output-file", str(output_path), "--json",
+            )
+        self.assertEqual(code, flowctl.REVIEW_TRANSPORT_EXIT_CODE)
+        self.assertIn("repair the backend/environment", out)
+        self.assertNotIn("persona", out)
+
+    def test_mixed_streak_keeps_repair_advice(self):
+        """One genuine transport failure in the streak means the backend is
+        still a live suspect — the contamination message must not claim it."""
+        message = flowctl.build_transport_unhealthy_message(
+            "codex", "plan", 3, 2, ["missing_verdict", "timeout"]
+        )
+        self.assertIn("repair the backend/environment", message)
+
+    def test_streak_walk_is_unbounded(self):
+        """An early real transport failure survives a long missing_verdict
+        tail — a truncated walk would misreport the streak as all-healthy
+        when the transport budget is configured above the old 20-row limit."""
+        attempts = [
+            {"scope": "plan", "outcome": "transport_failure",
+             "failure_class": "timeout"},
+        ] + [
+            {"scope": "plan", "outcome": "transport_failure",
+             "failure_class": "missing_verdict"}
+            for _ in range(25)
+        ]
+        classes = flowctl._consecutive_failure_classes(attempts, "plan")
+        self.assertEqual(len(classes), 26)
+        self.assertEqual(classes[0], "timeout")
+        message = flowctl.build_transport_unhealthy_message(
+            "codex", "plan", 26, 25, classes
+        )
+        self.assertIn("repair the backend/environment", message)
+
+    def test_streak_classes_are_reported_on_the_summary(self):
+        for _ in range(2):
+            flowctl.enforce_and_increment_review_cap(self.spec_id, "plan")
+            result = flowctl.record_review_attempt(
+                self.spec_id,
+                "plan",
+                backend="codex",
+                output="no tag",
+                failure_class="missing_verdict",
+                review_type="plan",
+            )
+        self.assertEqual(
+            result["consecutive_failure_classes"],
+            ["missing_verdict", "missing_verdict"],
+        )

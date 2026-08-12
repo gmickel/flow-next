@@ -317,7 +317,14 @@ class TestCodexLadder(unittest.TestCase):
         self.assertEqual(dispatched, ["gpt-5.6-sol", "gpt-5.5", "gpt-5.4", None])
         floor_argv = [c for c in calls if "exec" in c][-1]
         self.assertNotIn("--model", floor_argv)
-        self.assertNotIn("-c", floor_argv)  # R5: floor omits effort
+        # R5: the floor omits the model AND the reasoning-effort pin. Asserted on
+        # the effort override itself, not on `-c` presence: fn-187 R2 puts an
+        # unconditional `-c project_doc_max_bytes=0` on every dispatch (the floor
+        # inherits the host project doc too), so bare `-c` is no longer a proxy
+        # for "no effort pin".
+        joined = " ".join(floor_argv)
+        self.assertNotIn("model_reasoning_effort", joined)
+        self.assertIn("project_doc_max_bytes=0", floor_argv)
         self.assertTrue(res["floor"])
         self.assertIsNone(res["model"])
 

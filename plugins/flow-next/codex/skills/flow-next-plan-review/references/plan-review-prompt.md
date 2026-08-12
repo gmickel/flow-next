@@ -1,4 +1,11 @@
 <!-- placeholders: plan_quality_block, confidence_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+plan and the repository yourself and produce the verdict in this session.
+
 ## Context Gathering
 
 This review includes:

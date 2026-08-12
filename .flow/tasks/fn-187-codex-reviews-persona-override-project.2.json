@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T12:47:39.460227Z",
+  "depends_on": [
+    "fn-187-codex-reviews-persona-override-project.1"
+  ],
+  "id": "fn-187-codex-reviews-persona-override-project.2",
+  "priority": null,
+  "spec": "fn-187-codex-reviews-persona-override-project",
+  "spec_path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.2.md",
+  "status": "todo",
+  "title": "Plan-review prompt gains the 'You ARE the reviewer' role anchor (template + fallback, pins updated)",
+  "updated_at": "2026-08-12T12:47:39.460227Z"
+}

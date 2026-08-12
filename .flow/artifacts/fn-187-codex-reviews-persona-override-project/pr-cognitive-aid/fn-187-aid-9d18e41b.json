@@ -1,0 +1,573 @@
+{
+  "artifactId": "fn-187-aid-9d18e41b",
+  "baseSha": "80f42d257c85b2fbda8bd4d8dbf9e63715e235f2",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "codex exec auto-loads the host repo's AGENTS.md: in a repo that routes all agent work through the flow-next skills, the reviewer adopted that role and re-dispatched the review at itself, which the sandbox rejected (route A). With the flow-next codex plugin installed, the reviewer also read the plugin's own coordinator skills - 'never self-declares a verdict' - completed a good review, and withheld the tag (route B). The only counter-instruction flow-next ships, the persona preamble, was gated behind needs_persona_override=False for codex - a value that mechanically preserved pre-refactor behavior, never a decision. The plan prompt was also the only review prompt without the 'You ARE the reviewer' anchor (#246 gave it to the other three), which is why plan reviews failed first. And every no-verdict turn was misclassed as a transport timeout (the ladder scanned the reviewer's own output for the word 'timeout'), terminating in advice to repair a healthy backend.",
+        "taskIds": [],
+        "title": "Thirteen healthy runs, zero verdicts, and advice to repair the wrong thing"
+      },
+      {
+        "files": [
+          {
+            "additions": 155,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 31,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1",
+              "R2"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r1",
+              "s-r2",
+              "s-diff"
+            ],
+            "summary": "Registry flip + rename + per-backend docstring; argv flag on both codex exec paths. (Also carries tasks 2-3's fallback + ladder changes; single-file monolith.)",
+            "taskIds": [
+              "fn-187-codex-reviews-persona-override-project.1"
+            ]
+          },
+          {
+            "additions": 219,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_codex_persona_and_project_doc.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "7 pins: persona presence on all three codex review kinds + prompt-lead, argv flag on fresh + resume, registry flag.",
+            "taskIds": [
+              "fn-187-codex-reviews-persona-override-project.1"
+            ]
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_model_resolution.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Floor-run proxy assertion retargeted from bare -c to model_reasoning_effort (the flag is now on every dispatch by design).",
+            "taskIds": [
+              "fn-187-codex-reviews-persona-override-project.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1",
+          "s-r2"
+        ],
+        "summary": "BACKEND_REGISTRY['codex']['needs_persona_override'] = True with a comment recording the False was inherited; build_cursor_persona_override renamed build_review_persona_override with a per-backend docstring (persona text byte-identical - the preamble already names auto-attached AGENTS.md/CLAUDE.md and skill catalogs as superseded). '-c project_doc_max_bytes=0' added to the fresh dispatch (unconditional - floor runs inherit the project doc too) and the resume path (a resumed reviewer re-reads it every turn). Non-vacuity verified: with the flag forced off, all three persona tests fail.",
+        "taskIds": [
+          "fn-187-codex-reviews-persona-override-project.1"
+        ],
+        "title": "Persona override on for codex; host project docs suppressed on both argv paths"
+      },
+      {
+        "files": [
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-c2b",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "Role anchor paragraph, matching the other three prompts' placement.",
+            "taskIds": [
+              "fn-187-codex-reviews-persona-override-project.2"
+            ]
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_prompt_text_pinned.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-c2b",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "Plan template + fallback hashes re-pinned (twice: anchor port, then the diff->plan word fix).",
+            "taskIds": [
+              "fn-187-codex-reviews-persona-override-project.2"
+            ]
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/references/plan-review-prompt.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-diff"
+            ],
+            "summary": "Codex mirror of the anchor.",
+            "taskIds": [
+              "fn-187-codex-reviews-persona-override-project.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-c2b",
+          "s-r3"
+        ],
+        "summary": "The 'You ARE the reviewer - review directly' anchor the other three prompts gained in the bd196377 lineage is ported into plan-review-prompt.md and PLAN_REVIEW_PROMPT_FALLBACK (byte-identical parity preserved), with the closing sentence adapted to 'Read the plan and the repository' (each kind pins its own prompt; no cross-kind identity constraint). Both SHA pins updated with the rationale in the commit messages - the deliberate-change path the pin suite exists to audit.",
+        "taskIds": [
+          "fn-187-codex-reviews-persona-override-project.2"
+        ],
+        "title": "The plan-review prompt states its role"
+      },
+      {
+        "files": [
+          {
+            "additions": 189,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_convergence_cap.py",
+            "rIds": [
+              "R4",
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-t3",
+              "s-c3",
+              "s-r4",
+              "s-r5",
+              "s-diff"
+            ],
+            "summary": "7 token-pinned tests: prose-timeout -> missing_verdict, real timeout stays timeout, rp demotion, terminal branches, summary classes.",
+            "taskIds": [
+              "fn-187-codex-reviews-persona-override-project.3"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R4",
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-t3",
+          "s-c3",
+          "s-r4",
+          "s-r5"
+        ],
+        "summary": "The failure ladder's timeout scan reads stderr only - every backend's TimeoutExpired handler writes '<cli> timed out (Ns)' to stderr, while reviewer prose lands in output - so a healthy exit-0 review mentioning timeouts now records missing_verdict; the rp record path demotes a caller-declared timeout on an exit-0 non-empty run the same way. build_transport_unhealthy_message branches the cap terminal: an all-missing_verdict streak names instruction contamination (backend probably healthy - do not repair it; persona override on by default; check AGENTS.md / skill-catalog exposure), transport streaks keep the repair advice. Counter and cap semantics untouched; the summary gains consecutive_failure_classes (journal rows unchanged).",
+        "taskIds": [
+          "fn-187-codex-reviews-persona-override-project.3"
+        ],
+        "title": "Honest classification and an actionable terminal"
+      },
+      {
+        "files": [
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-c4",
+              "s-r6",
+              "s-diff"
+            ],
+            "summary": "Persona section per-backend; missing_verdict terminal documented.",
+            "taskIds": []
+          },
+          {
+            "additions": 35,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-c4",
+              "s-r6",
+              "s-diff"
+            ],
+            "summary": "Unreleased entry: both routes, the flag history, the honest classification.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/plan.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c4",
+              "s-diff"
+            ],
+            "summary": "Rendered-fixture rebaseline (anchor only).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/fixtures/review_prompts/plan_no_tasks.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c4",
+              "s-diff"
+            ],
+            "summary": "Rendered-fixture rebaseline (anchor only).",
+            "taskIds": []
+          },
+          {
+            "additions": 155,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 31,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c4",
+              "s-diff"
+            ],
+            "summary": "Vendored copy (dual-copy propagation).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c4",
+              "s-diff"
+            ],
+            "summary": "Regenerated hash.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c4",
+              "s-diff"
+            ],
+            "summary": "Regenerated hash.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-187-codex-reviews-persona-override-project.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec record.",
+            "taskIds": []
+          },
+          {
+            "additions": 37,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-187-codex-reviews-persona-override-project.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec body with R1-R6.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t3",
+              "s-diff"
+            ],
+            "summary": "Task 3 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-187-codex-reviews-persona-override-project.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t3",
+              "s-diff"
+            ],
+            "summary": "Task 3 body + done summary.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 4,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-c4",
+          "s-r6"
+        ],
+        "summary": "orchestration.md's persona section rewritten per-backend (the 'no CLI knob' sentence is now cursor-scoped; codex's argv suppression and the missing_verdict terminal are documented). Rendered plan fixtures rebaselined - the bd196377 precedent; the only delta is the 7-line anchor, and the fn-136 b1 guard reads its baseline from the same fixture so it keeps guarding against everything else. Full gate 4488 tests OK, ruff clean, dual-copy propagation + tracker manifest + codex mirror regen x2. CHANGELOG under Unreleased credits @sn-furali.",
+        "taskIds": [],
+        "title": "Docs, gate, propagation, and lifecycle artifacts"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-c4"
+        ],
+        "value": "4488 tests, 0 failures; ruff 0.16.0 clean; sync-codex idempotent"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-t3"
+        ],
+        "value": "14 new pins (persona x3 kinds + argv x2 paths + registry, non-vacuity forced-off check; 7 classification/terminal pins)"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-c3",
+          "s-c4"
+        ],
+        "value": "6/6 satisfied across three tasks + close-out"
+      },
+      {
+        "label": "Prompt-change audit",
+        "sourceRefs": [
+          "s-c2",
+          "s-c2b"
+        ],
+        "value": "plan template + fallback SHA pins updated with rationale in both commit messages; parity + rendered fixtures rebaselined (7-line anchor is the only delta)"
+      }
+    ],
+    "thesis": "codex reviews stop losing their verdicts to instructions never meant for the reviewer: the persona override now rides every codex review (the False flag was inherited from a refactor, never decided), the host AGENTS.md is suppressed at the argv level on both dispatch paths, the plan-review prompt finally states the reviewer's role like the other three prompts do, and a healthy run that declares no verdict is journaled as missing_verdict with a terminal that names instruction contamination instead of sending the operator to repair a healthy backend (issue #331)."
+  },
+  "generatedAt": "2026-08-12T14:35:00Z",
+  "headSha": "9d18e41b0bc19692ae2ab1c573a106d765befa4f",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-187-codex-reviews-persona-override-project"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-187-codex-reviews-persona-override-project.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-187-codex-reviews-persona-override-project.2"
+    },
+    {
+      "id": "s-t3",
+      "kind": "task",
+      "ref": "fn-187-codex-reviews-persona-override-project.3"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "b12d1f5b3ac49caa8f0d9cb6502332f4e91f8cb8"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "04ba1c9c7ad7bd981b2181756a97ee39f953b1e5"
+    },
+    {
+      "id": "s-c2b",
+      "kind": "commit",
+      "ref": "932efd4ddca72c1d9af0a9435ffdb1c43a502c87"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "e72691f671bee5e25eb715dd92e23d5c4dce0e03"
+    },
+    {
+      "id": "s-c4",
+      "kind": "commit",
+      "ref": "9d18e41b0bc19692ae2ab1c573a106d765befa4f"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "80f42d257c85b2fbda8bd4d8dbf9e63715e235f2..9d18e41b0bc19692ae2ab1c573a106d765befa4f"
+    }
+  ],
+  "specId": "fn-187-codex-reviews-persona-override-project"
+}
