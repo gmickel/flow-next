@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T08:24:14.418725Z",
+  "depends_on": [
+    "fn-186-worktree-kit-non-interactive-cleanup-no.1"
+  ],
+  "id": "fn-186-worktree-kit-non-interactive-cleanup-no.2",
+  "priority": null,
+  "spec": "fn-186-worktree-kit-non-interactive-cleanup-no",
+  "spec_path": ".flow/tasks/fn-186-worktree-kit-non-interactive-cleanup-no.2.md",
+  "status": "todo",
+  "title": "Docs: SKILL.md caveats + README/skills.md invocation truth",
+  "updated_at": "2026-08-12T08:24:14.418725Z"
+}
