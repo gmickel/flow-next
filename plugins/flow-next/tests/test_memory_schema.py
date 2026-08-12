@@ -507,6 +507,79 @@ class TestYamlScalarNeedsQuoting(unittest.TestCase):
                     f"unexpected quoting for {text!r}",
                 )
 
+    def test_mid_string_comment_hash_needs_quoting(self) -> None:
+        # Whitespace-then-# opens a YAML comment on read (issue #332).
+        for text in ("landed in #140", "tab\t#140", "a # b"):
+            with self.subTest(text=repr(text)):
+                self.assertTrue(
+                    flowctl._yaml_scalar_needs_quoting(text),
+                    f"expected quoting for {text!r}",
+                )
+
+    def test_non_comment_hash_stays_unquoted(self) -> None:
+        for text in ("C#/F# langs", "issue#140", "sharp# end"):
+            with self.subTest(text=repr(text)):
+                self.assertFalse(
+                    flowctl._yaml_scalar_needs_quoting(text),
+                    f"unexpected quoting for {text!r}",
+                )
+
+
+def _pyyaml_available() -> bool:
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+class TestCommentHashRoundTrip(unittest.TestCase):
+    """A mid-string ' #' value survives both readers (issue #332 cause a)."""
+
+    VALUE = "A title — the resync itself landed in #140"
+
+    @unittest.skipUnless(_pyyaml_available(), "PyYAML not installed")
+    def test_conforming_parser_round_trip(self) -> None:
+        import yaml
+
+        rendered = flowctl._format_yaml_value(self.VALUE, key="title")
+        parsed = yaml.safe_load(f"title: {rendered}\n")
+        self.assertEqual(parsed["title"], self.VALUE)
+
+    def test_inline_parser_round_trip(self) -> None:
+        rendered = flowctl._format_yaml_value(self.VALUE, key="title")
+        self.assertTrue(rendered.startswith('"') and rendered.endswith('"'))
+        parsed = flowctl._parse_inline_yaml(f"title: {rendered}\n")
+        self.assertEqual(parsed.get("title"), self.VALUE)
+
+
+class TestFlowListSplitQuoteAware(unittest.TestCase):
+    """Flow-list splitting is quote/depth aware (issue #332 cause b)."""
+
+    def test_reporter_two_element_list(self) -> None:
+        first = "Own it separately — rejected by the operator, who chose otherwise."
+        second = "Record it as a dep — rejected: it would misstate a priority."
+        text = f'alternatives_considered: ["{first}", "{second}"]\n'
+        parsed = flowctl._parse_inline_yaml(text)
+        self.assertEqual(parsed["alternatives_considered"], [first, second])
+
+    def test_list_with_commas_quotes_and_colons_round_trip(self) -> None:
+        tags = ["a, b", 'say "hi", now', "key: value", "plain"]
+        rendered = flowctl._format_yaml_value(tags, key="tags")
+        parsed = flowctl._parse_inline_yaml(f"tags: {rendered}\n")
+        self.assertEqual(parsed.get("tags"), tags)
+
+    def test_apostrophe_item_not_treated_as_quote(self) -> None:
+        text = "tags: [don't worry, ok]\n"
+        parsed = flowctl._parse_inline_yaml(text)
+        self.assertEqual(parsed["tags"], ["don't worry", "ok"])
+
+    def test_split_helper_depth_and_escapes(self) -> None:
+        self.assertEqual(
+            flowctl._split_flow_items('"a\\", b", [c, d], e'),
+            ['"a\\", b"', " [c, d]", " e"],
+        )
+
 
 class TestInlineParserRoundTrip(unittest.TestCase):
     """_format_yaml_value → _parse_inline_yaml preserves escapes (bug 1b)."""
