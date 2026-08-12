@@ -20808,6 +20808,63 @@ def _optional_yaml_parser() -> Optional[tuple[Any, type[BaseException]]]:
     return _YAML_PARSER
 
 
+def _split_flow_items(inner: str) -> list[str]:
+    """Split a flow-collection body on top-level commas.
+
+    Quote-aware (a quote only opens a quoted item at item start, matching
+    YAML flow-scalar rules, so an apostrophe mid-word stays literal) and
+    []/{} depth-aware. A naive ``inner.split(",")`` mangles any item that
+    contains a comma (issue #332). Returns raw slices; callers strip.
+    """
+    parts: list[str] = []
+    depth = 0
+    in_double = False
+    in_single = False
+    item_started = False
+    start = 0
+    i = 0
+    while i < len(inner):
+        ch = inner[i]
+        if in_double:
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == '"':
+                in_double = False
+        elif in_single:
+            if ch == "'":
+                in_single = False
+        elif ch == ",":
+            if depth == 0:
+                parts.append(inner[start:i])
+                start = i + 1
+            # A comma starts a new scalar position at any depth, so a
+            # quote opening the next nested item is recognized as one.
+            item_started = False
+        elif ch in "[{":
+            depth += 1
+            # Entering a collection starts a new scalar position: a quote
+            # right after [ or { opens a quoted first item, keeping any
+            # bracket characters inside it from corrupting the depth.
+            item_started = False
+        elif ch in "]}":
+            depth -= 1
+            item_started = True
+        elif ch in "\"'" and not item_started:
+            in_double = ch == '"'
+            in_single = ch == "'"
+            item_started = True
+        elif ch == ":" and (i + 1 >= len(inner) or inner[i + 1].isspace()):
+            # A mapping key separator (": ") starts a new scalar position:
+            # a quote after it opens a quoted value ({"1": "alpha, beta"}).
+            item_started = False
+        elif not ch.isspace():
+            item_started = True
+        i += 1
+    parts.append(inner[start:])
+    return parts
+
+
 def _parse_inline_yaml(text: str) -> dict[str, Any]:
     """Minimal inline YAML parser for flat `key: value` frontmatter.
 
@@ -20853,7 +20910,7 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
             if not inner:
                 result[key] = []
             else:
-                items = [item.strip() for item in inner.split(",")]
+                items = [item.strip() for item in _split_flow_items(inner)]
                 # Strip quotes from individual items.
                 cleaned = []
                 for item in items:
@@ -20879,19 +20936,8 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                 result[key] = {}
                 continue
             mapping: dict[str, Any] = {}
-            # Split on top-level commas (don't split inside brackets).
-            depth = 0
-            start = 0
-            parts: list[str] = []
-            for i, ch in enumerate(inner):
-                if ch in "[{":
-                    depth += 1
-                elif ch in "]}":
-                    depth -= 1
-                elif ch == "," and depth == 0:
-                    parts.append(inner[start:i])
-                    start = i + 1
-            parts.append(inner[start:])
+            # Split on top-level commas (don't split inside brackets/quotes).
+            parts = _split_flow_items(inner)
             ok = True
             for part in parts:
                 part = part.strip()
@@ -20906,14 +20952,19 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                     and k_raw[0] == k_raw[-1]
                     and k_raw[0] in ('"', "'")
                 ):
+                    kq = k_raw[0]
                     k_raw = k_raw[1:-1]
+                    if kq == '"':
+                        k_raw = _unquote_yaml_double(k_raw)
                 # Inline list inside the value.
                 if v_raw.startswith("[") and v_raw.endswith("]"):
                     list_inner = v_raw[1:-1].strip()
                     if not list_inner:
                         mapping[k_raw] = []
                     else:
-                        items = [it.strip() for it in list_inner.split(",")]
+                        items = [
+                            it.strip() for it in _split_flow_items(list_inner)
+                        ]
                         cleaned = []
                         for it in items:
                             if (
@@ -20921,7 +20972,10 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                                 and it[0] == it[-1]
                                 and it[0] in ('"', "'")
                             ):
+                                iq = it[0]
                                 it = it[1:-1]
+                                if iq == '"':
+                                    it = _unquote_yaml_double(it)
                             cleaned.append(it)
                         mapping[k_raw] = cleaned
                 else:
@@ -20931,7 +20985,10 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                         and v_raw[0] == v_raw[-1]
                         and v_raw[0] in ('"', "'")
                     ):
+                        vq = v_raw[0]
                         v_raw = v_raw[1:-1]
+                        if vq == '"':
+                            v_raw = _unquote_yaml_double(v_raw)
                     mapping[k_raw] = v_raw
             if ok:
                 result[key] = mapping
@@ -21031,6 +21088,9 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
         return True
     # Block-sequence / mapping-key indicators: bare `-`/`?` or followed by space.
     if text.startswith(("- ", "? ")) or text in {"-", "?"}:
+        return True
+    # Whitespace-then-# opens a YAML comment on read (YAML 1.2 §6.6/§7.3.3).
+    if " #" in text or "\t#" in text:
         return True
     # Leading characters that YAML treats as flow indicators / anchors /
     # references / tags / quoted scalars. Conservative — quote any of these.
