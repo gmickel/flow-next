@@ -4652,6 +4652,10 @@ def run_codex_exec(
             codex, "exec", "resume", session_id,
             "-c", f'model_reasoning_effort="{effective_effort}"',
             "-c", f'sandbox_mode="{sandbox}"',
+            # fn-187 R2: suppress the host repo's auto-loaded project doc
+            # (AGENTS.md). A resumed reviewer re-reads it on every turn, so the
+            # flag must mirror the fresh dispatch or route A returns on resume.
+            "-c", "project_doc_max_bytes=0",
             "--skip-git-repo-check", "-",
         ]
         try:
@@ -4716,6 +4720,11 @@ def run_codex_exec(
             cmd += ["--model", model]
         if not is_floor:
             cmd += ["-c", f'model_reasoning_effort="{effective_effort}"']
+        # fn-187 R2: unconditional (floor runs inherit the host project doc too).
+        # `codex exec` auto-loads the repo's AGENTS.md into the reviewer; in a repo
+        # whose AGENTS.md routes reviews through the flow-next skills, the reviewer
+        # adopts that role, re-dispatches at itself, and ends verdict-less (#331).
+        cmd += ["-c", "project_doc_max_bytes=0"]
         cmd += ["--sandbox", sandbox, "--skip-git-repo-check", "--json", "-"]
         try:
             result = subprocess.run(
@@ -12207,19 +12216,32 @@ def _render_structured_prior_finding(item: dict) -> Optional[str]:
     )
 
 
-def build_cursor_persona_override() -> str:
-    """fn-90 R7: persona-override preamble for the cursor review path.
+def build_review_persona_override() -> str:
+    """fn-90 R7 / fn-187 R1: persona-override preamble for review backends.
 
-    ``cursor-agent`` has NO system-prompt mechanism — the flow-next reviewer
-    rubric travels as a plain user prompt ON TOP OF Cursor's built-in persona
-    (which carries its OWN review rubric + end-to-end-thoroughness bias) and
-    auto-attaches workspace AGENTS.md, skills catalogs, and MCP instruction
-    blocks. That ambient guidance dilutes the scope anchor and biases the
-    reviewer toward always-produce-findings (spec cause #4 — an amplifier, not
-    the root cause, but real). Since there is no CLI knob to suppress the
-    auto-attach, the override rides in the user prompt: it explicitly supersedes
-    the ambient guidance so the ONLY rubric and verdict contract is the
-    flow-next one below.
+    The preamble is backend-agnostic (a plain user-prompt prepend); what differs
+    is WHICH contamination channel it counters:
+
+    - **cursor** — ``cursor-agent`` has NO system-prompt mechanism. The flow-next
+      reviewer rubric travels as a plain user prompt ON TOP OF Cursor's built-in
+      persona (which carries its OWN review rubric + end-to-end-thoroughness
+      bias) and auto-attaches workspace AGENTS.md, skills catalogs, and MCP
+      instruction blocks. That ambient guidance dilutes the scope anchor and
+      biases the reviewer toward always-produce-findings (fn-90 cause #4). There
+      is no CLI knob to suppress the auto-attach, so the override rides in the
+      user prompt.
+    - **codex** — ``codex exec`` auto-loads the host repo's project doc
+      (``AGENTS.md``) into the reviewer subprocess and, with the flow-next codex
+      plugin installed, exposes the plugin's own coordinator skill catalogs
+      ("Role: ... Coordinator (NOT the reviewer)", "never self-declares a
+      verdict"). The reviewer adopts the coordinator role and ends the turn
+      verdict-less (issue #331: 13 consecutive no-verdict runs). The project-doc
+      channel is additionally suppressed at the argv level
+      (``-c project_doc_max_bytes=0``, fn-187 R2); the skill-catalog channel has
+      no CLI knob, so precedence is asserted here.
+
+    In both cases the override explicitly supersedes the ambient guidance so the
+    ONLY rubric and verdict contract is the flow-next one below.
     """
     return """## PERSONA OVERRIDE — read first, this supersedes your defaults
 
@@ -41877,7 +41899,13 @@ def _wire_backend_review_hooks() -> None:
         "no_verdict_label": "Codex",
         # Prompt-fit: none (stdin delivery; no argv budget).
         "prompt_fit": "none",
-        "needs_persona_override": False,
+        # fn-187 R1: ON. The False here was never a decision — it mechanically
+        # preserved pre-#296 behavior when the registry was extracted. codex exec
+        # inherits the host AGENTS.md and (with the codex plugin installed) the
+        # flow-next coordinator skill catalogs, which taught the reviewer to
+        # re-dispatch instead of declaring a verdict (#331). Delivery is stdin
+        # with prompt_fit "none", so the preamble costs no argv budget.
+        "needs_persona_override": True,
     })
     BACKEND_REGISTRY["copilot"].update({
         # Spawn shape: session marker under .flow/tmp/copilot-sessions/.
@@ -42183,10 +42211,12 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
         )
 
-    # fn-90 R7: cursor-agent has no system-prompt channel, so the persona
-    # override rides at the very front of the user prompt — ahead of the ratchet.
+    # fn-90 R7 / fn-187 R1: backends whose reviewer inherits ambient instructions
+    # (cursor: no system-prompt channel; codex: auto-loaded project doc + plugin
+    # skill catalogs) get the persona override at the very front of the user
+    # prompt — ahead of the ratchet.
     if reg.get("needs_persona_override"):
-        persona = build_cursor_persona_override()
+        persona = build_review_persona_override()
         prompt = persona + prompt
         if injected_prompt is not None:
             injected_prompt = persona + injected_prompt
@@ -42651,7 +42681,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
         )
     if reg.get("needs_persona_override"):
-        persona = build_cursor_persona_override()
+        persona = build_review_persona_override()
         prompt = persona + prompt
         if injected_prompt is not None:
             injected_prompt = persona + injected_prompt
@@ -42931,7 +42961,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
         )
     if reg.get("needs_persona_override"):
-        persona = build_cursor_persona_override()
+        persona = build_review_persona_override()
         prompt = persona + prompt
         if injected_prompt is not None:
             injected_prompt = persona + injected_prompt
