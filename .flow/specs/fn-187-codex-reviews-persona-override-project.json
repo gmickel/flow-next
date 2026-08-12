@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-187-codex-reviews-persona-override-project.md",
-  "status": "open",
+  "status": "done",
   "title": "Codex reviews: persona override, project-doc suppression, plan-prompt role anchor, honest no-verdict class (#331)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-12T12:47:06.322727Z"
+  "updated_at": "2026-08-12T19:19:52.312401Z"
 }
