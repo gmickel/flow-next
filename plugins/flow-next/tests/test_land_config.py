@@ -523,6 +523,13 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn("per-PR state, not loop variables", self.text)
         self.assertIn("THIS PR's recorded pair", self.text)
 
+    def test_verdict_binds_head_and_base(self) -> None:
+        # A base that moved since judgment (earlier PR merged in the same
+        # tick) invalidates the verdict: RESOLVING re-tick, never a merge
+        # against an unjudged target.
+        self.assertIn("MERGE_VERDICT_BASE=", self.gate)
+        self.assertIn('"$BASE_NOW" != "$MERGE_VERDICT_BASE"', self.text)
+
     def test_gate_refusal_is_needs_human_not_blocked(self) -> None:
         # BLOCKED stays reserved for server-side merge refusals (3.5).
         self.assertIn("NEEDS_HUMAN`, action `none`", self.gate)

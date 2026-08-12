@@ -422,6 +422,8 @@ if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
     MV_ERR="$(tail -n 1 "$MV_ERR_FILE" 2>/dev/null | cut -c1-200)"; rm -f "$MV_ERR_FILE"
     [[ "$MV_RC" -eq 0 ]] && MERGE_VERDICT=green || MERGE_VERDICT=refused
     MERGE_VERDICT_HEAD="$HEAD_OID"
+    # The base the verdict was judged against (server truth, not a local ref):
+    MERGE_VERDICT_BASE="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
   fi
 fi
 ```
@@ -432,6 +434,8 @@ fi
 | any non-zero exit - including `124` or a host-tool timeout at the 600s bound, `126`/`127` (unexecutable / not found), `128+N` (signal death) | verdict `NEEDS_HUMAN`, action `none`, reason `merge-verdict command refused (exit <MV_RC>): <MV_ERR>` (last stderr line, ~200 chars). **No merge.** |
 
 **Fail-closed, always.** A configured command that is missing, unexecutable, times out at the 600s bound, or dies on a signal BLOCKS the merge - it is never read as "skip", "not applicable", or "gate unavailable". A tick that merged because the configured command could not run has broken this. The refusal class is `NEEDS_HUMAN`, never `BLOCKED`: `BLOCKED` stays reserved for server-side merge refusals (3.5). No `flow-next:needs-human` label is applied on refusal (same posture as 2.5b) - fix the repo-side cause and the next tick re-gates from scratch.
+
+**A verdict binds a (head, base) pair.** §2.9 records the base's remote SHA at judgment; 3.5 refuses to merge when the base has since moved (verdict `RESOLVING`, re-tick re-judges) - the common cause is an earlier PR in the same tick merging first. This mirrors the strict interpretation of a required check: the command judged one merge target, not whichever base exists later.
 
 **`MERGE_VERDICT` and `MERGE_VERDICT_HEAD` are per-PR state, not loop variables.** A tick that classifies several PRs records both values in each PR's classification record alongside its planned action; a later PR's classification never overwrites an earlier PR's verdict. 3.5 reads the values recorded for THE PR IT IS MERGING - a merge that read another iteration's (or a reset) verdict pair has broken this.
 
@@ -533,9 +537,17 @@ Verdict `NEEDS_HUMAN` with the planned reason. Later ticks skip the PR at gate 2
 All gates passed in-tick. Pin the head right before merging. When §2.9 ran green, the pin is the exact head the verdict command judged - re-reading a fresher head here would merge a commit no verdict covered; the `--match-head-commit` guard then refuses a moved head server-side and the PR re-gates next tick (`RESOLVING`), which is the fail-closed direction:
 
 ```bash
-# MERGE_VERDICT / MERGE_VERDICT_HEAD = THIS PR's recorded pair from its
-# §2.9 classification (per-PR state - never another iteration's values).
+# MERGE_VERDICT / MERGE_VERDICT_HEAD / MERGE_VERDICT_BASE = THIS PR's
+# recorded values from its §2.9 classification (per-PR state).
 if [[ "$MERGE_VERDICT" == "green" && -n "$MERGE_VERDICT_HEAD" ]]; then
+  # A base that moved since judgment (an earlier PR in this tick merging is
+  # the common cause) means the verdict covered a different merge target:
+  # do not merge - verdict RESOLVING, the next tick re-gates and re-judges.
+  BASE_NOW="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
+  if [[ -n "$MERGE_VERDICT_BASE" && "$BASE_NOW" != "$MERGE_VERDICT_BASE" ]]; then
+    echo "Evidence: merge-verdict stale (base moved $MERGE_VERDICT_BASE -> $BASE_NOW) - re-tick"
+    # verdict RESOLVING for this PR; skip the merge and the post-merge tail.
+  fi
   HEAD_OID="$MERGE_VERDICT_HEAD"   # §2.9 judged exactly this head - never a fresher one
 else
   HEAD_OID="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
