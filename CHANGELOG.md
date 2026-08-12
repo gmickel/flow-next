@@ -2,6 +2,41 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+`review.backend codex` could return no verdict over and over - 13 consecutive
+times in the report - while every probe said the backend was healthy, and the
+terminal advice sent the operator to repair a CLI that was fine. The reviewer
+subprocess was inheriting instructions never meant for it: the host repo's
+auto-loaded `AGENTS.md` taught it to re-dispatch the review at itself (the
+sandbox then rejected the nested dispatch), and the flow-next codex plugin's
+own coordinator skills taught it to "never self-declare a verdict" - so it
+reviewed well and withheld the verdict. Fixes #331 - thanks @sn-furali for
+the isolating-controls table that separated the two routes.
+
+### Fixed
+
+- **Codex reviews get the persona override.** `needs_persona_override` was
+  `False` for codex only because a registry refactor preserved pre-existing
+  behavior - never a decision. The preamble (which already names auto-attached
+  `AGENTS.md`/`CLAUDE.md` and skill catalogs as superseded) now rides every
+  codex review; the builder is renamed `build_review_persona_override` with a
+  per-backend rationale. Costs nothing: codex delivery is stdin.
+- **Host project docs are suppressed at the argv level.**
+  `-c project_doc_max_bytes=0` on both the fresh and resume `codex exec`
+  dispatch - the reporter's measured fix for the re-dispatch route.
+- **The plan-review prompt states its role.** It was the only review prompt
+  missing the "You ARE the reviewer - review directly" anchor the other three
+  gained in #246 - which is why plan reviews blew up first. Ported, with the
+  closing sentence reading "the plan", and both prompt hashes re-pinned.
+- **No-verdict runs are classed honestly.** The failure ladder scanned the
+  reviewer's own output for the word "timeout", so a healthy exit-0 review
+  that mentioned timeouts was journaled as a transport timeout; the scan now
+  reads stderr only (where every genuine `TimeoutExpired` lands). A streak of
+  `missing_verdict` failures terminates with instruction-contamination
+  guidance - the backend is probably healthy, do not repair it - instead of
+  `repair the backend/environment`.
+
 ## [flow-next 3.29.0] - 2026-08-12
 
 The worktree kit could not be driven from a script: `cleanup` - the only

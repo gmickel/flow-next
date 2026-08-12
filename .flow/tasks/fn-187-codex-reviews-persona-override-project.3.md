@@ -10,9 +10,8 @@ In plugins/flow-next/scripts/flowctl.py: (1) R4 - fix the failure-class ladders 
 R4+R5 met; existing convergence/journal suites green; new pins green; ruff clean.
 
 ## Done summary
-TBD
-
+Timeout substring scan scoped to stderr in the backend-exec ladder (TimeoutExpired handlers put every genuine transport timeout there; reviewer prose lands in output), and rp record demotes a caller-declared timeout on an exit-0 non-empty run to missing_verdict. New build_transport_unhealthy_message branches the cap terminal: all-missing_verdict streaks get instruction-contamination guidance (backend probably healthy - do not repair), transport streaks keep repair advice. Summary gains consecutive_failure_classes (journal rows unchanged). 7 token-pinned tests.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e72691f6
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_review_convergence_journal -q
 - PRs:

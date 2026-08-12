@@ -4652,6 +4652,10 @@ def run_codex_exec(
             codex, "exec", "resume", session_id,
             "-c", f'model_reasoning_effort="{effective_effort}"',
             "-c", f'sandbox_mode="{sandbox}"',
+            # fn-187 R2: suppress the host repo's auto-loaded project doc
+            # (AGENTS.md). A resumed reviewer re-reads it on every turn, so the
+            # flag must mirror the fresh dispatch or route A returns on resume.
+            "-c", "project_doc_max_bytes=0",
             "--skip-git-repo-check", "-",
         ]
         try:
@@ -4716,6 +4720,11 @@ def run_codex_exec(
             cmd += ["--model", model]
         if not is_floor:
             cmd += ["-c", f'model_reasoning_effort="{effective_effort}"']
+        # fn-187 R2: unconditional (floor runs inherit the host project doc too).
+        # `codex exec` auto-loads the repo's AGENTS.md into the reviewer; in a repo
+        # whose AGENTS.md routes reviews through the flow-next skills, the reviewer
+        # adopts that role, re-dispatches at itself, and ends verdict-less (#331).
+        cmd += ["-c", "project_doc_max_bytes=0"]
         cmd += ["--sandbox", sandbox, "--skip-git-repo-check", "--json", "-"]
         try:
             result = subprocess.run(
@@ -9431,6 +9440,13 @@ soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires rede
 """
 
 PLAN_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: plan_quality_block, confidence_rubric_block, protected_artifacts_block, review_json_tally_block -->
+
+**You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
+`flowctl <backend>` review command, or a nested agent/backend to perform this
+review: this prompt already reached you through that machinery, and nesting it
+fails inside the sandbox (app-server init) and can only self-review. Read the
+plan and the repository yourself and produce the verdict in this session.
+
 ## Context Gathering
 
 This review includes:
@@ -10015,6 +10031,72 @@ def get_max_review_transport_failures() -> int:
         except ValueError:
             pass
     return DEFAULT_MAX_REVIEW_TRANSPORT_FAILURES
+
+
+def _consecutive_failure_classes(
+    attempts: Any, scope: str, limit: int = 20
+) -> list:
+    """Failure classes of the trailing no-verdict streak on ``scope``.
+
+    Walks the attempt rows backwards, ignoring other scopes, and stops at the
+    first verdict-bearing row — the same streak the transport counter counts.
+    """
+    classes: list = []
+    if not isinstance(attempts, list):
+        return classes
+    for row in reversed(attempts):
+        if not isinstance(row, dict) or row.get("scope") != scope:
+            continue
+        if row.get("outcome") != "transport_failure":
+            break
+        classes.append(row.get("failure_class") or "unknown")
+        if len(classes) >= limit:
+            break
+    classes.reverse()
+    return classes
+
+
+def build_transport_unhealthy_message(
+    backend: str,
+    review_label: str,
+    count: Any,
+    cap: Any,
+    failure_classes: Optional[list] = None,
+) -> str:
+    """Terminal TRANSPORT_UNHEALTHY text, branched on what actually failed.
+
+    fn-187 (#331): a streak of ``missing_verdict`` rows is not a broken
+    backend — the reviewer ran fine and declined to declare a verdict, almost
+    always because it inherited host or plugin instructions. Telling that
+    operator to "repair the backend/environment" sends them to probe a healthy
+    CLI. Transport classes (timeout / nonzero_exit / sandbox / dispatch_*)
+    keep the original advice.
+    """
+    classes = [c for c in (failure_classes or []) if c]
+    head = (
+        f"TRANSPORT_UNHEALTHY: {backend} {review_label} review produced no "
+        f"verdict {count} consecutive times (budget {cap}). The reserved "
+        f"review round was refunded; "
+    )
+    tail = (
+        "This is not review non-convergence and does not require "
+        "review-rounds reset."
+    )
+    if classes and all(c == "missing_verdict" for c in classes):
+        return (
+            head
+            + "every attempt ran to completion and returned output with no "
+            "verdict tag, so the backend is probably healthy — do not repair "
+            "it. The usual cause is instruction contamination: the reviewer "
+            "inherited a host persona (auto-loaded AGENTS.md / CLAUDE.md) or "
+            "an installed flow-next skill catalog telling it to coordinate a "
+            "review rather than declare one. The reviewer persona override "
+            "ships on by default for codex; check what the backend "
+            "auto-loads (host AGENTS.md / CLAUDE.md size and instructions) "
+            "and whether flow-next review skills are exposed to the reviewer "
+            "process. " + tail
+        )
+    return head + "repair the backend/environment before retrying. " + tail
 
 
 def _read_review_rounds(spec_data: dict, review_kind: str, task_id: Optional[str]) -> int:
@@ -11290,6 +11372,11 @@ def _record_review_attempt_locked(
             "verdict": verdict,
             "failure_class": failure_class if refunded else None,
             "consecutive_transport_failures": consecutive,
+            # fn-187 (#331): what the streak was MADE of, so the terminal can
+            # name the real cause instead of blaming the transport.
+            "consecutive_failure_classes": (
+                _consecutive_failure_classes(attempts, scope) if refunded else []
+            ),
             "transport_failure_cap": get_max_review_transport_failures(),
             "transport_unhealthy": (
                 refunded
@@ -12207,19 +12294,32 @@ def _render_structured_prior_finding(item: dict) -> Optional[str]:
     )
 
 
-def build_cursor_persona_override() -> str:
-    """fn-90 R7: persona-override preamble for the cursor review path.
+def build_review_persona_override() -> str:
+    """fn-90 R7 / fn-187 R1: persona-override preamble for review backends.
 
-    ``cursor-agent`` has NO system-prompt mechanism — the flow-next reviewer
-    rubric travels as a plain user prompt ON TOP OF Cursor's built-in persona
-    (which carries its OWN review rubric + end-to-end-thoroughness bias) and
-    auto-attaches workspace AGENTS.md, skills catalogs, and MCP instruction
-    blocks. That ambient guidance dilutes the scope anchor and biases the
-    reviewer toward always-produce-findings (spec cause #4 — an amplifier, not
-    the root cause, but real). Since there is no CLI knob to suppress the
-    auto-attach, the override rides in the user prompt: it explicitly supersedes
-    the ambient guidance so the ONLY rubric and verdict contract is the
-    flow-next one below.
+    The preamble is backend-agnostic (a plain user-prompt prepend); what differs
+    is WHICH contamination channel it counters:
+
+    - **cursor** — ``cursor-agent`` has NO system-prompt mechanism. The flow-next
+      reviewer rubric travels as a plain user prompt ON TOP OF Cursor's built-in
+      persona (which carries its OWN review rubric + end-to-end-thoroughness
+      bias) and auto-attaches workspace AGENTS.md, skills catalogs, and MCP
+      instruction blocks. That ambient guidance dilutes the scope anchor and
+      biases the reviewer toward always-produce-findings (fn-90 cause #4). There
+      is no CLI knob to suppress the auto-attach, so the override rides in the
+      user prompt.
+    - **codex** — ``codex exec`` auto-loads the host repo's project doc
+      (``AGENTS.md``) into the reviewer subprocess and, with the flow-next codex
+      plugin installed, exposes the plugin's own coordinator skill catalogs
+      ("Role: ... Coordinator (NOT the reviewer)", "never self-declares a
+      verdict"). The reviewer adopts the coordinator role and ends the turn
+      verdict-less (issue #331: 13 consecutive no-verdict runs). The project-doc
+      channel is additionally suppressed at the argv level
+      (``-c project_doc_max_bytes=0``, fn-187 R2); the skill-catalog channel has
+      no CLI knob, so precedence is asserted here.
+
+    In both cases the override explicitly supersedes the ambient guidance so the
+    ONLY rubric and verdict contract is the flow-next one below.
     """
     return """## PERSONA OVERRIDE — read first, this supersedes your defaults
 
@@ -30510,8 +30610,15 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
     verdict = parse_codex_verdict(output)
     failure_class: Optional[str] = None
     if not verdict:
+        healthy_run = args.exit_code == 0 and bool(output.strip())
         if args.failure_class:
             failure_class = args.failure_class
+            if failure_class == "timeout" and healthy_run:
+                # fn-187 (#331): same honesty rule as the backend-exec ladder.
+                # A run that exited 0 and returned prose did not time out —
+                # whoever declared "timeout" read the reviewer's own words, and
+                # the truthful class is "the reviewer declared no verdict".
+                failure_class = "missing_verdict"
         elif args.exit_code != 0:
             failure_class = "nonzero_exit"
         elif not output.strip():
@@ -30567,12 +30674,13 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
     )
     if result.get("transport_unhealthy"):
         error_exit(
-            f"TRANSPORT_UNHEALTHY: {args.backend} {args.review_type} review "
-            f"produced no verdict {result['consecutive_transport_failures']} "
-            f"consecutive times (budget {result['transport_failure_cap']}). "
-            f"The reserved review round was refunded; repair the "
-            f"backend/environment before retrying. This is not review "
-            f"non-convergence and does not require review-rounds reset.",
+            build_transport_unhealthy_message(
+                args.backend,
+                args.review_type,
+                result["consecutive_transport_failures"],
+                result["transport_failure_cap"],
+                result.get("consecutive_failure_classes"),
+            ),
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
         )
@@ -41877,7 +41985,13 @@ def _wire_backend_review_hooks() -> None:
         "no_verdict_label": "Codex",
         # Prompt-fit: none (stdin delivery; no argv budget).
         "prompt_fit": "none",
-        "needs_persona_override": False,
+        # fn-187 R1: ON. The False here was never a decision — it mechanically
+        # preserved pre-#296 behavior when the registry was extracted. codex exec
+        # inherits the host AGENTS.md and (with the codex plugin installed) the
+        # flow-next coordinator skill catalogs, which taught the reviewer to
+        # re-dispatch instead of declaring a verdict (#331). Delivery is stdin
+        # with prompt_fit "none", so the preamble costs no argv budget.
+        "needs_persona_override": True,
     })
     BACKEND_REGISTRY["copilot"].update({
         # Spawn shape: session marker under .flow/tmp/copilot-sessions/.
@@ -42183,10 +42297,12 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
         )
 
-    # fn-90 R7: cursor-agent has no system-prompt channel, so the persona
-    # override rides at the very front of the user prompt — ahead of the ratchet.
+    # fn-90 R7 / fn-187 R1: backends whose reviewer inherits ambient instructions
+    # (cursor: no system-prompt channel; codex: auto-loaded project doc + plugin
+    # skill catalogs) get the persona override at the very front of the user
+    # prompt — ahead of the ratchet.
     if reg.get("needs_persona_override"):
-        persona = build_cursor_persona_override()
+        persona = build_review_persona_override()
         prompt = persona + prompt
         if injected_prompt is not None:
             injected_prompt = persona + injected_prompt
@@ -42479,10 +42595,16 @@ def _finish_backend_exec(
     sandbox_failure = (
         reg["has_sandbox"] and is_sandbox_failure(exit_code, output, stderr)
     )
-    combined = f"{stderr}\n{output}".lower()
+    # fn-187 (#331): the timeout scan reads STDERR ONLY. Every backend's
+    # transport timeout surfaces there — the `subprocess.TimeoutExpired`
+    # handlers return ("", …, 2, "<cli> timed out (Ns)") — while the reviewer's
+    # own prose lands in `output`. Scanning both meant a healthy exit-0 review
+    # that merely mentioned the word "timeout" was journaled as a transport
+    # timeout instead of the honest `missing_verdict`.
+    stderr_text = (stderr or "").lower()
     if sandbox_failure:
         failure_class = "sandbox"
-    elif "timed out" in combined or "timeout" in combined:
+    elif "timed out" in stderr_text or "timeout" in stderr_text:
         failure_class = "timeout"
     elif exit_code != 0:
         failure_class = "nonzero_exit"
@@ -42515,11 +42637,13 @@ def _finish_backend_exec(
         count = attempt["consecutive_transport_failures"]
         cap = attempt["transport_failure_cap"]
         error_exit(
-            f"TRANSPORT_UNHEALTHY: {backend} {review_type or review_kind} "
-            f"review produced no verdict {count} consecutive times "
-            f"(budget {cap}). The reserved review round was refunded; repair "
-            f"the backend/environment before retrying. This is not review "
-            f"non-convergence and does not require review-rounds reset.",
+            build_transport_unhealthy_message(
+                backend,
+                review_type or review_kind,
+                count,
+                cap,
+                attempt.get("consecutive_failure_classes"),
+            ),
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
         )
@@ -42651,7 +42775,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
         )
     if reg.get("needs_persona_override"):
-        persona = build_cursor_persona_override()
+        persona = build_review_persona_override()
         prompt = persona + prompt
         if injected_prompt is not None:
             injected_prompt = persona + injected_prompt
@@ -42931,7 +43055,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
         )
     if reg.get("needs_persona_override"):
-        persona = build_cursor_persona_override()
+        persona = build_review_persona_override()
         prompt = persona + prompt
         if injected_prompt is not None:
             injected_prompt = persona + injected_prompt

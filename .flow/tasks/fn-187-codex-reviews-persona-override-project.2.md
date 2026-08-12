@@ -10,9 +10,8 @@ R3 - Port the role-anchor paragraph that impl/standalone/completion review promp
 R3 met: anchor present in template + fallback (byte-identical parity), both SHA pins updated with rationale in the commit message, prompt suites green.
 
 ## Done summary
-TBD
-
+Plan-review prompt (template + PLAN_REVIEW_PROMPT_FALLBACK, byte-identical) now opens with the "You ARE the reviewer - review directly" role anchor the other three review prompts carry; both SHA pins updated with rationale; codex mirror regenerated twice. Orchestrator follow-up: adapted the closing sentence's "diff" to "plan" (per-kind pins, no cross-kind parity constraint) and re-pinned.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 04ba1c9c, 932efd4d
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_constraints -q
 - PRs:

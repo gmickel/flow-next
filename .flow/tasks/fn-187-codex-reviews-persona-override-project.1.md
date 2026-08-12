@@ -10,9 +10,8 @@ In plugins/flow-next/scripts/flowctl.py: (1) R1 - set BACKEND_REGISTRY['codex'][
 R1+R2 met; persona byte-identical; no existing assertion broken; new pins green; uvx ruff@0.16.0 check clean on touched files.
 
 ## Done summary
-TBD
-
+codex needs_persona_override flipped True (with a comment recording the False was inherited, not decided); build_cursor_persona_override renamed build_review_persona_override with a per-backend docstring, persona text byte-identical; -c project_doc_max_bytes=0 on BOTH codex exec argv paths (fresh incl. floor runs, resume). 7 new pins (persona presence x3 kinds, prompt-lead, argv flag x2 paths, registry flag); non-vacuity verified by forcing the flag off. One proxy assertion in test_model_resolution retargeted from bare -c to model_reasoning_effort with rationale.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b12d1f5b
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_backend_spec test_cursor_review_commands test_prompt_text_pinned test_review_prompt_constraints test_codex_persona_and_project_doc test_model_resolution -q
 - PRs:
