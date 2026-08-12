@@ -36,13 +36,18 @@ def _bash_executable() -> str:
     raise RuntimeError("bash executable not found")
 
 
-def run(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def run(
+    repo: Path,
+    *args: str,
+    stdin: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [_bash_executable(), str(SCRIPT), *args],
         cwd=repo,
         text=True,
         capture_output=True,
         check=False,
+        input=stdin,
     )
 
 
@@ -56,7 +61,9 @@ def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-class WorktreeIgnore(unittest.TestCase):
+class RepoCase(unittest.TestCase):
+    """Temp git repo with one commit, shared by every case in this module."""
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp_dir.cleanup)
@@ -77,6 +84,24 @@ class WorktreeIgnore(unittest.TestCase):
             0,
         )
 
+    def current_branch(self) -> str:
+        head = git(self.repo, "symbolic-ref", "--short", "HEAD")
+        self.assertEqual(head.returncode, 0, head.stderr)
+        return head.stdout.strip()
+
+    def add_origin(self) -> None:
+        """Give the fixture a real origin so create resolves origin/<base>."""
+        remote_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(remote_dir.cleanup)
+        remote = Path(remote_dir.name)
+        self.assertEqual(git(remote, "init", "-q", "--bare").returncode, 0)
+        added = git(self.repo, "remote", "add", "origin", str(remote))
+        self.assertEqual(added.returncode, 0, added.stderr)
+        pushed = git(self.repo, "push", "-q", "origin", self.current_branch())
+        self.assertEqual(pushed.returncode, 0, pushed.stderr)
+
+
+class WorktreeIgnore(RepoCase):
     def test_create_prevents_nested_worktree_gitlink_staging(self) -> None:
         created = run(self.repo, "create", "feature")
         self.assertEqual(created.returncode, 0, created.stderr)
@@ -131,6 +156,56 @@ class WorktreeIgnore(unittest.TestCase):
         entries = git(self.repo, "ls-files", "--stage")
         self.assertEqual(entries.returncode, 0, entries.stderr)
         self.assertNotIn("160000 ", entries.stdout)
+
+
+class WorktreeCleanupNonInteractive(RepoCase):
+    def test_cleanup_without_names_or_terminal_fails_loudly(self) -> None:
+        result = run(self.repo, "cleanup", stdin="")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("no terminal and no names given", result.stderr)
+        self.assertIn("--yes", result.stderr)
+
+    def test_cleanup_with_name_and_yes_removes_worktree(self) -> None:
+        created = run(self.repo, "create", "feature")
+        self.assertEqual(created.returncode, 0, created.stderr)
+        target = self.repo / ".worktrees" / "feature"
+        self.assertIn(target.resolve().as_posix(), git(self.repo, "worktree", "list").stdout)
+
+        result = run(self.repo, "cleanup", "feature", "--yes", stdin="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        listed = git(self.repo, "worktree", "list")
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertNotIn(target.resolve().as_posix(), listed.stdout)
+        self.assertFalse(target.exists())
+
+    def test_cleanup_with_name_without_yes_refuses_off_terminal(self) -> None:
+        created = run(self.repo, "create", "feature")
+        self.assertEqual(created.returncode, 0, created.stderr)
+
+        result = run(self.repo, "cleanup", "feature", stdin="")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("--yes", result.stderr)
+        listed = git(self.repo, "worktree", "list")
+        self.assertIn((self.repo / ".worktrees" / "feature").resolve().as_posix(), listed.stdout)
+
+    def test_cleanup_rejects_unknown_option(self) -> None:
+        result = run(self.repo, "cleanup", "--force", stdin="")
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("--force", result.stderr)
+
+
+class WorktreeCreateTracking(RepoCase):
+    def test_created_branch_has_no_upstream(self) -> None:
+        self.add_origin()
+        created = run(self.repo, "create", "feature")
+        self.assertEqual(created.returncode, 0, created.stderr)
+
+        remotes = git(self.repo, "rev-parse", "--verify", "-q", "refs/remotes/origin/" + self.current_branch())
+        self.assertEqual(remotes.returncode, 0, "fixture must have a remote-tracking base ref")
+
+        worktree = self.repo / ".worktrees" / "feature"
+        upstream = git(worktree, "rev-parse", "--abbrev-ref", "@{upstream}")
+        self.assertNotEqual(upstream.returncode, 0, upstream.stdout)
 
 
 if __name__ == "__main__":

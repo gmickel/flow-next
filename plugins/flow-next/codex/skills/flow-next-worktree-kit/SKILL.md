@@ -14,12 +14,13 @@ bash "${CODEX_HOME:-$HOME/.codex}/scripts/worktree.sh" <command> [args]
 Commands:
 - `create <name> [base]`
 - `list`
-- `switch <name>` (prints path)
-- `cleanup`
+- `switch <name>` (prints the worktree path; it cannot change your shell's directory - use `cd "$(... switch <name>)"`)
+- `cleanup [<name>...] [--yes]` (no args = interactive; names skip the prompt; `--yes` skips the confirmation, required off a terminal)
 - `copy-env <name>`
 
 Safety notes:
 - `create` does not change the current branch
+- `create` sets no upstream on the new branch (`--no-track`) - under the upstream-based push modes (`simple`, `upstream`, `current`) a bare `git push` cannot aim at the base branch; under the default `push.default=simple` (without `push.autoSetupRemote`) the first push needs `git push -u origin <name>` (legacy `push.default=matching` pushes all name-matched branches regardless of upstream)
 - `cleanup` does not force-remove worktrees and does not delete branches
 - `cleanup` deletes the worktree directory (including ignored files); removal fails if the worktree is not clean
 - `.env*` is copied with no overwrite (symlinks skipped)

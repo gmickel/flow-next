@@ -155,7 +155,7 @@ case "$cmd" in
     if git show-ref --verify --quiet "refs/heads/$name"; then
       git worktree add -- "$target" "$name"
     else
-      git worktree add -b "$name" -- "$target" "$start_point"
+      git worktree add --no-track -b "$name" -- "$target" "$start_point"
     fi
 
     copy_env "$target"
@@ -186,17 +186,35 @@ case "$cmd" in
     ;;
   cleanup)
     assert_worktrees_dir
+    cleanup_usage="usage: cleanup [<name>...] [--yes]"
+    remove_names=()
+    assume_yes=0
+    for arg in "${@:2}"; do
+      case "$arg" in
+        --yes) assume_yes=1 ;;
+        -*) fail "unknown option: $arg ($cleanup_usage)" ;;
+        *) remove_names+=("$arg") ;;
+      esac
+    done
+
     echo "all worktrees (only those under $worktrees_dir can be removed by name):"
     git worktree list
 
-    echo "enter names to remove (space-separated), or empty to cancel:"
-    read -r to_remove
-    [[ -n "$to_remove" ]] || { echo "cancel"; exit 0; }
-    IFS=' ' read -r -a remove_names <<< "$to_remove"
+    if [[ ${#remove_names[@]} -eq 0 ]]; then
+      [[ -t 0 ]] || fail "no terminal and no names given ($cleanup_usage)"
+      echo "enter names to remove (space-separated), or empty to cancel:"
+      read -r to_remove || fail "no input (EOF) ($cleanup_usage)"
+      [[ -n "$to_remove" ]] || { echo "cancel"; exit 0; }
+      IFS=' ' read -r -a remove_names <<< "$to_remove"
+      [[ ${#remove_names[@]} -gt 0 ]] || { echo "cancel"; exit 0; }
+    fi
 
-    echo "About to remove worktrees (no force, branches kept). Proceed? [y/N]"
-    read -r confirm
-    [[ "$confirm" == "y" || "$confirm" == "Y" ]] || { echo "cancel"; exit 0; }
+    if [[ "$assume_yes" != 1 ]]; then
+      [[ -t 0 ]] || fail "no terminal: pass --yes to remove without confirmation ($cleanup_usage)"
+      echo "About to remove worktrees (no force, branches kept). Proceed? [y/N]"
+      read -r confirm || fail "no input (EOF): pass --yes to remove without confirmation ($cleanup_usage)"
+      [[ "$confirm" == "y" || "$confirm" == "Y" ]] || { echo "cancel"; exit 0; }
+    fi
 
     failed=0
     for n in "${remove_names[@]}"; do
