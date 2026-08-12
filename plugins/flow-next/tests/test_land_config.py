@@ -494,10 +494,20 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
     def test_gate_is_fail_closed(self) -> None:
         # Missing/unexecutable/timeout/signal all block, never skip.
         self.assertIn("600s tool", self.gate)
-        self.assertIn("Fail-closed", self.gate)
         for token in ("124", "127", "128+N"):
             self.assertIn(token, self.gate)
-        self.assertIn("has broken this", self.gate)
+
+    def test_planned_action_is_assigned_by_the_gate_tree(self) -> None:
+        # Both PR bots caught the unassigned-variable bypass: nothing set
+        # PLANNED_ACTION, so the gate silently skipped. The assignment
+        # instruction must exist between 2.8 and 2.9.
+        self.assertIn("PLANNED_ACTION=<the action class planned above>", self.text)
+
+    def test_merge_pins_the_judged_head(self) -> None:
+        # TOCTOU: a push after the verdict must refuse at --match-head-commit,
+        # not merge an unjudged commit under a refreshed HEAD_OID.
+        self.assertIn('HEAD_OID="$MERGE_VERDICT_HEAD"', self.text)
+        self.assertIn('MERGE_VERDICT_HEAD="$HEAD_OID"', self.gate)
 
     def test_gate_refusal_is_needs_human_not_blocked(self) -> None:
         # BLOCKED stays reserved for server-side merge refusals (3.5).

@@ -387,6 +387,8 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 - `MERGE_STATE == "BEHIND"`: plan `rebase` (same mechanical update, then re-gate next tick).
 - Otherwise (`CLEAN`, `BLOCKED`, `HAS_HOOKS`, `UNSTABLE`): plan `merge`. (`BLOCKED`/`UNSTABLE` reflect server-side rules land already gates harder than — the merge attempt is authoritative; a refusal surfaces in ACT.)
 
+**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `rebase`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
+
 ### 2.9 — Repo merge-verdict gate (`land.mergeVerdictCommand`, opt-in, fail-closed)
 
 On a repo with no branch protection (free-plan private repos, where rulesets and protection 403) there is no required status check, so 2.4-2.8 gate against a server that has nothing to say. This is the repo-local gate of record: one repo-authored command whose exit code decides whether land may merge. It is block-only - a green verdict grants nothing the other gates did not already grant, it can only take a merge away. Off by default: unset, `null`, and `""` ALL mean OFF and behave byte-for-byte as before this gate existed (deliberately NOT the null-vs-`""` asymmetry of `cleanReviewCommentPattern` in §2.6 - do not copy that shape here).
@@ -395,7 +397,7 @@ Reached ONLY when every gate above is satisfied AND the action planned in 2.8 is
 
 ```bash
 MERGE_VERDICT=skipped # green | refused | skipped | would-run (Phase 4 evidence)
-# PLANNED_ACTION = the action class 2.8 planned for this PR.
+MERGE_VERDICT_HEAD="" # the exact head the command judged (pins 3.5's merge)
 if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
  if [[ "$LAND_DRY_RUN" == 1 ]]; then
  MERGE_VERDICT=would-run # R3 — --dry-run NEVER executes the command
@@ -410,6 +412,7 @@ if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
  bash -c "cd \"$REPO_ROOT\" && $MERGE_VERDICT_CMD" >/dev/null 2>"$MV_ERR_FILE" || MV_RC=$?
  MV_ERR="$(tail -n 1 "$MV_ERR_FILE" 2>/dev/null | cut -c1-200)"; rm -f "$MV_ERR_FILE"
  [[ "$MV_RC" -eq 0 ]] && MERGE_VERDICT=green || MERGE_VERDICT=refused
+ MERGE_VERDICT_HEAD="$HEAD_OID"
  fi
 fi
 ```
@@ -514,10 +517,14 @@ Verdict `NEEDS_HUMAN` with the planned reason. Later ticks skip the PR at gate 2
 
 ### 3.5 — `merge` + post-merge tail
 
-All gates passed in-tick. Re-read the head right before merging and pin it:
+All gates passed in-tick. Pin the head right before merging. When §2.9 ran green, the pin is the exact head the verdict command judged - re-reading a fresher head here would merge a commit no verdict covered; the `--match-head-commit` guard then refuses a moved head server-side and the PR re-gates next tick (`RESOLVING`), which is the fail-closed direction:
 
 ```bash
-HEAD_OID="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
+if [[ "$MERGE_VERDICT" == "green" && -n "$MERGE_VERDICT_HEAD" ]]; then
+ HEAD_OID="$MERGE_VERDICT_HEAD" # §2.9 judged exactly this head - never a fresher one
+else
+ HEAD_OID="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
+fi
 [[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER" # idempotent flip; non-draft skips
 MERGE_RC=0
 MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
