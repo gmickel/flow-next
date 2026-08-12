@@ -1,0 +1,396 @@
+{
+  "artifactId": "fn-186-aid-08bc7751",
+  "baseSha": "4a53f90350c928ff3cf9b4354c77dab275d78637",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "cleanup read two answers from stdin unconditionally under set -euo pipefail: with no terminal the first read hit EOF and the script died exit-1 before its own cancel branch, with nothing naming the cause - and cleanup is the only sanctioned removal path, so automated flows had no route. Separately, create resolved its start point to origin/<base> and git's default autoSetupMerge made the new branch track the base's remote branch: safe under push.default=simple, but under upstream a bare git push aimed at the base branch. And the README claimed every skill answers to /flow-next:<name>, which is false for the five phrase-triggered skills two lines before it names them (issue #333 asks a-d).",
+        "taskIds": [],
+        "title": "The one removal path needed a human at a keyboard"
+      },
+      {
+        "files": [
+          {
+            "additions": 26,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/skills/flow-next-worktree-kit/scripts/worktree.sh",
+            "rIds": [
+              "R1",
+              "R2"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r1",
+              "s-r2",
+              "s-diff"
+            ],
+            "summary": "Arg parsing + TTY-gated, EOF-guarded prompts in cleanup; --no-track on the new-branch create path.",
+            "taskIds": [
+              "fn-186-worktree-kit-non-interactive-cleanup-no.1"
+            ]
+          },
+          {
+            "additions": 77,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_worktree_kit.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r5",
+              "s-diff"
+            ],
+            "summary": "RepoCase base + origin fixture; 5 regression tests (EOF diagnostic, --yes removal, non-TTY refusal, unknown-option, no-upstream).",
+            "taskIds": [
+              "fn-186-worktree-kit-non-interactive-cleanup-no.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2",
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1",
+          "s-r2",
+          "s-r5"
+        ],
+        "summary": "cleanup parses its arguments into names plus --yes (any other dash token fails usage; validate_name already rejects leading-dash names so parsing is unambiguous). Names skip the name prompt; the y/N confirmation runs only on a TTY; non-TTY without --yes refuses naming the remedy; non-TTY with no names fails 'no terminal and no names given'; both reads are EOF-guarded. The new-branch create path gains --no-track (existing-branch path untouched). Five regression tests pin the contract tokens, including a no-upstream pin whose fixture asserts the remote-tracking base ref exists so it cannot pass vacuously - mutation-verified to fail without the fix.",
+        "taskIds": [
+          "fn-186-worktree-kit-non-interactive-cleanup-no.1"
+        ],
+        "title": "cleanup [<name>...] [--yes]; create --no-track"
+      },
+      {
+        "files": [
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-worktree-kit/SKILL.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "Non-interactive cleanup form; switch prints-a-path + cd idiom; no-upstream first-push note.",
+            "taskIds": [
+              "fn-186-worktree-kit-non-interactive-cleanup-no.2"
+            ]
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "README.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "Commands section: 24 command-backed vs 5 phrase-triggered; full-skill-name invocation note.",
+            "taskIds": [
+              "fn-186-worktree-kit-non-interactive-cleanup-no.2"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/skills.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "Same invocation note where the phrase-triggered tier is introduced.",
+            "taskIds": [
+              "fn-186-worktree-kit-non-interactive-cleanup-no.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r3",
+          "s-r4"
+        ],
+        "summary": "SKILL.md documents the non-interactive cleanup form, that switch prints the path and cannot change the caller's shell directory (cd idiom), and that create sets no upstream so the first push needs -u. README's Commands section now distinguishes the 24 command-backed skills from the 5 phrase-triggered ones and notes the full-skill-name invocation on hosts that surface skills as commands (verified live on Claude Code); docs/skills.md carries the same note. No commands/ wrapper added - counts, plugin manifests, and the codex catalog untouched.",
+        "taskIds": [
+          "fn-186-worktree-kit-non-interactive-cleanup-no.2"
+        ],
+        "title": "Docs: kit caveats + the honest invocation story"
+      },
+      {
+        "files": [
+          {
+            "additions": 26,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Unreleased entry: cleanup contract, --no-track, invocation story; credits the reporter.",
+            "taskIds": []
+          },
+          {
+            "additions": 26,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/codex/skills/flow-next-worktree-kit/scripts/worktree.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c2",
+              "s-diff"
+            ],
+            "summary": "Codex mirror copy of the script change.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-worktree-kit/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c2",
+              "s-diff"
+            ],
+            "summary": "Codex mirror copy of the SKILL.md change.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-186-worktree-kit-non-interactive-cleanup-no.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec record.",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-186-worktree-kit-non-interactive-cleanup-no.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec body with R1-R5.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-186-worktree-kit-non-interactive-cleanup-no.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-186-worktree-kit-non-interactive-cleanup-no.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-186-worktree-kit-non-interactive-cleanup-no.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-186-worktree-kit-non-interactive-cleanup-no.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 body + done summary.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 3,
+        "rIds": [],
+        "sourceRefs": [
+          "s-c3"
+        ],
+        "summary": "Full suite 4474 tests OK, ruff clean; the count-pinning suites (test_command_shim_flatten, test_chart_docs_inventory, test_chart_skill_contract) stay green because no wrapper was added. Codex mirror regenerated twice (idempotent) - the mirror copies of worktree.sh and SKILL.md carry the same change. CHANGELOG under Unreleased credits @sn-furali and answers ask (a) in one parenthetical.",
+        "taskIds": [],
+        "title": "Gate, mirror, and lifecycle artifacts"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-c3"
+        ],
+        "value": "4474 tests, 0 failures; ruff 0.16.0 clean; sync-codex idempotent"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1"
+        ],
+        "value": "5 regression tests; the --no-track pin mutation-verified (fails without the fix)"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2"
+        ],
+        "value": "5/5 satisfied across two tasks"
+      }
+    ],
+    "thesis": "The worktree kit becomes scriptable and safe by default: cleanup takes names plus --yes with EOF-guarded, TTY-only prompts (a no-terminal run fails loudly naming the remedy instead of dying inside a bare read), create passes --no-track so a per-worktree branch never aims a bare git push at the base, and the docs stop overclaiming the invocation story - the five phrase-triggered skills answer to plain language and, on hosts that surface skills as commands, their full skill name (issue #333)."
+  },
+  "generatedAt": "2026-08-12T09:05:00Z",
+  "headSha": "08bc775170b74dc4848ddfbc98fc5865704809b1",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-186-worktree-kit-non-interactive-cleanup-no"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-186-worktree-kit-non-interactive-cleanup-no.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-186-worktree-kit-non-interactive-cleanup-no.2"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "389d1387421fe040197e20ced8acab14a83547aa"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "1fdfc2037fe7a2159dbf6e892c3a790b6c04f445"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "08bc775170b74dc4848ddfbc98fc5865704809b1"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "4a53f90350c928ff3cf9b4354c77dab275d78637..08bc775170b74dc4848ddfbc98fc5865704809b1"
+    }
+  ],
+  "specId": "fn-186-worktree-kit-non-interactive-cleanup-no"
+}
