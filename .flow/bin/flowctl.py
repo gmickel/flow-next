@@ -20848,6 +20848,14 @@ def _split_flow_items(inner: str) -> list[str]:
             in_double = ch == '"'
             in_single = ch == "'"
             item_started = True
+        elif (
+            ch == ":"
+            and depth == 0
+            and (i + 1 >= len(inner) or inner[i + 1].isspace())
+        ):
+            # A mapping key separator (": ") starts a new scalar position:
+            # a quote after it opens a quoted value ({"1": "alpha, beta"}).
+            item_started = False
         elif not ch.isspace():
             item_started = True
         i += 1

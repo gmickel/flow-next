@@ -580,6 +580,15 @@ class TestFlowListSplitQuoteAware(unittest.TestCase):
             ['"a\\", b"', " [c, d]", " e"],
         )
 
+    def test_quoted_mapping_value_with_comma(self) -> None:
+        # A quote after a mapping key separator opens a quoted value.
+        parsed = flowctl._parse_inline_yaml(
+            'promoted_to: {"1": "alpha, beta", "2": ok}\n'
+        )
+        self.assertEqual(
+            parsed["promoted_to"], {"1": "alpha, beta", "2": "ok"}
+        )
+
 
 class TestInlineParserRoundTrip(unittest.TestCase):
     """_format_yaml_value → _parse_inline_yaml preserves escapes (bug 1b)."""
