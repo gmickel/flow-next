@@ -160,7 +160,7 @@ Whole-block rule: show a complete block (not a diff) when most of it is new, whe
 - NO auto-run anywhere: closers offer, the user invokes.
 - NO writes from the skill itself; chat output only.
 - NO version bump in implementation commits (batched release policy); docs-site (flow-next.dev) walk happens at release, not here.
-- Naming: `human` is the chosen command; do not rename to anything referencing visualization products or other tools.
+- Naming: `human` is the settled command name; not up for revision during implementation.
 
 ## Decision Context
 
