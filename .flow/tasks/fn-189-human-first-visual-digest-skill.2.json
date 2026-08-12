@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T19:50:28.034290Z",
+  "depends_on": [
+    "fn-189-human-first-visual-digest-skill.1"
+  ],
+  "id": "fn-189-human-first-visual-digest-skill.2",
+  "priority": null,
+  "spec": "fn-189-human-first-visual-digest-skill",
+  "spec_path": ".flow/tasks/fn-189-human-first-visual-digest-skill.2.md",
+  "status": "todo",
+  "title": "Closer offers in capture, plan, interview",
+  "updated_at": "2026-08-12T19:50:28.034290Z"
+}

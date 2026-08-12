@@ -1,0 +1,19 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T19:50:28.034394Z",
+  "depends_on": [
+    "fn-189-human-first-visual-digest-skill.1",
+    "fn-189-human-first-visual-digest-skill.2",
+    "fn-189-human-first-visual-digest-skill.3",
+    "fn-189-human-first-visual-digest-skill.4"
+  ],
+  "id": "fn-189-human-first-visual-digest-skill.5",
+  "priority": null,
+  "spec": "fn-189-human-first-visual-digest-skill",
+  "spec_path": ".flow/tasks/fn-189-human-first-visual-digest-skill.5.md",
+  "status": "todo",
+  "title": "Conduct checklist + prose-contract tests + dogfood",
+  "updated_at": "2026-08-12T19:50:28.034394Z"
+}
