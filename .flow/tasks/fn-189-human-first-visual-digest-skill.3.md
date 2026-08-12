@@ -15,7 +15,7 @@ make-pr's `## Structural changes` now licenses a diff-fenced structural sketch (
 stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 stage: delegation - skipped(config: delegation off)
 ## Evidence
-- Commits: 4ac591fa73c326de811579c75c0961d982565bd0
+- Commits: c4f10bdf7662e016710cec68e57975517b7769fd
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_command_shim_flatten -q (OK; test_visual_skill not yet authored - task .5), python3 scripts/run_tests_parallel.py (191 files, 4489 tests, 1 failure: test_chart_docs_inventory skill-count pin 30!=29 - inherited, owned by task .4), uvx ruff@0.16.0 check . (All checks passed), ./scripts/sync-codex.sh x2 (idempotent; 1 pre-existing error: flow-next-visual allow_implicit_invocation - owned by task .4)
 - PRs:
 stage: plan-sync - ran (no drift; .5 references verified against mermaid-rules.md §8)

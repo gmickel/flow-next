@@ -23,12 +23,12 @@ Notes:
 - The commit also carries a conductor-owned plan-sync edit to `.flow/tasks/fn-189-...3.md` that was already in the working tree (swept in by `git add -A`, per conductor instruction).
 - Task .5 still owns `test_visual_skill.py` (R9); the spec's Quick command naming it is expected to be unresolvable until then.
 
-baseline: red (`test_chart_docs_inventory` count pin, inherited from task .1 at base commit 4ac591fa; `test_visual_skill` module absent, owned by task .5) - both resolved or accounted for; full suite is green at HEAD.
+baseline: red (`test_chart_docs_inventory` count pin, inherited from task .1 at base commit c4f10bdf; `test_visual_skill` module absent, owned by task .5) - both resolved or accounted for; full suite is green at HEAD.
 
 stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 stage: delegation - skipped(config: delegation off)
 ## Evidence
-- Commits: 1959949dcdc901de0ba13767d9013ee2ae5d2621
+- Commits: 9991c55fb56eefcb934db1ba8095e4de40b92f61
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_command_shim_flatten test_chart_docs_inventory test_chart_skill_contract -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (run twice, rc=0 both, identical file set)
 - PRs:
 stage: plan-sync - ran (no drift; no editable downstream tasks, verify-only)

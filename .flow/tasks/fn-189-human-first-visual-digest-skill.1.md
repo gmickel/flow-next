@@ -19,7 +19,7 @@ baseline: green (test_command_shim_flatten pre-edit, rc=0)
 stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 stage: delegation - skipped(config: delegation off)
 ## Evidence
-- Commits: cf3ada964b56de47d0bf790d291c28883c73fef5
+- Commits: 726676e07718c129a3ccf28c4511695d893778a9
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_command_shim_flatten test_cursor_plugin_surface test_flowctl_surface -q (30 tests, OK), uvx ruff@0.16.0 check . (All checks passed), python3 scripts/run_tests_parallel.py (4489 ran, 1 failure: test_chart_docs_inventory count pins - skill/command counts, owned by fn-189-human-first-visual-digest-skill.4 R7)
 - PRs:
 stage: plan-sync - ran (no drift; downstream .2-.5 already aligned)

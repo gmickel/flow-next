@@ -14,12 +14,12 @@ Added exactly one `/flow-next:visual` offer line to each of the three closers: c
 
 Notes: `./scripts/sync-codex.sh` (run twice, idempotent file set) exits 1 on a single pre-existing validation error - `flow-next-visual has no explicit allow_implicit_invocation` - which belongs to task .4 (REQUIRED_OPENAI_YAML_SKILLS / generate_openai_yaml); per conductor instruction that integration was NOT added here. The sync did write the mirror for this task's files, so the mirror is committed. The commit also carries the untracked codex mirror copy of task .1's visual skill (byproduct of the sync) and task .1's uncommitted `.flow/tasks/...1.md` done-summary, swept in by `git add -A`.
 
-baseline: green (focused suite at pre-edit HEAD). Full suite is red with ONE inherited failure (test_chart_docs_inventory skill-count pin, caused by task .1's new skill dir at base commit cf3ada96) - task .4's listing-surface work closes it.
+baseline: green (focused suite at pre-edit HEAD). Full suite is red with ONE inherited failure (test_chart_docs_inventory skill-count pin, caused by task .1's new skill dir at base commit 726676e0) - task .4's listing-surface work closes it.
 
 stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 stage: delegation - skipped(config: delegation off)
 ## Evidence
-- Commits: f112340013f0023538c937bab1c07b22a4d8feef
-- Tests: cd plugins/flow-next/tests && python3 -m unittest test_command_shim_flatten -q (PASS; test_visual_skill not yet authored - task .5), ./scripts/sync-codex.sh x2 (mirror written + idempotent; 1 validation error, pre-existing: flow-next-visual openai.yaml integration owned by task .4), python3 scripts/run_tests_parallel.py (1 inherited failure: test_chart_docs_inventory skill-count pin 30!=29, caused by task .1's new skill dir at base commit cf3ada96; all other files pass)
+- Commits: 9c614725728c408d7eca06345e8b2eb079937669
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_command_shim_flatten -q (PASS; test_visual_skill not yet authored - task .5), ./scripts/sync-codex.sh x2 (mirror written + idempotent; 1 validation error, pre-existing: flow-next-visual openai.yaml integration owned by task .4), python3 scripts/run_tests_parallel.py (1 inherited failure: test_chart_docs_inventory skill-count pin 30!=29, caused by task .1's new skill dir at base commit 726676e0; all other files pass)
 - PRs:
 stage: plan-sync - ran (no drift; task .4 enriched with test_chart_docs_inventory count-pin surfaces)
