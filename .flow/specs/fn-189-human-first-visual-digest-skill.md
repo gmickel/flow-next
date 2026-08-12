@@ -70,6 +70,17 @@ For a file-layout change:
 +    `-- stream.ts
 ```
 
+For a component-tree change:
+
+```diff
+ <SessionPage>
+   useSessionEvents()
+   <SessionToolbar>
++    <RunSkillButton />
+   <SessionTimeline>
++    <SkillResultCard />
+```
+
 For a call-tree change:
 
 ```diff
@@ -107,9 +118,11 @@ resolveTarget(items: Item[], cursor: Cursor) -> ItemId | null
 
 **7. Compact table** - short enumerable facts only (R-ID coverage, per-task file ownership); explanations live in surrounding prose, never in cells.
 
-**8. Mermaid** - LAST resort, only when interaction/sequence genuinely needs it (renders graphically on forges, degrades to source in terminals). When emitted, the existing make-pr mermaid rules apply (reserved words, quoting, caps).
+**8. Mermaid** - LAST resort, only when interaction/sequence genuinely needs it (renders graphically on forges, degrades to source in terminals); when warranted, sequence and state diagrams are the two forms that earn their keep. When emitted, the existing make-pr mermaid rules apply (reserved words, quoting, caps).
 
 Whole-block rule: show a complete block (not a diff) when most of it is new, when omitted context would hide ownership or order, or when the reader needs a copyable target shape.
+
+Trimming rule: within the chosen shape, keep ONLY the calls, files, props, states, and boundaries needed to answer the current question - everything else is left out, even when true.
 
 ## Digest modes (what the skill renders per target)
 
@@ -143,7 +156,7 @@ Whole-block rule: show a complete block (not a diff) when most of it is new, whe
 ## Acceptance Criteria
 
 - R1: Canonical skill exists at `plugins/flow-next/skills/flow-next-visual/SKILL.md` with frontmatter `name`, `description`, `allowed-tools`; the description is trigger-rich so natural language invokes it without the slash command ("show me", "explain this visually", "restate that", "digest the plan", "too much text", "walk me through the spec/tasks/diff") and names the four targets (spec, task, diff, current topic). The skill BODY (not the description - that surface is for positive trigger matching only) states the output contract: compact markdown visuals rendered in chat, not images or HTML files. Command shim at `plugins/flow-next/commands/visual.md` with bare colon-free `name: visual` + non-empty description. Errors: no error surface beyond graceful degradation (missing state -> nearest viable mode, stated in prose).
-- R2: The skill embeds the full shape vocabulary (all 8 shapes with one concrete example each), the smallest-view selection rule, the visual-next-to-its-text rule, the one-or-a-few-never-all rule, the whole-block rule, and mermaid-as-last-resort. Errors: none (prose contract).
+- R2: The skill embeds the full shape vocabulary (all 8 shapes with one concrete example each), the smallest-view selection rule, the visual-next-to-its-text rule, the one-or-a-few-never-all rule, the whole-block rule, the trimming rule (only the calls/files/props/states/boundaries the current question needs), and mermaid-as-last-resort. Errors: none (prose contract).
 - R3: All five digest modes render as specified (spec post-plan with the 6 ordered elements, spec pre-plan, task, diff, ad-hoc), grounded per the guardrails (paths/edges/coverage from real state, never invented). Errors: unreadable/absent flowctl -> ad-hoc mode with one-line notice; empty diff range -> say so, no fabricated sketch.
 - R4: capture, plan, and interview closers each gain exactly one suggested-next-step line offering the digest at their read-back moment (capture: after spec write-back; plan: after task creation; interview: after final write); phrased as an offer, never auto-run. Errors: none (prose contract).
 - R5: make-pr `## Structural changes` may emit a diff-fenced structural sketch (file-tree or call-tree shape) as an alternate/complement to mermaid when the collapse-to-one rule would fire or a trigger fires marginally; documented in `mermaid-rules.md` (or a sibling section it links); same guardrails and prose-precedes-visual rule; pr_cognitive_aid schema/validator/renderer untouched. Errors: none beyond existing Phase 3 rules.
