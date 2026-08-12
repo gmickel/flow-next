@@ -411,19 +411,26 @@ if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
     MERGE_VERDICT=refused
     MV_RC=1; MV_ERR="merge-verdict gate requires the base checkout (on $(git rev-parse --abbrev-ref HEAD), base is $BASE_REF)"
   else
-    # FOREGROUND RULE: ONE blocking foreground Bash call with a 600s tool
-    # timeout (the host tool's bound - the `timeout` binary is not stock on
-    # macOS). A tool-level timeout is a refusal, exactly like exit 124.
-    MV_ERR_FILE="$(mktemp)"; MV_RC=0
-    # cwd = REPO_ROOT on ORIG_BRANCH (Phase 2 does no checkout).
-    FLOW_HEAD_SHA="$HEAD_OID" FLOW_BASE_REF="$BASE_REF" \
-    FLOW_PR_NUMBER="$PR_NUMBER" FLOW_SPEC_ID="$spec" \
-      bash -c "cd \"$REPO_ROOT\" && $MERGE_VERDICT_CMD" >/dev/null 2>"$MV_ERR_FILE" || MV_RC=$?
-    MV_ERR="$(tail -n 1 "$MV_ERR_FILE" 2>/dev/null | cut -c1-200)"; rm -f "$MV_ERR_FILE"
-    [[ "$MV_RC" -eq 0 ]] && MERGE_VERDICT=green || MERGE_VERDICT=refused
-    MERGE_VERDICT_HEAD="$HEAD_OID"
-    # The base the verdict was judged against (server truth, not a local ref):
+    # Bind the merge target BEFORE the command runs: a base that advances
+    # mid-run must read as moved, not as judged. Server truth via ls-remote;
+    # an empty resolution is a refusal (fail-closed), never a skipped check.
     MERGE_VERDICT_BASE="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
+    if [[ -z "$MERGE_VERDICT_BASE" ]]; then
+      MERGE_VERDICT=refused
+      MV_RC=1; MV_ERR="merge-verdict gate cannot resolve origin/$BASE_REF (ls-remote empty/failed)"
+    else
+      # FOREGROUND RULE: ONE blocking foreground Bash call with a 600s tool
+      # timeout (the host tool's bound - the `timeout` binary is not stock on
+      # macOS). A tool-level timeout is a refusal, exactly like exit 124.
+      MV_ERR_FILE="$(mktemp)"; MV_RC=0
+      # cwd = REPO_ROOT on ORIG_BRANCH (Phase 2 does no checkout).
+      FLOW_HEAD_SHA="$HEAD_OID" FLOW_BASE_REF="$BASE_REF" \
+      FLOW_PR_NUMBER="$PR_NUMBER" FLOW_SPEC_ID="$spec" \
+        bash -c "cd \"$REPO_ROOT\" && $MERGE_VERDICT_CMD" >/dev/null 2>"$MV_ERR_FILE" || MV_RC=$?
+      MV_ERR="$(tail -n 1 "$MV_ERR_FILE" 2>/dev/null | cut -c1-200)"; rm -f "$MV_ERR_FILE"
+      [[ "$MV_RC" -eq 0 ]] && MERGE_VERDICT=green || MERGE_VERDICT=refused
+      MERGE_VERDICT_HEAD="$HEAD_OID"
+    fi
   fi
 fi
 ```
@@ -539,24 +546,29 @@ All gates passed in-tick. Pin the head right before merging. When §2.9 ran gree
 ```bash
 # MERGE_VERDICT / MERGE_VERDICT_HEAD / MERGE_VERDICT_BASE = THIS PR's
 # recorded values from its §2.9 classification (per-PR state).
+MV_STALE_BASE=0
 if [[ "$MERGE_VERDICT" == "green" && -n "$MERGE_VERDICT_HEAD" ]]; then
   # A base that moved since judgment (an earlier PR in this tick merging is
-  # the common cause) means the verdict covered a different merge target:
-  # do not merge - verdict RESOLVING, the next tick re-gates and re-judges.
+  # the common cause) means the verdict covered a different merge target.
   BASE_NOW="$(git ls-remote origin "refs/heads/$BASE_REF" | cut -f1)"
-  if [[ -n "$MERGE_VERDICT_BASE" && "$BASE_NOW" != "$MERGE_VERDICT_BASE" ]]; then
-    echo "Evidence: merge-verdict stale (base moved $MERGE_VERDICT_BASE -> $BASE_NOW) - re-tick"
-    # verdict RESOLVING for this PR; skip the merge and the post-merge tail.
+  if [[ -z "$BASE_NOW" || "$BASE_NOW" != "$MERGE_VERDICT_BASE" ]]; then
+    MV_STALE_BASE=1
   fi
   HEAD_OID="$MERGE_VERDICT_HEAD"   # §2.9 judged exactly this head - never a fresher one
 else
   HEAD_OID="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)"
 fi
-[[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER"     # idempotent flip; non-draft skips
-MERGE_RC=0
-MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
-if [[ "$MERGE_RC" -ne 0 ]]; then
-  echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
+if [[ "$MV_STALE_BASE" == 1 ]]; then
+  echo "Evidence: merge-verdict stale (base moved since judgment: $MERGE_VERDICT_BASE -> ${BASE_NOW:-unresolvable}) - no merge"
+  # Verdict RESOLVING for this PR - the next tick re-gates and re-judges.
+  # STOP HERE for this PR: no gh pr ready, no merge, no post-merge tail.
+else
+  [[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER"   # idempotent flip; non-draft skips
+  MERGE_RC=0
+  MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+  if [[ "$MERGE_RC" -ne 0 ]]; then
+    echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
+  fi
 fi
 ```
 

@@ -520,8 +520,8 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         # Multi-PR ticks: the verdict pair rides each PR's classification
         # record; a later iteration must not clobber an earlier PR's pinned
         # head before 3.5 merges it.
-        self.assertIn("per-PR state, not loop variables", self.text)
-        self.assertIn("recorded values from its §2.9 classification", self.text)
+        self.assertIn("MV_STALE_BASE", self.text)
+        self.assertIn('HEAD_OID="$MERGE_VERDICT_HEAD"', self.text)
 
     def test_verdict_binds_head_and_base(self) -> None:
         # A base that moved since judgment (earlier PR merged in the same
@@ -529,6 +529,13 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         # against an unjudged target.
         self.assertIn("MERGE_VERDICT_BASE=", self.gate)
         self.assertIn('"$BASE_NOW" != "$MERGE_VERDICT_BASE"', self.text)
+        # Base bound BEFORE execution; empty resolution refuses, not skips.
+        base_bind = self.gate.index("MERGE_VERDICT_BASE=")
+        cmd_exec = self.gate.index('bash -c "cd')
+        self.assertLess(base_bind, cmd_exec)
+        self.assertIn('-z "$MERGE_VERDICT_BASE"', self.gate)
+        # Stale base structurally stops the merge (guard wraps gh pr merge).
+        self.assertIn('"$MV_STALE_BASE" == 1', self.text)
 
     def test_gate_refusal_is_needs_human_not_blocked(self) -> None:
         # BLOCKED stays reserved for server-side merge refusals (3.5).
