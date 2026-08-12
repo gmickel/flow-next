@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-185-memory-yaml-round-trip-mid-string-hash.md",
-  "status": "open",
+  "status": "done",
   "title": "Memory YAML round-trip: mid-string hash quoting + quote-aware flow-list split (#332)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-12T06:32:05.913351Z"
+  "updated_at": "2026-08-12T08:15:02.287029Z"
 }
