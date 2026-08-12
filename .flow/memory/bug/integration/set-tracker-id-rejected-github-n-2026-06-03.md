@@ -1,5 +1,5 @@
 ---
-title: set-tracker-id rejected GitHub #N identifiers (Linear-only handle validator)
+title: "set-tracker-id rejected GitHub #N identifiers (Linear-only handle validator)"
 date: "2026-06-03"
 track: bug
 category: integration
