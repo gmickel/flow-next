@@ -1,0 +1,380 @@
+{
+  "artifactId": "fn-185-aid-30e1bfb5",
+  "baseSha": "e083ef936c8f23545ac895dd333e08c1db848ce5",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "flowctl's frontmatter round-trip had two mutually concealing holes (issue #332): the writer's quoting gate only checked a leading '#', so a mid-string ' #' was emitted unquoted - YAML comment syntax that any conforming parser truncates at, while flowctl's own fallback parser (which doesn't strip comments) reads the broken output back intact, hiding the damage until PyYAML or an editor reads the file; and the no-PyYAML fallback split flow lists on every comma, quote-blind, so a 2-element list whose first element contains a comma parsed as 3 mangled elements that memory add --update then wrote back as genuinely malformed YAML. One live casualty existed in this repo's own memory store.",
+        "taskIds": [],
+        "title": "A memory store that silently returns different values than it stored"
+      },
+      {
+        "files": [
+          {
+            "additions": 56,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 15,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1",
+              "R2"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r1",
+              "s-r2",
+              "s-diff"
+            ],
+            "summary": "New ' #'/tab-# quoting condition; _split_flow_items helper wired into all three flow-split sites.",
+            "taskIds": [
+              "fn-185-memory-yaml-round-trip-mid-string-hash.1"
+            ]
+          },
+          {
+            "additions": 73,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_memory_schema.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "8 regression tests: predicate positives/negatives, conforming-parser + fallback round-trips, the #332 two-element reproducer, apostrophe non-regression, escape/depth split cases.",
+            "taskIds": [
+              "fn-185-memory-yaml-round-trip-mid-string-hash.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2",
+          "R3",
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1",
+          "s-r2",
+          "s-r3",
+          "s-r5"
+        ],
+        "summary": "_yaml_scalar_needs_quoting gains one condition: any value containing ' #' or a tab-then-'#' needs quotes (YAML 1.2 6.6/7.3.3 - whitespace-then-hash opens a comment on read); non-comment hashes (C#, issue#140) stay unquoted, and the shared gate means list items inherit the fix. A new _split_flow_items helper splits flow-collection bodies on top-level commas while tracking double/single-quote state (backslash escapes honored inside double quotes; a quote only opens quoted state at item start, so mid-word apostrophes stay literal) and bracket depth; it replaces all three naive split(',') sites in _parse_inline_yaml (list branch, flow-mapping top-level, mapping inner list). Eight regression tests including the issue reproducer verbatim and a conforming-parser round-trip guarded by skipUnless(PyYAML).",
+        "taskIds": [
+          "fn-185-memory-yaml-round-trip-mid-string-hash.1"
+        ],
+        "title": "Quote whitespace-then-hash on write; split flow lists quote- and depth-aware on read"
+      },
+      {
+        "files": [
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/memory/bug/integration/set-tracker-id-rejected-github-n-2026-06-03.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "title: value quoted; conforming parsers now read the full title.",
+            "taskIds": [
+              "fn-185-memory-yaml-round-trip-mid-string-hash.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r4"
+        ],
+        "summary": "The memory entry whose title a conforming parser truncated ('set-tracker-id rejected GitHub' instead of the full text) gets its title quoted using the fixed writer's own rendering. Verified verbatim round-trip under PyYAML; no other frontmatter or body changes.",
+        "taskIds": [
+          "fn-185-memory-yaml-round-trip-mid-string-hash.2"
+        ],
+        "title": "Repair the one damaged entry in this repo"
+      },
+      {
+        "files": [
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Unreleased entry: both fixes, user-outcome first, credits the reporter.",
+            "taskIds": []
+          },
+          {
+            "additions": 56,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 15,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Vendored copy of the fixed flowctl.py (dual-copy propagation).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Regenerated distribution hash for the changed flowctl.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Regenerated distribution hash for the changed flowctl.py.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-185-memory-yaml-round-trip-mid-string-hash.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec record.",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-185-memory-yaml-round-trip-mid-string-hash.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec body with R1-R5.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-185-memory-yaml-round-trip-mid-string-hash.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 record with satisfies + evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-185-memory-yaml-round-trip-mid-string-hash.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-185-memory-yaml-round-trip-mid-string-hash.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 record with satisfies + evidence.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-185-memory-yaml-round-trip-mid-string-hash.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 body + done summary.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 3,
+        "rIds": [
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-c3",
+          "s-r5"
+        ],
+        "summary": "Full suite 4466 tests OK and ruff 0.16.0 clean at head. Dual-copy propagation ran (flowctl.py to .flow/bin, tracker MANIFEST hashes regenerated); codex mirror regen twice produced no mirror diff (scripts are shared). CHANGELOG entry under Unreleased credits @sn-furali. Spec and task records carry the R-ID bindings and evidence commits for R5's no-behavior-change sweep (rendering all 93 memory entries changes exactly one value - the repaired title).",
+        "taskIds": [],
+        "title": "Gate, propagation, and lifecycle artifacts"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-c3"
+        ],
+        "value": "4466 tests, 0 failures; ruff 0.16.0 clean; sync-codex idempotent (no mirror diff)"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1"
+        ],
+        "value": "8 regression tests incl. the #332 reproducer verbatim and a PyYAML round-trip"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2"
+        ],
+        "value": "5/5 satisfied across two tasks"
+      },
+      {
+        "label": "No-behavior-change sweep",
+        "sourceRefs": [
+          "s-t1"
+        ],
+        "value": "rendering all 93 memory entries changes exactly one value - the repaired title"
+      }
+    ],
+    "thesis": "flowctl's memory frontmatter now survives a round-trip through any conforming YAML parser: mid-string whitespace-then-hash values are quoted on write (the silent-truncation hole), the no-PyYAML fallback splits flow lists quote- and depth-aware instead of on every comma (the mis-parse-then-persist hole), the one damaged entry in this repo is repaired, and eight regression tests pin both directions including a conforming-parser round-trip (issue #332)."
+  },
+  "generatedAt": "2026-08-12T06:49:22Z",
+  "headSha": "30e1bfb5351f61b5d81f8097bbe5a858e756e4d7",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-185-memory-yaml-round-trip-mid-string-hash"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-185-memory-yaml-round-trip-mid-string-hash.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-185-memory-yaml-round-trip-mid-string-hash.2"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "3eb073120cb9718f56c7e9c9ca174e43b6a3949d"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "0f23fe1e32d57005e4e448f3bd4ffd7bd93b809a"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "30e1bfb5351f61b5d81f8097bbe5a858e756e4d7"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "e083ef936c8f23545ac895dd333e08c1db848ce5..30e1bfb5351f61b5d81f8097bbe5a858e756e4d7"
+    }
+  ],
+  "specId": "fn-185-memory-yaml-round-trip-mid-string-hash"
+}
