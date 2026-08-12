@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T19:25:15.331642Z",
+  "depends_on": [],
+  "id": "fn-188-land-opt-in-repo-merge-verdict-command.1",
+  "priority": null,
+  "spec": "fn-188-land-opt-in-repo-merge-verdict-command",
+  "spec_path": ".flow/tasks/fn-188-land-opt-in-repo-merge-verdict-command.1.md",
+  "status": "todo",
+  "title": "Config plumbing: land.mergeVerdictCommand leaf + schema + docs row + config tests",
+  "updated_at": "2026-08-12T19:25:15.331642Z"
+}

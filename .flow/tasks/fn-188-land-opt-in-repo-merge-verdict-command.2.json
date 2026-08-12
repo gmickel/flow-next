@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-12T19:25:15.331970Z",
+  "depends_on": [
+    "fn-188-land-opt-in-repo-merge-verdict-command.1"
+  ],
+  "id": "fn-188-land-opt-in-repo-merge-verdict-command.2",
+  "priority": null,
+  "spec": "fn-188-land-opt-in-repo-merge-verdict-command",
+  "spec_path": ".flow/tasks/fn-188-land-opt-in-repo-merge-verdict-command.2.md",
+  "status": "todo",
+  "title": "land workflow \u00a72.9 merge-verdict gate + SKILL bullet + static workflow tests + conduct item",
+  "updated_at": "2026-08-12T19:25:15.331970Z"
+}
