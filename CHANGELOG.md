@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.31.0] - 2026-08-12
 
 On a free-plan private repo, branch protection and rulesets 403 - no required
 status check can exist - so land's gate tree read a server that had nothing to
