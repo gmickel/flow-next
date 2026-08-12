@@ -10,9 +10,8 @@ In plugins/flow-next/skills/flow-next-worktree-kit/scripts/worktree.sh: (1) R1 -
 R1, R2, R5 met; cd plugins/flow-next/tests && python3 -m unittest test_worktree_kit -q green; bash -n clean.
 
 ## Done summary
-TBD
-
+worktree.sh: cleanup now takes `cleanup [<name>...] [--yes]` with TTY-only prompts and EOF-guarded reads (loud failures name the remedy); the new-branch create path passes --no-track. 5 regression tests incl. a mutation-verified no-upstream pin. bash -n, ruff, suite green (8 tests).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 389d1387
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_worktree_kit -q, bash -n plugins/flow-next/skills/flow-next-worktree-kit/scripts/worktree.sh
 - PRs:
