@@ -9445,7 +9445,7 @@ PLAN_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: plan_quality_block, confiden
 `flowctl <backend>` review command, or a nested agent/backend to perform this
 review: this prompt already reached you through that machinery, and nesting it
 fails inside the sandbox (app-server init) and can only self-review. Read the
-diff and the repository yourself and produce the verdict in this session.
+plan and the repository yourself and produce the verdict in this session.
 
 ## Context Gathering
 
