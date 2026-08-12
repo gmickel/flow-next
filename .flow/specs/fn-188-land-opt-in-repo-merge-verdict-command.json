@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-188-land-opt-in-repo-merge-verdict-command.md",
-  "status": "open",
+  "status": "done",
   "title": "land: opt-in repo merge-verdict command gate (#330)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-12T19:24:44.069040Z"
+  "updated_at": "2026-08-12T21:23:06.289731Z"
 }
