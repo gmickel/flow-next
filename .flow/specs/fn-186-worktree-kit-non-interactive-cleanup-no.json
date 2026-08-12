@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-186-worktree-kit-non-interactive-cleanup-no.md",
-  "status": "open",
+  "status": "done",
   "title": "Worktree kit: non-interactive cleanup, --no-track create, invocation docs (#333)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-12T08:23:50.536805Z"
+  "updated_at": "2026-08-12T12:41:11.604630Z"
 }
