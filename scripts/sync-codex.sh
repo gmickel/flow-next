@@ -1507,6 +1507,11 @@ generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resol
 generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and specs"                           "#3B82F6" true
 generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" true
 generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a semantic feature index (opt-in)" "#F59E0B" true
+# Visual stays OUT of the Codex catalog (explicit false): its trigger-rich
+# description is the whole point on hosts that match on it, and injecting that
+# text into every session's shared skills budget is exactly the cost the
+# digest exists to save. Reachable by /flow-next:visual and by $name.
+generate_openai_yaml "flow-next-visual" "Flow Visual" "Restate a spec, task, diff, or the current topic as a compact markdown digest" "#F59E0B" false
 generate_openai_yaml "flow-next-ralph-init" "Flow Ralph Init" "Scaffold the repo-local Ralph autonomous harness" "#3B82F6" true
 
 # Internal skills (gray, explicit-only). These are spawned by other skills,
@@ -1621,6 +1626,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next"
   "flow-next-prime"
   "flow-next-map"
+  "flow-next-visual"
   "flow-next-ralph-init"
   "flow-next-drive"
   "flow-next-sync"

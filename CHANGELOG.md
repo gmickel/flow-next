@@ -2,6 +2,40 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Reviewing a fresh plan used to mean reading a spec plus every task file — 500+
+lines for a seven-task spec — and reconstructing the shape in your head just to
+find out whether anything was wrong. Now you can ask for the shape directly, and
+read only the file the shape says is wrong.
+
+### Added
+
+- **Review a plan, a task, a diff, or the conversation at a glance, on one
+  screen.** `/flow-next:visual` (or plain language — "show me", "too much text",
+  "walk me through the diff") restates the thing as a compact markdown digest:
+  a thesis line, a task tree in dependency order, a planned file-layout diff
+  with the owning task annotated, an R-ID coverage line where uncovered
+  requirements jump out, and IS / IS-NOT boundaries. Every path and edge comes
+  from real spec, task, or `git diff` state — the digest reports the shape, it
+  never invents one, and it never writes, commits, or mutates flow state. It is
+  the light register between raw markdown and the opt-in HTML render lenses,
+  which stay exactly as they were. Mechanism: a fixed eight-shape vocabulary
+  (pseudocode, call tree, component tree, shallow file tree, diff-fenced
+  structural sketch, types and signatures, compact table, mermaid last) rendered
+  in plain fenced blocks that colorize natively in the terminal, in chat, and on
+  every forge — no rendering machinery, nothing to port.
+- **Capture, plan, and interview offer the digest at their read-back moment.**
+  One line each, at the point where you have just been handed a wall of spec or
+  tasks to check. An offer you pick, never an automatic run.
+- **PR structural diagrams degrade to a sketch instead of collapsing.**
+  `/flow-next:make-pr`'s `## Structural changes` may now emit a diff-fenced
+  file-tree or call-tree sketch where mermaid is weakest — when the
+  collapse-to-one rule would fire or a trigger fires marginally — carrying the
+  same signal with no silent-rendering-failure risk. Same hallucination
+  guardrails and prose-precedes-visual rule as mermaid; the `pr_cognitive_aid`
+  schema, validator, and renderer are untouched.
+
 ## [flow-next 3.31.0] - 2026-08-12
 
 On a free-plan private repo, branch protection and rulesets 403 - no required
