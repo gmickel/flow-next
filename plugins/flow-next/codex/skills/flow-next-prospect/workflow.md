@@ -486,7 +486,7 @@ Target rejection rate: **[REJECTION_FLOOR_PCT]%**. Below that floor, the run wil
 
 ```yaml
 critiques:
-  - index: 0 # zero-indexed position in the input list
+  - index: 0       # zero-indexed position in the input list
     verdict: keep | drop
     taxonomy: null | duplicates-open-epic | out-of-scope | out-of-scope-vs-strategy | insufficient-signal | too-large | backward-incompat | other
     reason: <one specific sentence>
@@ -511,9 +511,9 @@ If `rejection_rate < REJECTION_FLOOR`, surface a **plain-text numbered prompt** 
 
 ```
 Critique rejected only X% (below the ≥Y% floor). Options:
-  regenerate    — re-run Phase 2 + Phase 3 from scratch (new candidates)
-  loosen-floor  — accept this critique result; ship survivors as-is
-  ship-anyway   — same as loosen-floor; preserved for clarity in transcripts
+  regenerate — re-run Phase 2 + Phase 3 from scratch (new candidates)
+  loosen-floor — accept this critique result; ship survivors as-is
+  ship-anyway — same as loosen-floor; preserved for clarity in transcripts
 ```
 
 Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use `plain-text numbered prompt`. Validate the choice; reject anything outside the three options.
@@ -532,8 +532,8 @@ If `len(SURVIVORS) == 0`, surface a plain-text numbered prompt:
 
 ```
 Critique rejected every candidate. Options:
-  regenerate    — re-run Phase 2 + Phase 3 with a fresh prompt
-  abort         — exit; no artifact written
+  regenerate — re-run Phase 2 + Phase 3 with a fresh prompt
+  abort — exit; no artifact written
 ```
 
 No third option here — shipping zero survivors produces a useless artifact.
@@ -557,9 +557,9 @@ Inputs: `SURVIVORS` (Phase 3 §3.3) + the Phase 1 grounding snapshot. Personas a
 Buckets (R2 / R4 anchor — frozen labels):
 
 ```
-High leverage (1-3)            — small-diff, large-impact wins; top-3 cap
-Worth considering (4-7)        — solid mid-leverage; positions 4-7
-If you have the time (8+)      — lower priority; positions 8 and beyond
+High leverage (1-3) — small-diff, large-impact wins; top-3 cap
+Worth considering (4-7) — solid mid-leverage; positions 4-7
+If you have the time (8+) — lower priority; positions 8 and beyond
 ```
 
 Prompt template:
@@ -593,18 +593,18 @@ Do **not** emit numeric scores, percentage estimates, "leverage values", or rank
 
 ```yaml
 ranking:
-  high_leverage: # 0-3 entries
+  high_leverage:           # 0-3 entries
     - position: 1
-      original_index: <int> # the index from the Phase 3 SURVIVORS list
+      original_index: <int>   # the index from the Phase 3 SURVIVORS list
       leverage: "Small-diff lever because ...; impact lands on ..."
     - position: 2
       ...
-  worth_considering: # 0-N entries
+  worth_considering:       # 0-N entries
     - position: 4
       original_index: <int>
       leverage: "..."
     ...
-  if_you_have_the_time: # 0-N entries
+  if_you_have_the_time:    # 0-N entries
     - position: 8
       original_index: <int>
       leverage: "..."

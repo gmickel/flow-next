@@ -309,12 +309,12 @@ File-layout change:
 ```diff
  src/
  |-- ingest/
-+| `-- dedupe.ts # drops repeated events
++|   `-- dedupe.ts        # drops repeated events
  |-- index/
 -`-- query.ts
 +`-- query/
-+ |-- parser.ts
-+ `-- ranker.ts
++    |-- parser.ts
++    `-- ranker.ts
 ```
 ````
 
@@ -325,11 +325,11 @@ Call-tree change:
  startMission
    resolveFleet
      claimSeat
-+ verifyAuth
++    verifyAuth
      openSession
-- streamEvents
-+ streamEvents
-+ replayBacklog
+-  streamEvents
++  streamEvents
++    replayBacklog
 ```
 ````
 

@@ -482,7 +482,7 @@ evidence; omit a field rather than guess it:
 
 ```bash
 # Start dev server (fixed port, non-interactive)
-[detected dev command] # e.g. PORT=3000 pnpm dev
+[detected dev command]            # e.g. PORT=3000 pnpm dev
 ```
 
 - **Ready line**: `[literal ready line to wait for, e.g. "ready on http://localhost:3000"]`

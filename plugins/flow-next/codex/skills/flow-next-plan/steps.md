@@ -408,9 +408,9 @@ below (they bind on both routes). Route B sessions skip that file entirely.
 
    | Req | Description | Task(s) | Gap justification |
    |-----|-------------|---------|-------------------|
-   | R1  | <criterion from Acceptance Criteria> | fn-N-slug.1, fn-N-slug.2 | — |
-   | R2  | <another criterion> | fn-N-slug.3 | — |
-   | R3  | <deferred item> | — | Deferred to fn-M-slug |
+   | R1 | <criterion from Acceptance Criteria> | fn-N-slug.1, fn-N-slug.2 | — |
+   | R2 | <another criterion> | fn-N-slug.3 | — |
+   | R3 | <deferred item> | — | Deferred to fn-M-slug |
    ```
 
    **Early proof point rules:**
