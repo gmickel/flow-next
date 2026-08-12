@@ -20834,13 +20834,19 @@ def _split_flow_items(inner: str) -> list[str]:
         elif in_single:
             if ch == "'":
                 in_single = False
-        elif ch == "," and depth == 0:
-            parts.append(inner[start:i])
-            start = i + 1
+        elif ch == ",":
+            if depth == 0:
+                parts.append(inner[start:i])
+                start = i + 1
+            # A comma starts a new scalar position at any depth, so a
+            # quote opening the next nested item is recognized as one.
             item_started = False
         elif ch in "[{":
             depth += 1
-            item_started = True
+            # Entering a collection starts a new scalar position: a quote
+            # right after [ or { opens a quoted first item, keeping any
+            # bracket characters inside it from corrupting the depth.
+            item_started = False
         elif ch in "]}":
             depth -= 1
             item_started = True
@@ -20848,11 +20854,7 @@ def _split_flow_items(inner: str) -> list[str]:
             in_double = ch == '"'
             in_single = ch == "'"
             item_started = True
-        elif (
-            ch == ":"
-            and depth == 0
-            and (i + 1 >= len(inner) or inner[i + 1].isspace())
-        ):
+        elif ch == ":" and (i + 1 >= len(inner) or inner[i + 1].isspace()):
             # A mapping key separator (": ") starts a new scalar position:
             # a quote after it opens a quoted value ({"1": "alpha, beta"}).
             item_started = False

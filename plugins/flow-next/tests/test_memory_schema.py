@@ -589,6 +589,16 @@ class TestFlowListSplitQuoteAware(unittest.TestCase):
             parsed["promoted_to"], {"1": "alpha, beta", "2": "ok"}
         )
 
+    def test_quoted_bracket_inside_nested_list(self) -> None:
+        # A quote at a nested item start opens quoted state, so bracket
+        # characters inside it cannot corrupt the depth tracking.
+        parsed = flowctl._parse_inline_yaml(
+            'promoted_to: {"1": ["[", "end"], "2": ["ok"]}\n'
+        )
+        self.assertEqual(
+            parsed["promoted_to"], {"1": ["[", "end"], "2": ["ok"]}
+        )
+
     def test_quoted_mapping_value_unescapes(self) -> None:
         # Double-quoted mapping keys/values/list-items are unescaped,
         # matching the top-level scalar and list branches.
