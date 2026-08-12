@@ -400,11 +400,14 @@ if [[ -n "$MERGE_VERDICT_CMD" && "$PLANNED_ACTION" == "merge" ]]; then
  if [[ "$LAND_DRY_RUN" == 1 ]]; then
  MERGE_VERDICT=would-run # R3 — --dry-run NEVER executes the command
  else
+ # FOREGROUND RULE: ONE blocking foreground Bash call with a 600s tool
+ # timeout (the host tool's bound - the `timeout` binary is not stock on
+ # macOS). A tool-level timeout is a refusal, exactly like exit 124.
  MV_ERR_FILE="$(mktemp)"; MV_RC=0
- # cwd = REPO_ROOT on ORIG_BRANCH (Phase 2 does no checkout); 600s hard bound.
+ # cwd = REPO_ROOT on ORIG_BRANCH (Phase 2 does no checkout).
  FLOW_HEAD_SHA="$HEAD_OID" FLOW_BASE_REF="$BASE_REF" \
  FLOW_PR_NUMBER="$PR_NUMBER" FLOW_SPEC_ID="$spec" \
- timeout 600 bash -c "cd \"$REPO_ROOT\" && $MERGE_VERDICT_CMD" >/dev/null 2>"$MV_ERR_FILE" || MV_RC=$?
+ bash -c "cd \"$REPO_ROOT\" && $MERGE_VERDICT_CMD" >/dev/null 2>"$MV_ERR_FILE" || MV_RC=$?
  MV_ERR="$(tail -n 1 "$MV_ERR_FILE" 2>/dev/null | cut -c1-200)"; rm -f "$MV_ERR_FILE"
  [[ "$MV_RC" -eq 0 ]] && MERGE_VERDICT=green || MERGE_VERDICT=refused
  fi
@@ -414,7 +417,7 @@ fi
 | Command outcome | Land action |
 |---|---|
 | exit 0 | **green** - the merge-verdict gate is satisfied; proceed to the planned `merge` (3.5). |
-| any non-zero exit - including `124` (timeout), `126`/`127` (unexecutable / not found), `128+N` (signal death) | verdict `NEEDS_HUMAN`, action `none`, reason `merge-verdict command refused (exit <MV_RC>): <MV_ERR>` (last stderr line, ~200 chars). **No merge.** |
+| any non-zero exit - including `124` or a host-tool timeout at the 600s bound, `126`/`127` (unexecutable / not found), `128+N` (signal death) | verdict `NEEDS_HUMAN`, action `none`, reason `merge-verdict command refused (exit <MV_RC>): <MV_ERR>` (last stderr line, ~200 chars). **No merge.** |
 
 **Fail-closed, always.** A configured command that is missing, unexecutable, times out at the 600s bound, or dies on a signal BLOCKS the merge - it is never read as "skip", "not applicable", or "gate unavailable". A tick that merged because the configured command could not run has broken this. The refusal class is `NEEDS_HUMAN`, never `BLOCKED`: `BLOCKED` stays reserved for server-side merge refusals (3.5). No `flow-next:needs-human` label is applied on refusal (same posture as 2.5b) - fix the repo-side cause and the next tick re-gates from scratch.
 

@@ -493,7 +493,7 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
 
     def test_gate_is_fail_closed(self) -> None:
         # Missing/unexecutable/timeout/signal all block, never skip.
-        self.assertIn("timeout 600", self.gate)
+        self.assertIn("600s tool", self.gate)
         self.assertIn("Fail-closed", self.gate)
         for token in ("124", "127", "128+N"):
             self.assertIn(token, self.gate)
