@@ -29,9 +29,9 @@ on the ORIGINAL input, immediately after detection and **before** running any
 # Runs ONLY when delegation_requested (resolved in Phase 0). On the default
 # (delegation-off) path this step does not exist — Phase 0 already returned.
 if <original input matched #5 idea text — none of: Flow id, resolvable handle, existing .md spec path>; then
- INPUT_WAS_BARE_PROMPT=1 # promoted bare prompt → NOT eligible for delegation (Gate 5)
+  INPUT_WAS_BARE_PROMPT=1   # promoted bare prompt → NOT eligible for delegation (Gate 5)
 else
- INPUT_WAS_BARE_PROMPT=0 # Flow id / resolvable handle / existing .md spec → eligible
+  INPUT_WAS_BARE_PROMPT=0   # Flow id / resolvable handle / existing .md spec → eligible
 fi
 ```
 
@@ -42,11 +42,11 @@ setting, not evidence that the host is Codex.
 
 ```bash
 platform_gate_ok() {
- [ -n "${CLAUDECODE:-}" ] || return 1
- [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1
- [ -z "${OPENCODE:-}" ] || return 1
- env | grep -q '^OPENCODE_' && return 1
- return 0
+  [ -n "${CLAUDECODE:-}" ] || return 1
+  [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1
+  [ -z "${OPENCODE:-}" ] || return 1
+  env | grep -q '^OPENCODE_' && return 1
+  return 0
 }
 ```
 
@@ -57,16 +57,16 @@ the recursion guard:
 
 ```bash
 not_inside_codex_sandbox() {
- case "${CODEX_SANDBOX:-}" in
- ""|read-only|workspace-write|danger-full-access|auto)
- RUNTIME_SANDBOX=0 ;;
- *)
- RUNTIME_SANDBOX=1 ;;
- esac
- if [ -n "${CODEX_SANDBOX_NETWORK_DISABLED:-}" ] || [ "${RUNTIME_SANDBOX:-0}" = "1" ]; then
- return 1
- fi
- return 0
+  case "${CODEX_SANDBOX:-}" in
+    ""|read-only|workspace-write|danger-full-access|auto)
+      RUNTIME_SANDBOX=0 ;;
+    *)
+      RUNTIME_SANDBOX=1 ;;
+  esac
+  if [ -n "${CODEX_SANDBOX_NETWORK_DISABLED:-}" ] || [ "${RUNTIME_SANDBOX:-0}" = "1" ]; then
+    return 1
+  fi
+  return 0
 }
 ```
 
@@ -74,8 +74,8 @@ not_inside_codex_sandbox() {
 
 ```bash
 codex_available() {
- command -v codex >/dev/null 2>&1 || return 1
- return 0
+  command -v codex >/dev/null 2>&1 || return 1
+  return 0
 }
 ```
 
@@ -110,11 +110,11 @@ Every Headless Work no-question marker uses the same exact predicate:
 
 ```bash
 delegation_headless() {
- [ "${FLOW_RALPH:-}" = "1" ] && return 0
- [ -n "${REVIEW_RECEIPT_PATH:-}" ] && return 0
- [ "${FLOW_AUTONOMOUS:-}" = "1" ] && return 0
- [ "${AUTONOMOUS:-}" = "1" ] && return 0 # parsed mode:autonomous token
- return 1
+  [ "${FLOW_RALPH:-}" = "1" ] && return 0
+  [ -n "${REVIEW_RECEIPT_PATH:-}" ] && return 0
+  [ "${FLOW_AUTONOMOUS:-}" = "1" ] && return 0
+  [ "${AUTONOMOUS:-}" = "1" ] && return 0  # parsed mode:autonomous token
+  return 1
 }
 ```
 
@@ -128,8 +128,8 @@ is headless.
 
 ```bash
 input_kind_ok() {
- [ "${INPUT_WAS_BARE_PROMPT:-0}" = "1" ] && return 1
- return 0
+  [ "${INPUT_WAS_BARE_PROMPT:-0}" = "1" ] && return 1
+  return 0
 }
 ```
 
@@ -141,7 +141,7 @@ automatically. `.flow/` is host-owned and excluded:
 ```bash
 DIRTY="$(git status --porcelain | grep -v '^.. \.flow/' || true)"
 if [ -n "$DIRTY" ]; then
- : # offer commit or standard mode; do not delegate dirty
+  : # offer commit or standard mode; do not delegate dirty
 fi
 ```
 
@@ -158,7 +158,7 @@ Only after all gates pass:
 1. set `delegation_active=true`;
 2. read `codex-delegation.md` once, top to bottom;
 3. follow its invocation, path-handoff, safety, worker-signal, and
- circuit-breaker contract for the rest of the run.
+   circuit-breaker contract for the rest of the run.
 
 Any other terminal sets `delegation_active=false`, reads no active reference,
 and continues the ordinary Work path.

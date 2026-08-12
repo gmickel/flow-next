@@ -9,7 +9,7 @@ This file is the rung's entry point: how to verify the driver, the universal flo
 ```bash
 # Present + version. Missing → install.
 command -v agent-browser >/dev/null 2>&1 && agent-browser --version \
- || echo "MISSING: npm install -g agent-browser (or: brew install agent-browser) then: agent-browser install"
+  || echo "MISSING: npm install -g agent-browser  (or: brew install agent-browser)  then: agent-browser install"
 ```
 
 - First install also needs the browser binary: `agent-browser install` (add `--with-deps` on Linux for system libs).
@@ -19,11 +19,11 @@ command -v agent-browser >/dev/null 2>&1 && agent-browser --version \
 **Prefer the installed CLI's own docs over this file when they disagree** — they're always version-matched to the binary you have:
 
 ```bash
-agent-browser skills get core # overview + common patterns
-agent-browser skills get core --full # + full command reference and templates
-agent-browser skills list # specialized skills (electron, slack, dogfood, vercel-sandbox, agentcore, ...)
-agent-browser --help # flag-level reference
-agent-browser <command> --help # per-command help
+agent-browser skills get core          # overview + common patterns
+agent-browser skills get core --full   # + full command reference and templates
+agent-browser skills list              # specialized skills (electron, slack, dogfood, vercel-sandbox, agentcore, ...)
+agent-browser --help                   # flag-level reference
+agent-browser <command> --help         # per-command help
 ```
 
 This rung doc captures the flow-next-specific framing and the gotchas; the CLI's `skills get core --full` is the canonical command reference and tracks the installed version.
@@ -33,14 +33,14 @@ This rung doc captures the flow-next-specific framing and the gotchas; the CLI's
 The SKILL.md universal flow (`observe → navigate → snapshot → act on fresh refs → verify → capture → release`) maps directly:
 
 ```bash
-agent-browser open https://example.com # navigate
-agent-browser wait --load networkidle # let an SPA settle
-agent-browser snapshot -i # fresh refs (REQUIRED before each act)
-agent-browser click @e1 # act on a ref from THIS snapshot
-agent-browser snapshot -i # re-snapshot — refs went stale after the click
-agent-browser get text @e5 # verify expected state appeared
-agent-browser screenshot out.png # capture evidence (and on failure)
-agent-browser close # release when fully done
+agent-browser open https://example.com          # navigate
+agent-browser wait --load networkidle            # let an SPA settle
+agent-browser snapshot -i                        # fresh refs (REQUIRED before each act)
+agent-browser click @e1                          # act on a ref from THIS snapshot
+agent-browser snapshot -i                        # re-snapshot — refs went stale after the click
+agent-browser get text @e5                       # verify expected state appeared
+agent-browser screenshot out.png                 # capture evidence (and on failure)
+agent-browser close                              # release when fully done
 ```
 
 **Re-snapshot after every DOM change.** Refs (`@e1`, `@e2`, …) are invalidated by any navigation, click that changes the page, form submit, or dynamic content load. A "ref not found" or "element has pointer-events: none" is almost always a stale snapshot, not a real bug — re-snapshot before concluding. Full ref model + lifecycle: [snapshot-refs.md](snapshot-refs.md).
@@ -62,9 +62,9 @@ Electron and Windows WebView2 apps are Chromium under the hood, so **agent-brows
 
 ```bash
 # Launch the app with a dedicated remote-debugging port + isolated user-data-dir, then:
-agent-browser --cdp 9222 snapshot -i # attach by explicit port
+agent-browser --cdp 9222 snapshot -i           # attach by explicit port
 agent-browser --cdp 9222 click @e1
-agent-browser connect 9222 # equivalent connect command
+agent-browser connect 9222                      # equivalent connect command
 
 # Or auto-discover a running Chrome/Chromium exposing a debug port
 # (also reuses that profile's signed-in auth state):

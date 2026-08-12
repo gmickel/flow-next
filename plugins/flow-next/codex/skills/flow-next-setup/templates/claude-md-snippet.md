@@ -4,9 +4,9 @@
 This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do NOT create markdown TODOs or use TodoWrite. Cold session: `.flow/bin/flowctl brief` first — one bounded call (specs, ready tasks, memory); go deeper with `show`/`cat`/`anchor <task-id>`.
 
 ```bash
-.flow/bin/flowctl list # specs + tasks
-.flow/bin/flowctl show fn-N.M # view task
-.flow/bin/flowctl start fn-N.M # claim -> implement -> commit
+.flow/bin/flowctl list                # specs + tasks
+.flow/bin/flowctl show fn-N.M         # view task
+.flow/bin/flowctl start fn-N.M        # claim -> implement -> commit
 .flow/bin/flowctl done fn-N.M --summary-file s.md --evidence-json e.json
 # e.json: {"commits": ["<sha>"], "tests": ["<command>"], "prs": []}
 ```

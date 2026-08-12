@@ -21,7 +21,7 @@ re-races credentials to change deployment shape.
 - project keys accept upper-case letters, digits, and underscore;
 - issue and comment bodies normalize to Markdown;
 - comment responses do not expose parent issue id, so response-side parent
- identity is unavailable.
+  identity is unavailable.
 
 ## Operation mapping
 

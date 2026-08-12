@@ -22,7 +22,7 @@ If `.flow/` does not exist, print `No .flow/ directory — run \`$FLOWCTL init\`
 **ONE root config snapshot for the whole capture run (fn-110)** — take it once after `.flow/` is confirmed, then derive every later leaf (including the Phase 5.2 mint gate) via `jq` from that file. No further root `config get` on the capture path for values already in the snapshot. Path-persistence: compose a literal path with an agent-chosen 4-char suffix and type it verbatim:
 
 ```bash
-CAPTURE_CFG="${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json" # literal path
+CAPTURE_CFG="${TMPDIR:-/tmp}/flow-capture-config-<suffix>.json"   # literal path
 "$FLOWCTL" config get --json > "$CAPTURE_CFG" 2>/dev/null || { printf '{"key":null,"value":{}}' > "$CAPTURE_CFG"; echo "[CAPTURE]: config snapshot empty — flowctl unreachable; snapshot-derived gates degrade to defaults" >&2; }
 ```
 
@@ -86,14 +86,14 @@ If memory is not initialized (`memory list` returns the `Memory not initialized`
 ```bash
 ACTIVE=0
 # NO pipelines in the probe — capture raw first, rc-checked; parse separately.
-RAW="$("$FLOWCTL" strategy status --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$("$FLOWCTL" strategy status --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '.sections_filled // 0' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "${VAL:-0}" -ge 1 ] 2>/dev/null && ACTIVE=1
+  VAL="$(printf '%s' "$RAW" | jq -r '.sections_filled // 0' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "${VAL:-0}" -ge 1 ] 2>/dev/null && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/strategy-alignment.md before continuing."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — STOP. Read references/strategy-alignment.md before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, read [references/strategy-alignment.md](references/strategy-alignment.md) and execute its §0.3b snapshot (it also owns the Phase 5.0 contradiction gate that runs before any write). When the gate is silent, `STRATEGY_PRESENT=false`: Phase 2 emits no `[strategy:*]` tags and Phase 5's contradiction check is skipped entirely — there is no signal to align to.
@@ -123,9 +123,9 @@ Error: relevant conversation evidence appears incomplete after compaction
 requirements needed for this spec may be missing.
 
 Options:
- - Restate or restore the missing relevant requirements in visible user turns.
- - Re-run with --from-compacted-ok if you've verified the remaining context
- contains the full intent despite the identified gaps.
+  - Restate or restore the missing relevant requirements in visible user turns.
+  - Re-run with --from-compacted-ok if you've verified the remaining context
+    contains the full intent despite the identified gaps.
 ```
 
 In **autofix mode**, exit 2. In **interactive mode**, this is a hard refusal — capture does not offer to "ask the user to confirm anyway" (the user can restate the missing material or re-invoke with the flag if they trust the transcript).
@@ -322,14 +322,14 @@ Worked example — conversation: *"add timestamps to log lines"* (purely technic
 
 ```bash
 ACTIVE=0
-RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '.total_terms // 0' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "${VAL:-0}" -gt 0 ] 2>/dev/null && ACTIVE=1
+  VAL="$(printf '%s' "$RAW" | jq -r '.total_terms // 0' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "${VAL:-0}" -gt 0 ] 2>/dev/null && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/glossary-terms.md before continuing."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — STOP. Read references/glossary-terms.md before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, read [references/glossary-terms.md](references/glossary-terms.md) and run its §2.7 scan (it also owns the Phase 4.2 `Glossary?` consent and the §5.8 write). When the gate is silent — no glossary, a `# Glossary` husk, or `total_terms == 0` — `GLOSSARY_PROPOSALS` stays empty and nothing downstream changes; seeding an empty glossary is `/flow-next:prime`'s job, never capture's.
@@ -398,14 +398,14 @@ The **summary payload** (metadata about the draft — never a re-emission of it)
 
 1. `title` + candidate `branch_name`.
 2. **Source-tag tally** — compact one-liner. Format:
- ```
- Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L
- ```
- Optional one-line per-section `[inferred]` breakdown when L > 0 (keep short — tallies, not the criteria prose):
- ```
- [inferred] count: 7 total (Architecture 3 · API 2 · Boundaries 2)
- ```
- The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
+   ```
+   Source: [user] N · [paraphrase] M · [strategy] K · [inferred] L
+   ```
+   Optional one-line per-section `[inferred]` breakdown when L > 0 (keep short — tallies, not the criteria prose):
+   ```
+   [inferred] count: 7 total (Architecture 3 · API 2 · Boundaries 2)
+   ```
+   The `[strategy]` count aggregates all `[strategy:<track>]` lines regardless of track. When Phase 0 strategy snapshot scanned `none` (`STRATEGY_PRESENT=false`), `[strategy] K` reads `[strategy] 0` (or the field is omitted entirely — equivalent in practice).
 3. **Spec-count note** — only when §2.5's gate fired; its reference owns the wording and the full proposal block.
 4. **Related context** footnote (if Phase 0.3 found memory hits) — one short clause, e.g. `Related memory: bug/runtime-errors/oauth-callback-2025-08-12.`
 5. **Rewrite-mode pointer** — only when `REWRITE_TARGET` is set; `references/rewrite-mode.md` owns the diff contract and the pointer clause.
@@ -419,14 +419,14 @@ The **summary payload** (metadata about the draft — never a re-emission of it)
 
 - **header**: `Read-back`
 - **body** (SHORT — pointer + tally/warnings + recommendation only; no multi-paragraph content):
- 1. One-line pointer: `Full draft printed above.` (rewrite: `Full draft + rewrite diff printed above.`)
- 2. Compact summary payload from §4.1 (source-tag tally, 8+ note, related-memory footnote, rewrite pointer, glossary term names) — tallies and one-liners only.
- 3. **The recommendation — no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend approve — the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked [inferred] in the draft above before choosing — approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve — <one-sentence rationale>. Confidence: [<tier>].`
+  1. One-line pointer: `Full draft printed above.` (rewrite: `Full draft + rewrite diff printed above.`)
+  2. Compact summary payload from §4.1 (source-tag tally, 8+ note, related-memory footnote, rewrite pointer, glossary term names) — tallies and one-liners only.
+  3. **The recommendation — no self-blessing rule (overrides lead-with-recommendation):** when the draft carries ≥1 `[inferred]` item, do NOT recommend approve — the agent never pre-blesses its own guesses. Lead neutrally instead: `Recommended: check the <N> guessed item(s) marked [inferred] in the draft above before choosing — approve only if they match your intent. Confidence: [<tier>].` Only a zero-`[inferred]` draft may carry `Recommended: approve — <one-sentence rationale>. Confidence: [<tier>].`
 - **options** (frozen — each description states its consequence in plain words, "Choose this if…"):
- - `approve` — proceed to Phase 5 write as ONE spec ("this becomes the spec and work can start from it")
- - `split-as-proposed` (only when §2.5's gate fired and proposed N>1) — Phase 5 runs the create ceremony once per proposed spec and records the dependency edges; "you get N linked specs exactly as printed above"
- - `edit` — revise specific sections (loops back to Phase 2 for those sections)
- - `abort` — exit 0, no write ("draft is thrown away, nothing saved")
+  - `approve` — proceed to Phase 5 write as ONE spec ("this becomes the spec and work can start from it")
+  - `split-as-proposed` (only when §2.5's gate fired and proposed N>1) — Phase 5 runs the create ceremony once per proposed spec and records the dependency edges; "you get N linked specs exactly as printed above"
+  - `edit` — revise specific sections (loops back to Phase 2 for those sections)
+  - `abort` — exit 0, no write ("draft is thrown away, nothing saved")
 
 Confidence tier (attaches to whichever recommendation the rule above produced):
 
@@ -441,19 +441,19 @@ Confidence tier (attaches to whichever recommendation the rule above produced):
 - **`Glossary?`** — only when §2.7's gate fired AND `GLOSSARY_PROPOSALS` is non-empty AND the user picked `approve`. Question shape lives in `references/glossary-terms.md`; the write is §5.8.
 - **`Mark ready?`** — probe only after `approve`, before any Phase 5 write changes the rewrite target's state:
 
- ```bash
- ACTIVE=0
- RAW="$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
- if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '.value // empty' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ -z "$VAL" ] && ACTIVE=1
- fi
- if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/mark-ready.md before continuing."
- fi # default branch: bare no-op — NO link, NO read path
- ```
+  ```bash
+  ACTIVE=0
+  RAW="$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+  if [ "$ACTIVE" = "0" ]; then
+    VAL="$(printf '%s' "$RAW" | jq -r '.value // empty' 2>/dev/null)" || ACTIVE=1      # parse ERROR ⇒ ACTIVE
+    [ -z "$VAL" ] && ACTIVE=1
+  fi
+  if [ "$ACTIVE" = "1" ]; then
+    echo "GATE ACTIVE — STOP. Read references/mark-ready.md before continuing."
+  fi   # default branch: bare no-op — NO link, NO read path
+  ```
 
- When the sentinel prints, read [references/mark-ready.md](references/mark-ready.md) and run its full target-aware predicate — it decides whether the `Mark ready?` question is asked at all (new capture: adopted local readiness; rewrite: the target itself was ready), and owns the §5.9 write. When the gate is silent, `tracker.readyState` is configured: readiness is a one-way tracker→local pull, no question is ever offered, no readiness is written.
+  When the sentinel prints, read [references/mark-ready.md](references/mark-ready.md) and run its full target-aware predicate — it decides whether the `Mark ready?` question is asked at all (new capture: adopted local readiness; rewrite: the target itself was ready), and owns the §5.9 write. When the gate is silent, `tracker.readyState` is configured: readiness is a one-way tracker→local pull, no question is ever offered, no readiness is written.
 
 ### 4.3 — Edit branch
 
@@ -509,26 +509,26 @@ SPEC_TITLE="<chosen title from Phase 3 or Phase 1.3>"
 
 # Tracker-first mint gate (distributed id allocation). Probe raw, rc-checked; parse separately.
 ACTIVE=0
-RAW="$("$FLOWCTL" sync active --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$("$FLOWCTL" sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$VAL" = "true" ] && ACTIVE=1
+  VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/tracker-integration.md before continuing."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — STOP. Read references/tracker-integration.md before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 
 # SILENT degrade - the ONLY flow-first creation site, deliberately an
 # unconditional post-check outside the tracker-first branch (rationale + the
 # orphan-issue GUARD live in references/tracker-integration.md §5.2).
 if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
- SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
+  SPEC_OUTPUT=$("$FLOWCTL" spec create --title "$SPEC_TITLE" --json)
 fi
 SPEC_ID=$(printf '%s' "$SPEC_OUTPUT" | jq -r '.id')
 
 if [[ -z "$SPEC_ID" || "$SPEC_ID" == "null" ]]; then
- echo "Error: spec create failed: $SPEC_OUTPUT" >&2
- exit 1
+  echo "Error: spec create failed: $SPEC_OUTPUT" >&2
+  exit 1
 fi
 
 # Write the spec body from the §4.1 draft file — type the literal path verbatim
@@ -605,14 +605,14 @@ Runs only when §4.2's `Mark ready?` consent recorded `mark-ready`; the `flowctl
 
 ```bash
 ACTIVE=0
-RAW="$("$FLOWCTL" config get artifacts.html.enabled --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$("$FLOWCTL" config get artifacts.html.enabled --json 2>/dev/null)" || ACTIVE=1   # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r 'if .value == true then "true" else "false" end' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$VAL" = "true" ] && ACTIVE=1
+  VAL="$(printf '%s' "$RAW" | jq -r 'if .value == true then "true" else "false" end' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/html-lens.md before continuing."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — STOP. Read references/html-lens.md before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, read [references/html-lens.md](references/html-lens.md) and follow it — the spec-artifact generation, the disclosure-reference load, the link-line write, and the Lavish companion. When the gate is silent (off or unset): **skip entirely** — write no artifact, print no artifact output. The one-line gate read above is the only cost.
@@ -644,9 +644,9 @@ When the sentinel prints, read [references/html-lens.md](references/html-lens.md
 # updated_at can be bumped by §5.9's ready-toggle after 5.7 — neither is safe.
 ANCHOR_FILE="${TMPDIR:-/tmp}/flow-capture-anchor-${SPEC_ID}"
 if [[ -f "$ANCHOR_FILE" ]]; then
- SINCE="$(cat "$ANCHOR_FILE")"
+  SINCE="$(cat "$ANCHOR_FILE")"
 else
- SINCE="$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.created_at')"
+  SINCE="$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.created_at')"
 fi
 
 "$FLOWCTL" sync check "$SPEC_ID" --events capture --since "$SINCE" --json
@@ -663,9 +663,9 @@ Spec captured at .flow/specs/<SPEC_ID>.md.
 Tracker sync: <OK | MISSING:capture → retro-fired → OK | MISSING:capture (retro-fire failed: <reason>) | n/a (bridge inactive)>
 
 Next:
- /flow-next:plan <SPEC_ID> → research + break into tasks
- /flow-next:interview <SPEC_ID> → refine via Q&A
- /flow-next:visual <SPEC_ID> → compact visual digest — review the spec at a glance
+  /flow-next:plan <SPEC_ID>      → research + break into tasks
+  /flow-next:interview <SPEC_ID> → refine via Q&A
+  /flow-next:visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 
 Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired — `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise — zero noise outside the consented / enabled path.
@@ -680,7 +680,7 @@ When the conversation has business-context signals but the business layer is spa
 # R25 threshold is host-agent judgment (fn-113; former flowctl helper removed).
 # Fire when 1 <= BIZ_SIGNAL_CATEGORIES < 3; otherwise stay silent.
 if [ "$BIZ_SIGNAL_CATEGORIES" -ge 1 ] && [ "$BIZ_SIGNAL_CATEGORIES" -lt 3 ]; then
- cat <<EOF
+  cat <<EOF
 
 This conversation has business-requirements signals; consider
 \`/flow-next:interview --scope=business $SPEC_ID\` to deep-refine the

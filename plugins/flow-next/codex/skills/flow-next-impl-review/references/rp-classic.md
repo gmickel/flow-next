@@ -24,14 +24,14 @@ Build the prompt by deterministic composition — redirect command output into t
 ```bash
 SETUP_FILE="${TMPDIR:-/tmp}/flow-impl-review-setup-<task-id-or-branch-slug>-<suffix>.env"
 source "$SETUP_FILE"
-PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md" # literal path
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-impl-review-prompt-<task-id-or-branch-slug>-<suffix>.md"   # literal path
 if [[ "$RP_MODE" == "classic" ]]; then
 
 # 1. Builder handoff — captured via redirection, never re-typed
 $FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
 
 # 2. Static header (quoted heredoc — no shell expansion; fill the scalar
-# [BRACKET] slots inline while typing this block)
+#    [BRACKET] slots inline while typing this block)
 cat >> "$PROMPT_FILE" << 'EOF'
 
 ---

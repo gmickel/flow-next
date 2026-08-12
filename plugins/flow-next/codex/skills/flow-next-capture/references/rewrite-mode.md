@@ -17,15 +17,15 @@ Contents:
 
 - Validate the target exists **and is a spec** (not a task — `flowctl show` accepts both, but capture only writes specs to spec IDs):
 
- ```bash
- out=$("$FLOWCTL" show "$REWRITE_TARGET" --json) || { echo "Error: --rewrite target $REWRITE_TARGET does not exist. Drop --rewrite to create a new spec, or pick an existing spec id." >&2; exit 2; }
- if echo "$out" | jq -e '.tasks' >/dev/null 2>&1; then
- : # spec — has .tasks array
- else
- echo "Error: --rewrite target $REWRITE_TARGET is a task, not a spec. Pass a spec id (fn-N-slug, no .M suffix)." >&2
- exit 2
- fi
- ```
+  ```bash
+  out=$("$FLOWCTL" show "$REWRITE_TARGET" --json) || { echo "Error: --rewrite target $REWRITE_TARGET does not exist. Drop --rewrite to create a new spec, or pick an existing spec id." >&2; exit 2; }
+  if echo "$out" | jq -e '.tasks' >/dev/null 2>&1; then
+    : # spec — has .tasks array
+  else
+    echo "Error: --rewrite target $REWRITE_TARGET is a task, not a spec. Pass a spec id (fn-N-slug, no .M suffix)." >&2
+    exit 2
+  fi
+  ```
 
 - If the target is missing or is a task, exit 2 with the appropriate error message above.
 - Read the existing spec. Phase 4 read-back will show a diff (existing → proposed) before write.
@@ -89,9 +89,9 @@ Readiness: spec rewritten — readiness reset to draft (re-bless when ready)
 Tracker sync: <same four states>
 
 Next:
- /flow-next:plan <SPEC_ID> → re-plan tasks (existing tasks under the spec
- may need /flow-next:sync to align)
- /flow-next:interview <SPEC_ID> → refine via Q&A
+  /flow-next:plan <SPEC_ID>      → re-plan tasks (existing tasks under the spec
+                                    may need /flow-next:sync to align)
+  /flow-next:interview <SPEC_ID> → refine via Q&A
 ```
 
 The `Readiness:` announcement line appears ONLY when §5.3's reset actually changed the flag (`READY_RESET=true`). Never-ready specs print no readiness line — an announcement is not a confirmation prompt, and it must not claim a reset that didn't happen.

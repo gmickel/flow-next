@@ -20,15 +20,15 @@ flowctl reads the parent and compares the returned durable id. A mismatch is
 
 ```json
 {
- "id": "durable id",
- "identifier": "display key",
- "url": "canonical URL",
- "title": "plain text",
- "body": "markdown",
- "status": {"id": "provider id", "name": "provider name", "slot": "in_progress"},
- "labels": ["label"],
- "assignees": [{"id": "provider id", "name": "display name"}],
- "updatedAt": "provider timestamp"
+  "id": "durable id",
+  "identifier": "display key",
+  "url": "canonical URL",
+  "title": "plain text",
+  "body": "markdown",
+  "status": {"id": "provider id", "name": "provider name", "slot": "in_progress"},
+  "labels": ["label"],
+  "assignees": [{"id": "provider id", "name": "display name"}],
+  "updatedAt": "provider timestamp"
 }
 ```
 
@@ -39,12 +39,12 @@ not manufacture identity fields absent from a provider response.
 
 ```json
 {
- "id": "provider comment id",
- "body": "plain markdown",
- "url": "provider URL or null",
- "created_at": "immutable provider timestamp or null",
- "raw": {},
- "parent_identity": "validated or not_available"
+  "id": "provider comment id",
+  "body": "plain markdown",
+  "url": "provider URL or null",
+  "created_at": "immutable provider timestamp or null",
+  "raw": {},
+  "parent_identity": "validated or not_available"
 }
 ```
 
@@ -88,12 +88,12 @@ write one receipt:
 - `create-first` creates before a subject and writes retry-key recovery state.
 - `persist-external` records an authorized MCP result.
 - `status` applies the deterministic status policy (specs; chart claim/release
- never masquerades as provider workflow status).
+  never masquerades as provider workflow status).
 - `relate` projects one blocked-by edge with provenance.
 - `sync-body` performs write/readback and paired merge-base persistence.
 - `sync` composes the event lifecycle as one unit.
 - Chart projection reuses the same facade with subject kind `chart` /
- `decision` (see Chart subjects below).
+  `decision` (see Chart subjects below).
 
 ## Chart subjects (fn-135)
 
@@ -136,9 +136,9 @@ explicit degradation:
 - D-ID, title, type, attendance, local status
 - Safe resolution gist (never full answer bodies)
 - Approved evidence references only (repo-relative paths, branch/commit refs,
- approved HTTPS URLs)
+  approved HTTPS URLs)
 - Claim/release may refresh the owned block/counts; **never** maps to provider
- workflow status
+  workflow status
 
 Never copy: full answers, unsafe assets, credentials, acceptance-criterion
 source tags.
@@ -170,13 +170,13 @@ URL **strictly** through the local provenance ledger:
 
 - Normalize scheme/host case and provider-approved cosmetic suffixes
 - Reject credential-bearing, wrong-host/project, ambiguous, unrecorded,
- stale-parent, and conflicting selectors
+  stale-parent, and conflicting selectors
 - Structured failures with codes such as `unresolved_locator`, `stale_id`,
- `unsupported_capability`; **zero mutation**
+  `unsupported_capability`; **zero mutation**
 - No network search, no redirect following, no title inference
 - Parent URL -> chart; open decision URL -> that D-ID; resolved/superseded
- decision URL -> history + replacement/frontier metadata (never silently
- different work)
+  decision URL -> history + replacement/frontier metadata (never silently
+  different work)
 
 ## Result envelope
 

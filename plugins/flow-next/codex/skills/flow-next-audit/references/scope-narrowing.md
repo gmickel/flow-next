@@ -43,9 +43,9 @@ The auth/runtime-errors cluster has 5 entries cross-referencing each other —
 3 reference files that no longer exist on disk. Highest staleness signal.
 
 Options:
- 1. Start with auth/runtime-errors (recommended)
- 2. Pick a different cluster
- 3. Audit everything (will take longer)
+  1. Start with auth/runtime-errors (recommended)
+  2. Pick a different cluster
+  3. Audit everything (will take longer)
 ```
 
 **Autofix:** process all clusters in impact order (highest first). Print the queue order so the report shows what got prioritized.

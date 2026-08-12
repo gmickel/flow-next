@@ -12,13 +12,13 @@ Render `## Live QA` **only when** the QA receipt exists at `.flow/review-receipt
 QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json"
 QA_PRESENT=0
 if [ -f "$QA_RECEIPT" ] && jq -e . "$QA_RECEIPT" >/dev/null 2>&1; then
- QA_PRESENT=1
- QA_OUTCOME="$(jq -r '.qa_outcome // "unknown"' "$QA_RECEIPT")"
- QA_HEAD_SHA="$(jq -r '.head_sha // ""' "$QA_RECEIPT")"
- QA_BLOCKED_REASON="$(jq -r '.blocked_reason // ""' "$QA_RECEIPT")"
- QA_NA_REASON="$(jq -r '.na_reason // ""' "$QA_RECEIPT")"
- QA_COV_COVERED="$(jq -r '.rid_coverage.covered // "?"' "$QA_RECEIPT")"
- QA_COV_TOTAL="$(jq -r '.rid_coverage.total // "?"' "$QA_RECEIPT")"
+  QA_PRESENT=1
+  QA_OUTCOME="$(jq -r '.qa_outcome // "unknown"' "$QA_RECEIPT")"
+  QA_HEAD_SHA="$(jq -r '.head_sha // ""' "$QA_RECEIPT")"
+  QA_BLOCKED_REASON="$(jq -r '.blocked_reason // ""' "$QA_RECEIPT")"
+  QA_NA_REASON="$(jq -r '.na_reason // ""' "$QA_RECEIPT")"
+  QA_COV_COVERED="$(jq -r '.rid_coverage.covered // "?"' "$QA_RECEIPT")"
+  QA_COV_TOTAL="$(jq -r '.rid_coverage.total // "?"' "$QA_RECEIPT")"
 fi
 
 # Freshness — the receipt carries head_sha for exactly this reason. The QA receipt is
@@ -32,15 +32,15 @@ fi
 # bookkeeping commits (the code head and everything above it). Fail CLOSED on empty.
 QA_FRESH_OK=0
 if [ "$QA_PRESENT" = "1" ] && [ -n "$QA_HEAD_SHA" ]; then
- _s="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
- while [ -n "$_s" ]; do
- [ "$_s" = "$QA_HEAD_SHA" ] && { QA_FRESH_OK=1; break; }
- git -C "$REPO_ROOT" log -1 --format='%s' "$_s" 2>/dev/null \
- | grep -qE '^chore\(flow\): (qa verdict|pr artifact) ' || break
- _s="$(git -C "$REPO_ROOT" rev-parse "$_s^" 2>/dev/null || echo "")"
- done
+  _s="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")"
+  while [ -n "$_s" ]; do
+    [ "$_s" = "$QA_HEAD_SHA" ] && { QA_FRESH_OK=1; break; }
+    git -C "$REPO_ROOT" log -1 --format='%s' "$_s" 2>/dev/null \
+      | grep -qE '^chore\(flow\): (qa verdict|pr artifact) ' || break
+    _s="$(git -C "$REPO_ROOT" rev-parse "$_s^" 2>/dev/null || echo "")"
+  done
 fi
-[ "$QA_FRESH_OK" = 1 ] || QA_PRESENT=0 # stale or empty head_sha → omit the section
+[ "$QA_FRESH_OK" = 1 ] || QA_PRESENT=0   # stale or empty head_sha → omit the section
 ```
 
 Read directly with `jq` (do NOT compose any free-form receipt field into shell-built JSON — surface the values as rendered markdown only). The receipt fields are exactly those task .1 added (`qa_outcome`, `head_sha`, `branch`, `rid_coverage`, `open_p0p1` as **objects**, plus the scoped `blocked_reason` / `na_reason`).
@@ -63,17 +63,17 @@ Field rules:
 - **`<head_sha short>`** — first 8 chars of `head_sha`; omit the "Ran against" clause if empty.
 - **R-ID coverage** — `rid_coverage.covered`/`rid_coverage.total`; omit the clause if either is `?`.
 - **Conditional outcome line:**
- - `SHIP` → `> Live QA passed: all derived scenarios passed on the running app with captured evidence; zero open P0/P1.`
- - `NA` → `> Live QA not applicable: <na_reason>` (no driveable user-visible AC — the common backend/CLI case).
- - `BLOCKED` → `> Live QA could not run: <blocked_reason>` (no local app reachable / no driver — **not** a failure; the augmenting pass was skipped).
- - `NEEDS_WORK` → `> Live QA found issues — see the open P0/P1 list below. (Advisory: this does not block merge; the human reviewer + land gate decide.)`
+  - `SHIP` → `> Live QA passed: all derived scenarios passed on the running app with captured evidence; zero open P0/P1.`
+  - `NA` → `> Live QA not applicable: <na_reason>` (no driveable user-visible AC — the common backend/CLI case).
+  - `BLOCKED` → `> Live QA could not run: <blocked_reason>` (no local app reachable / no driver — **not** a failure; the augmenting pass was skipped).
+  - `NEEDS_WORK` → `> Live QA found issues — see the open P0/P1 list below. (Advisory: this does not block merge; the human reviewer + land gate decide.)`
 - **Open P0/P1 list** — only when `open_p0p1[]` is non-empty (typically the `NEEDS_WORK` outcome). One checkbox bullet per object, using its structured fields (`severity` ∈ `{P0,P1}`, `reason` one-line symptom, `file` surface/route, `id` finding id):
 
- ```markdown
- - [ ] **<severity>** — <reason> (`<file>`) — QA finding `<id>`
- ```
+  ```markdown
+  - [ ] **<severity>** — <reason> (`<file>`) — QA finding `<id>`
+  ```
 
- Render the objects' fields verbatim as markdown text; never invent or paraphrase. If `open_p0p1` is empty, emit no list (a `SHIP`/`NA`/`BLOCKED` receipt has none).
+  Render the objects' fields verbatim as markdown text; never invent or paraphrase. If `open_p0p1` is empty, emit no list (a `SHIP`/`NA`/`BLOCKED` receipt has none).
 
 **What this section MUST NOT do:**
 

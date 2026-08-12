@@ -32,12 +32,12 @@ Two attach modes. Both reuse the live page state instead of launching a fresh pr
 
 ```bash
 # (a) --browser-url: you start Chrome (or the Electron/WebView2 app) yourself,
-# then point the MCP at its debug endpoint. Works for sandboxed/VM setups.
+#     then point the MCP at its debug endpoint. Works for sandboxed/VM setups.
 chrome --remote-debugging-port=9222 --user-data-dir=/path/to/dedicated-dir
 npx chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222
 
 # (b) --autoConnect: MCP discovers your already-running Chrome.
-# Enable remote debugging at chrome://inspect/#remote-debugging first.
+#     Enable remote debugging at chrome://inspect/#remote-debugging first.
 npx chrome-devtools-mcp@latest --autoConnect
 ```
 

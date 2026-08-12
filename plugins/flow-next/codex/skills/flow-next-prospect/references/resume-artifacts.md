@@ -45,62 +45,62 @@ out = []
 FRONT_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 
 def parse_frontmatter(text):
- m = FRONT_RE.match(text)
- if not m:
- return None
- fm = {}
- for line in m.group(1).splitlines():
- if ":" not in line:
- continue
- k, _, v = line.partition(":")
- fm[k.strip()] = v.strip().strip('"').strip("'")
- return fm
+    m = FRONT_RE.match(text)
+    if not m:
+        return None
+    fm = {}
+    for line in m.group(1).splitlines():
+        if ":" not in line:
+            continue
+        k, _, v = line.partition(":")
+        fm[k.strip()] = v.strip().strip('"').strip("'")
+    return fm
 
 for name in sorted(os.listdir(prospects_dir)):
- if not name.endswith(".md") or name.startswith("_"):
- continue
- path = os.path.join(prospects_dir, name)
- if not os.path.isfile(path):
- continue
- try:
- text = open(path, encoding="utf-8").read()
- except OSError:
- out.append({"file": name, "status": "corrupt", "reason": "unreadable"})
- continue
- fm = parse_frontmatter(text)
- status = "active"
- reason = ""
- age_days = None
- artifact_id = None
- if fm is None:
- status, reason = "corrupt", "no frontmatter block"
- else:
- artifact_id = fm.get("artifact_id") or name[:-3]
- try:
- d = date.fromisoformat(fm.get("date", ""))
- age_days = (today - d).days
- except ValueError:
- status, reason = "corrupt", "unparseable date"
- if status == "active":
- if "## Grounding snapshot" not in text:
- status, reason = "corrupt", "missing Grounding snapshot section"
- elif "## Survivors" not in text:
- status, reason = "corrupt", "missing Survivors section"
- if status == "active":
- fm_status = (fm.get("status") or "active").lower()
- if fm_status == "archived":
- status = "archived"
- elif age_days is not None and age_days > 30:
- status = "stale"
- out.append({
- "file": name,
- "artifact_id": artifact_id,
- "status": status,
- "reason": reason,
- "age_days": age_days,
- "title": fm.get("title") if fm else None,
- "focus_hint": fm.get("focus_hint") if fm else None,
- })
+    if not name.endswith(".md") or name.startswith("_"):
+        continue
+    path = os.path.join(prospects_dir, name)
+    if not os.path.isfile(path):
+        continue
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError:
+        out.append({"file": name, "status": "corrupt", "reason": "unreadable"})
+        continue
+    fm = parse_frontmatter(text)
+    status = "active"
+    reason = ""
+    age_days = None
+    artifact_id = None
+    if fm is None:
+        status, reason = "corrupt", "no frontmatter block"
+    else:
+        artifact_id = fm.get("artifact_id") or name[:-3]
+        try:
+            d = date.fromisoformat(fm.get("date", ""))
+            age_days = (today - d).days
+        except ValueError:
+            status, reason = "corrupt", "unparseable date"
+        if status == "active":
+            if "## Grounding snapshot" not in text:
+                status, reason = "corrupt", "missing Grounding snapshot section"
+            elif "## Survivors" not in text:
+                status, reason = "corrupt", "missing Survivors section"
+        if status == "active":
+            fm_status = (fm.get("status") or "active").lower()
+            if fm_status == "archived":
+                status = "archived"
+            elif age_days is not None and age_days > 30:
+                status = "stale"
+    out.append({
+        "file": name,
+        "artifact_id": artifact_id,
+        "status": status,
+        "reason": reason,
+        "age_days": age_days,
+        "title": fm.get("title") if fm else None,
+        "focus_hint": fm.get("focus_hint") if fm else None,
+    })
 
 print(json.dumps(out))
 PY
@@ -133,9 +133,9 @@ Present the resumable list in a deterministic numbered format and ask the user t
 Frozen option strings (R19 anchor — must match exactly across backends):
 
 ```
-fresh — start a new prospect artifact (Phase 1)
-extend N — append a new dated section to artifact #N (resumable list above)
-open N — print the path to artifact #N and exit Phase 0
+fresh         — start a new prospect artifact (Phase 1)
+extend N      — append a new dated section to artifact #N (resumable list above)
+open N        — print the path to artifact #N and exit Phase 0
 ```
 
 `extend` and `open` indices reference the **resumable** list only — never the corrupt list. Validate the index; reject `extend 0`, out-of-range numbers, or selecting a non-resumable artifact.

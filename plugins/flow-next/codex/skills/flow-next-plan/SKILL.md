@@ -114,14 +114,14 @@ Check the configured backend and route:
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$($FLOWCTL review-backend 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$($FLOWCTL review-backend 2>/dev/null)" || ACTIVE=1        # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- REVIEW_BACKEND="$(printf '%s' "$RAW" | tr -d '[:space:]' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$REVIEW_BACKEND" = "ASK" ] && ACTIVE=1
+  REVIEW_BACKEND="$(printf '%s' "$RAW" | tr -d '[:space:]' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$REVIEW_BACKEND" = "ASK" ] && ACTIVE=1
 fi
-[ "${AUTONOMOUS:-0}" = "1" ] && ACTIVE=0 # autonomous NEVER asks — defaults apply
+[ "${AUTONOMOUS:-0}" = "1" ] && ACTIVE=0        # autonomous NEVER asks — defaults apply
 if [ "$ACTIVE" = "1" ]; then
- echo "SETUP-QUESTIONS GATE ACTIVE — STOP. Read references/setup-questions.md before continuing."
+  echo "SETUP-QUESTIONS GATE ACTIVE — STOP. Read references/setup-questions.md before continuing."
 fi
 ```
 

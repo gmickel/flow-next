@@ -30,8 +30,8 @@ All autonomous signals collapse into one no-prompt gate:
 ```bash
 RALPH=0
 [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
- || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* ]] \
- && RALPH=1
+   || "${FLOW_AUTONOMOUS:-}" == "1" || "$ARGUMENTS" == *mode:autonomous* ]] \
+  && RALPH=1
 ```
 
 > **Autonomy parity is a hard invariant.** Under `RALPH=1` no code path reaches
@@ -65,13 +65,13 @@ a human instead — the transcript shows no `plain-text numbered prompt` on this
 Three supported starts share one durable locator:
 
 - **Flow-first:** create an issue for an existing spec, then persist the durable
- id, display identifier, and URL.
+  id, display identifier, and URL.
 - **Tracker-first:** read the existing issue, mint the hybrid Flow id, link it,
- and seed the paired merge base from the current bodies.
+  and seed the paired merge base from the current bodies.
 - **Create-first:** create a remote issue using a retry key before a local spec
- exists, mint from the returned identity, then link. If local persistence
- fails after the remote create, retry links the recovery record and never
- creates a duplicate.
+  exists, mint from the returned identity, then link. If local persistence
+  fails after the remote create, retry links the recovery record and never
+  creates a duplicate.
 
 #### Receipt / retry contract
 
@@ -242,9 +242,9 @@ posts only when the latest round for that id is answered or no question exists:
 
 ```bash
 $FLOWCTL tracker wire question --locator "$LOCATOR" \
- --subject-id "$SUBJECT_ID" --blocked-stage "$BLOCKED_STAGE" \
- --reason-code "$REASON_CODE" --question-slug "$QUESTION_SLUG" \
- --body-file "$BODY_FILE" --json
+  --subject-id "$SUBJECT_ID" --blocked-stage "$BLOCKED_STAGE" \
+  --reason-code "$REASON_CODE" --question-slug "$QUESTION_SLUG" \
+  --body-file "$BODY_FILE" --json
 ```
 
 Before listing, flowctl takes a local claim keyed by provider, durable issue id,

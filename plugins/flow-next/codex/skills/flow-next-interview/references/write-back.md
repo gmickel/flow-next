@@ -75,14 +75,14 @@ SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$INTERVIEW_CFG" 2>/dev/null
 BRIDGE_ACTIVE=$($FLOWCTL sync active --json 2>/dev/null | jq -r '.active // false')
 
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
- # Named existing issue → $FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "..." --json
- # then attach + seed too (tracker-sync steps.md Phase 2b): minting stores the
- # identifier but NOT the durable tracker.id, and an unlinked spec makes a later
- # touchpoint create a SECOND remote issue instead of linking the named one.
- # Fresh idea → skill: flow-next-tracker-sync (operation: create-first, title, body)
- # then mint + attach + seed (tracker-sync steps.md Phase 2d "Enabled caller sequence")
- # Assign SPEC_OUTPUT on every path that succeeds here.
- :
+  # Named existing issue → $FLOWCTL spec create --tracker-first --tracker-identifier "<key>" --title "..." --json
+  #   then attach + seed too (tracker-sync steps.md Phase 2b): minting stores the
+  #   identifier but NOT the durable tracker.id, and an unlinked spec makes a later
+  #   touchpoint create a SECOND remote issue instead of linking the named one.
+  # Fresh idea → skill: flow-next-tracker-sync (operation: create-first, title, body)
+  #   then mint + attach + seed (tracker-sync steps.md Phase 2d "Enabled caller sequence")
+  # Assign SPEC_OUTPUT on every path that succeeds here.
+  :
 fi
 
 # SILENT degrade - the ONLY flow-first creation site, deliberately OUTSIDE the
@@ -93,23 +93,23 @@ fi
 # create-first made an issue must surface identifier + url + retryKey and stop,
 # never silently create an fn-N spec that leaves the issue orphaned.
 if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
- SPEC_OUTPUT=$($FLOWCTL spec create --title "..." --json)
+  SPEC_OUTPUT=$($FLOWCTL spec create --title "..." --json)
 fi
 
 # Build the spec body in-memory:
-# 1. Seed from the canonical template FILE (not `flowctl spec skeleton` —
-# that command stays 1.0.2-compatible per R22; its section names
-# (Overview / Scope / Approach / Quick commands / Acceptance / References)
-# don't match the scope-aware write-policy's canonical section names).
+#   1. Seed from the canonical template FILE (not `flowctl spec skeleton` —
+#      that command stays 1.0.2-compatible per R22; its section names
+#      (Overview / Scope / Approach / Quick commands / Acceptance / References)
+#      don't match the scope-aware write-policy's canonical section names).
 #
-# Resolve the template via the 4-tier discovery cascade. The full walker
-# (cascade order, case-insensitive FS probe, both-exist warning, plugin-root
-# fallback) is single-sourced in ../../references/spec-template-discovery.md —
-# Read it and run its walker to set TEMPLATE_PATH + TEMPLATE.
-# Fill section bodies from interview answers under your scope's writable
-# sections per the write-policy (frontmatter + scope-owner markers may be
-# stripped from the final spec body — authoring guidance, not spec content).
-# 2. Append the auxiliary interview-audit sections (only those that fired):
+#      Resolve the template via the 4-tier discovery cascade. The full walker
+#      (cascade order, case-insensitive FS probe, both-exist warning, plugin-root
+#      fallback) is single-sourced in ../../references/spec-template-discovery.md —
+#      Read it and run its walker to set TEMPLATE_PATH + TEMPLATE.
+#      Fill section bodies from interview answers under your scope's writable
+#      sections per the write-policy (frontmatter + scope-owner markers may be
+#      stripped from the final spec body — authoring guidance, not spec content).
+#   2. Append the auxiliary interview-audit sections (only those that fired):
 ```
 
 **Source-tag every acceptance criterion written here** (`[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`, trailing token - see "Source tags on acceptance criteria" above). This branch mints the spec, so every criterion in it is one you authored this pass: an answered question yields `[user]` or `[paraphrase]`, agent gap-fill yields `[inferred]`.
@@ -212,9 +212,9 @@ $FLOWCTL cat <id>
 **If task has substantial planning content** (description with file refs, sizing, approach):
 - **Do NOT overwrite** — planning detail would be lost
 - Only ADD new acceptance criteria discovered in interview: read the existing acceptance (already fetched via `$FLOWCTL cat <id>` above), append the new criteria, and Write the merged list ONCE via the **Write tool** to a literal unique path (e.g. `${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md`) — per the single-emission write pattern above. **No source tags here:** task acceptance is plain `- [ ]` checklist items, not R-ID spec criteria; tagging is for the spec's `## Acceptance Criteria` bullets only. Then:
- ```bash
- $FLOWCTL task set-acceptance <id> --file "${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md" --json
- ```
+  ```bash
+  $FLOWCTL task set-acceptance <id> --file "${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md" --json
+  ```
 - Or suggest interviewing the spec instead: `/flow-next:interview <spec-id>`
 
 **If task is minimal** (just title, empty or stub description):

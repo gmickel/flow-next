@@ -31,12 +31,12 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
 if command -v rpce-cli >/dev/null 2>&1 \
- || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
- || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
- || command -v rp-cli >/dev/null 2>&1; then
- RP_ELIGIBLE=1
+  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+  || command -v rp-cli >/dev/null 2>&1; then
+  RP_ELIGIBLE=1
 else
- RP_ELIGIBLE=0
+  RP_ELIGIBLE=0
 fi
 
 # Priority: --review flag > per-spec `default_review` override > env > config (flag parsed in SKILL.md).
@@ -44,17 +44,17 @@ fi
 # right backend before branching (empty → env/config, no regression).
 # Text output is bare backend name for back-compat grep. --json returns full
 # resolved spec (backend, spec, model, effort, source).
-SPEC_ID="${1:-}" # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
+SPEC_ID="${1:-}"   # the spec-id positional arg (canonicalized by review-backend); empty falls back to env/config
 BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
- echo "Error: No review backend configured."
- if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
- else
- echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
- fi
- exit 1
+  echo "Error: No review backend configured."
+  if [ "$RP_ELIGIBLE" = 1 ]; then
+    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
+  else
+    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
+  fi
+  exit 1
 fi
 
 echo "Review backend: $BACKEND"
@@ -109,10 +109,10 @@ When a delivered `NEEDS_WORK` consumes round
 `${MAX_REVIEW_ITERATIONS:-8}`, it is the terminal capped verdict:
 
 - codex/copilot/cursor already self-wrote `needs_work` while handling that
- verdict; do not duplicate it.
+  verdict; do not duplicate it.
 - host/rp continue to SKILL.md's Step 0.5 checkpoint immediately, write
- `needs_work` exactly once, then emit `ESCALATE:` and exit 4. Do not attempt
- another reserve/dispatch first.
+  `needs_work` exactly once, then emit `ESCALATE:` and exit 4. Do not attempt
+  another reserve/dispatch first.
 
 The exit-4 cap refusal and transport-failure semantics are stated in SKILL.md
 directly under the Step 0.5 checkpoint; the unchanged-artifact terminal is at
@@ -132,16 +132,16 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 2. **Fix code** and run tests/lints
 3. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`)
 4. **Re-review**:
- - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
- - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
- - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
- - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
- re-review path.
- - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
+   - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
+   - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)
+   - **Cursor**: Re-run `flowctl cursor completion-review` (receipt enables context; must be `mode == "cursor"` to resume)
+   - **Host**: Continue through [workflow-host.md](workflow-host.md)'s selected
+     re-review path.
+   - **RP**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
 5. **Repeat** until `<verdict>SHIP</verdict>` — or a delivered `NEEDS_WORK`
- consumes the final round. On that final host/rp verdict, run the terminal
- status step below before the cap terminal; never rely on a later step after
- exit 4.
+   consumes the final round. On that final host/rp verdict, run the terminal
+   status step below before the cap terminal; never rely on a later step after
+   exit 4.
 
 **RP re-reviews stay in the same chat.** `--new-chat` belongs to the first review only — a re-review carrying it drops the reviewer's context and has broken this.
 

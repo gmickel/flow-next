@@ -4,12 +4,12 @@ Read only after the Model Routing answer is `Scaffold` or
 `Scaffold + enable codex delegation` on `PLATFORM=cursor`.
 
 1. Enumerate available Cursor model slugs from host knowledge; fallback to
- foreground, short-timeout `cursor-agent --list-models` (up to 200 lines)
- when `HAVE_CURSOR=1`. If unavailable, scaffold an explicit enumeration note.
+   foreground, short-timeout `cursor-agent --list-models` (up to 200 lines)
+   when `HAVE_CURSOR=1`. If unavailable, scaffold an explicit enumeration note.
 2. The HOST AGENT picks `SCOUT_PIN` (cheap/fast read-only scout) and
- `REVIEW_PIN` (strongest different-family host-review slug). Never Python,
- flowctl ranking, or same-family self-review. If no cross-family slug exists,
- leave a clear TODO.
+   `REVIEW_PIN` (strongest different-family host-review slug). Never Python,
+   flowctl ranking, or same-family self-review. If no cross-family slug exists,
+   leave a clear TODO.
 3. Compose this exact structure with today's ISO date, enumeration, and pins:
 
 ```markdown
@@ -44,16 +44,16 @@ Always target AGENTS.md. When Docs also selected CLAUDE.md, write both; AGENTS.m
 is load-bearing. Per target:
 
 - A file with exactly one non-empty `@<path>.md` or `See[:] <path>.md` line is
- a shim. Retarget to an existing in-repo pointer and re-apply the guard;
- missing targets are skipped. Never mix content into a shim.
+  a shim. Retarget to an existing in-repo pointer and re-apply the guard;
+  missing targets are skipped. Never mix content into a shim.
 - If a well-formed model-routing marker block exists, byte-compare it against
- the complete composed block. Identical means silent no-op and no mtime
- change. Different means ask `Keep mine (Recommended)` /
- `Overwrite with canonical` / `Skip`; never silently overwrite.
+  the complete composed block. Identical means silent no-op and no mtime
+  change. Different means ask `Keep mine (Recommended)` /
+  `Overwrite with canonical` / `Skip`; never silently overwrite.
 - Without markers, detect a user-authored model-routing heading and ask
- `Add the flow-next block below yours` / `Skip`; never duplicate silently.
+  `Add the flow-next block below yours` / `Skip`; never duplicate silently.
 - On a would-write path, show the complete block, ask `write` / `skip`, then
- append or marker-replace the whole block only on `write`.
+  append or marker-replace the whole block only on `write`.
 
 Confirm a write with:
 `Model-routing section written to <file> — Cursor host-native pins; re-run /flow-next:setup to refresh volatile ids.`

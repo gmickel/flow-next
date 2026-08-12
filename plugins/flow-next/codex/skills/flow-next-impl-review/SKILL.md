@@ -96,14 +96,14 @@ Format: `[task ID] [--base <commit>] [--validate] [--deep[=passes]] [--interacti
 
 **Opt-in flags (fn-32):**
 - `--validate` — adds a validator pass on NEEDS_WORK that re-checks each finding
- for false positives. All findings dropping upgrades verdict to SHIP.
+  for false positives. All findings dropping upgrades verdict to SHIP.
 - `FLOW_VALIDATE_REVIEW=1` env var — enables `--validate` session-wide (works in Ralph).
 - `--deep` — adds adversarial pass always + security/performance auto-enabled
- per diff paths. `--deep=adversarial,security` restricts to listed passes.
+  per diff paths. `--deep=adversarial,security` restricts to listed passes.
 - `FLOW_REVIEW_DEEP=1` env var — enables `--deep` session-wide (works in Ralph).
 - `--interactive` — per-finding walkthrough on NEEDS_WORK. **No env var form** —
- per-invocation only, always hard-errors in Ralph mode (`REVIEW_RECEIPT_PATH` or
- `FLOW_RALPH=1`) to prevent accidental autonomous engagement.
+  per-invocation only, always hard-errors in Ralph mode (`REVIEW_RECEIPT_PATH` or
+  `FLOW_RALPH=1`) to prevent accidental autonomous engagement.
 - Default review behavior (no flags) is unchanged.
 
 ## Workflow
@@ -130,35 +130,35 @@ If `--base` not provided, `BASE_COMMIT` stays empty (will fall back to main/mast
 ```bash
 VALIDATE=false
 DEEP=false
-DEEP_PASSES="" # optional CSV: "adversarial,security"
+DEEP_PASSES=""  # optional CSV: "adversarial,security"
 INTERACTIVE=false
 for arg in $ARGUMENTS; do
- case "$arg" in
- --validate) VALIDATE=true ;;
- --deep) DEEP=true ;;
- --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
- --interactive) INTERACTIVE=true ;;
- esac
+  case "$arg" in
+    --validate) VALIDATE=true ;;
+    --deep) DEEP=true ;;
+    --deep=*) DEEP=true; DEEP_PASSES="${arg#--deep=}" ;;
+    --interactive) INTERACTIVE=true ;;
+  esac
 done
 
 # Env opt-ins (Ralph-friendly). --interactive has NO env var form — per-invocation only.
 if [[ "${FLOW_VALIDATE_REVIEW:-}" == "1" ]]; then
- VALIDATE=true
+  VALIDATE=true
 fi
 if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
- DEEP=true
+  DEEP=true
 fi
 
 # Ralph-block (fn-32.3): Ralph must never engage interactive.
 if [[ "$INTERACTIVE" == "true" ]]; then
- if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
- exit 2
- fi
+  if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
+    echo "Error: --interactive requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+    exit 2
+  fi
 fi
 
 if [[ "$DEEP" == "true" || "$VALIDATE" == "true" || "$INTERACTIVE" == "true" ]]; then
- echo "OPTIONAL PHASES ACTIVE — STOP. Read optional-phases.md (deep=$DEEP validate=$VALIDATE interactive=$INTERACTIVE) before continuing."
+  echo "OPTIONAL PHASES ACTIVE — STOP. Read optional-phases.md (deep=$DEEP validate=$VALIDATE interactive=$INTERACTIVE) before continuing."
 fi
 ```
 
@@ -175,25 +175,25 @@ Opt-out: `--no-triage` argument or `FLOW_RALPH_NO_TRIAGE=1` env var.
 
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
- RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
- # Subcommand + one literal flag stay on the command line (the Ralph guard
- # blocks a variable in either of the two tokens after the launcher).
- TRIAGE_ARGS=(--receipt "$RECEIPT_PATH")
- [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
- [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
- # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
- # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
- [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
+  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+  # Subcommand + one literal flag stay on the command line (the Ralph guard
+  # blocks a variable in either of the two tokens after the launcher).
+  TRIAGE_ARGS=(--receipt "$RECEIPT_PATH")
+  [[ -n "$BASE_COMMIT" ]] && TRIAGE_ARGS+=(--base "$BASE_COMMIT")
+  [[ -n "$TASK_ID" ]] && TRIAGE_ARGS+=(--task "$TASK_ID")
+  # Deterministic-only by default; set FLOW_TRIAGE_LLM=1 to enable LLM judge
+  # for ambiguous diffs. Deterministic is conservative — ambiguous → REVIEW.
+  [[ -z "${FLOW_TRIAGE_LLM:-}" ]] && TRIAGE_ARGS+=(--no-llm)
 
- if TRIAGE_OUT=$($FLOWCTL triage-skip --json "${TRIAGE_ARGS[@]}" 2>/dev/null); then
- # Exit 0 = SKIP. Receipt already written by flowctl.
- SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
- echo "Triage-skip: $SKIP_REASON"
- echo "VERDICT=SHIP"
- exit 0
- fi
- # Exit 1 = proceed to full review (normal path). Exit >=2 = error, also falls
- # through so impl-review proceeds safely rather than failing on triage.
+  if TRIAGE_OUT=$($FLOWCTL triage-skip --json "${TRIAGE_ARGS[@]}" 2>/dev/null); then
+    # Exit 0 = SKIP. Receipt already written by flowctl.
+    SKIP_REASON=$(echo "$TRIAGE_OUT" | jq -r '.reason // "trivial diff"' 2>/dev/null || echo "trivial diff")
+    echo "Triage-skip: $SKIP_REASON"
+    echo "VERDICT=SHIP"
+    exit 0
+  fi
+  # Exit 1 = proceed to full review (normal path). Exit >=2 = error, also falls
+  # through so impl-review proceeds safely rather than failing on triage.
 fi
 ```
 
@@ -241,15 +241,15 @@ deliberate `--force` dispatch.
 
 **ANTI-PATTERN (never do either):**
 1. **A delivered verdict is never a transport failure.** Once flowctl parses
- `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`, the round is consumed and the
- attempt is recorded; transport classification is unreachable past that
- point. Do not re-dispatch, re-frame a `NEEDS_WORK` as a backend/sandbox
- problem, or claim a refund for it. `NEEDS_WORK` is fix-loop input, full
- stop.
+   `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`, the round is consumed and the
+   attempt is recorded; transport classification is unreachable past that
+   point. Do not re-dispatch, re-frame a `NEEDS_WORK` as a backend/sandbox
+   problem, or claim a refund for it. `NEEDS_WORK` is fix-loop input, full
+   stop.
 2. **Never widen the reviewer sandbox.** Reviewers are read-only by contract
- (Unix default `read-only`). A sandbox-blocked reviewer means something
- asked it to mutate the workspace: fix that, do not pass
- `--sandbox workspace-write` / `danger-full-access` or set `CODEX_SANDBOX`.
- The one exception is Windows, where `auto` already resolves for you.
+   (Unix default `read-only`). A sandbox-blocked reviewer means something
+   asked it to mutate the workspace: fix that, do not pass
+   `--sandbox workspace-write` / `danger-full-access` or set `CODEX_SANDBOX`.
+   The one exception is Windows, where `auto` already resolves for you.
 
 **On `NEEDS_WORK` — STOP and Read [references/fix-loop.md](references/fix-loop.md)** before any further step: it owns the ordered loop (optional deep / validator / walkthrough hooks, parse issues, fix code, run tests and lints, commit fixes, per-backend re-review command, repeat until `<verdict>SHIP</verdict>` or the cap above). Do not improvise the loop from memory. On `SHIP` the review is complete and nothing further is read.

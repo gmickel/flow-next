@@ -12,15 +12,15 @@ Investigation subagents are **read-only**. They must not Edit, Write, Bash beyon
 
 ```yaml
 references_verified:
- - path: src/auth/oauth.ts
- exists: true
- last_modified: "2026-03-12"
+  - path: src/auth/oauth.ts
+    exists: true
+    last_modified: "2026-03-12"
 references_missing:
- - path: src/legacy/auth_v1.ts
- note: "user mentioned but file not found; possibly already removed"
+  - path: src/legacy/auth_v1.ts
+    note: "user mentioned but file not found; possibly already removed"
 related_modules_found:
- - path: src/auth/middleware.ts
- relevance: "implements existing OAuth flow user wants to extend"
+  - path: src/auth/middleware.ts
+    relevance: "implements existing OAuth flow user wants to extend"
 ```
 
 When spawning subagents, include this directive in the task prompt:

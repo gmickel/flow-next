@@ -35,7 +35,7 @@ When `RALPH=1` or `AUTONOMOUS=1`:
 - Phase 0 questions hard-error with non-zero exit + a clear stderr message (no user to ask in an autonomous context). (Interactive mode resolves the same gaps with its usual Phase 0 info prompts — not a confirm gate.)
 - Phase 4 forces `--draft` regardless of `--ready` (autonomous loops never open ready-to-merge PRs) — the one autonomous-vs-interactive difference now that the confirm gate is gone for both.
 - **Ralph only** (`RALPH=1`): Phase 5 emits the `PR_URL=` line on stdout for the harness to capture.
- This and every receipt/harness semantic stay keyed on `RALPH` alone — `AUTONOMOUS` never triggers them.
+  This and every receipt/harness semantic stay keyed on `RALPH` alone — `AUTONOMOUS` never triggers them.
 
 There is no `FLOW_MAKE_PR_ALLOW_QUESTIONS_IN_RALPH` opt-in. Ralph is deterministic.
 
@@ -49,36 +49,36 @@ Skip both checks under `--dry-run`. Rationale: dry-run renders the PR body to st
 # --- §0.0: Ralph / autonomous context ---
 RALPH=0
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- RALPH=1
+  RALPH=1
 fi
 
 # --- §0.1: gh pre-flight (skipped under --dry-run) ---
 if [[ "$DRY_RUN" != "1" ]]; then
- if ! command -v gh >/dev/null 2>&1; then
- cat <<'EOF' >&2
+  if ! command -v gh >/dev/null 2>&1; then
+    cat <<'EOF' >&2
 Error: gh CLI not installed. /flow-next:make-pr requires gh for PR creation.
 
 Install:
- macOS: brew install gh
- Linux: see https://github.com/cli/cli#installation
- Windows: winget install --id GitHub.cli
+  macOS: brew install gh
+  Linux: see https://github.com/cli/cli#installation
+  Windows: winget install --id GitHub.cli
 
 Then authenticate:
- gh auth login --hostname github.com
+  gh auth login --hostname github.com
 EOF
- exit 1
- fi
+    exit 1
+  fi
 
- if ! gh auth status --hostname github.com >/dev/null 2>&1; then
- cat <<'EOF' >&2
+  if ! gh auth status --hostname github.com >/dev/null 2>&1; then
+    cat <<'EOF' >&2
 Error: gh CLI not authenticated for github.com. Run:
 
- gh auth login --hostname github.com
+  gh auth login --hostname github.com
 
 If you already authed and this still fails, check `gh auth status` for hostname mismatches.
 EOF
- exit 1
- fi
+    exit 1
+  fi
 fi
 ```
 
@@ -103,30 +103,30 @@ The combined §0.2–0.4 fence:
 ```bash
 # --- §0.2: resolve spec id ---
 if [[ -z "$SPEC_ID" ]]; then
- CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
- if [[ -n "$CURRENT_BRANCH" ]]; then
- # Match against `.flow/specs/*.json` `branch_name` field. flowctl's spec
- # store writes branch_name on spec create; jq across specs/ finds the match.
- SPEC_ID=$(
- find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null \
- | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
- 'select(.branch_name == $b) | .id' {} 2>/dev/null \
- | head -1)
- fi
+  CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
+  if [[ -n "$CURRENT_BRANCH" ]]; then
+    # Match against `.flow/specs/*.json` `branch_name` field. flowctl's spec
+    # store writes branch_name on spec create; jq across specs/ finds the match.
+    SPEC_ID=$(
+      find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null \
+      | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
+          'select(.branch_name == $b) | .id' {} 2>/dev/null \
+      | head -1)
+  fi
 fi
 
 if [[ -z "$SPEC_ID" ]]; then
- if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
- echo "Error: no spec id supplied and no .flow/specs/*.json branch_name matches '$CURRENT_BRANCH'. Autonomous context cannot prompt — pass an explicit spec id." >&2
- exit 2
- fi
- # Interactive: STOP this fence — a Bash call cannot pause for plain-text numbered prompt.
- # Ask outside the fence ("No spec detected from current branch. Provide a spec id
- # (fn-N-slug) or abort?" — options: 1. Type spec id 2. Abort; abort exits 1),
- # then RE-RUN this fence with SPEC_ID preset (interactive-ask exemption above).
- # §0.5's single `flowctl show` capture validates the typed id.
- echo "NEED_INPUT: SPEC_ID (no branch_name match for '$CURRENT_BRANCH')"
- exit 3
+  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
+    echo "Error: no spec id supplied and no .flow/specs/*.json branch_name matches '$CURRENT_BRANCH'. Autonomous context cannot prompt — pass an explicit spec id." >&2
+    exit 2
+  fi
+  # Interactive: STOP this fence — a Bash call cannot pause for plain-text numbered prompt.
+  # Ask outside the fence ("No spec detected from current branch. Provide a spec id
+  # (fn-N-slug) or abort?" — options: 1. Type spec id  2. Abort; abort exits 1),
+  # then RE-RUN this fence with SPEC_ID preset (interactive-ask exemption above).
+  # §0.5's single `flowctl show` capture validates the typed id.
+  echo "NEED_INPUT: SPEC_ID (no branch_name match for '$CURRENT_BRANCH')"
+  exit 3
 fi
 
 # Spec existence is validated by §0.5's single `flowctl show` capture (fn-110) —
@@ -134,57 +134,57 @@ fi
 
 # --- §0.3: base-branch detection cascade ---
 if [[ -z "$BASE_REF" ]]; then
- for candidate in origin/main main origin/master master; do
- if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
- BASE_REF="$candidate"
- break
- fi
- done
+  for candidate in origin/main main origin/master master; do
+    if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
+      BASE_REF="$candidate"
+      break
+    fi
+  done
 fi
 
 if [[ -z "$BASE_REF" ]]; then
- if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
- echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
- exit 2
- fi
- # Interactive: STOP this fence — ask for the base ref outside it (plain-text numbered prompt,
- # no frozen options — accept a typed branch name; on abort exit 1), then RE-RUN
- # this fence with BASE_REF preset (interactive-ask exemption above). The re-run's
- # final validation below rejects an invalid typed ref.
- echo "NEED_INPUT: BASE_REF (origin/main, main, origin/master, master all missing)"
- exit 3
+  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
+    echo "Error: no base ref detected (origin/main, main, origin/master, master all missing). Pass --base <ref> explicitly." >&2
+    exit 2
+  fi
+  # Interactive: STOP this fence — ask for the base ref outside it (plain-text numbered prompt,
+  # no frozen options — accept a typed branch name; on abort exit 1), then RE-RUN
+  # this fence with BASE_REF preset (interactive-ask exemption above). The re-run's
+  # final validation below rejects an invalid typed ref.
+  echo "NEED_INPUT: BASE_REF (origin/main, main, origin/master, master all missing)"
+  exit 3
 fi
 
 # Final validation — base must exist whether detected or supplied.
 if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$BASE_REF" >/dev/null 2>&1; then
- echo "Error: base ref '$BASE_REF' is not a valid git ref. Check with: git rev-parse --verify $BASE_REF" >&2
- exit 1
+  echo "Error: base ref '$BASE_REF' is not a valid git ref. Check with: git rev-parse --verify $BASE_REF" >&2
+  exit 1
 fi
 
 # --- §0.4: branch validity (same fence continues) ---
 HEAD_SHA=$(git -C "$REPO_ROOT" rev-parse --verify HEAD 2>/dev/null) || {
- echo "Error: HEAD does not resolve to a commit. Repo state is broken; run from a normal branch." >&2; exit 1; }
+  echo "Error: HEAD does not resolve to a commit. Repo state is broken; run from a normal branch." >&2; exit 1; }
 
 BASE_SHA=$(git -C "$REPO_ROOT" rev-parse --verify "$BASE_REF" 2>/dev/null)
 
 if [[ "$HEAD_SHA" == "$BASE_SHA" ]]; then
- echo "Error: HEAD and base ($BASE_REF) point at the same commit. Nothing to PR." >&2
- exit 1
+  echo "Error: HEAD and base ($BASE_REF) point at the same commit. Nothing to PR." >&2
+  exit 1
 fi
 
 # Resolve the merge-base. Required for a valid PR — without one the branches
 # are unrelated histories and gh pr create will fail.
 MERGE_BASE=$(git -C "$REPO_ROOT" merge-base "$BASE_REF" HEAD 2>/dev/null) || {
- echo "Error: HEAD and base ($BASE_REF) share no merge-base — unrelated histories. Pick a different --base." >&2
- exit 1; }
+  echo "Error: HEAD and base ($BASE_REF) share no merge-base — unrelated histories. Pick a different --base." >&2
+  exit 1; }
 
 # Confirm at least one commit exists on the branch since the merge-base.
 # Use <merge-base>..HEAD (NOT <BASE_REF>..HEAD) so a branch that's behind base
 # on linear history is still accepted as long as it has its own commits.
 COMMITS_AHEAD=$(git -C "$REPO_ROOT" rev-list --count "$MERGE_BASE..HEAD")
 if [[ "$COMMITS_AHEAD" -lt 1 ]]; then
- echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2
- exit 1
+  echo "Error: HEAD has 0 commits since merge-base with $BASE_REF. Nothing to PR." >&2
+  exit 1
 fi
 ```
 
@@ -214,20 +214,20 @@ The combined §0.5–0.7 fence:
 ```bash
 # --- §0.5: tasks-done validation (single show capture = spec-existence validation) ---
 if ! SPEC_JSON=$("$FLOWCTL" show "$SPEC_ID" --json 2>/dev/null); then
- echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2
- exit 1
+  echo "Error: spec '$SPEC_ID' not found in .flow/specs/. Check id with: $FLOWCTL specs" >&2
+  exit 1
 fi
 OPEN_TASKS=$(printf '%s' "$SPEC_JSON" | jq -r '[.tasks[]? | select(.status != "done") | .id] | join(", ")')
 OPEN_COUNT=$(printf '%s' "$SPEC_JSON" | jq '[.tasks[]? | select(.status != "done")] | length')
 
 if [[ "$OPEN_COUNT" -gt 0 ]]; then
- if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
- echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
- exit 2
- else
- # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
- echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
- fi
+  if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
+    echo "Error: $OPEN_COUNT task(s) under $SPEC_ID still open ($OPEN_TASKS). Autonomous context cannot open PRs for incomplete specs." >&2
+    exit 2
+  else
+    # Interactive + --dry-run alike: warn, don't block. Open items → draft (§4.2).
+    echo "Note: $OPEN_COUNT task(s) not yet done ($OPEN_TASKS) — opening as a DRAFT. Run /flow-next:work to finish, then mark the PR ready." >&2
+  fi
 fi
 
 # --- §0.6: existing-PR refusal (or --update target resolution) ---
@@ -236,46 +236,46 @@ EXISTING=$(printf '%s' "$EXISTING_JSON" | jq -r '.url // empty' 2>/dev/null || t
 UPDATE_PR_NUMBER=$(printf '%s' "$EXISTING_JSON" | jq -r '.number // empty' 2>/dev/null || true)
 
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
- # --update REFRESHES the existing open PR's body — an OPEN PR is required as the target.
- if [[ -z "$EXISTING" ]]; then
- echo "Error: --update needs an existing OPEN pull request on this branch; none found. Run /flow-next:make-pr (without --update) to create one first." >&2
- exit 1
- fi
- echo "Update mode: refreshing PR #$UPDATE_PR_NUMBER body against the current diff." >&2
+  # --update REFRESHES the existing open PR's body — an OPEN PR is required as the target.
+  if [[ -z "$EXISTING" ]]; then
+    echo "Error: --update needs an existing OPEN pull request on this branch; none found. Run /flow-next:make-pr (without --update) to create one first." >&2
+    exit 1
+  fi
+  echo "Update mode: refreshing PR #$UPDATE_PR_NUMBER body against the current diff." >&2
 elif [[ -n "$EXISTING" ]]; then
- cat <<EOF >&2
+  cat <<EOF >&2
 Error: branch already has an OPEN pull request: $EXISTING
 
 This skill creates new PRs only. To refresh the existing PR's body after fix rounds,
 re-run with --update:
 
- /flow-next:make-pr <spec-id> --update
+  /flow-next:make-pr <spec-id> --update
 
 To address review feedback, use /flow-next:resolve-pr. For a fresh PR, close the open
 one first: gh pr close <number> --comment "Replaced by upcoming /flow-next:make-pr"
 EOF
- exit 1
+  exit 1
 fi
 
 # --- §0.7: capture pre-flight context (same fence continues) ---
 PHASE0_CONTEXT=$(jq -n \
- --arg spec "$SPEC_ID" \
- --arg base "$BASE_REF" \
- --arg head "$HEAD_SHA" \
- --arg branch "${CURRENT_BRANCH:-$(git -C "$REPO_ROOT" branch --show-current)}" \
- --argjson commits_ahead "$COMMITS_AHEAD" \
- --argjson open_tasks "$OPEN_COUNT" \
- --argjson dry_run "$DRY_RUN" \
- --argjson ralph "$RALPH" \
- --argjson autonomous "$AUTONOMOUS" \
- --argjson no_mermaid "$NO_MERMAID" \
- --argjson write_memory "$WRITE_MEMORY" \
- --arg draft_force "$DRAFT_FORCE" \
- '{spec:$spec, base:$base, head:$head, branch:$branch,
- commits_ahead:$commits_ahead, open_tasks:$open_tasks,
- dry_run:($dry_run==1), ralph:($ralph==1), autonomous:($autonomous==1),
- no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
- draft_force:$draft_force}')
+  --arg spec "$SPEC_ID" \
+  --arg base "$BASE_REF" \
+  --arg head "$HEAD_SHA" \
+  --arg branch "${CURRENT_BRANCH:-$(git -C "$REPO_ROOT" branch --show-current)}" \
+  --argjson commits_ahead "$COMMITS_AHEAD" \
+  --argjson open_tasks "$OPEN_COUNT" \
+  --argjson dry_run "$DRY_RUN" \
+  --argjson ralph "$RALPH" \
+  --argjson autonomous "$AUTONOMOUS" \
+  --argjson no_mermaid "$NO_MERMAID" \
+  --argjson write_memory "$WRITE_MEMORY" \
+  --arg draft_force "$DRAFT_FORCE" \
+  '{spec:$spec, base:$base, head:$head, branch:$branch,
+    commits_ahead:$commits_ahead, open_tasks:$open_tasks,
+    dry_run:($dry_run==1), ralph:($ralph==1), autonomous:($autonomous==1),
+    no_mermaid:($no_mermaid==1), write_memory:($write_memory==1),
+    draft_force:$draft_force}')
 ```
 
 Phases 1-5 read `$PHASE0_CONTEXT` rather than re-deriving values.
@@ -345,7 +345,7 @@ Done when:
 
 - `pr-cognitive-aid.md` Done-when checklist passes.
 - The artifact is composed/validated before optional HTML and final PR-body
- creation.
+  creation.
 - `create-and-finalize.md` remains the later `$PR_URL` + tracker-facade boundary.
 
 ---
@@ -369,7 +369,7 @@ write no artifact, add no body line, and print no artifact-related output.
 ### Done when
 
 - Off/unset/`--dry-run`: exactly one config read; neither HTML reference loaded;
- no artifact, commit, body line, or output change.
+  no artifact, commit, body line, or output change.
 - Enabled: every `html-lens.md` Done-when item passes before Phase 2.
 
 ---
@@ -549,8 +549,8 @@ This is the one section that doesn't honor the §2.6 omission rule — even a ti
 **Lookup + the code-diff `<anchor>` (the host agent runs this once per PR).** The anchor is GitHub's per-file diff id: `diff-` + the lowercase SHA-256 hex of the file-path string.
 
 ```bash
-GH_NWO=$(gh repo view --json nameWithOwner --jq .nameWithOwner) # "owner/repo"
-HEAD_SHA=$(git rev-parse HEAD) # SHA-pin blob links (survive branch delete)
+GH_NWO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)   # "owner/repo"
+HEAD_SHA=$(git rev-parse HEAD)                                    # SHA-pin blob links (survive branch delete)
 BLOB_BASE="https://github.com/${GH_NWO}/blob/${HEAD_SHA}"
 COMMIT_BASE="https://github.com/${GH_NWO}/commit"
 file_anchor() { printf 'diff-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1)"; }
@@ -576,8 +576,8 @@ If `gh repo view` / `git rev-parse` fails (no remote, missing auth), **render pa
 **Anti-patterns:**
 
 ```markdown
-- [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py) ← BROKEN: relative → resolves to /pull/<N>/plugins/... (404)
-- `plugins/flow-next/scripts/flowctl.py` (~line 12001) ← inline code, no link at all
+- [`plugins/flow-next/scripts/flowctl.py`](plugins/flow-next/scripts/flowctl.py)   ← BROKEN: relative → resolves to /pull/<N>/plugins/... (404)
+- `plugins/flow-next/scripts/flowctl.py` (~line 12001)                              ← inline code, no link at all
 ```
 
 Correct:
@@ -612,18 +612,18 @@ Your job — the calls the pipeline can't make:
 Field rules:
 
 - **Supported/current cognitive aid:** tests, R-ID coverage, and review evidence
- draw only from the artifact proof and provenance already rendered in
- `## The change, top to bottom`. Never read `tasks[].evidence`,
- `tasks_summary`, or legacy review fields for this block.
+  draw only from the artifact proof and provenance already rendered in
+  `## The change, top to bottom`. Never read `tasks[].evidence`,
+  `tasks_summary`, or legacy review fields for this block.
 - **Labeled legacy fallback:** mechanically-verified summary draws from two
- export signals only: `tasks[].evidence.tests[]` (the same evidence §2.3b
- Verification renders) and R-ID coverage (acceptance-criteria count minus
- `tasks_summary.uncovered_r_ids`, with the §2.1 claimed-not-evidenced and
- undeclared qualifiers when non-zero — never report a plan gate as an
- unqualified 0%). `deferred_findings[]` is an open-items
- signal, not proof that a cross-model review ran. The export carries no
- review-verdict or suppression field, so the cross-model line says
- `no cross-model review recorded on this PR` rather than inferring one.
+  export signals only: `tasks[].evidence.tests[]` (the same evidence §2.3b
+  Verification renders) and R-ID coverage (acceptance-criteria count minus
+  `tasks_summary.uncovered_r_ids`, with the §2.1 claimed-not-evidenced and
+  undeclared qualifiers when non-zero — never report a plan gate as an
+  unqualified 0%). `deferred_findings[]` is an open-items
+  signal, not proof that a cross-model review ran. The export carries no
+  review-verdict or suppression field, so the cross-model line says
+  `no cross-model review recorded on this PR` rather than inferring one.
 - **No-overclaim rule (load-bearing).** Cite ONLY verification present in the payload. Absent verification is stated honestly, never implied: no test evidence → "no test evidence recorded on this PR"; no review-verdict field → "no cross-model review recorded on this PR". NEVER write "reviewed by a second model" / "fully tested" without an authoritative signal — the reviewer must be able to trust every line of this block literally. (This is §2.5 rule 11 — the same no-invented-claims discipline the Review plan rests on.)
 - **≤ ~8 rendered lines** (priorities, not a hard cap): a coaching frame, not a report. It sets up the buckets; it does NOT restate the Review plan's per-file detail (no repetition between this block and the buckets — the eval flagged length only when the two duplicated each other).
 - **No-evidence payloads (specless / manual PRs)** — all three signals may be absent; the block then honestly states each absence and still frames "your job". The eval verified this degrades cleanly (honesty stayed high with zero evidence).
@@ -780,9 +780,9 @@ Field rules:
 - **Link target** — blob, SHA-pinned (per §2.4b — `.flow/memory/<id>.md` is an artifact to read): `https://github.com/<owner>/<repo>/blob/<head-sha>/.flow/memory/<id>.md`. The `id` already contains the track/category prefix; concatenate it after `.flow/memory/`. (A bare relative `.flow/memory/<id>.md` is BROKEN in a PR body — see §2.4b.)
 - **`<first_sentence>`** — `decisions[].first_sentence` verbatim. flowctl already extracted this via `_export_first_sentence`. Never re-extract, never paraphrase.
 - **`<alternatives_considered>`** — `decisions[].alternatives_considered` from the export. **Caveat: this field arrives as a stringified Python list** (e.g. `"['option-a', 'option-b']"`) because flowctl wraps the frontmatter list with `str()` during export. The host agent renders it readably:
- - String matches `^\[.*\]$` and is non-empty → strip the brackets + quotes, emit as a comma-separated phrase: `option-a, option-b`.
- - String is empty (`""`) or literally `"[]"` → omit the trailing `Alternatives considered: …` clause entirely (don't emit the label with no content).
- - String is plain prose (legacy entries that wrote a sentence rather than a list) → emit verbatim.
+  - String matches `^\[.*\]$` and is non-empty → strip the brackets + quotes, emit as a comma-separated phrase: `option-a, option-b`.
+  - String is empty (`""`) or literally `"[]"` → omit the trailing `Alternatives considered: …` clause entirely (don't emit the label with no content).
+  - String is plain prose (legacy entries that wrote a sentence rather than a list) → emit verbatim.
 - **No truncation.** Decision entries are by-design prose-heavy; reviewer needs the full alternatives list to weigh the choice.
 
 If `memory_during_spec.decisions[]` is empty, the section heading is omitted entirely per §2.6. **No fallback "no decisions" line.** Section either has bullets or doesn't appear.
@@ -955,16 +955,16 @@ Render `## Live QA` **only when** the QA receipt exists at `.flow/review-receipt
 QA_ACTIVE=0
 QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SPEC_ID.json"
 if [ -f "$QA_RECEIPT" ]; then
- # NO pipelines in the probe — a failed producer masked by a healthy consumer
- # fails CLOSED. Capture raw first, rc-checked; parse separately.
- QA_RAW="$(cat "$QA_RECEIPT" 2>/dev/null)" || QA_ACTIVE=1 # read ERROR ⇒ ACTIVE (fail open)
- if [ "$QA_ACTIVE" = "0" ]; then
- QA_PROBE="$(printf '%s' "$QA_RAW" | jq -r '.qa_outcome // empty' 2>/dev/null)" || QA_ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ -n "$QA_PROBE" ] && QA_ACTIVE=1
- fi
+  # NO pipelines in the probe — a failed producer masked by a healthy consumer
+  # fails CLOSED. Capture raw first, rc-checked; parse separately.
+  QA_RAW="$(cat "$QA_RECEIPT" 2>/dev/null)" || QA_ACTIVE=1          # read ERROR ⇒ ACTIVE (fail open)
+  if [ "$QA_ACTIVE" = "0" ]; then
+    QA_PROBE="$(printf '%s' "$QA_RAW" | jq -r '.qa_outcome // empty' 2>/dev/null)" || QA_ACTIVE=1   # parse ERROR ⇒ ACTIVE
+    [ -n "$QA_PROBE" ] && QA_ACTIVE=1
+  fi
 fi
 if [ "$QA_ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/live-qa-section.md before continuing."
+  echo "GATE ACTIVE — STOP. Read references/live-qa-section.md before continuing."
 fi
 ```
 
@@ -1035,7 +1035,7 @@ The one exception is the §2.4 Critical changes "Limited churn" fallback bullet 
 
 ## Phase 3: Mermaid generation
 
-**Goal:** when the diff signals warrant it, emit a `## Structural changes` section with one to three mermaid codefences, each preceded by a one-paragraph prose summary in plain language. The diagrams are supplementary; the prose is load-bearing — forges that don't render mermaid still convey the change. When triggers don't fire OR `--no-mermaid` is set, the section is omitted entirely (never an empty placeholder).
+**Goal:** when the diff signals warrant it, emit a `## Structural changes` section with one to three mermaid codefences — or, in the two situations `mermaid-rules.md` §8 licenses, a diff-fenced structural sketch that complements or replaces a diagram — each preceded by a one-paragraph prose summary in plain language. The diagrams are supplementary; the prose is load-bearing — forges that don't render mermaid still convey the change. When triggers don't fire OR `--no-mermaid` is set, the section is omitted entirely (never an empty placeholder).
 
 The host agent reads `mermaid-rules.md` (sibling file in this skill) before emitting any codefence and validates each rendered diagram against the §6 checklist there. **No deterministic Python renderer.** flowctl's `spec export-cognitive-aid` payload provides the structured signals (`cross_module_changes`, `public_exports_changed`, `modules_touched`, `diff_summary.files`); the agent picks shape, picks nodes, emits codefence, validates.
 
@@ -1045,8 +1045,8 @@ Phase 3 is bypassed entirely when `$NO_MERMAID == 1`. **No diagrams emitted.** P
 
 ```bash
 if [[ "$NO_MERMAID" == "1" ]]; then
- : "skip Phase 3 entirely; the rendered body has no ## Structural changes heading"
- return 0 # or equivalent skip control in the host agent's render loop
+  : "skip Phase 3 entirely; the rendered body has no ## Structural changes heading"
+  return 0  # or equivalent skip control in the host agent's render loop
 fi
 ```
 
@@ -1092,10 +1092,10 @@ Phase 3 has no fallback bullet equivalent to Critical changes' "Limited churn" l
 
 - `--no-mermaid` short-circuits before any trigger evaluation; the body has no `## Structural changes` heading.
 - Trigger evaluation walks the 5 conditions ((1) `cross_module_changes[]` non-empty, (2) `public_exports_changed[]` non-empty, (3) new top-level dir, (4) removed top-level dir, (5) >15 files in >3 modules) and the skip rules; emits Phase 3 only when ≥1 trigger fires AND no skip rule applies. When a skip rule engages, the stderr breadcrumb `Phase 3 skipped: <reason>` is emitted.
-- Hard caps enforced (max 3 diagrams, max 12 nodes, max 25 edges, max 12K chars per codefence). Excess collapses to a `graph TB` overview; node excess groups by module/abstraction.
+- Hard caps enforced on mermaid codefences (max 3 diagrams, max 12 nodes, max 25 edges, max 12K chars per codefence). Excess collapses to a `graph TB` overview; node excess groups by module/abstraction. §8 sketches sit outside these caps.
 - Shape selection picks from the 4 documented shapes (`flowchart LR` / `classDiagram` / `sequenceDiagram` / `graph TB`) per the `mermaid-rules.md` §3 rules — or, in the two situations §8 licenses (collapse-to-one would fire; a trigger fires marginally with a <4-node diagram), a diff-fenced structural sketch (file tree or call tree), which does not count against the 3-diagram cap.
 - Every codefence is preceded by a 3-5 sentence plain-language prose summary anchored to `diff_summary.files[]` paths. The diagram is supplementary; prose is load-bearing.
-- Each codefence passes the `mermaid-rules.md` §6 validation checklist (9 rules: quotes balanced, no reserved-word bare ids, no emoji, no MathJax, no relative click links, no inheritance cycles, no subgraph/node-id collisions, arrow-char preference, ≤12K chars) before being emitted. Re-render loop on any failure — never emit a known-broken codefence.
+- Each mermaid codefence passes the `mermaid-rules.md` §6 validation checklist (9 rules: quotes balanced, no reserved-word bare ids, no emoji, no MathJax, no relative click links, no inheritance cycles, no subgraph/node-id collisions, arrow-char preference, ≤12K chars) before being emitted. Re-render loop on any failure — never emit a known-broken codefence. Diff-fenced sketches follow §8's own rules instead: §7 guardrails + §5 prose rule, equally suppressed by `--no-mermaid`.
 - `mermaid-rules.md` ref file present with: §1 reserved words, §2 special-character escapes + HTML-entity fallback (decimal codes only), §3 shape selection + decision matrix, §4 hard caps + allocation rule, §5 prose-summary rule, §6 validation checklist, §7 Phase-3 hallucination guardrails, §8 diff-fenced structural sketches.
 - Section omission honored: zero triggers OR skip rule OR `--no-mermaid` → no `## Structural changes` heading at all.
 - Hallucination guardrails honored: no invented modules / edges / symbols; "fewer nodes, more honest" over "context nodes for clarity."
@@ -1127,10 +1127,10 @@ The body string is owned by the host agent at this point — Phases 2/3 produced
 
 ```bash
 if [[ "$DRY_RUN" == "1" ]]; then
- printf '%s\n' "$BODY_CONTENT"
- echo "" >&2
- echo "Dry-run: body written to stdout. No push, no PR created, no memory entry written." >&2
- exit 0
+  printf '%s\n' "$BODY_CONTENT"
+  echo "" >&2
+  echo "Dry-run: body written to stdout. No push, no PR created, no memory entry written." >&2
+  exit 0
 fi
 ```
 

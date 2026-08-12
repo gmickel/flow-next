@@ -47,20 +47,20 @@ highest-dividend borrow. Apply it religiously.
 ### The five hygiene rules
 
 1. **Fresh user = fresh storage.** Before any "fresh user" / "no invite / no prior
- context" scenario, clear app-level storage. Cookies alone are not enough —
- `localStorage` and `sessionStorage` outlive a logout and silently poison the next run.
+   context" scenario, clear app-level storage. Cookies alone are not enough —
+   `localStorage` and `sessionStorage` outlive a logout and silently poison the next run.
 2. **One browser tab (session) per agent.** Two agents on a shared tab cause auth-provider
- rate-limits, session bleed, and false failures. With agent-browser, isolate via
- `--session <name>` (see fn-51 `session-management.md`); if your tooling cannot guarantee
- isolation, run scenarios **sequentially**, not in parallel.
+   rate-limits, session bleed, and false failures. With agent-browser, isolate via
+   `--session <name>` (see fn-51 `session-management.md`); if your tooling cannot guarantee
+   isolation, run scenarios **sequentially**, not in parallel.
 3. **Cool-down between auth attempts.** Auth providers throttle. ~30s between sign-ups is a
- safe default (e.g. Clerk dev keys); check the provider's docs. On a 429 / "too many
- requests", **stop the scenario and mark BLOCKED** — do not retry-spam, the limit grows.
+   safe default (e.g. Clerk dev keys); check the provider's docs. On a 429 / "too many
+   requests", **stop the scenario and mark BLOCKED** — do not retry-spam, the limit grows.
 4. **Unique persona per scenario.** A fresh-user scenario needs a fresh email with a unique
- suffix (see below). Reusing an email that previously hit an OTP / verify failure leaves
- the provider in a stuck state and produces a false failure on the next run.
+   suffix (see below). Reusing an email that previously hit an OTP / verify failure leaves
+   the provider in a stuck state and produces a false failure on the next run.
 5. **Reset between role changes.** Switching member → admin mid-pass means a full sign-out
- + storage clear + tab reset — not just "click sign out". Cookies and SSR auth state lag.
+   + storage clear + tab reset — not just "click sign out". Cookies and SSR auth state lag.
 
 ### Pre-scenario hygiene checklist
 
@@ -127,15 +127,15 @@ runs scenarios sequentially with one host agent; the disjoint-shard coordination
 scope. The two lessons worth carrying from BRB's parallel runs:
 
 - **Write-path-first.** When a later scenario depends on data an earlier scenario creates (a
- group, an org, a workspace, an invite), run the **write path first** so the shared
- artifact exists before any scenario that reads it. Record the created IDs / invite URLs in
- the run notes so a follow-on scenario reuses them instead of re-creating (and re-asserting)
- the same state.
+  group, an org, a workspace, an invite), run the **write path first** so the shared
+  artifact exists before any scenario that reads it. Record the created IDs / invite URLs in
+  the run notes so a follow-on scenario reuses them instead of re-creating (and re-asserting)
+  the same state.
 - **One tab (session) per agent.** If you ever *do* fan scenarios out across agents, each
- gets its **own** isolated browser session (`--session`) and its **own** persona suffix
- (`+run<MMDD>-<shard>`). Sharing a tab is what causes "no sign-in attempt found", stolen
- OTPs, and wrong-account writes. If isolation can't be guaranteed, **stay sequential** —
- the fix for a stalled parallel run is to go sequential, not to relaunch in parallel.
+  gets its **own** isolated browser session (`--session`) and its **own** persona suffix
+  (`+run<MMDD>-<shard>`). Sharing a tab is what causes "no sign-in attempt found", stolen
+  OTPs, and wrong-account writes. If isolation can't be guaranteed, **stay sequential** —
+  the fix for a stalled parallel run is to go sequential, not to relaunch in parallel.
 
 A common parallel failure worth pre-empting even in sequential mode: a scenario reports PASS
 but the backend shows nothing wrote (optimistic UI). For any **write path**
@@ -165,10 +165,10 @@ reference carries the *discipline* that the verdict must obey.
 Load-bearing honesty rules (these are *the* reason the verdict is trustworthy):
 
 - **Incomplete R-ID coverage is NO, not YES.** A confident PASS over an uncovered criterion
- is the failure mode this whole skill exists to prevent.
+  is the failure mode this whole skill exists to prevent.
 - **SHIP rests on evidence, never narration.** If you cannot point to a
- screenshot / console / observed-state artifact for each passing scenario, the outcome is
- BLOCKED, not SHIP.
+  screenshot / console / observed-state artifact for each passing scenario, the outcome is
+  BLOCKED, not SHIP.
 - **BLOCKED is a clean surfaced limitation, not a failure to hide.** Set `blocked_reason`.
 
 ### Paste-ready handoff
@@ -179,7 +179,7 @@ agent (or the fix author) should not have to rediscover state. Surface, in this 
 1. The **YES/NO call** + the `qa_outcome` (and `blocked_reason` / `na_reason` when set).
 2. The **open P0/P1 list** — finding ids + severities + the one-line symptom each.
 3. The **R-ID coverage table** (reused from `workflow.md` §2.2, now annotated pass/fail per
- scenario) — the traceability backbone: spec-AC ↔ scenario ↔ finding ↔ R-ID.
+   scenario) — the traceability backbone: spec-AC ↔ scenario ↔ finding ↔ R-ID.
 4. A **one-paragraph next-step prompt** — what remains unrun, what to re-test after the fix.
 
 QA files, surfaces, and hands off — it **does not fix product code** ("test, document, file,

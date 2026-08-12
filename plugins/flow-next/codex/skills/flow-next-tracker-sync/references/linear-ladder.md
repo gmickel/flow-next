@@ -3,9 +3,9 @@
 Linear has two reachable shapes:
 
 1. **MCP:** host-visible OAuth tools, used only for discovery or an explicitly
- authorized create when shell credentials are unavailable.
+   authorized create when shell credentials are unavailable.
 2. **GraphQL:** deterministic flowctl transport for normal lifecycle and wire
- verbs.
+   verbs.
 
 MCP is not a general runtime fallback. After an MCP create, pass its identifier,
 durable id when available, and URL to `tracker persist-external`. Flowctl

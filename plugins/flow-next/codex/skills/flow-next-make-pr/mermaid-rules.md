@@ -48,11 +48,11 @@ Labels containing the characters below MUST be quoted. Bare labels with these ch
 **HTML-entity fallback (decimal codes only — hex codes do NOT render):**
 
 ```
-" → #quot;
-# → #35;
-< → #60;
-> → #62;
-& → #38;
+"  →  #quot;
+#  →  #35;
+<  →  #60;
+>  →  #62;
+&  →  #38;
 ```
 
 The leading `#` plus decimal digits and trailing `;` is mermaid's documented escape syntax. Hex (`#x22;`) silently fails — always use decimal.
@@ -87,10 +87,10 @@ The four shapes the skill emits, with one canonical example per shape so the hos
 ````markdown
 ```mermaid
 flowchart LR
- skill["flow-next-make-pr<br/>skill"] --> flowctl["scripts/flowctl"]
- skill --> gh["gh CLI"]
- flowctl --> mem[".flow/memory/"]
- flowctl --> specs[".flow/specs/"]
+  skill["flow-next-make-pr<br/>skill"] --> flowctl["scripts/flowctl"]
+  skill --> gh["gh CLI"]
+  flowctl --> mem[".flow/memory/"]
+  flowctl --> specs[".flow/specs/"]
 ```
 ````
 
@@ -105,17 +105,17 @@ flowchart LR
 ````markdown
 ```mermaid
 classDiagram
- class CognitiveAidPayload {
- +spec: SpecMeta
- +tasks: Task[]
- +diff_summary: DiffSummary
- +memory_during_spec: MemorySnapshot
- }
- class SpecMeta {
- +id: string
- +acceptance_criteria: AcceptanceCriterion[]
- }
- CognitiveAidPayload *-- SpecMeta
+  class CognitiveAidPayload {
+    +spec: SpecMeta
+    +tasks: Task[]
+    +diff_summary: DiffSummary
+    +memory_during_spec: MemorySnapshot
+  }
+  class SpecMeta {
+    +id: string
+    +acceptance_criteria: AcceptanceCriterion[]
+  }
+  CognitiveAidPayload *-- SpecMeta
 ```
 ````
 
@@ -130,16 +130,16 @@ classDiagram
 ````markdown
 ```mermaid
 sequenceDiagram
- participant U as User
- participant S as /flow-next:make-pr
- participant F as flowctl
- participant G as gh CLI
- U->>S: invoke
- S->>F: spec export-cognitive-aid
- F-->>S: payload (JSON)
- S->>S: render body
- S->>G: gh pr create
- G-->>U: PR URL
+  participant U as User
+  participant S as /flow-next:make-pr
+  participant F as flowctl
+  participant G as gh CLI
+  U->>S: invoke
+  S->>F: spec export-cognitive-aid
+  F-->>S: payload (JSON)
+  S->>S: render body
+  S->>G: gh pr create
+  G-->>U: PR URL
 ```
 ````
 
@@ -154,12 +154,12 @@ sequenceDiagram
 ````markdown
 ```mermaid
 graph TB
- spec["fn-42 make-pr"]
- spec --> skill["plugins/flow-next/skills/flow-next-make-pr/"]
- spec --> flowctl["plugins/flow-next/scripts/flowctl.py"]
- spec --> tests["plugins/flow-next/scripts/make-pr_smoke_test.sh"]
- spec --> docs["docs (CHANGELOG, README, CLAUDE.md)"]
- spec --> sync["scripts/sync-codex.sh"]
+  spec["fn-42 make-pr"]
+  spec --> skill["plugins/flow-next/skills/flow-next-make-pr/"]
+  spec --> flowctl["plugins/flow-next/scripts/flowctl.py"]
+  spec --> tests["plugins/flow-next/scripts/make-pr_smoke_test.sh"]
+  spec --> docs["docs (CHANGELOG, README, CLAUDE.md)"]
+  spec --> sync["scripts/sync-codex.sh"]
 ```
 ````
 
@@ -194,17 +194,17 @@ The collapse-to-one rule prefers `graph TB` when the alternative is more than 3 
 
 ````
 Bad (15 nodes):
- skill --> agent_A
- skill --> agent_B
- skill --> agent_C
- skill --> agent_D
- skill --> agent_E
- ... (11 more)
+  skill --> agent_A
+  skill --> agent_B
+  skill --> agent_C
+  skill --> agent_D
+  skill --> agent_E
+  ... (11 more)
 
 Good (3 nodes):
- skill --> scouts["scouts (5)"]
- skill --> workers["workers (3)"]
- skill --> validators["validators (2)"]
+  skill --> scouts["scouts (5)"]
+  skill --> workers["workers (3)"]
+  skill --> validators["validators (2)"]
 ````
 
 The grouped label keeps the fan-out signal without burying it in 15 visually-similar nodes.
@@ -323,10 +323,10 @@ Call-tree change:
 ````markdown
 ```diff
  startMission
- resolveFleet
- claimSeat
+   resolveFleet
+     claimSeat
 + verifyAuth
- openSession
+     openSession
 - streamEvents
 + streamEvents
 + replayBacklog

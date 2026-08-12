@@ -23,9 +23,9 @@ Capture treats an admitted briefing as **attributable evidence**, not as pre-tag
 2. **Admission (fail closed):** ordinary capture **REFUSES draft or stale briefings**. A forced draft (`status: draft`) is never treated as final. A stale B-ID (after `chart reopen` or supersession of linked D-IDs) is refused by default.
 3. **Explicit risk override only:** to admit a draft or stale briefing, the user must name the unresolved or invalidated D-IDs and the agent must **read back the exact risk** before write. The override never promotes a forced draft into a final briefing and never rewrites chart history.
 4. **Provenance separation (load-bearing):**
- - Chart/B-ID/cluster/D-ID evidence and approved assets go into `## Decision Context` / evidence sections as **links and references** — never with trailing `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]` tags.
- - The four source tags apply **only** to acceptance criteria capture **newly authors**. Never retag existing criteria. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
- - Do **not** introduce verified/inferred fact or decision grammar (fn-148 closed STOPPED — no verdict; it licenses nothing here).
+   - Chart/B-ID/cluster/D-ID evidence and approved assets go into `## Decision Context` / evidence sections as **links and references** — never with trailing `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]` tags.
+   - The four source tags apply **only** to acceptance criteria capture **newly authors**. Never retag existing criteria. A criterion derived from an unattended resolved D-ID is **not** automatically `[user]`.
+   - Do **not** introduce verified/inferred fact or decision grammar (fn-148 closed STOPPED — no verdict; it licenses nothing here).
 5. **Write order after approval:** `spec create` → `spec set-plan` → `flowctl chart link-spec <chart> --briefing <B> --spec <S> --decisions <D,...> [--cluster <k>]`. Call `link-spec` **only after** each successful spec creation. Decline records nothing and leaves the chart resumable.
 6. **Retry / partial multi-spec:** on retry, first check `produced_specs[]` (and existing specs) for this B-ID+cluster identity; if a link already exists, link/use that spec instead of minting a duplicate. Partial multi-spec capture records only successful links and resumes the failed cluster without duplicating the first. Shared-context D-IDs stay attributable in each handoff but become acceptance requirements only where read-back confirms the target spec needs that guarantee.
 
@@ -40,9 +40,9 @@ When the conversation or `$ARGUMENTS` names a chart briefing input — a path ma
 ```bash
 # Example probes (agent-owned paths; type literal paths, never shell vars across prompt turns):
 # Read the briefing markdown, and the chart sidecar for status of that B-ID:
-# .flow/charts/<chart-id>.json -> briefings[].id / .status (final|draft|stale)
-# .flow/charts/<chart-id>-briefing.md
-# .flow/charts/<chart-id>-briefing-<k>.md # multi-cluster
+#   .flow/charts/<chart-id>.json  -> briefings[].id / .status (final|draft|stale)
+#   .flow/charts/<chart-id>-briefing.md
+#   .flow/charts/<chart-id>-briefing-<k>.md   # multi-cluster
 ```
 
 **Refuse (ordinary capture, fail closed):**
@@ -105,12 +105,12 @@ Runs inside the Phase 5 new-spec ceremony, immediately after `spec create` + `sp
 # On retry: if produced_specs already has this B-ID+cluster identity, discover
 # that entry and link the existing spec instead of minting another (Phase 1.2b).
 if [[ -n "$CHART_ID" && -n "$BRIEFING_ID" ]]; then
- # Subcommand tokens stay LITERAL on the command line (the Ralph guard blocks
- # a variable in either of the two tokens after the launcher); only arguments
- # come from the array.
- LINK_ARGS=("$CHART_ID" --briefing "$BRIEFING_ID" --spec "$SPEC_ID" --decisions "$CHART_DECISIONS" --json)
- [[ -n "$CLUSTER_KEY" ]] && LINK_ARGS+=(--cluster "$CLUSTER_KEY")
- "$FLOWCTL" chart link-spec "${LINK_ARGS[@]}"
+  # Subcommand tokens stay LITERAL on the command line (the Ralph guard blocks
+  # a variable in either of the two tokens after the launcher); only arguments
+  # come from the array.
+  LINK_ARGS=("$CHART_ID" --briefing "$BRIEFING_ID" --spec "$SPEC_ID" --decisions "$CHART_DECISIONS" --json)
+  [[ -n "$CLUSTER_KEY" ]] && LINK_ARGS+=(--cluster "$CLUSTER_KEY")
+  "$FLOWCTL" chart link-spec "${LINK_ARGS[@]}"
 fi
 ```
 

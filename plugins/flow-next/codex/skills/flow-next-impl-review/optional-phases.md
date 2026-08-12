@@ -17,12 +17,12 @@ primary review. When multiple are set, phases run in a fixed order:
 
 ```
 1. Primary review (always)
-2. If --deep: run deep passes in same session → merge findings into receipt
-3. If --validate: validator re-checks merged findings → drops false positives
+2. If --deep:        run deep passes in same session → merge findings into receipt
+3. If --validate:    validator re-checks merged findings → drops false positives
 4. If --interactive: user walks surviving findings → Apply/Defer/Skip/Acknowledge
-5. Verdict computed over surviving findings (deep may upgrade SHIP→NEEDS_WORK;
- validate may upgrade NEEDS_WORK→SHIP; walkthrough never flips)
-6. Receipt each phase writes its own additive block without disturbing others
+5. Verdict           computed over surviving findings (deep may upgrade SHIP→NEEDS_WORK;
+                     validate may upgrade NEEDS_WORK→SHIP; walkthrough never flips)
+6. Receipt           each phase writes its own additive block without disturbing others
 ```
 
 Mode split (fn-113): steps 2-3 mutate the receipt ONLY under autonomy markers
@@ -33,13 +33,13 @@ instead of re-reading the receipt. Both paths are documented per phase below.
 
 **Why this order:**
 - Deep runs before validate: deep expands the finding superset; validator
- filters the (larger) merged set in a single pass — cheaper than running
- validator twice (once for primary, once for deep).
+  filters the (larger) merged set in a single pass — cheaper than running
+  validator twice (once for primary, once for deep).
 - Validate runs before interactive: the user walks only validated findings,
- reducing decision burden and keeping per-finding quality high.
+  reducing decision burden and keeping per-finding quality high.
 - Interactive is always last: it consumes the fully-merged, fully-validated
- set; it never flips the verdict, only sorts findings into Apply / Defer /
- Skip / Acknowledge buckets.
+  set; it never flips the verdict, only sorts findings into Apply / Defer /
+  Skip / Acknowledge buckets.
 
 **Flag combination matrix:**
 
@@ -68,18 +68,18 @@ keys.
 
 **Empty-block invariants:**
 - When no `--validate`, the receipt has **no** `validator` key, **no**
- `validator_timestamp`, and **no** `verdict_before_validate`.
+  `validator_timestamp`, and **no** `verdict_before_validate`.
 - When no `--deep`, the receipt has **no** `deep_passes`, **no**
- `deep_findings_count`, **no** `cross_pass_promotions`, **no**
- `deep_timestamp`, and **no** `verdict_before_deep`.
+  `deep_findings_count`, **no** `cross_pass_promotions`, **no**
+  `deep_timestamp`, and **no** `verdict_before_deep`.
 - When no `--interactive`, the receipt has **no** `walkthrough` and
- **no** `walkthrough_timestamp`.
+  **no** `walkthrough_timestamp`.
 - When `--validate` ran with zero dispatched findings, an empty validator
- block (`{dispatched: 0, dropped: 0, kept: 0, reasons: []}`) + its
- timestamp are still written — this keeps the receipt shape deterministic
- for consumers.
+  block (`{dispatched: 0, dropped: 0, kept: 0, reasons: []}`) + its
+  timestamp are still written — this keeps the receipt shape deterministic
+  for consumers.
 - `verdict_before_validate` / `verdict_before_deep` are only written when
- their phase actually upgraded the verdict; otherwise absent.
+  their phase actually upgraded the verdict; otherwise absent.
 
 **Ralph compatibility:** the receipt-gate logic reads `verdict`, `mode`,
 and `session_id`. All new fields are optional and ignored by older Ralph
@@ -113,16 +113,16 @@ against the changed-file list. Explicit CSV form
 # Otherwise: adversarial always + security/performance auto-enabled by
 # changed-file globs via `flowctl review-deep-auto`.
 if [[ -n "$DEEP_PASSES" ]]; then
- SELECTED_PASSES="${DEEP_PASSES//,/ }"
+  SELECTED_PASSES="${DEEP_PASSES//,/ }"
 else
- # Determine changed files for auto-enable heuristic
- if [[ -n "$BASE_COMMIT" ]]; then
- CHANGED="$(git diff --name-only "$BASE_COMMIT"..HEAD)"
- else
- DIFF_BASE=main; git rev-parse main >/dev/null 2>&1 || DIFF_BASE=master
- CHANGED="$(git diff --name-only "$DIFF_BASE"..HEAD)"
- fi
- SELECTED_PASSES="$(printf '%s\n' "$CHANGED" | $FLOWCTL review-deep-auto)"
+  # Determine changed files for auto-enable heuristic
+  if [[ -n "$BASE_COMMIT" ]]; then
+    CHANGED="$(git diff --name-only "$BASE_COMMIT"..HEAD)"
+  else
+    DIFF_BASE=main; git rev-parse main >/dev/null 2>&1 || DIFF_BASE=master
+    CHANGED="$(git diff --name-only "$DIFF_BASE"..HEAD)"
+  fi
+  SELECTED_PASSES="$(printf '%s\n' "$CHANGED" | $FLOWCTL review-deep-auto)"
 fi
 echo "Deep passes selected: $SELECTED_PASSES"
 ```
@@ -148,55 +148,55 @@ re-flagging issues the primary already caught.
 ### Step D.3: Dispatch each pass
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
 
 for pass in $SELECTED_PASSES; do
- case "$BACKEND" in
- codex)
- $FLOWCTL codex deep-pass \
- --pass "$pass" \
- --primary-findings "$PRIMARY_FINDINGS" \
- --receipt "$RECEIPT_PATH" \
- --json
- ;;
- copilot)
- $FLOWCTL copilot deep-pass \
- --pass "$pass" \
- --primary-findings "$PRIMARY_FINDINGS" \
- --receipt "$RECEIPT_PATH" \
- --json
- ;;
- cursor)
- $FLOWCTL cursor deep-pass \
- --pass "$pass" \
- --primary-findings "$PRIMARY_FINDINGS" \
- --receipt "$RECEIPT_PATH" \
- --json
- ;;
- rp)
- # RP: same-chat session continuity is automatic. Render the
- # pass-specific prompt from deep-passes.md (inject primary
- # findings block), send via `rp chat-send` (NO --new-chat). Classic uses
- # --tab "$T"; CE uses --context-id "$T" --chat-id "$CHAT_ID" --mode review,
- # parse findings with the same header regex flowctl uses,
- # merge into receipt manually (or via a shared helper).
- # See deep-passes.md for template markers.
- :
- ;;
- host)
- # fn-123 R5: no flowctl subprocess for host. Dispatch each selected
- # pass as ANOTHER fresh read-only host-native reviewer subagent with
- # the SAME cross-family pin as the primary review (workflow-host.md
- # Step 1). Give it the pass-specific prompt from deep-passes.md plus
- # the primary findings block; parse its findings and merge them into
- # the receipt yourself (deep_findings_count / cross_pass_promotions,
- # same additive fields as D.5). If a fresh subagent cannot be
- # dispatched, do NOT silently skip: interactive -> ask whether to
- # continue without deep passes; autonomous -> NEEDS_HUMAN.
- :
- ;;
- esac
+  case "$BACKEND" in
+    codex)
+      $FLOWCTL codex deep-pass \
+        --pass "$pass" \
+        --primary-findings "$PRIMARY_FINDINGS" \
+        --receipt "$RECEIPT_PATH" \
+        --json
+      ;;
+    copilot)
+      $FLOWCTL copilot deep-pass \
+        --pass "$pass" \
+        --primary-findings "$PRIMARY_FINDINGS" \
+        --receipt "$RECEIPT_PATH" \
+        --json
+      ;;
+    cursor)
+      $FLOWCTL cursor deep-pass \
+        --pass "$pass" \
+        --primary-findings "$PRIMARY_FINDINGS" \
+        --receipt "$RECEIPT_PATH" \
+        --json
+      ;;
+    rp)
+      # RP: same-chat session continuity is automatic. Render the
+      # pass-specific prompt from deep-passes.md (inject primary
+      # findings block), send via `rp chat-send` (NO --new-chat). Classic uses
+      # --tab "$T"; CE uses --context-id "$T" --chat-id "$CHAT_ID" --mode review,
+      # parse findings with the same header regex flowctl uses,
+      # merge into receipt manually (or via a shared helper).
+      # See deep-passes.md for template markers.
+      :
+      ;;
+    host)
+      # fn-123 R5: no flowctl subprocess for host. Dispatch each selected
+      # pass as ANOTHER fresh read-only host-native reviewer subagent with
+      # the SAME cross-family pin as the primary review (workflow-host.md
+      # Step 1). Give it the pass-specific prompt from deep-passes.md plus
+      # the primary findings block; parse its findings and merge them into
+      # the receipt yourself (deep_findings_count / cross_pass_promotions,
+      # same additive fields as D.5). If a fresh subagent cannot be
+      # dispatched, do NOT silently skip: interactive -> ask whether to
+      # continue without deep passes; autonomous -> NEEDS_HUMAN.
+      :
+      ;;
+  esac
 done
 ```
 
@@ -230,18 +230,18 @@ After deep passes run, the receipt carries:
 
 ```json
 {
- "type": "impl_review",
- "id": "fn-32.2",
- "mode": "codex",
- "verdict": "NEEDS_WORK",
- "verdict_before_deep": "SHIP",
- "session_id": "019ba...",
- "deep_passes": ["adversarial", "security"],
- "deep_findings_count": {"adversarial": 2, "security": 1},
- "cross_pass_promotions": [
- {"id": "f1", "from": 50, "to": 75, "pass": "adversarial"}
- ],
- "deep_timestamp": "2026-04-24T10:10:00Z"
+  "type": "impl_review",
+  "id": "fn-32.2",
+  "mode": "codex",
+  "verdict": "NEEDS_WORK",
+  "verdict_before_deep": "SHIP",
+  "session_id": "019ba...",
+  "deep_passes": ["adversarial", "security"],
+  "deep_findings_count": {"adversarial": 2, "security": 1},
+  "cross_pass_promotions": [
+    {"id": "f1", "from": 50, "to": 75, "pass": "adversarial"}
+  ],
+  "deep_timestamp": "2026-04-24T10:10:00Z"
 }
 ```
 
@@ -286,55 +286,55 @@ parse error; fall through to normal fix loop.
 ### Step V.2: Dispatch the validator pass
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 FINDINGS_FILE="/tmp/review-findings.jsonl"
 
 case "$BACKEND" in
- codex)
- VALIDATOR_JSON="$($FLOWCTL codex validate \
- --findings-file "$FINDINGS_FILE" \
- --receipt "$RECEIPT_PATH" \
- --json 2>&1)"
- ;;
- copilot)
- VALIDATOR_JSON="$($FLOWCTL copilot validate \
- --findings-file "$FINDINGS_FILE" \
- --receipt "$RECEIPT_PATH" \
- --json 2>&1)"
- ;;
- cursor)
- VALIDATOR_JSON="$($FLOWCTL cursor validate \
- --findings-file "$FINDINGS_FILE" \
- --receipt "$RECEIPT_PATH" \
- --json 2>&1)"
- ;;
- rp)
- # RP: same-chat session continuity is automatic. Build a validator prompt
- # from validate-pass.md and send it via `rp chat-send` (NO --new-chat).
- # Classic uses --tab "$T"; CE uses --context-id "$T" plus chat identity.
- # Parse the response lines with the same regex flowctl uses:
- # `<id>: validated: <true|false> -- <reason>`
- # Then recompute dropped/kept counts and merge into the receipt by hand
- # (or via a shared helper). See validate-pass.md for the template.
- cat /path/to/validate-pass.md | sed 's|<!-- FINDINGS_BLOCK -->|'"$(cat render_findings.md)"'|' > /tmp/validator.md
- if [[ "$RP_MODE" == "ce" ]]; then
- VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file /tmp/validator.md)"
- else
- VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
- fi
- # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
- # and update receipt's validator block accordingly.
- ;;
- host)
- # fn-123 R5: no flowctl subprocess for host. Dispatch the validator as a
- # fresh read-only host-native subagent with the SAME cross-family pin as
- # the primary review (workflow-host.md Step 1), prompted from
- # validate-pass.md with the findings block injected. Parse its
- # `<id>: validated: <true|false> -- <reason>` lines yourself, recompute
- # dropped/kept counts, and merge the validator block into the receipt.
- # If a fresh subagent cannot be dispatched, do NOT silently skip:
- # interactive -> ask; autonomous -> NEEDS_HUMAN.
- ;;
+  codex)
+    VALIDATOR_JSON="$($FLOWCTL codex validate \
+      --findings-file "$FINDINGS_FILE" \
+      --receipt "$RECEIPT_PATH" \
+      --json 2>&1)"
+    ;;
+  copilot)
+    VALIDATOR_JSON="$($FLOWCTL copilot validate \
+      --findings-file "$FINDINGS_FILE" \
+      --receipt "$RECEIPT_PATH" \
+      --json 2>&1)"
+    ;;
+  cursor)
+    VALIDATOR_JSON="$($FLOWCTL cursor validate \
+      --findings-file "$FINDINGS_FILE" \
+      --receipt "$RECEIPT_PATH" \
+      --json 2>&1)"
+    ;;
+  rp)
+    # RP: same-chat session continuity is automatic. Build a validator prompt
+    # from validate-pass.md and send it via `rp chat-send` (NO --new-chat).
+    # Classic uses --tab "$T"; CE uses --context-id "$T" plus chat identity.
+    # Parse the response lines with the same regex flowctl uses:
+    #   `<id>: validated: <true|false> -- <reason>`
+    # Then recompute dropped/kept counts and merge into the receipt by hand
+    # (or via a shared helper). See validate-pass.md for the template.
+    cat /path/to/validate-pass.md | sed 's|<!-- FINDINGS_BLOCK -->|'"$(cat render_findings.md)"'|' > /tmp/validator.md
+    if [[ "$RP_MODE" == "ce" ]]; then
+      VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file /tmp/validator.md)"
+    else
+      VALIDATOR_RESPONSE="$($FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file /tmp/validator.md)"
+    fi
+    # Parse lines matching /^[>*_` ]*<id>[\s*_`]*:[\s*_`]*validated[\s*_`]*:[\s*_`]*(true|false)/
+    # and update receipt's validator block accordingly.
+    ;;
+  host)
+    # fn-123 R5: no flowctl subprocess for host. Dispatch the validator as a
+    # fresh read-only host-native subagent with the SAME cross-family pin as
+    # the primary review (workflow-host.md Step 1), prompted from
+    # validate-pass.md with the findings block injected. Parse its
+    # `<id>: validated: <true|false> -- <reason>` lines yourself, recompute
+    # dropped/kept counts, and merge the validator block into the receipt.
+    # If a fresh subagent cannot be dispatched, do NOT silently skip:
+    # interactive -> ask; autonomous -> NEEDS_HUMAN.
+    ;;
 esac
 ```
 
@@ -356,8 +356,8 @@ KEPT="$(jq -r '.validator.kept // 0' "$RECEIPT_PATH" 2>/dev/null || echo 0)"
 echo "Validator: dropped=$DROPPED kept=$KEPT verdict=$NEW_VERDICT"
 
 if [[ "$NEW_VERDICT" == "SHIP" ]]; then
- # All findings dropped — verdict upgraded. Done, no fix loop.
- exit 0
+  # All findings dropped — verdict upgraded. Done, no fix loop.
+  exit 0
 fi
 
 # NEEDS_WORK remains — surviving findings go into the fix loop below,
@@ -371,23 +371,23 @@ object and (when upgraded) a `verdict_before_validate` field:
 
 ```json
 {
- "type": "impl_review",
- "id": "fn-32.1",
- "mode": "codex",
- "verdict": "SHIP",
- "verdict_before_validate": "NEEDS_WORK",
- "session_id": "019ba...",
- "validator": {
- "dispatched": 3,
- "dropped": 3,
- "kept": 0,
- "reasons": [
- {"id": "f1", "file": "src/x.ts", "line": 42, "reason": "null check already at line 40"},
- {"id": "f2", "file": "src/y.ts", "line": 10, "reason": "error is propagated via ? operator"},
- {"id": "f3", "file": "src/z.ts", "line": 5, "reason": "suggested fix misreads TS narrowing"}
- ]
- },
- "validator_timestamp": "2026-04-24T10:05:00Z"
+  "type": "impl_review",
+  "id": "fn-32.1",
+  "mode": "codex",
+  "verdict": "SHIP",
+  "verdict_before_validate": "NEEDS_WORK",
+  "session_id": "019ba...",
+  "validator": {
+    "dispatched": 3,
+    "dropped": 3,
+    "kept": 0,
+    "reasons": [
+      {"id": "f1", "file": "src/x.ts", "line": 42, "reason": "null check already at line 40"},
+      {"id": "f2", "file": "src/y.ts", "line": 10, "reason": "error is propagated via ? operator"},
+      {"id": "f3", "file": "src/z.ts", "line": 5,  "reason": "suggested fix misreads TS narrowing"}
+    ]
+  },
+  "validator_timestamp": "2026-04-24T10:05:00Z"
 }
 ```
 
@@ -449,10 +449,10 @@ otherwise → Defer.
 ```bash
 DEFER_COUNT=$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)
 if [[ "$DEFER_COUNT" -gt 0 ]]; then
- $FLOWCTL review-walkthrough-defer \
- --findings-file /tmp/walkthrough-defer.jsonl \
- --receipt "$RECEIPT_PATH" \
- --json
+  $FLOWCTL review-walkthrough-defer \
+    --findings-file /tmp/walkthrough-defer.jsonl \
+    --receipt "$RECEIPT_PATH" \
+    --json
 fi
 ```
 
@@ -464,27 +464,27 @@ section to `.flow/review-deferred/<branch-slug>.md`.
 
 ```bash
 $FLOWCTL review-walkthrough-record \
- --receipt "$RECEIPT_PATH" \
- --applied "$(wc -l < /tmp/walkthrough-apply.jsonl 2>/dev/null || echo 0)" \
- --deferred "$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)" \
- --skipped "$(wc -l < /tmp/walkthrough-skip.jsonl 2>/dev/null || echo 0)" \
- --acknowledged "$(wc -l < /tmp/walkthrough-ack.jsonl 2>/dev/null || echo 0)" \
- --lfg-rest "${LFG_USED:-false}" \
- --json
+  --receipt "$RECEIPT_PATH" \
+  --applied  "$(wc -l < /tmp/walkthrough-apply.jsonl 2>/dev/null || echo 0)" \
+  --deferred "$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)" \
+  --skipped  "$(wc -l < /tmp/walkthrough-skip.jsonl  2>/dev/null || echo 0)" \
+  --acknowledged "$(wc -l < /tmp/walkthrough-ack.jsonl 2>/dev/null || echo 0)" \
+  --lfg-rest "${LFG_USED:-false}" \
+  --json
 ```
 
 Receipt gains:
 
 ```json
 {
- "walkthrough": {
- "applied": 3,
- "deferred": 2,
- "skipped": 1,
- "acknowledged": 0,
- "lfg_rest": false
- },
- "walkthrough_timestamp": "2026-04-24T18:42:00Z"
+  "walkthrough": {
+    "applied": 3,
+    "deferred": 2,
+    "skipped": 1,
+    "acknowledged": 0,
+    "lfg_rest": false
+  },
+  "walkthrough_timestamp": "2026-04-24T18:42:00Z"
 }
 ```
 

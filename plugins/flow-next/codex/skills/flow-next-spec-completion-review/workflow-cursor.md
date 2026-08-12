@@ -23,12 +23,12 @@ $FLOWCTL show "$SPEC_ID" --json
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}" # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.json}"  # fn-90 R5: spec-scoped default (concurrent specs no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # Runtime config:
-# --spec <spec> full spec (cursor:<model>), highest priority
-# FLOW_REVIEW_BACKEND spec-form ok: cursor:gpt-5.5-high
-# FLOW_CURSOR_MODEL fills missing model only (default gpt-5.5-high)
+#   --spec <spec>           full spec (cursor:<model>), highest priority
+#   FLOW_REVIEW_BACKEND     spec-form ok: cursor:gpt-5.5-high
+#   FLOW_CURSOR_MODEL       fills missing model only (default gpt-5.5-high)
 #
 # Cursor folds reasoning effort INTO the model name, so there is NO effort
 # field (no FLOW_CURSOR_EFFORT, no `cursor:<model>:<effort>`).

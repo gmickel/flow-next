@@ -844,8 +844,26 @@ def strip_toolsearch_bullets(text):
 
 text = strip_toolsearch_bullets(text)
 
-# Collapse double spaces that result from strips.
-text = re.sub(r'  +', ' ', text)
+# Collapse double spaces that result from strips — fence-aware: fenced-block
+# whitespace is meaning-bearing (visual-skill trees, aligned file-tree
+# comments), and leading indentation outside fences is structure, not residue.
+def collapse_interior_spaces(text):
+    out = []
+    in_fence = False
+    for line in text.split('\n'):
+        stripped = line.lstrip()
+        if stripped.startswith('```') or stripped.startswith('~~~'):
+            in_fence = not in_fence
+            out.append(line)
+            continue
+        if in_fence:
+            out.append(line)
+            continue
+        indent = line[:len(line) - len(stripped)]
+        out.append(indent + re.sub(r'  +', ' ', stripped))
+    return '\n'.join(out)
+
+text = collapse_interior_spaces(text)
 # Collapse blank-line runs to max 2.
 text = re.sub(r'\n{3,}', '\n\n', text)
 # Trim trailing whitespace per line.
@@ -1448,8 +1466,26 @@ elif had_ask_in_prose and 'plain-text numbered prompt' in text:
             out.append(line)
         text = '\n'.join(out)
 
-# Collapse double spaces / blank-line runs left over from substitutions.
-text = re.sub(r'  +', ' ', text)
+# Collapse double spaces / blank-line runs left over from substitutions —
+# fence-aware: fenced-block whitespace is meaning-bearing (visual-skill trees,
+# aligned file-tree comments); leading indent outside fences is structure.
+def collapse_interior_spaces(text):
+    out = []
+    in_fence = False
+    for line in text.split('\n'):
+        stripped = line.lstrip()
+        if stripped.startswith('```') or stripped.startswith('~~~'):
+            in_fence = not in_fence
+            out.append(line)
+            continue
+        if in_fence:
+            out.append(line)
+            continue
+        indent = line[:len(line) - len(stripped)]
+        out.append(indent + re.sub(r'  +', ' ', stripped))
+    return '\n'.join(out)
+
+text = collapse_interior_spaces(text)
 text = re.sub(r'\n{3,}', '\n\n', text)
 text = '\n'.join(line.rstrip() for line in text.split('\n'))
 

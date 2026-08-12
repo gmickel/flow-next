@@ -54,13 +54,13 @@ clawpatch is pre-1.0 (v0.4.0, 2026-05-22; weekly minor releases). The README for
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
- TRIGGER="REVIEW_RECEIPT_PATH"
- else
- TRIGGER="FLOW_RALPH"
- fi
- echo "Error: /flow-next:map declines under Ralph ($TRIGGER set); rerun interactively." >&2
- exit 2
+  if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
+    TRIGGER="REVIEW_RECEIPT_PATH"
+  else
+    TRIGGER="FLOW_RALPH"
+  fi
+  echo "Error: /flow-next:map declines under Ralph ($TRIGGER set); rerun interactively." >&2
+  exit 2
 fi
 ```
 

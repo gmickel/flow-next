@@ -32,14 +32,14 @@ Run these guards before discovery, ledger writes, branch changes, or skill dispa
 
 ```bash
 if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
- echo "Ralph and land are alternative drivers — never nest them" >&2
- echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
- exit 1
+  echo "Ralph and land are alternative drivers — never nest them" >&2
+  echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
+  exit 1
 fi
 
 if git status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
- echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="dirty working tree at tick start"'
- exit 0
+  echo 'LAND_VERDICT=NEEDS_HUMAN prs=0 pr=- reason="dirty working tree at tick start"'
+  exit 0
 fi
 ```
 
@@ -54,11 +54,11 @@ RAW_ARGS="$ARGUMENTS"
 LAND_DRY_RUN=0
 
 for ARG in $RAW_ARGS; do
- case "$ARG" in
- --dry-run) LAND_DRY_RUN=1 ;;
- -*) echo "Unknown flag: $ARG (ignored by /flow-next:land)" >&2 ;;
- *) echo "Unknown argument: $ARG (ignored by /flow-next:land)" >&2 ;;
- esac
+  case "$ARG" in
+    --dry-run) LAND_DRY_RUN=1 ;;
+    -*) echo "Unknown flag: $ARG (ignored by /flow-next:land)" >&2 ;;
+    *)  echo "Unknown argument: $ARG (ignored by /flow-next:land)" >&2 ;;
+  esac
 done
 export LAND_DRY_RUN
 ```
@@ -106,8 +106,8 @@ Execute [workflow.md](workflow.md) in order:
 1. **guards** — refuse Ralph nesting, refuse dirty non-`.flow/` start state, resolve the `.git` land ledger (read-only at this point), read `land.*` config. *Done when: both guards passed, `LAND_CFG` is captured with its fallbacks applied, and the ledger is loaded without a write.*
 2. **discover** — open specs with all tasks done → `gh pr list --head <branch_name> --state all`, OPEN-state filter, dual authorship signals, merged-but-unclosed re-entry candidates. *Done when: every candidate spec has a classification (babysit / re-entry / `NEEDS_HUMAN` / skipped) and the discovery table is echoed.*
 3. **gate** — per-PR read-only classification: durable-label skip, CI tri-state over every check, patience window anchored to last push, unresolved review threads, review signal (`land.reviewSignal`), stale-approval detection, `mergeStateStatus`. `--dry-run` stops here. *Done when: each PR carries one planned action class plus a provisional verdict, and nothing has been mutated.*
- - Under the default `silence` signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate — land scans `issues/<n>/comments` for an automated-reviewer comment matching `land.cleanReviewCommentPattern` (a structured built-in default) that names the **current head SHA**. It only ever *adds* this evidence; CI, unresolved-thread, and window gates are unchanged, and a stale-SHA or non-automated comment is ignored. Set `land.cleanReviewCommentPattern` to an explicit empty string `""` to **disable** the comment path (pure reviews-API behavior); leaving it unset uses the built-in default.
- - `land.mergeVerdictCommand` (default `""`, off) adds an opt-in **repo merge-verdict gate** (§2.9) for repos with no branch protection to gate against: once every other gate passes and the planned action is `merge`, land runs the configured command once via `bash -c` from the repo root, with context in the environment only (`FLOW_HEAD_SHA`, `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`). Exit 0 merges; **any** non-zero - including missing, unexecutable, or timed out at the 600s bound - blocks with `NEEDS_HUMAN` and no label. It is block-only (it can never grant a merge the other gates refused), `--dry-run` reports `would-run` and executes nothing, and unset, `null`, and `""` all mean off. The command runs on the base checkout, so it must key on `$FLOW_HEAD_SHA` and refuse when it cannot see that head.
+   - Under the default `silence` signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate — land scans `issues/<n>/comments` for an automated-reviewer comment matching `land.cleanReviewCommentPattern` (a structured built-in default) that names the **current head SHA**. It only ever *adds* this evidence; CI, unresolved-thread, and window gates are unchanged, and a stale-SHA or non-automated comment is ignored. Set `land.cleanReviewCommentPattern` to an explicit empty string `""` to **disable** the comment path (pure reviews-API behavior); leaving it unset uses the built-in default.
+   - `land.mergeVerdictCommand` (default `""`, off) adds an opt-in **repo merge-verdict gate** (§2.9) for repos with no branch protection to gate against: once every other gate passes and the planned action is `merge`, land runs the configured command once via `bash -c` from the repo root, with context in the environment only (`FLOW_HEAD_SHA`, `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`). Exit 0 merges; **any** non-zero - including missing, unexecutable, or timed out at the 600s bound - blocks with `NEEDS_HUMAN` and no label. It is block-only (it can never grant a merge the other gates refused), `--dry-run` reports `would-run` and executes nothing, and unset, `null`, and `""` all mean off. The command runs on the base checkout, so it must key on `$FLOW_HEAD_SHA` and refuse when it cannot see that head.
 4. **act** — at most one action class per PR: CI fix, resolve-pr dispatch, mechanical rebase/update, or ready→merge→post-merge tail (spec close → tracker touchpoint → release-follow). *Done when: each PR has had exactly one action class executed, the worktree is back on `ORIG_BRANCH` (or the merged base), and the non-`.flow/` tree is clean.*
 5. **report** — per-PR verdict evidence, ledger writes, and the terminal `LAND_VERDICT` line (worst-severity rule). *Done when: one evidence block per processed PR is echoed and the terminal line is the last line of the response.*
 

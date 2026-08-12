@@ -4,11 +4,11 @@ Read only after the Model Routing answer is `Scaffold` or
 `Scaffold + enable codex delegation` on `PLATFORM=grok`.
 
 1. Enumerate available Grok models from host knowledge; fallback to foreground,
- short-timeout `grok models` when `HAVE_GROK=1`. If unavailable, list
- `grok-4.5` with a not-live-enumerated note.
+   short-timeout `grok models` when `HAVE_GROK=1`. If unavailable, list
+   `grok-4.5` with a not-live-enumerated note.
 2. The HOST AGENT picks `SCOUT_PIN`. Grok is single-native-family; leave
- `REVIEW_PIN` as an explicit TODO or bridge-model note unless a genuinely
- different-family pin exists. Never invent a fake native cross-family slug.
+   `REVIEW_PIN` as an explicit TODO or bridge-model note unless a genuinely
+   different-family pin exists. Never invent a fake native cross-family slug.
 3. Compose this exact structure:
 
 ```markdown
@@ -43,16 +43,16 @@ Always target AGENTS.md; optionally also CLAUDE.md when Docs selected it. Per
 target:
 
 - A file with exactly one non-empty `@<path>.md` or `See[:] <path>.md` line is
- a shim. Retarget to an existing in-repo pointer and re-apply the guard;
- missing targets are skipped. Never mix content into a shim.
+  a shim. Retarget to an existing in-repo pointer and re-apply the guard;
+  missing targets are skipped. Never mix content into a shim.
 - If a well-formed model-routing marker block exists, byte-compare it against
- the complete composed block. Identical means silent no-op and no mtime
- change. Different means ask `Keep mine (Recommended)` /
- `Overwrite with canonical` / `Skip`; never silently overwrite.
+  the complete composed block. Identical means silent no-op and no mtime
+  change. Different means ask `Keep mine (Recommended)` /
+  `Overwrite with canonical` / `Skip`; never silently overwrite.
 - Without markers, detect a user-authored model-routing heading and ask
- `Add the flow-next block below yours` / `Skip`; never duplicate silently.
+  `Add the flow-next block below yours` / `Skip`; never duplicate silently.
 - On a would-write path, show the complete block, ask `write` / `skip`, then
- append or marker-replace the whole block only on `write`.
+  append or marker-replace the whole block only on `write`.
 
 Confirm:
 `Model-routing section written to <file> — Grok host-native pins (single-family fail-closed for host review); re-run /flow-next:setup to refresh.`

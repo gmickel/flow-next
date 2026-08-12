@@ -18,13 +18,13 @@ Read [steps.md](steps.md) for the operation sequence and
 normalized contract. Load only references needed by the reached path:
 
 - Body comparison or conflict:
- [references/body-merge.md](references/body-merge.md).
+  [references/body-merge.md](references/body-merge.md).
 - Status projection: [references/status-sync.md](references/status-sync.md).
 - Comment or question-valve content:
- [references/comments-sync.md](references/comments-sync.md).
+  [references/comments-sync.md](references/comments-sync.md).
 - Hybrid identifiers: [references/identity.md](references/identity.md).
 - Linear transport shape: [references/linear-ladder.md](references/linear-ladder.md),
- then only the reached MCP or GraphQL reference.
+  then only the reached MCP or GraphQL reference.
 - GitHub, GitLab, or Jira transport shape: the matching provider reference only.
 
 Never load an unselected provider merely because another reference links it.
@@ -42,8 +42,8 @@ Use the lifecycle facade for event-driven projection:
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 $FLOWCTL tracker sync "$SPEC_ID" --op "$OP" --event "$EVENT" \
- --flow-file "$FLOW_FILE" --body-file "$BODY_FILE" \
- --comments-file "$COMMENTS_FILE" --source-body-file "$SOURCE_BODY_FILE"
+  --flow-file "$FLOW_FILE" --body-file "$BODY_FILE" \
+  --comments-file "$COMMENTS_FILE" --source-body-file "$SOURCE_BODY_FILE"
 ```
 
 Pass only flags legal for the selected operation. [steps.md](steps.md) lists
@@ -60,25 +60,25 @@ Every command returns one JSON object on stdout. Success has `success: true`,
 These are the only five surfaces intentionally retained in the host agent:
 
 1. **MCP rung.** MCP tools exist only in the host tool environment, so flowctl
- cannot invoke them. The agent may perform the explicitly requested Linear
- MCP action, then hands the returned identity to `tracker persist-external`.
+   cannot invoke them. The agent may perform the explicitly requested Linear
+   MCP action, then hands the returned identity to `tracker persist-external`.
 2. **Discovery ceremony.** Choosing a tracker, project or team, and enabling
- lifecycle events is an ambiguous one-time product decision. The agent
- surfaces detected choices and asks before persisting configuration.
+   lifecycle events is an ambiguous one-time product decision. The agent
+   surfaces detected choices and asks before persisting configuration.
 3. **Body-merge conflict adjudication.** A three-way body conflict is semantic
- because equivalent prose, intent, and requirement meaning cannot be resolved
- from hashes or syntax alone. The agent adjudicates only conflicting sections,
- while flowctl owns snapshots and atomic persistence.
+   because equivalent prose, intent, and requirement meaning cannot be resolved
+   from hashes or syntax alone. The agent adjudicates only conflicting sections,
+   while flowctl owns snapshots and atomic persistence.
 4. **Comment content synthesis.** Lifecycle comments communicate human context.
- The caller decides what the comment should say and supplies a stable
- occurrence identity as the first file line, `evidence=<token>`. Flowctl
- rejects missing/placeholder evidence, strips that line from visible content,
- and owns marker dedup, transport, and the receipt.
+   The caller decides what the comment should say and supplies a stable
+   occurrence identity as the first file line, `evidence=<token>`. Flowctl
+   rejects missing/placeholder evidence, strips that line from visible content,
+   and owns marker dedup, transport, and the receipt.
 5. **Recovery routing from a structured error.** A typed conflict,
- `external_action_required`, or non-retryable capability result can require a
- user choice, an MCP continuation, a local correction, or a defer. The agent
- selects that next action from the structured envelope instead of parsing
- error prose.
+   `external_action_required`, or non-retryable capability result can require a
+   user choice, an MCP continuation, a local correction, or a defer. The agent
+   selects that next action from the structured envelope instead of parsing
+   error prose.
 
 No other tracker operation is agentic. In particular, request construction,
 pagination, provider field mapping, status policy, relation projection,
@@ -105,22 +105,22 @@ the deterministic GraphQL route. If an MCP create returns only a display key,
 
 - One Flow spec maps to one tracker issue. Tasks remain Flow-local.
 - Tracker-first creation uses the hybrid identifier rules in `identity.md`.
- Never rename an existing Flow-first spec.
+  Never rename an existing Flow-first spec.
 - Callers retain their bridge-active and `perEvent` gates. An inactive bridge
- remains silent because the lifecycle facade is not invoked.
+  remains silent because the lifecycle facade is not invoked.
 - Event-driven callers use `tracker sync`, not granular tracker verbs.
 - Comment text and merged body text travel through mode `0600` temporary files,
- never argv. Delete temporary files after the call.
+  never argv. Delete temporary files after the call.
 - The facade writes one aggregate receipt. Do not add a second receipt.
 - A pull or reconcile may update Flow prose, but never Flow task status.
 - Dependency projection is additive and provenance-led. Never delete or
- recreate a user-controlled relation without evidence that Flow owns it.
+  recreate a user-controlled relation without evidence that Flow owns it.
 - `inactive` is a silent no-op for lifecycle callers.
 - `rate_limited` is retried only when the envelope says `retryable: true`.
 - `auth`, `unresolved`, `stale_id`, `conflict`, `capability`, and
- `external_action_required` follow the recovery table in `steps.md`.
+  `external_action_required` follow the recovery table in `steps.md`.
 - In Ralph or a forked lifecycle call, queue a decision that needs a person.
- Never attempt an interactive prompt from the fork.
+  Never attempt an interactive prompt from the fork.
 
 ## Boundaries
 

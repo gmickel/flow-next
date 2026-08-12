@@ -25,8 +25,8 @@ Create it with:
 
 ```bash
 $FLOWCTL spec create --tracker-first --tracker-identifier "WOR-17" --title "<issue title>" --json
-# GitHub: --tracker-identifier "#123" → gh-123-slug
-# GitLab: --tracker-identifier "group/project#456" → gl-456-slug
+# GitHub: --tracker-identifier "#123"  → gh-123-slug
+# GitLab: --tracker-identifier "group/project#456"  → gl-456-slug
 ```
 
 `--tracker-first` keys the spec by the tracker identifier instead of allocating a fresh `fn-NN`. No second id; no rename. Skills route here when `tracker.specIds=tracker` and the bridge is active.

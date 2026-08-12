@@ -1,6 +1,7 @@
 ---
 name: flow-next-visual
 description: "Restate a spec, a task, a diff, or the current topic visually as a compact markdown digest. Use when asked to 'show me', 'explain this visually', 'restate that', 'digest the plan', 'walk me through the spec', 'walk me through the tasks', 'walk me through the diff', or when the output is too much text and a shape would land faster. Triggers on /flow-next:visual with an optional spec id, task id, git range, or free-form topic."
+user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob
 ---
 
@@ -83,38 +84,38 @@ Pick the **smallest** view that makes the key point clear. Place each visual **n
 
 ```text
 on(message)
- if seen(message.id)
- drop
- enqueue(message)
- schedule flush
+  if seen(message.id)
+    drop
+  enqueue(message)
+  schedule flush
 ```
 
 **2. Call tree** (indented text) — runtime control flow, orchestration, backend-shaped problems:
 
 ```text
 startMission
- resolveFleet
- claimSeat
- openSession
- streamEvents
+  resolveFleet
+    claimSeat
+    openSession
+  streamEvents
 ```
 
 **3. Component tree** — UI structure, keeping ONLY the state hooks and module boundaries that matter:
 
 ```tsx
 <MissionBoard> (apps/cockpit/src/routes/mission.tsx)
- useFleetEvents()
- <SeatGrid>
- <SeatCard> (packages/ui)
+  useFleetEvents()
+  <SeatGrid>
+    <SeatCard> (packages/ui)
 ```
 
 **4. Shallow file tree** — "where does this live" / scoping a refactor; one line of responsibility per entry:
 
 ```text
 src/
-|-- ingest/ # tails source feeds
-|-- index/ # owns the search index
-`-- query/ # answers searches
+|-- ingest/        # tails source feeds
+|-- index/         # owns the search index
+`-- query/         # answers searches
 ```
 
 **5. Diff-fenced structural sketch** — the standout shape: diff syntax applied to a SHAPE (call tree, file tree, component tree, pseudocode), used when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.
@@ -124,55 +125,55 @@ File-layout change:
 ```diff
  src/
  |-- ingest/
-+| `-- dedupe.ts # drops repeated events
++|   `-- dedupe.ts        # drops repeated events
  |-- index/
 -`-- query.ts
 +`-- query/
-+ |-- parser.ts
-+ `-- ranker.ts
++    |-- parser.ts
++    `-- ranker.ts
 ```
 
 Component-tree change:
 
 ```diff
  <MissionBoard>
- useFleetEvents()
- <SeatGrid>
-+ <SeatFilter />
- <EventFeed>
-+ <RetryBanner />
+   useFleetEvents()
+   <SeatGrid>
++    <SeatFilter />
+   <EventFeed>
++    <RetryBanner />
 ```
 
 Call-tree change:
 
 ```diff
  startMission
- resolveFleet
- claimSeat
-+ verifyAuth
- openSession
-- streamEvents
-+ streamEvents
-+ replayBacklog
+   resolveFleet
+     claimSeat
++    verifyAuth
+     openSession
+-  streamEvents
++  streamEvents
++    replayBacklog
 ```
 
 State/control-flow change:
 
 ```diff
  on(message)
-- enqueue(message)
-+ if seen(message.id)
-+ drop
-+ enqueue(message)
-+ schedule flush
+-  enqueue(message)
++  if seen(message.id)
++    drop
++  enqueue(message)
++  schedule flush
 ```
 
 **6. Types and signatures** — the shape of code before any of it exists (the thing plan prose buries):
 
 ```ts
 interface Seat {
- id: SeatId
- missionId: MissionId | null
+  id: SeatId
+  missionId: MissionId | null
 }
 
 assignSeat(seats: Seat[], policy: Policy) -> SeatId | null

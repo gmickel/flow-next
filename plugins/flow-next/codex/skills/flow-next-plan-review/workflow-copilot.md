@@ -7,7 +7,7 @@ Use only when `BACKEND="copilot"` after [workflow.md](workflow.md).
 1. Use `$FLOWCTL copilot plan-review` exclusively.
 2. Pass `--receipt`; resume only when the prior receipt mode is `copilot`.
 3. Model/effort precedence remains explicit spec → per-spec default → review
- env → Copilot env → registry defaults.
+   env → Copilot env → registry defaults.
 4. Run the dispatch as one blocking foreground call.
 
 ## Execute Review — one atomic fence

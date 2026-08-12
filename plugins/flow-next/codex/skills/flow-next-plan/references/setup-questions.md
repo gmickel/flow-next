@@ -13,12 +13,12 @@ Ask the setup questions below as plain text — never via the `plain-text number
 ```bash
 # Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
 if command -v rpce-cli >/dev/null 2>&1 \
- || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
- || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
- || command -v rp-cli >/dev/null 2>&1; then
- RP_ELIGIBLE=1
+  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+  || command -v rp-cli >/dev/null 2>&1; then
+  RP_ELIGIBLE=1
 else
- RP_ELIGIBLE=0
+  RP_ELIGIBLE=0
 fi
 ```
 
@@ -30,15 +30,15 @@ When `RP_ELIGIBLE=1`:
 Quick setup before planning:
 
 1. **Plan depth** — How detailed?
- a) Short — problem, acceptance, key context only
- b) Standard (default) — + approach, risks, test notes
- c) Deep — + phases, alternatives, rollout plan
+   a) Short — problem, acceptance, key context only
+   b) Standard (default) — + approach, risks, test notes
+   c) Deep — + phases, alternatives, rollout plan
 
 2. **Review** — Run Carmack-level review after?
- a) Codex CLI
- b) RepoPrompt
- c) Export for external LLM
- d) None (configure later)
+   a) Codex CLI
+   b) RepoPrompt
+   c) Export for external LLM
+   d) None (configure later)
 
 (Reply: "1a 2d", or just tell me naturally)
 ```
@@ -49,14 +49,14 @@ When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI): drop the RepoProm
 Quick setup before planning:
 
 1. **Plan depth** — How detailed?
- a) Short — problem, acceptance, key context only
- b) Standard (default) — + approach, risks, test notes
- c) Deep — + phases, alternatives, rollout plan
+   a) Short — problem, acceptance, key context only
+   b) Standard (default) — + approach, risks, test notes
+   c) Deep — + phases, alternatives, rollout plan
 
 2. **Review** — Run Carmack-level review after?
- a) Codex CLI
- b) Export for external LLM
- c) None (configure later)
+   a) Codex CLI
+   b) Export for external LLM
+   c) None (configure later)
 
 (Reply: "1a 2c", or just tell me naturally)
 ```

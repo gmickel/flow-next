@@ -69,53 +69,53 @@ DIFF_BASE="${BASE_COMMIT:-main}"
 # not resolve fails closed: silently reviewing against master would bind and
 # hash a range the caller never asked for.
 if ! git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1; then
- if [[ -n "${BASE_COMMIT:-}" ]]; then
- echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2
- exit 1
- fi
- DIFF_BASE="master"
+  if [[ -n "${BASE_COMMIT:-}" ]]; then
+    echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2
+    exit 1
+  fi
+  DIFF_BASE="master"
 fi
 git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 \
- || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
+  || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
 REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.env"
 REVIEW_HEAD_SHA="$(git rev-parse HEAD)" || exit 1
 REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
 [[ -n "$REVIEW_HEAD_SHA" && -n "$REVIEW_BASE_SHA" ]] \
- || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
+  || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
 printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
- "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+  "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
 
 DIFF_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.diff"
 git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
- || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+  || { echo "git diff failed; not reserving a round" >&2; exit 1; }
 [[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
- || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+  || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
 ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-completion-review-host-${SPEC_ID}.blob"
 "$FLOWCTL" review-artifact completion "$SPEC_ID" --diff-file "$DIFF_FILE" \
- --output "$ARTIFACT_FILE" --json
+  --output "$ARTIFACT_FILE" --json
 ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
- --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
+  --review-type completion --artifact-file "$ARTIFACT_FILE" --json)"
 ROUND_EXIT=$?
 if [[ "$ROUND_EXIT" -ne 0 ]]; then
- printf '%s\n' "$ROUND_JSON"
- if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
- # Human-action terminal: edit artifact / human reset / human --force only.
- # Never refund, force, reset, or redispatch autonomously.
- exit 1
- fi
- exit "$ROUND_EXIT"
+  printf '%s\n' "$ROUND_JSON"
+  if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
+    # Human-action terminal: edit artifact / human reset / human --force only.
+    # Never refund, force, reset, or redispatch autonomously.
+    exit 1
+  fi
+  exit "$ROUND_EXIT"
 fi
 if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
- # A delivered verdict was recovered. Apply
- # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK >
- # all-SHIP and do not dispatch another reviewer.
- printf '%s\n' "$ROUND_JSON"
- # A superseded replay never votes (a concurrent SHIP reset the counter).
- if [[ "$(jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
- fi
- exit 0
+  # A delivered verdict was recovered. Apply
+  # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK >
+  # all-SHIP and do not dispatch another reviewer.
+  printf '%s\n' "$ROUND_JSON"
+  # A superseded replay never votes (a concurrent SHIP reset the counter).
+  if [[ "$(jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
+    echo "ESCALATE: reviewer requested human review" >&2
+    exit 4
+  fi
+  exit 0
 fi
 REVIEW_ROUND="$(printf '%s' "$ROUND_JSON" | jq -r '.round')"
 REVIEW_CAP="$(printf '%s' "$ROUND_JSON" | jq -r '.cap')"
@@ -142,37 +142,37 @@ block) through receipt writing.
 Give the subagent:
 - Spec requirements / R-IDs / acceptance criteria
 - The exact output of `$FLOWCTL criteria prompt-block`, appended verbatim when
- non-empty (global acceptance criteria + the `## Global criteria` output
- grammar; the command prints nothing when `.flow/criteria.md` is absent -
- include nothing in that case. A nonzero exit is a validation error - fix
- `.flow/criteria.md` before re-running the review)
+  non-empty (global acceptance criteria + the `## Global criteria` output
+  grammar; the command prints nothing when `.flow/criteria.md` is absent -
+  include nothing in that case. A nonzero exit is a validation error - fix
+  `.flow/criteria.md` before re-running the review)
 - Task list + evidence that work claims done
 - Diff / implementation surfaces to check compliance (not code-quality taste — that is impl-review)
 - Prior findings for convergence as structured `findings.items` (on re-review; render
- ordinal, severity, classification, status, title, and file:line; use legacy
- review prose only when the structured field is absent)
+  ordinal, severity, classification, status, title, and file:line; use legacy
+  review prose only when the structured field is absent)
 - **The prior-finding reply grammar, stated verbatim** (on re-review). These lines are
- machine-read, and prose resolutions are invisible to the parser — a reviewer that
- resolves priors in prose only leaves them carried forward and the loop cannot
- converge. Require one line per prior finding, at the start of a line, echoing the
- ordinal it was rendered with:
+  machine-read, and prose resolutions are invisible to the parser — a reviewer that
+  resolves priors in prose only leaves them carried forward and the loop cannot
+  converge. Require one line per prior finding, at the start of a line, echoing the
+  ordinal it was rendered with:
 
- ```
- Prior finding #1: fixed
- Prior finding #2: not-fixed
- Prior finding #3: withdrawn
- ```
+  ```
+  Prior finding #1: fixed
+  Prior finding #2: not-fixed
+  Prior finding #3: withdrawn
+  ```
 
- Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With
- exactly one prior finding the number may be omitted (`Prior finding: fixed`). When
- every prior finding is fixed — and only then — the single line
- `Prior findings: all fixed` may replace the per-finding lines; the two must not be
- mixed, because any per-finding line present wins and disables the aggregate. The `unaddressed` array in the JSON tail is about spec R-ID
- coverage and does **not** vouch for prior findings.
+  Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With
+  exactly one prior finding the number may be omitted (`Prior finding: fixed`). When
+  every prior finding is fixed — and only then — the single line
+  `Prior findings: all fixed` may replace the per-finding lines; the two must not be
+  mixed, because any per-finding line present wins and disables the aggregate. The `unaddressed` array in the JSON tail is about spec R-ID
+  coverage and does **not** vouch for prior findings.
 - For every gap: Severity, Confidence `0|25|50|75|100`, and Classification
- `introduced|pre_existing`
+  `introduced|pre_existing`
 - Required exact verdict tags: `<verdict>SHIP</verdict>` /
- `<verdict>NEEDS_WORK</verdict>` / `<verdict>NEEDS_HUMAN</verdict>`
+  `<verdict>NEEDS_WORK</verdict>` / `<verdict>NEEDS_HUMAN</verdict>`
 
 Wait for the subagent result (blocking — do not background).
 
@@ -201,16 +201,16 @@ Build this payload once:
 
 ```json
 {
- "type": "completion_review",
- "id": "<spec-id>",
- "mode": "host",
- "verdict": "<SHIP|NEEDS_WORK|NEEDS_HUMAN>",
- "model": "<actual-reviewer-slug>",
- "spec": "host",
- "session_id": null,
- "review": "<full reviewer output text - findings + verdict>",
- "timestamp": "<ISO-8601>",
- "attempt_timestamp": ""
+  "type": "completion_review",
+  "id": "<spec-id>",
+  "mode": "host",
+  "verdict": "<SHIP|NEEDS_WORK|NEEDS_HUMAN>",
+  "model": "<actual-reviewer-slug>",
+  "spec": "host",
+  "session_id": null,
+  "review": "<full reviewer output text - findings + verdict>",
+  "timestamp": "<ISO-8601>",
+  "attempt_timestamp": ""
 }
 ```
 
@@ -222,20 +222,20 @@ and publish that payload by reservation id (never re-derive it):
 
 ```bash
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
- --review-type completion --backend host --output-file "$RESPONSE_FILE" \
- --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
- --receipt-payload-file "$RECEIPT_INPUT" --status-target completion --json)"
+  --review-type completion --backend host --output-file "$RESPONSE_FILE" \
+  --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
+  --receipt-payload-file "$RECEIPT_INPUT" --status-target completion --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
 [[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
 "$FLOWCTL" review-findings attach \
- --reservation-id "$RESERVATION_ID" \
- --receipt "$RECEIPT_PATH" \
- --json
+  --reservation-id "$RESERVATION_ID" \
+  --receipt "$RECEIPT_PATH" \
+  --json
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
+  echo "ESCALATE: reviewer requested human review" >&2
+  exit 4
 fi
 ```
 
@@ -247,15 +247,15 @@ The command performs no reviewer/model/network call.
 Persist it in this order:
 
 1. Under the terminal receipt's cross-process lock, write the complete JSON
- payload to
- `$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json`
- first (create the parent directory), preserve the prior terminal generation
- beside `$RECEIPT_PATH`, then atomically advance `$RECEIPT_PATH`.
+   payload to
+   `$REPO_ROOT/.flow/tmp/completion-review-receipt-recovery-${SPEC_ID}.json`
+   first (create the parent directory), preserve the prior terminal generation
+   beside `$RECEIPT_PATH`, then atomically advance `$RECEIPT_PATH`.
 2. Validate `type`, `id`, and `verdict` at `$RECEIPT_PATH` with `jq`.
 3. Leave the recovery file in place after receipt validation. SKILL.md's
- shared checkpoint deletes it only after terminal status persists.
- On any write/validation failure, leave recovery in place, output
- `<promise>RETRY</promise>`, and stop before terminal status.
+   shared checkpoint deletes it only after terminal status persists.
+   On any write/validation failure, leave recovery in place, output
+   `<promise>RETRY</promise>`, and stop before terminal status.
 
 `session_id` is literal `null` — host re-reviews are always fresh subagents; `null` distinguishes by-design non-resumability from an incomplete receipt. Shape stays compatible with existing consumers.
 
@@ -273,21 +273,21 @@ gate in a later invocation), never before. A failed publish therefore leaves
 no terminal status with no receipt behind it.
 
 - `SHIP`: the journaled status leg persisted `ship` when attach published the
- receipt; continue to the shared terminal checkpoint.
+  receipt; continue to the shared terminal checkpoint.
 - `NEEDS_WORK`: parse every valid gap, fix the implementation, run the relevant
- tests/lints, and commit the fixes before re-review. Then repeat Steps 1–3
- with a **new** read-only subagent, the same cross-family rules, and prior
- findings in its prompt. At the deterministic round cap
- (`REVIEW_ROUND == REVIEW_CAP`), do not start another fix/re-review cycle:
- the journaled status leg persisted `needs_work` on publication; then emit
- `ESCALATE:` and exit 4.
+  tests/lints, and commit the fixes before re-review. Then repeat Steps 1–3
+  with a **new** read-only subagent, the same cross-family rules, and prior
+  findings in its prompt. At the deterministic round cap
+  (`REVIEW_ROUND == REVIEW_CAP`), do not start another fix/re-review cycle:
+  the journaled status leg persisted `needs_work` on publication; then emit
+  `ESCALATE:` and exit 4.
 - After `SHIP`, `record` already atomically reset the shared plan counter and
- advanced its hash epoch. Never issue `review-rounds reset` autonomously.
+  advanced its hash epoch. Never issue `review-rounds reset` autonomously.
 - `NEEDS_HUMAN`: after attach publishes the receipt and lands `needs_human`,
- emit `ESCALATE: reviewer requested human review` and exit 4.
- Dispatch failure, malformed verdict, receipt failure, or retry outcome stops
- without writing completion status; dispatch/transport failures output
- `<promise>RETRY</promise>` and never self-issue a verdict or switch backends.
+  emit `ESCALATE: reviewer requested human review` and exit 4.
+  Dispatch failure, malformed verdict, receipt failure, or retry outcome stops
+  without writing completion status; dispatch/transport failures output
+  `<promise>RETRY</promise>` and never self-issue a verdict or switch backends.
 
 ## Anti-patterns (Host backend)
 

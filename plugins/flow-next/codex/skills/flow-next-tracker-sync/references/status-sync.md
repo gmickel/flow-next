@@ -57,19 +57,19 @@ merge-confirmed work.
 BRANCH_NAME=$(.flow/bin/flowctl show "$SPEC_ID" --json | jq -r .branch_name)
 # Bare `gh pr view` returns rc 0 even for CLOSED/MERGED — ALWAYS filter .state via jq.
 PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all \
- --json url,state,number,isDraft 2>/dev/null)
+  --json url,state,number,isDraft 2>/dev/null)
 MERGED=$(printf '%s' "$PR_JSON" | jq '[.[] | select(.state=="MERGED")] | length')
-OPEN=$(printf '%s' "$PR_JSON" | jq '[.[] | select(.state=="OPEN")] | length')
+OPEN=$(printf '%s'   "$PR_JSON" | jq '[.[] | select(.state=="OPEN")]   | length')
 # prEvidence ∈ {
-# merged ≥1 MERGED
-# open ≥1 OPEN, 0 MERGED
-# closed-unmerged ≥1 CLOSED, 0 MERGED/OPEN
-# none no PR for branch (probe succeeded, empty result)
-# ambiguous a state the four buckets above don't cleanly cover — e.g. a
-# branch with BOTH an open AND a closed-unmerged PR, or a draft-
-# only result where no clear merge/open/closed signal dominates
-# probe-error the gh probe itself failed (non-zero rc, no auth, network) —
-# branch_name unknown counts here (cannot probe)
+#   merged          ≥1 MERGED
+#   open            ≥1 OPEN, 0 MERGED
+#   closed-unmerged ≥1 CLOSED, 0 MERGED/OPEN
+#   none            no PR for branch (probe succeeded, empty result)
+#   ambiguous       a state the four buckets above don't cleanly cover — e.g. a
+#                   branch with BOTH an open AND a closed-unmerged PR, or a draft-
+#                   only result where no clear merge/open/closed signal dominates
+#   probe-error     the gh probe itself failed (non-zero rc, no auth, network) —
+#                   branch_name unknown counts here (cannot probe)
 # }
 ```
 
@@ -175,70 +175,70 @@ the two current normalized statuses, which are always available).
 
 ```
 reconcileStatus(spec, issue):
- prEvidence = mergeEvidenceProbe(spec.branch_name) # merged|open|closed-unmerged|none|ambiguous
- flowNorm = flowToNormalized(spec, prEvidence) # table above — terminal needs MERGED
- trackerNorm = issue.status.normalized # adapter already mapped it
+  prEvidence   = mergeEvidenceProbe(spec.branch_name)  # merged|open|closed-unmerged|none|ambiguous
+  flowNorm     = flowToNormalized(spec, prEvidence)    # table above — terminal needs MERGED
+  trackerNorm  = issue.status.normalized               # adapter already mapped it
 
- if flowNorm == trackerNorm:
- noop (status already agrees) — no setStatus, no spec change
+  if flowNorm == trackerNorm:
+     noop (status already agrees) — no setStatus, no spec change
 
- # ── DEADLOCK CHECK FIRST — terminal on one side, active (in-progress) on the
- # other. This pair matches BOTH the terminal-wins and in-progress-wins rules,
- # so it MUST be caught before either, or it auto-resolves silently. Routes to
- # the R1 conflictTiebreak; never lets a single-field rule win it outright. ──
- elif (trackerNorm ∈ {done, verified} and flowNorm == in-progress)
- OR (flowNorm ∈ {done, verified} and trackerNorm == in-progress):
- # genuine status deadlock (tracker=done × flow=in-progress, simultaneously) →
- # R1 conflictTiebreak fallback (next section). NOT a silent auto-close.
+  # ── DEADLOCK CHECK FIRST — terminal on one side, active (in-progress) on the
+  #    other. This pair matches BOTH the terminal-wins and in-progress-wins rules,
+  #    so it MUST be caught before either, or it auto-resolves silently. Routes to
+  #    the R1 conflictTiebreak; never lets a single-field rule win it outright. ──
+  elif (trackerNorm ∈ {done, verified} and flowNorm == in-progress)
+    OR (flowNorm    ∈ {done, verified} and trackerNorm == in-progress):
+     # genuine status deadlock (tracker=done × flow=in-progress, simultaneously) →
+     # R1 conflictTiebreak fallback (next section). NOT a silent auto-close.
 
- # ── CLOSED-UNMERGED / AMBIGUOUS / PROBE-ERROR — flow is locally done but the
- # merge probe is NOT a clean MERGED. flowNorm is in-review (non-terminal — the
- # gate forbade terminal), but the closed-without-merge / missing-branch /
- # ambiguous / probe-error condition is a conflict a human must judge: surface
- # NEEDS_HUMAN and do NOT write any status. Caught before the in-review
- # advancement so it never silently pushes a rung. ──
- elif spec.status == done and prEvidence ∈ {closed-unmerged, ambiguous, probe-error}:
- # R6: locally shipped, but no merged PR and the probe is not clean →
- # surface NEEDS_HUMAN (interactive ask / Ralph `sync defer --reason <prEvidence>`).
- # NO setStatus, NO terminal, NO spec change. Tracker keeps its current state.
+  # ── CLOSED-UNMERGED / AMBIGUOUS / PROBE-ERROR — flow is locally done but the
+  #    merge probe is NOT a clean MERGED. flowNorm is in-review (non-terminal — the
+  #    gate forbade terminal), but the closed-without-merge / missing-branch /
+  #    ambiguous / probe-error condition is a conflict a human must judge: surface
+  #    NEEDS_HUMAN and do NOT write any status. Caught before the in-review
+  #    advancement so it never silently pushes a rung. ──
+  elif spec.status == done and prEvidence ∈ {closed-unmerged, ambiguous, probe-error}:
+     # R6: locally shipped, but no merged PR and the probe is not clean →
+     # surface NEEDS_HUMAN (interactive ask / Ralph `sync defer --reason <prEvidence>`).
+     # NO setStatus, NO terminal, NO spec change. Tracker keeps its current state.
 
- elif trackerNorm ∈ {done, verified} (terminal, flow NOT in-progress):
- # tracker wins terminal — flow is at backlog/planned/done, so the tracker's
- # closure folds in cleanly (no live in-progress work to contradict it)
- mark the spec done (+ completion_review_status if the tracker says verified)
- # do NOT call setStatus (tracker already terminal)
+  elif trackerNorm ∈ {done, verified} (terminal, flow NOT in-progress):
+     # tracker wins terminal — flow is at backlog/planned/done, so the tracker's
+     # closure folds in cleanly (no live in-progress work to contradict it)
+     mark the spec done (+ completion_review_status if the tracker says verified)
+     # do NOT call setStatus (tracker already terminal)
 
- elif flowNorm == in-progress and trackerNorm ∈ {backlog, planned}:
- # flow wins in-progress — push flow's progress to the tracker
- setStatus(trackerId, in-progress) [transport — linear-ladder.md]
+  elif flowNorm == in-progress and trackerNorm ∈ {backlog, planned}:
+     # flow wins in-progress — push flow's progress to the tracker
+     setStatus(trackerId, in-progress)            [transport — linear-ladder.md]
 
- # ── NO-PR PRESERVE RULE (S-G) — flow is locally done but prEvidence is `none`
- # (no PR exists). flowNorm is in-review, but if the tracker is ALREADY at a
- # valid non-terminal state (backlog/planned/in-progress/in-review) we do NOT
- # force a rung change: a locally-shipped spec with no PR has no merge evidence
- # and no open-PR signal, so we KEEP the current non-terminal state (no advance,
- # no terminal). This is checked before the generic in-review push so `none`
- # never drives an unconditional in-progress→in-review downgrade. ──
- elif flowNorm == in-review and prEvidence == none
- and trackerNorm ∈ {backlog, planned, in-progress, in-review}:
- # S-G: preserve the existing valid non-terminal state — no setStatus, no advance.
+  # ── NO-PR PRESERVE RULE (S-G) — flow is locally done but prEvidence is `none`
+  #    (no PR exists). flowNorm is in-review, but if the tracker is ALREADY at a
+  #    valid non-terminal state (backlog/planned/in-progress/in-review) we do NOT
+  #    force a rung change: a locally-shipped spec with no PR has no merge evidence
+  #    and no open-PR signal, so we KEEP the current non-terminal state (no advance,
+  #    no terminal). This is checked before the generic in-review push so `none`
+  #    never drives an unconditional in-progress→in-review downgrade. ──
+  elif flowNorm == in-review and prEvidence == none
+       and trackerNorm ∈ {backlog, planned, in-progress, in-review}:
+     # S-G: preserve the existing valid non-terminal state — no setStatus, no advance.
 
- elif flowNorm == in-review and trackerNorm ∈ {backlog, planned, in-progress}:
- # flow is in review (open PR — prEvidence=open), tracker behind → push the
- # In Review rung (R2). Non-terminal advance; issue stays OPEN.
- setStatus(trackerId, in-review) [transport — linear-ladder.md / github.md]
+  elif flowNorm == in-review and trackerNorm ∈ {backlog, planned, in-progress}:
+     # flow is in review (open PR — prEvidence=open), tracker behind → push the
+     # In Review rung (R2). Non-terminal advance; issue stays OPEN.
+     setStatus(trackerId, in-review)              [transport — linear-ladder.md / github.md]
 
- elif trackerNorm ∈ {deferred, wontfix} OR priority differs:
- # surface, never auto-change (interactive ask / Ralph queue) — see below
+  elif trackerNorm ∈ {deferred, wontfix} OR priority differs:
+     # surface, never auto-change (interactive ask / Ralph queue) — see below
 
- elif flowNorm ∈ {done, verified} and trackerNorm ∈ {backlog, planned, in-review}:
- # flow reached terminal (prEvidence=merged — the gate passed), tracker still
- # pre-terminal (not in-progress → not a deadlock) — push flow's closure out
- setStatus(trackerId, flowNorm) [transport]
+  elif flowNorm ∈ {done, verified} and trackerNorm ∈ {backlog, planned, in-review}:
+     # flow reached terminal (prEvidence=merged — the gate passed), tracker still
+     # pre-terminal (not in-progress → not a deadlock) — push flow's closure out
+     setStatus(trackerId, flowNorm)               [transport]
 
- else:
- # any residual incompatibility the rules above didn't resolve →
- # R1 conflictTiebreak fallback (next section)
+  else:
+     # any residual incompatibility the rules above didn't resolve →
+     # R1 conflictTiebreak fallback (next section)
 ```
 
 The deadlock branch deliberately **subsumes** the `tracker-done × flow-in-progress`
@@ -291,12 +291,12 @@ fn-51's surface-aware ladder and the body-merge `always-ask × Ralph` rule.
 ```bash
 # Ralph deadlock under always-ask — queue, write no status, advance no state:
 $FLOWCTL sync defer "$SPEC_ID" \
- --summary "Status deadlock: tracker=done, flow=in-progress" \
- --suggested "Human picks: close the spec to match the tracker, or reopen the issue to match flow" \
- --reason "status-deadlock"
+  --summary "Status deadlock: tracker=done, flow=in-progress" \
+  --suggested "Human picks: close the spec to match the tracker, or reopen the issue to match flow" \
+  --reason "status-deadlock"
 # ($EVENT = lifecycle event tag from steps.md Phase 0; empty on manual runs.)
 $FLOWCTL sync receipt "$SPEC_ID" --status diverged --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
- --note "status deadlock queued (tracker=done × flow=in-progress); no status written, base unchanged"
+  --note "status deadlock queued (tracker=done × flow=in-progress); no status written, base unchanged"
 ```
 
 Supported `flow-wins` / `tracker-wins` resolutions reuse the existing persistence
@@ -340,15 +340,15 @@ crash**:
 
 ```
 normalizeTrackerStatus(state):
- if state.type ∈ {the six fixed types}:
- base = defaultMap[state.type] # table above
- # apply a config name-override if one exists for this state name:
- return statusMap.get(state.name, base)
- else:
- # an unknown type (future Linear schema) — do NOT guess a flow effect:
- warn("unmapped tracker state '<name>' (type '<type>') — surfacing, not auto-applying")
- surface to the user (interactive ask / Ralph sync defer)
- return UNMAPPED # treated like deferred/wontfix: never auto-change flow
+  if state.type ∈ {the six fixed types}:
+     base = defaultMap[state.type]               # table above
+     # apply a config name-override if one exists for this state name:
+     return statusMap.get(state.name, base)
+  else:
+     # an unknown type (future Linear schema) — do NOT guess a flow effect:
+     warn("unmapped tracker state '<name>' (type '<type>') — surfacing, not auto-applying")
+     surface to the user (interactive ask / Ralph sync defer)
+     return UNMAPPED                              # treated like deferred/wontfix: never auto-change flow
 ```
 
 An `UNMAPPED` status is treated exactly like `deferred`/`wontfix`: **surfaced, never
@@ -359,9 +359,9 @@ the run.
 ```bash
 # Unmapped state — surface it, reconcile the rest, never crash:
 $FLOWCTL sync defer "$SPEC_ID" \
- --summary "Unmapped tracker state 'Pending Legal' (type 'started') — name not in statusMap" \
- --suggested "Add a tracker.perTracker.statusMap override, or confirm it means in-progress" \
- --reason "unmapped-state"
+  --summary "Unmapped tracker state 'Pending Legal' (type 'started') — name not in statusMap" \
+  --suggested "Add a tracker.perTracker.statusMap override, or confirm it means in-progress" \
+  --reason "unmapped-state"
 ```
 
 ## Readiness projection — `tracker.readyState` → local `ready` flag (fn-58, R3)
@@ -377,26 +377,26 @@ skipped — no calls, no receipts, no flag writes (R7 invisibility).
 **Derive the desired flag** from the normalized `issue`:
 
 - **Linear** — `desired = (trim+casefold(status.raw) == trim+casefold(readyState))`.
- The match is on the workflow-state **name** (`status.raw` carries it), not the
- `state.type`: names are non-unique and renamable, and a custom "Ready" state is
- typically `type=unstarted` — type alone cannot distinguish Todo from Ready (same
- rationale as the `statusMap` name-override above).
+  The match is on the workflow-state **name** (`status.raw` carries it), not the
+  `state.type`: names are non-unique and renamable, and a custom "Ready" state is
+  typically `type=unstarted` — type alone cannot distinguish Todo from Ready (same
+  rationale as the `statusMap` name-override above).
 - **GitHub** — `desired = (readyState label ∈ issue.labels[].name)`, compared
- case-insensitive/trimmed (GitHub label names are case-insensitively unique).
- **Label absent ⇒ `desired = false` — a normal state, never an error or a warn**;
- un-labeling the issue is exactly how a GitHub user un-readies a spec.
+  case-insensitive/trimmed (GitHub label names are case-insensitively unique).
+  **Label absent ⇒ `desired = false` — a normal state, never an error or a warn**;
+  un-labeling the issue is exactly how a GitHub user un-readies a spec.
 - **GitLab** — same as GitHub: GitLab has no workflow states, so readiness is a
- **label**. `desired = (readyState label ∈ issue.labels[])` (the normalized
- `issue.labels`), compared case-insensitive/trimmed. **Label absent ⇒ `desired =
- false`** — a normal state; removing the label is how a GitLab user un-readies a spec.
+  **label**. `desired = (readyState label ∈ issue.labels[])` (the normalized
+  `issue.labels`), compared case-insensitive/trimmed. **Label absent ⇒ `desired =
+  false`** — a normal state; removing the label is how a GitLab user un-readies a spec.
 - **Jira** — like Linear, Jira has **workflow states, not labels**, so readiness is a
- **status-name match**: `desired = (trim+casefold(status.raw) ==
- trim+casefold(readyState))`. The match is on the workflow-state **name**
- (`status.raw` carries `fields.status.name`), **never** `statusCategory` — names are
- what a human moves an issue *to* on the board, and a "Ready" state could be any
- category. `readyState` here is the **raw Jira status name** (the same value
- `listOpenIssues` interpolates into its JQL — [jira.md](jira.md) § `listOpenIssues`),
- NOT a `statusMap`-resolved value. One-way, tracker-authoritative.
+  **status-name match**: `desired = (trim+casefold(status.raw) ==
+  trim+casefold(readyState))`. The match is on the workflow-state **name**
+  (`status.raw` carries `fields.status.name`), **never** `statusCategory` — names are
+  what a human moves an issue *to* on the board, and a "Ready" state could be any
+  category. `readyState` here is the **raw Jira status name** (the same value
+  `listOpenIssues` interpolates into its JQL — [jira.md](jira.md) § `listOpenIssues`),
+  NOT a `statusMap`-resolved value. One-way, tracker-authoritative.
 
 **Gate the clear path BEFORE any toggle** — `desired = false` is ambiguous
 between "the issue genuinely isn't in the ready state" and "the config is stale
@@ -413,9 +413,9 @@ changed:
 ```bash
 # desired=false ⇒ the stale-config gate above has already passed (config resolves):
 if [ "$DESIRED" = "true" ]; then
- RESULT=$($FLOWCTL spec ready "$SPEC_ID" --json)
+  RESULT=$($FLOWCTL spec ready "$SPEC_ID" --json)
 else
- RESULT=$($FLOWCTL spec unready "$SPEC_ID" --json)
+  RESULT=$($FLOWCTL spec unready "$SPEC_ID" --json)
 fi
 CHANGED=$(printf '%s' "$RESULT" | jq -r '.changed')
 ```
@@ -425,8 +425,8 @@ echo, mirroring the `lastSyncedAt` advance-only-on-real-reconciliation semantics
 
 ```bash
 [ "$CHANGED" = "true" ] && $FLOWCTL sync receipt "$SPEC_ID" --status updated \
- --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
- --note "readiness: ready=$DESIRED projected from tracker (readyState '<configured name>')"
+  --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
+  --note "readiness: ready=$DESIRED projected from tracker (readyState '<configured name>')"
 ```
 
 ### Unresolvable config — warn `noop` receipt, flag untouched, sync continues
@@ -437,32 +437,32 @@ to still resolve on the tracker (a *match* resolves by construction — no extra
 call):
 
 - **Linear** — the configured name must exist among the team's workflow states:
- MCP `list_issue_statuses(team:<team>)`, GraphQL
- `workflowStates(first:100, filter:{team:{name:{eq:$team}}}){ nodes { name } }`
- (explicit `first:` — every `{nodes}` field is a connection). Present ⇒ genuine
- not-ready, clear the flag. Absent ⇒ stale config.
+  MCP `list_issue_statuses(team:<team>)`, GraphQL
+  `workflowStates(first:100, filter:{team:{name:{eq:$team}}}){ nodes { name } }`
+  (explicit `first:` — every `{nodes}` field is a connection). Present ⇒ genuine
+  not-ready, clear the flag. Absent ⇒ stale config.
 - **GitHub** — the label must exist in the repo's label namespace:
- `gh label list -R "$REPO" --search "$READY_LABEL" --json name` (search is
- substring — compare the returned names case-insensitively for an exact match).
- Present ⇒ genuine not-ready. Absent from the repo ⇒ stale config.
+  `gh label list -R "$REPO" --search "$READY_LABEL" --json name` (search is
+  substring — compare the returned names case-insensitively for an exact match).
+  Present ⇒ genuine not-ready. Absent from the repo ⇒ stale config.
 - **GitLab** — the label must exist in the project's label namespace, read via the
- **resolved rung** (glab when installed, else the token-only raw-REST floor — never
- hard-require glab; gitlab.md § header ladder): glab →
- `glab api ${HOST:+--hostname "$HOST"} "projects/$ENC/labels?search=$READY_ENC"`, or raw
- REST → `curl -sS --header "$GL_HDR" "https://${HOST:-gitlab.com}/api/v4/projects/$ENC/labels?search=$READY_ENC"`
- (`$GL_HDR` prefers the write-scoped `GITLAB_TOKEN`), then `| jq -r '.[].name'`
- (`search` is substring — compare case-insensitively for an exact match; `READY_ENC`
- is the `@uri`-encoded label). Present ⇒ genuine not-ready. Absent from the project ⇒
- stale config.
+  **resolved rung** (glab when installed, else the token-only raw-REST floor — never
+  hard-require glab; gitlab.md § header ladder): glab →
+  `glab api ${HOST:+--hostname "$HOST"} "projects/$ENC/labels?search=$READY_ENC"`, or raw
+  REST → `curl -sS --header "$GL_HDR" "https://${HOST:-gitlab.com}/api/v4/projects/$ENC/labels?search=$READY_ENC"`
+  (`$GL_HDR` prefers the write-scoped `GITLAB_TOKEN`), then `| jq -r '.[].name'`
+  (`search` is substring — compare case-insensitively for an exact match; `READY_ENC`
+  is the `@uri`-encoded label). Present ⇒ genuine not-ready. Absent from the project ⇒
+  stale config.
 - **Jira** — like Linear (a workflow-state name, not a label), the configured status
- name must still **exist in the project's workflow**. Read the project's statuses via
- the persisted-scheme auth ([jira.md](jira.md) § Auth):
- `curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json"
- "$JIRA_BASE/rest/api/$APIV/project/$PROJ_KEY/statuses"` returns the issue types each
- with their `statuses[]` (`{name, id, statusCategory}`); collect every `.statuses[].name`
- and compare case-insensitively/trimmed for an exact match against `readyState`.
- Present ⇒ genuine not-ready, clear the flag. **Absent from the project ⇒ stale
- config** (the status was renamed/removed) — warn + noop, never mass-un-ready.
+  name must still **exist in the project's workflow**. Read the project's statuses via
+  the persisted-scheme auth ([jira.md](jira.md) § Auth):
+  `curl -sS "${JK[@]}" "${JAUTH[@]}" -H "Accept: application/json"
+  "$JIRA_BASE/rest/api/$APIV/project/$PROJ_KEY/statuses"` returns the issue types each
+  with their `statuses[]` (`{name, id, statusCategory}`); collect every `.statuses[].name`
+  and compare case-insensitively/trimmed for an exact match against `readyState`.
+  Present ⇒ genuine not-ready, clear the flag. **Absent from the project ⇒ stale
+  config** (the status was renamed/removed) — warn + noop, never mass-un-ready.
 
 Stale config ⇒ **warn + `noop` receipt + flag untouched + the rest of the sync
 continues** — graceful degradation, same posture as the unmapped-state path above
@@ -471,21 +471,21 @@ un-ready every linked spec):
 
 ```bash
 $FLOWCTL sync receipt "$SPEC_ID" --status noop --transport "$TRANSPORT" ${EVENT:+--event "$EVENT"} \
- --note "readiness: configured readyState '<name>' not found on the tracker — flag untouched; fix tracker.readyState"
+  --note "readiness: configured readyState '<name>' not found on the tracker — flag untouched; fix tracker.readyState"
 ```
 
 ### Invariants (load-bearing)
 
 - **Never write readiness back to the tracker.** No `setStatus`, no label
- add/remove is ever driven by the local `ready` flag. A local `flowctl spec
- ready` on a tracker-connected repo is overwritten by the next sync — the
- tracker is authoritative (which is why the capture/interview mark-ready prompt
- is gated off when `readyState` is configured).
+  add/remove is ever driven by the local `ready` flag. A local `flowctl spec
+  ready` on a tracker-connected repo is overwritten by the next sync — the
+  tracker is authoritative (which is why the capture/interview mark-ready prompt
+  is gated off when `readyState` is configured).
 - **Readiness receipts are local-only** — never posted as tracker comments
- (readiness is not a lifecycle comment; tracker-side comment text also gets
- auto-linkified/rewritten, so it could never round-trip cleanly anyway).
+  (readiness is not a lifecycle comment; tracker-side comment text also gets
+  auto-linkified/rewritten, so it could never round-trip cleanly anyway).
 - The projection never advances `lastSyncedAt` by itself, never blocks, and never
- aborts the run — body/status/comments reconcile exactly as before.
+  aborts the run — body/status/comments reconcile exactly as before.
 
 ## Worked fixtures (runnable without a live tracker)
 
@@ -556,12 +556,12 @@ deadlock check fires **first** in the reconcile loop (before terminal-wins), it 
 NOT auto-closed by the tracker-wins-terminal rule — it resolves via
 `tracker.conflictTiebreak`:
 - `always-ask` (default) → **interactive ask** / **Ralph `sync defer`** (queue,
- `diverged` receipt — see the `sync defer` block above). PASS iff exactly one
- scoped status deadlock is surfaced and **no** status is written.
+  `diverged` receipt — see the `sync defer` block above). PASS iff exactly one
+  scoped status deadlock is surfaced and **no** status is written.
 - `tracker-wins` → fold `done` into the spec (confident → `set-last-synced` +
- `merged` receipt). PASS iff the spec closes and state advances.
+  `merged` receipt). PASS iff the spec closes and state advances.
 - `flow-wins` → `setStatus(in-progress)` (confident → advance). PASS iff the board
- reopens and state advances.
+  reopens and state advances.
 
 ### Fixture S-F — unmapped custom state, warn + surface (R7)
 
@@ -692,19 +692,19 @@ wrote Done for ungated projects. Regression guard for Thread B.
 ## Boundaries
 
 - **This is the status/metadata layer, not the body merge or the transport.** The
- 3-way body merge is [body-merge.md](body-merge.md) (fn-52.4); the transport
- (`setStatus`/`readStatus` wire detail) is [linear-ladder.md](linear-ladder.md)
- (fn-52.3) / the GitHub adapter (fn-52.7). This file consumes the normalized
- `status` struct and applies the per-field policy.
+  3-way body merge is [body-merge.md](body-merge.md) (fn-52.4); the transport
+  (`setStatus`/`readStatus` wire detail) is [linear-ladder.md](linear-ladder.md)
+  (fn-52.3) / the GitHub adapter (fn-52.7). This file consumes the normalized
+  `status` struct and applies the per-field policy.
 - **Per-field who-wins — never one global rule.** Terminal → tracker; in-progress →
- flow; priority + `deferred`/`wontfix` + unmapped → surface, never auto-change.
+  flow; priority + `deferred`/`wontfix` + unmapped → surface, never auto-change.
 - **Status is never silently overwritten on a deadlock** — it falls back to the R1
- `conflictTiebreak`; `always-ask` queues in Ralph, prompts interactively.
+  `conflictTiebreak`; `always-ask` queues in Ralph, prompts interactively.
 - **State advances only on a successful reconcile.** A `setStatus` error, an
- unmapped state surfaced, or a queued deadlock does NOT advance `lastSyncedAt`.
+  unmapped state surfaced, or a queued deadlock does NOT advance `lastSyncedAt`.
 - **Native open records a manual reopen.** On GitHub and GitLab, a lone stale
- terminal `status:*` label cannot override the provider's open state. An
- ambiguous multi-label namespace still fails closed.
+  terminal `status:*` label cannot override the provider's open state. An
+  ambiguous multi-label namespace still fails closed.
 - **Readiness projection is one-way pull** (`tracker.readyState` → local `ready`
- flag, fn-58): change-only receipts, stale config warns + leaves the flag
- untouched, and readiness is never written back to the tracker.
+  flag, fn-58): change-only receipts, stale config warns + leaves the flag
+  untouched, and readiness is never written back to the tracker.

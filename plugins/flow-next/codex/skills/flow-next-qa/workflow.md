@@ -39,8 +39,8 @@ When `NO_PROMPT=1`, every `plain-text numbered prompt` info-prompt below routes 
 ```bash
 # Fail OPEN: an unset NO_PROMPT (gate above failed to compute) reads the reference.
 if [ "${NO_PROMPT:-1}" = "1" ]; then
- echo "AUTONOMOUS GATE ACTIVE — STOP. Read references/autonomy.md#0-the-autonomous-routing-table-no_prompt1 before continuing."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "AUTONOMOUS GATE ACTIVE — STOP. Read references/autonomy.md#0-the-autonomous-routing-table-no_prompt1 before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, STOP and Read [references/autonomy.md](references/autonomy.md) (§0, the per-fact routing table) before any further step. When the gate is silent (`NO_PROMPT=0`, interactive), continue — every prompt path below asks the user as written.
@@ -59,16 +59,16 @@ When the sentinel prints, STOP and Read [references/autonomy.md](references/auto
 
 ```bash
 if [[ -z "$SPEC_ID" ]]; then
- CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
- if [[ -n "$CURRENT_BRANCH" ]]; then
- SPEC_ID=$(
- { find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null
- find "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null
- } \
- | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
- 'select(.branch_name == $b) | .id' {} 2>/dev/null \
- | head -1)
- fi
+  CURRENT_BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
+  if [[ -n "$CURRENT_BRANCH" ]]; then
+    SPEC_ID=$(
+      { find "$REPO_ROOT/.flow/specs" -maxdepth 1 -name '*.json' 2>/dev/null
+        find "$REPO_ROOT/.flow/epics" -maxdepth 1 -name '*.json' 2>/dev/null
+      } \
+      | xargs -I{} jq -r --arg b "$CURRENT_BRANCH" \
+          'select(.branch_name == $b) | .id' {} 2>/dev/null \
+      | head -1)
+  fi
 fi
 ```
 
@@ -78,7 +78,7 @@ Validate the resolved id is a spec (not a task):
 
 ```bash
 $FLOWCTL show "$SPEC_ID" --json | jq -e '.tasks != null' >/dev/null \
- || { echo "Not a spec: $SPEC_ID (QA runs against a spec, not a single task)." >&2; exit 1; }
+  || { echo "Not a spec: $SPEC_ID (QA runs against a spec, not a single task)." >&2; exit 1; }
 ```
 
 ### 1.2 — Resolve the diff base + pull the cognitive-aid payload
@@ -96,66 +96,66 @@ $FLOWCTL show "$SPEC_ID" --json | jq -e '.tasks != null' >/dev/null \
 # before the cascade, so the detection only runs when nothing was passed.
 DEFAULT_BRANCH="${QA_BASE_REF:-}"
 if [[ -z "$DEFAULT_BRANCH" ]]; then
- for candidate in origin/main main origin/master master; do
- if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
- DEFAULT_BRANCH="$candidate"; break
- fi
- done
+  for candidate in origin/main main origin/master master; do
+    if git -C "$REPO_ROOT" rev-parse --verify --quiet "$candidate" >/dev/null 2>&1; then
+      DEFAULT_BRANCH="$candidate"; break
+    fi
+  done
 fi
 # Fall back to the repo's ACTUAL default branch when it isn't named main/master
 # (develop, trunk, …). `origin/HEAD` is the remote's recorded default; resolve it
 # to `origin/<branch>` and verify the ref actually exists. `git remote set-head
 # origin -a` repairs an unset symbolic-ref on clones that never recorded one.
 if [[ -z "$DEFAULT_BRANCH" ]]; then
- ORIGIN_HEAD="$(git -C "$REPO_ROOT" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
- | sed 's#^refs/remotes/##')"
- if [[ -z "$ORIGIN_HEAD" ]]; then
- git -C "$REPO_ROOT" remote set-head origin -a >/dev/null 2>&1 || true
- ORIGIN_HEAD="$(git -C "$REPO_ROOT" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
- | sed 's#^refs/remotes/##')"
- fi
- if [[ -n "$ORIGIN_HEAD" ]] && git -C "$REPO_ROOT" rev-parse --verify --quiet "$ORIGIN_HEAD" >/dev/null 2>&1; then
- DEFAULT_BRANCH="$ORIGIN_HEAD"
- fi
+  ORIGIN_HEAD="$(git -C "$REPO_ROOT" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
+    | sed 's#^refs/remotes/##')"
+  if [[ -z "$ORIGIN_HEAD" ]]; then
+    git -C "$REPO_ROOT" remote set-head origin -a >/dev/null 2>&1 || true
+    ORIGIN_HEAD="$(git -C "$REPO_ROOT" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null \
+      | sed 's#^refs/remotes/##')"
+  fi
+  if [[ -n "$ORIGIN_HEAD" ]] && git -C "$REPO_ROOT" rev-parse --verify --quiet "$ORIGIN_HEAD" >/dev/null 2>&1; then
+    DEFAULT_BRANCH="$ORIGIN_HEAD"
+  fi
 fi
 # Still nothing — ask the user for the base (interactive), or hard-error under
 # Ralph. Mirrors make-pr §0.3: never silently exit on an unusual default branch.
-QA_OUTCOME="" # set non-empty here ONLY to short-circuit to the BLOCKED receipt (autonomous no-base path)
+QA_OUTCOME=""   # set non-empty here ONLY to short-circuit to the BLOCKED receipt (autonomous no-base path)
 if [[ -z "$DEFAULT_BRANCH" ]]; then
- if [[ "${NO_PROMPT:-0}" == "1" ]]; then
- # Autonomous / Ralph: no user to ask. An undetectable base ref means scenarios
- # cannot be derived → surface a BLOCKED qa_verdict (the Autonomous-mode gate
- # table), never a prompt, never a hang. Short-circuit straight to the §6.3
- # writer (skip the rev-parse validation + payload pull below) with:
- # QA_OUTCOME=BLOCKED, BLOCKED_REASON="no base branch detected (…); pass --base".
- echo "No base branch detected (origin/main, main, origin/master, master, origin/HEAD all missing). Emitting BLOCKED qa_verdict; pass an explicit --base to QA." >&2
- QA_OUTCOME="BLOCKED"
- BLOCKED_REASON="no base branch detected (origin/main, main, origin/master, master, origin/HEAD all missing) — pass an explicit --base"
- else
- # Interactive: ask for the base ref via plain-text numbered prompt (info prompt — no frozen
- # options; accept a typed ref). Validate the answer with rev-parse below; on
- # abort, exit 1. (sync-codex.sh rewrites plain-text numbered prompt to a numbered prompt.)
- : "ask user for DEFAULT_BRANCH via plain-text numbered prompt; on abort exit 1"
- fi
+  if [[ "${NO_PROMPT:-0}" == "1" ]]; then
+    # Autonomous / Ralph: no user to ask. An undetectable base ref means scenarios
+    # cannot be derived → surface a BLOCKED qa_verdict (the Autonomous-mode gate
+    # table), never a prompt, never a hang. Short-circuit straight to the §6.3
+    # writer (skip the rev-parse validation + payload pull below) with:
+    #   QA_OUTCOME=BLOCKED, BLOCKED_REASON="no base branch detected (…); pass --base".
+    echo "No base branch detected (origin/main, main, origin/master, master, origin/HEAD all missing). Emitting BLOCKED qa_verdict; pass an explicit --base to QA." >&2
+    QA_OUTCOME="BLOCKED"
+    BLOCKED_REASON="no base branch detected (origin/main, main, origin/master, master, origin/HEAD all missing) — pass an explicit --base"
+  else
+    # Interactive: ask for the base ref via plain-text numbered prompt (info prompt — no frozen
+    # options; accept a typed ref). Validate the answer with rev-parse below; on
+    # abort, exit 1. (sync-codex.sh rewrites plain-text numbered prompt to a numbered prompt.)
+    : "ask user for DEFAULT_BRANCH via plain-text numbered prompt; on abort exit 1"
+  fi
 fi
 # When the autonomous no-base path set QA_OUTCOME=BLOCKED, skip the rest of Phase 1.2
 # and Phase 2 entirely — jump to §6.3 to write the BLOCKED receipt and exit clean.
 # (The host treats a non-empty QA_OUTCOME here as the terminal short-circuit.)
 if [[ "$QA_OUTCOME" == "BLOCKED" ]]; then
- : "→ skip to Phase 6.3: write BLOCKED qa_verdict, exit clean"
+  : "→ skip to Phase 6.3: write BLOCKED qa_verdict, exit clean"
 else
- # Validate the resolved/typed base actually exists before computing the merge-base.
- if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$DEFAULT_BRANCH" >/dev/null 2>&1; then
- echo "Base ref '$DEFAULT_BRANCH' is not a valid git ref. Check with: git rev-parse --verify $DEFAULT_BRANCH" >&2
- exit 1
- fi
+  # Validate the resolved/typed base actually exists before computing the merge-base.
+  if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$DEFAULT_BRANCH" >/dev/null 2>&1; then
+    echo "Base ref '$DEFAULT_BRANCH' is not a valid git ref. Check with: git rev-parse --verify $DEFAULT_BRANCH" >&2
+    exit 1
+  fi
 fi
 # Diff base = the merge-base, so a branch that's behind the default still gets a
 # stable base. Fall back to the default branch itself if no merge-base exists.
 # (Only runs when not short-circuited to BLOCKED above.)
 if [[ "$QA_OUTCOME" != "BLOCKED" ]]; then
- BASE_REF="$(git -C "$REPO_ROOT" merge-base "$DEFAULT_BRANCH" HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
- PAYLOAD="$($FLOWCTL spec export-cognitive-aid "$SPEC_ID" --base "$BASE_REF" --json)" # full payload — tasks[] is the evidence source for §2.0
+  BASE_REF="$(git -C "$REPO_ROOT" merge-base "$DEFAULT_BRANCH" HEAD 2>/dev/null || echo "$DEFAULT_BRANCH")"
+  PAYLOAD="$($FLOWCTL spec export-cognitive-aid "$SPEC_ID" --base "$BASE_REF" --json)"  # full payload — tasks[] is the evidence source for §2.0
 fi
 ```
 
@@ -247,12 +247,12 @@ Each derived scenario is recorded as:
 
 ```
 S<n>:
- r_ids: [R<i>, ...] # which AC it exercises
- persona: <who — a fresh real user>
- goal: <what they're trying to do>
- steps: [<observable user action>, ...]
- expected: <from decision_context / AC — what the live app should do>
- excluded_by: [<boundary text>, ...] # only if a boundary trims this scenario
+  r_ids:    [R<i>, ...]        # which AC it exercises
+  persona:  <who — a fresh real user>
+  goal:     <what they're trying to do>
+  steps:    [<observable user action>, ...]
+  expected: <from decision_context / AC — what the live app should do>
+  excluded_by: [<boundary text>, ...]   # only if a boundary trims this scenario
 ```
 
 Scenarios carry forward to Phase 3 (prepare) and Phase 4 (execute). At least one scenario (or an explicit "no UI-observable AC → N/A" determination) must exist before leaving Phase 2.
@@ -424,11 +424,11 @@ Rule 426 ("SHIP is forbidden without captured evidence") is load-bearing but was
 
 ```bash
 if [[ "$QA_OUTCOME" == "SHIP" ]]; then
- EVIDENCE_COUNT="$(find ".flow/tmp/qa-${SPEC_ID}" -maxdepth 1 -type f \( -name '*.png' -o -name '*.log' \) 2>/dev/null | wc -l | tr -d ' ')"
- if [[ "${EVIDENCE_COUNT:-0}" -eq 0 ]]; then
- QA_OUTCOME="BLOCKED"
- BLOCKED_REASON="SHIP claimed without captured live-app evidence — no screenshot/console artifact under .flow/tmp/qa-${SPEC_ID}/ (R1: PASS rests on evidence, never narration)"
- fi
+  EVIDENCE_COUNT="$(find ".flow/tmp/qa-${SPEC_ID}" -maxdepth 1 -type f \( -name '*.png' -o -name '*.log' \) 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${EVIDENCE_COUNT:-0}" -eq 0 ]]; then
+    QA_OUTCOME="BLOCKED"
+    BLOCKED_REASON="SHIP claimed without captured live-app evidence — no screenshot/console artifact under .flow/tmp/qa-${SPEC_ID}/ (R1: PASS rests on evidence, never narration)"
+  fi
 fi
 ```
 
@@ -465,16 +465,16 @@ The receipt is the **only committed persisted output** (no new artifact, no new 
 ```bash
 # QA_OUTCOME ∈ {SHIP,NEEDS_WORK,NA,BLOCKED} from §6.1; project to the enum (§6.2).
 case "$QA_OUTCOME" in
- SHIP) VERDICT="SHIP" ;;
- NEEDS_WORK) VERDICT="NEEDS_WORK" ;;
- BLOCKED) VERDICT="NEEDS_WORK" ;;
- NA) VERDICT="SHIP" ;;
- *) echo "Internal error: bad qa_outcome '$QA_OUTCOME'" >&2; exit 1 ;;
+  SHIP)       VERDICT="SHIP" ;;
+  NEEDS_WORK) VERDICT="NEEDS_WORK" ;;
+  BLOCKED)    VERDICT="NEEDS_WORK" ;;
+  NA)         VERDICT="SHIP" ;;
+  *) echo "Internal error: bad qa_outcome '$QA_OUTCOME'" >&2; exit 1 ;;
 esac
 
 # MODE describes the run context (informational; the guard does not gate on it):
-# ralph (REVIEW_RECEIPT_PATH set) | rp (--receipt passed) | interactive (default).
-if [ -n "${REVIEW_RECEIPT_PATH:-}" ]; then MODE="ralph"
+#   ralph (REVIEW_RECEIPT_PATH set) | rp (--receipt passed) | interactive (default).
+if   [ -n "${REVIEW_RECEIPT_PATH:-}" ]; then MODE="ralph"
 elif [ -n "${QA_RECEIPT_OVERRIDE:-}" ]; then MODE="rp"
 else MODE="interactive"; fi
 
@@ -484,10 +484,10 @@ RECEIPT_INPUT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-receipt.XXXXXX.json")"
 QA_REVIEW_FILE="$(mktemp "${TMPDIR:-/tmp}/flow-qa-review.XXXXXX.md")"
 PRIOR_RECEIPT="$(mktemp "${TMPDIR:-/tmp}/flow-qa-prior.XXXXXX.json")"
 if [[ -f "$RECEIPT_PATH" ]]; then
- cp "$RECEIPT_PATH" "$PRIOR_RECEIPT"
+  cp "$RECEIPT_PATH" "$PRIOR_RECEIPT"
 else
- rm -f "$PRIOR_RECEIPT"
- PRIOR_RECEIPT=""
+  rm -f "$PRIOR_RECEIPT"
+  PRIOR_RECEIPT=""
 fi
 
 # Freshness key (R1b) + orientation. HEAD is resolved at QA time; a detached/empty
@@ -497,43 +497,43 @@ BRANCH="$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")"
 
 # QA_FINDINGS = JSON ARRAY OF every P0/P1/P2 finding from Phase 5.
 # OPEN_P0P1 = verdict-facing subset:
-# [{"id","severity","confidence","classification","reason","file"}, …];
-# default "[]". RID_COVERAGE = the §2.2 spine as JSON:
-# {"covered":N,"total":M,"rids":[{"id":"R1","coverage":"live"}, …]}; default "{}".
+#   [{"id","severity","confidence","classification","reason","file"}, …];
+#   default "[]". RID_COVERAGE = the §2.2 spine as JSON:
+#   {"covered":N,"total":M,"rids":[{"id":"R1","coverage":"live"}, …]}; default "{}".
 # Both are JSON STRINGS here — python re-parses them so free-form fields are escaped.
 # Reason fields are set ONLY for their outcome (BLOCKED → blocked_reason, NA → na_reason).
 export QA_TYPE="qa_verdict" QA_ID="$SPEC_ID" QA_MODE="$MODE" QA_VERDICT="$VERDICT" \
- QA_OUTCOME HEAD_SHA BRANCH \
- QA_FINDINGS="${QA_FINDINGS:-[]}" OPEN_P0P1="${OPEN_P0P1:-[]}" \
- RID_COVERAGE="${RID_COVERAGE:-{}}" \
- BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
+       QA_OUTCOME HEAD_SHA BRANCH \
+       QA_FINDINGS="${QA_FINDINGS:-[]}" OPEN_P0P1="${OPEN_P0P1:-[]}" \
+       RID_COVERAGE="${RID_COVERAGE:-{}}" \
+       BLOCKED_REASON="${BLOCKED_REASON:-}" NA_REASON="${NA_REASON:-}"
 
 # Resolve Python 3.11+ once (functionality/version probe — the Windows Store python3
 # alias stub satisfies `command -v` but exits 9009; the probe skips it). Order
 # mirrors the shared scripts/lib/pick-python.sh resolver.
 PY=""
 for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
- [ -n "$_c" ] || continue
- $_c -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1 && { PY="$_c"; break; }
+  [ -n "$_c" ] || continue
+  $_c -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1 && { PY="$_c"; break; }
 done
 [ -n "$PY" ] || { echo "qa: no working Python 3.11+ interpreter found (see Windows Python troubleshooting)" >&2; exit 1; }
 
 $PY - "$RECEIPT_INPUT" <<'PY'
 import datetime, json, os, sys
 r = {"type": os.environ["QA_TYPE"], "id": os.environ["QA_ID"],
- "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],
- "qa_outcome": os.environ["QA_OUTCOME"],
- "head_sha": os.environ.get("HEAD_SHA", ""), # R1b freshness key (pilot/.2 reads this)
- "branch": os.environ.get("BRANCH", ""),
- "rid_coverage": json.loads(os.environ.get("RID_COVERAGE") or "{}"),
- "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")}
+     "mode": os.environ["QA_MODE"], "verdict": os.environ["QA_VERDICT"],
+     "qa_outcome": os.environ["QA_OUTCOME"],
+     "head_sha": os.environ.get("HEAD_SHA", ""),     # R1b freshness key (pilot/.2 reads this)
+     "branch": os.environ.get("BRANCH", ""),
+     "rid_coverage": json.loads(os.environ.get("RID_COVERAGE") or "{}"),
+     "open_p0p1": json.loads(os.environ.get("OPEN_P0P1") or "[]")}
 if os.environ["QA_OUTCOME"] == "BLOCKED" and os.environ.get("BLOCKED_REASON"):
- r["blocked_reason"] = os.environ["BLOCKED_REASON"] # json.dump escapes free-form text
+    r["blocked_reason"] = os.environ["BLOCKED_REASON"]   # json.dump escapes free-form text
 if os.environ["QA_OUTCOME"] == "NA" and os.environ.get("NA_REASON"):
- r["na_reason"] = os.environ["NA_REASON"]
+    r["na_reason"] = os.environ["NA_REASON"]
 r["timestamp"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
- json.dump(r, fh); fh.write("\n")
+    json.dump(r, fh); fh.write("\n")
 PY
 
 $PY - "$QA_REVIEW_FILE" "${PRIOR_RECEIPT:-}" <<'PY'
@@ -541,89 +541,89 @@ import json, os, sys
 items = json.loads(os.environ.get("QA_FINDINGS") or "[]")
 current = {}
 for item in items:
- required = {"id", "severity", "confidence", "classification", "reason", "file"}
- if not isinstance(item, dict) or not required <= set(item):
- raise SystemExit("qa: open finding lacks v1 fields")
- finding_id = item["id"]
- if not isinstance(finding_id, str) or not finding_id or finding_id in current:
- raise SystemExit("qa: finding ids must be unique non-empty strings")
- current[finding_id] = item
+    required = {"id", "severity", "confidence", "classification", "reason", "file"}
+    if not isinstance(item, dict) or not required <= set(item):
+        raise SystemExit("qa: open finding lacks v1 fields")
+    finding_id = item["id"]
+    if not isinstance(finding_id, str) or not finding_id or finding_id in current:
+        raise SystemExit("qa: finding ids must be unique non-empty strings")
+    current[finding_id] = item
 
 prior_items = []
 prior_path = sys.argv[2] if len(sys.argv) > 2 else ""
 if prior_path:
- try:
- with open(prior_path, encoding="utf-8") as fh:
- prior_receipt = json.load(fh)
- prior_findings = prior_receipt.get("findings", {})
- if (
- prior_receipt.get("type") == os.environ["QA_TYPE"]
- and prior_receipt.get("id") == os.environ["QA_ID"]
- and prior_receipt.get("mode") == os.environ["QA_MODE"]
- and prior_findings.get("schemaVersion") == 1
- and isinstance(prior_findings.get("items"), list)
- ):
- prior_items = prior_findings["items"]
- except (OSError, TypeError, ValueError, json.JSONDecodeError):
- prior_items = []
+    try:
+        with open(prior_path, encoding="utf-8") as fh:
+            prior_receipt = json.load(fh)
+        prior_findings = prior_receipt.get("findings", {})
+        if (
+            prior_receipt.get("type") == os.environ["QA_TYPE"]
+            and prior_receipt.get("id") == os.environ["QA_ID"]
+            and prior_receipt.get("mode") == os.environ["QA_MODE"]
+            and prior_findings.get("schemaVersion") == 1
+            and isinstance(prior_findings.get("items"), list)
+        ):
+            prior_items = prior_findings["items"]
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        prior_items = []
 
 lines = []
 known_ids = set()
 for prior in sorted(prior_items, key=lambda item: item.get("ordinal", 0)):
- finding_id = prior.get("title")
- ordinal = prior.get("ordinal")
- if (
- not isinstance(finding_id, str)
- or not isinstance(ordinal, int)
- or isinstance(ordinal, bool)
- or ordinal < 1
- or finding_id in known_ids
- ):
- prior_items = []
- lines = []
- known_ids = set()
- break
- known_ids.add(finding_id)
- if finding_id in current:
- status = "not_fixed"
- elif os.environ["QA_OUTCOME"] in {"BLOCKED", "NA"}:
- status = prior.get("status", "open")
- if status == "open":
- status = "not_fixed"
- else:
- status = "fixed"
- lines.append(f"Prior finding {ordinal} — {status}.")
+    finding_id = prior.get("title")
+    ordinal = prior.get("ordinal")
+    if (
+        not isinstance(finding_id, str)
+        or not isinstance(ordinal, int)
+        or isinstance(ordinal, bool)
+        or ordinal < 1
+        or finding_id in known_ids
+    ):
+        prior_items = []
+        lines = []
+        known_ids = set()
+        break
+    known_ids.add(finding_id)
+    if finding_id in current:
+        status = "not_fixed"
+    elif os.environ["QA_OUTCOME"] in {"BLOCKED", "NA"}:
+        status = prior.get("status", "open")
+        if status == "open":
+            status = "not_fixed"
+    else:
+        status = "fixed"
+    lines.append(f"Prior finding {ordinal} — {status}.")
 
 for finding_id, item in current.items():
- if finding_id in known_ids:
- continue
- lines.extend([
- f"### {finding_id}",
- f"- **Severity**: {item['severity']}",
- f"- **Confidence**: {item['confidence']}",
- f"- **Classification**: {item['classification']}",
- f"- **Title**: {finding_id}",
- f"- **Problem**: {item['reason']} (surface: {item['file']})",
- "",
- ])
+    if finding_id in known_ids:
+        continue
+    lines.extend([
+        f"### {finding_id}",
+        f"- **Severity**: {item['severity']}",
+        f"- **Confidence**: {item['confidence']}",
+        f"- **Classification**: {item['classification']}",
+        f"- **Title**: {finding_id}",
+        f"- **Problem**: {item['reason']} (surface: {item['file']})",
+        "",
+    ])
 if not lines:
- lines.append("No findings.")
+    lines.append("No findings.")
 lines.append(f"<verdict>{os.environ['QA_VERDICT']}</verdict>")
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
- fh.write("\n".join(lines) + "\n")
+    fh.write("\n".join(lines) + "\n")
 PY
 PRIOR_ARGS=()
 [[ -n "$PRIOR_RECEIPT" ]] \
- && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT" --require-prior-current)
+  && PRIOR_ARGS=(--prior "$PRIOR_RECEIPT" --require-prior-current)
 if ! "$FLOWCTL" review-findings attach \
- --input "$RECEIPT_INPUT" \
- --receipt "$RECEIPT_PATH" \
- "${PRIOR_ARGS[@]}" \
- --review-file "$QA_REVIEW_FILE" \
- --head HEAD \
- --json >/dev/null; then
- rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
- exit 1
+  --input "$RECEIPT_INPUT" \
+  --receipt "$RECEIPT_PATH" \
+  "${PRIOR_ARGS[@]}" \
+  --review-file "$QA_REVIEW_FILE" \
+  --head HEAD \
+  --json >/dev/null; then
+  rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
+  exit 1
 fi
 rm -f "$RECEIPT_INPUT" "$QA_REVIEW_FILE" ${PRIOR_RECEIPT:+"$PRIOR_RECEIPT"}
 echo "QA_VERDICT_WRITTEN: $RECEIPT_PATH ($QA_OUTCOME → $VERDICT)"
@@ -639,14 +639,14 @@ When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ra
 
 ```bash
 if [ "$QA_AUTONOMOUS" = "1" ]; then
- # Receipt always; the filed memory paths only when non-empty (SHIP/NA/BLOCKED or
- # memory.enabled=false file none). Narrow pathspec — exactly QA's own files.
- RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"
- QA_HISTORY_PATHS=()
- [ -d "$RECEIPT_HISTORY_DIR" ] && QA_HISTORY_PATHS=("$RECEIPT_HISTORY_DIR")
- git -C "$REPO_ROOT" add -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
- git -C "$REPO_ROOT" diff --cached --quiet -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY} \
- || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SPEC_ID" -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+  # Receipt always; the filed memory paths only when non-empty (SHIP/NA/BLOCKED or
+  # memory.enabled=false file none). Narrow pathspec — exactly QA's own files.
+  RECEIPT_HISTORY_DIR="${RECEIPT_PATH}.history"
+  QA_HISTORY_PATHS=()
+  [ -d "$RECEIPT_HISTORY_DIR" ] && QA_HISTORY_PATHS=("$RECEIPT_HISTORY_DIR")
+  git -C "$REPO_ROOT" add -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
+  git -C "$REPO_ROOT" diff --cached --quiet -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY} \
+    || git -C "$REPO_ROOT" commit -m "chore(flow): qa verdict $SPEC_ID" -- "$RECEIPT_PATH" "${QA_HISTORY_PATHS[@]}" ${QA_FILED_MEMORY:+$QA_FILED_MEMORY}
 fi
 ```
 
@@ -691,14 +691,14 @@ After the Phase 6 verdict is written, optionally post it as a structured tracker
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$($FLOWCTL config get tracker.perEvent.qa --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$($FLOWCTL config get tracker.perEvent.qa --json 2>/dev/null)" || ACTIVE=1   # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- QA_LEAF="$(printf '%s' "$RAW" | jq -r '.value' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$QA_LEAF" != "off" ] && [ "$QA_LEAF" != "null" ] && ACTIVE=1
+  QA_LEAF="$(printf '%s' "$RAW" | jq -r '.value' 2>/dev/null)" || ACTIVE=1        # parse ERROR ⇒ ACTIVE
+  [ "$QA_LEAF" != "off" ] && [ "$QA_LEAF" != "null" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "TRACKER QA LEAF ACTIVE — STOP. Read references/autonomy.md#4-opt-in-tracker-verdict-post-trackerpereventqa-r9 and execute it before finishing."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "TRACKER QA LEAF ACTIVE — STOP. Read references/autonomy.md#4-opt-in-tracker-verdict-post-trackerpereventqa-r9 and execute it before finishing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, STOP and Read [references/autonomy.md](references/autonomy.md) (§4 — the bridge-active check, the body-file contract, and the single facade call) before any further step. The comment QA synthesizes always opens with the stable token `evidence=<tested-head-sha>` on its FIRST line, written to a mode 0600 temporary body file, never argv. When the gate is silent (leaf `off` — the default), continue: nothing is posted. The leaf accepts `off` | `comment` (default `off`); `comment` is the only verdict-meaningful verb, and any other non-`off` value coerces to `comment` (never `push`/`pull`/`reconcile`). The actual transport / comment dedup / receipt lives entirely in the **flow-next-tracker-sync** skill — Phase A only gates + delegates.

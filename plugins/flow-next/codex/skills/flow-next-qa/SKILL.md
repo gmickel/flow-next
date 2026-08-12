@@ -50,26 +50,26 @@ SPEC_ID=""
 # blocks (pilot dogfood finding, 1.13.0).
 PREV=""
 for ARG in $RAW_ARGS; do
- case "$PREV" in
- --target) QA_TARGET_URL="$ARG"; PREV=""; continue ;; # Phase 3.1 caller override
- --receipt) QA_RECEIPT_OVERRIDE="$ARG"; PREV=""; continue ;; # Phase 6.3 receipt path
- --base) QA_BASE_REF="$ARG"; PREV=""; continue ;; # §1.2 base-branch override
- esac
- case "$ARG" in
- --target|--receipt|--base) PREV="$ARG" ;;
- --target=*) QA_TARGET_URL="${ARG#--target=}" ;; # Phase 3.1 caller override
- --receipt=*) QA_RECEIPT_OVERRIDE="${ARG#--receipt=}" ;; # Phase 6.3 receipt path
- --base=*) QA_BASE_REF="${ARG#--base=}" ;; # §1.2 base-branch override
- mode:autonomous) QA_AUTONOMOUS=1 ;; # strip the literal token (see "Autonomous mode" below)
- -*) echo "Unknown flag: $ARG (reserved for a later task)" >&2 ;;
- *) [[ -z "$SPEC_ID" ]] && SPEC_ID="$ARG" ;;
- esac
+  case "$PREV" in
+    --target)  QA_TARGET_URL="$ARG"; PREV=""; continue ;;        # Phase 3.1 caller override
+    --receipt) QA_RECEIPT_OVERRIDE="$ARG"; PREV=""; continue ;;  # Phase 6.3 receipt path
+    --base)    QA_BASE_REF="$ARG"; PREV=""; continue ;;          # §1.2 base-branch override
+  esac
+  case "$ARG" in
+    --target|--receipt|--base) PREV="$ARG" ;;
+    --target=*)  QA_TARGET_URL="${ARG#--target=}" ;;        # Phase 3.1 caller override
+    --receipt=*) QA_RECEIPT_OVERRIDE="${ARG#--receipt=}" ;; # Phase 6.3 receipt path
+    --base=*)    QA_BASE_REF="${ARG#--base=}" ;;            # §1.2 base-branch override
+    mode:autonomous) QA_AUTONOMOUS=1 ;;                     # strip the literal token (see "Autonomous mode" below)
+    -*) echo "Unknown flag: $ARG (reserved for a later task)" >&2 ;;
+    *)  [[ -z "$SPEC_ID" ]] && SPEC_ID="$ARG" ;;
+  esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored)" >&2
 # Secondary autonomy signal: the FLOW_AUTONOMOUS=1 env var (process-level drivers
 # like the pilot stage). Either signal flips QA_AUTONOMOUS on.
 [[ "${FLOW_AUTONOMOUS:-}" == "1" ]] && QA_AUTONOMOUS=1
-export QA_TARGET_URL QA_RECEIPT_OVERRIDE QA_BASE_REF QA_AUTONOMOUS # carry the resolved overrides + autonomy into workflow.md (Phases 3.1 / 6.3 / §1.2 + the preamble)
+export QA_TARGET_URL QA_RECEIPT_OVERRIDE QA_BASE_REF QA_AUTONOMOUS   # carry the resolved overrides + autonomy into workflow.md (Phases 3.1 / 6.3 / §1.2 + the preamble)
 ```
 
 When `SPEC_ID` is empty, the **discover** phase resolves it (branch-match, or by asking the user via `plain-text numbered prompt` as an info prompt) — never silently default.

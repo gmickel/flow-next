@@ -18,10 +18,10 @@ Probe availability first (subcommand ships in a later task on some trees):
 ```bash
 LOCATE_HELP=$("$FLOWCTL" chart locate --help 2>&1) || true
 if printf '%s' "$LOCATE_HELP" | grep -qiE 'locate|usage:'; then
- LOCATE_JSON=$("$FLOWCTL" chart locate "$SELECTOR" --json 2>/dev/null) || LOCATE_JSON=""
+  LOCATE_JSON=$("$FLOWCTL" chart locate "$SELECTOR" --json 2>/dev/null) || LOCATE_JSON=""
 else
- LOCATE_JSON=""
- # Degrade: ask for the local chart id; never invent identity from the URL title.
+  LOCATE_JSON=""
+  # Degrade: ask for the local chart id; never invent identity from the URL title.
 fi
 ```
 

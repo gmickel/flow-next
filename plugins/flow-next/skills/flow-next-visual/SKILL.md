@@ -1,6 +1,7 @@
 ---
 name: flow-next-visual
 description: "Restate a spec, a task, a diff, or the current topic visually as a compact markdown digest. Use when asked to 'show me', 'explain this visually', 'restate that', 'digest the plan', 'walk me through the spec', 'walk me through the tasks', 'walk me through the diff', or when the output is too much text and a shape would land faster. Triggers on /flow-next:visual with an optional spec id, task id, git range, or free-form topic."
+user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob
 ---
 

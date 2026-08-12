@@ -85,9 +85,9 @@ $FLOWCTL tasks --spec "<spec-id>" --json
 ```
 
 1. First, find a **source task** to anchor drift detection (agent requires `COMPLETED_TASK_ID`):
- - Prefer most recently updated task with `status: done`
- - Else: most recently updated task with `status: in_progress`
- - Else: error "No completed or in-progress tasks to sync from. Complete a task first."
+   - Prefer most recently updated task with `status: done`
+   - Else: most recently updated task with `status: in_progress`
+   - Else: error "No completed or in-progress tasks to sync from. Complete a task first."
 
 2. Then filter remaining tasks to `status: todo` or `status: blocked` (these are downstream).
 
@@ -108,9 +108,9 @@ Three extra context types help the agent catch drift the spec text alone can't r
 
 ```bash
 GLOSSARY_JSON="$("$FLOWCTL" glossary list --json 2>/dev/null \
- || echo '{"groups":[],"file_count":0,"total_terms":0}')"
+  || echo '{"groups":[],"file_count":0,"total_terms":0}')"
 DECISIONS_JSON="$("$FLOWCTL" memory list --track knowledge --category decisions --json 2>/dev/null \
- || echo '{"entries":[],"legacy":[],"count":0,"status":"active"}')"
+  || echo '{"entries":[],"legacy":[],"count":0,"status":"active"}')"
 STRATEGY_CONTENT="$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')"
 ```
 

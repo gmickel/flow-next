@@ -80,22 +80,22 @@ line. The marker is the canonical dedup key and the back-reference all at once:
 ```
 
 - `issue=<issue-uuid>` — the tracker issue's stable UUID. **Primary, linkify-safe
- dedup key** (a UUID is not an issue-key pattern, so trackers never rewrite it —
- see "Linkify hazard" below). Match on `issue` + `evt` + `evidence`.
+  dedup key** (a UUID is not an issue-key pattern, so trackers never rewrite it —
+  see "Linkify hazard" below). Match on `issue` + `evt` + `evidence`.
 - `spec=<spec-id>` — the flow spec this comment belongs to (e.g. `fn-42-add-oauth`
- or `wor-17-slug`). **For readability + the back-reference only — never the sole
- match key.** A tracker-first id (`wor-17-slug`) embeds the tracker key, which the
- tracker auto-linkifies (next note), mangling a literal `spec=` match.
+  or `wor-17-slug`). **For readability + the back-reference only — never the sole
+  match key.** A tracker-first id (`wor-17-slug`) embeds the tracker key, which the
+  tracker auto-linkifies (next note), mangling a literal `spec=` match.
 - `evt=<event>` — the lifecycle event (`work.done`, `makePr`,
- `completionReview`, …) — the **shorthand the adapter surfaces as the normalized
- `comment.marker` (`flow-evt:<event>`)**.
+  `completionReview`, …) — the **shorthand the adapter surfaces as the normalized
+  `comment.marker` (`flow-evt:<event>`)**.
 - `evidence=<stable-token>` — the caller-owned occurrence identity: a
- task/evidence commit, reviewed or tested head, spec-content fingerprint, or
- merge commit. Every synthesized lifecycle comment input starts with this
- whitespace-free token; missing, empty, or placeholder evidence is rejected
- before a provider call. This makes a *re-post of the same occurrence*
- detectable even if the surrounding prose changed without collapsing later
- occurrences of the same event.
+  task/evidence commit, reviewed or tested head, spec-content fingerprint, or
+  merge commit. Every synthesized lifecycle comment input starts with this
+  whitespace-free token; missing, empty, or placeholder evidence is rejected
+  before a provider call. This makes a *re-post of the same occurrence*
+  detectable even if the surrounding prose changed without collapsing later
+  occurrences of the same event.
 
 **Retry rule — re-check before ANY re-post.** A post whose response you failed to
 parse may still have LANDED (body-escaping bugs corrupt the response read, not the
@@ -174,15 +174,15 @@ pastes the evidence block into a *new* tracker comment, or into the body) — it
 **normalized-text hash**:
 
 1. **Normalize** the comment text: strip the marker line, lowercase, collapse runs
- of whitespace to a single space, trim, drop trailing punctuation-only lines.
- (Normalization is what avoids a *whitespace false-new* — a paste with different
- indentation/line-wrapping must hash identically to the original.)
+   of whitespace to a single space, trim, drop trailing punctuation-only lines.
+   (Normalization is what avoids a *whitespace false-new* — a paste with different
+   indentation/line-wrapping must hash identically to the original.)
 2. **Hash** the normalized text (the same `_content_hash` flowctl uses for body
- echo-suppression — reuse it, don't invent a second hasher).
+   echo-suppression — reuse it, don't invent a second hasher).
 3. Maintain a **seen-set** of normalized hashes for every flow-posted comment.
- Before importing a marker-less tracker comment into the sync log, compute its
- normalized hash; **if it matches a flow-posted comment's hash → it's a paste of
- flow's own content → do NOT import** (and do not re-post).
+   Before importing a marker-less tracker comment into the sync log, compute its
+   normalized hash; **if it matches a flow-posted comment's hash → it's a paste of
+   flow's own content → do NOT import** (and do not re-post).
 
 This is the layer that makes "a human-pasted copy of a flow comment must not be
 re-posted/re-imported" (R8) actually hold.
@@ -192,24 +192,24 @@ re-posted/re-imported" (R8) actually hold.
 ```
 # PULL (tracker → flow sync log):
 for c in listComments(trackerId):
- if c.marker != null: continue # Layer 1: flow's own marked comment — skip
- # (flow-evt:<event> / flow-evt:question / flow-evt:status)
- if c carries flow-next:answer id=<id>: # human ANSWER (marker stays null): the round-trip
- claim it by <id> for the question-valve (steps.md Phase 7) BEFORE Sync-Log;
- if it MATCHED an open question: continue # imported under ## Open Questions, not the Sync Log
- # else (no matching open question) fall through — it is a genuine comment
- if c.id ∈ postedIds: continue # Layer 2: known flow-originated id — skip
- if normHash(c.body) ∈ seenSet: continue # Layer 3: human paste of flow content — skip
- append c to the spec's ## Sync Log # a genuine tracker-side comment
+  if c.marker != null:            continue   # Layer 1: flow's own marked comment — skip
+                                             #   (flow-evt:<event> / flow-evt:question / flow-evt:status)
+  if c carries flow-next:answer id=<id>:     # human ANSWER (marker stays null): the round-trip
+     claim it by <id> for the question-valve (steps.md Phase 7) BEFORE Sync-Log;
+     if it MATCHED an open question:  continue   # imported under ## Open Questions, not the Sync Log
+     # else (no matching open question) fall through — it is a genuine comment
+  if c.id ∈ postedIds:            continue   # Layer 2: known flow-originated id — skip
+  if normHash(c.body) ∈ seenSet:  continue   # Layer 3: human paste of flow content — skip
+  append c to the spec's ## Sync Log         # a genuine tracker-side comment
 
 # POST (flow → tracker):
 marker = "<!-- flow-next:sync issue=<uuid> spec=<id> evt=<event> evidence=<stable-token> -->"
-existing = listComments(trackerId) # normalize each body first: strip <issue …>KEY</issue> → KEY
-if any(e has marker with same issue+evt+evidence): skip # Layer 1 exact-match: already posted
+existing = listComments(trackerId)               # normalize each body first: strip <issue …>KEY</issue> → KEY
+if any(e has marker with same issue+evt+evidence):  skip   # Layer 1 exact-match: already posted
 else:
- body = marker + "\n\n" + <structured comment text>
- posted = postComment(trackerId, body)
- record posted.id in postedIds; record normHash(body) in seenSet
+  body = marker + "\n\n" + <structured comment text>
+  posted = postComment(trackerId, body)
+  record posted.id in postedIds; record normHash(body) in seenSet
 ```
 
 `lastSyncedAt` advances on a real TWO-WAY comment reconcile (a genuine import, or
@@ -263,43 +263,43 @@ Backlog mode's `ask` stage posts a **question-valve comment** through this same
 dedup but is keyed on a stable `id` rather than `issue+evt+evidence`:
 
 ```html
-<!-- flow-next:question id=<hash> status=open --> <!-- the parked question -->
-<!-- flow-next:answer id=<hash> --> <!-- a human's reply, matched by id -->
+<!-- flow-next:question id=<hash> status=open -->     <!-- the parked question -->
+<!-- flow-next:answer   id=<hash> -->                 <!-- a human's reply, matched by id -->
 ```
 
 - **`id` hashes STABLE fields only** — `subjectId` + blocked-stage + `reasonCode` +
- `questionSlug` (the question authoring lives in [steps.md](../steps.md) Phase 7).
- `subjectId` = the spec id when spec-backed, else the opaque tracker **UUID** —
- **never a bare tracker key** (`WOR-17` / `#123`), because the linkify hazard above
- mangles keys even inside HTML comments. The **free-prose reason is OUTSIDE the
- hash**, so rephrasing the question never spawns a duplicate anchor.
+  `questionSlug` (the question authoring lives in [steps.md](../steps.md) Phase 7).
+  `subjectId` = the spec id when spec-backed, else the opaque tracker **UUID** —
+  **never a bare tracker key** (`WOR-17` / `#123`), because the linkify hazard above
+  mangles keys even inside HTML comments. The **free-prose reason is OUTSIDE the
+  hash**, so rephrasing the question never spawns a duplicate anchor.
 - **Round-aware dedup by `id` (Layer 1).** Before posting a question,
- `listComments` and collect matching `flow-next:question` and
- `flow-next:answer` markers. Compare normalized immutable `created_at` values:
- latest question → **skip** (the subject is parked); latest answer → post a new
- question round with the same stable id. A mixed history with missing, invalid,
- or tied timestamps fails closed. This prevents both duplicate open questions
- and the opposite bug where an old answer suppresses every future round.
+  `listComments` and collect matching `flow-next:question` and
+  `flow-next:answer` markers. Compare normalized immutable `created_at` values:
+  latest question → **skip** (the subject is parked); latest answer → post a new
+  question round with the same stable id. A mixed history with missing, invalid,
+  or tied timestamps fails closed. This prevents both duplicate open questions
+  and the opposite bug where an old answer suppresses every future round.
 - **Concurrent dedup.** Before `listComments`, flowctl takes a local claim keyed
- by provider, durable issue id, and stable question id, and holds it through
- any post. A racing identical ask returns retryable `question_in_flight`; its
- retry then sees and deduplicates against the winner's open marker.
+  by provider, durable issue id, and stable question id, and holds it through
+  any post. A racing identical ask returns retryable `question_in_flight`; its
+  retry then sees and deduplicates against the winner's open marker.
 - **`flow-next:question` is flow-posted ⇒ the adapter sets `marker = flow-evt:question`
- ⇒ NOT pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
- comment, like every `flow-evt` comment; the adapter MUST detect it per the closed
- marker vocabulary in [adapter-interface.md](adapter-interface.md) § `comment`). The
- question's durable home is the spec `## Open Questions` (spec-backed) or the tracker
- comment itself (tracker-only) — never the Sync Log.
+  ⇒ NOT pulled into the Sync Log** (Layer 1 on pull — it is flow's own structured
+  comment, like every `flow-evt` comment; the adapter MUST detect it per the closed
+  marker vocabulary in [adapter-interface.md](adapter-interface.md) § `comment`). The
+  question's durable home is the spec `## Open Questions` (spec-backed) or the tracker
+  comment itself (tracker-only) — never the Sync Log.
 - **`flow-next:answer` is the HUMAN's reply** — it is genuine tracker-side content,
- but it is NOT a free-form Sync-Log comment: the answer round-trip
- ([steps.md](../steps.md) Phase 7) matches it to its open question **by `id`**
- (threaded via `comment.parentId` on Linear, or flat by the body marker on
- GitHub, GitLab **and Jira** — GitLab issue notes and Jira issue comments are flat,
- `parentId: null`, matched by the `<!-- flow-next:answer id=… -->` body marker exactly
- like GitHub) and imports it
- **under the matching `## Open Questions` entry**, flipping
- the question anchor to `status=answered`. An answer that matches no open question
- falls through to the normal Sync-Log append (a genuine tracker comment).
+  but it is NOT a free-form Sync-Log comment: the answer round-trip
+  ([steps.md](../steps.md) Phase 7) matches it to its open question **by `id`**
+  (threaded via `comment.parentId` on Linear, or flat by the body marker on
+  GitHub, GitLab **and Jira** — GitLab issue notes and Jira issue comments are flat,
+  `parentId: null`, matched by the `<!-- flow-next:answer id=… -->` body marker exactly
+  like GitHub) and imports it
+  **under the matching `## Open Questions` entry**, flipping
+  the question anchor to `status=answered`. An answer that matches no open question
+  falls through to the normal Sync-Log append (a genuine tracker comment).
 
 This is additive to the three-layer dedup — the question-valve markers are a second
 marker *vocabulary* on the same Layer-1 channel, not a new dedup mechanism.
@@ -316,13 +316,13 @@ flow **updates in place** (not appends) to show the current spec status at a gla
 ```
 
 - Identified by its **distinct** marker `flow-next:status … rolling` (NOT the
- `flow-next:sync` append marker) — so it is unmistakable and never collides with
- the append fence.
+  `flow-next:sync` append marker) — so it is unmistakable and never collides with
+  the append fence.
 - On each sync, **find the rolling comment by its marker and update that one
- comment** (the one place `postComment`'s update path / a `save_comment(id, body)`
- is used to edit rather than create); if none exists, create it once.
+  comment** (the one place `postComment`'s update path / a `save_comment(id, body)`
+  is used to edit rather than create); if none exists, create it once.
 - It reflects **only** derived status (the [status-sync.md](status-sync.md)
- normalized status + a task tally) — never user content, never evidence prose.
+  normalized status + a task tally) — never user content, never evidence prose.
 
 **Hard boundary:** this rolling comment is the **only** edit-in-place surface. It
 does **NOT** apply to evidence, lifecycle, or user comments — those stay strictly
@@ -448,22 +448,22 @@ threaded one.
 ## Boundaries
 
 - **This is the comments/evidence layer, not the body merge, status, or transport.**
- The 3-way body merge is [body-merge.md](body-merge.md) (fn-52.4); status who-wins
- is [status-sync.md](status-sync.md); the `postComment`/`listComments` wire detail
- is [linear-ladder.md](linear-ladder.md) (fn-52.3) / the GitHub adapter (fn-52.7).
+  The 3-way body merge is [body-merge.md](body-merge.md) (fn-52.4); status who-wins
+  is [status-sync.md](status-sync.md); the `postComment`/`listComments` wire detail
+  is [linear-ladder.md](linear-ladder.md) (fn-52.3) / the GitHub adapter (fn-52.7).
 - **Append-only is the default and the contract** — the rolling status comment is the
- SOLE edit-in-place exception, opt-in and droppable; it never weakens append-only
- for evidence / lifecycle / user comments.
+  SOLE edit-in-place exception, opt-in and droppable; it never weakens append-only
+  for evidence / lifecycle / user comments.
 - **Dedup is three independent layers** — marker (exact), stored id (durable),
- normalized-text hash (catches the human paste). Any hit ⇒ skip.
+  normalized-text hash (catches the human paste). Any hit ⇒ skip.
 - **The question-valve markers (fn-68 R15)** — `flow-next:question id=<hash>` /
- `flow-next:answer id=<hash>` — ride the Layer-1 channel keyed on a STABLE `id`
- (free prose outside the hash, never a bare tracker key). The authoring + answer
- round-trip live in [steps.md](../steps.md) Phase 7; this file owns their dedup +
- the `flow-next:answer`-vs-Sync-Log distinction.
+  `flow-next:answer id=<hash>` — ride the Layer-1 channel keyed on a STABLE `id`
+  (free prose outside the hash, never a bare tracker key). The authoring + answer
+  round-trip live in [steps.md](../steps.md) Phase 7; this file owns their dedup +
+  the `flow-next:answer`-vs-Sync-Log distinction.
 - **Never promote a tracker comment to an R-ID** — log it; promotion is a flow-
- authoring act (interview/plan), not a sync act. The bridge projects.
+  authoring act (interview/plan), not a sync act. The bridge projects.
 - **State advances only on a real reconcile** — a run that dedups to a no-op does not
- advance `lastSyncedAt`.
+  advance `lastSyncedAt`.
 - **Lifecycle wiring is fn-52.6** — this file defines the comment shape + dedup; the
- per-skill hooks that call it land there.
+  per-skill hooks that call it land there.

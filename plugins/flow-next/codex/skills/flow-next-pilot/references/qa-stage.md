@@ -23,23 +23,23 @@ Resolve `BRANCH_NAME` + `QA_FRESH` here; the `qa` decision itself is made in the
 QA_RECEIPT="$REPO_ROOT/.flow/review-receipts/qa-$SELECTED_SPEC.json"
 QA_FRESH=0
 if [ -f "$QA_RECEIPT" ] && [ -n "$BRANCH_NAME" ]; then
- R_ID="$(jq -r '.id // ""' "$QA_RECEIPT" 2>/dev/null)"
- R_SHA="$(jq -r '.head_sha // ""' "$QA_RECEIPT" 2>/dev/null)"
- R_OUT="$(jq -r '.qa_outcome // ""' "$QA_RECEIPT" 2>/dev/null)"
- case "$R_OUT" in SHIP|NEEDS_WORK|NA|BLOCKED) : ;; *) R_SHA="" ;; esac # invalid outcome → never fresh
- # The receipt's head_sha is the CODE head; pilot's own `chore(flow): qa verdict` commit
- # (and a later `pr artifact` commit) sit ABOVE it on the branch, so the branch tip is not
- # the code head. Walk from the tip peeling those bookkeeping commits and accept a match
- # anywhere in the chain — else a successful QA pass reads as never-fresh and re-runs forever.
- if [ "$R_ID" = "$SELECTED_SPEC" ] && [ -n "$R_SHA" ]; then
- _s="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "$BRANCH_NAME" 2>/dev/null || echo "")"
- while [ -n "$_s" ]; do
- [ "$_s" = "$R_SHA" ] && { QA_FRESH=1; break; }
- git -C "$REPO_ROOT" log -1 --format='%s' "$_s" 2>/dev/null \
- | grep -qE '^chore\(flow\): (qa verdict|pr artifact) ' || break
- _s="$(git -C "$REPO_ROOT" rev-parse "$_s^" 2>/dev/null || echo "")"
- done
- fi
+  R_ID="$(jq -r '.id // ""' "$QA_RECEIPT" 2>/dev/null)"
+  R_SHA="$(jq -r '.head_sha // ""' "$QA_RECEIPT" 2>/dev/null)"
+  R_OUT="$(jq -r '.qa_outcome // ""' "$QA_RECEIPT" 2>/dev/null)"
+  case "$R_OUT" in SHIP|NEEDS_WORK|NA|BLOCKED) : ;; *) R_SHA="" ;; esac   # invalid outcome → never fresh
+  # The receipt's head_sha is the CODE head; pilot's own `chore(flow): qa verdict` commit
+  # (and a later `pr artifact` commit) sit ABOVE it on the branch, so the branch tip is not
+  # the code head. Walk from the tip peeling those bookkeeping commits and accept a match
+  # anywhere in the chain — else a successful QA pass reads as never-fresh and re-runs forever.
+  if [ "$R_ID" = "$SELECTED_SPEC" ] && [ -n "$R_SHA" ]; then
+    _s="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "$BRANCH_NAME" 2>/dev/null || echo "")"
+    while [ -n "$_s" ]; do
+      [ "$_s" = "$R_SHA" ] && { QA_FRESH=1; break; }
+      git -C "$REPO_ROOT" log -1 --format='%s' "$_s" 2>/dev/null \
+        | grep -qE '^chore\(flow\): (qa verdict|pr artifact) ' || break
+      _s="$(git -C "$REPO_ROOT" rev-parse "$_s^" 2>/dev/null || echo "")"
+    done
+  fi
 fi
 ```
 

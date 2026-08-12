@@ -105,48 +105,48 @@ The full list lives in [SKILL.md](SKILL.md) — single copy. Branch-specific row
 
 ```
 Ralph mode? (FLOW_RALPH=1 or REVIEW_RECEIPT_PATH set)
- yes → exit 2 with Ralph-block message (see SKILL.md)
- no → continue
+  yes → exit 2 with Ralph-block message (see SKILL.md)
+  no  → continue
 
 Compaction signal detected?
- no → continue
- yes → evidence needed for this capture missing / truncated / summary-only?
- no → continue; note prior compaction in Phase 4 warnings
- yes → --from-compacted-ok set?
- no → refuse with override hint (interactive); exit 2 (autofix)
- yes → continue
+  no  → continue
+  yes → evidence needed for this capture missing / truncated / summary-only?
+          no  → continue; note prior compaction in Phase 4 warnings
+          yes → --from-compacted-ok set?
+                  no  → refuse with override hint (interactive); exit 2 (autofix)
+                  yes → continue
 
 Duplicate detection: ≥2 strong spec-title matches AND --rewrite not set?
- yes → gate → ask: extend / supersede / proceed-anyway / abort (interactive); exit 2 (autofix)
- no → continue
+  yes → gate → ask: extend / supersede / proceed-anyway / abort (interactive); exit 2 (autofix)
+  no  → continue
 
 Prior-capture artifact id detected in conversation AND --rewrite not set?
- yes → gate → ask: rewrite / proceed / abort (interactive); exit 2 (autofix)
- no → continue
+  yes → gate → ask: rewrite / proceed / abort (interactive); exit 2 (autofix)
+  no  → continue
 
 --rewrite target invalid or missing?
- yes → exit 2 with hint
- no → continue
+  yes → exit 2 with hint
+  no  → continue
 
 Extract conversation evidence → draft spec → tag every line.
 
 Must-ask cases: ambiguous title / untestable acceptance / scope-conflict?
- any fired → gate → ask one at a time (interactive); exit 2 (autofix)
- none → continue
+  any fired → gate → ask one at a time (interactive); exit 2 (autofix)
+  none      → continue
 
 Read-back (print-then-ask): print FULL draft markdown (+ rewrite diff if any)
- as ordinary assistant message, then SHORT ask (pointer + [inferred] tally +
- 8+ note + options only — never multi-paragraph content in the ask body).
- interactive: approve / split-as-proposed (only when 2.5 proposed N>1) / edit / abort
- edit cycles: reprint revised draft before each short re-ask
- autofix --yes: print summary and proceed
- autofix without --yes: print summary and exit 0
+  as ordinary assistant message, then SHORT ask (pointer + [inferred] tally +
+  8+ note + options only — never multi-paragraph content in the ask body).
+  interactive: approve / split-as-proposed (only when 2.5 proposed N>1) / edit / abort
+  edit cycles: reprint revised draft before each short re-ask
+  autofix --yes: print summary and proceed
+  autofix without --yes: print summary and exit 0
 
 Approved? Write via flowctl spec create + spec set-plan.
 
 Glossary proposals approved at read-back? (interactive only; gate: total_terms > 0)
- yes → write each via flowctl glossary add (best-effort, never blocks)
- no → continue
+  yes → write each via flowctl glossary add (best-effort, never blocks)
+  no  → continue
 
 Print next-step footer. Done.
 ```

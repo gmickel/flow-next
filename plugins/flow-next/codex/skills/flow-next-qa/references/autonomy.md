@@ -82,10 +82,10 @@ base flow. Inherit fn-51's degradation table — do **not** re-derive it. See
 degradation (all surfaces)":
 
 - **Probe, don't assume.** Detect each non-default rung before planning around it.
- agent-browser is the only assumed-present driver; everything above it is probe-and-degrade.
+  agent-browser is the only assumed-present driver; everything above it is probe-and-degrade.
 - **Pick the highest rung that passes; fail soft to the next.** The terminal rung is
- always manual / documented-limitation. For QA that terminal rung = there is nothing
- the skill can drive autonomously → BLOCKED (not a fabricated PASS, not a hard error).
+  always manual / documented-limitation. For QA that terminal rung = there is nothing
+  the skill can drive autonomously → BLOCKED (not a fabricated PASS, not a hard error).
 - **BLOCKED ≠ FAIL.** "No ship *claim* on a QA basis," never "the app is broken."
 
 The BLOCKED routing (no live target) is `workflow.md` §4.2; the verdict BLOCKED is
@@ -104,20 +104,20 @@ is active, then delegate:
 
 ```bash
 case "$QA_LEAF" in
- pull|push|reconcile|comment) QA_OP="comment" ;;
- off|null) QA_OP="off" ;;
- *) QA_OP="off" ;; # malformed config stays silent
+  pull|push|reconcile|comment) QA_OP="comment" ;;
+  off|null)                    QA_OP="off" ;;
+  *)                           QA_OP="off" ;; # malformed config stays silent
 esac
 if [ "$($FLOWCTL sync active --json | jq -r '.active')" = "true" ] \
- && [ "$QA_OP" != "off" ]; then
- # QA synthesizes the comment content by name: verdict, qa_outcome, open P0/P1
- # findings, and R-ID coverage. Its FIRST line is
- # `evidence=<tested-head-sha>`. Write it to a mode 0600 temporary body file,
- # never argv. The inline flow-next-tracker-sync wrapper makes exactly one
- # facade call and deletes the file:
- # "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event qa --body-file "$BODY_FILE"
- # pull, push, reconcile, and comment all coerce to comment. Best-effort.
- : # never blocks
+   && [ "$QA_OP" != "off" ]; then
+  # QA synthesizes the comment content by name: verdict, qa_outcome, open P0/P1
+  # findings, and R-ID coverage. Its FIRST line is
+  # `evidence=<tested-head-sha>`. Write it to a mode 0600 temporary body file,
+  # never argv. The inline flow-next-tracker-sync wrapper makes exactly one
+  # facade call and deletes the file:
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op comment --event qa --body-file "$BODY_FILE"
+  # pull, push, reconcile, and comment all coerce to comment. Best-effort.
+  : # never blocks
 fi
 ```
 
@@ -138,13 +138,13 @@ already a recognised leaf verb (fn-52); this task only adds the `qa` *key* defau
 ### Best-effort + no-op safety
 
 - **Active-AND-opted-in only.** Bridge inactive → no-op. Leaf `off`/`null` → no-op.
- No linked tracker id on the spec → the tracker-sync skill no-ops cleanly. The
- no-tracker path is the documented default and is behaviorally unchanged.
+  No linked tracker id on the spec → the tracker-sync skill no-ops cleanly. The
+  no-tracker path is the documented default and is behaviorally unchanged.
 - **Never blocks the verdict.** A tracker failure (no transport, 404 issue, rate
- limit) is swallowed by the tracker-sync skill's own `sync receipt`; the QA verdict
- is already written (§6.3) before this step and is never rolled back on a post failure.
+  limit) is swallowed by the tracker-sync skill's own `sync receipt`; the QA verdict
+  is already written (§6.3) before this step and is never rolled back on a post failure.
 - **Transport lives in flow-next-tracker-sync.** Phase A only gates + delegates — it
- never opens a transport, renders a comment body, or dedups comments itself.
+  never opens a transport, renders a comment body, or dedups comments itself.
 
 ### Receipt-prefix note (v1)
 

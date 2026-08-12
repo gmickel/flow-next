@@ -20,14 +20,14 @@ When `frontier` / completion reports **briefable** (no open decisions including 
 
 ```json
 {
- "clusters": [
- {
- "key": "1",
- "rationale": "Single product surface; all decisions share one Outcome",
- "decisions": ["fn-140.D1", "fn-140.D2"]
- }
- ],
- "shared_context": []
+  "clusters": [
+    {
+      "key": "1",
+      "rationale": "Single product surface; all decisions share one Outcome",
+      "decisions": ["fn-140.D1", "fn-140.D2"]
+    }
+  ],
+  "shared_context": []
 }
 ```
 

@@ -27,24 +27,24 @@ SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "${TMPDIR:-/tmp}/flow-captur
 BRIDGE_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // false')
 
 if [ "$SPEC_IDS" = "tracker" ] && [ "$BRIDGE_ACTIVE" = "true" ]; then
- # Named existing issue in the request → mint from that key, THEN attach + seed.
- # SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "$SPEC_TITLE" --json)
- # Minting stores the identifier but NOT the durable tracker.id, so this branch
- # MUST also run the fetch/attach/seed ceremony (tracker-sync steps.md Phase 2b)
- # exactly like the fresh-idea branch below. Skipping it leaves the spec
- # effectively unlinked: a later lifecycle touchpoint sees no tracker.id, takes
- # the Phase 3 create-if-unlinked path, and creates a SECOND remote issue
- # instead of linking the one the user named.
- # Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
- # skill: flow-next-tracker-sync (operation: create-first, title: "$SPEC_TITLE", body: "<draft seed>")
- # → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below
- # SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$SPEC_TITLE" --json)
- # then attach + seed merge base per tracker-sync steps.md Phase 2d "Enabled caller sequence"
- # Network cost (honest, conditional): when tracker.perEvent.capture is already active,
- # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
- # bridge-active repo can have every lifecycle event disabled), tracker-first adds an
- # EARLIER remote write that flow-first would not have made.
- :
+  # Named existing issue in the request → mint from that key, THEN attach + seed.
+  #   SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "<KEY|#N|project#iid>" --title "$SPEC_TITLE" --json)
+  #   Minting stores the identifier but NOT the durable tracker.id, so this branch
+  #   MUST also run the fetch/attach/seed ceremony (tracker-sync steps.md Phase 2b)
+  #   exactly like the fresh-idea branch below. Skipping it leaves the spec
+  #   effectively unlinked: a later lifecycle touchpoint sees no tracker.id, takes
+  #   the Phase 3 create-if-unlinked path, and creates a SECOND remote issue
+  #   instead of linking the one the user named.
+  # Fresh idea → create-first first (tracker-sync steps.md Phase 2d), then mint + attach + seed:
+  #   skill: flow-next-tracker-sync (operation: create-first, title: "$SPEC_TITLE", body: "<draft seed>")
+  #   → {id, identifier, url}; on noop / no transport → SILENT fall-through to flow-first below
+  #   SPEC_OUTPUT=$("$FLOWCTL" spec create --tracker-first --tracker-identifier "$IDENTIFIER" --title "$SPEC_TITLE" --json)
+  #   then attach + seed merge base per tracker-sync steps.md Phase 2d "Enabled caller sequence"
+  # Network cost (honest, conditional): when tracker.perEvent.capture is already active,
+  # tracker-first REORDERS that existing remote write; when the leaf is off (default — a
+  # bridge-active repo can have every lifecycle event disabled), tracker-first adds an
+  # EARLIER remote write that flow-first would not have made.
+  :
 fi
 ```
 
@@ -59,25 +59,25 @@ The flow-first `spec create` in workflow.md §5.2 is the **silent degrade** post
 ```bash
 LEAF="$("$FLOWCTL" config get tracker.perEvent.capture --json | jq -r '.value')"
 case "$LEAF" in
- pull) OP="pull" ;;
- push) OP="push" ;;
- reconcile) OP="reconcile" ;;
- comment) OP="comment" ;;
- off|null) OP="off" ;;
- *) OP="off" ;; # malformed config stays silent
+  pull)      OP="pull" ;;
+  push)      OP="push" ;;
+  reconcile) OP="reconcile" ;;
+  comment)   OP="comment" ;;
+  off|null)  OP="off" ;;
+  *)         OP="off" ;; # malformed config stays silent
 esac
 if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ] \
- && [ "$OP" != "off" ]; then
- # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
- # operation-specific 0600 input files, then makes exactly one lifecycle call:
- # "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event capture <legal file flags>
- # For OP=comment, Capture synthesizes the comment content by name: a compact
- # created/updated-spec summary plus the captured context. The 0600
- # --body-file FIRST line is `evidence=<sha256-of-current-spec-file>`; delete
- # the file after the call. No content travels in argv.
- # No reachable transport is best-effort; genuine body conflicts surface scoped
- # (interactive) or queue (Ralph, though capture itself is Ralph-blocked).
- :
+   && [ "$OP" != "off" ]; then
+  # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
+  # operation-specific 0600 input files, then makes exactly one lifecycle call:
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event capture <legal file flags>
+  # For OP=comment, Capture synthesizes the comment content by name: a compact
+  # created/updated-spec summary plus the captured context. The 0600
+  # --body-file FIRST line is `evidence=<sha256-of-current-spec-file>`; delete
+  # the file after the call. No content travels in argv.
+  # No reachable transport is best-effort; genuine body conflicts surface scoped
+  # (interactive) or queue (Ralph, though capture itself is Ralph-blocked).
+  :
 fi
 ```
 
@@ -92,5 +92,5 @@ Best-effort — a tracker failure never blocks the capture. The skill emits its 
 1. Record the retro-fire start anchor and echo it (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
 2. Invoke the **inline flow-next-tracker-sync wrapper directly**. Re-resolve the operation with 5.7's complete `off | pull | push | reconcile | comment` mapping. For `comment`, Capture re-synthesizes the created/updated-spec summary plus captured context in a mode `0600` body file. The wrapper prepares the other legal operation inputs, makes exactly one `flowctl tracker sync <spec-id> --op <op> --event capture <legal file flags>` call, and deletes the temporary files. **The Phase 6 `sync check` block is an audit, never the wrapper.** A retro-fire that re-runs the check block in place of the `flowctl tracker sync` call has broken this — it re-reads the same MISSING state and writes nothing.
 3. Re-check with `--since` = the step-1 anchor:
- `"$FLOWCTL" sync check "$SPEC_ID" --events capture --since "<retro-fire-start>" --json`
+   `"$FLOWCTL" sync check "$SPEC_ID" --events capture --since "<retro-fire-start>" --json`
 4. Record the final state in the footer slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the spec is already on disk; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.

@@ -18,8 +18,8 @@ TODAY="$(date -u +%Y-%m-%d)"
 # scripts/lib/pick-python.sh resolver.
 PY=""
 for _c in "${PYTHON_BIN:-}" "py -3" python3 python; do
- [ -n "$_c" ] || continue
- $_c -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1 && { PY="$_c"; break; }
+  [ -n "$_c" ] || continue
+  $_c -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1 && { PY="$_c"; break; }
 done
 [ -n "$PY" ] || { echo "prospect: no working Python 3.11+ interpreter found" >&2; exit 1; }
 ```
@@ -32,8 +32,8 @@ done
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
- exit 2
+  echo "Error: /flow-next:prospect requires a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+  exit 2
 fi
 ```
 
@@ -51,16 +51,16 @@ fi
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-mkdir -p "$PROSPECTS_DIR" 2>/dev/null || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+mkdir -p "$PROSPECTS_DIR" 2>/dev/null || ACTIVE=1                 # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- RAW="$(find "$PROSPECTS_DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE
+  RAW="$(find "$PROSPECTS_DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null)" || ACTIVE=1   # probe ERROR ⇒ ACTIVE
 fi
 if [ "$ACTIVE" = "0" ]; then
- FIRST="$(printf '%s' "${RAW%%$'\n'*}")" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ -n "$FIRST" ] && ACTIVE=1
+  FIRST="$(printf '%s' "${RAW%%$'\n'*}")" || ACTIVE=1             # parse ERROR ⇒ ACTIVE
+  [ -n "$FIRST" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — STOP. Read references/resume-artifacts.md before continuing."
+  echo "GATE ACTIVE — STOP. Read references/resume-artifacts.md before continuing."
 fi
 ```
 
@@ -83,7 +83,7 @@ When the sentinel prints, STOP and Read [references/resume-artifacts.md](referen
 
 ```bash
 FOCUS_HINT="${ARGUMENTS:-}"
-FOCUS_KIND="open-ended" # one of: open-ended | concept | path | constraint | volume
+FOCUS_KIND="open-ended"   # one of: open-ended | concept | path | constraint | volume
 FOCUS_PATH=""
 ```
 
@@ -104,15 +104,15 @@ Each subsection writes a small structured block into a single snapshot buffer. E
 
 ```bash
 if [[ -d "$REPO_ROOT/.git" ]] && command -v git >/dev/null 2>&1; then
- GIT_FILES=$(git -C "$REPO_ROOT" log --since="30 days ago" --name-only --pretty=format: 2>/dev/null \
- | grep -v '^$' | sort -u)
- GIT_COUNT=$(printf "%s\n" "$GIT_FILES" | grep -c .)
- GIT_TOP=$(printf "%s\n" "$GIT_FILES" | head -10)
- GIT_BLOCK="git_log_30d: ${GIT_COUNT} files modified
+  GIT_FILES=$(git -C "$REPO_ROOT" log --since="30 days ago" --name-only --pretty=format: 2>/dev/null \
+    | grep -v '^$' | sort -u)
+  GIT_COUNT=$(printf "%s\n" "$GIT_FILES" | grep -c .)
+  GIT_TOP=$(printf "%s\n" "$GIT_FILES" | head -10)
+  GIT_BLOCK="git_log_30d: ${GIT_COUNT} files modified
 top:
-$(printf "%s\n" "$GIT_TOP" | sed 's/^/ - /')"
+$(printf "%s\n" "$GIT_TOP" | sed 's/^/  - /')"
 else
- GIT_BLOCK="git_log_30d: scanned: none (no git repo)"
+  GIT_BLOCK="git_log_30d: scanned: none (no git repo)"
 fi
 ```
 
@@ -123,10 +123,10 @@ SPECS_JSON=$("$FLOWCTL" specs --json 2>/dev/null || echo '{"specs":[]}')
 OPEN_SPECS=$(jq '[.specs[] | select(.status == "open")]' <<< "$SPECS_JSON" 2>/dev/null || echo '[]')
 SPECS_COUNT=$(jq 'length' <<< "$OPEN_SPECS" 2>/dev/null || echo 0)
 if [[ "$SPECS_COUNT" -gt 0 ]]; then
- SPECS_BLOCK="open_specs: ${SPECS_COUNT}
-$(jq -r '.[] | " - \(.id): \(.title)"' <<< "$OPEN_SPECS")"
+  SPECS_BLOCK="open_specs: ${SPECS_COUNT}
+$(jq -r '.[] | "  - \(.id): \(.title)"' <<< "$OPEN_SPECS")"
 else
- SPECS_BLOCK="open_specs: scanned: none (no open specs)"
+  SPECS_BLOCK="open_specs: scanned: none (no open specs)"
 fi
 ```
 
@@ -138,14 +138,14 @@ The Phase 2 prompt uses this list as anti-duplication grounding — candidates t
 
 ```bash
 if [[ -f "$REPO_ROOT/CHANGELOG.md" ]]; then
- CHANGELOG_HEAD=$(head -50 "$REPO_ROOT/CHANGELOG.md")
- # distill: keep only entry headers (lines starting with ##) + first bullet under each
- CHANGELOG_BLOCK="changelog_recent:
+  CHANGELOG_HEAD=$(head -50 "$REPO_ROOT/CHANGELOG.md")
+  # distill: keep only entry headers (lines starting with ##) + first bullet under each
+  CHANGELOG_BLOCK="changelog_recent:
 $(printf "%s\n" "$CHANGELOG_HEAD" | awk '
- /^## / { print " " $0; getline; while ($0 == "" && (getline) > 0); if ($0 ~ /^[-*]/) print " " $0; next
- }')"
+  /^## / { print "  " $0; getline; while ($0 == "" && (getline) > 0); if ($0 ~ /^[-*]/) print "    " $0; next
+  }')"
 else
- CHANGELOG_BLOCK="changelog_recent: scanned: none (no CHANGELOG.md)"
+  CHANGELOG_BLOCK="changelog_recent: scanned: none (no CHANGELOG.md)"
 fi
 ```
 
@@ -155,33 +155,33 @@ Distillation keeps version headers + first bullet per entry — recent-shipped s
 
 ```bash
 MEMORY_ENABLED=$("$FLOWCTL" config get memory.enabled --json 2>/dev/null \
- | jq -r '.value // false')
+  | jq -r '.value // false')
 
 if [[ "$MEMORY_ENABLED" == "true" && "$FOCUS_KIND" == "concept" && -n "$FOCUS_HINT" ]]; then
- # memory search writes its error JSON to stdout AND exits non-zero when memory
- # isn't initialised — so the response is the source of truth, not the exit code.
- MEMORY_RESP=$("$FLOWCTL" memory search "$FOCUS_HINT" --limit 5 --json 2>/dev/null \
- || true)
- # `memory search --json` returns {"success": false, "error": "..."} on
- # uninitialised memory. Bare `.success // true` returns true for false (jq's
- # `//` only substitutes null/false), so probe `has("error")` instead.
- MEMORY_BAD=$(jq -r 'has("error")' <<< "$MEMORY_RESP" 2>/dev/null || echo true)
- if [[ "$MEMORY_BAD" == "true" ]]; then
- MEMORY_BLOCK="memory_matches: scanned: none (memory not initialised)"
- else
- HITS_COUNT=$(jq '(.matches // []) | length' <<< "$MEMORY_RESP" 2>/dev/null \
- || echo 0)
- if [[ "$HITS_COUNT" -gt 0 ]]; then
- MEMORY_BLOCK="memory_matches: ${HITS_COUNT}
-$(jq -r '.matches[] | " - [\(.track)/\(.category)] \(.title) — tags: \((.tags // []) | join(","))"' <<< "$MEMORY_RESP")"
- else
- MEMORY_BLOCK="memory_matches: scanned: none (no hits for \"$FOCUS_HINT\")"
- fi
- fi
+  # memory search writes its error JSON to stdout AND exits non-zero when memory
+  # isn't initialised — so the response is the source of truth, not the exit code.
+  MEMORY_RESP=$("$FLOWCTL" memory search "$FOCUS_HINT" --limit 5 --json 2>/dev/null \
+    || true)
+  # `memory search --json` returns {"success": false, "error": "..."} on
+  # uninitialised memory. Bare `.success // true` returns true for false (jq's
+  # `//` only substitutes null/false), so probe `has("error")` instead.
+  MEMORY_BAD=$(jq -r 'has("error")' <<< "$MEMORY_RESP" 2>/dev/null || echo true)
+  if [[ "$MEMORY_BAD" == "true" ]]; then
+    MEMORY_BLOCK="memory_matches: scanned: none (memory not initialised)"
+  else
+    HITS_COUNT=$(jq '(.matches // []) | length' <<< "$MEMORY_RESP" 2>/dev/null \
+      || echo 0)
+    if [[ "$HITS_COUNT" -gt 0 ]]; then
+      MEMORY_BLOCK="memory_matches: ${HITS_COUNT}
+$(jq -r '.matches[] | "  - [\(.track)/\(.category)] \(.title) — tags: \((.tags // []) | join(","))"' <<< "$MEMORY_RESP")"
+    else
+      MEMORY_BLOCK="memory_matches: scanned: none (no hits for \"$FOCUS_HINT\")"
+    fi
+  fi
 elif [[ "$MEMORY_ENABLED" == "true" ]]; then
- MEMORY_BLOCK="memory_matches: scanned: skipped (no concept focus)"
+  MEMORY_BLOCK="memory_matches: scanned: skipped (no concept focus)"
 else
- MEMORY_BLOCK="memory_matches: scanned: none (memory disabled)"
+  MEMORY_BLOCK="memory_matches: scanned: none (memory disabled)"
 fi
 ```
 
@@ -192,21 +192,21 @@ Title + tags only. Never paste memory bodies — that's exactly the kind of grou
 ```bash
 AUDIT_DIR="$REPO_ROOT/.flow/memory/_audit"
 if [[ -d "$AUDIT_DIR" ]]; then
- LATEST_AUDIT=$(ls -1t "$AUDIT_DIR"/*.md 2>/dev/null | head -1)
- if [[ -n "$LATEST_AUDIT" ]]; then
- # Read only the stale-flagged section if present; cap at 20 lines.
- AUDIT_EXCERPT=$(awk '/^## Stale/,/^## /' "$LATEST_AUDIT" | head -20)
- if [[ -n "$AUDIT_EXCERPT" ]]; then
- AUDIT_BLOCK="memory_audit_stale:
-$(printf "%s\n" "$AUDIT_EXCERPT" | sed 's/^/ /')"
- else
- AUDIT_BLOCK="memory_audit_stale: scanned: none (no stale entries flagged)"
- fi
- else
- AUDIT_BLOCK="memory_audit_stale: scanned: none (no audit reports)"
- fi
+  LATEST_AUDIT=$(ls -1t "$AUDIT_DIR"/*.md 2>/dev/null | head -1)
+  if [[ -n "$LATEST_AUDIT" ]]; then
+    # Read only the stale-flagged section if present; cap at 20 lines.
+    AUDIT_EXCERPT=$(awk '/^## Stale/,/^## /' "$LATEST_AUDIT" | head -20)
+    if [[ -n "$AUDIT_EXCERPT" ]]; then
+      AUDIT_BLOCK="memory_audit_stale:
+$(printf "%s\n" "$AUDIT_EXCERPT" | sed 's/^/  /')"
+    else
+      AUDIT_BLOCK="memory_audit_stale: scanned: none (no stale entries flagged)"
+    fi
+  else
+    AUDIT_BLOCK="memory_audit_stale: scanned: none (no audit reports)"
+  fi
 else
- AUDIT_BLOCK="memory_audit_stale: scanned: none (audit not run)"
+  AUDIT_BLOCK="memory_audit_stale: scanned: none (audit not run)"
 fi
 ```
 
@@ -219,23 +219,23 @@ STRATEGY_STATUS_JSON=$("$FLOWCTL" strategy status --json 2>/dev/null || echo '{"
 STRATEGY_FILLED=$(jq -r '.sections_filled // 0' <<< "$STRATEGY_STATUS_JSON" 2>/dev/null || echo 0)
 
 if [[ "$STRATEGY_FILLED" -ge 1 ]]; then
- STRATEGY_JSON=$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')
- STRATEGY_NAME=$(jq -r '.name // "(unnamed)"' <<< "$STRATEGY_JSON")
- STRATEGY_PROBLEM=$(jq -r '.target_problem // ""' <<< "$STRATEGY_JSON")
- STRATEGY_APPROACH=$(jq -r '.approach // ""' <<< "$STRATEGY_JSON")
- STRATEGY_TRACKS=$(jq -r '.tracks // ""' <<< "$STRATEGY_JSON")
- STRATEGY_UPDATED=$(jq -r '.last_updated // "(unknown)"' <<< "$STRATEGY_JSON")
- STRATEGY_BLOCK="strategy:
- name: ${STRATEGY_NAME}
- last_updated: ${STRATEGY_UPDATED}
- target_problem: |
-$(printf "%s\n" "$STRATEGY_PROBLEM" | sed 's/^/ /')
- approach: |
-$(printf "%s\n" "$STRATEGY_APPROACH" | sed 's/^/ /')
- tracks: |
-$(printf "%s\n" "$STRATEGY_TRACKS" | sed 's/^/ /')"
+  STRATEGY_JSON=$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')
+  STRATEGY_NAME=$(jq -r '.name // "(unnamed)"' <<< "$STRATEGY_JSON")
+  STRATEGY_PROBLEM=$(jq -r '.target_problem // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_APPROACH=$(jq -r '.approach // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_TRACKS=$(jq -r '.tracks // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_UPDATED=$(jq -r '.last_updated // "(unknown)"' <<< "$STRATEGY_JSON")
+  STRATEGY_BLOCK="strategy:
+  name: ${STRATEGY_NAME}
+  last_updated: ${STRATEGY_UPDATED}
+  target_problem: |
+$(printf "%s\n" "$STRATEGY_PROBLEM" | sed 's/^/    /')
+  approach: |
+$(printf "%s\n" "$STRATEGY_APPROACH" | sed 's/^/    /')
+  tracks: |
+$(printf "%s\n" "$STRATEGY_TRACKS" | sed 's/^/    /')"
 else
- STRATEGY_BLOCK="strategy: scanned: none (no STRATEGY.md signal)"
+  STRATEGY_BLOCK="strategy: scanned: none (no STRATEGY.md signal)"
 fi
 ```
 
@@ -292,7 +292,7 @@ Volume comes from `FOCUS_HINT` (Phase 1 §1.1). Default if no hint:
 ```bash
 VOLUME_TARGET_MIN=15
 VOLUME_TARGET_MAX=25
-REJECTION_FLOOR=0.40 # Phase 3 default
+REJECTION_FLOOR=0.40   # Phase 3 default
 ```
 
 Hint patterns (case-insensitive, leading/trailing whitespace tolerated):
@@ -309,8 +309,8 @@ Hint patterns (case-insensitive, leading/trailing whitespace tolerated):
 Stash the resolved settings in shell:
 
 ```bash
-GENERATION_TARGET="${VOLUME_TARGET_MIN}-${VOLUME_TARGET_MAX}" # display-only string
-SURVIVOR_TARGET="" # set only when "top N" hint
+GENERATION_TARGET="${VOLUME_TARGET_MIN}-${VOLUME_TARGET_MAX}"   # display-only string
+SURVIVOR_TARGET=""                                              # set only when "top N" hint
 ```
 
 ### 2.2 — Pick personas
@@ -358,15 +358,15 @@ Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no c
 
 ```yaml
 candidates:
- - title: <short title, ≤80 chars>
- summary: <one-line summary, ≤120 chars>
- affected_areas:
- - <path or subsystem>
- - <path or subsystem>
- size: <S | M | L | XL>
- risk_notes: <one-line risk / unknown / caveat — ≤120 chars>
- persona: <senior-maintainer | first-time-user | adversarial-reviewer>
- - title: ...
+  - title: <short title, ≤80 chars>
+    summary: <one-line summary, ≤120 chars>
+    affected_areas:
+      - <path or subsystem>
+      - <path or subsystem>
+    size: <S | M | L | XL>
+    risk_notes: <one-line risk / unknown / caveat — ≤120 chars>
+    persona: <senior-maintainer | first-time-user | adversarial-reviewer>
+  - title: ...
 ```
 
 Constraints:
@@ -396,7 +396,7 @@ Parse the model output. The skill must accept output the model wraps in ```yaml 
 # here first (vars die across prompt turns).
 
 $PY - <<'PY'
-import sys, re, yaml # PyYAML may not be installed — fall back to a stdlib loader if needed.
+import sys, re, yaml  # PyYAML may not be installed — fall back to a stdlib loader if needed.
 text = sys.stdin.read()
 m = re.search(r"```yaml\s*\n(.*?)\n```", text, re.DOTALL)
 body = m.group(1) if m else text
@@ -412,9 +412,9 @@ If fewer than `floor(GENERATION_TARGET_MIN * 0.7)` valid candidates survive vali
 
 ```
 Phase 2 produced only K valid candidates (target was M-N). Options:
- retry — re-run Phase 2 with the same prompt
- loosen — proceed with K candidates anyway (Phase 3 floor still applies)
- abort — exit; no artifact written
+  retry      — re-run Phase 2 with the same prompt
+  loosen     — proceed with K candidates anyway (Phase 3 floor still applies)
+  abort      — exit; no artifact written
 ```
 
 The `loosen` path keeps the run going but flags the under-volume in the eventual artifact frontmatter (`generation_under_volume: true`) so downstream readers know the spread was narrow.
@@ -440,13 +440,13 @@ Inputs handed to the critique subagent: `CANDIDATES_YAML` (Phase 2 §2.4) + the 
 Rejection taxonomy (R3 anchor — frozen string list):
 
 ```
-duplicates-open-epic — material overlap with an open spec in the grounding snapshot (slug kept stable for artifact round-trip; semantics now read "duplicates-open-spec")
-out-of-scope — outside what this codebase / the focus area should tackle
-out-of-scope-vs-strategy — contradicts an active track in the strategy snapshot (advisory only — user can override at promote time)
-insufficient-signal — speculative without evidence in grounding snapshot
-too-large — XL or undermined by size; should be split or deferred
-backward-incompat — would break public contracts / users without strong justification
-other — explain in `reason` field; use sparingly
+duplicates-open-epic       — material overlap with an open spec in the grounding snapshot (slug kept stable for artifact round-trip; semantics now read "duplicates-open-spec")
+out-of-scope               — outside what this codebase / the focus area should tackle
+out-of-scope-vs-strategy   — contradicts an active track in the strategy snapshot (advisory only — user can override at promote time)
+insufficient-signal        — speculative without evidence in grounding snapshot
+too-large                  — XL or undermined by size; should be split or deferred
+backward-incompat          — would break public contracts / users without strong justification
+other                      — explain in `reason` field; use sparingly
 ```
 
 `out-of-scope-vs-strategy` is **advisory only**. It fires when a candidate's direction contradicts an active track from the strategy snapshot (Phase 1 §1.2). The rejection cites the violated track verbatim: `Rejected: [out-of-scope-vs-strategy] — contradicts active track "<track-name>"`. The user can `flowctl prospect promote <id> --idea N --force` to override (existing flag, no new plumbing). When the strategy snapshot scanned `none`, this category is unreachable — Phase 3 will not emit it.
@@ -486,12 +486,12 @@ Target rejection rate: **[REJECTION_FLOOR_PCT]%**. Below that floor, the run wil
 
 ```yaml
 critiques:
- - index: 0 # zero-indexed position in the input list
- verdict: keep | drop
- taxonomy: null | duplicates-open-epic | out-of-scope | out-of-scope-vs-strategy | insufficient-signal | too-large | backward-incompat | other
- reason: <one specific sentence>
- - index: 1
- ...
+  - index: 0 # zero-indexed position in the input list
+    verdict: keep | drop
+    taxonomy: null | duplicates-open-epic | out-of-scope | out-of-scope-vs-strategy | insufficient-signal | too-large | backward-incompat | other
+    reason: <one specific sentence>
+  - index: 1
+    ...
 ```
 
 Emit one entry per candidate, in order. No preamble, no commentary outside YAML.
@@ -511,9 +511,9 @@ If `rejection_rate < REJECTION_FLOOR`, surface a **plain-text numbered prompt** 
 
 ```
 Critique rejected only X% (below the ≥Y% floor). Options:
- regenerate — re-run Phase 2 + Phase 3 from scratch (new candidates)
- loosen-floor — accept this critique result; ship survivors as-is
- ship-anyway — same as loosen-floor; preserved for clarity in transcripts
+  regenerate    — re-run Phase 2 + Phase 3 from scratch (new candidates)
+  loosen-floor  — accept this critique result; ship survivors as-is
+  ship-anyway   — same as loosen-floor; preserved for clarity in transcripts
 ```
 
 Frozen string format (R12 anchor — must match across backends): `regenerate | loosen-floor | ship-anyway`. Use `plain-text numbered prompt`. Validate the choice; reject anything outside the three options.
@@ -532,8 +532,8 @@ If `len(SURVIVORS) == 0`, surface a plain-text numbered prompt:
 
 ```
 Critique rejected every candidate. Options:
- regenerate — re-run Phase 2 + Phase 3 with a fresh prompt
- abort — exit; no artifact written
+  regenerate    — re-run Phase 2 + Phase 3 with a fresh prompt
+  abort         — exit; no artifact written
 ```
 
 No third option here — shipping zero survivors produces a useless artifact.
@@ -557,9 +557,9 @@ Inputs: `SURVIVORS` (Phase 3 §3.3) + the Phase 1 grounding snapshot. Personas a
 Buckets (R2 / R4 anchor — frozen labels):
 
 ```
-High leverage (1-3) — small-diff, large-impact wins; top-3 cap
-Worth considering (4-7) — solid mid-leverage; positions 4-7
-If you have the time (8+) — lower priority; positions 8 and beyond
+High leverage (1-3)            — small-diff, large-impact wins; top-3 cap
+Worth considering (4-7)        — solid mid-leverage; positions 4-7
+If you have the time (8+)      — lower priority; positions 8 and beyond
 ```
 
 Prompt template:
@@ -593,22 +593,22 @@ Do **not** emit numeric scores, percentage estimates, "leverage values", or rank
 
 ```yaml
 ranking:
- high_leverage: # 0-3 entries
- - position: 1
- original_index: <int> # the index from the Phase 3 SURVIVORS list
- leverage: "Small-diff lever because ...; impact lands on ..."
- - position: 2
- ...
- worth_considering: # 0-N entries
- - position: 4
- original_index: <int>
- leverage: "..."
- ...
- if_you_have_the_time: # 0-N entries
- - position: 8
- original_index: <int>
- leverage: "..."
- ...
+  high_leverage: # 0-3 entries
+    - position: 1
+      original_index: <int> # the index from the Phase 3 SURVIVORS list
+      leverage: "Small-diff lever because ...; impact lands on ..."
+    - position: 2
+      ...
+  worth_considering: # 0-N entries
+    - position: 4
+      original_index: <int>
+      leverage: "..."
+    ...
+  if_you_have_the_time: # 0-N entries
+    - position: 8
+      original_index: <int>
+      leverage: "..."
+    ...
 ```
 
 Position numbers run 1-indexed, sequential, and stable across the buckets (positions 1-3 in High leverage, 4-7 in Worth considering, 8+ in If you have the time). Skip positions if a bucket is shorter than its slot — e.g., if High leverage has only 2 entries, Worth considering still starts at position 4. Buckets may be empty.
@@ -657,8 +657,8 @@ Materialize `RANKED` — the parsed ranking with each survivor's full candidate 
 - `VOLUME` — count of candidates fed into Phase 3 (pre-critique).
 - `REJECTION_RATE` — `len(DROPS) / VOLUME` rounded to two decimals.
 - Optional flags from upstream phases — written **only when set**:
- - `floor_violation: true` — Phase 3 set this when the user picked `loosen-floor` / `ship-anyway` on a rejection-floor miss.
- - `generation_under_volume: true` — Phase 2 set this when validated candidates fell below `floor(GENERATION_TARGET_MIN * 0.7)`.
+  - `floor_violation: true` — Phase 3 set this when the user picked `loosen-floor` / `ship-anyway` on a rejection-floor miss.
+  - `generation_under_volume: true` — Phase 2 set this when validated candidates fell below `floor(GENERATION_TARGET_MIN * 0.7)`.
 
 ### 5.2 — Slug + artifact id allocation (R13)
 
@@ -674,8 +674,8 @@ from pathlib import Path
 
 # Load flowctl module without invoking the CLI.
 flowctl_py = os.environ.get("FLOWCTL_PY") or (
- Path(os.environ.get("DROID_PLUGIN_ROOT") or os.environ["CLAUDE_PLUGIN_ROOT"])
- / "scripts" / "flowctl.py"
+    Path(os.environ.get("DROID_PLUGIN_ROOT") or os.environ["CLAUDE_PLUGIN_ROOT"])
+    / "scripts" / "flowctl.py"
 )
 spec = importlib.util.spec_from_file_location("fc", str(flowctl_py))
 fc = importlib.util.module_from_spec(spec); spec.loader.exec_module(fc)
@@ -697,31 +697,31 @@ PY
 Body rendering and frontmatter validation are bundled — do **not** hand-roll YAML or template strings in the skill. Use `flowctl.render_prospect_body` and `flowctl.write_prospect_artifact`:
 
 ```python
-ranked = { # from Phase 4 §4.3
- "high_leverage": [{...}, {...}],
- "worth_considering": [{...}, ...],
- "if_you_have_the_time": [{...}, ...],
+ranked = {                                  # from Phase 4 §4.3
+    "high_leverage":         [{...}, {...}],
+    "worth_considering":     [{...}, ...],
+    "if_you_have_the_time":  [{...}, ...],
 }
 drops = [{"title": ..., "taxonomy": ..., "reason": ...}, ...]
 body = fc.render_prospect_body(focus_text, grounding_snapshot, ranked, drops)
 
 frontmatter = {
- "title": <focus or "Open-ended prospect">,
- "date": today_iso, # quoted as a string by the writer
- "focus_hint": focus_hint or "",
- "volume": volume, # int
- "survivor_count": survivor_count, # int
- "rejected_count": rejected_count, # int
- "rejection_rate": rejection_rate, # float, two decimals
- "artifact_id": artifact_id,
- "promoted_ideas": [], # `flowctl prospect promote` appends here
- "status": "active",
+    "title": <focus or "Open-ended prospect">,
+    "date": today_iso,                       # quoted as a string by the writer
+    "focus_hint": focus_hint or "",
+    "volume": volume,                        # int
+    "survivor_count": survivor_count,        # int
+    "rejected_count": rejected_count,        # int
+    "rejection_rate": rejection_rate,        # float, two decimals
+    "artifact_id": artifact_id,
+    "promoted_ideas": [],                    # `flowctl prospect promote` appends here
+    "status": "active",
 }
 # Optional flags — set ONLY when upstream phases provided them.
 if phase3_floor_violation:
- frontmatter["floor_violation"] = True
+    frontmatter["floor_violation"] = True
 if phase2_generation_under_volume:
- frontmatter["generation_under_volume"] = True
+    frontmatter["generation_under_volume"] = True
 
 target = Path(prospects_dir) / f"{artifact_id}.md"
 fc.write_prospect_artifact(target, frontmatter, body)
@@ -746,9 +746,9 @@ The writer emits body sections in this exact order:
 ## Focus
 ## Grounding snapshot
 ## Survivors
- ### High leverage (1-3)
- ### Worth considering (4-7)
- ### If you have the time (8+)
+  ### High leverage (1-3)
+  ### Worth considering (4-7)
+  ### If you have the time (8+)
 ## Rejected
 ```
 
@@ -759,9 +759,9 @@ Each survivor block:
 **Summary:** <one line>
 **Leverage:** Small-diff lever because <X>; impact lands on <Y>.
 **Size:** <S|M|L|XL>
-**Affected areas:** <comma-joined list> # only when present
-**Risk notes:** <one line> # only when present
-**Persona:** <senior-maintainer | first-time-user | adversarial-reviewer> # only when present
+**Affected areas:** <comma-joined list>      # only when present
+**Risk notes:** <one line>                   # only when present
+**Persona:** <senior-maintainer | first-time-user | adversarial-reviewer>   # only when present
 **Next step:** /flow-next:interview
 ```
 
@@ -804,11 +804,11 @@ When plain text is the prompt mechanism (or the platform tool errors), print thi
 Saved: .flow/prospects/<artifact-id>.md
 
 Promote a survivor to a spec?
- 1) Promote #1: <title>
- 2) Promote #2: <title>
- ...
- N) Skip
- i) Interview (ask /flow-next:interview what to refine)
+  1) Promote #1: <title>
+  2) Promote #2: <title>
+  ...
+  N) Skip
+  i) Interview (ask /flow-next:interview what to refine)
 
 Enter choice [1-N|i|skip]:
 ```

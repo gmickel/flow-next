@@ -38,10 +38,10 @@ nothing else in this phase ran.
 # reference stays the authoritative full platform check — incl. the OPENCODE_* env
 # scan; this is its cheap pre-check subset, run pre-load.)
 host_is_claude_code() {
- [ -n "${CLAUDECODE:-}" ] || return 1 # not Claude Code → off
- [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1 # Droid → off (compat alias not keyed)
- [ -z "${OPENCODE:-}" ] || return 1 # OpenCode → off
- return 0
+  [ -n "${CLAUDECODE:-}" ] || return 1        # not Claude Code → off
+  [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1 # Droid → off (compat alias not keyed)
+  [ -z "${OPENCODE:-}" ] || return 1          # OpenCode → off
+  return 0
 }
 # Single value-check — same shape as the tracker-sync touchpoints (SKILL.md).
 # Guard a missing .flow/: a fresh repo / idea-or-markdown input has not been
@@ -49,17 +49,17 @@ host_is_claude_code() {
 # absent .flow/. Treat missing .flow/ as delegation OFF — a bare-idea input is
 # never delegation-eligible anyway (delegation requires a plan/spec/task input).
 if [ -d .flow ]; then
- # ONE root snapshot (fn-110) serving work.delegate here AND the Phase 1 mint's
- # tracker.specIds: one config read per run, not two. Re-type the literal path.
- WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
- $FLOWCTL config get --json > "$WORK_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$WORK_CFG"
- DELEGATE_CFG=$(jq -r '.value.work.delegate // false' "$WORK_CFG" 2>/dev/null)
+  # ONE root snapshot (fn-110) serving work.delegate here AND the Phase 1 mint's
+  # tracker.specIds: one config read per run, not two. Re-type the literal path.
+  WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
+  $FLOWCTL config get --json > "$WORK_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$WORK_CFG"
+  DELEGATE_CFG=$(jq -r '.value.work.delegate // false' "$WORK_CFG" 2>/dev/null)
 else
- DELEGATE_CFG=false
+  DELEGATE_CFG=false
 fi
 # delegation_requested = host_is_claude_code && (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
-# On a non-Claude-Code host delegation_requested is FALSE here. The generic
-# "use codex" is NOT the token — it still selects the review backend.
+#   On a non-Claude-Code host delegation_requested is FALSE here. The generic
+#   "use codex" is NOT the token — it still selects the review backend.
 ```
 
 If `delegation_requested` is **false** (the default), do nothing more here and run
@@ -136,16 +136,16 @@ Based on user's answer from setup questions:
 
 - **Worktree**: use `skill: flow-next-worktree-kit`
 - **New branch**:
- ```bash
- git checkout main && git pull origin main
- git checkout -b <branch>
- ```
+  ```bash
+  git checkout main && git pull origin main
+  git checkout -b <branch>
+  ```
 - **Current branch**: proceed (user already confirmed)
 
 After the branch choice is applied in any mode, persist the SPEC-RUN BASE once:
 ```bash
 mkdir -p .flow/tmp
-git merge-base HEAD <base-branch> > .flow/tmp/spec_base # <base-branch> = the branch the run is based on, e.g. origin/main
+git merge-base HEAD <base-branch> > .flow/tmp/spec_base   # <base-branch> = the branch the run is based on, e.g. origin/main
 ```
 Like the worker `BASE_COMMIT`, bash variables do not survive across prompt turns, so later phases re-read this persisted base via `$(cat .flow/tmp/spec_base)`. Capture it once at branch setup; Phase 4 uses it for classify calls.
 
@@ -177,14 +177,14 @@ or overlapping `**Touches:**` declaration has broken this.
 1. same spec;
 2. wave size ≤ 3;
 3. no dependency path between any pair, in either direction, **transitively**
- (walk the `depends_on` closure from `$FLOWCTL show <task-id> --json` /
- `$FLOWCTL tasks --spec <spec-id> --json` — `flowctl dep` only writes edges,
- it has no read verb; a direct-only check is wrong);
+   (walk the `depends_on` closure from `$FLOWCTL show <task-id> --json` /
+   `$FLOWCTL tasks --spec <spec-id> --json` — `flowctl dep` only writes edges,
+   it has no read verb; a direct-only check is wrong);
 4. every dispatched task carries a `**Touches:**` declaration, and the declared
- sets are pairwise **disjoint** (`touches(A) ∩ touches(B) = ∅`, glob-aware);
+   sets are pairwise **disjoint** (`touches(A) ∩ touches(B) = ∅`, glob-aware);
 5. no task touches the always-serial set: `.flow/`, lockfiles, migration
- dirs, codegen/generated outputs (in this repo: `plugins/flow-next/codex/**`,
- `.flow/bin` dual copies), or spec/task files.
+   dirs, codegen/generated outputs (in this repo: `plugins/flow-next/codex/**`,
+   `.flow/bin` dual copies), or spec/task files.
 
 The error paths are the rule: a task with no `**Touches:**` declaration →
 serial; any intersection → serial; any doubt about a glob, a hidden coupling
@@ -234,14 +234,14 @@ Done when: every task in the selected wave reads `in_progress` under this actor,
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$VAL" = "true" ] && ACTIVE=1
+  VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#first-claim, then continue with Phase 3c."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#first-claim, then continue with Phase 3c."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `First claim` section (`work.firstClaim` leaf check + best-effort dispatch), then continue with Phase 3c. When the gate is silent (bridge inactive), continue — nothing fires here.
@@ -326,9 +326,9 @@ If status is not `done` (and the 3d.0 gate did not apply or already ran), the wo
 **Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
 
 ```bash
-$FLOWCTL show <task-id> --json # status + evidence the worker recorded
-git log --oneline -5 # did the worker leave commits?
-git status --short # uncommitted-but-complete changes?
+$FLOWCTL show <task-id> --json          # status + evidence the worker recorded
+git log --oneline -5                     # did the worker leave commits?
+git status --short                       # uncommitted-but-complete changes?
 ```
 
 Classify and act:
@@ -346,14 +346,14 @@ Done when: every dispatched task in the wave reads `done`, or has been escalated
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$VAL" = "true" ] && ACTIVE=1
+  VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#task-done, then continue with Phase 3d.2."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#task-done, then continue with Phase 3d.2."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Task done` section (`work.done` leaf check + best-effort dispatch), then continue with Phase 3d.2. When the gate is silent (bridge inactive), continue — nothing fires here.
@@ -435,30 +435,30 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 **If review needed:**
 
 1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
- - Pass `--review=<backend>` matching the work review backend
- - Skill handles rp/codex/copilot/cursor/host backend dispatch
- - Skill runs its fix loop internally until SHIP and writes terminal
- `completion_review_status` through its backend-aware shared owner
+   - Pass `--review=<backend>` matching the work review backend
+   - Skill handles rp/codex/copilot/cursor/host backend dispatch
+   - Skill runs its fix loop internally until SHIP and writes terminal
+     `completion_review_status` through its backend-aware shared owner
 
 2. After skill returns with SHIP:
- - **Tracker sync (opt-in) — SHIP posts a verdict comment, never a terminal `Done` (fn-66):** runs only when the tracker bridge is active and `completionReview` is opted in. With no tracker configured this is a no-op:
+   - **Tracker sync (opt-in) — SHIP posts a verdict comment, never a terminal `Done` (fn-66):** runs only when the tracker bridge is active and `completionReview` is opted in. With no tracker configured this is a no-op:
 
- ```bash
- ACTIVE=0
- # NO pipelines in the probe — a failed producer masked by a healthy consumer
- # fails CLOSED. Capture raw first, rc-checked; parse separately.
- RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
- if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$VAL" = "true" ] && ACTIVE=1
- fi
- if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#completion-review, then continue with Phase 4."
- fi # default branch: bare no-op — NO link, NO read path
- ```
+     ```bash
+     ACTIVE=0
+     # NO pipelines in the probe — a failed producer masked by a healthy consumer
+     # fails CLOSED. Capture raw first, rc-checked; parse separately.
+     RAW="$($FLOWCTL sync active --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
+     if [ "$ACTIVE" = "0" ]; then
+       VAL="$(printf '%s' "$RAW" | jq -r '.active' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+       [ "$VAL" = "true" ] && ACTIVE=1
+     fi
+     if [ "$ACTIVE" = "1" ]; then
+       echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#completion-review, then continue with Phase 4."
+     fi   # default branch: bare no-op — NO link, NO read path
+     ```
 
- When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Completion review` section (`completionReview` leaf check + comment-shaped verdict/R-ID-coverage dispatch), then continue with Phase 4. **`land.merged` is the only driver that writes terminal `Done`/`verified`** — a dispatch from here that flipped the issue terminal has broken this. When the gate is silent (bridge inactive), continue — nothing fires here.
- - Go to Phase 4 (Quality)
+     When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Completion review` section (`completionReview` leaf check + comment-shaped verdict/R-ID-coverage dispatch), then continue with Phase 4. **`land.merged` is the only driver that writes terminal `Done`/`verified`** — a dispatch from here that flipped the issue terminal has broken this. When the gate is silent (bridge inactive), continue — nothing fires here.
+   - Go to Phase 4 (Quality)
 
 **Note:** The spec-completion-review skill owns the terminal
 `completion_review_status` write. Work never writes that status again. After
@@ -502,24 +502,24 @@ After all tasks complete (or periodically for large specs):
 - For each full gate (test) command that would run, first probe `$FLOWCTL gate check --gate <gate_id> --command "<cmd>"`; exit 0 means skip that re-run and note `Gates: baseline reused (green receipt <sha8>)` for the Phase 5 final summary. On nonzero, run it. After any passing full gate run here, write its receipt with `$FLOWCTL gate receipt --gate <gate_id> --command "<cmd>"`.
 - Run lint/format per repo
 - If change is large/risky, run the quality_auditor agent as **two axis-scoped dispatches of the same agent**, both named in ONE message:
- - Use the quality_auditor agent("AXIS: correctness — review recent changes; base <sha>")
- - Use the quality_auditor agent("AXIS: standards — review recent changes; base <sha>")
+  - Use the quality_auditor agent("AXIS: correctness — review recent changes; base <sha>")
+  - Use the quality_auditor agent("AXIS: standards — review recent changes; base <sha>")
 
- `<sha>` is the spec base you already resolved this phase (`cat .flow/tmp/spec_base`) — substitute the value into both dispatch strings. A dispatch that shipped the literal `<sha>` has broken this.
+  `<sha>` is the spec base you already resolved this phase (`cat .flow/tmp/spec_base`) — substitute the value into both dispatch strings. A dispatch that shipped the literal `<sha>` has broken this.
 
- **Both axis dispatches go out in the same message.** A run that dispatched one axis and waited for its report before sending the other has broken this — the split exists so neither axis can spend the whole budget on the other's territory, and serializing them re-imports the cost the split removed.
+  **Both axis dispatches go out in the same message.** A run that dispatched one axis and waited for its report before sending the other has broken this — the split exists so neither axis can spend the whole budget on the other's territory, and serializing them re-imports the cost the split removed.
 
- **Aggregation — both reports verbatim, under two headings:**
- - `### Correctness axis` — that report, unedited.
- - `### Standards axis` — that report, unedited.
+  **Aggregation — both reports verbatim, under two headings:**
+  - `### Correctness axis` — that report, unedited.
+  - `### Standards axis` — that report, unedited.
 
- Never merged, never reranked, never interleaved; neither axis's findings may bury the other's. A run that folded the two reports into one ranked list, or dropped an axis because the other looked worse, has broken this. After the two reports, one line per axis: finding count + worst tier **within that axis**. There is no single winner across axes.
+  Never merged, never reranked, never interleaved; neither axis's findings may bury the other's. A run that folded the two reports into one ranked list, or dropped an axis because the other looked worse, has broken this. After the two reports, one line per axis: finding count + worst tier **within that axis**. There is no single winner across axes.
 
 - Fix rule:
- - Fix **Critical** findings. Only the correctness axis can carry them — the standards axis's ceiling is Should Fix by charter, so a Critical attributed to the standards axis is a charter break, not a blocker.
- - **Should Fix** from either axis: conductor judgment.
- - **Consider** never blocks.
- - When deciding fixes, read each `Out-of-axis observation:` as belonging to the named axis's territory. This is a fix-decision step only — the presented reports above stay verbatim.
+  - Fix **Critical** findings. Only the correctness axis can carry them — the standards axis's ceiling is Should Fix by charter, so a Critical attributed to the standards axis is a charter break, not a blocker.
+  - **Should Fix** from either axis: conductor judgment.
+  - **Consider** never blocks.
+  - When deciding fixes, read each `Out-of-axis observation:` as belonging to the named axis's territory. This is a fix-decision step only — the presented reports above stay verbatim.
 
 Host skips cannot land in task evidence because tasks are already done by Phase 4. **Every skip/honor outcome is accumulated as it happens** (gate_id, plus the receipt `<sha8>` where one was honored) **and surfaces as its own `Gates:` line in the Phase 5 final summary.** A silent skip, or several mixed outcomes collapsed into one line, has broken this (a periodic Phase 4 pass can produce several: some gates receipt-reused, some run full, a later pass docs-only).
 
@@ -558,16 +558,16 @@ WORKED="<task-id-1> <task-id-2> ..."
 # bash vars do NOT survive across prompt turns; flowctl show re-derives it anytime.
 SINCE=""
 for T in $WORKED; do
- TS="$($FLOWCTL show "$T" --json | jq -r '.claimed_at // empty')"
- [ -n "$TS" ] && { [ -z "$SINCE" ] || [ "$TS" \< "$SINCE" ]; } && SINCE="$TS"
+  TS="$($FLOWCTL show "$T" --json | jq -r '.claimed_at // empty')"
+  [ -n "$TS" ] && { [ -z "$SINCE" ] || [ "$TS" \< "$SINCE" ]; } && SINCE="$TS"
 done
 
 # --events: ONLY what actually triggered this run (triggered-set contract):
-# ≥1 task claimed this run → include work.firstClaim
-# ≥1 task reached done this run → include work.done
-# completion review ran this run (3g) → include completionReview
+#   ≥1 task claimed this run            → include work.firstClaim
+#   ≥1 task reached done this run       → include work.done
+#   completion review ran this run (3g) → include completionReview
 # Configured-but-not-triggered events are never checked, never MISSING.
-EVENTS="work.firstClaim,work.done" # ← substitute the actual triggered set
+EVENTS="work.firstClaim,work.done"   # ← substitute the actual triggered set
 
 "$FLOWCTL" sync check "$SPEC_ID" --events "$EVENTS" --since "$SINCE" --json
 # Empty output → bridge inactive → slot = `n/a (bridge inactive)`. Otherwise
@@ -592,9 +592,9 @@ Spec: <spec-id> — <title>
 Tasks: <n done>/<total>
 Tests: <commands + result>
 Review: <verdict | n/a>
-Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B> # one line per outcome; repeat for each
+Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B>   # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
-Next: $flow-next-make-pr <spec-id> # or $flow-next-qa <spec-id> first when pipeline.qa=on
+Next: $flow-next-make-pr <spec-id>   # or $flow-next-qa <spec-id> first when pipeline.qa=on
 ```
 
 The `Next:` line is the executable handoff — the reader runs it, rather than
@@ -637,12 +637,12 @@ Confirm before ship:
 
 ```
 Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
- ├─ 3a-c: inspect frontier → select/claim wave → dispatch isolated worker(s)
- ├─ 3d: join → integrate → review/complete each task
- ├─ 3e: plan-sync after the wave resolves (if enabled + downstream tasks exist)
- ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
- ├─ no more tasks → 3g: check completion_review_status
- │ ├─ status != ship → invoke /flow-next:spec-completion-review → skill fixes, writes SHIP once, returns
- │ └─ status = ship → Phase 4
- └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)
+  ├─ 3a-c: inspect frontier → select/claim wave → dispatch isolated worker(s)
+  ├─ 3d: join → integrate → review/complete each task
+  ├─ 3e: plan-sync after the wave resolves (if enabled + downstream tasks exist)
+  ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
+  ├─ no more tasks → 3g: check completion_review_status
+  │   ├─ status != ship → invoke /flow-next:spec-completion-review → skill fixes, writes SHIP once, returns
+  │   └─ status = ship → Phase 4
+  └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)
 ```

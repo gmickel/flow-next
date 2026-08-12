@@ -19,7 +19,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 **Discover all commands/options:**
 ```bash
 $FLOWCTL --help
-$FLOWCTL <command> --help # e.g., $FLOWCTL task --help
+$FLOWCTL <command> --help   # e.g., $FLOWCTL task --help
 ```
 
 ## Quick Reference
@@ -44,11 +44,11 @@ $FLOWCTL tasks --status todo --json
 
 # View spec with all tasks
 $FLOWCTL show fn-1-add-oauth --json
-$FLOWCTL cat fn-1-add-oauth # Spec markdown
+$FLOWCTL cat fn-1-add-oauth              # Spec markdown
 
 # View single task
 $FLOWCTL show fn-1-add-oauth.2 --json
-$FLOWCTL cat fn-1-add-oauth.2 # Task spec
+$FLOWCTL cat fn-1-add-oauth.2            # Task spec
 
 # What's ready to work on?
 $FLOWCTL ready --spec fn-1-add-oauth --json
@@ -82,35 +82,35 @@ $FLOWCTL validate --all --json
 ### "Add a task for X"
 
 1. Find relevant spec:
- ```bash
- # List all specs
- $FLOWCTL specs --json
+   ```bash
+   # List all specs
+   $FLOWCTL specs --json
 
- # Or show a specific spec to check its scope
- $FLOWCTL show fn-1 --json
- ```
+   # Or show a specific spec to check its scope
+   $FLOWCTL show fn-1 --json
+   ```
 
 2. Create task:
- ```bash
- $FLOWCTL task create --spec fn-N --title "Short title" --json
- ```
+   ```bash
+   $FLOWCTL task create --spec fn-N --title "Short title" --json
+   ```
 
 3. Add description + acceptance (combined):
- ```bash
- # Unique per-task temp paths — written + consumed in this one block
- cat > "${TMPDIR:-/tmp}/flow-desc-fn-N.M.md" << 'EOF'
- **Bug/Feature:** Brief description
+   ```bash
+   # Unique per-task temp paths — written + consumed in this one block
+   cat > "${TMPDIR:-/tmp}/flow-desc-fn-N.M.md" << 'EOF'
+   **Bug/Feature:** Brief description
 
- **Details:**
- - Point 1
- - Point 2
- EOF
- cat > "${TMPDIR:-/tmp}/flow-accept-fn-N.M.md" << 'EOF'
- - [ ] Criterion 1
- - [ ] Criterion 2
- EOF
- $FLOWCTL task set-spec fn-N.M --description "${TMPDIR:-/tmp}/flow-desc-fn-N.M.md" --acceptance "${TMPDIR:-/tmp}/flow-accept-fn-N.M.md" --json
- ```
+   **Details:**
+   - Point 1
+   - Point 2
+   EOF
+   cat > "${TMPDIR:-/tmp}/flow-accept-fn-N.M.md" << 'EOF'
+   - [ ] Criterion 1
+   - [ ] Criterion 2
+   EOF
+   $FLOWCTL task set-spec fn-N.M --description "${TMPDIR:-/tmp}/flow-desc-fn-N.M.md" --acceptance "${TMPDIR:-/tmp}/flow-accept-fn-N.M.md" --json
+   ```
 
 ### "What tasks are there?"
 
@@ -131,8 +131,8 @@ $FLOWCTL ready --spec fn-1-add-oauth --json
 ### "Show me task X"
 
 ```bash
-$FLOWCTL show fn-1-add-oauth.2 --json # Metadata
-$FLOWCTL cat fn-1-add-oauth.2 # Full spec
+$FLOWCTL show fn-1-add-oauth.2 --json   # Metadata
+$FLOWCTL cat fn-1-add-oauth.2           # Full spec
 ```
 
 (Legacy `fn-1.2` / `fn-1-xxx.2` still works.)

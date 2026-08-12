@@ -20,15 +20,15 @@ STRATEGY_STATUS_JSON=$("$FLOWCTL" strategy status --json 2>/dev/null || echo '{"
 STRATEGY_FILLED=$(jq -r '.sections_filled // 0' <<< "$STRATEGY_STATUS_JSON" 2>/dev/null || echo 0)
 
 if [[ "$STRATEGY_FILLED" -ge 1 ]]; then
- STRATEGY_JSON=$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')
- STRATEGY_PRESENT=true
- STRATEGY_NAME=$(jq -r '.name // "(unnamed)"' <<< "$STRATEGY_JSON")
- STRATEGY_PROBLEM=$(jq -r '.target_problem // ""' <<< "$STRATEGY_JSON")
- STRATEGY_APPROACH=$(jq -r '.approach // ""' <<< "$STRATEGY_JSON")
- STRATEGY_TRACKS_RAW=$(jq -r '.tracks // ""' <<< "$STRATEGY_JSON")
- STRATEGY_PATH=$(jq -r '.path // "STRATEGY.md"' <<< "$STRATEGY_JSON")
+  STRATEGY_JSON=$("$FLOWCTL" strategy read --json 2>/dev/null || echo '{}')
+  STRATEGY_PRESENT=true
+  STRATEGY_NAME=$(jq -r '.name // "(unnamed)"' <<< "$STRATEGY_JSON")
+  STRATEGY_PROBLEM=$(jq -r '.target_problem // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_APPROACH=$(jq -r '.approach // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_TRACKS_RAW=$(jq -r '.tracks // ""' <<< "$STRATEGY_JSON")
+  STRATEGY_PATH=$(jq -r '.path // "STRATEGY.md"' <<< "$STRATEGY_JSON")
 else
- STRATEGY_PRESENT=false
+  STRATEGY_PRESENT=false
 fi
 ```
 
@@ -36,8 +36,8 @@ Surface as a "Strategic context:" footnote — 3-5 lines total — when the agen
 
 ```
 Strategic context (STRATEGY.md, last updated 2026-04-30):
- Approach: <verbatim approach line, capped to 1-2 sentences>
- Active tracks: <track-name-1>, <track-name-2>, <track-name-3>
+  Approach: <verbatim approach line, capped to 1-2 sentences>
+  Active tracks: <track-name-1>, <track-name-2>, <track-name-3>
 ```
 
 `STRATEGY_TRACKS_RAW` is a **raw markdown string** with `### <track-name>` H3 sub-blocks. Parse the H3 names locally for the active-tracks list. Empty section bodies (any of `target_problem`, `approach`, `tracks`) surface as `""` — `(.field // "")` style fallbacks in the jq queries above keep parsing well-formed when an optional section is missing.
@@ -61,9 +61,9 @@ When a contradiction is detected AND `OVERRIDE_STRATEGY` is `0`:
 Error: spec contradicts active track "<track>" — pass --override-strategy to proceed.
 
 Detected contradiction:
- Track: <track-name> (STRATEGY.md)
- Track says: "<canonical wording>"
- Spec says: "<conflicting wording>"
+  Track: <track-name> (STRATEGY.md)
+  Track says: "<canonical wording>"
+  Spec says:  "<conflicting wording>"
 
 Re-run with --override-strategy to write the spec anyway. You'll be prompted to
 record the override as a decision entry (the override is exactly the kind of
@@ -94,12 +94,12 @@ On `yes`, invoke `flowctl memory add` with the override rationale piped via `--b
 
 ```bash
 "$FLOWCTL" memory add \
- --track knowledge \
- --category decisions \
- --title "Override strategy: <track-name>" \
- --module strategy \
- --tags strategy-override \
- --body-file - <<EOF
+  --track knowledge \
+  --category decisions \
+  --title "Override strategy: <track-name>" \
+  --module strategy \
+  --tags strategy-override \
+  --body-file - <<EOF
 ## Problem
 Spec <spec-id> contradicts active track "<track-name>" in STRATEGY.md.
 

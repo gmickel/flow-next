@@ -46,37 +46,37 @@ OVERRIDE_STRATEGY=0
 
 # Mode token
 if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
- MODE="autofix"
- RAW_ARGS="${RAW_ARGS//mode:autofix/}"
+  MODE="autofix"
+  RAW_ARGS="${RAW_ARGS//mode:autofix/}"
 fi
 
 # --rewrite <id>
 if [[ "$RAW_ARGS" =~ --rewrite[[:space:]]+([^[:space:]]+) ]]; then
- REWRITE_TARGET="${BASH_REMATCH[1]}"
- RAW_ARGS="${RAW_ARGS//--rewrite ${REWRITE_TARGET}/}"
+  REWRITE_TARGET="${BASH_REMATCH[1]}"
+  RAW_ARGS="${RAW_ARGS//--rewrite ${REWRITE_TARGET}/}"
 fi
 
 # --from-compacted-ok
 if [[ "$RAW_ARGS" == *"--from-compacted-ok"* ]]; then
- FROM_COMPACTED_OK=1
- RAW_ARGS="${RAW_ARGS//--from-compacted-ok/}"
+  FROM_COMPACTED_OK=1
+  RAW_ARGS="${RAW_ARGS//--from-compacted-ok/}"
 fi
 
 # --yes (autofix commit gate)
 if [[ "$RAW_ARGS" == *"--yes"* ]]; then
- COMMIT_YES=1
- RAW_ARGS="${RAW_ARGS//--yes/}"
+  COMMIT_YES=1
+  RAW_ARGS="${RAW_ARGS//--yes/}"
 fi
 
 # --override-strategy (Phase 5.0 strategy-contradiction override)
 if [[ "$RAW_ARGS" == *"--override-strategy"* ]]; then
- OVERRIDE_STRATEGY=1
- RAW_ARGS="${RAW_ARGS//--override-strategy/}"
+  OVERRIDE_STRATEGY=1
+  RAW_ARGS="${RAW_ARGS//--override-strategy/}"
 fi
 
 if [ "$MODE" = "autofix" ]; then
- echo "GATE ACTIVE — STOP. Read references/autofix-mode.md before continuing."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — STOP. Read references/autofix-mode.md before continuing."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 | Mode | When | Behavior |
@@ -92,8 +92,8 @@ When the sentinel above prints, read [references/autofix-mode.md](references/aut
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then
- echo "Error: /flow-next:capture requires conversation context + a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
- exit 2
+  echo "Error: /flow-next:capture requires conversation context + a user at the terminal; not compatible with Ralph mode (REVIEW_RECEIPT_PATH or FLOW_RALPH detected)." >&2
+  exit 2
 fi
 ```
 

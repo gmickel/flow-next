@@ -27,12 +27,12 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Prefer RepoPrompt CE; retain Classic only as the final compatibility rung.
 if command -v rpce-cli >/dev/null 2>&1 \
- || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
- || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
- || command -v rp-cli >/dev/null 2>&1; then
- RP_ELIGIBLE=1
+  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+  || command -v rp-cli >/dev/null 2>&1; then
+  RP_ELIGIBLE=1
 else
- RP_ELIGIBLE=0
+  RP_ELIGIBLE=0
 fi
 
 # Priority: --review flag > per-task/spec `review` override > env > config (flag parsed in SKILL.md).
@@ -53,19 +53,19 @@ REVIEW_ID="<fn-N.M task or fn-N spec id from \$ARGUMENTS, or empty for a standal
 BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 
 if [[ "$BACKEND" == "ASK" ]]; then
- echo "Error: No review backend configured."
- if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
- else
- echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
- fi
- exit 1
+  echo "Error: No review backend configured."
+  if [ "$RP_ELIGIBLE" = 1 ]; then
+    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
+  else
+    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
+  fi
+  exit 1
 fi
 
 if [ "$RP_ELIGIBLE" = 1 ]; then
- echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|host|none)"
+  echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|host|none)"
 else
- echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|host|none)"
+  echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|host|none)"
 fi
 ```
 

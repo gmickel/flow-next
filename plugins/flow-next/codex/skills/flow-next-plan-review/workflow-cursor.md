@@ -7,7 +7,7 @@ Use only when `BACKEND="cursor"` after [workflow.md](workflow.md).
 1. Use `$FLOWCTL cursor plan-review` exclusively.
 2. Pass `--receipt`; resume only when the prior receipt mode is `cursor`.
 3. Cursor takes a model only. Effort is encoded in the model name; never pass an
- effort field.
+   effort field.
 4. Run the read-only dispatch as one blocking foreground call.
 
 ## Execute Review — one atomic fence

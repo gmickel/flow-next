@@ -32,7 +32,7 @@ Parse `$ARGUMENTS` as a flag list. Recognized flags: `--draft`, `--ready`, `--no
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
-DRAFT_FORCE="auto" # auto | draft | ready
+DRAFT_FORCE="auto"      # auto | draft | ready
 NO_MERMAID=0
 WRITE_MEMORY=0
 DRY_RUN=0
@@ -46,28 +46,28 @@ AUTONOMOUS=0
 # positional tokens inside skill code blocks (pilot dogfood finding, 1.13.0).
 PREV=""
 for ARG in $RAW_ARGS; do
- case "$PREV" in
- --base) BASE_REF="$ARG"; PREV=""; continue ;;
- esac
- case "$ARG" in
- --draft) DRAFT_FORCE="draft" ;;
- --ready) DRAFT_FORCE="ready" ;;
- --no-mermaid) NO_MERMAID=1 ;;
- --memory) WRITE_MEMORY=1 ;;
- --dry-run) DRY_RUN=1 ;;
- --base) PREV="$ARG" ;;
- --base=*) BASE_REF="${ARG#--base=}" ;;
- mode:autonomous) AUTONOMOUS=1 ;;
- -*) echo "Unknown flag: $ARG" >&2; exit 2 ;;
- *) SPEC_ID="$ARG" ;;
- esac
+  case "$PREV" in
+    --base) BASE_REF="$ARG"; PREV=""; continue ;;
+  esac
+  case "$ARG" in
+    --draft)      DRAFT_FORCE="draft" ;;
+    --ready)      DRAFT_FORCE="ready" ;;
+    --no-mermaid) NO_MERMAID=1 ;;
+    --memory)     WRITE_MEMORY=1 ;;
+    --dry-run)    DRY_RUN=1 ;;
+    --base)       PREV="$ARG" ;;
+    --base=*)     BASE_REF="${ARG#--base=}" ;;
+    mode:autonomous) AUTONOMOUS=1 ;;
+    -*) echo "Unknown flag: $ARG" >&2; exit 2 ;;
+    *)  SPEC_ID="$ARG" ;;
+  esac
 done
 [[ -n "$PREV" ]] && { echo "Flag $PREV given without a value" >&2; exit 2; }
 
 # Secondary signal: process-level autonomous driver (env survives only
 # within one process tree; the token is the primary, prose-safe carrier).
 if [[ "${FLOW_AUTONOMOUS:-}" == "1" ]]; then
- AUTONOMOUS=1
+  AUTONOMOUS=1
 fi
 ```
 

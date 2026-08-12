@@ -11,7 +11,7 @@ failures. Skill prose never executes GitHub API requests directly.
 - display identity: `#N`;
 - parent verification: issue read returns the node id;
 - comment response parent identity: unavailable, so no response-side parent
- assertion is invented.
+  assertion is invented.
 
 ## Operation mapping
 

@@ -7,7 +7,7 @@ in the host agent environment. Flowctl cannot invoke them.
 
 - discover accessible Linear teams and projects during the confirmed ceremony;
 - create an issue only when the user authorized that action and no
- shell-reachable Linear credential can complete it;
+  shell-reachable Linear credential can complete it;
 - return the created issue identity to deterministic persistence.
 
 MCP does not perform routine update, status, comment, relation, attachment,
