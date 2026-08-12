@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.28.1] - 2026-08-12
 
 A memory entry edited with `memory add --update` could come back different
 from the one that went in, silently: the frontmatter re-serializer left a
@@ -23,8 +23,11 @@ reads its own broken output back intact.
 - **Flow-list splitting in the no-PyYAML fallback is quote- and depth-aware.**
   A 2-element list whose first element contains a comma now parses as 2
   verbatim elements instead of 3 mangled ones; a shared `_split_flow_items`
-  helper replaces all three naive `split(",")` sites, honoring escapes inside
-  double quotes and leaving mid-word apostrophes literal.
+  helper replaces all three naive `split(",")` sites - recognizing quoted
+  scalars at item starts, after mapping key separators, and at nested
+  collection boundaries - and double-quoted mapping keys/values/items now
+  unescape like the top-level branches (the latter two cases surfaced by
+  Codex review on the PR).
 
 ## [flow-next 3.28.0] - 2026-08-11
 
