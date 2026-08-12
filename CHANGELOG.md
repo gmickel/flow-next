@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.29.0] - 2026-08-12
 
 The worktree kit could not be driven from a script: `cleanup` - the only
 sanctioned removal path - read two answers from stdin unconditionally and
