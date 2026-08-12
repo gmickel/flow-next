@@ -42,7 +42,7 @@ Read `$FLOWCTL show <spec-id> --json`, the spec markdown (`$FLOWCTL cat <spec-id
 2. **Task tree** — indented text tree in dependency order, parallel groups adjacent; one line per task: id, short title, the one thing it produces.
 3. **Planned file-layout diff** — shallow tree with `+` (new) / `~` (changed) per file or dir, one-line responsibility, owning task id annotated, so the reviewer sees where the change lands and who owns it.
 4. **Shape sketch** — the new/changed types, signatures, config keys, or command surfaces the tasks will create (shape 6), when the plan implies any. Skip when it implies none.
-5. **R-ID coverage line** — one compact line or tiny table from the tasks' `satisfies` arrays: `R1 -> t1 · R2 -> t2,t3 · R5 -> UNCOVERED`. Uncovered and undeclared jump out instead of needing cross-referencing.
+5. **R-ID coverage line** — one compact line or tiny table from the tasks' declared `satisfies` arrays, which live in each task file's frontmatter (`$FLOWCTL cat <task-id>`), not in `show --json`: `R1 -> t1 · R2 -> t2,t3 · R5 -> UNCOVERED`. Uncovered and undeclared jump out instead of needing cross-referencing.
 6. **Boundaries** — IS / IS-NOT, one line each side.
 
 ### Spec digest (pre-plan)
@@ -65,7 +65,7 @@ No flow id: restate the current conversation topic, or the text the user points 
 
 - Every path in a file tree comes from a task file, the spec, or `git diff --stat` — never invented.
 - Every edge in a call tree traces to real code read in this session or to a real task dependency.
-- Coverage lines come from `show --json` task `satisfies` arrays, not from re-narrated prose.
+- Coverage lines come from the tasks' declared `satisfies` frontmatter (read with `$FLOWCTL cat <task-id>`) checked against the spec's R-IDs, not from re-narrated prose.
 - No embellishment nodes "for clarity". When in doubt: **fewer nodes, more honest.**
 - Nothing readable → say what was unreadable in one line, digest what is readable. A digest that quietly invents the missing half is worse than a short one.
 

@@ -27,6 +27,7 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 - [`impl-review.md`](impl-review.md) — `/flow-next:impl-review`, backend implementation review
 - [`spec-completion-review.md`](spec-completion-review.md) — `/flow-next:spec-completion-review`, combined-implementation verification
 - [`quality-auditor.md`](quality-auditor.md) — `quality-auditor`, single-axis in-host quality audit
+- [`visual.md`](visual.md) — `/flow-next:visual`, compact markdown digest of a spec, task, diff, or topic
 
 **Build**
 
