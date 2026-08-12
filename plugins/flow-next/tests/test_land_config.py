@@ -456,5 +456,77 @@ class CommentScanWorkflowStaticTestCase(unittest.TestCase):
         self.assertNotIn('-z "$CLEAN_REVIEW_PATTERN"', self.text)
 
 
+class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over flow-next-land/workflow.md §2.9 (fn-188).
+
+    Same honest harness limitation as CommentScanWorkflowStaticTestCase: the
+    merge-verdict gate is host-agent BASH inside the skill workflow, not
+    flowctl Python. Pin the load-bearing invariants of the section by
+    asserting the prose/snippet carries them: the gate exists, it is
+    fail-closed, `--dry-run` reports would-run instead of executing, and the
+    context env-var names are the documented ones.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("### 2.9 — Repo merge-verdict gate")
+        end = cls.text.find("### Dry-run stops here", start)
+        assert start != -1 and end != -1, "§2.9 merge-verdict gate not found"
+        cls.gate = cls.text[start:end]
+
+    def test_gate_section_present_between_2_8_and_dry_run_stop(self) -> None:
+        pos_28 = self.text.find("### 2.8 — Merge-state gates")
+        pos_29 = self.text.find("### 2.9 — Repo merge-verdict gate")
+        pos_dry = self.text.find("### Dry-run stops here")
+        self.assertNotEqual(pos_28, -1)
+        self.assertLess(pos_28, pos_29)
+        self.assertLess(pos_29, pos_dry)
+        self.assertIn("land.mergeVerdictCommand", self.gate)
+
+    def test_gate_reads_command_off_the_shared_lcfg_capture(self) -> None:
+        # No second `config get` probe — the key rides the Phase 0 subtree
+        # read (test_skill_prose_diet pins exactly one config get).
+        self.assertIn("MERGE_VERDICT_CMD=\"$(lcfg mergeVerdictCommand)\"", self.text)
+        self.assertNotIn("config get land.mergeVerdictCommand", self.text)
+
+    def test_gate_is_fail_closed(self) -> None:
+        # Missing/unexecutable/timeout/signal all block, never skip.
+        self.assertIn("timeout 600", self.gate)
+        self.assertIn("Fail-closed", self.gate)
+        for token in ("124", "127", "128+N"):
+            self.assertIn(token, self.gate)
+        self.assertIn("has broken this", self.gate)
+
+    def test_gate_refusal_is_needs_human_not_blocked(self) -> None:
+        # BLOCKED stays reserved for server-side merge refusals (3.5).
+        self.assertIn("NEEDS_HUMAN`, action `none`", self.gate)
+        self.assertIn("never `BLOCKED`", self.gate)
+
+    def test_gate_dry_run_reports_would_run_and_never_executes(self) -> None:
+        self.assertIn("MERGE_VERDICT=would-run", self.gate)
+        self.assertIn('"$LAND_DRY_RUN" == 1', self.gate)
+        # the dry-run stop restates it for the classification report
+        self.assertIn("mergeVerdict=would-run", self.text)
+
+    def test_gate_passes_context_as_env_vars_only(self) -> None:
+        for var in (
+            "FLOW_HEAD_SHA",
+            "FLOW_BASE_REF",
+            "FLOW_PR_NUMBER",
+            "FLOW_SPEC_ID",
+        ):
+            self.assertIn(var, self.gate)
+        # wrong-tree trap: the command must key on the PR head, not the tree
+        self.assertIn("BASE checkout", self.gate)
+
+    def test_gate_documents_all_three_off_states(self) -> None:
+        self.assertIn('`null`, and `""` ALL mean OFF', self.gate)
+
+    def test_phase4_evidence_block_carries_merge_verdict_field(self) -> None:
+        self.assertIn("mergeVerdict=<green|refused|skipped|would-run>", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()
