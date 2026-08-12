@@ -20950,7 +20950,10 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                     and k_raw[0] == k_raw[-1]
                     and k_raw[0] in ('"', "'")
                 ):
+                    kq = k_raw[0]
                     k_raw = k_raw[1:-1]
+                    if kq == '"':
+                        k_raw = _unquote_yaml_double(k_raw)
                 # Inline list inside the value.
                 if v_raw.startswith("[") and v_raw.endswith("]"):
                     list_inner = v_raw[1:-1].strip()
@@ -20967,7 +20970,10 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                                 and it[0] == it[-1]
                                 and it[0] in ('"', "'")
                             ):
+                                iq = it[0]
                                 it = it[1:-1]
+                                if iq == '"':
+                                    it = _unquote_yaml_double(it)
                             cleaned.append(it)
                         mapping[k_raw] = cleaned
                 else:
@@ -20977,7 +20983,10 @@ def _parse_inline_yaml(text: str) -> dict[str, Any]:
                         and v_raw[0] == v_raw[-1]
                         and v_raw[0] in ('"', "'")
                     ):
+                        vq = v_raw[0]
                         v_raw = v_raw[1:-1]
+                        if vq == '"':
+                            v_raw = _unquote_yaml_double(v_raw)
                     mapping[k_raw] = v_raw
             if ok:
                 result[key] = mapping

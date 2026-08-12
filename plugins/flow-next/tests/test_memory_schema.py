@@ -589,6 +589,17 @@ class TestFlowListSplitQuoteAware(unittest.TestCase):
             parsed["promoted_to"], {"1": "alpha, beta", "2": "ok"}
         )
 
+    def test_quoted_mapping_value_unescapes(self) -> None:
+        # Double-quoted mapping keys/values/list-items are unescaped,
+        # matching the top-level scalar and list branches.
+        parsed = flowctl._parse_inline_yaml(
+            'promoted_to: {"1": "say \\"hi\\", now", "2": ["a\\"b", c]}\n'
+        )
+        self.assertEqual(
+            parsed["promoted_to"],
+            {"1": 'say "hi", now', "2": ['a"b', "c"]},
+        )
+
 
 class TestInlineParserRoundTrip(unittest.TestCase):
     """_format_yaml_value → _parse_inline_yaml preserves escapes (bug 1b)."""
