@@ -10033,6 +10033,72 @@ def get_max_review_transport_failures() -> int:
     return DEFAULT_MAX_REVIEW_TRANSPORT_FAILURES
 
 
+def _consecutive_failure_classes(
+    attempts: Any, scope: str, limit: int = 20
+) -> list:
+    """Failure classes of the trailing no-verdict streak on ``scope``.
+
+    Walks the attempt rows backwards, ignoring other scopes, and stops at the
+    first verdict-bearing row — the same streak the transport counter counts.
+    """
+    classes: list = []
+    if not isinstance(attempts, list):
+        return classes
+    for row in reversed(attempts):
+        if not isinstance(row, dict) or row.get("scope") != scope:
+            continue
+        if row.get("outcome") != "transport_failure":
+            break
+        classes.append(row.get("failure_class") or "unknown")
+        if len(classes) >= limit:
+            break
+    classes.reverse()
+    return classes
+
+
+def build_transport_unhealthy_message(
+    backend: str,
+    review_label: str,
+    count: Any,
+    cap: Any,
+    failure_classes: Optional[list] = None,
+) -> str:
+    """Terminal TRANSPORT_UNHEALTHY text, branched on what actually failed.
+
+    fn-187 (#331): a streak of ``missing_verdict`` rows is not a broken
+    backend — the reviewer ran fine and declined to declare a verdict, almost
+    always because it inherited host or plugin instructions. Telling that
+    operator to "repair the backend/environment" sends them to probe a healthy
+    CLI. Transport classes (timeout / nonzero_exit / sandbox / dispatch_*)
+    keep the original advice.
+    """
+    classes = [c for c in (failure_classes or []) if c]
+    head = (
+        f"TRANSPORT_UNHEALTHY: {backend} {review_label} review produced no "
+        f"verdict {count} consecutive times (budget {cap}). The reserved "
+        f"review round was refunded; "
+    )
+    tail = (
+        "This is not review non-convergence and does not require "
+        "review-rounds reset."
+    )
+    if classes and all(c == "missing_verdict" for c in classes):
+        return (
+            head
+            + "every attempt ran to completion and returned output with no "
+            "verdict tag, so the backend is probably healthy — do not repair "
+            "it. The usual cause is instruction contamination: the reviewer "
+            "inherited a host persona (auto-loaded AGENTS.md / CLAUDE.md) or "
+            "an installed flow-next skill catalog telling it to coordinate a "
+            "review rather than declare one. The reviewer persona override "
+            "ships on by default for codex; check what the backend "
+            "auto-loads (host AGENTS.md / CLAUDE.md size and instructions) "
+            "and whether flow-next review skills are exposed to the reviewer "
+            "process. " + tail
+        )
+    return head + "repair the backend/environment before retrying. " + tail
+
+
 def _read_review_rounds(spec_data: dict, review_kind: str, task_id: Optional[str]) -> int:
     """Read the current cumulative round count for a plan or impl review."""
     if review_kind == "plan":
@@ -11306,6 +11372,11 @@ def _record_review_attempt_locked(
             "verdict": verdict,
             "failure_class": failure_class if refunded else None,
             "consecutive_transport_failures": consecutive,
+            # fn-187 (#331): what the streak was MADE of, so the terminal can
+            # name the real cause instead of blaming the transport.
+            "consecutive_failure_classes": (
+                _consecutive_failure_classes(attempts, scope) if refunded else []
+            ),
             "transport_failure_cap": get_max_review_transport_failures(),
             "transport_unhealthy": (
                 refunded
@@ -30539,8 +30610,15 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
     verdict = parse_codex_verdict(output)
     failure_class: Optional[str] = None
     if not verdict:
+        healthy_run = args.exit_code == 0 and bool(output.strip())
         if args.failure_class:
             failure_class = args.failure_class
+            if failure_class == "timeout" and healthy_run:
+                # fn-187 (#331): same honesty rule as the backend-exec ladder.
+                # A run that exited 0 and returned prose did not time out —
+                # whoever declared "timeout" read the reviewer's own words, and
+                # the truthful class is "the reviewer declared no verdict".
+                failure_class = "missing_verdict"
         elif args.exit_code != 0:
             failure_class = "nonzero_exit"
         elif not output.strip():
@@ -30596,12 +30674,13 @@ def cmd_review_rounds_record(args: argparse.Namespace) -> None:
     )
     if result.get("transport_unhealthy"):
         error_exit(
-            f"TRANSPORT_UNHEALTHY: {args.backend} {args.review_type} review "
-            f"produced no verdict {result['consecutive_transport_failures']} "
-            f"consecutive times (budget {result['transport_failure_cap']}). "
-            f"The reserved review round was refunded; repair the "
-            f"backend/environment before retrying. This is not review "
-            f"non-convergence and does not require review-rounds reset.",
+            build_transport_unhealthy_message(
+                args.backend,
+                args.review_type,
+                result["consecutive_transport_failures"],
+                result["transport_failure_cap"],
+                result.get("consecutive_failure_classes"),
+            ),
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
         )
@@ -42516,10 +42595,16 @@ def _finish_backend_exec(
     sandbox_failure = (
         reg["has_sandbox"] and is_sandbox_failure(exit_code, output, stderr)
     )
-    combined = f"{stderr}\n{output}".lower()
+    # fn-187 (#331): the timeout scan reads STDERR ONLY. Every backend's
+    # transport timeout surfaces there — the `subprocess.TimeoutExpired`
+    # handlers return ("", …, 2, "<cli> timed out (Ns)") — while the reviewer's
+    # own prose lands in `output`. Scanning both meant a healthy exit-0 review
+    # that merely mentioned the word "timeout" was journaled as a transport
+    # timeout instead of the honest `missing_verdict`.
+    stderr_text = (stderr or "").lower()
     if sandbox_failure:
         failure_class = "sandbox"
-    elif "timed out" in combined or "timeout" in combined:
+    elif "timed out" in stderr_text or "timeout" in stderr_text:
         failure_class = "timeout"
     elif exit_code != 0:
         failure_class = "nonzero_exit"
@@ -42552,11 +42637,13 @@ def _finish_backend_exec(
         count = attempt["consecutive_transport_failures"]
         cap = attempt["transport_failure_cap"]
         error_exit(
-            f"TRANSPORT_UNHEALTHY: {backend} {review_type or review_kind} "
-            f"review produced no verdict {count} consecutive times "
-            f"(budget {cap}). The reserved review round was refunded; repair "
-            f"the backend/environment before retrying. This is not review "
-            f"non-convergence and does not require review-rounds reset.",
+            build_transport_unhealthy_message(
+                backend,
+                review_type or review_kind,
+                count,
+                cap,
+                attempt.get("consecutive_failure_classes"),
+            ),
             use_json=args.json,
             code=REVIEW_TRANSPORT_EXIT_CODE,
         )
