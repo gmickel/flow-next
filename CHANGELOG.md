@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.30.0] - 2026-08-12
 
 `review.backend codex` could return no verdict over and over - 13 consecutive
 times in the report - while every probe said the backend was healthy, and the
