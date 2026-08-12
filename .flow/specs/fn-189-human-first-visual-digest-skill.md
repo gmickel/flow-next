@@ -20,39 +20,39 @@ The skill's core is this fixed vocabulary. Each shape has one job; the skill pic
 **1. Pseudocode** - logic or an algorithm:
 
 ```text
-on(save)
-  if content is unchanged
-    return cached result
-  write new content
-  return fresh result
+on(message)
+  if seen(message.id)
+    drop
+  enqueue(message)
+  schedule flush
 ```
 
 **2. Call tree** (indented text) - runtime control flow, orchestration, backend-shaped problems:
 
 ```text
-submitForm
-  createSession
-    persistPrompt
-    launchAgent
-  navigateToSession
+startMission
+  resolveFleet
+    claimSeat
+    openSession
+  streamEvents
 ```
 
 **3. Component tree** - UI structure, keeping ONLY the state hooks and module boundaries that matter:
 
 ```tsx
-<SessionPage> (apps/example/src/routes/session.tsx)
-  useSessionEvents()
-  <SessionToolbar>
-    <RunSkillButton> (packages/ui)
+<MissionBoard> (apps/cockpit/src/routes/mission.tsx)
+  useFleetEvents()
+  <SeatGrid>
+    <SeatCard> (packages/ui)
 ```
 
 **4. Shallow file tree** - "where does this live" / scoping a refactor; one line of responsibility per entry:
 
 ```text
 src/
-|-- commands/       # parses user actions
-|-- sessions/       # owns session state
-`-- transport/      # sends API requests
+|-- ingest/        # tails source feeds
+|-- index/         # owns the search index
+`-- query/         # answers searches
 ```
 
 **5. Diff-fenced structural sketch** - the standout shape: diff syntax applied to a SHAPE (call tree, file tree, component tree, pseudocode), used when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.
@@ -61,59 +61,59 @@ For a file-layout change:
 
 ```diff
  src/
- |-- commands/
-+|   `-- digest.ts        # expands the slash command
- |-- sessions/
--`-- transport.ts
-+`-- transport/
-+    |-- client.ts
-+    `-- stream.ts
+ |-- ingest/
++|   `-- dedupe.ts        # drops repeated events
+ |-- index/
+-`-- query.ts
++`-- query/
++    |-- parser.ts
++    `-- ranker.ts
 ```
 
 For a component-tree change:
 
 ```diff
- <SessionPage>
-   useSessionEvents()
-   <SessionToolbar>
-+    <RunSkillButton />
-   <SessionTimeline>
-+    <SkillResultCard />
+ <MissionBoard>
+   useFleetEvents()
+   <SeatGrid>
++    <SeatFilter />
+   <EventFeed>
++    <RetryBanner />
 ```
 
 For a call-tree change:
 
 ```diff
- submitForm
-   createSession
-     persistPrompt
-+    expandSkillMention
-     launchAgent
--  navigateToSession
-+  navigateToSession
-+    subscribeToEvents
+ startMission
+   resolveFleet
+     claimSeat
++    verifyAuth
+     openSession
+-  streamEvents
++  streamEvents
++    replayBacklog
 ```
 
 For a state/control-flow change:
 
 ```diff
- on(save)
--  write content
-+  if content is unchanged
-+    return cached result
-+  write new content
-+  invalidate cache
+ on(message)
+-  enqueue(message)
++  if seen(message.id)
++    drop
++  enqueue(message)
++  schedule flush
 ```
 
 **6. Types and signatures** - the shape of code before any of it exists (the thing plan prose buries):
 
 ```ts
-interface Item {
-  id: ItemId
-  parentId: ItemId | null
+interface Seat {
+  id: SeatId
+  missionId: MissionId | null
 }
 
-resolveTarget(items: Item[], cursor: Cursor) -> ItemId | null
+assignSeat(seats: Seat[], policy: Policy) -> SeatId | null
 ```
 
 **7. Compact table** - short enumerable facts only (R-ID coverage, per-task file ownership); explanations live in surrounding prose, never in cells.
