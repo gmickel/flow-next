@@ -431,6 +431,8 @@ fi
 
 **Fail-closed, always.** A configured command that is missing, unexecutable, times out at the 600s bound, or dies on a signal BLOCKS the merge - it is never read as "skip", "not applicable", or "gate unavailable". A tick that merged because the configured command could not run has broken this. The refusal class is `NEEDS_HUMAN`, never `BLOCKED`: `BLOCKED` stays reserved for server-side merge refusals (3.5). No `flow-next:needs-human` label is applied on refusal (same posture as 2.5b) - fix the repo-side cause and the next tick re-gates from scratch.
 
+**`MERGE_VERDICT` and `MERGE_VERDICT_HEAD` are per-PR state, not loop variables.** A tick that classifies several PRs records both values in each PR's classification record alongside its planned action; a later PR's classification never overwrites an earlier PR's verdict. 3.5 reads the values recorded for THE PR IT IS MERGING - a merge that read another iteration's (or a reset) verdict pair has broken this.
+
 **The command executes ONLY from the base checkout.** The command string and the config that carries it are read from the working tree, so a non-base checkout (the PR branch itself, a feature branch) would execute text the PR author controls - a self-approval channel. The trust guard above refuses on any checkout whose branch is not `BASE_REF`; a gate that executed the command from a non-base checkout has broken this.
 
 **The command runs on the BASE checkout, not the PR.** Phase 2 performs no checkout and land never checks out the PR branch for this gate, so a command that inspects the working tree is grading the base and would pass a broken PR. `$FLOW_HEAD_SHA` (the PR `.headRefOid` captured at the top of Phase 2) is the only thing that names the code being merged: the command must key on it - fetch it (`git fetch origin "$FLOW_HEAD_SHA"`), check it out into a scratch worktree, or read it through the API - and it must exit non-zero when it cannot see that head. `$FLOW_BASE_REF`, `$FLOW_PR_NUMBER`, and `$FLOW_SPEC_ID` carry the rest of the context.
@@ -529,6 +531,8 @@ Verdict `NEEDS_HUMAN` with the planned reason. Later ticks skip the PR at gate 2
 All gates passed in-tick. Pin the head right before merging. When §2.9 ran green, the pin is the exact head the verdict command judged - re-reading a fresher head here would merge a commit no verdict covered; the `--match-head-commit` guard then refuses a moved head server-side and the PR re-gates next tick (`RESOLVING`), which is the fail-closed direction:
 
 ```bash
+# MERGE_VERDICT / MERGE_VERDICT_HEAD = THIS PR's recorded pair from its
+# §2.9 classification (per-PR state - never another iteration's values).
 if [[ "$MERGE_VERDICT" == "green" && -n "$MERGE_VERDICT_HEAD" ]]; then
  HEAD_OID="$MERGE_VERDICT_HEAD" # §2.9 judged exactly this head - never a fresher one
 else

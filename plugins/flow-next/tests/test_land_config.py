@@ -516,6 +516,13 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn('git rev-parse --abbrev-ref HEAD)" != "$BASE_REF"', self.gate)
         self.assertIn("requires the base checkout", self.gate)
 
+    def test_verdict_pair_is_per_pr_state(self) -> None:
+        # Multi-PR ticks: the verdict pair rides each PR's classification
+        # record; a later iteration must not clobber an earlier PR's pinned
+        # head before 3.5 merges it.
+        self.assertIn("per-PR state, not loop variables", self.text)
+        self.assertIn("THIS PR's recorded pair", self.text)
+
     def test_gate_refusal_is_needs_human_not_blocked(self) -> None:
         # BLOCKED stays reserved for server-side merge refusals (3.5).
         self.assertIn("NEEDS_HUMAN`, action `none`", self.gate)
