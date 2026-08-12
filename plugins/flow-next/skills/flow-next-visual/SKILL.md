@@ -56,7 +56,7 @@ One task: what it produces (shape sketch or file-layout diff), its position in t
 
 ### Diff digest
 
-Input is a git range; on a branch with no range given, default to the merge base with the default branch (`git merge-base origin/HEAD HEAD` or the repo's default branch). Emit a file-layout diff with one-line responsibilities from `git diff --stat`, plus a call-tree or component-tree sketch of the load-bearing structural change. For orienting a reader before they read the real diff. Empty range: say so in one line and stop — never fabricate a sketch.
+Input is a git range; on a branch with no range given, default to the merge base with the default branch (`git merge-base origin/HEAD HEAD` or the repo's default branch). Emit a file-layout diff with paths from `git diff --name-status` (rename-aware path identity — `--stat` prints `{old => new}` presentation labels, not paths) and churn from `git diff --stat`, plus a call-tree or component-tree sketch of the load-bearing structural change. For orienting a reader before they read the real diff. Empty range: say so in one line and stop — never fabricate a sketch.
 
 ### Ad-hoc restate
 
@@ -64,7 +64,7 @@ No flow id: restate the current conversation topic, or the text the user points 
 
 ## Grounding (hallucination guardrails)
 
-- Every path in a file tree comes from a task file, the spec, or `git diff --stat` — never invented.
+- Every path in a file tree comes from a task file, the spec, or `git diff --name-status` — never invented. (`--stat` is for churn numbers only; its rename labels `{old => new}` are presentation strings, not paths.)
 - Every edge in a call tree traces to real code read in this session or to a real task dependency.
 - Coverage lines come from the tasks' declared `satisfies` frontmatter (read with `$FLOWCTL cat <task-id>`) checked against the spec's R-IDs, not from re-narrated prose.
 - No embellishment nodes "for clarity". When in doubt: **fewer nodes, more honest.**

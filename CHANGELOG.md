@@ -12,7 +12,7 @@ read only the file the shape says is wrong.
 ### Added
 
 - **Review a plan, a task, a diff, or the conversation at a glance, on one
-  screen.** `/flow-next:visual` (or plain language — "show me", "too much text",
+  screen.** `/flow-next:visual` (or plain language on description-matching hosts — "show me", "too much text",
   "walk me through the diff") restates the thing as a compact markdown digest:
   a thesis line, a task tree in dependency order, a planned file-layout diff
   with the owning task annotated, an R-ID coverage line where uncovered
@@ -24,7 +24,9 @@ read only the file the shape says is wrong.
   (pseudocode, call tree, component tree, shallow file tree, diff-fenced
   structural sketch, types and signatures, compact table, mermaid last) rendered
   in plain fenced blocks that colorize natively in the terminal, in chat, and on
-  every forge — no rendering machinery, nothing to port.
+  every forge — no rendering machinery, nothing to port. On Codex the digest is
+  explicit-only (`$flow-next-visual`) — its trigger-rich description is kept out
+  of the shared skill-catalog budget by design (see `docs/platforms.md`).
 - **Capture, plan, and interview offer the digest at their read-back moment.**
   One line each, at the point where you have just been handed a wall of spec or
   tasks to check. An offer you pick, never an automatic run.
