@@ -169,13 +169,13 @@ class WorktreeCleanupNonInteractive(RepoCase):
         created = run(self.repo, "create", "feature")
         self.assertEqual(created.returncode, 0, created.stderr)
         target = self.repo / ".worktrees" / "feature"
-        self.assertIn(str(target.resolve()), git(self.repo, "worktree", "list").stdout)
+        self.assertIn(target.resolve().as_posix(), git(self.repo, "worktree", "list").stdout)
 
         result = run(self.repo, "cleanup", "feature", "--yes", stdin="")
         self.assertEqual(result.returncode, 0, result.stderr)
         listed = git(self.repo, "worktree", "list")
         self.assertEqual(listed.returncode, 0, listed.stderr)
-        self.assertNotIn(str(target.resolve()), listed.stdout)
+        self.assertNotIn(target.resolve().as_posix(), listed.stdout)
         self.assertFalse(target.exists())
 
     def test_cleanup_with_name_without_yes_refuses_off_terminal(self) -> None:
@@ -186,7 +186,7 @@ class WorktreeCleanupNonInteractive(RepoCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("--yes", result.stderr)
         listed = git(self.repo, "worktree", "list")
-        self.assertIn(str((self.repo / ".worktrees" / "feature").resolve()), listed.stdout)
+        self.assertIn((self.repo / ".worktrees" / "feature").resolve().as_posix(), listed.stdout)
 
     def test_cleanup_rejects_unknown_option(self) -> None:
         result = run(self.repo, "cleanup", "--force", stdin="")
