@@ -16,6 +16,11 @@ fresh repo, WITHOUT any prior `config set`:
         explicit ""  → comment scan DISABLED (the real off-switch,
                        distinct from the seeded default);
         other value  → used verbatim.
+  * land.mergeVerdictCommand → ""  (fn-188) — the opt-in repo
+        merge-verdict gate. CONTRACT: unset, null, AND "" all mean OFF
+        (byte-for-byte today's behavior); any other value is a shell
+        command run as the fail-closed merge gate of record. Deliberately
+        NOT the null-vs-"" asymmetry of cleanReviewCommentPattern.
 
 Plus: `config set` round-trips for the string enum and the integer knob
 (set_config auto-coerces digits), the explicit-empty-disables case, the
@@ -105,6 +110,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                     r"(Didn'?t find any( major)? issues"
                     r"|No( major)? issues found).*Reviewed commit"
                 ),
+                "mergeVerdictCommand": "",
             },
         )
 
@@ -296,6 +302,66 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
             self._run_config_get_cli("land.cleanReviewCommentPattern")["value"],
             self.EXPECTED_CLEAN_PATTERN,
         )
+
+    # ── fn-188: land.mergeVerdictCommand (R1) ────────────────────────────
+
+    def test_merge_verdict_command_seeded_default_is_empty(self) -> None:
+        # Seeded as "" (OFF) so a fresh repo behaves byte-for-byte as before
+        # the gate existed — and surfaces as "" via the defaults merge, not
+        # as a missing key.
+        defaults = self.flowctl.get_default_config()
+        self.assertEqual(defaults["land"]["mergeVerdictCommand"], "")
+
+    def test_fresh_get_merge_verdict_command_is_empty_not_null(self) -> None:
+        out = self._run_config_get_cli("land.mergeVerdictCommand")
+        self.assertEqual(out["value"], "")
+        self.assertIsNotNone(out["value"])
+
+    def test_set_merge_verdict_command_round_trips(self) -> None:
+        cmd = "scripts/merge-verdict.sh"
+        set_out = self._run_config_set_cli("land.mergeVerdictCommand", cmd)
+        self.assertEqual(set_out["value"], cmd)
+        get_out = self._run_config_get_cli("land.mergeVerdictCommand")
+        self.assertEqual(get_out["value"], cmd)
+
+    def test_set_merge_verdict_command_empty_reads_back_empty(self) -> None:
+        # All three off-states (unset / null / "") mean OFF — an explicit ""
+        # must NOT be coerced into anything else. Unlike
+        # cleanReviewCommentPattern, "" here is not a distinct mode; it is
+        # simply the same OFF as unset.
+        self._run_config_set_cli("land.mergeVerdictCommand", "make verdict")
+        set_out = self._run_config_set_cli("land.mergeVerdictCommand", "")
+        self.assertEqual(set_out["value"], "")
+        self.assertEqual(
+            self._run_config_get_cli("land.mergeVerdictCommand")["value"], ""
+        )
+
+    def test_set_merge_verdict_command_keeps_sibling_land_defaults(self) -> None:
+        self._run_config_set_cli("land.mergeVerdictCommand", "make verdict")
+        self.assertEqual(
+            self._run_config_get_cli("land.ciFixBudget")["value"], 3
+        )
+        self.assertEqual(
+            self._run_config_get_cli("land.reviewSignal")["value"], "silence"
+        )
+        self.assertIs(self._run_config_get_cli("land.release")["value"], True)
+        self.assertEqual(
+            self._run_config_get_cli("land.cleanReviewCommentPattern")["value"],
+            self.EXPECTED_CLEAN_PATTERN,
+        )
+
+    def test_set_sibling_keeps_merge_verdict_command_default(self) -> None:
+        self._run_config_set_cli("land.reviewSignal", "approve")
+        self.assertEqual(
+            self._run_config_get_cli("land.mergeVerdictCommand")["value"], ""
+        )
+
+    def test_docstring_lists_merge_verdict_command_key(self) -> None:
+        import sys as _sys
+
+        module_doc = _sys.modules[__name__].__doc__ or ""
+        self.assertIn("mergeVerdictCommand", module_doc)
+        self.assertIn("all mean OFF", module_doc)
 
     def test_docstring_lists_clean_review_pattern_key(self) -> None:
         # The module docstring is the human-facing key inventory; keep the

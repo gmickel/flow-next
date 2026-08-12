@@ -374,6 +374,18 @@ DESCRIPTIONS: dict[str, str] = {
         "CI-fix attempts per PR before land durably labels it "
         "flow-next:needs-human and skips it on later ticks."
     ),
+    "land.mergeVerdictCommand": (
+        "Opt-in repo merge-verdict gate: a shell command land runs once per "
+        "merge attempt, after every other gate is satisfied and only when "
+        "the planned action is merge. Exit 0 = green; any non-zero exit - "
+        "including a missing/unexecutable command, the 600s timeout, or "
+        "signal death - blocks the merge (fail-closed, never skipped). "
+        "Context arrives as environment only (FLOW_HEAD_SHA, FLOW_BASE_REF, "
+        "FLOW_PR_NUMBER, FLOW_SPEC_ID); it runs on the base checkout, so it "
+        "must key on FLOW_HEAD_SHA and refuse when it cannot see that head. "
+        "Never executed under --dry-run. Unset, null, and an empty string "
+        "all mean OFF."
+    ),
     "makePr": "/flow-next:make-pr export settings.",
     "makePr.derivedPaths": (
         "Optional derived-file classification rules for the make-pr export: "
@@ -733,6 +745,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("land.reviewTrigger", {"type": "string"}),
         ("land.ciFixBudget", {"type": "integer"}),
         ("land.cleanReviewCommentPattern", {"type": ["string", "null"]}),
+        ("land.mergeVerdictCommand", {"type": ["string", "null"]}),
         ("makePr", {"kind": "object", "open": False}),
         (
             "makePr.derivedPaths",

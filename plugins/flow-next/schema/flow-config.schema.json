@@ -656,6 +656,14 @@
             "null"
           ],
           "default": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit"
+        },
+        "mergeVerdictCommand": {
+          "description": "Opt-in repo merge-verdict gate: a shell command land runs once per merge attempt, after every other gate is satisfied and only when the planned action is merge. Exit 0 = green; any non-zero exit - including a missing/unexecutable command, the 600s timeout, or signal death - blocks the merge (fail-closed, never skipped). Context arrives as environment only (FLOW_HEAD_SHA, FLOW_BASE_REF, FLOW_PR_NUMBER, FLOW_SPEC_ID); it runs on the base checkout, so it must key on FLOW_HEAD_SHA and refuse when it cannot see that head. Never executed under --dry-run. Unset, null, and an empty string all mean OFF.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": ""
         }
       }
     },
