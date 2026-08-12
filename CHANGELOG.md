@@ -2,6 +2,30 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+A memory entry edited with `memory add --update` could come back different
+from the one that went in, silently: the frontmatter re-serializer left a
+mid-string `" #"` unquoted (any conforming YAML parser then reads the value
+as truncated at the hash - flowctl's own fallback parser doesn't strip
+comments, so the damage stays invisible until PyYAML or an editor reads the
+file), and the no-PyYAML fallback split quoted flow-list items on every
+comma, then wrote the mis-parse back as genuinely malformed YAML. Fixes #332
+- thanks @sn-furali for the forensic report, including catching that flowctl
+reads its own broken output back intact.
+
+### Fixed
+
+- **Mid-string `" #"` scalars are now quoted on write.** Whitespace-then-hash
+  opens a YAML comment on read (YAML 1.2 §6.6/§7.3.3); the writer's quoting
+  gate only checked a *leading* `#`. Non-comment hashes (`C#`, `issue#140`)
+  stay unquoted. The shared gate means list items inherit the fix.
+- **Flow-list splitting in the no-PyYAML fallback is quote- and depth-aware.**
+  A 2-element list whose first element contains a comma now parses as 2
+  verbatim elements instead of 3 mangled ones; a shared `_split_flow_items`
+  helper replaces all three naive `split(",")` sites, honoring escapes inside
+  double quotes and leaving mid-word apostrophes literal.
+
 ## [flow-next 3.28.0] - 2026-08-11
 
 A struck-out pilot spec on a board-armed repo could read ready everywhere a

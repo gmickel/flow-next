@@ -10,9 +10,8 @@ In plugins/flow-next/scripts/flowctl.py: (1) extend _yaml_scalar_needs_quoting (
 R1 predicate true for mid-string whitespace-hash and false for C#/issue#140; R2 reproducer parses to exactly 2 verbatim elements and all three split sites share the helper; R3 tests added and green; focused suites (test_memory_schema, test_memory_marks, test_prospect_promote) green.
 
 ## Done summary
-TBD
-
+Added mid-string " #" condition to _yaml_scalar_needs_quoting (whitespace-then-hash opens a YAML comment per YAML 1.2) and extracted a quote/depth-aware _split_flow_items helper wired into all three flow-split sites in _parse_inline_yaml. 8 regression tests incl. the issue #332 reproducer and a conforming-parser (PyYAML) round-trip. Focused suites green (134 tests), ruff clean.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3eb07312
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_memory_schema test_memory_marks test_prospect_promote -q
 - PRs:

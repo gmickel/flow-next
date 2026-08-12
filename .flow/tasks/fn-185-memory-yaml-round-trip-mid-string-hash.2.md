@@ -10,9 +10,8 @@ Quote the title: value in .flow/memory/bug/integration/set-tracker-id-rejected-g
 R4: title survives a conforming-parser read verbatim; file otherwise byte-identical; flowctl memory list/search still returns the entry.
 
 ## Done summary
-TBD
-
+Quoted the title of .flow/memory/bug/integration/set-tracker-id-rejected-github-n-2026-06-03.md using the fixed writer's rendering; verified verbatim round-trip under PyYAML (uv run --with pyyaml) and flowctl memory search still returns the entry. No other frontmatter/body changes.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0f23fe1e
+- Tests: uv run --with pyyaml python3 -c 'yaml.safe_load frontmatter round-trip assert'
 - PRs:
