@@ -2,6 +2,23 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Model guidance refreshed for Grok 4.6 (released 2026-08-12).** The setup
+  model-routing scaffold, `.flow/usage.md` bridge recipes, and orchestration
+  docs move the grok tier to `grok-4.6` with an evidence-based reprofile:
+  intelligence up (Artificial Analysis Index 61, tied with GPT-5.6 Sol Max;
+  real-user consensus ~Opus 4.8-tier), raw speed down but ~2x turn efficiency,
+  and a sharper routing rule - supervised editor-shaped implementation is its
+  strong surface (CursorBench 69.9%, day-one Cursor integration with a
+  permanent 2x usage pool), long unsupervised terminal loops are its weak one
+  (Terminal-Bench v3 26%). The never-the-gate posture stands: AA-Omniscience
+  measures it inventing ~1/3 of the time when it doesn't know, and API cache
+  reads cost 67% more than 4.5 on long sessions. Cursor bridge slug verified
+  live: `cursor-grok-4.6-high` (`-fast` at 2x price).
+
 ## [flow-next 3.32.0] - 2026-08-13
 
 Reviewing a fresh plan used to mean reading a spec plus every task file — 500+

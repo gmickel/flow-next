@@ -71,9 +71,9 @@ claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Ba
 # grok: xAI's Grok Build CLI (v0.2.x alpha) - a full headless EDITING agent, same class as codex
 # exec / cursor-agent, on its own quota. FLAGS BEFORE -p: `-p/--single` consumes the NEXT token as
 # the prompt, so `grok -p --always-approve "..."` misparses (live-verified failure mode).
-# Model + effort are separate flags: `-m grok-4.5 --reasoning-effort high` (NOT `-m grok-4.5-high`).
-grok -m grok-4.5 --reasoning-effort high -p "<self-contained prompt>" </dev/null             # read-only one-shot
-grok --always-approve --no-plan -m grok-4.5 --reasoning-effort high -p "<self-contained prompt>" </dev/null  # WRITE mode (blanket; trusted git dir ONLY - acceptEdits skips Bash and silently truncates shell-using tasks). Extras: --check, --best-of-n N, --json-schema. Grok 4.5 = fast cheap first-draft; bulk/implementation, never taste-critical work.
+# Model + effort are separate flags: `-m grok-4.6 --reasoning-effort high` (NOT `-m grok-4.6-high`).
+grok -m grok-4.6 --reasoning-effort high -p "<self-contained prompt>" </dev/null             # read-only one-shot
+grok --always-approve --no-plan -m grok-4.6 --reasoning-effort high -p "<self-contained prompt>" </dev/null  # WRITE mode (blanket; trusted git dir ONLY - acceptEdits skips Bash and silently truncates shell-using tasks). Extras: --check, --best-of-n N, --json-schema. Grok 4.6 = fast cheap first-draft; supervised bulk/implementation (editor-shaped work, not long unsupervised terminal loops), never taste-critical work.
 ```
 
 The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.

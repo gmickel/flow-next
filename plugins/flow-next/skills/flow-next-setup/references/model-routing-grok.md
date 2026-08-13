@@ -5,7 +5,7 @@ Read only after the Model Routing answer is `Scaffold` or
 
 1. Enumerate available Grok models from host knowledge; fallback to foreground,
    short-timeout `grok models` when `HAVE_GROK=1`. If unavailable, list
-   `grok-4.5` with a not-live-enumerated note.
+   `grok-4.6` with a not-live-enumerated note.
 2. The HOST AGENT picks `SCOUT_PIN`. Grok is single-native-family; leave
    `REVIEW_PIN` as an explicit TODO or bridge-model note unless a genuinely
    different-family pin exists. Never invent a fake native cross-family slug.
@@ -15,11 +15,11 @@ Read only after the Model Routing answer is `Scaffold` or
 <!-- flow-next:model-routing:start -->
 ## Picking models for flow-next workflows and subagents
 
-_Scaffolded by `/flow-next:setup` on Grok (<YYYY-MM-DD>). Grok is single-native-family (grok-4.5); model ids may change — re-run setup to refresh. Edit freely; this section is yours now._
+_Scaffolded by `/flow-next:setup` on Grok (<YYYY-MM-DD>). Grok is single-native-family (grok-4.6 / grok-4.5); model ids may change — re-run setup to refresh. Edit freely; this section is yours now._
 
 ### Available models (enumerated at setup)
 
-- <bullet list of enumerated Grok models — typically just grok-4.5>
+- <bullet list of enumerated Grok models — typically grok-4.6 and grok-4.5>
 
 ### Dispatch pins (host agent picked)
 

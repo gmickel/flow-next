@@ -198,7 +198,7 @@ Then `/flow-next:plan <spec-id>`.
 <!-- flow-next:model-routing:start -->
 ## Picking models for flow-next workflows and subagents
 
-_Scaffolded by `/flow-next:setup` — edit freely; re-run setup to regenerate. These scores are starting opinions (as of Jul 2026): re-rank them to what you actually pay for and prefer. This section is yours now._
+_Scaffolded by `/flow-next:setup` — edit freely; re-run setup to regenerate. These scores are starting opinions (as of Aug 2026): re-rank them to what you actually pay for and prefer. This section is yours now._
 
 Rankings, higher = better. **cost** = how lightly it rides your subscription quota (higher = run it freely; lower = it burns the plan's budget fast, so spend it sparingly), NOT list $/token, and each provider is a separate budget; **speed** = output speed at *default* reasoning effort (raising effort trades speed for intelligence); **intelligence** = how hard a problem you can hand it unsupervised; **taste** = UI/UX, code quality, API design, copy.
 
@@ -209,7 +209,7 @@ Rankings, higher = better. **cost** = how lightly it rides your subscription quo
 | opus-4.8      | 4    | 3     | 7            | 8     |
 | gpt-5.6-sol   | 8    | 5     | 9            | 6     |
 | gpt-5.6-terra | 9    | 7     | 7            | 5     |
-| grok-4.5      | 9    | 9     | 7            | 5     |
+| grok-4.6      | 9    | 8     | 8            | 5     |
 | composer-2.5  | 9    | 10    | 6            | 6     |
 | sonnet-5      | 5    | 6     | 7            | 7     |
 | haiku-4.5     | 8    | 9     | 4            | 4     |
@@ -227,7 +227,7 @@ flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claud
 - Implementation, native: a worker/subagent on opus-5 (quality) or sonnet-5 (speed) via the model parameter.
 Implementation via gpt-5.6-terra @ medium (the packaged delegate default): `/flow-next:work <id> delegate:codex` (consent-gated, host keeps git/review) or a direct `codex exec` bridge. Eval-matched gpt-5.6-sol correctness at ~2/3 wall-clock on strong specs; escalate work.delegateModel to gpt-5.6-sol for gnarly tasks.
 Implementation via composer-2.5: the `cursor-agent` bridge (`--force` to apply); host reviews + commits.
-Implementation via grok-4.5: a fast, cheap first-draft worker via the grok CLI bridge (`grok --always-approve -m grok-4.5 --reasoning-effort high -p "<task>"` - flags BEFORE `-p`; acceptEdits skips Bash and silently truncates shell-using headless runs); host reviews + commits on a taste-heavier tier. Route it to bulk/implementation, NOT UI or final taste-critical work (higher hallucination, weaker on UI). (Or reach grok-4.5 through the cursor bridge: `cursor-agent --model cursor-grok-4.5-high --force`.)
+Implementation via grok-4.6: a fast, cheap first-draft worker via the grok CLI bridge (`grok --always-approve -m grok-4.6 --reasoning-effort high -p "<task>"` - flags BEFORE `-p`; acceptEdits skips Bash and silently truncates shell-using headless runs); host reviews + commits on a taste-heavier tier. Route it to supervised editor-shaped bulk/implementation - NOT long unsupervised terminal loops (Terminal-Bench v3 26%), NOT UI or taste-critical work (hallucination unresolved: invents ~1/3 when it doesn't know, AA-Omniscience). Prefer the cursor bridge for it: `cursor-agent --model cursor-grok-4.6-high --force` (permanent 2x Cursor usage pool). API long sessions: cache reads +67% vs 4.5.
 Review, cross-family (recommended default when the writer is Claude-family; on a GPT-writer host pick a non-GPT reviewer instead): `review.backend codex`; per-task `review:` pins exceptions; escalate reviewer↔worker disagreements to the session model.
 Review, cross-family via cursor (multi-family reach): `review.backend cursor:claude-opus-5-thinking-high` (Claude-family default; `cursor:claude-fable-5-thinking-high` only when you explicitly want the Fable gate — NO ZDR) or `cursor:gpt-5.6-sol-high` (GPT-family) — pick the family that did NOT write the diff. Ids are volatile → `cursor-agent --list-models` (opus-5 slug verified live 2026-07-24). Composer/grok tiers are quick extra voices, never the gate.
 - Review, same-family heavy: a fresh-context reviewer subagent on opus-5 (or the session model) with the review criteria — no registry rung needed; describe the arrangement.
