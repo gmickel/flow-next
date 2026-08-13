@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-13T21:53:43.311717Z",
+  "depends_on": [
+    "fn-190-flowctl-startup-importable-entry-for.2"
+  ],
+  "id": "fn-190-flowctl-startup-importable-entry-for.4",
+  "priority": null,
+  "spec": "fn-190-flowctl-startup-importable-entry-for",
+  "spec_path": ".flow/tasks/fn-190-flowctl-startup-importable-entry-for.4.md",
+  "status": "todo",
+  "title": "Route the unit suite's flowctl invocations through the entry",
+  "updated_at": "2026-08-13T21:53:43.311717Z"
+}
