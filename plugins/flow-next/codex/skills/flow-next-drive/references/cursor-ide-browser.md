@@ -45,7 +45,7 @@ There is **no** `browser_console_messages`. Schemas live in the cache `tools/*.j
 - **`browser_type`**, **`browser_drag`**, **`browser_mouse_click_xy`** (coordinate click; prefer refs), **`browser_get_bounding_box`**.
 - **`browser_cdp {method, params}` is real** (Cursor-documented). **Never `Input.*`** — denied: focus-sensitive in Electron webviews, routes input to Cursor UI. Also denied: browser-wide, storage, cookie, permission, download, target-management, filesystem-backed file-input, system-level, and CDP navigation/history-navigation methods. Large CDP responses are written to files — read focused sections, don't inline.
 
-**Iframe content is unreachable** — only elements outside iframes can be interacted with. A QA scenario whose controls live in an iframe cannot be driven here; record that as an evidence gap.
+**Iframe content is unreachable** — only elements outside iframes can be interacted with. A `/flow-next:qa` scenario whose controls live in an iframe cannot be driven here; set `QA_OUTCOME=BLOCKED` with `blocked_reason` naming the unreachable iframe (do not invent evidence paths). Fall through to the QA receipt write.
 
 Never repeat a failing action without new evidence. After ~4 failed attempts, **stop and report**.
 
@@ -59,7 +59,7 @@ Recover: **re-probe by id**. Observed 2026-08-13: one restoration in several att
 
 This rung has no console/network MCP tool. Public docs (2026-08-13) say logs are written to files the agent greps, and network traffic is "currently only available in the Agent panel". Cursor's own `INSTRUCTIONS.md` lists `Log.enable` and `Network.enable` as CDP examples — **that is not live evidence**. A dedicated 2026-08-13 attempt against `http://127.0.0.1:8762/` (page emits `console.error` + `fetch('/fail')` → 500) locked the tab, then the MCP dropped before any CDP call returned; after one successful re-probe, navigate dropped it again and it stayed gone. **Do not claim console/network work because a CDP method name appears in a doc.**
 
-Consequence: rung 4 **cannot** satisfy the drive `verify` contract (clean console + no failed API request) unaided. A `/flow-next:qa` pass routed here must record an **evidence gap** rather than a PASS. Spell the QA evidence-tuple fields that this rung cannot fill as `console_path: unavailable — rung 4 has no console channel` (and the same shape for network) — do not leave them empty and do not invent a path. Screenshot + snapshot YAML are the proven evidence channels.
+Consequence: rung 4 **cannot** satisfy the drive `verify` contract (clean console + no failed API request) unaided. A `/flow-next:qa` pass that reaches this rung and cannot capture console + network MUST set `QA_OUTCOME=BLOCKED` with `blocked_reason` naming the missing channels (rung 4 has no console/network from the driven surface). Do not invent `console_path` / network path values. Screenshot + snapshot YAML remain the proven drive evidence; they do not make verify complete. Fall through to the QA receipt write (do not stop without a receipt).
 
 ## Operator precondition (approval)
 
