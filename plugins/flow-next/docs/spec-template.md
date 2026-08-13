@@ -61,7 +61,21 @@ Frontmatter and the `<!-- scope: ... -->` markers are authoring guidance, not sp
   - **R1:** Given a signed-in user with an expired session, when they submit the form, then the draft is preserved and they are returned to it after re-auth.
   ```
 
-  Every spec the project authors from then on arrives with that instruction, and every interview/capture pass writes criteria in that shape. The only load-bearing parts are the heading name and the `**R<n>:**` bullet marker - the criterion *text* is yours (the parser reads wrapped multi-line bullets, and anything it cannot read is surfaced as `acceptance_criteria_residue` rather than silently dropped). The same move works for any house convention: user-story phrasing ("As a <role>..."), a mandated observability clause per criterion, or a severity tag.
+  Every spec the project authors from then on arrives with that instruction, and every interview/capture pass writes criteria in that shape. The only load-bearing parts are the heading name and the `**R<n>:**` bullet marker - the criterion *text* is yours (the parser reads wrapped multi-line bullets, and anything it cannot read is surfaced as `acceptance_criteria_residue` rather than silently dropped). The same move works for any house convention.
+
+  More house styles, same mechanism - each is one instruction comment (or one rewritten guidance line) in your copied `SPEC.md`, and every spec the project authors from then on obeys it:
+
+  | Team wants | Instruction to add under the relevant heading |
+  |---|---|
+  | **User-story criteria** (product orgs) | Under `## Acceptance Criteria`: *"Phrase each criterion as: As a <role>, I can <capability>, so that <outcome> - observable outcome mandatory, keep the `**R<n>:**` marker."* |
+  | **Observability mandate** (SRE-minded) | Under `## Acceptance Criteria`: *"Every criterion names the signal that proves it in production - a metric, log line, or alert. A criterion with no signal is not accepted."* |
+  | **Compliance traceability** (regulated) | Under `## Acceptance Criteria`: *"Tag each criterion with the control it satisfies (e.g. `[SOC2-CC6.1]`, `[GDPR-Art17]`)."* Plus an added `## Data & Compliance` section: classification of data touched, retention, audit-trail impact. |
+  | **Non-functional budgets** | An added `## Budgets` section: *"State the numeric budgets this change must hold: p95 latency, bundle-size delta, WCAG level. 'Fast' is not a budget; '<200ms p95' is."* |
+  | **Rollout & revert** (ops) | An added `## Rollout` section: *"Feature flag or migration? Name the flag, the rollout stages, and the tested revert path. A migration with no revert statement is incomplete."* |
+  | **Test-evidence rule** | Under `## Acceptance Criteria` or `## Boundaries`: *"Every criterion names the command or test file that will prove it - the worker baselines and re-runs exactly those."* |
+  | **Specs in your language** | Rewrite the guidance prose in German/French/Japanese/... - the authoring passes follow the instruction language, and the four parsed headings plus `**R<n>:**` markers stay English so the tooling keeps reading them. |
+
+  Composable with [role passes](teams.md#roles-and-ownership): a platform or quality role's standing section is just another row of this table.
 - **Adding project vocabulary**, links to your ADRs / design docs / glossary, or a house rule ("every spec names the observability signal that proves it worked").
 
 ### What breaks if you rename or remove a canonical heading
