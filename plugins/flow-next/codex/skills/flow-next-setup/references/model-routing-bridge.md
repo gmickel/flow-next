@@ -10,9 +10,9 @@ disk after the Docs write; never reuse an in-memory copy.
 Use this deterministic ladder, first match wins:
 
 1. Docs answered this run: mirror `CLAUDE.md only`, `AGENTS.md only`, or `Both`.
- `Skip` falls through.
+   `Skip` falls through.
 2. Otherwise use files already carrying `<!-- BEGIN FLOW-NEXT -->` (both means
- both).
+   both).
 3. Otherwise use Codex → `AGENTS.md`; Claude Code/Droid → `CLAUDE.md`.
 
 Apply the shim guard per target. Exactly one non-empty line matching
@@ -34,7 +34,7 @@ verbatim. Deterministically transform every probe-sentinel line:
 
 - Passing probe: strip the `<!-- probe:<cli> --> ` prefix.
 - Failed probe: comment the full route as
- `<!-- not detected on this machine — install <binary>, then uncomment: TEXT -->`.
+  `<!-- not detected on this machine — install <binary>, then uncomment: TEXT -->`.
 - Map `codex` → `codex`, `cursor` → `cursor-agent`, `grok` → `grok`.
 
 After transformation no `<!-- probe:` sentinel and no active route for a failed
@@ -50,14 +50,14 @@ AGENTS.md on Claude Code/Droid keep slash syntax.
 Inspect the target before read-back:
 
 - Existing well-formed model-routing marker block: byte-compare against this
- target's composed block.
- - identical: silent no-op, no mtime change,
- `ROUTING_OUTCOME="unchanged (already current)"`.
- - different: ask `Keep mine (Recommended)` / `Overwrite with canonical` /
- `Skip`. Keep prints the canonical template path and records
- `kept (customized)`; Skip records `skipped`; Overwrite continues.
+  target's composed block.
+  - identical: silent no-op, no mtime change,
+    `ROUTING_OUTCOME="unchanged (already current)"`.
+  - different: ask `Keep mine (Recommended)` / `Overwrite with canonical` /
+    `Skip`. Keep prints the canonical template path and records
+    `kept (customized)`; Skip records `skipped`; Overwrite continues.
 - No marker: scan outside markers for a model-routing-shaped heading. If found,
- ask `Add the flow-next block below yours` / `Skip`; never duplicate silently.
+  ask `Add the flow-next block below yours` / `Skip`; never duplicate silently.
 
 On a would-write path, show the complete composed block, then ask `write` /
 `skip`. Only `write` appends or marker-replaces the whole block. Confirm:

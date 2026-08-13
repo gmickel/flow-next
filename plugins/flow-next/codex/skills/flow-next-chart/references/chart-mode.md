@@ -41,15 +41,15 @@ Emit a structured snapshot under `## Grounding Snapshot`:
 
 candidate_outcome: <1-2 lines>
 known_facts:
- - <fact> [ref: <path|commit|https> rev:<optional>]
+  - <fact> [ref: <path|commit|https> rev:<optional>]
 conflicts_or_staleness:
- - <uncertainty - missing, conflicting, stale, inaccessible, or secret-bearing>
+  - <uncertainty - missing, conflicting, stale, inaccessible, or secret-bearing>
 smallest_visible_frontier:
- - <proposed title> (type: research|probe|eval|prototype|interview|task) [attendance if task]
+  - <proposed title> (type: research|probe|eval|prototype|interview|task) [attendance if task]
 parked_unknowns:
- - <in-scope but not yet sharp enough to be a decision record>
+  - <in-scope but not yet sharp enough to be a decision record>
 attended_unattended_cost:
- - <N decisions: U unattended, A attended; estimated sessions with you>
+  - <N decisions: U unattended, A attended; estimated sessions with you>
 ```
 
 **Grounding rules:**
@@ -128,32 +128,32 @@ Write an initial-map JSON file (never hand-edit `.flow/charts/`):
 
 ```json
 {
- "decisions": [
- {
- "title": "Research provider limits",
- "type": "research",
- "question": "What hard limits does the provider publish for multi-tenant rate isolation?"
- },
- {
- "title": "Prototype tenancy UX",
- "type": "prototype",
- "question": "Does the tenant switcher mental model match operators?"
- }
- ],
- "parked_questions": [
- "Whether billing splits per tenant or per workspace"
- ],
- "notes": "- Tenancy today is a single shared schema [ref: src/db/schema.sql rev:9f2c1ab]\n- Provider rate limits are per-account, not per-key [ref: https://example.invalid/docs/limits]"
+  "decisions": [
+    {
+      "title": "Research provider limits",
+      "type": "research",
+      "question": "What hard limits does the provider publish for multi-tenant rate isolation?"
+    },
+    {
+      "title": "Prototype tenancy UX",
+      "type": "prototype",
+      "question": "Does the tenant switcher mental model match operators?"
+    }
+  ],
+  "parked_questions": [
+    "Whether billing splits per tenant or per workspace"
+  ],
+  "notes": "- Tenancy today is a single shared schema [ref: src/db/schema.sql rev:9f2c1ab]\n- Provider rate limits are per-account, not per-key [ref: https://example.invalid/docs/limits]"
 }
 ```
 
 ```bash
 "$FLOWCTL" chart create \
- --title "<short title>" \
- --outcome "<outcome text>" \
- --initial-map-file "<path>" \
- [--force-size --reason "<consent reason>"] \
- --json
+  --title "<short title>" \
+  --outcome "<outcome text>" \
+  --initial-map-file "<path>" \
+  [--force-size --reason "<consent reason>"] \
+  --json
 ```
 
 On success:

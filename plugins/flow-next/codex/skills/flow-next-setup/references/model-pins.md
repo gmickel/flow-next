@@ -17,10 +17,10 @@ CURRENT_MODELS=$("${PLUGIN_ROOT}/scripts/flowctl" config get models --raw --json
 CURRENT_VERIFIED_AT=$("${PLUGIN_ROOT}/scripts/flowctl" config get models.verifiedAt --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
 
 if [[ "$HAVE_CURSOR" == "1" ]]; then
- CURSOR_MODELS=$(cursor-agent --list-models 2>/dev/null | head -200 || true)
+  CURSOR_MODELS=$(cursor-agent --list-models 2>/dev/null | head -200 || true)
 fi
 if [[ "$HAVE_COPILOT" == "1" ]]; then
- COPILOT_MODELS=$(copilot -p "/model" 2>/dev/null | head -100 || true)
+  COPILOT_MODELS=$(copilot -p "/model" 2>/dev/null | head -100 || true)
 fi
 ```
 
@@ -84,14 +84,14 @@ Ask via `plain-text numbered prompt` (the Codex mirror uses its numbered-prompt 
 
 ```json
 {
- "header": "Model pins",
- "question": "Refresh models.roles pins from today's probe? (flowctl stores; you pick. Re-run setup anytime to refresh again.)",
- "options": [
- {"label": "Accept proposed map (Recommended)", "description": "Write the judged pins via flowctl config set and stamp models.verifiedAt today"},
- {"label": "Stamp verifiedAt only", "description": "Keep every current pin; only refresh models.verifiedAt to today"},
- {"label": "Skip", "description": "Write nothing; leave models.roles and models.verifiedAt untouched"}
- ],
- "multiSelect": false
+  "header": "Model pins",
+  "question": "Refresh models.roles pins from today's probe? (flowctl stores; you pick. Re-run setup anytime to refresh again.)",
+  "options": [
+    {"label": "Accept proposed map (Recommended)", "description": "Write the judged pins via flowctl config set and stamp models.verifiedAt today"},
+    {"label": "Stamp verifiedAt only", "description": "Keep every current pin; only refresh models.verifiedAt to today"},
+    {"label": "Skip", "description": "Write nothing; leave models.roles and models.verifiedAt untouched"}
+  ],
+  "multiSelect": false
 }
 ```
 
@@ -121,10 +121,10 @@ Offer (not force) a routing-table refresh.
 After `written` or `stamped`, offer via `plain-text numbered prompt`:
 
 - `Refresh routing table` — re-enter Step 7's Model Routing scaffold pipeline,
- or perform a focused edit of an existing
- `<!-- flow-next:model-routing:start -->` block when the scaffold question was
- not offered. Never silently overwrite customization; preserve the same
- Keep/Overwrite discipline.
+  or perform a focused edit of an existing
+  `<!-- flow-next:model-routing:start -->` block when the scaffold question was
+  not offered. Never silently overwrite customization; preserve the same
+  Keep/Overwrite discipline.
 - `Leave routing table` — recommended when the user did not ask for it.
 
 Do not offer this after a skipped pin write.

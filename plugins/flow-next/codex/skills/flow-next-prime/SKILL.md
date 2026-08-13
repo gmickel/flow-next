@@ -64,13 +64,13 @@ threading `ROOT` isn't feasible, error rather than silently scan cwd.
 Parse the mode before loading any reference:
 
 - **`--classify-only`:** read [classification.md](classification.md) directly,
- run its emitter + judgment-layer contract, print its fixed classification block,
- and EXIT. Do **not** read `workflow.md`, `pillars.md`, `playbooks.md`, or
- `remediation.md`; never ask, dispatch scouts, verify, report, or remediate.
+  run its emitter + judgment-layer contract, print its fixed classification block,
+  and EXIT. Do **not** read `workflow.md`, `pillars.md`, `playbooks.md`, or
+  `remediation.md`; never ask, dispatch scouts, verify, report, or remediate.
 - **All other modes:** read [workflow.md](workflow.md) and execute it. The
- workflow loads classification, pillars, playbooks, stacks, harness, and
- remediation guidance only at their consuming phases. `--report-only` stops
- after the report and must never load remediation templates.
+  workflow loads classification, pillars, playbooks, stacks, harness, and
+  remediation guidance only at their consuming phases. `--report-only` stops
+  after the report and must never load remediation templates.
 
 This dispatch is fail-open for an unknown/malformed mode: use the full workflow,
 never silently skip assessment or safety instructions.

@@ -21,7 +21,7 @@ ordering (the HOW) — but stops short of writing the implementation itself.
 interface WorkerBackend { /* every method and field */ }
 const backends = new Map<string, WorkerBackend>();
 export function registerBackend(backend: WorkerBackend) {
- backends.set(backend.name, backend);
+  backends.set(backend.name, backend);
 }
 \`\`\`
 ```
@@ -94,10 +94,10 @@ architecture rationale, and re-told R2 acceptance — retold at task length]
 
 \`\`\`typescript
 export const claudeBackend: WorkerBackend = {
- name: 'claude',
- async spawn(opts) { /* complete process implementation */ },
- async isAlive(handle) { /* complete liveness implementation */ },
- async kill(handle) { /* complete shutdown implementation */ },
+  name: 'claude',
+  async spawn(opts) { /* complete process implementation */ },
+  async isAlive(handle) { /* complete liveness implementation */ },
+  async kill(handle) { /* complete shutdown implementation */ },
 };
 \`\`\`
 ```
@@ -150,13 +150,13 @@ backend is an independent adapter behind the interface fn-2.1 landed.
 
 **Why this is better:**
 - The delegation payload: named files, concrete approach, task-scoped
- acceptance — a cheaper implementer builds without re-deriving design
- decisions
+  acceptance — a cheaper implementer builds without re-deriving design
+  decisions
 - References R2 instead of restating what R2 says — the executor reads the
- spec alongside the task
+  spec alongside the task
 - `**Touches:**` declares the write surface for later concurrency planning
 - Points to pattern to follow (`codex.ts:15-40`); notes key decision (prompt
- via `-p` flag)
+  via `-p` flag)
 - Implementer has freedom to write the actual code; acceptance is testable
 
 ---
@@ -284,14 +284,14 @@ Include a mermaid diagram when the change involves:
 
 \`\`\`mermaid
 erDiagram
- User ||--o{ Session : has
- User ||--o{ OAuthToken : has
- OAuthToken {
- string provider
- string access_token
- string refresh_token
- datetime expires_at
- }
+    User ||--o{ Session : has
+    User ||--o{ OAuthToken : has
+    OAuthToken {
+        string provider
+        string access_token
+        string refresh_token
+        datetime expires_at
+    }
 \`\`\`
 ```
 
@@ -302,10 +302,10 @@ erDiagram
 
 \`\`\`mermaid
 flowchart LR
- Client --> API
- API --> AuthService
- AuthService --> Google[Google OAuth]
- AuthService --> DB[(Database)]
+    Client --> API
+    API --> AuthService
+    AuthService --> Google[Google OAuth]
+    AuthService --> DB[(Database)]
 \`\`\`
 ```
 
@@ -367,10 +367,10 @@ flowchart LR
 
 | Req | Description | Task(s) | Gap justification |
 |-----|-------------|---------|-------------------|
-| R1 | OAuth login flow | fn-1-add-oauth.1, fn-1-add-oauth.2 | — |
-| R2 | Session persistence | fn-1-add-oauth.3 | — |
-| R3 | Admin dashboard | — | Deferred to fn-2-admin-panel |
-| R4 | Logout clears tokens | fn-1-add-oauth.2 | — |
+| R1  | OAuth login flow | fn-1-add-oauth.1, fn-1-add-oauth.2 | — |
+| R2  | Session persistence | fn-1-add-oauth.3 | — |
+| R3  | Admin dashboard | — | Deferred to fn-2-admin-panel |
+| R4  | Logout clears tokens | fn-1-add-oauth.2 | — |
 ```
 
 **Why this works:**

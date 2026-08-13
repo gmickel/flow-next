@@ -41,15 +41,15 @@ Example question shape (single entry):
 ```
 Entry: bug/runtime-errors/oauth-callback-2025-08-12
 Evidence:
- - module `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts`
- - function signature unchanged
- - no successor entry found
+  - module `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts`
+  - function signature unchanged
+  - no successor entry found
 Recommendation: Update (rename references)
 
 Options:
- 1. Update (recommended)
- 2. Skip for now
- 3. Mark stale
+  1. Update (recommended)
+  2. Skip for now
+  3. Mark stale
 ```
 
 ### 3.3 — Harden candidate questions
@@ -60,23 +60,23 @@ One question per candidate, via the same plain-text numbered prompt. Show the pr
 Entry: knowledge/conventions/timestamps-utc-2026-03-04
 Lesson: always stamp timestamps UTC ISO-8601; naive datetime.now() broke receipt comparisons
 Evidence:
- - 2 `## Update` headings (re-taught in fn-97 and fn-104)
- - 4 commits on the entry file
- - mechanizable: naive-datetime use is lint-detectable
- - duplication guard: no `DTZ` rule found in pyproject.toml
+  - 2 `## Update` headings (re-taught in fn-97 and fn-104)
+  - 4 commits on the entry file
+  - mechanizable: naive-datetime use is lint-detectable
+  - duplication guard: no `DTZ` rule found in pyproject.toml
 Proposed gate: (a) lint rule — add `DTZ` to the ruff `select` list in pyproject.toml
 
- [tool.ruff.lint]
- select = ["E", "F", "DTZ"] # <- DTZ added
+  [tool.ruff.lint]
+  select = ["E", "F", "DTZ"]     # <- DTZ added
 
 On accept: the edit is written, `ruff check` is run to confirm DTZ is active in the
 resolved config, and only then is the entry demoted to a pointer at the gate
 (file stays on disk, body intact).
 
 Options:
- 1. Accept — write the lint rule, verify, demote (recommended)
- 2. Pick a different gate type (CI step / CLAUDE.md rule)
- 3. Decline — keep the entry as context
+  1. Accept — write the lint rule, verify, demote (recommended)
+  2. Pick a different gate type (CI step / CLAUDE.md rule)
+  3. Decline — keep the entry as context
 ```
 
 Rules for these questions:

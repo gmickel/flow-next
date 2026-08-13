@@ -33,7 +33,7 @@ This rung is for the **same surface as Computer Use** — and nothing more:
 
 - **True-native apps** — macOS AppKit / SwiftUI, Catalyst; native Windows / Linux apps.
 - **Non-CDP webviews** — a webview exposing no Chrome DevTools Protocol port.
- The common case is **macOS WKWebView, which Tauri uses on macOS**.
+  The common case is **macOS WKWebView, which Tauri uses on macOS**.
 
 **Electron and Windows WebView2 do NOT belong here.** They are Chromium and
 expose a CDP debug port — drive them on the **web ladder** by CDP-attach
@@ -52,26 +52,26 @@ A single MCP server (`cua-driver mcp`, stdio transport) the host agent drives vi
 its MCP tools. The everyday loop seen live:
 
 - **Session** — `start_session` / `end_session`. Concurrent agents get **distinct
- cursors** via separate sessions, so two drives don't fight over one pointer.
+  cursors** via separate sessions, so two drives don't fight over one pointer.
 - **App lifecycle** — `launch_app` (launches **in the background**; returns
- `self_activation_suppressed: true`, confirming no focus steal) / `kill_app`.
- **Platform scope (0.6.8):** `launch_app` / `list_apps` / `list_windows` are
- **macOS-shaped** — `launch_app` takes a macOS `bundle_id` (e.g.
- `com.apple.calculator`) + `open -n`; `list_windows` reads the macOS WindowServer.
- On **Windows / Linux** native runs, do **not** assume `launch_app` works the same
- — the target is typically **already running** (discover + attach by `pid` rather
- than cold-launch), and the cold-launch/focus path is platform-specific. **Verify
- the Windows/Linux launch surface at build** (the driver's Windows tier is
- pre-release; see "drift / verify-at-build").
+  `self_activation_suppressed: true`, confirming no focus steal) / `kill_app`.
+  **Platform scope (0.6.8):** `launch_app` / `list_apps` / `list_windows` are
+  **macOS-shaped** — `launch_app` takes a macOS `bundle_id` (e.g.
+  `com.apple.calculator`) + `open -n`; `list_windows` reads the macOS WindowServer.
+  On **Windows / Linux** native runs, do **not** assume `launch_app` works the same
+  — the target is typically **already running** (discover + attach by `pid` rather
+  than cold-launch), and the cold-launch/focus path is platform-specific. **Verify
+  the Windows/Linux launch surface at build** (the driver's Windows tier is
+  pre-release; see "drift / verify-at-build").
 - **Observe** — `get_window_state` returns the **accessibility tree** as
- structured elements (`element_index` / `role` / `label` / `frame`) plus a
- Markdown rendering, and — *when Screen Recording is granted* — a
- `screenshot_png_b64` of the live window. `get_screen_size` / `list_apps` are
- no-grant reads.
+  structured elements (`element_index` / `role` / `label` / `frame`) plus a
+  Markdown rendering, and — *when Screen Recording is granted* — a
+  `screenshot_png_b64` of the live window. `get_screen_size` / `list_apps` are
+  no-grant reads.
 - **Act** — element-indexed `click` / `type_text` (you act on an `element_index`
- from the live AX tree, **not** pixel coordinates), plus `press_key` / `hotkey`
- / `scroll` actuation. *(The MCP text-entry tool is `type_text`, not `type` —
- per `cua-driver list-tools`; a bare `type` call will not resolve.)*
+  from the live AX tree, **not** pixel coordinates), plus `press_key` / `hotkey`
+  / `scroll` actuation. *(The MCP text-entry tool is `type_text`, not `type` —
+  per `cua-driver list-tools`; a bare `type` call will not resolve.)*
 
 The driver is **accessibility-tree based** — the host reasons over structured
 elements, which is far more robust for native apps than pixel-matching. Exact
@@ -86,13 +86,13 @@ the relevant commands and let the operator run them.
 **1. Install the driver** (upstream installers):
 
 - macOS / Linux:
- ```bash
- /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh)"
- ```
+  ```bash
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.sh)"
+  ```
 - Windows (PowerShell):
- ```powershell
- irm https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.ps1 | iex
- ```
+  ```powershell
+  irm https://raw.githubusercontent.com/trycua/cua/main/libs/cua-driver/scripts/install.ps1 | iex
+  ```
 
 > **Supply-chain note.** These are upstream's official installers, piped from the
 > **mutable `main` branch** — a compromised upstream could turn `curl … | bash` /
@@ -104,25 +104,25 @@ the relevant commands and let the operator run them.
 present the form for the operator's host, not Claude-only:
 
 - **Claude** (Claude Code CLI):
- ```bash
- claude mcp add --transport stdio cua-driver -- cua-driver mcp
- ```
+  ```bash
+  claude mcp add --transport stdio cua-driver -- cua-driver mcp
+  ```
 - **Codex** — add to the active Codex home's `config.toml` (`$CODEX_HOME`, default `~/.codex`):
- ```toml
- [mcp_servers.cua-driver]
- command = "cua-driver"
- args = ["mcp"]
- ```
+  ```toml
+  [mcp_servers.cua-driver]
+  command = "cua-driver"
+  args = ["mcp"]
+  ```
 - **Any other MCP host** — register a stdio MCP server whose command is
- `cua-driver mcp` (consult the host's MCP-config docs for the exact shape).
+  `cua-driver mcp` (consult the host's MCP-config docs for the exact shape).
 
 **3. Grant macOS permissions (one-time) — the load-bearing step.** macOS TCC
 grants **Accessibility** and **Screen Recording** *separately*, and they unlock
 **different** things (see the permission-split section). Request **both**:
 
 ```bash
-cua-driver permissions status # report which grants are present
-cua-driver permissions grant # walk the user through both grants
+cua-driver permissions status   # report which grants are present
+cua-driver permissions grant    # walk the user through both grants
 ```
 
 The grant is attributed to `com.trycua.driver` (LaunchServices). **The daemon
@@ -132,7 +132,7 @@ reset grants. (Linux/Windows have no TCC split — skip this step there.)
 **4. (Optional) Run the daemon** so MCP tools share one driver process:
 
 ```bash
-cua-driver serve # macOS / Linux, and Windows from an interactive desktop session
+cua-driver serve   # macOS / Linux, and Windows from an interactive desktop session
 ```
 
 Without `serve`, tools fall back to an **in-process** driver with a warning —
@@ -161,17 +161,17 @@ the same way the skill never assumes an issue tracker. Probe inline; observe,
 don't force:
 
 - **Display present.** No display / headless host → the local driver does not run
- here (that's the Sandbox rung's job). This rung never runs on a no-display path.
+  here (that's the Sandbox rung's job). This rung never runs on a no-display path.
 - **MCP registered, or binary present.** The `cua-driver` MCP server is
- registered with the host, **or** `command -v cua-driver` resolves. Confirm
- health with `cua-driver doctor`.
+  registered with the host, **or** `command -v cua-driver` resolves. Confirm
+  health with `cua-driver doctor`.
 - **Daemon (optional but preferred).** `cua-driver serve` running → MCP tools
- share one driver process; absent → in-process fallback with a warning.
+  share one driver process; absent → in-process fallback with a warning.
 - **macOS grant state.** On `uname -s` = `Darwin`, surface `cua-driver
- permissions status` so the user is told to `permissions grant` *before* a drive
- needs Screen Recording. Basic reads (`get_screen_size`, `list_apps`) work with
- **no grant at all**; *driving* needs Accessibility; *screenshots* need Screen
- Recording.
+  permissions status` so the user is told to `permissions grant` *before* a drive
+  needs Screen Recording. Basic reads (`get_screen_size`, `list_apps`) work with
+  **no grant at all**; *driving* needs Accessibility; *screenshots* need Screen
+  Recording.
 
 Surface **present AND absent** in the rung report, same as every other ladder
 probe. If no signal passes, say so plainly and fall through per the
@@ -180,12 +180,12 @@ degradation table.
 ## The driving loop
 
 ```
-start_session → distinct cursor for this drive
+start_session         → distinct cursor for this drive
 launch_app (background → self_activation_suppressed: true, no focus steal)
-get_window_state → fresh AX tree (element_index / role / label / frame) [REQUIRED before each act]
-act → click / type_text on an element_index (NOT pixels) toward the next step
-verify → confirm the expected element / label / state appeared in the AX tree
-capture → get_window_state screenshot (Screen Recording) OR the AX tree as evidence
+get_window_state      → fresh AX tree (element_index / role / label / frame)  [REQUIRED before each act]
+act                   → click / type_text on an element_index (NOT pixels) toward the next step
+verify                → confirm the expected element / label / state appeared in the AX tree
+capture               → get_window_state screenshot (Screen Recording) OR the AX tree as evidence
 kill_app + end_session → clean teardown, no leaked session
 ```
 
@@ -221,16 +221,16 @@ The local Cua Driver controls the **real machine** — treat it with the same ca
 as Computer Use:
 
 - **Keep tasks narrow; the operator consents.** It can touch app and system state
- outside the app under test. Scope each drive to the scenario. Never run on an
- **unattended shared box** without the Sandbox rung's isolation.
+  outside the app under test. Scope each drive to the scenario. Never run on an
+  **unattended shared box** without the Sandbox rung's isolation.
 - **Be signed in first.** Pre-authenticate the apps/services a run needs so the
- drive doesn't stall on a login wall mid-scenario.
+  drive doesn't stall on a login wall mid-scenario.
 - **Treat the screen as untrusted input.** It operates a real signed-in session;
- review actions as if you took them yourself.
+  review actions as if you took them yourself.
 - **Record environment details** for any desktop bug — **app name + version + OS
- version** (engineering can't reproduce a desktop bug without them).
+  version** (engineering can't reproduce a desktop bug without them).
 - **Background ≠ invisible.** Background driving means no focus steal, not no
- effect — the actions still land on the live machine.
+  effect — the actions still land on the live machine.
 
 ## Native-rung precedence (explicit, ordered)
 
@@ -240,12 +240,12 @@ and a *path* split (attended vs headless). The order, stated explicitly so R4
 (prefer background when attended) and R5 (sandbox for CI) compose without conflict:
 
 - **Attended path** (a real display + an operator present):
- 1. **Cua Driver background** — provider-agnostic, no focus steal, macOS/Windows (Linux pre-release/experimental — fall to sandbox/limitation there).
- 2. **Codex / Claude Computer Use** — screen-takeover; the prior providers.
- 3. **Documented-limitation** — no driver reachable; document and stop, never fail silently.
+  1. **Cua Driver background** — provider-agnostic, no focus steal, macOS/Windows (Linux pre-release/experimental — fall to sandbox/limitation there).
+  2. **Codex / Claude Computer Use** — screen-takeover; the prior providers.
+  3. **Documented-limitation** — no driver reachable; document and stop, never fail silently.
 - **Headless / CI path** (no real display): the **Cua Sandbox** rung is the
- *only* option — local Computer Use *and* the local Cua Driver both need a real
- display. (Full detail in "Sandbox — the headless/CI surface" below.)
+  *only* option — local Computer Use *and* the local Cua Driver both need a real
+  display. (Full detail in "Sandbox — the headless/CI surface" below.)
 
 So the local Cua Driver ranks **above** Computer Use on the attended path (better:
 no focus steal, more platforms), and the sandbox is first-and-only on the headless
@@ -258,48 +258,48 @@ Determine it, never assume — and keep it **separate from driver-install state 
 TCC grants** (different questions, see the cautions below). In order:
 
 1. **CI short-circuit.** `$CI` set (GitHub Actions, GitLab CI, CircleCI, etc. all
- export it) ⇒ treat as headless: skip the attended, focus-stealing local driver
- and go straight to the **Cua Sandbox** rung.
+   export it) ⇒ treat as headless: skip the attended, focus-stealing local driver
+   and go straight to the **Cua Sandbox** rung.
 2. **Probe only when the driver is installed.** The display probe is meaningful
- *only* if `cua-driver` actually exists. **A probe that fails because the binary
- is absent is NOT a no-display signal** — never route an attended machine to the
- sandbox just because nothing is installed.
+   *only* if `cua-driver` actually exists. **A probe that fails because the binary
+   is absent is NOT a no-display signal** — never route an attended machine to the
+   sandbox just because nothing is installed.
 
- - **Driver present** (`command -v cua-driver`): `cua-driver call get_screen_size`
- returns positive dims when a real display is reachable. The CLI returns a flat
- `{width, height, scale_factor}` (verified 0.6.8); tolerate the MCP
- `structuredContent` envelope too:
+   - **Driver present** (`command -v cua-driver`): `cua-driver call get_screen_size`
+     returns positive dims when a real display is reachable. The CLI returns a flat
+     `{width, height, scale_factor}` (verified 0.6.8); tolerate the MCP
+     `structuredContent` envelope too:
 
- ```bash
- if ! command -v cua-driver >/dev/null 2>&1; then
- DISPLAY_PRESENT=unknown # driver absent — can't probe; fall back to env/platform (#3) + Computer Use, NOT headless
- elif cua-driver call get_screen_size 2>/dev/null \
- | jq -e '(.width // .structuredContent.width // 0) > 0
- and (.height // .structuredContent.height // 0) > 0' >/dev/null; then
- DISPLAY_PRESENT=1 # display reachable (positive WIDTH and HEIGHT) → attended ladder
- else
- DISPLAY_PRESENT=0 # driver present but no display → headless (Cua Sandbox if a backend exists)
- fi
- ```
+     ```bash
+     if ! command -v cua-driver >/dev/null 2>&1; then
+       DISPLAY_PRESENT=unknown   # driver absent — can't probe; fall back to env/platform (#3) + Computer Use, NOT headless
+     elif cua-driver call get_screen_size 2>/dev/null \
+          | jq -e '(.width // .structuredContent.width // 0) > 0
+                   and (.height // .structuredContent.height // 0) > 0' >/dev/null; then
+       DISPLAY_PRESENT=1         # display reachable (positive WIDTH and HEIGHT) → attended ladder
+     else
+       DISPLAY_PRESENT=0         # driver present but no display → headless (Cua Sandbox if a backend exists)
+     fi
+     ```
 
- - **Driver absent:** you can't probe — do **not** infer headless. Fall back to
- env/platform (#3) and let the **Computer Use** ladder (and its own display
- check) decide; only a real no-display signal routes to the sandbox.
+   - **Driver absent:** you can't probe — do **not** infer headless. Fall back to
+     env/platform (#3) and let the **Computer Use** ladder (and its own display
+     check) decide; only a real no-display signal routes to the sandbox.
 3. **Env/platform fallback (driver absent).** On **Linux**,
- `[ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]` is a fast headless hint.
- **Never use `$DISPLAY` on macOS** — it's unset on a fully-displayed Mac (verified:
- a 5120×1440 Mac reports `$DISPLAY` unset), so it false-positives headless. macOS
- always has a window server even over SSH; absent the driver, assume **attended**
- and let Computer Use's own probe decide.
+   `[ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]` is a fast headless hint.
+   **Never use `$DISPLAY` on macOS** — it's unset on a fully-displayed Mac (verified:
+   a 5120×1440 Mac reports `$DISPLAY` unset), so it false-positives headless. macOS
+   always has a window server even over SSH; absent the driver, assume **attended**
+   and let Computer Use's own probe decide.
 
 **Two things that are NOT a headless signal (don't conflate them):**
 
 - **TCC grants (macOS).** `get_screen_size` works with **no** grants. Missing
- **Accessibility** is an *attended-path driver failure* → fall through to Computer
- Use, **not** the sandbox. Missing **Screen Recording** still drives (AX-only
- evidence). Keep grant state out of the display decision entirely.
+  **Accessibility** is an *attended-path driver failure* → fall through to Computer
+  Use, **not** the sandbox. Missing **Screen Recording** still drives (AX-only
+  evidence). Keep grant state out of the display decision entirely.
 - **Driver not installed.** That's a *detect-and-instruct* gap (print the install),
- not proof of no display — see #2.
+  not proof of no display — see #2.
 
 `cua-driver doctor` reports install / TCC health, **not** display presence — don't
 use it for this decision.
@@ -336,10 +336,10 @@ ordering in "Native-rung precedence" above; it slots in as the headless leg. The
 two compose:
 
 - **Attended path:** Cua Driver background → Computer Use → documented-limitation
- (the sandbox is available but not preferred — only worth it for hermetic
- isolation the operator explicitly wants).
+  (the sandbox is available but not preferred — only worth it for hermetic
+  isolation the operator explicitly wants).
 - **Headless / CI path:** **Cua Sandbox only** — first and last resort, because
- nothing else can drive a native surface with no display.
+  nothing else can drive a native surface with no display.
 
 Still **for true-native + non-CDP surfaces only** (same scope rule as the rest of
 this rung). A Chromium app (Electron / WebView2) in CI belongs on the web ladder
@@ -374,15 +374,15 @@ Same posture as the local driver — *probably absent*, confirm before planning
 around it. Probe inline; observe, don't force:
 
 - **Local backend present.** The `cua` Python SDK is importable **and** a local
- VM/container backend is usable: `command -v lume` (macOS VM), `command -v
- docker` + a running daemon (Linux container), or a QEMU install. No backend →
- no local sandbox.
+  VM/container backend is usable: `command -v lume` (macOS VM), `command -v
+  docker` + a running daemon (Linux container), or a QEMU install. No backend →
+  no local sandbox.
 - **Cloud backend configured.** `CUA_API_KEY` is set **and** the operator has
- opted into the cloud for this run. Never treat a present key as consent to
- egress — the cloud is opt-in per run.
+  opted into the cloud for this run. Never treat a present key as consent to
+  egress — the cloud is opt-in per run.
 - **Headless is fine here.** Unlike every other native rung, the sandbox is
- *designed* for a no-display host — that is its whole point. Absence of a
- display is **not** a degradation signal for this rung.
+  *designed* for a no-display host — that is its whole point. Absence of a
+  display is **not** a degradation signal for this rung.
 
 Surface **present AND absent** in the rung report, same as every other ladder
 probe. Absent local backend *and* no opted-in cloud → no sandbox rung; on a
@@ -405,7 +405,7 @@ curl -fsSL https://raw.githubusercontent.com/trycua/cua/main/libs/lume/scripts/i
 # Pull a base image — FIRST PULL IS A MULTI-GB "COFFEE BREAK", not a hang
 # (the macOS image is ~30GB; it downloads once, then is cached)
 lume pull macos-sequoia-cua:latest
-lume ls # confirm the image is present
+lume ls   # confirm the image is present
 
 # Linux container backend — Docker Desktop / engine running is enough; no lume.
 ```
@@ -415,7 +415,7 @@ lume ls # confirm the image is present
 ```bash
 # Cua's quickstart requires Python 3.12+ (lists 3.12/3.13). flow-next itself is 3.11+,
 # so install into a dedicated venv: python3.12 -m venv .cua && .cua/bin/pip install cua
-pip install cua # MIT base; the omni/vision extras are NOT needed here — see Licensing
+pip install cua   # MIT base; the omni/vision extras are NOT needed here — see Licensing
 
 # IMPORTANT for the "local = zero-network" promise: the `cua` package ships
 # anonymous usage telemetry ENABLED by default. For a truly offline local run,
@@ -454,16 +454,16 @@ import asyncio
 from cua import Sandbox, Image
 
 async def main():
- # local=True → the zero-network local backend (Docker/Lume/QEMU); the DEFAULT here.
- # Omit local=True ONLY when the operator opted into the cloud (CUA_API_KEY set) — bills + egress.
- async with Sandbox.ephemeral(Image.linux(), local=True) as sb: # ← auto-destroyed on exit
- # observe → snapshot → act → verify → capture, the universal flow (SKILL.md Step 2),
- # now inside the hermetic machine. The sandbox exposes a GUI half (screenshot / AX /
- # click / type_text) and a code half (sb.shell.run(...)) over one filesystem.
- png = await sb.screenshot() # capture — hermetic display, no host screen needed
- with open("evidence.png", "wb") as f:
- f.write(png)
- # sandbox destroyed HERE — on normal exit AND on exception. No leaked VM.
+    # local=True → the zero-network local backend (Docker/Lume/QEMU); the DEFAULT here.
+    # Omit local=True ONLY when the operator opted into the cloud (CUA_API_KEY set) — bills + egress.
+    async with Sandbox.ephemeral(Image.linux(), local=True) as sb:   # ← auto-destroyed on exit
+        # observe → snapshot → act → verify → capture, the universal flow (SKILL.md Step 2),
+        # now inside the hermetic machine. The sandbox exposes a GUI half (screenshot / AX /
+        # click / type_text) and a code half (sb.shell.run(...)) over one filesystem.
+        png = await sb.screenshot()              # capture — hermetic display, no host screen needed
+        with open("evidence.png", "wb") as f:
+            f.write(png)
+    # sandbox destroyed HERE — on normal exit AND on exception. No leaked VM.
 
 asyncio.run(main())
 ```
@@ -471,18 +471,18 @@ asyncio.run(main())
 **Teardown discipline (load-bearing):**
 
 - **`ephemeral` is the default pattern** — its `async with` tears the sandbox
- down automatically, on the error path too. Use it unless you have a reason not to.
+  down automatically, on the error path too. Use it unless you have a reason not to.
 - If you use the **persistent** form (`Sandbox.create(... name=...)` →
- `disconnect()` keeps it running), you **own** the deletion: `sb.destroy()` or
- the classmethod `Sandbox.delete(name, local=True)`. **`local=True` is required to
- delete a *local* sandbox — the default `local=False` targets the cloud namespace,
- so `Sandbox.delete(name)` after a `local=True` create silently leaves the local
- VM running** (the exact leak this rung exists to avoid). Only use the persistent
- form when state must outlive the run, and delete it explicitly. (Verify at build.)
+  `disconnect()` keeps it running), you **own** the deletion: `sb.destroy()` or
+  the classmethod `Sandbox.delete(name, local=True)`. **`local=True` is required to
+  delete a *local* sandbox — the default `local=False` targets the cloud namespace,
+  so `Sandbox.delete(name)` after a `local=True` create silently leaves the local
+  VM running** (the exact leak this rung exists to avoid). Only use the persistent
+  form when state must outlive the run, and delete it explicitly. (Verify at build.)
 - **On error/abort, still tear down.** Never leave a half-driven VM running —
- wrap non-ephemeral lifecycles so an exception still reaches `destroy()`.
+  wrap non-ephemeral lifecycles so an exception still reaches `destroy()`.
 - **`Sandbox.list()` is the leak audit** — list and reap orphaned sandboxes if a
- run died without cleanup. (Verify at build.)
+  run died without cleanup. (Verify at build.)
 
 ### First-pull "coffee break" — not a hang
 
@@ -497,15 +497,15 @@ seconds.)
 ## Licensing — documented, never auto-installed
 
 - **Default driving path = MIT only.** The everyday rung — the background
- `cua-driver` MCP — uses **only MIT** components and needs **none** of the
- vision/OmniParser stack. (If that turns out false at build, **correct this
- claim**, do not relax the no-auto-install rule.)
+  `cua-driver` MCP — uses **only MIT** components and needs **none** of the
+  vision/OmniParser stack. (If that turns out false at build, **correct this
+  claim**, do not relax the no-auto-install rule.)
 - **AGPL / CC-BY extras — flagged, never auto-installed.** The optional
- `cua-agent[omni]` pulls **ultralytics (AGPL-3.0)**, and **OmniParser** is
- **CC-BY-4.0**. The rung **never runs `pip install cua-agent[omni]`** (or any
- extra) for the user — same enforcement as `/flow-next:map`'s no-auto-install
- rule for `clawpatch`. Document which extras are MIT-safe vs AGPL/CC-BY; let the
- operator install with their own consent.
+  `cua-agent[omni]` pulls **ultralytics (AGPL-3.0)**, and **OmniParser** is
+  **CC-BY-4.0**. The rung **never runs `pip install cua-agent[omni]`** (or any
+  extra) for the user — same enforcement as `/flow-next:map`'s no-auto-install
+  rule for `clawpatch`. Document which extras are MIT-safe vs AGPL/CC-BY; let the
+  operator install with their own consent.
 
 ## Evidence tuple (R6) — slots into QA with no schema change
 
@@ -526,26 +526,26 @@ verdict) stays QA's concern.
 Cua moves fast (the live run was 0.6.8). Confirm against current upstream at build:
 
 - **MCP command surface** — the tool names/fields (`start_session`,
- `launch_app`, `get_window_state` and its `element_index` / `role` / `label` /
- `frame` / `screenshot_png_b64` shape, `click`, `type_text`, `press_key` / `hotkey`, `kill_app`,
- `end_session`), the `self_activation_suppressed` background signal, and the CLI
- subcommands (`mcp`, `serve`, `doctor`, `permissions status` / `grant`,
- `skills install`).
+  `launch_app`, `get_window_state` and its `element_index` / `role` / `label` /
+  `frame` / `screenshot_png_b64` shape, `click`, `type_text`, `press_key` / `hotkey`, `kill_app`,
+  `end_session`), the `self_activation_suppressed` background signal, and the CLI
+  subcommands (`mcp`, `serve`, `doctor`, `permissions status` / `grant`,
+  `skills install`).
 - **Install + wiring** — the `install.sh` / `install.ps1` URLs, the `claude mcp
- add` form, and the Codex `[mcp_servers.cua-driver]` shape.
+  add` form, and the Codex `[mcp_servers.cua-driver]` shape.
 - **Permission model** — the macOS Accessibility-vs-Screen-Recording split, the
- `com.trycua.driver` attribution, and the daemon-restart-to-pick-up-grant rule.
+  `com.trycua.driver` attribution, and the daemon-restart-to-pick-up-grant rule.
 - **Sandbox provisioning API** — the `cua` SDK lifecycle surface
- (`Sandbox.ephemeral` / `create` / `connect` / `destroy` / `delete` / `list`,
- the `local=True` local-vs-cloud switch, `Image.linux()` and the image catalog),
- the local backend matrix (`lume`/Apple-Virtualization on macOS, Docker on
- Linux, QEMU/Hyper-V on Windows), the `lume pull` image name + ~30GB size, and
- the cua.ai cloud `CUA_API_KEY` opt-in surface. **None of this was validated
- live** — the local *driver* was; the *sandbox* was not. Verify every claim
- before relying on it.
+  (`Sandbox.ephemeral` / `create` / `connect` / `destroy` / `delete` / `list`,
+  the `local=True` local-vs-cloud switch, `Image.linux()` and the image catalog),
+  the local backend matrix (`lume`/Apple-Virtualization on macOS, Docker on
+  Linux, QEMU/Hyper-V on Windows), the `lume pull` image name + ~30GB size, and
+  the cua.ai cloud `CUA_API_KEY` opt-in surface. **None of this was validated
+  live** — the local *driver* was; the *sandbox* was not. Verify every claim
+  before relying on it.
 - **License-extra boundary** — that the MIT `cua-driver` MCP is the
- default-path-complete set and `cua-agent[omni]` (ultralytics AGPL-3.0) /
- OmniParser (CC-BY-4.0) remain optional, never-auto-installed extras.
+  default-path-complete set and `cua-agent[omni]` (ultralytics AGPL-3.0) /
+  OmniParser (CC-BY-4.0) remain optional, never-auto-installed extras.
 
 ## Graceful degradation (load-bearing)
 
@@ -566,16 +566,16 @@ Cua Driver is never required. When it's absent, fall through — never fail sile
 ## Limits
 
 - **Never a hard dependency.** If neither the local driver nor a sandbox backend
- is present, fall through per the table — the pass still completes. agent-browser
- stays the only assumed-present driver; flowctl never imports or requires Cua.
+  is present, fall through per the table — the pass still completes. agent-browser
+  stays the only assumed-present driver; flowctl never imports or requires Cua.
 - This rung is for **true-native + non-CDP webviews only** — local driver *and*
- sandbox alike. Anything Chromium (Electron / WebView2) → the web ladder
- ([agent-browser.md](agent-browser.md), [chrome-devtools-mcp.md](chrome-devtools-mcp.md)),
- even in CI.
+  sandbox alike. Anything Chromium (Electron / WebView2) → the web ladder
+  ([agent-browser.md](agent-browser.md), [chrome-devtools-mcp.md](chrome-devtools-mcp.md)),
+  even in CI.
 - **The local driver needs a real display; the Cua Sandbox is the only headless/CI
- native surface.** Keep that distinction explicit so CI users reach for the
- sandbox, not the local driver. The sandbox is heavier (provisions a VM) and
- opt-in per run — never the default native path on an attended host.
+  native surface.** Keep that distinction explicit so CI users reach for the
+  sandbox, not the local driver. The sandbox is heavier (provisions a VM) and
+  opt-in per run — never the default native path on an attended host.
 - **The cloud sandbox backend bills and egresses the driven screen — never
- auto-selected.** The zero-network local backend (`lume`/QEMU/Docker) is the
- default; the cua.ai cloud requires an explicit per-run opt-in and a `CUA_API_KEY`.
+  auto-selected.** The zero-network local backend (`lume`/QEMU/Docker) is the
+  default; the cua.ai cloud requires an explicit per-run opt-in and a `CUA_API_KEY`.

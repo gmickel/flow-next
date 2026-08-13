@@ -16,15 +16,15 @@ diffs default to REVIEW. Opt-in to LLM judge with `FLOW_TRIAGE_LLM=1`.
 
 ```json
 {
- "type": "impl_review",
- "id": "fn-29.6",
- "mode": "triage_skip",
- "base": "main",
- "verdict": "SHIP",
- "reason": "lockfile-only (bun.lock)",
- "source": "deterministic",
- "changed_file_count": 1,
- "timestamp": "2026-04-24T10:00:00Z"
+  "type": "impl_review",
+  "id": "fn-29.6",
+  "mode": "triage_skip",
+  "base": "main",
+  "verdict": "SHIP",
+  "reason": "lockfile-only (bun.lock)",
+  "source": "deterministic",
+  "changed_file_count": 1,
+  "timestamp": "2026-04-24T10:00:00Z"
 }
 ```
 

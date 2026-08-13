@@ -1,11 +1,54 @@
 {
   "branch_name": "fn-189-human-first-visual-digest-skill",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-12T21:27:05.656474Z",
   "created_at": "2026-08-12T19:50:23.774121Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-189-human-first-visual-digest-skill",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "d23e54f6e9a8c78f54d517b82f1cfbd54cf8754ff14ec6d7394047430a25a0a3",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "81b713838462e844e75e19476c264d09db136190",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 2653,
+      "output_sha256": "12fafb5dd093edc76f1de0a6774b06a0220fb10f54425fad2d82520bd1e27953",
+      "reservation_id": "1c4fe595867c47e9bc780e3aad008ba9",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-12T21:27:04.896179Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "plan#completion": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "completion": 0
+  },
   "spec_path": ".flow/specs/fn-189-human-first-visual-digest-skill.md",
   "status": "open",
   "title": "Human-first visual digest skill + structural sketches in make-pr",
@@ -20,5 +63,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-12T19:50:23.776688Z"
+  "updated_at": "2026-08-12T21:27:05.657264Z"
 }

@@ -51,9 +51,9 @@ If the entry's `status` is `hardened`, capture its `hardened_into` value into th
 ```bash
 LEGACY_FILES=()
 for legacy in pitfalls.md conventions.md decisions.md; do
- if [[ -f "$MEMORY_DIR/$legacy" ]]; then
- LEGACY_FILES+=("$legacy")
- fi
+  if [[ -f "$MEMORY_DIR/$legacy" ]]; then
+    LEGACY_FILES+=("$legacy")
+  fi
 done
 LEGACY_COUNT=$(( ${#LEGACY_FILES[@]} ))
 ```
@@ -62,7 +62,7 @@ If `LEGACY_COUNT > 0`, count entries inside (each legacy file is `---`-delimited
 
 ```bash
 LEGACY_ENTRY_COUNT=$("$FLOWCTL" memory list --json 2>/dev/null \
- | jq '[.legacy[]?.entries] | add // 0' 2>/dev/null || echo 0)
+  | jq '[.legacy[]?.entries] | add // 0' 2>/dev/null || echo 0)
 ```
 
 **Skip them.** Auditing legacy entries is half-broken: no frontmatter to write `status: stale` to, no track / category for scoping, references too dense to verify mechanically. The report will print:
@@ -115,14 +115,14 @@ This phase runs in parallel concept to the memory walk — same audit invocation
 ACTIVE=0
 # NO pipelines in the probe — a failed producer masked by a healthy consumer
 # fails CLOSED. Capture raw first, rc-checked; parse separately.
-RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1 # probe ERROR ⇒ ACTIVE (fail open)
+RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || ACTIVE=1     # probe ERROR ⇒ ACTIVE (fail open)
 if [ "$ACTIVE" = "0" ]; then
- VAL="$(printf '%s' "$RAW" | jq -r '(.file_count // 0) > 0' 2>/dev/null)" || ACTIVE=1 # parse ERROR ⇒ ACTIVE
- [ "$VAL" = "true" ] && ACTIVE=1
+  VAL="$(printf '%s' "$RAW" | jq -r '(.file_count // 0) > 0' 2>/dev/null)" || ACTIVE=1   # parse ERROR ⇒ ACTIVE
+  [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "GATE ACTIVE — read and execute references/glossary-scan.md, then continue with Phase 0.75."
-fi # default branch: bare no-op — NO link, NO read path
+  echo "GATE ACTIVE — read and execute references/glossary-scan.md, then continue with Phase 0.75."
+fi   # default branch: bare no-op — NO link, NO read path
 ```
 
 When the sentinel prints, STOP and Read [references/glossary-scan.md](references/glossary-scan.md) before any further step, then execute it — it owns the enumeration and JSON shape, the per-term code search and its decision table, Edit-tool stale-marking, husk advisories, alias-creep handling, the four glossary report counts, and the §4.4.1 Phase-4 execution half. Then continue with Phase 0.75. When the gate is silent (no glossary files on the ancestor chain), continue — nothing fires here, the glossary report counts are all zero, and §4.4.1 has nothing to execute.
@@ -161,15 +161,15 @@ UPDATE_HEADINGS=${UPDATE_HEADINGS:-0}
 # `rename to` lines and no `+`/`-` content, so awk correctly does not count a `git mv` as a
 # re-teaching; a rename carrying real edits still counts once, as it should.
 ENTRY_COMMITS=$(git -C "$REPO_ROOT" log --follow --format='COMMIT %H' --patch --unified=0 \
- -- "$entry_file" 2>/dev/null | awk '
- /^COMMIT / { substantive = 0; next } # new commit — reset the per-commit flag
- /^(--- |\+\+\+ )/ { next } # skip file headers, not content
- /^[+-]/ {
- field = substr($0, 2)
- if (field ~ /^(last_audited|audit_notes|status|stale_reason|stale_date|hardened_into):/) next
- if (!substantive) { substantive = 1; count++ }
- }
- END { print count + 0 }') # prints 0 for an untracked/new file
+  -- "$entry_file" 2>/dev/null | awk '
+  /^COMMIT /        { substantive = 0; next }        # new commit — reset the per-commit flag
+  /^(--- |\+\+\+ )/ { next }                         # skip file headers, not content
+  /^[+-]/ {
+    field = substr($0, 2)
+    if (field ~ /^(last_audited|audit_notes|status|stale_reason|stale_date|hardened_into):/) next
+    if (!substantive) { substantive = 1; count++ }
+  }
+  END { print count + 0 }')                          # prints 0 for an untracked/new file
 ENTRY_COMMITS=${ENTRY_COMMITS:-0}
 # plus, from the frontmatter already parsed in §0.1: related_to length, last_updated
 ```
@@ -217,10 +217,10 @@ For each remaining discovered entry (§0.1) — not recurrence-qualified, not ha
 # variable in zsh, which the skills' bash blocks run under; a bare `status=` assignment errors).
 NEEDS_INVESTIGATION=1
 if [[ -n "$module" && -n "$last_audited" && "$entry_status" != "stale" && -e "$module" ]]; then
- # $module must be a real tracked path for this to be sound: a logical module NAME, or a
- # DELETED module (path gone → a Delete candidate), both fail `-e` and fall through to investigation.
- CHANGED="$(git log --oneline --since="$last_audited" -- "$module" 2>/dev/null | head -1)"
- [[ -z "$CHANGED" ]] && NEEDS_INVESTIGATION=0 # module path untouched since the last audit → still current
+  # $module must be a real tracked path for this to be sound: a logical module NAME, or a
+  # DELETED module (path gone → a Delete candidate), both fail `-e` and fall through to investigation.
+  CHANGED="$(git log --oneline --since="$last_audited" -- "$module" 2>/dev/null | head -1)"
+  [[ -z "$CHANGED" ]] && NEEDS_INVESTIGATION=0   # module path untouched since the last audit → still current
 fi
 ```
 
@@ -283,16 +283,16 @@ entry_id: bug/runtime-errors/oauth-callback-2025-08-12
 recommendation: Update | Keep | Consolidate | Replace | Delete | Harden
 confidence: low | medium | high
 evidence:
- - "file `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts` (git log shows move 2025-11-03)"
- - "function signature unchanged — solution still applies"
- - "no successor entry found"
-recurrence: # carried from §0.75.1; artifacts only, never a usage count
- update_headings: 2
- entry_commits: 4
- related_to: 0
-mechanizable: yes | no | n/a # required whenever recommendation is Harden
+  - "file `src/auth/callback.ts` renamed to `src/auth/oauth/callback.ts` (git log shows move 2025-11-03)"
+  - "function signature unchanged — solution still applies"
+  - "no successor entry found"
+recurrence:            # carried from §0.75.1; artifacts only, never a usage count
+  update_headings: 2
+  entry_commits: 4
+  related_to: 0
+mechanizable: yes | no | n/a   # required whenever recommendation is Harden
 open_questions:
- - "should this be consolidated with bug/runtime-errors/oauth-token-2025-09-04?"
+  - "should this be consolidated with bug/runtime-errors/oauth-token-2025-09-04?"
 ```
 
 When spawning subagents, include this directive in the task prompt:
@@ -538,10 +538,10 @@ Skipped legacy: <LEGACY_ENTRY_COUNT> (run `/flow-next:memory-migrate` first to m
 
 Kept: <X>
 Updated: <Y>
-Consolidated: <C> (clusters: <K>)
+Consolidated: <C>  (clusters: <K>)
 Replaced: <Z>
 Deleted: <W>
-Hardened: <H> (failed graduations: <HF>; un-graduated: <HU>)
+Hardened: <H>  (failed graduations: <HF>; un-graduated: <HU>)
 Marked stale: <S>
 Skipped (no decision): <U>
 
@@ -558,20 +558,20 @@ Then per-entry detail (one block each):
 
 ```
 - <entry_id>
- Classification: <Keep|Update|Consolidate|Replace|Delete|Harden|Stale>
- Evidence:
- - <bullet>
- - <bullet>
- Action: <what was done — file edits, deletions, mark-stale calls>
- [Consolidate only] Canonical: <entry_id>; merged: [<list>]; deleted: [<list>]
- [Replace only] Old guidance: <one-line>; New entry: <new_id>
- [Decision Replace] Successor: <new_id>; old marked decision_status=superseded (NOT git-rm'd)
- [Harden only] Gate type: <lint|CI|instruction file>; Artifact: <path>;
- Gate-ref: <path>#<rule-id> -- <note>; Verified: <how it was confirmed live>
- [Harden — pointer only] Existing gate: <path>#<rule-id>; no new artifact written
- [Harden — failed] Gate type: <...>; Artifact: <path>; FAILED VERIFICATION: <reason>;
- entry left active, not demoted
- [Un-graduated] Gate <path>#<rule-id> no longer live (<what was missing>); mark-fresh applied
+  Classification: <Keep|Update|Consolidate|Replace|Delete|Harden|Stale>
+  Evidence:
+    - <bullet>
+    - <bullet>
+  Action: <what was done — file edits, deletions, mark-stale calls>
+  [Consolidate only] Canonical: <entry_id>; merged: [<list>]; deleted: [<list>]
+  [Replace only] Old guidance: <one-line>; New entry: <new_id>
+  [Decision Replace] Successor: <new_id>; old marked decision_status=superseded (NOT git-rm'd)
+  [Harden only] Gate type: <lint|CI|instruction file>; Artifact: <path>;
+                Gate-ref: <path>#<rule-id> -- <note>; Verified: <how it was confirmed live>
+  [Harden — pointer only] Existing gate: <path>#<rule-id>; no new artifact written
+  [Harden — failed] Gate type: <...>; Artifact: <path>; FAILED VERIFICATION: <reason>;
+                    entry left active, not demoted
+  [Un-graduated] Gate <path>#<rule-id> no longer live (<what was missing>); mark-fresh applied
 ```
 
 For **Keep** outcomes, group under a "Reviewed without edits" subsection so the result is visible without git churn.
@@ -582,10 +582,10 @@ Then per-glossary-term detail (only for stale + alias-creep cases — Keep is si
 
 ```
 - <relative-path>:<term>
- Outcome: <Marked stale|Alias-creep|Marked stale + alias-creep>
- Term hits: <N>
- Alias hits: <alias-1>: <N1>, <alias-2>: <N2>
- Action: <Edit applied|None — recommendation only>
+  Outcome: <Marked stale|Alias-creep|Marked stale + alias-creep>
+  Term hits: <N>
+  Alias hits: <alias-1>: <N1>, <alias-2>: <N2>
+  Action: <Edit applied|None — recommendation only>
 ```
 
 Husk advisories (one per file with `count: 0`) follow under a "Glossary husks" subsection.
@@ -607,7 +607,7 @@ If all writes succeed, Recommended is empty. If no writes succeed (read-only inv
 GIT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current 2>/dev/null || echo "")
 GIT_DIRTY=$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null | grep -v "^??" | wc -l | tr -d ' ')
 GIT_DEFAULT=$(git -C "$REPO_ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null \
- | sed 's|^origin/||' || echo "main")
+  | sed 's|^origin/||' || echo "main")
 ```
 
 Skip Phase 5 commit logic if no files were modified (all Keep, all writes failed).
@@ -618,7 +618,7 @@ If `GIT_BRANCH` matches `main` / `master` / `$GIT_DEFAULT`:
 
 ```
 1. Create a branch + commit + open PR (recommended)
- Branch: docs/audit-memory-<date> (or topic-specific if scope was narrow)
+   Branch: docs/audit-memory-<date>  (or topic-specific if scope was narrow)
 2. Commit directly to <GIT_BRANCH>
 3. Don't commit — I'll handle it
 ```
@@ -717,7 +717,7 @@ When the spirit isn't met, draft the smallest addition that communicates the thr
 When there's an existing directory listing or architecture section, add a line:
 
 ```
-.flow/memory/ # categorized learnings (bug/<category>/, knowledge/<category>/) — YAML frontmatter (track, category, module, tags, status); search via `flowctl memory search <q>`; relevant when implementing or debugging in documented modules
+.flow/memory/  # categorized learnings (bug/<category>/, knowledge/<category>/) — YAML frontmatter (track, category, module, tags, status); search via `flowctl memory search <q>`; relevant when implementing or debugging in documented modules
 ```
 
 When nothing in the file is a natural fit, a small headed section is appropriate:
@@ -749,9 +749,9 @@ Proposed addition (under <section name>):
 <draft text>
 
 Options:
- 1. Apply addition (recommended)
- 2. Edit the draft first
- 3. Skip — I'll handle it
+  1. Apply addition (recommended)
+  2. Edit the draft first
+  3. Skip — I'll handle it
 ```
 
 If the user picks Apply:

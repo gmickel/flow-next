@@ -81,8 +81,8 @@ Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if
 
 **If `setup_version` exists (already set up):**
 - If **same version**: tell user "Already set up with v<VERSION>. Re-run to refresh files + docs? (y/n)"
- - If yes: continue from the existing-mode guard (before Step 3) — it runs on EVERY pass, then copy-mode repos flow into Step 3's re-copy (idempotent; same-version refresh should NOT skip the file copy, otherwise a project running an unchanged version number but a moved template lands docs that point at a missing path)
- - If no: done
+  - If yes: continue from the existing-mode guard (before Step 3) — it runs on EVERY pass, then copy-mode repos flow into Step 3's re-copy (idempotent; same-version refresh should NOT skip the file copy, otherwise a project running an unchanged version number but a moved template lands docs that point at a missing path)
+  - If no: done
 - If **older version**: tell user "Updating from v<OLD> to v<NEW>" and continue
 
 **If no `setup_version`:** continue (first-time setup)
@@ -157,8 +157,8 @@ The spec-template discovery cascade prefers a customized scaffold at the repo ro
 # would print one shared filesystem id for BOTH files, collapsing a genuine
 # two-file repo to HITS=1.
 HITS=$(for f in SPEC.md spec.md; do
- [ -e "$f" ] || continue
- stat -c %i "$f" 2>/dev/null || stat -f %i "$f" 2>/dev/null
+  [ -e "$f" ] || continue
+  stat -c %i "$f" 2>/dev/null || stat -f %i "$f" 2>/dev/null
 done | sort -u | wc -l | tr -d ' ')
 ```
 
@@ -169,9 +169,9 @@ Then branch:
 - **header**: `Copy canonical spec template to <repo-root>/SPEC.md?`
 - **body**: `Every new flow-next spec starts from a template. Lookup order: <repo-root>/SPEC.md first, then .flow/templates/spec.md, then the plugin's bundled copy — so a SPEC.md at the repo root is where you customize section wording for THIS project without touching .flow/ internals. Skipping is safe — the later fallbacks always resolve, and you can opt in any time by copying .flow/templates/spec.md to the repo root.`
 - **options**:
- - `Copy template` — write `<repo_root>/SPEC.md` from the bundled template (carries the customization-location top-comment). Print the path so the user knows where to edit.
- - `Skip` — no write. Cascade falls through to `.flow/templates/spec.md`. Documentation cross-links (CLAUDE.md / AGENTS.md snippets) explain how to opt in later: just copy `.flow/templates/spec.md` to `<repo-root>/SPEC.md`.
- - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo_root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+  - `Copy template` — write `<repo_root>/SPEC.md` from the bundled template (carries the customization-location top-comment). Print the path so the user knows where to edit.
+  - `Skip` — no write. Cascade falls through to `.flow/templates/spec.md`. Documentation cross-links (CLAUDE.md / AGENTS.md snippets) explain how to opt in later: just copy `.flow/templates/spec.md` to `<repo-root>/SPEC.md`.
+  - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo_root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 On `Copy template`: write the file via Bash `cp` with absolute paths.
 
@@ -209,7 +209,7 @@ Or in Python:
 
 ```python
 def normalize(b: bytes) -> bytes:
- return b.replace(b"\r\n", b"\n").rstrip(b"\n")
+    return b.replace(b"\r\n", b"\n").rstrip(b"\n")
 identical = normalize(user_bytes) == normalize(canonical_bytes)
 ```
 
@@ -217,12 +217,12 @@ Then:
 
 - **Identical** (after normalization): no-op. Skip the write — re-running setup must not bump mtime on unchanged files.
 - **Customized** (any deviation after normalization): **the file is never replaced without an explicit answer** — a customized `SPEC.md` overwritten silently has broken this. Ask the user via `plain-text numbered prompt`:
- - **header**: `Overwrite customized <repo-root>/$EXISTING?`
- - **body**: `<repo-root>/$EXISTING exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
- - **options**:
- - `Keep mine (Recommended)` — leave `<repo-root>/$EXISTING` unchanged. Print the path to the canonical template so the user can diff manually.
- - `Overwrite with canonical` — replace `<repo-root>/$EXISTING` (same filename — do NOT rename lowercase `spec.md` to uppercase `SPEC.md` here; preserve the user's casing) with the bundled template content. Repo customization is lost.
- - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo-root>/$EXISTING` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+  - **header**: `Overwrite customized <repo-root>/$EXISTING?`
+  - **body**: `<repo-root>/$EXISTING exists and differs from the canonical template shipped with this plugin version (CRLF and trailing newlines ignored). Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/spec.md\`).`
+  - **options**:
+    - `Keep mine (Recommended)` — leave `<repo-root>/$EXISTING` unchanged. Print the path to the canonical template so the user can diff manually.
+    - `Overwrite with canonical` — replace `<repo-root>/$EXISTING` (same filename — do NOT rename lowercase `spec.md` to uppercase `SPEC.md` here; preserve the user's casing) with the bundled template content. Repo customization is lost.
+    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo-root>/$EXISTING` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 **Note:** Setup writes uppercase `SPEC.md` only on the **fresh-seed** path (`HITS=0` `Copy template`). Never seed lowercase `spec.md` from scratch. The lowercase entry in the cascade is read-only at discovery time — present only for users who deliberately created lowercase. On the **re-setup overwrite** path above, preserve the user's existing filename casing via `$EXISTING` (so a lowercase `spec.md` stays lowercase after `Overwrite with canonical`).
 
@@ -231,14 +231,14 @@ Then handle `.flow/usage.md` — preserve any repo-customized variant:
 1. Read [../../templates/usage.md](../../templates/usage.md) (this is the canonical content, bundled at `${PLUGIN_ROOT}/templates/usage.md` since fn-121).
 2. If `.flow/usage.md` does not exist → write the canonical content.
 3. If `.flow/usage.md` exists → compare byte-for-byte with the canonical content:
- - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
- - **Customized** (any deviation): **the file is never overwritten without an explicit answer.** Ask the user via `plain-text numbered prompt`:
- - **header**: `Overwrite customized .flow/usage.md?`
- - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/usage.md\`).`
- - **options**:
- - `Keep mine (Recommended)` — leave `.flow/usage.md` unchanged. Print the path to the canonical template so the user can diff manually.
- - `Overwrite with canonical` — replace `.flow/usage.md` with the template content. Repo customization is lost.
- - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `.flow/usage.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+   - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
+   - **Customized** (any deviation): **the file is never overwritten without an explicit answer.** Ask the user via `plain-text numbered prompt`:
+     - **header**: `Overwrite customized .flow/usage.md?`
+     - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/usage.md\`).`
+     - **options**:
+       - `Keep mine (Recommended)` — leave `.flow/usage.md` unchanged. Print the path to the canonical template so the user can diff manually.
+       - `Overwrite with canonical` — replace `.flow/usage.md` with the template content. Repo customization is lost.
+       - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `.flow/usage.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
@@ -254,11 +254,11 @@ AGENTS_SRC="${PLUGIN_ROOT}/codex/agents"
 [ -d "$AGENTS_SRC" ] || AGENTS_SRC="${CODEX_HOME:-$HOME/.codex}/agents"
 
 if [ -d "$AGENTS_SRC" ]; then
- mkdir -p .codex/agents
- cp "$AGENTS_SRC"/*.toml .codex/agents/
- echo "Copied $(ls .codex/agents/*.toml 2>/dev/null | wc -l | tr -d ' ') agent configs to .codex/agents/"
+  mkdir -p .codex/agents
+  cp "$AGENTS_SRC"/*.toml .codex/agents/
+  echo "Copied $(ls .codex/agents/*.toml 2>/dev/null | wc -l | tr -d ' ') agent configs to .codex/agents/"
 else
- echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ${CODEX_HOME:-$HOME/.codex}/agents/"
+  echo "Warning: No agent .toml files found at ${PLUGIN_ROOT}/codex/agents/ or ${CODEX_HOME:-$HOME/.codex}/agents/"
 fi
 ```
 
@@ -274,8 +274,8 @@ Read current `.flow/meta.json`, add/update these fields (preserve all others):
 
 ```json
 {
- "setup_version": "<PLUGIN_VERSION>",
- "setup_date": "<ISO_DATE>"
+  "setup_version": "<PLUGIN_VERSION>",
+  "setup_date": "<ISO_DATE>"
 }
 ```
 
@@ -288,9 +288,9 @@ Before asking questions, detect available tools and read current config:
 ```bash
 # Detect available review backends
 if command -v rpce-cli >/dev/null 2>&1 \
- || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
- || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
- || command -v rp-cli >/dev/null 2>&1; then HAVE_RP=1; else HAVE_RP=0; fi
+  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+  || command -v rp-cli >/dev/null 2>&1; then HAVE_RP=1; else HAVE_RP=0; fi
 HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
@@ -305,7 +305,7 @@ HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 # still offered when ROUTING_ASK=1.
 BRIDGE_DETECTED=0
 if [[ "$HAVE_CODEX" == "1" || "$HAVE_CURSOR" == "1" || "$HAVE_GROK" == "1" ]]; then
- BRIDGE_DETECTED=1
+  BRIDGE_DETECTED=1
 fi
 
 # Read current config values if they exist.
@@ -337,7 +337,7 @@ CURRENT_SPEC_IDS=$("${PLUGIN_ROOT}/scripts/flowctl" config get tracker.specIds -
 # Global criteria scaffold gate (fn-137): the question is offered only while
 # .flow/criteria.md is absent. An existing file - scaffolded, hand-written, or
 # customized - is user content and is never re-asked about, never touched.
-CRITERIA_EXISTS=$( { test -e .flow/criteria.md || test -L .flow/criteria.md; } && echo 1 || echo 0) # -e||-L: a dangling symlink or non-regular path COUNTS as existing (never re-ask/overwrite; a broken path is a validation error to surface, not a scaffold target)
+CRITERIA_EXISTS=$( { test -e .flow/criteria.md || test -L .flow/criteria.md; } && echo 1 || echo 0)   # -e||-L: a dangling symlink or non-regular path COUNTS as existing (never re-ask/overwrite; a broken path is a validation error to surface, not a scaffold target)
 
 # Call the canonical predicate; never re-derive it. A bare `-n "$TYPE"` counted
 # an inactive value ("null", a typo) as configured, so setup persisted
@@ -355,8 +355,8 @@ TRACKER_CONFIGURED=$("${PLUGIN_ROOT}/scripts/flowctl" sync active --json 2>/dev/
 # the same family every lifecycle skill honors.
 ROUTING_ASK=1
 if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
- || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
- ROUTING_ASK=0
+      || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
+  ROUTING_ASK=0
 fi
 ```
 
@@ -406,26 +406,26 @@ Available questions (include only if corresponding config is unset):
 **Memory question** (include if CURRENT_MEMORY is empty):
 ```json
 {
- "header": "Memory",
- "question": "Enable the memory system? When a review sends a task back for rework, the lesson learned is saved under .flow/memory/ and read by future planning and implementation - so the same mistake is not repeated across specs.",
- "options": [
- {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback into .flow/memory/"},
- {"label": "No", "description": "No learnings captured. Enable later with: flowctl config set memory.enabled true"}
- ],
- "multiSelect": false
+  "header": "Memory",
+  "question": "Enable the memory system? When a review sends a task back for rework, the lesson learned is saved under .flow/memory/ and read by future planning and implementation - so the same mistake is not repeated across specs.",
+  "options": [
+    {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback into .flow/memory/"},
+    {"label": "No", "description": "No learnings captured. Enable later with: flowctl config set memory.enabled true"}
+  ],
+  "multiSelect": false
 }
 ```
 
 **Plan-Sync question** (include if CURRENT_PLANSYNC is empty):
 ```json
 {
- "header": "Plan-Sync",
- "question": "Enable plan-sync? After each task is implemented, a quick sync pass updates the not-yet-started tasks in the same spec to match what was ACTUALLY built - so later tasks never work from a stale plan.",
- "options": [
- {"label": "Yes (Recommended)", "description": "Sync remaining task specs whenever implementation deviates from the original plan"},
- {"label": "No", "description": "Later tasks keep their original wording. Enable later with: flowctl config set planSync.enabled true"}
- ],
- "multiSelect": false
+  "header": "Plan-Sync",
+  "question": "Enable plan-sync? After each task is implemented, a quick sync pass updates the not-yet-started tasks in the same spec to match what was ACTUALLY built - so later tasks never work from a stale plan.",
+  "options": [
+    {"label": "Yes (Recommended)", "description": "Sync remaining task specs whenever implementation deviates from the original plan"},
+    {"label": "No", "description": "Later tasks keep their original wording. Enable later with: flowctl config set planSync.enabled true"}
+  ],
+  "multiSelect": false
 }
 ```
 
@@ -434,65 +434,65 @@ Available questions (include only if corresponding config is unset):
 [^crossspec-legacy]: The canonical config key is `planSync.crossSpec`. The pre-1.1.3 name `planSync.crossEpic` was removed in 2.0.0 — flowctl no longer reads it; a leftover key in `.flow/config.json` is inert.
 ```json
 {
- "header": "Cross-Spec",
- "question": "Enable cross-spec plan-sync? (Also checks other open specs for stale references)",
- "options": [
- {"label": "No (Recommended)", "description": "Only sync within current spec. Faster, avoids long Ralph loops."},
- {"label": "Yes", "description": "Also update tasks in other specs that reference changed APIs/patterns."}
- ],
- "multiSelect": false
+  "header": "Cross-Spec",
+  "question": "Enable cross-spec plan-sync? (Also checks other open specs for stale references)",
+  "options": [
+    {"label": "No (Recommended)", "description": "Only sync within current spec. Faster, avoids long Ralph loops."},
+    {"label": "Yes", "description": "Also update tasks in other specs that reference changed APIs/patterns."}
+  ],
+  "multiSelect": false
 }
 ```
 
 **GitHub Scout question** (include if CURRENT_GITHUB_SCOUT is empty):
 ```json
 {
- "header": "GitHub Scout",
- "question": "Enable GitHub scout? (Searches public/private repos for patterns during planning, requires gh CLI)",
- "options": [
- {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
- {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan"}
- ],
- "multiSelect": false
+  "header": "GitHub Scout",
+  "question": "Enable GitHub scout? (Searches public/private repos for patterns during planning, requires gh CLI)",
+  "options": [
+    {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
+    {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan"}
+  ],
+  "multiSelect": false
 }
 ```
 
 **Spec ids question** (include if `TRACKER_CONFIGURED=1` AND `CURRENT_SPEC_IDS` is empty — both conditions; skip entirely when no tracker is configured, and never re-ask once the key is set to either `flow` or `tracker`):
 ```json
 {
- "header": "Spec ids",
- "question": "How should new specs get their ids? Parallel agents and branches both scanning only local .flow/specs/ collide on fn-N — that is structural, not unlucky. With a tracker configured, tracker-first keys each new spec to the issue (Linear/Jira WOR-17 → wor-17-slug; GitHub #123 → gh-123-slug; GitLab iid → gl-N-slug) so the tracker is the distributed allocator. Recommended: tracker. Choosing tracker means every new-spec creation contacts the tracker immediately — it creates the issue BEFORE the local spec exists. When the matching lifecycle touchpoint (tracker.perEvent.capture/plan/...) is already on, that is a reorder of an existing remote write; when those leaves are off (their default, and a bridge-active repo can have every lifecycle event disabled), it is an earlier remote write that flow-first would not make.",
- "options": [
- {"label": "Tracker (Recommended)", "description": "Mint KEY-N-slug / gh-N / gl-N from the issue; create the tracker issue first on a fresh idea. Stops parallel fn-N collisions."},
- {"label": "Flow", "description": "Keep sequential fn-N allocation (today's default). Safer offline; collisions remain possible across parallel worktrees/clones. An explicit Flow answer is remembered — setup will not ask again."}
- ],
- "multiSelect": false
+  "header": "Spec ids",
+  "question": "How should new specs get their ids? Parallel agents and branches both scanning only local .flow/specs/ collide on fn-N — that is structural, not unlucky. With a tracker configured, tracker-first keys each new spec to the issue (Linear/Jira WOR-17 → wor-17-slug; GitHub #123 → gh-123-slug; GitLab iid → gl-N-slug) so the tracker is the distributed allocator. Recommended: tracker. Choosing tracker means every new-spec creation contacts the tracker immediately — it creates the issue BEFORE the local spec exists. When the matching lifecycle touchpoint (tracker.perEvent.capture/plan/...) is already on, that is a reorder of an existing remote write; when those leaves are off (their default, and a bridge-active repo can have every lifecycle event disabled), it is an earlier remote write that flow-first would not make.",
+  "options": [
+    {"label": "Tracker (Recommended)", "description": "Mint KEY-N-slug / gh-N / gl-N from the issue; create the tracker issue first on a fresh idea. Stops parallel fn-N collisions."},
+    {"label": "Flow", "description": "Keep sequential fn-N allocation (today's default). Safer offline; collisions remain possible across parallel worktrees/clones. An explicit Flow answer is remembered — setup will not ask again."}
+  ],
+  "multiSelect": false
 }
 ```
 
 **HTML Artifacts question** (include if CURRENT_HTML_ARTIFACTS is empty):
 ```json
 {
- "header": "HTML Artifacts",
- "question": "Enable HTML artifact mode? Capture/plan/make-pr additionally render each spec and PR body as a self-contained HTML page under .flow/artifacts/ - nicer for humans to review in a browser. The markdown stays the source of truth; pages are regenerable any time.",
- "options": [
- {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown"},
- {"label": "No", "description": "Markdown-only. Zero extra steps, zero token overhead. Enable later: flowctl config set artifacts.html.enabled true"}
- ],
- "multiSelect": false
+  "header": "HTML Artifacts",
+  "question": "Enable HTML artifact mode? Capture/plan/make-pr additionally render each spec and PR body as a self-contained HTML page under .flow/artifacts/ - nicer for humans to review in a browser. The markdown stays the source of truth; pages are regenerable any time.",
+  "options": [
+    {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown"},
+    {"label": "No", "description": "Markdown-only. Zero extra steps, zero token overhead. Enable later: flowctl config set artifacts.html.enabled true"}
+  ],
+  "multiSelect": false
 }
 ```
 
 **Global criteria question** (include if `CRITERIA_EXISTS=0` — an existing `.flow/criteria.md` is user content: never re-ask, never touch. Runs in BOTH setup modes — like the Step 4a SPEC.md offer, it seeds a user-owned file, not a setup-managed copy):
 ```json
 {
- "header": "Global criteria",
- "question": "Scaffold .flow/criteria.md? A plain markdown file of standing, project-wide acceptance criteria (- **G1:** every route change regenerates the contract...). When present, spec completion review judges every criterion against each spec's implementation and records met/violated/n-a in the review receipt. Absent = zero effect anywhere.",
- "options": [
- {"label": "Scaffold", "description": "Write .flow/criteria.md from the bundled template - documents the G-ID grammar with commented examples to replace with your own criteria"},
- {"label": "Skip", "description": "No file written, nothing changes. Opt in any time by creating .flow/criteria.md yourself (grammar: - **G<N>:** <criterion>) or re-running /flow-next:setup"}
- ],
- "multiSelect": false
+  "header": "Global criteria",
+  "question": "Scaffold .flow/criteria.md? A plain markdown file of standing, project-wide acceptance criteria (- **G1:** every route change regenerates the contract...). When present, spec completion review judges every criterion against each spec's implementation and records met/violated/n-a in the review receipt. Absent = zero effect anywhere.",
+  "options": [
+    {"label": "Scaffold", "description": "Write .flow/criteria.md from the bundled template - documents the G-ID grammar with commented examples to replace with your own criteria"},
+    {"label": "Skip", "description": "No file written, nothing changes. Opt in any time by creating .flow/criteria.md yourself (grammar: - **G<N>:** <criterion>) or re-running /flow-next:setup"}
+  ],
+  "multiSelect": false
 }
 ```
 
@@ -501,50 +501,50 @@ Available questions (include only if corresponding config is unset):
 **When `PLATFORM=cursor`** — lead with `host` (Recommended); keep every existing backend selectable; label the Cursor CLI option as circular/secondary from inside Cursor (fn-123 R6):
 ```json
 {
- "header": "Review",
- "question": "Which review backend? Plans and implementations get reviewed before they land. From inside Cursor, prefer a host-native fresh-context subagent pinned cross-family via AGENTS.md model-routing (no second CLI). External CLIs remain available. Guide: https://flow-next.dev/review/workflow/",
- "options": [
- {"label": "Host (Recommended)", "description": "Fresh-context host-native subagent; pin a cross-family Cursor model slug in the AGENTS.md model-routing section (setup scaffolds the pins). No external CLI. Preferred from inside Cursor."},
- {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
- {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
- {"label": "Cursor CLI (secondary — circular from inside Cursor)", "description": "Runs the external cursor-agent CLI. Circular when already inside Cursor — prefer Host. Still selectable for multi-family reach via the cursor-agent model menu. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
- {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
- {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
- ],
- "multiSelect": false
+  "header": "Review",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. From inside Cursor, prefer a host-native fresh-context subagent pinned cross-family via AGENTS.md model-routing (no second CLI). External CLIs remain available. Guide: https://flow-next.dev/review/workflow/",
+  "options": [
+    {"label": "Host (Recommended)", "description": "Fresh-context host-native subagent; pin a cross-family Cursor model slug in the AGENTS.md model-routing section (setup scaffolds the pins). No external CLI. Preferred from inside Cursor."},
+    {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
+    {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
+    {"label": "Cursor CLI (secondary — circular from inside Cursor)", "description": "Runs the external cursor-agent CLI. Circular when already inside Cursor — prefer Host. Still selectable for multi-family reach via the cursor-agent model menu. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
+    {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
+    {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
+  ],
+  "multiSelect": false
 }
 ```
 
 **When `PLATFORM=grok`** (fn-126) — offer `host` with the fail-closed cross-family caveat (Grok is single-native-family `grok-4.5`) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
 ```json
 {
- "header": "Review",
- "question": "Which review backend? Plans and implementations get reviewed before they land. Grok's only native model family is grok-4.5 — host-native review fails closed unless the writer is non-Grok; cross-family review comes via bridge backends (codex/cursor/copilot). Guide: https://flow-next.dev/review/workflow/",
- "options": [
- {"label": "Host", "description": "Fresh-context host-native subagent; pin from AGENTS.md model-routing (setup scaffolds). Fail-closed: Grok is single-native-family (grok-4.5) — native host review refuses same-family self-review (interactive → ask; autonomous → NEEDS_HUMAN) unless the writer is non-Grok. Cross-family via bridges."},
- {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
- {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
- {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
- {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
- {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
- ],
- "multiSelect": false
+  "header": "Review",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. Grok's only native model family is grok-4.5 — host-native review fails closed unless the writer is non-Grok; cross-family review comes via bridge backends (codex/cursor/copilot). Guide: https://flow-next.dev/review/workflow/",
+  "options": [
+    {"label": "Host", "description": "Fresh-context host-native subagent; pin from AGENTS.md model-routing (setup scaffolds). Fail-closed: Grok is single-native-family (grok-4.5) — native host review refuses same-family self-review (interactive → ask; autonomous → NEEDS_HUMAN) unless the writer is non-Grok. Cross-family via bridges."},
+    {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
+    {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
+    {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
+    {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
+    {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
+  ],
+  "multiSelect": false
 }
 ```
 
 **When `PLATFORM` is neither `cursor` nor `grok`** (Claude Code / Droid / Codex — unchanged; Cursor and Grok each use their dedicated menu above):
 ```json
 {
- "header": "Review",
- "question": "Which review backend? Plans and implementations get reviewed before they land; a review backend is a second AI CLI - ideally a DIFFERENT model family than the one writing the code, for uncorrelated blind spots. Each needs its own install/subscription. Guide: https://flow-next.dev/review/workflow/",
- "options": [
- {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
- {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
- {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
- {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
- {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
- ],
- "multiSelect": false
+  "header": "Review",
+  "question": "Which review backend? Plans and implementations get reviewed before they land; a review backend is a second AI CLI - ideally a DIFFERENT model family than the one writing the code, for uncorrelated blind spots. Each needs its own install/subscription. Guide: https://flow-next.dev/review/workflow/",
+  "options": [
+    {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
+    {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
+    {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
+    {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
+    {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
+  ],
+  "multiSelect": false
 }
 ```
 
@@ -561,11 +561,11 @@ Resolve `PLATFORM` first, then **MUST read exactly one applicable direct
 question reference** and add its question object to the grouped prompt:
 
 - Bridge-host offer gate: `ROUTING_ASK=1` AND `BRIDGE_DETECTED=1`. Cursor and
- Grok are host-native exceptions.
+  Grok are host-native exceptions.
 - `cursor` → [references/model-routing-question-cursor.md](references/model-routing-question-cursor.md)
 - `grok` → [references/model-routing-question-grok.md](references/model-routing-question-grok.md)
 - `claude-code`, `droid`, or `codex` →
- [references/model-routing-question-bridge.md](references/model-routing-question-bridge.md)
+  [references/model-routing-question-bridge.md](references/model-routing-question-bridge.md)
 
 Unknown `PLATFORM` fails open to the bridge question reference. If the gate is
 false, do not read any model-routing question or implementation reference and
@@ -576,60 +576,60 @@ record `not offered`.
 For **Codex** (`PLATFORM=codex`):
 ```json
 {
- "header": "Docs",
- "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
- "options": [
- {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Codex reads this)"},
- {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
- {"label": "Both", "description": "Add flow-next section to both files"},
- {"label": "Skip", "description": "Don't update documentation"}
- ],
- "multiSelect": false
+  "header": "Docs",
+  "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
+  "options": [
+    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Codex reads this)"},
+    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+    {"label": "Both", "description": "Add flow-next section to both files"},
+    {"label": "Skip", "description": "Don't update documentation"}
+  ],
+  "multiSelect": false
 }
 ```
 
 For **Claude Code / Droid**:
 ```json
 {
- "header": "Docs",
- "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
- "options": [
- {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
- {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
- {"label": "Both", "description": "Add flow-next section to both files"},
- {"label": "Skip", "description": "Don't update documentation"}
- ],
- "multiSelect": false
+  "header": "Docs",
+  "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
+  "options": [
+    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+    {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
+    {"label": "Both", "description": "Add flow-next section to both files"},
+    {"label": "Skip", "description": "Don't update documentation"}
+  ],
+  "multiSelect": false
 }
 ```
 
 For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (the `/flow-next:` snippet is wired in Step 7's write mapping, NOT the Codex `$flow-next-` one):
 ```json
 {
- "header": "Docs",
- "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
- "options": [
- {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Cursor reads this)"},
- {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
- {"label": "Both", "description": "Add flow-next section to both files"},
- {"label": "Skip", "description": "Don't update documentation"}
- ],
- "multiSelect": false
+  "header": "Docs",
+  "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
+  "options": [
+    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (Cursor reads this)"},
+    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+    {"label": "Both", "description": "Add flow-next section to both files"},
+    {"label": "Skip", "description": "Don't update documentation"}
+  ],
+  "multiSelect": false
 }
 ```
 
 For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; lifecycle snippet defaults to CLAUDE.md (canonical Claude-format target, `/flow-next:` slash syntax — NOT the Codex `$flow-next-` one). A pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form (marker-scoped; text outside markers untouched). Model-routing block still targets AGENTS.md (where host-review workflows read it):
 ```json
 {
- "header": "Docs",
- "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched. Grok loads both CLAUDE.md and AGENTS.md.",
- "options": [
- {"label": "CLAUDE.md only (Recommended)", "description": "Add flow-next section to CLAUDE.md (canonical Grok lifecycle target; /flow-next: slash syntax)"},
- {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
- {"label": "Both", "description": "Add flow-next section to both files (recommended when you also want the model-routing block's sibling lifecycle snippet nearby)"},
- {"label": "Skip", "description": "Don't update documentation"}
- ],
- "multiSelect": false
+  "header": "Docs",
+  "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched. Grok loads both CLAUDE.md and AGENTS.md.",
+  "options": [
+    {"label": "CLAUDE.md only (Recommended)", "description": "Add flow-next section to CLAUDE.md (canonical Grok lifecycle target; /flow-next: slash syntax)"},
+    {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
+    {"label": "Both", "description": "Add flow-next section to both files (recommended when you also want the model-routing block's sibling lifecycle snippet nearby)"},
+    {"label": "Skip", "description": "Don't update documentation"}
+  ],
+  "multiSelect": false
 }
 ```
 
@@ -638,12 +638,12 @@ For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; life
 ```bash
 RALPH_ASK=1
 if [[ "$PLATFORM" == "cursor" || "$PLATFORM" == "grok" ]]; then
- RALPH_ASK=0
- RALPH_OUTCOME="off (unsupported on $PLATFORM)"
+  RALPH_ASK=0
+  RALPH_OUTCOME="off (unsupported on $PLATFORM)"
 elif [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
- || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
- RALPH_ASK=0
- RALPH_OUTCOME="off (non-interactive)"
+      || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
+  RALPH_ASK=0
+  RALPH_OUTCOME="off (non-interactive)"
 fi
 ```
 
@@ -657,13 +657,13 @@ registration and no branch read.
 **Star question** (always include):
 ```json
 {
- "header": "Star",
- "question": "Flow-Next is free and open source. Star the repo on GitHub?",
- "options": [
- {"label": "Yes, star it", "description": "Uses gh CLI if available, otherwise shows link"},
- {"label": "No thanks", "description": "Skip starring"}
- ],
- "multiSelect": false
+  "header": "Star",
+  "question": "Flow-Next is free and open source. Star the repo on GitHub?",
+  "options": [
+    {"label": "Yes, star it", "description": "Uses gh CLI if available, otherwise shows link"},
+    {"label": "No thanks", "description": "Skip starring"}
+  ],
+  "multiSelect": false
 }
 ```
 
@@ -681,9 +681,9 @@ gate before reading any ceremony instructions:
 ```bash
 MODELS_ASK=1
 if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
- || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
- MODELS_ASK=0
- MODELS_CEREMONY="skipped (autonomous)"
+      || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
+  MODELS_ASK=0
+  MODELS_CEREMONY="skipped (autonomous)"
 fi
 ```
 
@@ -727,46 +727,46 @@ Only process answers for questions that were asked (config values that were unse
 **HTML Artifacts** (if question was asked):
 - If "No": `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled false --json`
 - If "Yes":
- 1. `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled true --json`
- 2. Ask ONE follow-up via `plain-text numbered prompt` — track or ignore the artifact directory:
- - **header**: `Artifacts in git?`
- - **question**: `Artifacts live at .flow/artifacts/<spec-id>/{spec,pr}.html (fixed paths, regenerable). Commit them or gitignore the directory?`
- - **options**:
- - `Commit artifacts (Recommended)` — keep `.flow/artifacts/` tracked. This is what makes make-pr blob links resolve for remote reviewers. No action needed (the auto-managed `.flow/.gitignore` block does not exclude `artifacts/`).
- - `Gitignore` — local-open only; make-pr skips blob links. Append the pattern below the auto-managed footer in `.flow/.gitignore` (user patterns there are preserved by flowctl), guarding against duplicates:
- ```bash
- grep -qx 'artifacts/' .flow/.gitignore 2>/dev/null || printf 'artifacts/\n' >> .flow/.gitignore
- # Untrack any artifacts committed before this choice so state converges (no-op when none)
- git rm -r --cached --quiet .flow/artifacts 2>/dev/null || true
- ```
- 3. Print the lavish-axi offer verbatim. **The skill detects and instructs; it never installs.** A transcript showing setup running `npm i -g lavish-axi` has broken this — global installs are user-consent territory, the same discipline as /flow-next:map:
+  1. `"${PLUGIN_ROOT}/scripts/flowctl" config set artifacts.html.enabled true --json`
+  2. Ask ONE follow-up via `plain-text numbered prompt` — track or ignore the artifact directory:
+     - **header**: `Artifacts in git?`
+     - **question**: `Artifacts live at .flow/artifacts/<spec-id>/{spec,pr}.html (fixed paths, regenerable). Commit them or gitignore the directory?`
+     - **options**:
+       - `Commit artifacts (Recommended)` — keep `.flow/artifacts/` tracked. This is what makes make-pr blob links resolve for remote reviewers. No action needed (the auto-managed `.flow/.gitignore` block does not exclude `artifacts/`).
+       - `Gitignore` — local-open only; make-pr skips blob links. Append the pattern below the auto-managed footer in `.flow/.gitignore` (user patterns there are preserved by flowctl), guarding against duplicates:
+         ```bash
+         grep -qx 'artifacts/' .flow/.gitignore 2>/dev/null || printf 'artifacts/\n' >> .flow/.gitignore
+         # Untrack any artifacts committed before this choice so state converges (no-op when none)
+         git rm -r --cached --quiet .flow/artifacts 2>/dev/null || true
+         ```
+  3. Print the lavish-axi offer verbatim. **The skill detects and instructs; it never installs.** A transcript showing setup running `npm i -g lavish-axi` has broken this — global installs are user-consent territory, the same discipline as /flow-next:map:
 
- ```
- HTML artifact mode enabled.
+     ```
+     HTML artifact mode enabled.
 
- Optional companion — lavish-axi (annotate spec artifacts in the browser; feedback
- flows back as markdown-source edits, then the lens regenerates):
+     Optional companion — lavish-axi (annotate spec artifacts in the browser; feedback
+     flows back as markdown-source edits, then the lens regenerates):
 
- Install: npm i -g lavish-axi
- (or zero-setup, per run: npx lavish-axi <artifact.html>)
+       Install:   npm i -g lavish-axi
+                  (or zero-setup, per run: npx lavish-axi <artifact.html>)
 
- Feedback model — session-spanning, pull-only: annotations queue in the global
- ~/.lavish-axi/state.json and survive the agent session; any later agent session
- drains the queue via the lavish-axi poll CLI. Nothing is pushed into the agent.
+       Feedback model — session-spanning, pull-only: annotations queue in the global
+       ~/.lavish-axi/state.json and survive the agent session; any later agent session
+       drains the queue via the lavish-axi poll CLI. Nothing is pushed into the agent.
 
- Lifecycle: the local server idle-stops after ~30 min; reopening the artifact
- resumes the session. Without lavish-axi (or after idle-stop) the artifact still
- renders as a plain static page — it is never a dependency.
+       Lifecycle: the local server idle-stops after ~30 min; reopening the artifact
+       resumes the session. Without lavish-axi (or after idle-stop) the artifact still
+       renders as a plain static page — it is never a dependency.
 
- flow-next never auto-installs lavish-axi.
- ```
+     flow-next never auto-installs lavish-axi.
+     ```
 
 **Global criteria** (if question was asked):
 - If "Scaffold": copy the bundled template (both modes resolve it from the plugin - the file is user content from this moment on, so no re-run ever refreshes or compares it):
 
- ```bash
- cp "${PLUGIN_ROOT}/templates/criteria.md" .flow/criteria.md
- ```
+  ```bash
+  cp "${PLUGIN_ROOT}/templates/criteria.md" .flow/criteria.md
+  ```
 
 - If "Skip": do nothing - no file, no config key, no meta stamp. Declining leaves no trace.
 
@@ -777,12 +777,12 @@ Map user's answer to config value and persist:
 # Determine backend from answer (Host before Cursor so "Host (Recommended)" never
 # matches the Cursor* pattern; "Cursor CLI (secondary…)" still maps to cursor).
 case "$review_answer" in
- "Host"*) REVIEW_BACKEND="host" ;;
- "Codex"*) REVIEW_BACKEND="codex" ;;
- "Copilot"*|"copilot"*) REVIEW_BACKEND="copilot" ;;
- "Cursor"*|"cursor"*) REVIEW_BACKEND="cursor" ;;
- "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
- *) REVIEW_BACKEND="none" ;;
+  "Host"*) REVIEW_BACKEND="host" ;;
+  "Codex"*) REVIEW_BACKEND="codex" ;;
+  "Copilot"*|"copilot"*) REVIEW_BACKEND="copilot" ;;
+  "Cursor"*|"cursor"*) REVIEW_BACKEND="cursor" ;;
+  "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
+  *) REVIEW_BACKEND="none" ;;
 esac
 
 "${PLUGIN_ROOT}/scripts/flowctl" config set review.backend "$REVIEW_BACKEND" --json
@@ -801,23 +801,23 @@ For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marke
 
 1. Run the helper (repeat per resolved file, substituting the snippet template selected above):
 
- ```bash
- "${PLUGIN_ROOT}/scripts/flowctl" setup-block apply --file <FILE> \
- --template "${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md" --json
- ```
+   ```bash
+   "${PLUGIN_ROOT}/scripts/flowctl" setup-block apply --file <FILE> \
+     --template "${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md" --json
+   ```
 
 2. Route on the returned `action` - the first four need no prompt:
- - `appended` - no marker block existed; the snippet was appended at end of file (pre-existing content untouched) and its pristine hash recorded.
- - `refreshed` - the existing block matched its recorded pristine hash (never customized), so the helper silently replaced it with the new canonical and updated the hash. Existing installs receive template fixes without a prompt.
- - `unchanged` - the block already matches the canonical template. No write, no mtime bump.
- - `kept` - a previous "Keep mine" recorded the `"customized"` sentinel; the helper never re-asks and never silently overwrites. Leave it alone.
- - `ask` (reason `customized` or `hash-absent`) - the block differs from canonical and is not provably pristine. The helper wrote nothing; ask via `plain-text numbered prompt`:
- - **header**: `Overwrite customized <FILE>?` (substitute CLAUDE.md or AGENTS.md)
- - **body**: `<FILE> contains a flow-next marker block that differs from the canonical template shipped with this plugin version and is not recorded as pristine. Overwriting replaces the marker block only; content outside the markers is untouched either way.`
- - **options**:
- - `Keep mine (Recommended)` - run `"${PLUGIN_ROOT}/scripts/flowctl" setup-block resolve --file <FILE> --template <same template> --choice keep --json`. This records the `"customized"` sentinel so future re-runs never re-ask and never overwrite. Print the canonical template path so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
- - `Overwrite with canonical` - run the same `setup-block resolve` command with `--choice overwrite`. This replaces the marker block with the canonical snippet and records the new pristine hash; customizations inside the markers are lost, content outside the markers is preserved.
- - `abort` - exit cleanly, no further writes. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the Model Routing scaffold, and the Star step). Re-run `/flow-next:setup` later to complete setup.
+   - `appended` - no marker block existed; the snippet was appended at end of file (pre-existing content untouched) and its pristine hash recorded.
+   - `refreshed` - the existing block matched its recorded pristine hash (never customized), so the helper silently replaced it with the new canonical and updated the hash. Existing installs receive template fixes without a prompt.
+   - `unchanged` - the block already matches the canonical template. No write, no mtime bump.
+   - `kept` - a previous "Keep mine" recorded the `"customized"` sentinel; the helper never re-asks and never silently overwrites. Leave it alone.
+   - `ask` (reason `customized` or `hash-absent`) - the block differs from canonical and is not provably pristine. The helper wrote nothing; ask via `plain-text numbered prompt`:
+     - **header**: `Overwrite customized <FILE>?` (substitute CLAUDE.md or AGENTS.md)
+     - **body**: `<FILE> contains a flow-next marker block that differs from the canonical template shipped with this plugin version and is not recorded as pristine. Overwriting replaces the marker block only; content outside the markers is untouched either way.`
+     - **options**:
+       - `Keep mine (Recommended)` - run `"${PLUGIN_ROOT}/scripts/flowctl" setup-block resolve --file <FILE> --template <same template> --choice keep --json`. This records the `"customized"` sentinel so future re-runs never re-ask and never overwrite. Print the canonical template path so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
+       - `Overwrite with canonical` - run the same `setup-block resolve` command with `--choice overwrite`. This replaces the marker block with the canonical snippet and records the new pristine hash; customizations inside the markers are lost, content outside the markers is preserved.
+       - `abort` - exit cleanly, no further writes. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the Model Routing scaffold, and the Star step). Re-run `/flow-next:setup` later to complete setup.
 
 The marker-block boundaries are load-bearing: **docs snippets are written through `flowctl setup-block apply`, touching only the bytes inside the flow-next markers.** Prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` that changed, or a write made by anything other than the helper, has broken this. And **an `ask` result prompts Keep mine / Overwrite / abort** — a customized block replaced without that answer has broken this too.
 
@@ -827,11 +827,11 @@ disk after Docs; never interleave the two writes.
 
 - `Skip` → `ROUTING_OUTCOME="skipped"`; read no implementation reference.
 - `Scaffold` or `Scaffold + enable codex delegation` → resolve `PLATFORM`, then
- **MUST read and follow exactly one direct implementation reference**:
- - `cursor` → [references/model-routing-cursor.md](references/model-routing-cursor.md)
- - `grok` → [references/model-routing-grok.md](references/model-routing-grok.md)
- - `claude-code`, `droid`, or `codex` →
- [references/model-routing-bridge.md](references/model-routing-bridge.md)
+  **MUST read and follow exactly one direct implementation reference**:
+  - `cursor` → [references/model-routing-cursor.md](references/model-routing-cursor.md)
+  - `grok` → [references/model-routing-grok.md](references/model-routing-grok.md)
+  - `claude-code`, `droid`, or `codex` →
+    [references/model-routing-bridge.md](references/model-routing-bridge.md)
 
 Unknown `PLATFORM` fails open to the bridge reference. Never read more than one
 implementation reference for one run. The delegation opt-in remains
@@ -841,9 +841,9 @@ independent of whether a selected reference writes, keeps, or no-ops the block.
 unsupported and read no Ralph reference):
 
 - `Yes, enable or keep` → **MUST read and follow exactly**
- [references/ralph-enable.md](references/ralph-enable.md).
+  [references/ralph-enable.md](references/ralph-enable.md).
 - `No (Recommended)` or an empty/default interactive answer → **MUST read and
- follow exactly** [references/ralph-disable.md](references/ralph-disable.md).
+  follow exactly** [references/ralph-disable.md](references/ralph-disable.md).
 
 Unknown answer fails safe to the disable reference. Under any non-interactive
 marker, do not read either Ralph reference, do not register hooks, and set
@@ -851,9 +851,9 @@ marker, do not read either Ralph reference, do not register hooks, and set
 
 **Star:**
 - If "Yes, star it":
- 1. Check if `gh` CLI is available: `which gh`
- 2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
- 3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
+  1. Check if `gh` CLI is available: `which gh`
+  2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
+  3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
 
 ### Step 7c: Stamp setup mode (fn-121)
 
@@ -911,8 +911,8 @@ Codex project setup:
 **Then always show:**
 ```
 To use from command line:
- export PATH=".flow/bin:$PATH"
- flowctl --help
+  export PATH=".flow/bin:$PATH"
+  flowctl --help
 
 Configuration (use flowctl config set to change):
 - Memory: <enabled|disabled>
@@ -920,7 +920,7 @@ Configuration (use flowctl config set to change):
 - Plan-Sync cross-spec: <enabled|disabled>
 - GitHub scout: <enabled|disabled>
 - HTML artifacts: <enabled|disabled>
-- Spec ids: <flow|tracker|unset> # only meaningful when a tracker is configured; tracker is the team default
+- Spec ids: <flow|tracker|unset>   # only meaningful when a tracker is configured; tracker is the team default
 - Review backend: <host|codex|rp|copilot|cursor|none>
 
 Documentation updated:
@@ -946,8 +946,8 @@ Notes:
 
 ```
 Optional next step — connect a tracker:
- If your team lives in Linear, GitHub Issues, GitLab, or Jira, run /flow-next:tracker-sync to set up the
- two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
- Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
+  If your team lives in Linear, GitHub Issues, GitLab, or Jira, run  /flow-next:tracker-sync  to set up the
+  two-way bridge (spec ⇄ issue, status, comments) and make PRs reviewable as Linear Diffs.
+  Fully opt-in — nothing syncs until you confirm it in the discovery ceremony.
 ```
 

@@ -11,11 +11,11 @@
 2. **`chat-send` takes 2-10 MINUTES** - It waits for the LLM to generate a full review. This is NORMAL. Do NOT assume it is stuck.
 
 3. **Run commands directly and WAIT** - Do NOT use background jobs. Just run the command and wait:
- ```bash
- # Run setup-review - takes 5-15 minutes, just wait
- $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..."
- # You will see file paths printed as it indexes - this is progress, not errors
- ```
+   ```bash
+   # Run setup-review - takes 5-15 minutes, just wait
+   $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" --summary "..."
+   # You will see file paths printed as it indexes - this is progress, not errors
+   ```
 
 4. **Output is progress, not errors** - The context builder prints file paths as it indexes. Seeing many lines of output is NORMAL. Do not interpret this as an error loop.
 
@@ -33,7 +33,7 @@ Use only when `BACKEND="rp"` after [workflow.md](workflow.md).
 
 1. The coordinator does not review the plan.
 2. Use `setup-review` exactly once; it atomically selects the window and runs
- Builder.
+   Builder.
 3. Wait for the actual RepoPrompt response.
 4. Never pass `--json` to `chat-send`.
 5. Only the first dispatch uses `--new-chat`; all re-reviews stay in that chat.
@@ -78,8 +78,8 @@ plus the protected-path tally when applicable. End with exactly one tag:
 EOF
 $FLOWCTL cat "$SPEC_ID" >> "$REVIEW_INSTRUCTIONS_FILE"
 for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
- [[ -f "$task_spec" ]] && printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE" \
- && sed -n 'p' "$task_spec" >> "$REVIEW_INSTRUCTIONS_FILE"
+  [[ -f "$task_spec" ]] && printf '\n\n' >> "$REVIEW_INSTRUCTIONS_FILE" \
+    && sed -n 'p' "$task_spec" >> "$REVIEW_INSTRUCTIONS_FILE"
 done
 
 RESERVATION_FILE="${TMPDIR:-/tmp}/flow-plan-review-reservation-<spec-id>-<suffix>.json"
@@ -88,56 +88,56 @@ ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-<spec-id>-<suffix>.blob
 # immediately before setup-review; Classic waits until its final prompt exists.
 PROBED_RP_MODE="$($FLOWCTL rp mode-probe --json | jq -er '.mode')" || exit $?
 if [[ "$PROBED_RP_MODE" == "ce" ]]; then
- $FLOWCTL review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
- ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
- --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
- ROUND_EXIT=$?
- if [[ "$ROUND_EXIT" -ne 0 ]]; then
- printf '%s\n' "$ROUND_JSON"
- # Exact NOT_RETRYABLE marker + exit 1 is a human-action terminal: edit the
- # artifact, human reset, or human --force; never refund/force/reset/redispatch.
- exit "$ROUND_EXIT"
- fi
- if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
- # Recovery precedence NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK >
- # all-SHIP; no dispatch.
- printf '%s\n' "$ROUND_JSON"
- # A superseded replay never votes (a concurrent SHIP reset the counter).
- if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
- fi
- exit 0
- fi
- printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
+  $FLOWCTL review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+    --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    # Exact NOT_RETRYABLE marker + exit 1 is a human-action terminal: edit the
+    # artifact, human reset, or human --force; never refund/force/reset/redispatch.
+    exit "$ROUND_EXIT"
+  fi
+  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+    # Recovery precedence NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK >
+    # all-SHIP; no dispatch.
+    printf '%s\n' "$ROUND_JSON"
+    # A superseded replay never votes (a concurrent SHIP reset the counter).
+    if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+      echo "ESCALATE: reviewer requested human review" >&2
+      exit 4
+    fi
+    exit 0
+  fi
+  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
 fi
 $FLOWCTL rp setup-review --repo-root "$REPO_ROOT" \
- --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
- --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
+  --summary-file "$REVIEW_INSTRUCTIONS_FILE" --response-type review \
+  --response-file "$RESPONSE_FILE" --create > "$SETUP_FILE"
 SETUP_EXIT=$?
 if [[ "$SETUP_EXIT" -ne 0 ]]; then
- : > "$RESPONSE_FILE"
- if [[ "$PROBED_RP_MODE" == "ce" ]]; then
- RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
- --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
- --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
- --exit-code "$SETUP_EXIT" --json)"
- RECORD_EXIT=$?
- printf '%s\n' "$RECORD_JSON"
- if [[ "$RECORD_EXIT" -ne 0 ]]; then
- exit "$RECORD_EXIT"
- fi
- fi
- exit "$SETUP_EXIT"
+  : > "$RESPONSE_FILE"
+  if [[ "$PROBED_RP_MODE" == "ce" ]]; then
+    RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
+      --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
+      --reservation-id "$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
+      --exit-code "$SETUP_EXIT" --json)"
+    RECORD_EXIT=$?
+    printf '%s\n' "$RECORD_JSON"
+    if [[ "$RECORD_EXIT" -ne 0 ]]; then
+      exit "$RECORD_EXIT"
+    fi
+  fi
+  exit "$SETUP_EXIT"
 fi
 source "$SETUP_FILE"
 if [[ -z "${W:-}" || -z "${T:-}" || -z "${RP_MODE:-}" ]]; then
- echo "<promise>RETRY</promise>"
- exit 0
+  echo "<promise>RETRY</promise>"
+  exit 0
 fi
 if [[ "$RP_MODE" == "ce" && ( -z "${CHAT_ID:-}" || ! -s "$RESPONSE_FILE" ) ]]; then
- echo "<promise>RETRY</promise>"
- exit 0
+  echo "<promise>RETRY</promise>"
+  exit 0
 fi
 ```
 
@@ -150,12 +150,12 @@ its published-tab selection:
 SETUP_FILE="${TMPDIR:-/tmp}/flow-plan-review-setup-<spec-id>-<suffix>.env"
 source "$SETUP_FILE"
 if [[ "$RP_MODE" == "classic" ]]; then
- $FLOWCTL rp select-get --window "$W" --tab "$T"
- $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/${SPEC_ID}.md"
- for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
- [[ -f "$task_spec" ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" "$task_spec"
- done
- [[ -f docs/prd.md ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" docs/prd.md
+  $FLOWCTL rp select-get --window "$W" --tab "$T"
+  $FLOWCTL rp select-add --window "$W" --tab "$T" ".flow/specs/${SPEC_ID}.md"
+  for task_spec in .flow/tasks/${SPEC_ID}.*.md; do
+    [[ -f "$task_spec" ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" "$task_spec"
+  done
+  [[ -f docs/prd.md ]] && $FLOWCTL rp select-add --window "$W" --tab "$T" docs/prd.md
 fi
 ```
 
@@ -214,17 +214,17 @@ Conduct a John Carmack-level review:
 5. **Architecture** - Right abstractions? Clean boundaries?
 6. **Risks** - Blockers identified? Security gaps? Mitigation?
 7. **Scope** - Right-sized? Over/under-engineering? Overengineering is a
- FINDING, not a taste note: flag (a) any task or surface not traceable to a
- stated requirement (extra commands, export/import paths, detection hooks,
- config knobs "for later"); (b) risk-management machinery (trust/consent
- layers, caps, scanners, secondary state stores) where the risk could be
- eliminated structurally (closed schema, inert format, capability not
- exposed); (c) N-way generality where the request names one concrete case.
- Scope-minimality never trims rigor: error/negative-case enumeration per AC
- must stay complete — flag the plan if minimality was achieved by dropping
- error handling or by dropping filesystem-identity, permission, or
- concurrency guards (realpath/symlink containment, lock-guarded writes,
- forced excludes of runtime state).
+   FINDING, not a taste note: flag (a) any task or surface not traceable to a
+   stated requirement (extra commands, export/import paths, detection hooks,
+   config knobs "for later"); (b) risk-management machinery (trust/consent
+   layers, caps, scanners, secondary state stores) where the risk could be
+   eliminated structurally (closed schema, inert format, capability not
+   exposed); (c) N-way generality where the request names one concrete case.
+   Scope-minimality never trims rigor: error/negative-case enumeration per AC
+   must stay complete — flag the plan if minimality was achieved by dropping
+   error handling or by dropping filesystem-identity, permission, or
+   concurrency guards (realpath/symlink containment, lock-guarded writes,
+   forced excludes of runtime state).
 8. **Task sizing** - M tasks preferred. Flag over-splitting: 7+ tasks? Sequential S tasks that should be combined?
 9. **Testability** - How will we verify this works?
 10. **Consistency** - Do task specs align with spec?
@@ -273,37 +273,37 @@ REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-plan-review-snapshot-<spec-id>-<suffi
 source "$SETUP_FILE"
 source "$REVIEW_SNAPSHOT_FILE"
 if [[ "$RP_MODE" == "classic" ]]; then
- # Classic's final prompt now exists; reserve immediately before chat-send.
- ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-<spec-id>-<suffix>.blob"
- $FLOWCTL review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
- ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
- --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
- ROUND_EXIT=$?
- if [[ "$ROUND_EXIT" -ne 0 ]]; then
- printf '%s\n' "$ROUND_JSON"
- # NOT_RETRYABLE is human-action terminal; never transport-refund or redispatch.
- exit "$ROUND_EXIT"
- fi
- if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
- printf '%s\n' "$ROUND_JSON"
- # A superseded replay never votes (a concurrent SHIP reset the counter).
- if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
- fi
- exit 0
- fi
- printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
- $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Plan Review: <SPEC_ID>" > "$RESPONSE_FILE"
- RP_EXIT=$?
+  # Classic's final prompt now exists; reserve immediately before chat-send.
+  ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-<spec-id>-<suffix>.blob"
+  $FLOWCTL review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
+  ROUND_JSON="$($FLOWCTL review-rounds increment "$SPEC_ID" --kind plan \
+    --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
+  ROUND_EXIT=$?
+  if [[ "$ROUND_EXIT" -ne 0 ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    # NOT_RETRYABLE is human-action terminal; never transport-refund or redispatch.
+    exit "$ROUND_EXIT"
+  fi
+  if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '.replayed // false')" == "true" ]]; then
+    printf '%s\n' "$ROUND_JSON"
+    # A superseded replay never votes (a concurrent SHIP reset the counter).
+    if [[ "$(printf '%s' "$ROUND_JSON" | jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end')" == "NEEDS_HUMAN" ]]; then
+      echo "ESCALATE: reviewer requested human review" >&2
+      exit 4
+    fi
+    exit 0
+  fi
+  printf '%s' "$ROUND_JSON" > "$RESERVATION_FILE"
+  $FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file "$PROMPT_FILE" --new-chat --chat-name "Plan Review: <SPEC_ID>" > "$RESPONSE_FILE"
+  RP_EXIT=$?
 else
- RP_EXIT=0
+  RP_EXIT=0
 fi
 RESERVATION_ID="$(jq -er '.reservation_id' "$RESERVATION_FILE")" \
- || { echo "no reservation id for this dispatch; refusing to finalize" >&2; exit 2; }
+  || { echo "no reservation id for this dispatch; refusing to finalize" >&2; exit 2; }
 VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
- | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>' \
- | tail -n 1 | sed -E 's#</?verdict>##g')"
+  | grep -oE '<verdict>(SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN)</verdict>' \
+  | tail -n 1 | sed -E 's#</?verdict>##g')"
 
 # Round-8 ordering: the receipt inputs are assembled BEFORE `record`, which
 # journals the exact intended payload while consuming the reservation. Phase 4
@@ -311,36 +311,36 @@ VERDICT="$(tr -d '\r' < "$RESPONSE_FILE" \
 # assembles nothing, so a refund never consumes receipt inputs.
 RECEIPT_ARGS=()
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" && -n "$VERDICT" ]]; then
- mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
- RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-plan-review-receipt-<spec-id>-<suffix>.json"
- jq -n --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
- --arg head "${REVIEW_HEAD_SHA:-}" \
- --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
- '{type:"plan_review",id:$id,mode:"rp",verdict:$verdict,head:$head,timestamp:$timestamp}' \
- > "$RECEIPT_INPUT"
- RECEIPT_ARGS=(--receipt-target "$REVIEW_RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT")
+  mkdir -p "$(dirname "$REVIEW_RECEIPT_PATH")"
+  RECEIPT_INPUT="${TMPDIR:-/tmp}/flow-plan-review-receipt-<spec-id>-<suffix>.json"
+  jq -n --arg id "$SPEC_ID" --arg verdict "$VERDICT" \
+    --arg head "${REVIEW_HEAD_SHA:-}" \
+    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{type:"plan_review",id:$id,mode:"rp",verdict:$verdict,head:$head,timestamp:$timestamp}' \
+    > "$RECEIPT_INPUT"
+  RECEIPT_ARGS=(--receipt-target "$REVIEW_RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT")
 fi
 RECORD_JSON="$($FLOWCTL review-rounds record "$SPEC_ID" --kind plan \
- --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
- --reservation-id "$RESERVATION_ID" --status-target plan \
- ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} \
- --exit-code "$RP_EXIT" --json)"
+  --review-type plan --backend rp --output-file "$RESPONSE_FILE" \
+  --reservation-id "$RESERVATION_ID" --status-target plan \
+  ${RECEIPT_ARGS[@]+"${RECEIPT_ARGS[@]}"} \
+  --exit-code "$RP_EXIT" --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
 if [[ "$RECORD_EXIT" -ne 0 ]]; then
- exit "$RECORD_EXIT"
+  exit "$RECORD_EXIT"
 fi
 # A concurrent SHIP landed while this review ran: the verdict was recorded as
 # evidence, charged no round, and wrote no status. Routing it as a live
 # terminal would fix-loop against a pre-SHIP artifact.
 if [[ "$(printf '%s' "$RECORD_JSON" | jq -r '.superseded // false')" == "true" ]]; then
- echo "VERDICT=SUPERSEDED"
- echo "review superseded by a newer SHIP — durable state unchanged; verdict recorded as evidence only" >&2
- exit 0
+  echo "VERDICT=SUPERSEDED"
+  echo "review superseded by a newer SHIP — durable state unchanged; verdict recorded as evidence only" >&2
+  exit 0
 fi
 REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-plan-review-dispatch-<spec-id>-<suffix>.env"
 printf 'VERDICT=%q\nRESERVATION_ID=%q\n' "$VERDICT" "$RESERVATION_ID" \
- > "$REVIEW_DISPATCH_FILE"
+  > "$REVIEW_DISPATCH_FILE"
 ```
 
 If no verdict exists, the `record` call refunds the reservation and durably
@@ -360,22 +360,22 @@ owns their construction:
 
 ```bash
 if [[ -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
- REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-plan-review-dispatch-<spec-id>-<suffix>.env"
- source "$REVIEW_DISPATCH_FILE"
- if [[ -n "${VERDICT:-}" ]]; then
- if ! "$FLOWCTL" review-findings attach \
- --reservation-id "$RESERVATION_ID" \
- --receipt "$REVIEW_RECEIPT_PATH" \
- --json >/dev/null; then
- echo "<promise>RETRY</promise>"
- exit 0
- fi
- fi
+  REVIEW_DISPATCH_FILE="${TMPDIR:-/tmp}/flow-plan-review-dispatch-<spec-id>-<suffix>.env"
+  source "$REVIEW_DISPATCH_FILE"
+  if [[ -n "${VERDICT:-}" ]]; then
+    if ! "$FLOWCTL" review-findings attach \
+      --reservation-id "$RESERVATION_ID" \
+      --receipt "$REVIEW_RECEIPT_PATH" \
+      --json >/dev/null; then
+      echo "<promise>RETRY</promise>"
+      exit 0
+    fi
+  fi
 fi
 
 if [[ "${VERDICT:-}" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
+  echo "ESCALATE: reviewer requested human review" >&2
+  exit 4
 fi
 ```
 
@@ -393,25 +393,25 @@ Carry the verdict directly into SKILL.md's shared Fix Loop.
 Only after the current spec and affected task specs are updated:
 
 1. Source the literal setup file again to restore `RP_MODE`, `W`, `T`, and
- `CHAT_ID`.
+   `CHAT_ID`.
 2. Classic only: do not re-add already selected files; add only genuinely new
- files. CE never runs selection commands because its context ID is not tab
- state.
+   files. CE never runs selection commands because its context ID is not tab
+   state.
 3. Increment the deterministic round counter before dispatch; capture its exit
- and stop before any RP call on nonzero.
+   and stop before any RP call on nonzero.
 4. Send `Issues addressed. Please re-review.` in the SAME chat, without
- `--new-chat`; require the same verdict grammar. Classic uses
- `--window "$W" --tab "$T"`. CE uses
- `--window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review`
- with no `--tab`; `T` is CE's canonical context binding, not visible-tab
- projection.
+   `--new-chat`; require the same verdict grammar. Classic uses
+   `--window "$W" --tab "$T"`. CE uses
+   `--window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review`
+   with no `--tab`; `T` is CE's canonical context binding, not visible-tab
+   projection.
 5. Overwrite the same response file, parse the verdict, assemble the receipt
- inputs FIRST, then call the same
- `review-rounds record ... --review-type plan --status-target plan` command
- with those inputs and the captured `rp chat-send` exit code, capture and
- check `RECORD_EXIT` exactly as in the first dispatch, then read the response
- once and publish the receipt by reservation id.
- A nonzero recorder exit stops the round before any verdict/control path.
+   inputs FIRST, then call the same
+   `review-rounds record ... --review-type plan --status-target plan` command
+   with those inputs and the captured `rp chat-send` exit code, capture and
+   check `RECORD_EXIT` exactly as in the first dispatch, then read the response
+   once and publish the receipt by reservation id.
+   A nonzero recorder exit stops the round before any verdict/control path.
 
 ## Anti-patterns
 

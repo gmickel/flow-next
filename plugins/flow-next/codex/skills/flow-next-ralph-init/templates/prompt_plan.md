@@ -10,20 +10,20 @@ The full spec is also exported as `FLOW_REVIEW_BACKEND` for flowctl to resolve m
 
 Steps:
 1) Re-anchor:
- - scripts/ralph/flowctl show {{SPEC_ID}} --json
- - scripts/ralph/flowctl cat {{SPEC_ID}}
- - git status
- - git log -10 --oneline
+   - scripts/ralph/flowctl show {{SPEC_ID}} --json
+   - scripts/ralph/flowctl cat {{SPEC_ID}}
+   - git status
+   - git log -10 --oneline
 
 2) Save checkpoint (recovery point if context compacts during review cycles):
- ```bash
- scripts/ralph/flowctl checkpoint save --spec {{SPEC_ID}} --json
- ```
+   ```bash
+   scripts/ralph/flowctl checkpoint save --spec {{SPEC_ID}} --json
+   ```
 
 Ralph mode rules (must follow):
 - Branch on PLAN_REVIEW_BACKEND (bare name), NOT the full PLAN_REVIEW spec.
- Spec form (e.g. `codex:gpt-5.4:xhigh`) carries model + effort; the backend
- name picks the wrapper and the full spec flows through `FLOW_REVIEW_BACKEND`.
+  Spec form (e.g. `codex:gpt-5.4:xhigh`) carries model + effort; the backend
+  name picks the wrapper and the full spec flows through `FLOW_REVIEW_BACKEND`.
 - If PLAN_REVIEW_BACKEND=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
 - If PLAN_REVIEW_BACKEND=codex: use `flowctl codex` wrappers (plan-review with --receipt).
 - If PLAN_REVIEW_BACKEND=copilot: use `flowctl copilot` wrappers (plan-review with --receipt). Never call `copilot` directly; never pass `--continue`.
@@ -32,48 +32,48 @@ Ralph mode rules (must follow):
 - If any rule is violated, output `<promise>RETRY</promise>` and stop.
 
 3) Plan review gate (branch on bare backend; full spec is already in env):
- - If PLAN_REVIEW_BACKEND=rp: run `/flow-next:plan-review {{SPEC_ID}} --review=rp`
- - If PLAN_REVIEW_BACKEND=codex: run `/flow-next:plan-review {{SPEC_ID}} --review=codex`
- - If PLAN_REVIEW_BACKEND=copilot: run `/flow-next:plan-review {{SPEC_ID}} --review=copilot`
- - If PLAN_REVIEW_BACKEND=cursor: run `/flow-next:plan-review {{SPEC_ID}} --review=cursor`
- - If PLAN_REVIEW_BACKEND=export: run `/flow-next:plan-review {{SPEC_ID}} --review=export`
- - If PLAN_REVIEW_BACKEND=none:
- - If REQUIRE_PLAN_REVIEW=1: output `<promise>RETRY</promise>` and stop.
- - Else: set ship and stop:
- `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status ship --json`
+   - If PLAN_REVIEW_BACKEND=rp: run `/flow-next:plan-review {{SPEC_ID}} --review=rp`
+   - If PLAN_REVIEW_BACKEND=codex: run `/flow-next:plan-review {{SPEC_ID}} --review=codex`
+   - If PLAN_REVIEW_BACKEND=copilot: run `/flow-next:plan-review {{SPEC_ID}} --review=copilot`
+   - If PLAN_REVIEW_BACKEND=cursor: run `/flow-next:plan-review {{SPEC_ID}} --review=cursor`
+   - If PLAN_REVIEW_BACKEND=export: run `/flow-next:plan-review {{SPEC_ID}} --review=export`
+   - If PLAN_REVIEW_BACKEND=none:
+     - If REQUIRE_PLAN_REVIEW=1: output `<promise>RETRY</promise>` and stop.
+     - Else: set ship and stop:
+       `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status ship --json`
 
- Note: when PLAN_REVIEW is spec form (e.g. `codex:gpt-5.4:xhigh`), the
- /flow-next:plan-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
- automatically — no extra flag needed.
+   Note: when PLAN_REVIEW is spec form (e.g. `codex:gpt-5.4:xhigh`), the
+   /flow-next:plan-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
+   automatically — no extra flag needed.
 
 4) A single review call may emit one reviewer tag: `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN</verdict>`. This step returns control to Ralph only for SHIP, MAJOR_RETHINK, or NEEDS_HUMAN.
- - First review uses `--new-chat`
- - If NEEDS_WORK: skill fixes plan AND syncs affected task specs, then re-reviews in SAME chat (no --new-chat); NEEDS_WORK stays inside this step.
- - NEEDS_HUMAN means a design judgment needs human authority, never a soft
- NEEDS_WORK; MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
- - If context compacts mid-review: `scripts/ralph/flowctl checkpoint restore --spec {{SPEC_ID}} --json`
+   - First review uses `--new-chat`
+   - If NEEDS_WORK: skill fixes plan AND syncs affected task specs, then re-reviews in SAME chat (no --new-chat); NEEDS_WORK stays inside this step.
+   - NEEDS_HUMAN means a design judgment needs human authority, never a soft
+     NEEDS_WORK; MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
+   - If context compacts mid-review: `scripts/ralph/flowctl checkpoint restore --spec {{SPEC_ID}} --json`
 
 5) IMMEDIATELY after SHIP verdict, write receipt (for rp mode):
- ```bash
- mkdir -p "$(dirname '{{REVIEW_RECEIPT_PATH}}')"
- ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
- cat > '{{REVIEW_RECEIPT_PATH}}' <<EOF
- {"type":"plan_review","id":"{{SPEC_ID}}","mode":"rp","verdict":"SHIP","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
- EOF
- ```
- For codex mode, receipt is written automatically by `flowctl codex plan-review --receipt`.
- For copilot mode, receipt is written automatically by `flowctl copilot plan-review --receipt`.
- For cursor mode, receipt is written automatically by `flowctl cursor plan-review --receipt`.
- **CRITICAL: Copy EXACTLY. The `"id":"{{SPEC_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
- Missing id/verdict = verification fails = forced retry.
+   ```bash
+   mkdir -p "$(dirname '{{REVIEW_RECEIPT_PATH}}')"
+   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+   cat > '{{REVIEW_RECEIPT_PATH}}' <<EOF
+   {"type":"plan_review","id":"{{SPEC_ID}}","mode":"rp","verdict":"SHIP","timestamp":"$ts","iteration":{{RALPH_ITERATION}}}
+   EOF
+   ```
+   For codex mode, receipt is written automatically by `flowctl codex plan-review --receipt`.
+   For copilot mode, receipt is written automatically by `flowctl copilot plan-review --receipt`.
+   For cursor mode, receipt is written automatically by `flowctl cursor plan-review --receipt`.
+   **CRITICAL: Copy EXACTLY. The `"id":"{{SPEC_ID}}"` and `"verdict":"SHIP"` fields are REQUIRED.**
+   Missing id/verdict = verification fails = forced retry.
 
 6) After SHIP:
- - `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status ship --json`
- - stop (do NOT output promise tag)
+   - `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status ship --json`
+   - stop (do NOT output promise tag)
 
 7) If MAJOR_RETHINK (rare):
- - `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status needs_work --json`
- - output `<promise>FAIL</promise>` and stop
+   - `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status needs_work --json`
+   - output `<promise>FAIL</promise>` and stop
 
 8) On hard failure, output `<promise>FAIL</promise>` and stop.
 

@@ -41,11 +41,11 @@ When unsure whether a desktop app exposes CDP, probe for B first (try to launch/
 ```
 observe / list what's open
 navigate to the target (URL, or focus the app window)
-snapshot → fresh element refs (after a DOM change; for ONE known target prefer semantic find)
-act → click / fill / type / press / scroll toward the next step
-verify → expected text/state appeared AND console clean + no failed API/network requests
-capture → screenshot + console/errors at the moment of interest (and on failure)
-release → close the tab / end the session when fully done
+snapshot              → fresh element refs (after a DOM change; for ONE known target prefer semantic find)
+act                   → click / fill / type / press / scroll toward the next step
+verify                → expected text/state appeared AND console clean + no failed API/network requests
+capture               → screenshot + console/errors at the moment of interest (and on failure)
+release               → close the tab / end the session when fully done
 ```
 
 **`verify` is not DOM-only — every verify checks the console is clean and no API/network request failed, alongside the expected text or state.** A pass declared on a green-looking DOM while a request returned 500 or the console threw an uncaught exception has broken this: that is exactly the silent breakage a real user hits, and the `/flow-next:qa` `qa_verdict` rests on this evidence. The tooling is already on the default rung (`agent-browser console`, `agent-browser network requests --filter api`; the DevTools-MCP rung has richer inspection). A failed request or console error under a green DOM is a finding, not noise.
@@ -99,11 +99,11 @@ All share the universal flow (Step 2) — `observe → act → verify → captur
 2. **Pick the highest rung that passes; fail soft to the next.** The terminal rung is always manual / documented-limitation — the pass still completes.
 3. **No native driver is required or on a headless/CI path.** Neither the local Cua Driver nor Computer Use runs without a real display; most VMs/Linux/CI lack both. (Headless/CI native driving is the opt-in **Cua Sandbox** surface — see `references/cua.md`.)
 4. **Graceful degradation on the native rung (C):** *(Determine attended vs headless first — `$CI` ⇒ headless, else the empirical `cua-driver call get_screen_size` display probe; NOT `$DISPLAY` on macOS. See `references/cua.md` § "Determining headless / CI".)*
- - **Attended (real display):** prefer **Cua Driver** (background, provider-agnostic) when present → else **Computer Use** (screen-takeover) → else **documented-limitation** (document, don't fail).
- - **Headless / CI (no display):** the **Cua Sandbox** is the only native option (provision a hermetic VM, drive, tear down each run); local backend is the default, cua.ai cloud is explicit opt-in (bills + egress). No backend and no opted-in cloud → documented-limitation. See `references/cua.md`.
- - A **Chromium-backed app (B)** still drives via the web-ladder CDP attach (Step 3), or by driving its local dev-server URL in a browser. Note that shell-level integration (system tray, native menus, OS dialogs) can't be reached this way — surface that limitation.
- - A **genuinely native app (C)** with no native driver at all → document the limitation rather than fail.
- - On macOS, the Cua Driver's **Accessibility-vs-Screen-Recording permission split** means driving can work while screenshots don't — surface "AX-only evidence, no screenshot" rather than emit an empty one (`references/cua.md`).
+   - **Attended (real display):** prefer **Cua Driver** (background, provider-agnostic) when present → else **Computer Use** (screen-takeover) → else **documented-limitation** (document, don't fail).
+   - **Headless / CI (no display):** the **Cua Sandbox** is the only native option (provision a hermetic VM, drive, tear down each run); local backend is the default, cua.ai cloud is explicit opt-in (bills + egress). No backend and no opted-in cloud → documented-limitation. See `references/cua.md`.
+   - A **Chromium-backed app (B)** still drives via the web-ladder CDP attach (Step 3), or by driving its local dev-server URL in a browser. Note that shell-level integration (system tray, native menus, OS dialogs) can't be reached this way — surface that limitation.
+   - A **genuinely native app (C)** with no native driver at all → document the limitation rather than fail.
+   - On macOS, the Cua Driver's **Accessibility-vs-Screen-Recording permission split** means driving can work while screenshots don't — surface "AX-only evidence, no screenshot" rather than emit an empty one (`references/cua.md`).
 5. **agent-browser stays the only assumed-present driver.** No MCP server, Cua Driver, or Computer Use is ever a hard install dependency; flowctl never imports any of them.
 
 ### Done when

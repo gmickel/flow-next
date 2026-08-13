@@ -18,32 +18,32 @@ Strip the four doc-aware override flags from `$ARGUMENTS` before input-type dete
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
-DOC_AWARE_FORCE="" # "" = autodetect, "on" = forced on, "off" = forced off (controls glossary + decisions)
-STRATEGY_AWARE_FORCE="" # "" = autodetect, "on" = forced on, "off" = forced off (controls strategy independently)
+DOC_AWARE_FORCE=""        # "" = autodetect, "on" = forced on, "off" = forced off (controls glossary + decisions)
+STRATEGY_AWARE_FORCE=""   # "" = autodetect, "on" = forced on, "off" = forced off (controls strategy independently)
 
 # Glossary + decisions: --docs / --no-docs (mutually exclusive; --no-docs wins)
 if [[ "$RAW_ARGS" == *"--no-docs"* ]]; then
- DOC_AWARE_FORCE="off"
- RAW_ARGS="${RAW_ARGS//--no-docs/}"
+  DOC_AWARE_FORCE="off"
+  RAW_ARGS="${RAW_ARGS//--no-docs/}"
 elif [[ "$RAW_ARGS" == *"--docs"* ]]; then
- DOC_AWARE_FORCE="on"
- RAW_ARGS="${RAW_ARGS//--docs/}"
+  DOC_AWARE_FORCE="on"
+  RAW_ARGS="${RAW_ARGS//--docs/}"
 fi
 
 # Strategy: explicit --strategy / --no-strategy always wins. Otherwise --docs / --no-docs cascades.
 # Order: explicit pair first (mutually exclusive; --no-strategy wins on conflict), then docs cascade.
 if [[ "$RAW_ARGS" == *"--no-strategy"* ]]; then
- STRATEGY_AWARE_FORCE="off"
- RAW_ARGS="${RAW_ARGS//--no-strategy/}"
+  STRATEGY_AWARE_FORCE="off"
+  RAW_ARGS="${RAW_ARGS//--no-strategy/}"
 elif [[ "$RAW_ARGS" == *"--strategy"* ]]; then
- STRATEGY_AWARE_FORCE="on"
- RAW_ARGS="${RAW_ARGS//--strategy/}"
+  STRATEGY_AWARE_FORCE="on"
+  RAW_ARGS="${RAW_ARGS//--strategy/}"
 elif [[ "$DOC_AWARE_FORCE" == "off" ]]; then
- # --no-docs alone cascades to strategy: matrix row 3 says all three off.
- STRATEGY_AWARE_FORCE="off"
+  # --no-docs alone cascades to strategy: matrix row 3 says all three off.
+  STRATEGY_AWARE_FORCE="off"
 elif [[ "$DOC_AWARE_FORCE" == "on" ]]; then
- # --docs alone cascades to strategy: matrix row 2 says all three on.
- STRATEGY_AWARE_FORCE="on"
+  # --docs alone cascades to strategy: matrix row 2 says all three on.
+  STRATEGY_AWARE_FORCE="on"
 fi
 
 RAW_ARGS=$(printf "%s" "$RAW_ARGS" | tr -s ' ' | sed 's/^ //;s/ $//')
@@ -101,17 +101,17 @@ JSON shape:
 
 ```json
 {
- "groups": [
- {
- "path": "GLOSSARY.md",
- "entries": [
- { "term": "Worker", "definition": "...", "avoid": ["consumer"], "relates_to": ["Queue"] }
- ],
- "count": 1
- }
- ],
- "file_count": 1,
- "total_terms": 1
+  "groups": [
+    {
+      "path": "GLOSSARY.md",
+      "entries": [
+        { "term": "Worker", "definition": "...", "avoid": ["consumer"], "relates_to": ["Queue"] }
+      ],
+      "count": 1
+    }
+  ],
+  "file_count": 1,
+  "total_terms": 1
 }
 ```
 
@@ -138,19 +138,19 @@ Confidence tier: `[high]` when the canonical entry is recent and the user's word
 Across the conversation, watch for overloaded language — words the user keeps using whose meaning could plausibly shift between turns ("workflow", "session", "task" when a Flow `task` already has meaning, etc.). When you spot one:
 
 1. Propose a canonical via `plain-text numbered prompt`:
- - **header**: `Sharpen "<term>"?`
- - **body**: `You've used "<term>" in <count> replies. I'm reading it as "<agent's working definition>" but want to lock it in. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
- - **options**: 2-4 candidate canonical wordings + `none-of-these` (user provides their own).
+   - **header**: `Sharpen "<term>"?`
+   - **body**: `You've used "<term>" in <count> replies. I'm reading it as "<agent's working definition>" but want to lock it in. Recommended: <X> — <one-sentence rationale>. Confidence: [<tier>].`
+   - **options**: 2-4 candidate canonical wordings + `none-of-these` (user provides their own).
 
 2. On user-pick, build the resolved entry and write it to the nearest-ancestor `GLOSSARY.md` via `flowctl glossary add`:
 
- ```bash
- "$FLOWCTL" glossary add "<term>" --definition-file - --json <<EOF
- <user-resolved one-line or short paragraph definition>
- EOF
- ```
+   ```bash
+   "$FLOWCTL" glossary add "<term>" --definition-file - --json <<EOF
+   <user-resolved one-line or short paragraph definition>
+   EOF
+   ```
 
- Use `--definition-file -` (stdin) so multi-sentence definitions and quoted phrasing round-trip cleanly. `glossary add` is upsert — case-insensitive match replaces the existing entry in full; new terms append at the end of the file. If the user picked `redefine` in behavior (a), this is the same call site (one path, one upsert).
+   Use `--definition-file -` (stdin) so multi-sentence definitions and quoted phrasing round-trip cleanly. `glossary add` is upsert — case-insensitive match replaces the existing entry in full; new terms append at the end of the file. If the user picked `redefine` in behavior (a), this is the same call site (one path, one upsert).
 
 3. The next question can re-read the glossary. There is no in-memory cache to invalidate — re-read on every doc-aware round that needs canonical lookup. The cost is one stat + one file read per round; sub-millisecond at typical sizes.
 
@@ -183,39 +183,39 @@ If any of the three fails, do NOT write a decision entry. Note the choice in the
 When all three hold:
 
 1. **Draft the entry** in agent memory (do not write yet). Shape:
- - **Title** (1 line, ≤80 chars): the decision in noun-phrase form (e.g. "Nearest-ancestor walk for glossary lookup").
- - **Body** (1-3 sentences floor; longer when warranted):
- - 1 sentence on what was chosen.
- - 0-1 sentences on why.
- - Optional `## Considered Options` block listing rejected alternatives with one-line reasons each.
- - Optional `## Consequences` block listing what this commits the project to.
- - **Module** (optional): the file or subsystem the decision shapes.
- - **Tags** (optional): comma-separated, e.g. `glossary,resolution,walk`.
+   - **Title** (1 line, ≤80 chars): the decision in noun-phrase form (e.g. "Nearest-ancestor walk for glossary lookup").
+   - **Body** (1-3 sentences floor; longer when warranted):
+     - 1 sentence on what was chosen.
+     - 0-1 sentences on why.
+     - Optional `## Considered Options` block listing rejected alternatives with one-line reasons each.
+     - Optional `## Consequences` block listing what this commits the project to.
+   - **Module** (optional): the file or subsystem the decision shapes.
+   - **Tags** (optional): comma-separated, e.g. `glossary,resolution,walk`.
 
 2. **Print-then-ask before writing** — same print-then-ask contract as `/flow-next:capture` Phase 4 (R13):
- - **Print first:** emit the FULL decision-entry draft (title, body markdown, optional module/tags, optional Considered Options / Consequences blocks) as an ordinary assistant markdown message. Never embed the multi-paragraph body in the ask.
- - **Then short ask** via `plain-text numbered prompt`:
- - **header**: `Write decision?`
- - **body** (SHORT — pointer + tally/warnings + recommendation only): `Decision draft printed above (<title>). Recommended: approve — <one-sentence rationale why all three gate criteria hold>. Confidence: [<tier>].`
- - **options**: frozen — `approve` (write), `edit` (user revises title / body / module / tags via follow-up), `skip` (do not write; the choice stays in spec prose only).
+   - **Print first:** emit the FULL decision-entry draft (title, body markdown, optional module/tags, optional Considered Options / Consequences blocks) as an ordinary assistant markdown message. Never embed the multi-paragraph body in the ask.
+   - **Then short ask** via `plain-text numbered prompt`:
+     - **header**: `Write decision?`
+     - **body** (SHORT — pointer + tally/warnings + recommendation only): `Decision draft printed above (<title>). Recommended: approve — <one-sentence rationale why all three gate criteria hold>. Confidence: [<tier>].`
+     - **options**: frozen — `approve` (write), `edit` (user revises title / body / module / tags via follow-up), `skip` (do not write; the choice stays in spec prose only).
 
- Never write silently — even when the gate cleanly passes, the user owns the final write. Never put the full decision body "inline in the question"; ask bodies render as collapsed plain text.
+   Never write silently — even when the gate cleanly passes, the user owns the final write. Never put the full decision body "inline in the question"; ask bodies render as collapsed plain text.
 
 3. **On `approve`**, call:
 
- ```bash
- "$FLOWCTL" memory add \
- --track knowledge \
- --category decisions \
- --title "<title>" \
- --module "<module>" \
- --tags "<tags>" \
- --body-file - <<EOF
- <body markdown>
- EOF
- ```
+   ```bash
+   "$FLOWCTL" memory add \
+     --track knowledge \
+     --category decisions \
+     --title "<title>" \
+     --module "<module>" \
+     --tags "<tags>" \
+     --body-file - <<EOF
+   <body markdown>
+   EOF
+   ```
 
- The `decisions` category is registered in flowctl's memory schema (Task 1 of the original decisions epic). Optional fields `--decision-status` (default `accepted`), `--superseded-by`, and `--alternatives-considered` are available; pass them when the conversation supplies them and skip otherwise.
+   The `decisions` category is registered in flowctl's memory schema (Task 1 of the original decisions epic). Optional fields `--decision-status` (default `accepted`), `--superseded-by`, and `--alternatives-considered` are available; pass them when the conversation supplies them and skip otherwise.
 
 4. **On `edit`**, ask one follow-up `plain-text numbered prompt` for which field changes (title / body / module / tags), capture the revision, **reprint the full revised draft as ordinary markdown**, then re-issue the short approval ask; loop. Hard cap at 2 edit cycles before defaulting to `approve` / `skip`.
 
@@ -235,12 +235,12 @@ JSON shape (selected fields used here):
 
 ```json
 {
- "name": "<product-name>",
- "target_problem": "...",
- "approach": "...",
- "tracks": "### track-a\nOne line on track A.\n_Why it serves the approach:_ ...\n\n### track-b\n...",
- "last_updated": "2026-05-01",
- "path": "STRATEGY.md"
+  "name": "<product-name>",
+  "target_problem": "...",
+  "approach": "...",
+  "tracks": "### track-a\nOne line on track A.\n_Why it serves the approach:_ ...\n\n### track-b\n...",
+  "last_updated": "2026-05-01",
+  "path": "STRATEGY.md"
 }
 ```
 

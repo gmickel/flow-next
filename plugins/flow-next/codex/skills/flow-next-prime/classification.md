@@ -33,7 +33,7 @@ A single XOR verdict silently drops constellation guidance for a monorepo that i
 **Bit 2 - constellation-member**, three confidence tiers:
 
 - **(a) LIKELY:** sibling dirs with `.git` (`ls ../*/.git`), shared org in remotes, shared naming prefix (`acme-api`, `acme-web`).
- **Workspace-parent dampener (load-bearing, eval-proven):** a parent holding many git dirs (>~20) is a developer WORKSPACE, not a home base - shared-org there is meaningless (3 of 5 real eval repos false-positived without this). Inside a workspace parent, only a prefix-family cluster (>=2 named siblings) or a tier-(c) reference raises LIKELY, and it ALWAYS routes to the Phase 0.6 clarification, never auto-confirms. Prefix matches can include scratch / test repos, so they are LIKELY-tier input only.
+  **Workspace-parent dampener (load-bearing, eval-proven):** a parent holding many git dirs (>~20) is a developer WORKSPACE, not a home base - shared-org there is meaningless (3 of 5 real eval repos false-positived without this). Inside a workspace parent, only a prefix-family cluster (>=2 named siblings) or a tier-(c) reference raises LIKELY, and it ALWAYS routes to the Phase 0.6 clarification, never auto-confirms. Prefix matches can include scratch / test repos, so they are LIKELY-tier input only.
 - **(b) CONFIRMED:** a parent-level `CLAUDE.md` / `AGENTS.md` or manifest (`repos.yaml`, `mani.yaml`, `.meta`, `*.repos`, `workspace.toml`, `default.xml`, `.code-workspace`), a parent `docker-compose` / `justfile` / `mise.toml`, or a `_plans/` dir - AND the parent is NOT a workspace parent.
 - **(c) ASK:** in-repo external references - a compose `build: ../other-service` or same-org images, a CI checkout of a second repository, OpenAPI / proto client generation pointing at another repo's spec, a `go.mod` `replace` / pnpm `link:` / `pip -e ../` outside the repo, env vars referencing ports of services this repo does not define, AND **textual cross-repo path references in the agent file / README**. Both real constellations in eval were referenced in prose ("see ~/work/transcribe/docs/RELEASING.md (the app repo)") while the pattern probes returned empty; prose references also sharpen the Phase 0.6 question (never ask what a probe already answered).
 
@@ -139,93 +139,93 @@ The deterministic layer of Phase 0.5 ships as a pure-stdlib flowctl emitter (bou
 
 ```json
 {
- "schema_version": 1,
- "assessment_scope": {
- "value": "repository | workspace-member | constellation-home-base",
- "member_path": "<rel path, present only for workspace-member>",
- "confidence": "high | medium | low",
- "evidence": ["<string>", "..."]
- },
- "axes": {
- "lifecycle": {
- "value": "greenfield | hybrid | brownfield",
- "confidence": "high | medium | low",
- "signals": {
- "commit_count": 0,
- "tags": 0,
- "ci_config": false,
- "tracked_files": 0,
- "generator_scaffold": "create-next-app | cargo | uv | dotnet | null",
- "first_commit_days": 0,
- "single_contributor": false,
- "lockfile": false
- },
- "evidence": ["<string>", "..."]
- },
- "topology": {
- "monorepo": {
- "value": false,
- "confidence": "high | medium | low",
- "signals": { "workspace_config": [], "cross_referenced_manifests": 0, "downweighted_subprojects": [] },
- "evidence": ["<string>", "..."]
- },
- "constellation_member": {
- "value": false,
- "tier": "a | b | c | none",
- "confidence": "high | medium | low",
- "workspace_parent": false,
- "signals": { "sibling_git_dirs": 0, "shared_org": false, "prefix_family": [], "in_repo_external_refs": [], "prose_cross_repo_refs": [] },
- "evidence": ["<string>", "..."]
- }
- },
- "size": {
- "band": "small | medium | large | huge",
- "confidence": "high | medium | low",
- "loc": 0,
- "files": 0,
- "tool": "file-estimate",
- "exclusions_applied": ["tool-managed", "vendored", "fixtures", "agent-state", "hash-duplicate", "regenerated", "legacy-snapshot"],
- "loc_corroboration": { "tool": "scc | tokei", "loc_wholetree": 0 },
- "legibility": {
- "top_level_dirs": 0,
- "entrypoints": [],
- "generated_vendored_tracked": [],
- "instruction_file_lines": 0,
- "ambiguity_probe_hits": 0
- },
- "evidence": ["<string>", "..."]
- },
- "stacks": [
- {
- "name": "<stack>",
- "manifest": "<path>",
- "loc_share": 0.0,
- "subproject": false,
- "confidence": "high | medium | low",
- "evidence": ["<string>", "..."]
- }
- ]
- },
- "shape_markers": {
- "bin_exports": [],
- "framework_markers": [],
- "serve_health_code": [],
- "desktop_markers": [],
- "prose_ratio": 0.0
- },
- "collectors": [
- {
- "name": "<collector>",
- "status": "ok | error",
- "complete": true,
- "sampled": false,
- "truncated": false,
- "cap_hit": false,
- "errors": [],
- "tool": "<tool used>",
- "operations": 0
- }
- ]
+  "schema_version": 1,
+  "assessment_scope": {
+    "value": "repository | workspace-member | constellation-home-base",
+    "member_path": "<rel path, present only for workspace-member>",
+    "confidence": "high | medium | low",
+    "evidence": ["<string>", "..."]
+  },
+  "axes": {
+    "lifecycle": {
+      "value": "greenfield | hybrid | brownfield",
+      "confidence": "high | medium | low",
+      "signals": {
+        "commit_count": 0,
+        "tags": 0,
+        "ci_config": false,
+        "tracked_files": 0,
+        "generator_scaffold": "create-next-app | cargo | uv | dotnet | null",
+        "first_commit_days": 0,
+        "single_contributor": false,
+        "lockfile": false
+      },
+      "evidence": ["<string>", "..."]
+    },
+    "topology": {
+      "monorepo": {
+        "value": false,
+        "confidence": "high | medium | low",
+        "signals": { "workspace_config": [], "cross_referenced_manifests": 0, "downweighted_subprojects": [] },
+        "evidence": ["<string>", "..."]
+      },
+      "constellation_member": {
+        "value": false,
+        "tier": "a | b | c | none",
+        "confidence": "high | medium | low",
+        "workspace_parent": false,
+        "signals": { "sibling_git_dirs": 0, "shared_org": false, "prefix_family": [], "in_repo_external_refs": [], "prose_cross_repo_refs": [] },
+        "evidence": ["<string>", "..."]
+      }
+    },
+    "size": {
+      "band": "small | medium | large | huge",
+      "confidence": "high | medium | low",
+      "loc": 0,
+      "files": 0,
+      "tool": "file-estimate",
+      "exclusions_applied": ["tool-managed", "vendored", "fixtures", "agent-state", "hash-duplicate", "regenerated", "legacy-snapshot"],
+      "loc_corroboration": { "tool": "scc | tokei", "loc_wholetree": 0 },
+      "legibility": {
+        "top_level_dirs": 0,
+        "entrypoints": [],
+        "generated_vendored_tracked": [],
+        "instruction_file_lines": 0,
+        "ambiguity_probe_hits": 0
+      },
+      "evidence": ["<string>", "..."]
+    },
+    "stacks": [
+      {
+        "name": "<stack>",
+        "manifest": "<path>",
+        "loc_share": 0.0,
+        "subproject": false,
+        "confidence": "high | medium | low",
+        "evidence": ["<string>", "..."]
+      }
+    ]
+  },
+  "shape_markers": {
+    "bin_exports": [],
+    "framework_markers": [],
+    "serve_health_code": [],
+    "desktop_markers": [],
+    "prose_ratio": 0.0
+  },
+  "collectors": [
+    {
+      "name": "<collector>",
+      "status": "ok | error",
+      "complete": true,
+      "sampled": false,
+      "truncated": false,
+      "cap_hit": false,
+      "errors": [],
+      "tool": "<tool used>",
+      "operations": 0
+    }
+  ]
 }
 ```
 
@@ -233,10 +233,10 @@ Notes on the split:
 - The emitter emits axes 1-4 with deterministic values + a mechanical confidence, plus RAW `shape_markers` (Axis 5 is NOT resolved by the emitter - the skill reasons over the markers).
 - `collectors[]` carries the per-collector completeness diagnostics (resolution 21b). The judgment layer MUST downgrade confidence and use NOT ASSESSED when `complete` is false / `sampled` / `truncated` / `cap_hit` - partial data never yields high confidence.
 - The emitter ALSO carries the deterministic substance-grep outputs consumed by Phase 2/3 (its `emitter`-owned rows in the criterion-to-score map in [pillars.md](pillars.md)); this file pins only the classification portion of that payload. Two substance-payload contracts worth pinning here because the judgment layer depends on them:
- - `substance.secrets_gate` splits ENFORCED invocations from config-only presence: `tools_found` + `locations` carry only scanner invocations found in enforcement surfaces (pre-commit config, package.json `"scripts"` values, executable CI lines); scanner config/baseline files (`.gitleaks.toml`, `.secrets.baseline`) land in `configs_found` (`{tool, path}` entries) as EVIDENCE-ONLY - FH4 must never grade config presence alone as an enforced gate. A scanner named only in package.json dependencies is metadata, never an invocation (unparseable package.json is skipped, not wholesale-grepped).
- - `substance.ci_gate` trigger detection routes by CI system: GitHub workflows are parsed for `on:` push/pull_request forms; `.gitlab-ci.yml` counts as push-gated by default, `bitbucket-pipelines.yml` counts when a `default:`/`branches:` section is a DIRECT child of the top-level `pipelines:` key (a `branches:` nested under `custom:` never gates), and `azure-pipelines.yml` counts unless `trigger: none` (these systems run on push by default - the GitHub `on:` grammar is never forced on them).
- - `substance.ci_gate` test/lint detection (`has_test_step` / `has_lint_step` / `mutating_lint`) matches only EXECUTABLE CI content - GitHub `run:` values (inline + block scalars), gitlab/bitbucket/azure `script:`-family values, CircleCI `run`/`command` values - never `name:` strings, job ids, comments, or matrix entries (a `name: test lint` step is not a test step).
- - `substance.ci_gate.gated_test_step` / `gated_lint_step` are the load-bearing FH3 gating signals: the SAME workflow file carries a push/PR trigger AND the test/lint step. The plain `has_*` booleans are whole-repo aggregates - a dispatch-only test workflow next to a push-gated deploy workflow sets `has_test_step` but NOT `gated_test_step`; FH3 judges "CI actually gates" from the `gated_*` pair.
+  - `substance.secrets_gate` splits ENFORCED invocations from config-only presence: `tools_found` + `locations` carry only scanner invocations found in enforcement surfaces (pre-commit config, package.json `"scripts"` values, executable CI lines); scanner config/baseline files (`.gitleaks.toml`, `.secrets.baseline`) land in `configs_found` (`{tool, path}` entries) as EVIDENCE-ONLY - FH4 must never grade config presence alone as an enforced gate. A scanner named only in package.json dependencies is metadata, never an invocation (unparseable package.json is skipped, not wholesale-grepped).
+  - `substance.ci_gate` trigger detection routes by CI system: GitHub workflows are parsed for `on:` push/pull_request forms; `.gitlab-ci.yml` counts as push-gated by default, `bitbucket-pipelines.yml` counts when a `default:`/`branches:` section is a DIRECT child of the top-level `pipelines:` key (a `branches:` nested under `custom:` never gates), and `azure-pipelines.yml` counts unless `trigger: none` (these systems run on push by default - the GitHub `on:` grammar is never forced on them).
+  - `substance.ci_gate` test/lint detection (`has_test_step` / `has_lint_step` / `mutating_lint`) matches only EXECUTABLE CI content - GitHub `run:` values (inline + block scalars), gitlab/bitbucket/azure `script:`-family values, CircleCI `run`/`command` values - never `name:` strings, job ids, comments, or matrix entries (a `name: test lint` step is not a test step).
+  - `substance.ci_gate.gated_test_step` / `gated_lint_step` are the load-bearing FH3 gating signals: the SAME workflow file carries a push/PR trigger AND the test/lint step. The plain `has_*` booleans are whole-repo aggregates - a dispatch-only test workflow next to a push-gated deploy workflow sets `has_test_step` but NOT `gated_test_step`; FH3 judges "CI actually gates" from the `gated_*` pair.
 
 ---
 
@@ -248,12 +248,12 @@ Fixed field order, one line per axis, each carrying `value + confidence + eviden
 
 ```
 assessment_scope: repository (high, 3 evidence)
-lifecycle: brownfield (high, 4 evidence)
-topology: monorepo=yes (high, 2 evidence) | constellation-member=tier-c (low, 1 evidence)
-size: medium ~180K LOC / 2.1K files via scc (high, 5 evidence)
-stacks: TS/JS (0.71), Python (0.18 subproject) (high, 3 evidence)
-shape: web-service, CLI (medium, 2 evidence)
-would-ask: [constellation] sibling repos elsewhere? (tier-c prose ref: README ~/work/other)
+lifecycle:        brownfield (high, 4 evidence)
+topology:         monorepo=yes (high, 2 evidence) | constellation-member=tier-c (low, 1 evidence)
+size:             medium ~180K LOC / 2.1K files via scc (high, 5 evidence)
+stacks:           TS/JS (0.71), Python (0.18 subproject) (high, 3 evidence)
+shape:            web-service, CLI (medium, 2 evidence)
+would-ask:        [constellation] sibling repos elsewhere? (tier-c prose ref: README ~/work/other)
 ```
 
 The interactive block is the same lines PLUS the printed evidence items under each axis and, when a low-confidence or uninferable fact changes a playbook or verdict, the Phase 0.6 clarification (R15) rather than the "would ask" list.

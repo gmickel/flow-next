@@ -17,10 +17,10 @@ BRANCH="$(git branch --show-current)"
 # Use BASE_COMMIT from arguments if provided (task-scoped review)
 # Otherwise fall back to main/master (full branch review)
 if [[ -z "$BASE_COMMIT" ]]; then
- DIFF_BASE="main"
- git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+  DIFF_BASE="main"
+  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
 else
- DIFF_BASE="$BASE_COMMIT"
+  DIFF_BASE="$BASE_COMMIT"
 fi
 
 git log ${DIFF_BASE}..HEAD --oneline
@@ -31,14 +31,14 @@ git log ${DIFF_BASE}..HEAD --oneline
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}" # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # Runtime config:
-# --spec <spec> full spec (backend:model:effort), highest priority
-# FLOW_REVIEW_BACKEND env (spec-form ok: copilot:claude-opus-4.5:xhigh)
-# FLOW_COPILOT_MODEL env (fills missing model only; default gpt-5.5)
-# FLOW_COPILOT_EFFORT env (fills missing effort only; default high)
-# per-task stored review via `flowctl task set-backend` (highest if set)
+#   --spec <spec>           full spec (backend:model:effort), highest priority
+#   FLOW_REVIEW_BACKEND     env (spec-form ok: copilot:claude-opus-4.5:xhigh)
+#   FLOW_COPILOT_MODEL      env (fills missing model only; default gpt-5.5)
+#   FLOW_COPILOT_EFFORT     env (fills missing effort only; default high)
+#   per-task stored review  via `flowctl task set-backend` (highest if set)
 
 # Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely
 # (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).

@@ -34,14 +34,14 @@ Run these guards before selection, ledger writes, branch changes, or skill dispa
 
 ```bash
 if [[ -n "${FLOW_RALPH:-}" || -n "${REVIEW_RECEIPT_PATH:-}" ]]; then
- echo "Ralph and pilot are alternative drivers — never nest them" >&2
- echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
- exit 1
+  echo "Ralph and pilot are alternative drivers — never nest them" >&2
+  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="nested under Ralph harness (FLOW_RALPH/REVIEW_RECEIPT_PATH set) — refuse to run"'
+  exit 1
 fi
 
 if git status --porcelain | grep -v '^.. \.flow/' >/dev/null; then
- echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
- exit 0
+  echo 'PILOT_VERDICT=NEEDS_HUMAN spec=- stage=- reason="dirty working tree at tick start"'
+  exit 0
 fi
 ```
 
@@ -60,27 +60,27 @@ PILOT_DRY_RUN=0
 PILOT_REVIEW=""
 PILOT_RESEARCH="grep"
 PILOT_DEPTH="short"
-PILOT_BACKLOG_OVERRIDE="" # "" = use config; "1" = force backlog (--backlog/--auto)
+PILOT_BACKLOG_OVERRIDE=""   # "" = use config; "1" = force backlog (--backlog/--auto)
 
 PREV=""
 for ARG in $RAW_ARGS; do
- case "$PREV" in
- --spec) PILOT_SPEC="$ARG"; PREV=""; continue ;;
- --review) PILOT_REVIEW="$ARG"; PREV=""; continue ;;
- --research) PILOT_RESEARCH="$ARG"; PREV=""; continue ;;
- --depth) PILOT_DEPTH="$ARG"; PREV=""; continue ;;
- esac
- case "$ARG" in
- --spec|--review|--research|--depth) PREV="$ARG" ;;
- --spec=*) PILOT_SPEC="${ARG#--spec=}" ;;
- --dry-run) PILOT_DRY_RUN=1 ;;
- --backlog|--auto) PILOT_BACKLOG_OVERRIDE=1 ;;
- --review=*) PILOT_REVIEW="${ARG#--review=}" ;;
- --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
- --depth=*) PILOT_DEPTH="${ARG#--depth=}" ;;
- -*) echo "Unknown flag: $ARG (ignored by /flow-next:pilot)" >&2 ;;
- *) echo "Unknown argument: $ARG (ignored by /flow-next:pilot)" >&2 ;;
- esac
+  case "$PREV" in
+    --spec)     PILOT_SPEC="$ARG"; PREV=""; continue ;;
+    --review)   PILOT_REVIEW="$ARG"; PREV=""; continue ;;
+    --research) PILOT_RESEARCH="$ARG"; PREV=""; continue ;;
+    --depth)    PILOT_DEPTH="$ARG"; PREV=""; continue ;;
+  esac
+  case "$ARG" in
+    --spec|--review|--research|--depth) PREV="$ARG" ;;
+    --spec=*)     PILOT_SPEC="${ARG#--spec=}" ;;
+    --dry-run)    PILOT_DRY_RUN=1 ;;
+    --backlog|--auto) PILOT_BACKLOG_OVERRIDE=1 ;;
+    --review=*)   PILOT_REVIEW="${ARG#--review=}" ;;
+    --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
+    --depth=*)    PILOT_DEPTH="${ARG#--depth=}" ;;
+    -*) echo "Unknown flag: $ARG (ignored by /flow-next:pilot)" >&2 ;;
+    *)  echo "Unknown argument: $ARG (ignored by /flow-next:pilot)" >&2 ;;
+  esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:pilot)" >&2
 export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE
@@ -104,14 +104,14 @@ Resolve `PILOT_AUTONOMY` once, here, so every downstream block keys off a single
 # downstream jq reads then error, which keeps the pipeline.qa probe's fail-open
 # contract (probe error ⇒ ACTIVE) intact.
 PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
-rm -f "$PILOT_CFG_SNAPSHOT" 2>/dev/null # drop any stale/planted file (incl. a symlinked leaf) before the fresh write
+rm -f "$PILOT_CFG_SNAPSHOT" 2>/dev/null   # drop any stale/planted file (incl. a symlinked leaf) before the fresh write
 $FLOWCTL config get --json > "$PILOT_CFG_SNAPSHOT" 2>/dev/null \
- || rm -f "$PILOT_CFG_SNAPSHOT"
+  || rm -f "$PILOT_CFG_SNAPSHOT"
 PILOT_AUTONOMY="$(jq -r '.value.pilot.autonomy' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)"
 if [ "$PILOT_BACKLOG_OVERRIDE" = "1" ]; then
- PILOT_AUTONOMY="backlog" # --backlog / --auto forces backlog this run
+  PILOT_AUTONOMY="backlog"                       # --backlog / --auto forces backlog this run
 elif [ "$PILOT_AUTONOMY" != "backlog" ]; then
- PILOT_AUTONOMY="ready" # ONLY the literal `backlog` enables — never bool true / typos / null
+  PILOT_AUTONOMY="ready"                         # ONLY the literal `backlog` enables — never bool true / typos / null
 fi
 export PILOT_AUTONOMY
 ```

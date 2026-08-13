@@ -34,22 +34,22 @@ JSON shape (fn-38 task 2):
 
 ```json
 {
- "groups": [
- {
- "path": "/abs/path/GLOSSARY.md",
- "entries": [
- {
- "term": "<canonical>",
- "definition": "<one-line>",
- "avoid": ["<alias-1>", "<alias-2>"],
- "relates_to": ["<other-term>"]
- }
- ],
- "count": 1
- }
- ],
- "file_count": 1,
- "total_terms": 1
+  "groups": [
+    {
+      "path": "/abs/path/GLOSSARY.md",
+      "entries": [
+        {
+          "term": "<canonical>",
+          "definition": "<one-line>",
+          "avoid": ["<alias-1>", "<alias-2>"],
+          "relates_to": ["<other-term>"]
+        }
+      ],
+      "count": 1
+    }
+  ],
+  "file_count": 1,
+  "total_terms": 1
 }
 ```
 
@@ -61,34 +61,34 @@ For each `(group, entry)` where `count > 0`:
 
 1. **Build the search corpus** — tracked source files only. Use `git ls-files` to honor `.gitignore`; exclude `.flow/`, the glossary file itself, and known build artifacts:
 
- ```bash
- git -C "$REPO_ROOT" ls-files -z \
- | grep -zvE '^\.flow/|/GLOSSARY\.md$|^GLOSSARY\.md$|/node_modules/|/\.git/' \
- > /tmp/glossary-corpus.zlist
- ```
+   ```bash
+   git -C "$REPO_ROOT" ls-files -z \
+     | grep -zvE '^\.flow/|/GLOSSARY\.md$|^GLOSSARY\.md$|/node_modules/|/\.git/' \
+     > /tmp/glossary-corpus.zlist
+   ```
 
- On platforms where Bash file ops gate behind permissions, the host agent should fall back to Glob with the equivalent exclusion pattern.
+   On platforms where Bash file ops gate behind permissions, the host agent should fall back to Glob with the equivalent exclusion pattern.
 
 2. **Search for the term** — case-insensitive, whole-word match (matches T2's `_glossary_term_matches` invariant). Normalize whitespace in the term first (collapse runs of whitespace to a single space), then anchor with `\b`:
 
- ```bash
- TERM_NORM="$(printf '%s' "$term" | tr -s '[:space:]' ' ')"
- TERM_HITS=$(xargs -0 grep -liEw -- "$(printf '%s' "$TERM_NORM" | sed 's/[][\.*^$\/]/\\&/g')" \
- < /tmp/glossary-corpus.zlist 2>/dev/null | wc -l | tr -d ' ')
- ```
+   ```bash
+   TERM_NORM="$(printf '%s' "$term" | tr -s '[:space:]' ' ')"
+   TERM_HITS=$(xargs -0 grep -liEw -- "$(printf '%s' "$TERM_NORM" | sed 's/[][\.*^$\/]/\\&/g')" \
+                 < /tmp/glossary-corpus.zlist 2>/dev/null | wc -l | tr -d ' ')
+   ```
 
- The agent may also use the Grep tool directly with an equivalent pattern; either path is fine.
+   The agent may also use the Grep tool directly with an equivalent pattern; either path is fine.
 
 3. **Search for each `_Avoid_` alias** — same matching rule. Aggregate alias hits per-alias so the report can name the offending alias.
 
 4. **Decide:**
 
- | Term hits | Any alias hits | Outcome |
- |-----------|----------------|---------|
- | ≥1 | (n/a) | **Keep** — record reviewed-without-change |
- | 0 | 0 | **Mark stale** — Edit tool, append HTML comment after the term heading |
- | 0 | ≥1 | **Mark stale + alias-creep flag** — same Edit, plus surface to Phase 3 (interactive) or report (autofix) |
- | ≥1 | ≥1 | **Alias-creep flag only** — term is alive but an alias is being used in code; do not mark stale |
+   | Term hits | Any alias hits | Outcome |
+   |-----------|----------------|---------|
+   | ≥1 | (n/a) | **Keep** — record reviewed-without-change |
+   | 0 | 0 | **Mark stale** — Edit tool, append HTML comment after the term heading |
+   | 0 | ≥1 | **Mark stale + alias-creep flag** — same Edit, plus surface to Phase 3 (interactive) or report (autofix) |
+   | ≥1 | ≥1 | **Alias-creep flag only** — term is alive but an alias is being used in code; do not mark stale |
 
 ### 0.5.3 — Stale-marking via Edit tool
 
@@ -133,18 +133,18 @@ When a term has alias hits in code (whether or not the canonical term also has h
 
 - **Interactive (Phase 3):** present per alias as a question. Lead with the recommendation:
 
- ```
- Glossary term: "<term>" (defined in <relative path>)
- _Avoid_ alias "<alias>" appears in tracked code at <file:line> (and N other locations).
+  ```
+  Glossary term: "<term>" (defined in <relative path>)
+  _Avoid_ alias "<alias>" appears in tracked code at <file:line> (and N other locations).
 
- Options:
- 1. Rename the code uses to "<term>" (recommended)
- 2. Drop "<alias>" from the _Avoid_ list (alias is now acceptable)
- 3. Skip — surface in report only
- ```
+  Options:
+    1. Rename the code uses to "<term>" (recommended)
+    2. Drop "<alias>" from the _Avoid_ list (alias is now acceptable)
+    3. Skip — surface in report only
+  ```
 
- Option 1 is a code-edit recommendation only — the audit reports the locations; the operator handles the rename. (Mass-renaming code from a memory audit is out of scope.)
- Option 2 is an Edit on the glossary file: remove the alias from the `_Avoid_` list while preserving the rest of the entry.
+  Option 1 is a code-edit recommendation only — the audit reports the locations; the operator handles the rename. (Mass-renaming code from a memory audit is out of scope.)
+  Option 2 is an Edit on the glossary file: remove the alias from the `_Avoid_` list while preserving the rest of the entry.
 
 - **Autofix:** never auto-rename code. Surface the alias-creep finding in the report under "Recommended" with file:line locations. The agent does not Edit the glossary unless the term itself is also stale (in which case the stale comment captures the alias-creep too).
 

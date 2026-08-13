@@ -74,29 +74,29 @@ two passes:
 
 1. confirm the task's code, tests, commit, and handover files;
 2. normalize each task's evidence to the integrated commit IDs and retain its
- exact task-specific normalized integrated base **and head**;
+   exact task-specific normalized integrated base **and head**;
 3. when its resolved `REVIEW_MODE` is not `none`, run
- `$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
- from a safe review context whose `HEAD` is that task's normalized integrated
- head. The host chooses that context and isolation mechanism; it must not use
- the wave target's later `HEAD` when peer commits extend it. Apply the existing
- bounded fix loop, integrate any review-fix commits onto the target branch,
- and append them to that task's evidence.
+   `$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
+   from a safe review context whose `HEAD` is that task's normalized integrated
+   head. The host chooses that context and isolation mechanism; it must not use
+   the wave target's later `HEAD` when peer commits extend it. Apply the existing
+   bounded fix loop, integrate any review-fix commits onto the target branch,
+   and append them to that task's evidence.
 
 After every successful task has the required SHIP verdict (or review is `none`)
 and all review-fix commits are integrated:
 
 4. run the existing Phase 5 Verify contract once on the final integrated target
- **immediately before tasks are marked done**. This verification is mandatory
- even when every worker was green in isolation: classify the combined diff,
- honor only valid integrated-HEAD receipts, otherwise run the required suite,
- and fix + re-commit any failure. Append verification-fix commits (distinct
- from review-fix commits) plus the integrated-target verification's exact
- commands/results to every affected task's evidence;
+   **immediately before tasks are marked done**. This verification is mandatory
+   even when every worker was green in isolation: classify the combined diff,
+   honor only valid integrated-HEAD receipts, otherwise run the required suite,
+   and fix + re-commit any failure. Append verification-fix commits (distinct
+   from review-fix commits) plus the integrated-target verification's exact
+   commands/results to every affected task's evidence;
 5. for each successful task, run `flowctl done` with the updated task-unique
- summary/evidence;
+   summary/evidence;
 6. verify `flowctl show <task-id> --json` reports `done`, then run the existing
- 3d.1 tracker touchpoint.
+   3d.1 tracker touchpoint.
 
 ## Partial failures
 

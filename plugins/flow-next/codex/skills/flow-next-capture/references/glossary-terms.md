@@ -15,9 +15,9 @@ GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_ter
 
 - `GLOSSARY_TERMS == 0` (absent, husk, or flowctl error) → **silent skip**: `GLOSSARY_PROPOSALS` stays empty, nothing downstream changes. Bootstrap is `/flow-next:prime`'s job, never capture's.
 - `GLOSSARY_TERMS > 0` → scan the conversation evidence for genuinely NEW project vocabulary. A term qualifies when ALL hold:
- 1. **Used repeatedly** — appears in ≥2 user turns (or once + load-bearing for an acceptance criterion).
- 2. **Project-specific** — a coined noun / flow / distinction, not generic English ("receipt gate" yes; "function" no).
- 3. **Absent from the glossary** — no existing entry matches on `term` or `avoid` aliases (case-insensitive, whitespace-collapsed — the `_glossary_term_matches` contract; do not reinvent matching logic).
+  1. **Used repeatedly** — appears in ≥2 user turns (or once + load-bearing for an acceptance criterion).
+  2. **Project-specific** — a coined noun / flow / distinction, not generic English ("receipt gate" yes; "function" no).
+  3. **Absent from the glossary** — no existing entry matches on `term` or `avoid` aliases (case-insensitive, whitespace-collapsed — the `_glossary_term_matches` contract; do not reinvent matching logic).
 
 Collect at most **5** proposals (`GLOSSARY_PROPOSALS`), each with a one-line definition drawn from how the user actually used the term. Proposals surface at Phase 4 read-back; writes happen only in Phase 5.8 after consent.
 

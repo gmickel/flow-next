@@ -99,7 +99,7 @@ Unsafe content (secrets, guard-triggering destructive commands): refuse to embed
 
 ```bash
 # asset JSON: { "kind": "path"|"git_ref"|"branch"|"commit"|"url"|"https",
-# "reference": "<safe ref>", "display": "<summary>", "revision": "<optional>" }
+#               "reference": "<safe ref>", "display": "<summary>", "revision": "<optional>" }
 "$FLOWCTL" chart attach-asset "<chart-id>.D<n>" --asset-file assets.json --json
 ```
 
@@ -119,12 +119,12 @@ Missing or unsafe artefact -> cannot resolve a prototype decision.
 
 ```bash
 "$FLOWCTL" chart resolve "<chart-id>.D<n>" \
- --answer-file answer.md \
- [--sharpen-file sharpen.json] \
- [--supersedes D3,D5] \
- [--keep-dependents] \
- [--assets '[]'] \
- --json
+  --answer-file answer.md \
+  [--sharpen-file sharpen.json] \
+  [--supersedes D3,D5] \
+  [--keep-dependents] \
+  [--assets '[]'] \
+  --json
 ```
 
 **Out-of-scope** (closes without ledger answer; writes `## Boundaries`):
@@ -145,14 +145,14 @@ After an answer exposes sharper questions, include them in the same resolve tran
 
 ```json
 {
- "decisions": [
- {
- "title": "Pick retention window",
- "type": "interview",
- "question": "How long must tenant audit logs remain queryable?"
- }
- ],
- "remove_questions": ["<parked-key-that-sharpened>"]
+  "decisions": [
+    {
+      "title": "Pick retention window",
+      "type": "interview",
+      "question": "How long must tenant audit logs remain queryable?"
+    }
+  ],
+  "remove_questions": ["<parked-key-that-sharpened>"]
 }
 ```
 
@@ -162,7 +162,7 @@ After an answer exposes sharper questions, include them in the same resolve tran
 
 ```json
 {
- "notes_append": "- auth module DOES have tests (src/auth/tests/, 14 files)"
+  "notes_append": "- auth module DOES have tests (src/auth/tests/, 14 files)"
 }
 ```
 

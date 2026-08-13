@@ -17,28 +17,28 @@ READINESS_PROBES_OK=true
 
 READY_STATE_RAW=$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null) || READINESS_PROBES_OK=false
 if [[ "$READINESS_PROBES_OK" == true ]]; then
- READY_STATE=$(printf '%s' "$READY_STATE_RAW" | jq -r '.value // empty' 2>/dev/null) || READINESS_PROBES_OK=false
+  READY_STATE=$(printf '%s' "$READY_STATE_RAW" | jq -r '.value // empty' 2>/dev/null) || READINESS_PROBES_OK=false
 fi
 
 READY_SPECS_RAW=$("$FLOWCTL" specs --json 2>/dev/null) || READINESS_PROBES_OK=false
 if [[ "$READINESS_PROBES_OK" == true ]]; then
- READY_ADOPTED=$(printf '%s' "$READY_SPECS_RAW" | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null) || READINESS_PROBES_OK=false
+  READY_ADOPTED=$(printf '%s' "$READY_SPECS_RAW" | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null) || READINESS_PROBES_OK=false
 fi
 
 if [[ -n "$REWRITE_TARGET" && "$READINESS_PROBES_OK" == true ]]; then
- REWRITE_RAW=$("$FLOWCTL" show "$REWRITE_TARGET" --json 2>/dev/null) || READINESS_PROBES_OK=false
- if [[ "$READINESS_PROBES_OK" == true ]]; then
- REWRITE_WAS_READY=$(printf '%s' "$REWRITE_RAW" | jq -r '.ready // false' 2>/dev/null) || READINESS_PROBES_OK=false
- fi
+  REWRITE_RAW=$("$FLOWCTL" show "$REWRITE_TARGET" --json 2>/dev/null) || READINESS_PROBES_OK=false
+  if [[ "$READINESS_PROBES_OK" == true ]]; then
+    REWRITE_WAS_READY=$(printf '%s' "$REWRITE_RAW" | jq -r '.ready // false' 2>/dev/null) || READINESS_PROBES_OK=false
+  fi
 fi
 
 READY_OFFER=false
 if [[ "$READINESS_PROBES_OK" == true && -z "$READY_STATE" ]]; then
- if [[ -n "$REWRITE_TARGET" ]]; then
- [[ "$REWRITE_WAS_READY" == true ]] && READY_OFFER=true
- elif [[ "$READY_ADOPTED" =~ ^[0-9]+$ && "$READY_ADOPTED" -ge 1 ]]; then
- READY_OFFER=true
- fi
+  if [[ -n "$REWRITE_TARGET" ]]; then
+    [[ "$REWRITE_WAS_READY" == true ]] && READY_OFFER=true
+  elif [[ "$READY_ADOPTED" =~ ^[0-9]+$ && "$READY_ADOPTED" -ge 1 ]]; then
+    READY_OFFER=true
+  fi
 fi
 # Probe failures degrade to READY_OFFER=false (don't offer).
 ```

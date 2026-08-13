@@ -24,8 +24,8 @@ For flow-next autonomous / Ralph passes, **prefer `@playwright/cli`** — the sn
 ## CLI quickstart (the autonomous default)
 
 ```bash
-npm install -g @playwright/cli@latest # or local dep + npx playwright-cli
-playwright-cli install --skills # agent skill files
+npm install -g @playwright/cli@latest      # or local dep + npx playwright-cli
+playwright-cli install --skills            # agent skill files
 playwright-cli --help
 # Each command prints a snapshot path; act on refs from the latest snapshot.
 playwright-cli screenshot --filename=evidence.png

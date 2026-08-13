@@ -11,7 +11,7 @@ Use the export-time code-under-review identity:
 
 ```bash
 CURRENT_AID=$("$FLOWCTL" pr-cognitive-aid current "$SPEC_ID" \
- --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json)
+  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json)
 CURRENT_AID_STATUS=$(printf '%s' "$CURRENT_AID" | jq -r '.status')
 CURRENT_AID_ID=$(printf '%s' "$CURRENT_AID" | jq -r '.artifact.artifactId // empty')
 LATEST_AID_ID=$(printf '%s' "$CURRENT_AID" | jq -r '.latestArtifactId // empty')
@@ -25,24 +25,24 @@ Otherwise, compose exactly one JSON object from the already-loaded
 repository. The object follows `pr_cognitive_aid` schema version 1:
 
 - Identity: `schemaVersion`, a portable unique `artifactId`, `specId`,
- `baseSha=$MERGE_BASE`, `headSha=$HEAD_SHA`, UTC `generatedAt`, and
- `supersedesArtifactId=$LATEST_AID_ID` when a prior chain tip exists.
+  `baseSha=$MERGE_BASE`, `headSha=$HEAD_SHA`, UTC `generatedAt`, and
+  `supersedesArtifactId=$LATEST_AID_ID` when a prior chain tip exists.
 - One bounded `sources[]` table. Allowed kinds: `spec`, `task`, `rid`,
- `review_receipt`, `qa_receipt`, `diff_metadata`, `commit`.
+  `review_receipt`, `qa_receipt`, `diff_metadata`, `commit`.
 - `changeWalkthrough.thesis`, grounded `proof[]`, and ordered `groups[]`.
- Logical order: optional `problem`, optional `principle`, 1-7 `step`, optional
- `kept`, optional `verify`. Never invent an optional group.
+  Logical order: optional `problem`, optional `principle`, 1-7 `step`, optional
+  `kept`, optional `verify`. Never invent an optional group.
 - Source refs are bound, not labels: `spec` equals `specId`; `task` belongs to
- that spec; `rid` uses canonical R-ID syntax; `commit` is a SHA; and
- `diff_metadata` equals `$MERGE_BASE..$HEAD_SHA`.
+  that spec; `rid` uses canonical R-ID syntax; `commit` is a SHA; and
+  `diff_metadata` equals `$MERGE_BASE..$HEAD_SHA`.
 - Each proof/group/file semantic claim carries non-empty `sourceRefs`.
- Group/file `rIds` and `taskIds` also carry a same-record source reference to
- the matching `rid` or `task` source. File claims do not inherit group claims.
+  Group/file `rIds` and `taskIds` also carry a same-record source reference to
+  the matching `rid` or `task` source. File claims do not inherit group claims.
 - Each file comes only from `diff_summary.files[]`, cites the bound
- `diff_metadata` source, and keeps its upstream group and array order.
- `changeType` is Git state (`added|modified|deleted|renamed|copied`);
- `attentionClass` is review attention
- (`canonical|generated|mechanical`). Never collapse these dimensions.
+  `diff_metadata` source, and keeps its upstream group and array order.
+  `changeType` is Git state (`added|modified|deleted|renamed|copied`);
+  `attentionClass` is review attention
+  (`canonical|generated|mechanical`). Never collapse these dimensions.
 - No raw diff text. `diffUrl` may be HTTPS or repository-relative only.
 
 The validator enforces the full v1 payload, string, path, URL, provenance,
@@ -61,7 +61,7 @@ operation:
 
 ```bash
 "$FLOWCTL" pr-cognitive-aid write "$SPEC_ID" --file "$AID_INPUT" \
- --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json >/dev/null
+  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA" --json >/dev/null
 ```
 
 The generation lands at
@@ -76,14 +76,14 @@ For a reused/persisted generation:
 
 ```bash
 PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render "$SPEC_ID" \
- --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA") || PR_AID_MARKDOWN=""
+  --base-sha "$MERGE_BASE" --head-sha "$HEAD_SHA") || PR_AID_MARKDOWN=""
 ```
 
 For `--dry-run`, render the validated temporary file:
 
 ```bash
 PR_AID_MARKDOWN=$("$FLOWCTL" pr-cognitive-aid render --file "$AID_INPUT") \
- || PR_AID_MARKDOWN=""
+  || PR_AID_MARKDOWN=""
 ```
 
 Non-empty output is inserted as one contiguous body section before Critical
@@ -91,8 +91,8 @@ changes. It is either:
 
 - compact: thesis, proof, and one flat canonical-file table; or
 - full when canonical additions+deletions are at least 200 or canonical file
- count is at least 6: complete legend, evidenced logical groups, file tables,
- and generated/mechanical rows collapsed inside their original group.
+  count is at least 6: complete legend, evidenced logical groups, file tables,
+  and generated/mechanical rows collapsed inside their original group.
 
 The rendered section never replaces or absorbs the separate risk-ranked
 `## Review plan`, and never includes raw diff excerpts.
@@ -134,10 +134,10 @@ restore the retired tracker-runner dispatch.
 ## Done when
 
 - Current matching v1 generation reused, or a new valid generation composed
- from the existing payload and validated before final body creation.
+  from the existing payload and validated before final body creation.
 - Real run persisted one immutable generation; dry-run wrote no repository
- state.
+  state.
 - Markdown selected exactly one compact/full path and stayed separate from the
- Review plan.
+  Review plan.
 - Rejection selected the labeled legacy fallback without mixing fields.
 - No new model/network invocation; tracker creation/facade ordering unchanged.

@@ -17,27 +17,27 @@ Contents:
 ```bash
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-LEAF="$("$FLOWCTL" config get tracker.perEvent.interview --json | jq -r '.value')" # read the leaf ONCE
+LEAF="$("$FLOWCTL" config get tracker.perEvent.interview --json | jq -r '.value')"   # read the leaf ONCE
 case "$LEAF" in
- pull) OP="pull" ;;
- push) OP="push" ;;
- reconcile) OP="reconcile" ;;
- comment) OP="comment" ;;
- off|null) OP="off" ;;
- *) OP="off" ;; # malformed config stays silent
+  pull)      OP="pull" ;;
+  push)      OP="push" ;;
+  reconcile) OP="reconcile" ;;
+  comment)   OP="comment" ;;
+  off|null)  OP="off" ;;
+  *)         OP="off" ;; # malformed config stays silent
 esac
 if [ "$OP" != "off" ]; then
- # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
- # operation-specific 0600 input files, then makes exactly one lifecycle call:
- # "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event interview <legal file flags>
- # For OP=comment, Interview synthesizes the comment content by name: a compact
- # refined-spec summary and the decisions resolved in this interview. The
- # 0600 --body-file FIRST line is
- # `evidence=<sha256-of-current-spec-file>`; delete the file after the call.
- # No content travels in argv.
- # Unlinked specs create and link inside the facade. No reachable transport is
- # best-effort; a tracker failure never blocks the interview write-back.
- :
+  # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
+  # operation-specific 0600 input files, then makes exactly one lifecycle call:
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op "$OP" --event interview <legal file flags>
+  # For OP=comment, Interview synthesizes the comment content by name: a compact
+  # refined-spec summary and the decisions resolved in this interview. The
+  # 0600 --body-file FIRST line is
+  # `evidence=<sha256-of-current-spec-file>`; delete the file after the call.
+  # No content travels in argv.
+  # Unlinked specs create and link inside the facade. No reachable transport is
+  # best-effort; a tracker failure never blocks the interview write-back.
+  :
 fi
 ```
 

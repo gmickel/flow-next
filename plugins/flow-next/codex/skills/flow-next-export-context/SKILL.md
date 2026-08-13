@@ -82,13 +82,13 @@ $FLOWCTL rp select-add --window "$W" --tab "$T" <files>
 Build the prompt by deterministic composition — the handoff is captured via redirection, never pasted into a heredoc; only the static review criteria (same criteria as plan-review or impl-review) are typed, once, in the quoted heredoc:
 
 ```bash
-PROMPT_FILE="${TMPDIR:-/tmp}/flow-export-prompt-<target>-<suffix>.md" # literal path
+PROMPT_FILE="${TMPDIR:-/tmp}/flow-export-prompt-<target>-<suffix>.md"   # literal path
 
 # 1. Builder handoff — captured via redirection, never re-typed
 $FLOWCTL rp prompt-get --window "$W" --tab "$T" > "$PROMPT_FILE"
 
 # 2. Review criteria (static, quoted heredoc — same criteria block as
-# plan-review or impl-review, per the export type)
+#    plan-review or impl-review, per the export type)
 cat >> "$PROMPT_FILE" << 'EOF'
 <review criteria — static block>
 EOF

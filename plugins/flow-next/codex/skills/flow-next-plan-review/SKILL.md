@@ -25,9 +25,9 @@ Conduct a John Carmack-level review of spec plans.
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends** (branch on the common workflow's `RP_ELIGIBLE` probe):
 - When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI
- (copilot), Cursor CLI (cursor), or host-native (`host`)
+  (copilot), Cursor CLI (cursor), or host-native (`host`)
 - When `RP_ELIGIBLE=0`: Codex CLI, GitHub Copilot CLI, Cursor CLI, or
- host-native — rp remains accepted explicitly but errors at runtime
+  host-native — rp remains accepted explicitly but errors at runtime
 
 ## Preamble — execute common routing exactly once
 
@@ -60,15 +60,15 @@ mode, never a configured backend.
 - Stick to one backend for the full review/fix cycle.
 - If `REVIEW_RECEIPT_PATH` is set, every review verdict writes a receipt.
 - Any backend/transport failure outputs `<promise>RETRY</promise>` and stops;
- never silently fall back to a different backend. Autonomous/Ralph callers
- receive the same retry terminal and decide whether to re-enter. A no-verdict
- dispatch is refunded and recorded by flowctl; never manually reset the review
- counter for a transport failure. Exit 5 / `TRANSPORT_UNHEALTHY` means stop
- automatic retries and repair the backend.
+  never silently fall back to a different backend. Autonomous/Ralph callers
+  receive the same retry terminal and decide whether to re-enter. A no-verdict
+  dispatch is refunded and recorded by flowctl; never manually reset the review
+  counter for a transport failure. Exit 5 / `TRANSPORT_UNHEALTHY` means stop
+  automatic retries and repair the backend.
 - `none` skips only when selected explicitly or resolved from configuration.
 - `export` emits the existing external-review artifact and terminal output,
- then returns; it never loads configured-backend guidance, writes a review
- receipt/status, or enters the fix loop.
+  then returns; it never loads configured-backend guidance, writes a review
+  receipt/status, or enters the fix loop.
 - **Foreground rule:** run every `flowctl <backend> plan-review` call as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7) — never `run_in_background` + monitor/poll (a background completion does not reliably resume a subagent context). Host-backend subagent dispatches are also blocking.
 
 Backend-specific invocation, availability, model, session-continuity, receipt,
@@ -86,7 +86,7 @@ Format: `<flow-spec-id> [focus areas] [--review=<mode>]`
 2. If it returns for `none` or `export`, stop. Do not read a backend file.
 3. Read exactly the selected `workflow-<backend>.md`.
 4. Execute one backend dispatch and carry its verdict directly into the shared
- Fix Loop below.
+   Fix Loop below.
 5. Continue in that loop until its terminal contract is satisfied.
 
 ## Fix Loop (INTERNAL - do not exit to Ralph)
@@ -125,17 +125,17 @@ When the verdict is `NEEDS_WORK`:
 1. Parse all valid issues from reviewer feedback.
 2. Fix the user-edited current spec, never a checkpoint copy:
 
- ```bash
- $FLOWCTL spec set-plan <SPEC_ID> --file - --json <<'EOF'
- <updated current spec content>
- EOF
- ```
+   ```bash
+   $FLOWCTL spec set-plan <SPEC_ID> --file - --json <<'EOF'
+   <updated current spec content>
+   EOF
+   ```
 
 3. Sync affected task specs when requirements, acceptance, design decisions,
- interfaces, retry/error semantics, or state values changed.
+   interfaces, retry/error semantics, or state values changed.
 4. Re-enter the SAME selected backend file's re-review step. Never load or mix
- another backend. Codex/Copilot/Cursor resume only through a same-mode receipt;
- host uses a fresh read-only subagent; rp stays in the same chat.
+   another backend. Codex/Copilot/Cursor resume only through a same-mode receipt;
+   host uses a fresh read-only subagent; rp stays in the same chat.
 5. Repeat until `SHIP`, `MAJOR_RETHINK`, backend failure, or deterministic cap.
 
 **Done when:** the round ends in one of exactly four states — a `SHIP` from the

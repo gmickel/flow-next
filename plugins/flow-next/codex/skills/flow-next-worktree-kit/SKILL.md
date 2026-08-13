@@ -30,5 +30,5 @@ Safety notes:
 - fetch from `origin` only when base looks like a branch
 - Worktrees live under `.worktrees/`
 - `create` initializes `.worktrees/.gitignore` (`*` plus `!.gitignore`) when
- absent, so `git add -A` cannot stage nested worktrees as gitlinks; existing
- custom ignore files are preserved
+  absent, so `git add -A` cannot stage nested worktrees as gitlinks; existing
+  custom ignore files are preserved

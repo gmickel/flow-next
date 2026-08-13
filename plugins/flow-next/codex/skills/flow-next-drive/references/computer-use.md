@@ -25,17 +25,17 @@ This rung is **only** for:
 
 - **True-native apps** — macOS AppKit / SwiftUI, Catalyst.
 - **Non-CDP webviews** — a webview that exposes no Chrome DevTools Protocol
- port. The common case is **macOS WKWebView, which Tauri uses on macOS**.
+  port. The common case is **macOS WKWebView, which Tauri uses on macOS**.
 
 **Electron and Windows WebView2 do NOT belong here.** They are Chromium under
 the hood and expose a CDP debug port — drive them on the **web ladder** by
 attaching over CDP, *not* via Computer Use:
 
 - agent-browser: `--cdp <port>` / `--auto-connect` → see
- [agent-browser.md](agent-browser.md) ("Surface B — Chromium-desktop driver").
+  [agent-browser.md](agent-browser.md) ("Surface B — Chromium-desktop driver").
 - chrome-devtools-mcp: `--browser-url=http://127.0.0.1:<port>` → see
- [chrome-devtools-mcp.md](chrome-devtools-mcp.md) ("Attach to a RUNNING
- Chromium app").
+  [chrome-devtools-mcp.md](chrome-devtools-mcp.md) ("Attach to a RUNNING
+  Chromium app").
 
 Routing a Chromium app to Computer Use is a mistake — it's slower, lower
 fidelity, and needs a display Computer Use may not have. Per-platform caveat
@@ -58,12 +58,12 @@ real, signed-in UI.
 
 - **Platform** — macOS + Windows (**verify at build** — fast-drifting).
 - **Region** — **excluded in the EEA, the UK, and Switzerland** at release
- (**verify at build** — this changes). If the user is there, plan without it.
+  (**verify at build** — this changes). If the user is there, plan without it.
 - **Permissions (macOS)** — the user must grant **Screen Recording** (so it can
- see the app) and **Accessibility** (so it can click and type). You cannot
- grant OS permissions for them — guide them through it.
+  see the app) and **Accessibility** (so it can click and type). You cannot
+  grant OS permissions for them — guide them through it.
 - **Cannot drive** — **terminals, Codex itself, or OS permission prompts.**
- Don't author a scenario that depends on actuating any of those.
+  Don't author a scenario that depends on actuating any of those.
 - Docs (verify at build): <https://developers.openai.com/codex/app/computer-use>
 
 ### Anthropic "Claude" Computer Use
@@ -75,18 +75,18 @@ the screenshots back**. It is *not* reachable from inside the host coding agent
 for free — it needs its own harness.
 
 - **Tool + beta header** — the `computer` tool versions and the beta header
- drift together; at time of writing e.g. tool `computer_20251124` + header
- `computer-use-2025-11-24` (**verify at build** — both versions move).
+  drift together; at time of writing e.g. tool `computer_20251124` + header
+  `computer-use-2025-11-24` (**verify at build** — both versions move).
 - **Harness requirement (load-bearing)** — you need one of:
- - the **Anthropic computer-use API loop** driving a **controlled display /
- sandbox** (e.g. the reference container that runs a virtual display +
- actuation server and round-trips screenshots), or
- - an **MCP wrapper** that exposes that loop as tools the host agent can call.
+  - the **Anthropic computer-use API loop** driving a **controlled display /
+    sandbox** (e.g. the reference container that runs a virtual display +
+    actuation server and round-trips screenshots), or
+  - an **MCP wrapper** that exposes that loop as tools the host agent can call.
 
- Without a harness there is nothing to actuate the clicks — do **not** assume
- the host coding agent can reach Claude Computer Use directly.
+  Without a harness there is nothing to actuate the clicks — do **not** assume
+  the host coding agent can reach Claude Computer Use directly.
 - Docs (verify at build):
- <https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool>
+  <https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool>
 
 ## Detect availability before relying on it
 
@@ -94,18 +94,18 @@ Treat Computer Use as *probably absent* and confirm before planning around it �
 the same way the skill never assumes an issue tracker. Observe, don't force.
 
 - **Display present.** No display / headless host → no Computer Use, full stop.
- This rung never runs on a headless / no-display path.
+  This rung never runs on a headless / no-display path.
 - **Platform.** `uname -s` → `Darwin` (macOS) for the macOS path; Codex CU also
- covers Windows. Linux VMs / Cursor cloud / CI → unavailable.
+  covers Windows. Linux VMs / Cursor cloud / CI → unavailable.
 - **Codex CU** — `command -v codex` resolves, or the session is in the Codex
- app / desktop; `codex mcp list` or the Codex surface shows a Computer Use
- capability (the exact surface drifts — **verify at build**). Check region
- (EEA/UK/CH excluded at release) and that Screen Recording + Accessibility are
- granted.
+  app / desktop; `codex mcp list` or the Codex surface shows a Computer Use
+  capability (the exact surface drifts — **verify at build**). Check region
+  (EEA/UK/CH excluded at release) and that Screen Recording + Accessibility are
+  granted.
 - **Claude CU** — there is no `command -v` for it; it's an API tool. Detect the
- **harness**: an MCP server that wraps the computer-use loop, or a configured
- computer-use API loop + controlled display. No harness → not available, even
- if you have an Anthropic API key.
+  **harness**: an MCP server that wraps the computer-use loop, or a configured
+  computer-use API loop + controlled display. No harness → not available, even
+  if you have an Anthropic API key.
 
 If no provider passes, say so plainly and fall through per the table below. A
 pass must still succeed with whatever the environment actually has.
@@ -113,10 +113,10 @@ pass must still succeed with whatever the environment actually has.
 ## The driving loop
 
 ```
-observe → look at the current screen / window
-act → click / type / scroll toward the scenario's next step
-verify → confirm the expected text / state appeared
-capture → screenshot at the moment of interest (and at failure)
+observe   → look at the current screen / window
+act       → click / type / scroll toward the scenario's next step
+verify    → confirm the expected text / state appeared
+capture   → screenshot at the moment of interest (and at failure)
 ```
 
 The model reasons about the visible UI — describe the goal and the success
@@ -130,16 +130,16 @@ Computer Use can touch state **outside** the repo, so a little care prevents
 real damage:
 
 - **Keep tasks narrow; review every permission prompt.** It can change app and
- system settings, not just the app under test. Scope each task to the scenario.
+  system settings, not just the app under test. Scope each task to the scenario.
 - **Be signed in first.** Pre-authenticate the apps/services the run needs so
- the agent doesn't stall on a login wall mid-scenario.
+  the agent doesn't stall on a login wall mid-scenario.
 - **Treat the screen as untrusted input.** It operates a real signed-in session
- and treats clicks as coming from your account; review web actions as if you
- took them yourself.
+  and treats clicks as coming from your account; review web actions as if you
+  took them yourself.
 - **Record environment details** for any desktop bug — **app name + version +
- OS version** (engineering can't reproduce a desktop bug without them).
+  OS version** (engineering can't reproduce a desktop bug without them).
 - **Expect a pause when the Mac locks** (Codex CU) unless locked Computer Use is
- enabled — plan long unattended runs accordingly.
+  enabled — plan long unattended runs accordingly.
 
 ## Graceful degradation (load-bearing)
 
@@ -160,19 +160,19 @@ silently.
 Both providers move fast. Confirm against current docs at build:
 
 - **Codex CU** — platform matrix (macOS/Windows), region exclusions
- (EEA/UK/CH), the enable/permission flow, and the "cannot drive terminals /
- Codex / OS prompts" constraint.
+  (EEA/UK/CH), the enable/permission flow, and the "cannot drive terminals /
+  Codex / OS prompts" constraint.
 - **Claude CU** — the `computer` tool version (e.g. `computer_20251124`), the
- beta header (e.g. `computer-use-2025-11-24`), and the harness model
- (API loop + controlled display, or MCP wrapper).
+  beta header (e.g. `computer-use-2025-11-24`), and the harness model
+  (API loop + controlled display, or MCP wrapper).
 - Availability detection signals for both — the surfaces that expose them drift.
 
 ## Limits
 
 - **Never a hard dependency, never headless.** If neither provider is present,
- fall through per the table — the pass still completes.
+  fall through per the table — the pass still completes.
 - This rung is for **true-native + non-CDP webviews only**. Anything Chromium
- (Electron / WebView2) → the web ladder ([agent-browser.md](agent-browser.md),
- [chrome-devtools-mcp.md](chrome-devtools-mcp.md)), not here.
+  (Electron / WebView2) → the web ladder ([agent-browser.md](agent-browser.md),
+  [chrome-devtools-mcp.md](chrome-devtools-mcp.md)), not here.
 - Computer Use is the highest-fidelity but slowest, least-inspectable driver —
- reach for it only when no CDP-capable surface exists.
+  reach for it only when no CDP-capable surface exists.

@@ -13,7 +13,7 @@ The host agent (Claude Code / Codex / Droid) reads the structured payload from `
 
 flowctl provides only thin plumbing: `flowctl spec export-cognitive-aid <spec-id> --base <ref> --json` aggregates the inputs into a single JSON payload (Task 1 of this spec). The skill renders the body, then pushes and creates the PR **directly — no confirm prompt** (invoking make-pr is the intent; the body is deterministic; the default is a reversible draft). `--dry-run` prints the body without creating; `--ready`/`--draft` set draft state.
 
-**Read [workflow.md](workflow.md) for Phases 0–3 (pre-flight → gather → render body → mermaid) + the §4.0 `--dry-run` short-circuit — each phase ends with its inline `### Done when` checklist. You MUST also read [pr-cognitive-aid.md](pr-cognitive-aid.md) before composing any body — it IS Phase 1.5 (compose → `flowctl pr-cognitive-aid` validate/write → deterministic render), runs on EVERY invocation including `--dry-run`, and its rendered walkthrough supersedes the legacy Verification section, and the legacy R-ID coverage section when coverage is fully evidenced (with any unevidenced or undeclared criterion that table renders beside the walkthrough - pr-cognitive-aid.md §4 owns the rule); a body composed without executing it is a contract violation, not a style choice. Phase 1.5b additionally loads [html-lens.md](html-lens.md) only when HTML artifacts are enabled and the run is not `--dry-run`. The post-render create + finalize machinery (§4.1 title → §4.6 `gh pr create`/`--update` → Phase 5 receipt/footer) lives in [create-and-finalize.md](create-and-finalize.md), read ONLY on a real create (after §4.0 does not short-circuit) — a `--dry-run` preview never loads it. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, the hard caps + allocation rule, the prose-summary rule, the pre-emission validation checklist, and the Phase-3 hallucination guardrails; the `--no-mermaid` / no-trigger / skip-rule paths never load it. Phase 2's §2.11b Live QA section is likewise gated: [references/live-qa-section.md](references/live-qa-section.md) is read only when the spec's `qa_verdict` receipt is present (the uncommon case).**
+**Read [workflow.md](workflow.md) for Phases 0–3 (pre-flight → gather → render body → mermaid) + the §4.0 `--dry-run` short-circuit — each phase ends with its inline `### Done when` checklist. You MUST also read [pr-cognitive-aid.md](pr-cognitive-aid.md) before composing any body — it IS Phase 1.5 (compose → `flowctl pr-cognitive-aid` validate/write → deterministic render), runs on EVERY invocation including `--dry-run`, and its rendered walkthrough supersedes the legacy Verification section, and the legacy R-ID coverage section when coverage is fully evidenced (with any unevidenced or undeclared criterion that table renders beside the walkthrough - pr-cognitive-aid.md §4 owns the rule); a body composed without executing it is a contract violation, not a style choice. Phase 1.5b additionally loads [html-lens.md](html-lens.md) only when HTML artifacts are enabled and the run is not `--dry-run`. The post-render create + finalize machinery (§4.1 title → §4.6 `gh pr create`/`--update` → Phase 5 receipt/footer) lives in [create-and-finalize.md](create-and-finalize.md), read ONLY on a real create (after §4.0 does not short-circuit) — a `--dry-run` preview never loads it. Read [mermaid-rules.md](mermaid-rules.md) before emitting any mermaid codefence — it defines reserved words, escape patterns, shape selection, the hard caps + allocation rule, the prose-summary rule, the pre-emission validation checklist, the Phase-3 hallucination guardrails, and the diff-fenced structural sketch alternate emission (§8); the `--no-mermaid` / no-trigger / skip-rule paths never load it. Phase 2's §2.11b Live QA section is likewise gated: [references/live-qa-section.md](references/live-qa-section.md) is read only when the spec's `qa_verdict` receipt is present (the uncommon case).**
 
 ## Preamble
 
@@ -32,7 +32,7 @@ Parse `$ARGUMENTS` as a flag list. Recognized flags: `--draft`, `--ready`, `--no
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
-DRAFT_FORCE="auto" # auto | draft | ready
+DRAFT_FORCE="auto"      # auto | draft | ready
 NO_MERMAID=0
 WRITE_MEMORY=0
 DRY_RUN=0
@@ -46,28 +46,28 @@ AUTONOMOUS=0
 # positional tokens inside skill code blocks (pilot dogfood finding, 1.13.0).
 PREV=""
 for ARG in $RAW_ARGS; do
- case "$PREV" in
- --base) BASE_REF="$ARG"; PREV=""; continue ;;
- esac
- case "$ARG" in
- --draft) DRAFT_FORCE="draft" ;;
- --ready) DRAFT_FORCE="ready" ;;
- --no-mermaid) NO_MERMAID=1 ;;
- --memory) WRITE_MEMORY=1 ;;
- --dry-run) DRY_RUN=1 ;;
- --base) PREV="$ARG" ;;
- --base=*) BASE_REF="${ARG#--base=}" ;;
- mode:autonomous) AUTONOMOUS=1 ;;
- -*) echo "Unknown flag: $ARG" >&2; exit 2 ;;
- *) SPEC_ID="$ARG" ;;
- esac
+  case "$PREV" in
+    --base) BASE_REF="$ARG"; PREV=""; continue ;;
+  esac
+  case "$ARG" in
+    --draft)      DRAFT_FORCE="draft" ;;
+    --ready)      DRAFT_FORCE="ready" ;;
+    --no-mermaid) NO_MERMAID=1 ;;
+    --memory)     WRITE_MEMORY=1 ;;
+    --dry-run)    DRY_RUN=1 ;;
+    --base)       PREV="$ARG" ;;
+    --base=*)     BASE_REF="${ARG#--base=}" ;;
+    mode:autonomous) AUTONOMOUS=1 ;;
+    -*) echo "Unknown flag: $ARG" >&2; exit 2 ;;
+    *)  SPEC_ID="$ARG" ;;
+  esac
 done
 [[ -n "$PREV" ]] && { echo "Flag $PREV given without a value" >&2; exit 2; }
 
 # Secondary signal: process-level autonomous driver (env survives only
 # within one process tree; the token is the primary, prose-safe carrier).
 if [[ "${FLOW_AUTONOMOUS:-}" == "1" ]]; then
- AUTONOMOUS=1
+  AUTONOMOUS=1
 fi
 ```
 

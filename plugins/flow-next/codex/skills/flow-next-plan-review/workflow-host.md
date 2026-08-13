@@ -9,11 +9,11 @@ subcommand and accepts no model/effort suffix.
 
 1. The coordinator does not review the plan.
 2. Dispatch a fresh, tool-enforced read-only reviewer pinned to a different
- model family than the plan author.
+   model family than the plan author.
 3. Every re-review is a new subagent; prior findings provide convergence
- context, never a fabricated resume id.
+   context, never a fabricated resume id.
 4. Receipt mode is `host`, actual reviewer model is recorded, and
- `session_id` is literal `null`.
+   `session_id` is literal `null`.
 5. Missing cross-family pin fails closed.
 
 **fn-169 — host is the documented always-inject exception.** The `codex` backend
@@ -47,28 +47,28 @@ never reserve again after a replay result.
 ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-plan-review-artifact-${SPEC_ID}.blob"
 "$FLOWCTL" review-artifact plan "$SPEC_ID" --output "$ARTIFACT_FILE" --json
 ROUND_JSON="$("$FLOWCTL" review-rounds increment "$SPEC_ID" --kind plan \
- --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
+  --review-type plan --artifact-file "$ARTIFACT_FILE" --json)"
 ROUND_EXIT=$?
 if [[ "$ROUND_EXIT" -ne 0 ]]; then
- printf '%s\n' "$ROUND_JSON"
- if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
- # Human-action terminal: edit the artifact, explicitly reset, or use
- # human --force. Never refund, reset, force, or redispatch autonomously.
- exit 1
- fi
- exit "$ROUND_EXIT"
+  printf '%s\n' "$ROUND_JSON"
+  if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
+    # Human-action terminal: edit the artifact, explicitly reset, or use
+    # human --force. Never refund, reset, force, or redispatch autonomously.
+    exit 1
+  fi
+  exit "$ROUND_EXIT"
 fi
 if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
- # Record/attach recovery delivered the prior verdict. Apply terminal
- # precedence NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP; no
- # new dispatch.
- printf '%s\n' "$ROUND_JSON"
- # A superseded replay never votes (a concurrent SHIP reset the counter).
- if [[ "$(jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
- fi
- exit 0
+  # Record/attach recovery delivered the prior verdict. Apply terminal
+  # precedence NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP; no
+  # new dispatch.
+  printf '%s\n' "$ROUND_JSON"
+  # A superseded replay never votes (a concurrent SHIP reset the counter).
+  if [[ "$(jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
+    echo "ESCALATE: reviewer requested human review" >&2
+    exit 4
+  fi
+  exit 0
 fi
 RESERVATION_ID="$(jq -er '.reservation_id' <<<"$ROUND_JSON")"
 ```
@@ -84,7 +84,7 @@ If no cross-family pin is available:
 
 - Interactive: ask explicitly which reviewer family/model to use.
 - Autonomous / Ralph / `REVIEW_RECEIPT_PATH`: stop with
- `NEEDS_HUMAN: host review needs a cross-family model pin in AGENTS.md model-routing`.
+  `NEEDS_HUMAN: host review needs a cross-family model pin in AGENTS.md model-routing`.
 
 Dispatch one fresh read-only reviewer using the host primitive:
 Immediately beforehand capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
@@ -140,15 +140,15 @@ Write:
 
 ```json
 {
- "type": "plan_review",
- "id": "<spec-id>",
- "mode": "host",
- "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN>",
- "model": "<actual-reviewer-slug>",
- "spec": "host",
- "session_id": null,
- "review": "<full reviewer output>",
- "timestamp": "<ISO-8601>"
+  "type": "plan_review",
+  "id": "<spec-id>",
+  "mode": "host",
+  "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN>",
+  "model": "<actual-reviewer-slug>",
+  "spec": "host",
+  "session_id": null,
+  "review": "<full reviewer output>",
+  "timestamp": "<ISO-8601>"
 }
 ```
 
@@ -158,19 +158,19 @@ journaled payload (never re-derive it after `record`):
 
 ```bash
 RECORD_JSON="$("$FLOWCTL" review-rounds record "$SPEC_ID" --kind plan \
- --review-type plan --backend host --output-file "$REVIEW_OUTPUT_FILE" \
- --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
- --receipt-payload-file "$RECEIPT_INPUT" --status-target plan --json)"
+  --review-type plan --backend host --output-file "$REVIEW_OUTPUT_FILE" \
+  --reservation-id "$RESERVATION_ID" --receipt-target "$RECEIPT_PATH" \
+  --receipt-payload-file "$RECEIPT_INPUT" --status-target plan --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
 [[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
 "$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
- --receipt "$RECEIPT_PATH" \
- --json
+  --receipt "$RECEIPT_PATH" \
+  --json
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
+  echo "ESCALATE: reviewer requested human review" >&2
+  exit 4
 fi
 ```
 

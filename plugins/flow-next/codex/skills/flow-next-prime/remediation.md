@@ -102,9 +102,9 @@ OPTIONAL_VAR=default_value
 at the layer that fits their cost (SV4, pillars.md):
 
 - **Edit / commit layer (L1/L2):** fast, file/staged-**scoped** FORMAT + LINT only - `<10s`,
- auto-fix, scoped to the staged files. This is what a git / harness hook is FOR.
+  auto-fix, scoped to the staged files. This is what a git / harness hook is FOR.
 - **Verify + acceptance + CI layer (L3/L4):** TESTS, typecheck-all, coverage, E2E. These are the
- verify command + acceptance requirements + a CI required check - NOT a hook.
+  verify command + acceptance requirements + a CI required check - NOT a hook.
 
 **Prime NEVER offers a test-running pre-commit hook.** A test suite / E2E / coverage wired into a
 pre-commit hook is a known agent bypass/stall risk (the `--no-verify` incident, terminal-hook
@@ -132,9 +132,9 @@ in a Biome-only repo makes EVERY subsequent `git commit` fail with `eslint: comm
 a "fix" that actively breaks agent readiness. Pick the block for the detected stack:
 
 ```jsonc
-// Biome repo: "*.{js,ts,tsx,json}": ["biome check --write --no-errors-on-unmatched"]
+// Biome repo:      "*.{js,ts,tsx,json}": ["biome check --write --no-errors-on-unmatched"]
 // ESLint+Prettier: "*.{js,ts,tsx}": ["eslint --fix", "prettier --write"], "*.{json,md}": ["prettier --write"]
-// Ruff (Python): "*.py": ["ruff check --fix", "ruff format"]
+// Ruff (Python):   "*.py": ["ruff check --fix", "ruff format"]
 ```
 
 If husky not installed, add `husky` + `lint-staged` to devDependencies, then:
@@ -151,20 +151,20 @@ verify command + CI, per the layering rule above):
 
 ```yaml
 repos:
- - repo: https://github.com/pre-commit/pre-commit-hooks
- rev: v4.5.0
- hooks:
- - id: trailing-whitespace
- - id: end-of-file-fixer
- - id: check-yaml
- - id: check-added-large-files
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
 
- - repo: https://github.com/astral-sh/ruff-pre-commit
- rev: v0.3.0
- hooks:
- - id: ruff
- args: [--fix]
- - id: ruff-format
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
 ```
 
 Exercise it once after writing (`pre-commit run --all-files` or against a sample) so the offered
@@ -186,7 +186,7 @@ Example ESLint - `eslint.config.js`:
 import js from '@eslint/js';
 
 export default [
- js.configs.recommended,
+  js.configs.recommended,
 ];
 ```
 
@@ -194,9 +194,9 @@ Example Biome - `biome.json`:
 
 ```json
 {
- "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
- "linter": { "enabled": true },
- "formatter": { "enabled": true }
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "linter": { "enabled": true },
+  "formatter": { "enabled": true }
 }
 ```
 
@@ -208,9 +208,9 @@ Example Prettier - `.prettierrc`:
 
 ```json
 {
- "semi": true,
- "singleQuote": true,
- "tabWidth": 2
+  "semi": true,
+  "singleQuote": true,
+  "tabWidth": 2
 }
 ```
 
@@ -226,8 +226,8 @@ in order: `package.json` `engines.node` / CI workflow matrix / `node --version`;
 actually evidenced in the repo/toolchain.
 
 ```bash
-# Node: e.g. NODE_VER=$(node --version | sed 's/^v//; s/\..*//') → echo "$NODE_VER" > .nvmrc
-# Python: derive from requires-python or `python --version` → echo "$PY_VER" > .python-version
+# Node: e.g. NODE_VER=$(node --version | sed 's/^v//; s/\..*//')  → echo "$NODE_VER" > .nvmrc
+# Python: derive from requires-python or `python --version`       → echo "$PY_VER" > .python-version
 ```
 
 ---
@@ -270,8 +270,8 @@ Jest - create `jest.config.cjs` (use `.cjs`, not `.js` — `module.exports` fail
 ```javascript
 /** @type {import('jest').Config} */
 const config = {
- testEnvironment: 'node',
- testMatch: ['**/*.test.js', '**/*.test.ts'],
+  testEnvironment: 'node',
+  testMatch: ['**/*.test.js', '**/*.test.ts'],
 };
 
 module.exports = config;
@@ -283,10 +283,10 @@ Vitest - create `vitest.config.ts`:
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
- test: {
- globals: true,
- environment: 'node',
- },
+  test: {
+    globals: true,
+    environment: 'node',
+  },
 });
 ```
 
@@ -296,7 +296,7 @@ discover ZERO tests, regressing TS3/TS4 on the next run; omit the key entirely i
 
 ```ini
 [pytest]
-# testpaths = <detected test dir(s)> # omit if tests aren't in a single known dir — auto-discovery works
+# testpaths = <detected test dir(s)>   # omit if tests aren't in a single known dir — auto-discovery works
 python_files = test_*.py
 python_functions = test_*
 addopts = -v --tb=short
@@ -314,10 +314,10 @@ Create `.devcontainer/devcontainer.json`:
 
 ```json
 {
- "name": "[Project Name]",
- "image": "mcr.microsoft.com/devcontainers/[language]:latest",
- "features": {},
- "postCreateCommand": "[install command]"
+  "name": "[Project Name]",
+  "image": "mcr.microsoft.com/devcontainers/[language]:latest",
+  "features": {},
+  "postCreateCommand": "[install command]"
 }
 ```
 
@@ -331,24 +331,24 @@ Create `.github/workflows/ci.yml`:
 name: CI
 
 on:
- push:
- branches: [main]
- pull_request:
- branches: [main]
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
- build:
- runs-on: ubuntu-latest
- steps:
- - uses: actions/checkout@v4
- - name: Setup [runtime]
- uses: actions/setup-[runtime]@v4
- - name: Install
- run: [install command]
- - name: Lint
- run: [lint command]
- - name: Test
- run: [test command]
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup [runtime]
+        uses: actions/setup-[runtime]@v4
+      - name: Install
+        run: [install command]
+      - name: Lint
+        run: [lint command]
+      - name: Test
+        run: [test command]
 ```
 
 ---
@@ -382,7 +382,7 @@ entrypoints it can detect; the human writes the one-line module purposes (prime 
 
 ## Build & verify
 - Build: `[Phase-2-verified build command]`
-- Test: `[Phase-2-verified test-list command]`
+- Test:  `[Phase-2-verified test-list command]`
 
 ## Never-edit / generated (LEG7)
 - `[tool-managed dir]/` - regenerated by `[script]`; never hand-edit
@@ -401,7 +401,7 @@ offering:
 # build.sh - headless compile wrapper. Exits non-zero on build failure so CI/agents get a gate.
 set -eu
 # <stacks.md verify-column build command for the detected stack/module>
-# e.g. Go: go build ./...
+# e.g. Go:   go build ./...
 # e.g. .NET Framework (Windows host only): msbuild /t:Build /restore MySolution.sln
 exec <build command> "$@"
 ```
@@ -423,13 +423,13 @@ must never itself corrupt anything). Exercise it once against a sample before of
 set -eu
 bad=0
 for f in $(git diff --cached --name-only --diff-filter=ACM); do
- [ -f "$f" ] || continue
- # `file` returns charset; block anything not utf-8/us-ascii. POSIX classes only.
- enc=$(file --mime-encoding -b "$f" 2>/dev/null || echo unknown)
- case "$enc" in
- utf-8|us-ascii|binary) : ;;
- *) echo "encoding-guard: $f is $enc (expected utf-8) - normalize deliberately or add to the never-edit list"; bad=1 ;;
- esac
+  [ -f "$f" ] || continue
+  # `file` returns charset; block anything not utf-8/us-ascii. POSIX classes only.
+  enc=$(file --mime-encoding -b "$f" 2>/dev/null || echo unknown)
+  case "$enc" in
+    utf-8|us-ascii|binary) : ;;
+    *) echo "encoding-guard: $f is $enc (expected utf-8) - normalize deliberately or add to the never-edit list"; bad=1 ;;
+  esac
 done
 [ "$bad" -eq 0 ] || exit 1
 ```
@@ -449,20 +449,20 @@ project allow rules are inert until the workspace-trust dialog is accepted. **Ne
 
 ```json
 {
- "permissions": {
- "deny": [
- "Read(./.env)",
- "Read(./.env.*)",
- "Read(./**/*.pem)",
- "Read(./**/secrets/**)"
- ],
- "ask": [
- "Bash(git push:*)",
- "Bash(rm -rf:*)",
- "Bash(curl:*)",
- "Bash(wget:*)"
- ]
- }
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/*.pem)",
+      "Read(./**/secrets/**)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(rm -rf:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)"
+    ]
+  }
 }
 ```
 
@@ -482,7 +482,7 @@ evidence; omit a field rather than guess it:
 
 ```bash
 # Start dev server (fixed port, non-interactive)
-[detected dev command] # e.g. PORT=3000 pnpm dev
+[detected dev command]            # e.g. PORT=3000 pnpm dev
 ```
 
 - **Ready line**: `[literal ready line to wait for, e.g. "ready on http://localhost:3000"]`
@@ -519,7 +519,7 @@ merge libraries-before-consumers, contract tests at the boundaries.
 - Git-directory safety: only run git in the intended repo dir.
 - Docs update is Definition-of-Done for any cross-repo change.
 - Codex ignores an AGENTS.md above the git root (openai/codex#15683) - each per-repo file must
- link BACK here explicitly; Claude Code `--add-dir` solves access, not knowledge.
+  link BACK here explicitly; Claude Code `--add-dir` solves access, not knowledge.
 ```
 
 `repos.yaml` (the headline artifact):
@@ -527,9 +527,9 @@ merge libraries-before-consumers, contract tests at the boundaries.
 ```yaml
 # One line per repo - purpose only. This file is the single source of truth.
 repos:
- acme-api: { path: ./acme-api, purpose: "REST API + auth" }
- acme-web: { path: ./acme-web, purpose: "customer web app" }
- acme-jobs: { path: ./acme-jobs, purpose: "background workers" }
+  acme-api:  { path: ./acme-api,  purpose: "REST API + auth" }
+  acme-web:  { path: ./acme-web,  purpose: "customer web app" }
+  acme-jobs: { path: ./acme-jobs, purpose: "background workers" }
 ```
 
 Run-everything scripts (`clone-all` / `status-all` / `test-all` - plain scripts, or mani/gita/vcstool;
@@ -558,7 +558,7 @@ bulk-generated instruction file; every scaffolded artifact is exercised in the s
 7. [ ] Secrets deny-rules baseline (above) - the one harness artifact safe to scaffold on an empty repo.
 8. [ ] First spec = first vertical slice with explicit non-goals (`/flow-next:plan`).
 9. [ ] Recorded-deferral N/A lines for premature pillars (observability, security scan, container,
- E2E) - each naming the trigger that un-defers it. A documented deferral beats a stub.
+       E2E) - each naming the trigger that un-defers it. A documented deferral beats a stub.
 ```
 
 ---

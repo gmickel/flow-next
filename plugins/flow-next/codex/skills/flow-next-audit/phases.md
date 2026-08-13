@@ -122,10 +122,10 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 1. **Confirm canonical entry** — most recent date, broadest module scope, highest-confidence Phase 1 recommendation, cleanest body.
 2. **Extract unique content** from subsumed entries — diff against canonical body. Edge cases, alternative approaches, extra prevention rules.
 3. **Merge into canonical:**
- - Integrate unique content where it logically belongs (don't blindly append).
- - Combine `tags` arrays (dedupe).
- - Preserve canonical's `module`, `track`, `category` — those are the canonical key.
- - Optional: append `related_to: [<subsumed_id>, ...]` for traceability (git history also captures this).
+   - Integrate unique content where it logically belongs (don't blindly append).
+   - Combine `tags` arrays (dedupe).
+   - Preserve canonical's `module`, `track`, `category` — those are the canonical key.
+   - Optional: append `related_to: [<subsumed_id>, ...]` for traceability (git history also captures this).
 4. **Update other entries' `related_to`** — if any other entries cross-reference the subsumed entries, re-point to canonical.
 5. **`git rm` subsumed entries.** No archival, no redirect metadata. Git history preserves them; recovery via `git log --diff-filter=D -- .flow/memory/`.
 
@@ -164,9 +164,9 @@ By the time you identify a Replace candidate, Phase 1 investigation gathered evi
 
 - **Sufficient evidence** — you understand both old recommendation AND current approach. New file locations, current pattern, why old guidance misleads. → proceed to Replace flow.
 - **Insufficient evidence** — drift is so fundamental you can't confidently document the current approach. Entire subsystem replaced; new architecture too complex to summarize from a file scan. → mark stale instead:
- - `flowctl memory mark-stale <id> --reason "<what was found, what's missing>" --audited-by "/flow-next:audit"`
- - Report what evidence was found and what's missing.
- - Recommend the user run a domain-specific solve afterward to capture fresh context.
+  - `flowctl memory mark-stale <id> --reason "<what was found, what's missing>" --audited-by "/flow-next:audit"`
+  - Report what evidence was found and what's missing.
+  - Recommend the user run a domain-specific solve afterward to capture fresh context.
 
 In autofix mode, "insufficient evidence" always routes to mark-stale, never a half-baked Replace.
 
@@ -175,14 +175,14 @@ In autofix mode, "insufficient evidence" always routes to mark-stale, never a ha
 Process Replace candidates **one at a time, sequentially.** Each replacement may need significant code investigation; parallel runs risk orchestrator context exhaustion.
 
 1. **Spawn a single subagent** (sequential) to write the replacement. Pass:
- - Old entry's full content.
- - Investigation evidence summary (what changed, current pattern, why old misleads).
- - Target track + category. Same as old unless the category itself drifted (e.g. a `bug/integration` entry whose problem domain morphed into a `knowledge/architecture-patterns` issue — agent decides).
- - Memory schema reference (the `MEMORY_REQUIRED_FIELDS` / `MEMORY_BUG_FIELDS` / `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_OPTIONAL_FIELDS` constants in `flowctl.py`):
- - Required: `title`, `date`, `track`, `category`.
- - Track-specific bug: `problem_type`, `symptoms`, `root_cause`, `resolution_type`.
- - Track-specific knowledge: `applies_when`.
- - Optional: `module`, `tags`, `related_to`, `status`.
+   - Old entry's full content.
+   - Investigation evidence summary (what changed, current pattern, why old misleads).
+   - Target track + category. Same as old unless the category itself drifted (e.g. a `bug/integration` entry whose problem domain morphed into a `knowledge/architecture-patterns` issue — agent decides).
+   - Memory schema reference (the `MEMORY_REQUIRED_FIELDS` / `MEMORY_BUG_FIELDS` / `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_OPTIONAL_FIELDS` constants in `flowctl.py`):
+     - Required: `title`, `date`, `track`, `category`.
+     - Track-specific bug: `problem_type`, `symptoms`, `root_cause`, `resolution_type`.
+     - Track-specific knowledge: `applies_when`.
+     - Optional: `module`, `tags`, `related_to`, `status`.
 2. **Subagent writes the new entry** via Write tool OR `flowctl memory add --track <t> --category <c> --title "..." --module <m> --tags "a,b" --body-file <path>`. flowctl `add` enforces schema validation; direct Write requires the subagent to emit valid frontmatter.
 3. **Optional traceability** — new entry's frontmatter may include `related_to: [<old-id>]`. Git history also captures the relationship.
 4. **Orchestrator `git rm`'s the old entry** after the subagent completes.
@@ -402,8 +402,8 @@ The audit never deletes the file. Removing it is a project decision, not a memor
 
 ```bash
 "$FLOWCTL" memory mark-stale "$ENTRY_ID" \
- --reason "<one-line ambiguity description>" \
- --audited-by "/flow-next:audit"
+  --reason "<one-line ambiguity description>" \
+  --audited-by "/flow-next:audit"
 ```
 
 The helper sets `status: stale`, stamps `last_audited` (today's date), records `audit_notes` from `--reason`. Atomic — preserves unknown frontmatter fields.
@@ -424,55 +424,55 @@ The tree is ordered by the precedence rule at the top of this file: **correctnes
 
 ```
 Is the entry already status: hardened?
- yes → gate-liveness check only (grep <path> for <rule-id> from hardened_into,
- confirm the rule is ACTIVE — not commented out / ignored / in a dead job)
- gate live → report as still-hardened; do NOT re-investigate
- gate gone → propose `flowctl memory mark-fresh <id>` (un-graduate,
- returns to active) with the evidence
- gate upgraded→ re-run mark-hardened with the new ref (idempotent)
- no → continue
+  yes → gate-liveness check only (grep <path> for <rule-id> from hardened_into,
+        confirm the rule is ACTIVE — not commented out / ignored / in a dead job)
+        gate live    → report as still-hardened; do NOT re-investigate
+        gate gone    → propose `flowctl memory mark-fresh <id>` (un-graduate,
+                       returns to active) with the evidence
+        gate upgraded→ re-run mark-hardened with the new ref (idempotent)
+  no  → continue
 
 Is the entry under knowledge/decisions/?
- yes → use the Decision-entry calibration block above
- (judging question = "does the constraint still hold?";
- Replace = supersede, not git rm; Harden is rare but legal — file stays on disk)
- no → continue with the standard tree below
+  yes → use the Decision-entry calibration block above
+        (judging question = "does the constraint still hold?";
+         Replace = supersede, not git rm; Harden is rare but legal — file stays on disk)
+  no  → continue with the standard tree below
 
 --- correctness first: a wrong lesson is never graduated into a gate ---
 
 Is the entry's referenced code AND problem domain both gone?
- yes → Delete (auto-applicable when ALL auto-Delete criteria hold)
- no → continue
+  yes → Delete (auto-applicable when ALL auto-Delete criteria hold)
+  no  → continue
 
 Does the body's recommended solution conflict with current code?
- yes → enough evidence to write successor?
- yes → Replace (sequential subagent writes new; orchestrator deletes old)
- no → mark stale (autofix) or ask user (interactive)
- no → continue
+  yes → enough evidence to write successor?
+        yes → Replace (sequential subagent writes new; orchestrator deletes old)
+        no  → mark stale (autofix) or ask user (interactive)
+  no  → continue
 
 --- then Consolidate: the cluster, not each member, is the Harden unit ---
 
 Does another entry in the same module/category overlap heavily?
- yes → Consolidate (canonical = newer/broader; subsumed → merged + git rm)
- then re-enter this tree ONCE with the merged entry
- no → continue
+  yes → Consolidate (canonical = newer/broader; subsumed → merged + git rm)
+        then re-enter this tree ONCE with the merged entry
+  no  → continue
 
 --- then Harden: only a correct, single, canonical entry is eligible ---
 
 Recurrence signal? (>= 2 `## Update` headings OR >= 4 commits on the entry file;
 a related_to cluster >= 3 only corroborates — it proposes nothing on its own)
- yes → is the lesson mechanizable (a deterministic check a gate can run)?
- yes → duplication guard: does an ACTIVE gate already enforce the class?
- active match → propose pointer-demotion citing that gate, no new artifact
- inactive match → broken gate: entry stays active, report the finding
- no match → Harden (pick gate type a→b→c, draft artifact,
- ask, write, VERIFY the gate fires, then mark-hardened)
- no → Keep (judgment-only lessons stay context, not gates)
- no → continue
+  yes → is the lesson mechanizable (a deterministic check a gate can run)?
+        yes → duplication guard: does an ACTIVE gate already enforce the class?
+              active match   → propose pointer-demotion citing that gate, no new artifact
+              inactive match → broken gate: entry stays active, report the finding
+              no match       → Harden (pick gate type a→b→c, draft artifact,
+                               ask, write, VERIFY the gate fires, then mark-hardened)
+        no  → Keep (judgment-only lessons stay context, not gates)
+  no  → continue
 
 Are there reference drifts (paths, modules, links, snippets)?
- yes → Update (write tool; preserve unknown frontmatter)
- no → Keep (no edit; report under "Reviewed without edits")
+  yes → Update (write tool; preserve unknown frontmatter)
+  no  → Keep (no edit; report under "Reviewed without edits")
 ```
 
 An entry needing both an Update and a Harden gets the Update applied first — fix the lesson before retiring it — then hardened in the same run.

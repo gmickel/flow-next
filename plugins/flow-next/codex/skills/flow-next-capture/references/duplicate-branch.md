@@ -16,10 +16,10 @@ Format the question via `plain-text numbered prompt`:
 - **header**: `Duplicate?`
 - **body**: `Found <N> potentially overlapping spec(s): <spec-1> "<title-1>", <spec-2> "<title-2>". Recommended: <extend|proceed-anyway> — <one-sentence rationale>. Confidence: [<tier>].`
 - **options** (frozen labels, no recommendation marker on the option itself):
- - `extend <spec-id>` — add criteria to the existing spec (capture exits; skill suggests `--rewrite <id>` rerun)
- - `supersede <spec-id>` — close the old spec and capture this one fresh (capture proceeds; the user closes the old one manually after capture lands)
- - `proceed-anyway` — accept that two specs will live alongside each other (capture proceeds)
- - `abort` — exit cleanly, no write
+  - `extend <spec-id>` — add criteria to the existing spec (capture exits; skill suggests `--rewrite <id>` rerun)
+  - `supersede <spec-id>` — close the old spec and capture this one fresh (capture proceeds; the user closes the old one manually after capture lands)
+  - `proceed-anyway` — accept that two specs will live alongside each other (capture proceeds)
+  - `abort` — exit cleanly, no write
 
 Recommendation logic:
 
@@ -39,8 +39,8 @@ Error: <N> potentially overlapping spec(s) detected: <spec-1>, <spec-2>.
 Capture cannot resolve duplicates in autofix mode.
 
 Options:
- - Re-run with --rewrite <spec-id> to overwrite a specific spec.
- - Re-run interactively (drop mode:autofix) to choose extend / supersede / proceed-anyway.
+  - Re-run with --rewrite <spec-id> to overwrite a specific spec.
+  - Re-run interactively (drop mode:autofix) to choose extend / supersede / proceed-anyway.
 ```
 
 Exit 2.

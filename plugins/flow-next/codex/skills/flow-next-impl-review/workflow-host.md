@@ -64,52 +64,52 @@ DIFF_BASE="${BASE_COMMIT:-main}"
 # not resolve fails closed: silently reviewing against master would bind and
 # hash a range the caller never asked for.
 if ! git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1; then
- if [[ -n "${BASE_COMMIT:-}" ]]; then
- echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2
- exit 1
- fi
- DIFF_BASE="master"
+  if [[ -n "${BASE_COMMIT:-}" ]]; then
+    echo "BASE_COMMIT '$BASE_COMMIT' does not resolve; not reserving a round" >&2
+    exit 1
+  fi
+  DIFF_BASE="master"
 fi
 git rev-parse --verify "$DIFF_BASE" >/dev/null 2>&1 \
- || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
+  || { echo "cannot resolve diff base; not reserving a round" >&2; exit 1; }
 REVIEW_SNAPSHOT_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.env"
 REVIEW_HEAD_SHA="$(git rev-parse HEAD)" || exit 1
 REVIEW_BASE_SHA="$(git merge-base "$DIFF_BASE" "$REVIEW_HEAD_SHA")" || exit 1
 [[ -n "$REVIEW_HEAD_SHA" && -n "$REVIEW_BASE_SHA" ]] \
- || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
+  || { echo "unbound review snapshot; refusing to hash" >&2; exit 1; }
 printf 'REVIEW_HEAD_SHA=%q\nREVIEW_BASE_SHA=%q\n' \
- "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
+  "$REVIEW_HEAD_SHA" "$REVIEW_BASE_SHA" > "$REVIEW_SNAPSHOT_FILE"
 
 DIFF_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.diff"
 git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
- || { echo "git diff failed; not reserving a round" >&2; exit 1; }
+  || { echo "git diff failed; not reserving a round" >&2; exit 1; }
 [[ -s "$DIFF_FILE" || "$REVIEW_BASE_SHA" == "$REVIEW_HEAD_SHA" ]] \
- || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
+  || { echo "empty diff over a non-empty range; not reserving a round" >&2; exit 1; }
 ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.blob"
 "$FLOWCTL" review-artifact impl "${TASK_ID%.*}" --diff-file "$DIFF_FILE" \
- --output "$ARTIFACT_FILE" --json
+  --output "$ARTIFACT_FILE" --json
 ROUND_JSON="$("$FLOWCTL" review-rounds increment "${TASK_ID%.*}" --kind impl \
- --task "$TASK_ID" --review-type impl --artifact-file "$ARTIFACT_FILE" --json)"
+  --task "$TASK_ID" --review-type impl --artifact-file "$ARTIFACT_FILE" --json)"
 ROUND_EXIT=$?
 if [[ "$ROUND_EXIT" -ne 0 ]]; then
- printf '%s\n' "$ROUND_JSON"
- if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
- # Human-action terminal: edit artifact / human reset / human --force only.
- # Never refund, force, reset, or redispatch from an autonomous loop.
- exit 1
- fi
- exit "$ROUND_EXIT"
+  printf '%s\n' "$ROUND_JSON"
+  if grep -Fq 'NOT_RETRYABLE: artifact unchanged since last verdict' <<<"$ROUND_JSON"; then
+    # Human-action terminal: edit artifact / human reset / human --force only.
+    # Never refund, force, reset, or redispatch from an autonomous loop.
+    exit 1
+  fi
+  exit "$ROUND_EXIT"
 fi
 if [[ "$(jq -r '.replayed // false' <<<"$ROUND_JSON")" == "true" ]]; then
- # Recovered verdict terminal precedence:
- # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP.
- printf '%s\n' "$ROUND_JSON"
- # A superseded replay never votes (a concurrent SHIP reset the counter).
- if [[ "$(jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
- fi
- exit 0
+  # Recovered verdict terminal precedence:
+  # NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP.
+  printf '%s\n' "$ROUND_JSON"
+  # A superseded replay never votes (a concurrent SHIP reset the counter).
+  if [[ "$(jq -r '[.replays[]? | select(.superseded != true) | .verdict] | if index("NEEDS_HUMAN") then "NEEDS_HUMAN" else "" end' <<<"$ROUND_JSON")" == "NEEDS_HUMAN" ]]; then
+    echo "ESCALATE: reviewer requested human review" >&2
+    exit 4
+  fi
+  exit 0
 fi
 RESERVATION_ID="$(jq -er '.reservation_id' <<<"$ROUND_JSON")"
 ```
@@ -136,26 +136,26 @@ Give the subagent:
 - Diff scope (`--base` / branch vs main as resolved in Phase 0)
 - Task id / focus areas if any
 - Prior findings for convergence as structured `findings.items` (on re-review; render
- ordinal, severity, classification, status, title, and file:line; use legacy
- review prose only when the structured field is absent)
+  ordinal, severity, classification, status, title, and file:line; use legacy
+  review prose only when the structured field is absent)
 - **The prior-finding reply grammar, stated verbatim** (on re-review). These lines are
- machine-read, and prose resolutions are invisible to the parser — a reviewer that
- resolves priors in prose only leaves them carried forward and the loop cannot
- converge. Require one line per prior finding, at the start of a line, echoing the
- ordinal it was rendered with:
+  machine-read, and prose resolutions are invisible to the parser — a reviewer that
+  resolves priors in prose only leaves them carried forward and the loop cannot
+  converge. Require one line per prior finding, at the start of a line, echoing the
+  ordinal it was rendered with:
 
- ```
- Prior finding #1: fixed
- Prior finding #2: not-fixed
- Prior finding #3: withdrawn
- ```
+  ```
+  Prior finding #1: fixed
+  Prior finding #2: not-fixed
+  Prior finding #3: withdrawn
+  ```
 
- Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With
- exactly one prior finding the number may be omitted (`Prior finding: fixed`). When
- every prior finding is fixed — and only then — the single line
- `Prior findings: all fixed` may replace the per-finding lines; the two must not be
- mixed, because any per-finding line present wins and disables the aggregate. The `unaddressed` array in the JSON tail is about spec R-ID
- coverage and does **not** vouch for prior findings.
+  Allowed statuses: `fixed`, `not-fixed`, `withdrawn` — nothing else parses. With
+  exactly one prior finding the number may be omitted (`Prior finding: fixed`). When
+  every prior finding is fixed — and only then — the single line
+  `Prior findings: all fixed` may replace the per-finding lines; the two must not be
+  mixed, because any per-finding line present wins and disables the aggregate. The `unaddressed` array in the JSON tail is about spec R-ID
+  coverage and does **not** vouch for prior findings.
 - Required verdict tags: `SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK` / `NEEDS_HUMAN`
 
 Wait for the subagent result (blocking — do not background).
@@ -172,15 +172,15 @@ Write a receipt compatible with existing consumers:
 
 ```json
 {
- "type": "impl_review",
- "id": "<task-id or branch scope>",
- "mode": "host",
- "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN>",
- "model": "<actual-reviewer-slug>",
- "spec": "host",
- "session_id": null,
- "review": "<full reviewer output text - findings + verdict>",
- "timestamp": "<ISO-8601>"
+  "type": "impl_review",
+  "id": "<task-id or branch scope>",
+  "mode": "host",
+  "verdict": "<SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN>",
+  "model": "<actual-reviewer-slug>",
+  "spec": "host",
+  "session_id": null,
+  "review": "<full reviewer output text - findings + verdict>",
+  "timestamp": "<ISO-8601>"
 }
 ```
 
@@ -193,19 +193,19 @@ lineage/currentness contract as subprocess backends:
 
 ```bash
 RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
- --task "$TASK_ID" --review-type impl --backend host \
- --output-file "$REVIEW_OUTPUT_FILE" --reservation-id "$RESERVATION_ID" \
- --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --json)"
+  --task "$TASK_ID" --review-type impl --backend host \
+  --output-file "$REVIEW_OUTPUT_FILE" --reservation-id "$RESERVATION_ID" \
+  --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
 [[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
 "$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
- --receipt "$RECEIPT_PATH" \
- --json
+  --receipt "$RECEIPT_PATH" \
+  --json
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
- echo "ESCALATE: reviewer requested human review" >&2
- exit 4
+  echo "ESCALATE: reviewer requested human review" >&2
+  exit 4
 fi
 ```
 
@@ -230,14 +230,14 @@ run.
 
 - `SHIP`: complete the review contract.
 - `MAJOR_RETHINK`: continue into the shared `BLOCKED: DESIGN_CONFLICT`
- terminal; do not patch the design.
+  terminal; do not patch the design.
 - `NEEDS_WORK`: parse every valid finding, fix the code, run the relevant
- tests/lints, and commit the fixes before re-review. Then repeat Steps 1–4
- with a **new** read-only subagent, the same cross-family rules, and the prior
- findings in its prompt. Continue until `SHIP` or the deterministic round cap.
+  tests/lints, and commit the fixes before re-review. Then repeat Steps 1–4
+  with a **new** read-only subagent, the same cross-family rules, and the prior
+  findings in its prompt. Continue until `SHIP` or the deterministic round cap.
 - Dispatch, malformed-verdict, or receipt failure: output
- `<promise>RETRY</promise>` and stop. Never self-issue a verdict or switch
- backends.
+  `<promise>RETRY</promise>` and stop. Never self-issue a verdict or switch
+  backends.
 
 ## Anti-patterns (Host backend)
 

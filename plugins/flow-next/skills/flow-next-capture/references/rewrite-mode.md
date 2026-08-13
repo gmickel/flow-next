@@ -92,6 +92,7 @@ Next:
   /flow-next:plan <SPEC_ID>      → re-plan tasks (existing tasks under the spec
                                     may need /flow-next:sync to align)
   /flow-next:interview <SPEC_ID> → refine via Q&A
+  /flow-next:visual <SPEC_ID>    → compact visual digest — review the spec at a glance
 ```
 
 The `Readiness:` announcement line appears ONLY when §5.3's reset actually changed the flag (`READY_RESET=true`). Never-ready specs print no readiness line — an announcement is not a confirmation prompt, and it must not claim a reset that didn't happen.

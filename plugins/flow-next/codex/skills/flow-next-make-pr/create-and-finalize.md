@@ -18,15 +18,15 @@ SPEC_TITLE=$(printf '%s' "$SPEC_JSON" | jq -r '.title // ""')
 GOAL_FIRST_SENTENCE=$(printf '%s' "$SPEC_JSON" | jq -r '(.spec_sections.goal_and_context // "") | split(". ")[0]')
 
 if [[ -n "$SPEC_TITLE" && "${#SPEC_TITLE}" -le 72 ]]; then
- PR_TITLE="$SPEC_TITLE"
+  PR_TITLE="$SPEC_TITLE"
 elif [[ -n "$GOAL_FIRST_SENTENCE" ]]; then
- if [[ "${#GOAL_FIRST_SENTENCE}" -gt 70 ]]; then
- PR_TITLE="${GOAL_FIRST_SENTENCE:0:70}…"
- else
- PR_TITLE="$GOAL_FIRST_SENTENCE"
- fi
+  if [[ "${#GOAL_FIRST_SENTENCE}" -gt 70 ]]; then
+    PR_TITLE="${GOAL_FIRST_SENTENCE:0:70}…"
+  else
+    PR_TITLE="$GOAL_FIRST_SENTENCE"
+  fi
 else
- PR_TITLE="$SPEC_ID" # last-resort fallback; spec id is always populated
+  PR_TITLE="$SPEC_ID"   # last-resort fallback; spec id is always populated
 fi
 ```
 
@@ -44,30 +44,30 @@ DRAFT_FLAG=""
 
 # Layer 1: Ralph OR autonomous mode forces draft (autonomous-loop opens-for-human-review default).
 if [[ "$RALPH" == "1" || "$AUTONOMOUS" == "1" ]]; then
- DRAFT_FLAG="--draft"
+  DRAFT_FLAG="--draft"
 fi
 
 # Layer 2: Open items default to draft (incomplete state shouldn't go straight to ready).
 # OPEN_ITEMS_COUNT comes from Phase 1 — counts spec open_questions + deferred_findings + spec-completion-review needs_work flag.
 if [[ "$OPEN_ITEMS_COUNT" -gt 0 ]]; then
- DRAFT_FLAG="--draft"
+  DRAFT_FLAG="--draft"
 fi
 
 # Layer 3: Explicit --draft force.
 if [[ "$DRAFT_FORCE" == "draft" ]]; then
- DRAFT_FLAG="--draft"
+  DRAFT_FLAG="--draft"
 fi
 
 # Layer 4: Explicit --ready force overrides everything except Ralph/autonomous.
 # Layer 1 is a hard invariant — autonomous loops (Ralph or pilot) MUST NOT open ready PRs even with --ready in args.
 if [[ "$DRAFT_FORCE" == "ready" && "$RALPH" != "1" && "$AUTONOMOUS" != "1" ]]; then
- DRAFT_FLAG=""
+  DRAFT_FLAG=""
 fi
 
 # Conflict surfacing: --draft AND --ready in the same invocation is the SKILL.md last-flag-wins rule.
 # DRAFT_FORCE captured the last one already; this layer just makes the conflict legible at runtime.
 if [[ "$DRAFT_FORCE" == "ready" && ( "$RALPH" == "1" || "$AUTONOMOUS" == "1" ) ]]; then
- echo "Note: --ready ignored under Ralph/autonomous mode. PR will open as draft (autonomous-loop terminus)." >&2
+  echo "Note: --ready ignored under Ralph/autonomous mode. PR will open as draft (autonomous-loop terminus)." >&2
 fi
 ```
 
@@ -91,8 +91,8 @@ fi
 ```bash
 # Sources A + B come from EXPORT_PAYLOAD (spec open_questions + deferred_findings).
 PAYLOAD_OPEN=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
- ( (.spec.spec_sections.open_questions // []) | length ) +
- ( ([(.deferred_findings // [])[] | (.items // [])[]] | length) )
+  ( (.spec.spec_sections.open_questions // []) | length ) +
+  ( ([(.deferred_findings // [])[] | (.items // [])[]] | length) )
 ')
 
 # Source C — spec-completion-review verdict. The export-cognitive-aid payload
@@ -101,7 +101,7 @@ PAYLOAD_OPEN=$(printf '%s' "$EXPORT_PAYLOAD" | jq '
 SPEC_REVIEW_STATUS=$("$FLOWCTL" show "$SPEC_ID" --json | jq -r '.completion_review_status // "unknown"')
 SPEC_REVIEW_OPEN=0
 if [[ "$SPEC_REVIEW_STATUS" == "needs_work" ]]; then
- SPEC_REVIEW_OPEN=1
+  SPEC_REVIEW_OPEN=1
 fi
 
 OPEN_ITEMS_COUNT=$(( PAYLOAD_OPEN + SPEC_REVIEW_OPEN ))
@@ -126,8 +126,8 @@ After the Write call, validate the file is non-empty before proceeding to push +
 
 ```bash
 if [[ ! -s "$BODY_FILE" ]]; then
- echo "Error: rendered body is empty. Phase 2/3 produced no content — re-check abort conditions (§2.7)." >&2
- exit 1
+  echo "Error: rendered body is empty. Phase 2/3 produced no content — re-check abort conditions (§2.7)." >&2
+  exit 1
 fi
 ```
 
@@ -155,8 +155,8 @@ The heredoc form survives simple bodies but fails on (a) backtick-wrapped code r
 ```bash
 BODY_BYTES=$(wc -c < "$BODY_FILE" | tr -d ' ')
 if [[ "$BODY_BYTES" -gt 65000 ]]; then
- : "host agent runs the truncation cascade above"
- : "(1) drop file list (2) trim TL;DR (3) collapse mermaid (4) spill to .flow/pr-bodies/"
+  : "host agent runs the truncation cascade above"
+  : "(1) drop file list  (2) trim TL;DR  (3) collapse mermaid  (4) spill to .flow/pr-bodies/"
 fi
 ```
 
@@ -185,8 +185,8 @@ Reached directly after §4.4 (body persisted) — no confirm gate. `git push -u 
 # cryptic "Head sha can't be blank" error after the push.
 HEAD_BRANCH=$(git branch --show-current)
 if [[ -z "$HEAD_BRANCH" ]]; then
- echo "Error: detached HEAD or empty branch name; cannot create PR. Check out a branch first." >&2
- exit 1
+  echo "Error: detached HEAD or empty branch name; cannot create PR. Check out a branch first." >&2
+  exit 1
 fi
 
 # Push branch. We don't pre-check `git rev-parse @{push}` — the cost of a redundant
@@ -195,32 +195,32 @@ fi
 PUSH_OUT=$(git push -u origin HEAD 2>&1)
 PUSH_RC=$?
 if [[ "$PUSH_RC" -ne 0 ]]; then
- echo "Error: git push failed:" >&2
- echo "$PUSH_OUT" >&2
- exit 1
+  echo "Error: git push failed:" >&2
+  echo "$PUSH_OUT" >&2
+  exit 1
 fi
 
-sleep 1 # GitHub API eventual-consistency lag (cli/cli #2691)
+sleep 1   # GitHub API eventual-consistency lag (cli/cli #2691)
 
 # --update mode: the PR already exists (from §0.6, captured as $UPDATE_PR_NUMBER) and is
 # already tracker-linked. Skip §4.6a linkage + the create retry loop below — just replace
 # its body with the freshly-rendered content, then fall through to the receipt / PR_URL
 # emission. The push above already landed the fix commits the refreshed body describes.
 if [[ "${UPDATE_MODE:-0}" == "1" ]]; then
- # Re-derive the target PR number here (the §0.6 var does not survive across tool-call
- # bash blocks). $BODY_FILE is the known §4.4 tempfile path (same one create mode uses).
- UPDATE_PR_NUMBER=$(gh pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
- if [[ -z "$UPDATE_PR_NUMBER" ]]; then
- echo "Error: --update: no open PR on this branch at edit time." >&2; exit 1
- fi
- if gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
- PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
- echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
- else
- echo "Error: gh pr edit #$UPDATE_PR_NUMBER --body-file failed." >&2
- exit 1
- fi
- # PR_URL is set — the Ralph `PR_URL=` stdout line (§5.4) + receipts emit as usual.
+  # Re-derive the target PR number here (the §0.6 var does not survive across tool-call
+  # bash blocks). $BODY_FILE is the known §4.4 tempfile path (same one create mode uses).
+  UPDATE_PR_NUMBER=$(gh pr view --json number,state --jq 'select(.state=="OPEN") | .number' 2>/dev/null || true)
+  if [[ -z "$UPDATE_PR_NUMBER" ]]; then
+    echo "Error: --update: no open PR on this branch at edit time." >&2; exit 1
+  fi
+  if gh pr edit "$UPDATE_PR_NUMBER" --body-file "$BODY_FILE"; then
+    PR_URL=$(gh pr view "$UPDATE_PR_NUMBER" --json url --jq '.url')
+    echo "Updated PR #$UPDATE_PR_NUMBER body (refreshed against the current diff)." >&2
+  else
+    echo "Error: gh pr edit #$UPDATE_PR_NUMBER --body-file failed." >&2
+    exit 1
+  fi
+  # PR_URL is set — the Ralph `PR_URL=` stdout line (§5.4) + receipts emit as usual.
 fi
 ```
 
@@ -248,25 +248,25 @@ BASE_BRANCH="${BASE_REF#origin/}"
 # never aborting the run after the push but before `gh pr create`.
 TRK_ACTIVE=$("$FLOWCTL" sync active --json 2>/dev/null | jq -r '.active // empty' 2>/dev/null || true)
 if [ "$TRK_ACTIVE" = "true" ]; then
- TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty' 2>/dev/null || true)
- TRK_STATE=$("$FLOWCTL" sync get-state "$SPEC_ID" --json 2>/dev/null || printf '{}')
- TRK_ID=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.identifier // empty' 2>/dev/null || true)
- REF=""
- case "$TRK_TYPE" in
- linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;; # WOR-N → Linear auto-link + Diffs
- github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;; # #N → native GitHub cross-reference
- gitlab) [ -n "$TRK_ID" ] && REF="Ref \`${TRK_ID}\`" ;; # <project>#<iid> in BACKTICKS → inline code, so GitHub does NOT autolink it as a cross-repo "owner/repo#N" reference (a GitLab key whose path also names a GitHub repo would otherwise mis-link to GitHub issue #N). A GitHub-PR ref can't link a GitLab issue anyway — the real cross-link is the §5.6 non-closing PR-URL note on the GitLab issue.
- jira) REF="" ;; # NO PR-body ref — Jira has neither PR auto-linkify (Linear) nor `gh` (GitHub), and a `PROJ-123` key in a GitHub PR body would not link the Jira issue anyway. The real cross-link is the §5.6 in-adapter **remote link** (POST /issue/{key}/remotelink) on the Jira issue (jira.md §makePr).
- esac
- # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
- # substring — the cognitive-aid body already mentions the spec path
- # (.flow/specs/wor-17-slug.md), so a substring grep for "WOR-17" would
- # false-positive and silently skip the ref. `-x` whole-line + `-F` fixed-string.
- # Size: the §4.4 cap targets 65,000 chars (vs GitHub's ~65,536 hard limit), so the
- # ~25-char ref line fits within the reserved headroom — no re-cap needed.
- if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
- printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
- fi
+  TRK_TYPE=$("$FLOWCTL" config get tracker.type --json 2>/dev/null | jq -r '.value // empty' 2>/dev/null || true)
+  TRK_STATE=$("$FLOWCTL" sync get-state "$SPEC_ID" --json 2>/dev/null || printf '{}')
+  TRK_ID=$(printf '%s' "$TRK_STATE" | jq -r '.tracker.identifier // empty' 2>/dev/null || true)
+  REF=""
+  case "$TRK_TYPE" in
+    linear) [ -n "$TRK_ID" ] && REF="Ref ${TRK_ID}" ;;      # WOR-N → Linear auto-link + Diffs
+    github) [ -n "$TRK_ID" ] && REF="Refs ${TRK_ID}" ;;      # #N → native GitHub cross-reference
+    gitlab) [ -n "$TRK_ID" ] && REF="Ref \`${TRK_ID}\`" ;;    # <project>#<iid> in BACKTICKS → inline code, so GitHub does NOT autolink it as a cross-repo "owner/repo#N" reference (a GitLab key whose path also names a GitHub repo would otherwise mis-link to GitHub issue #N). A GitHub-PR ref can't link a GitLab issue anyway — the real cross-link is the §5.6 non-closing PR-URL note on the GitLab issue.
+    jira)   REF="" ;;                                        # NO PR-body ref — Jira has neither PR auto-linkify (Linear) nor `gh` (GitHub), and a `PROJ-123` key in a GitHub PR body would not link the Jira issue anyway. The real cross-link is the §5.6 in-adapter **remote link** (POST /issue/{key}/remotelink) on the Jira issue (jira.md §makePr).
+  esac
+  # Idempotency: match the exact ref LINE (whole-line, case-insensitive), NOT any
+  # substring — the cognitive-aid body already mentions the spec path
+  # (.flow/specs/wor-17-slug.md), so a substring grep for "WOR-17" would
+  # false-positive and silently skip the ref. `-x` whole-line + `-F` fixed-string.
+  # Size: the §4.4 cap targets 65,000 chars (vs GitHub's ~65,536 hard limit), so the
+  # ~25-char ref line fits within the reserved headroom — no re-cap needed.
+  if [ -n "$REF" ] && ! grep -qixF "$REF" "$BODY_FILE"; then
+    printf '\n\n---\n%s\n' "$REF" >> "$BODY_FILE"
+  fi
 fi
 
 # PR-create seam (#277). FLOW_PR_CREATE_CMD names the command that OPENS the
@@ -275,17 +275,17 @@ fi
 # forbids approving your own PR, so a human-authored PR can never collect the
 # required approval) point it at a wrapper that supplies its own identity.
 # Contract (STABLE — integrators depend on it):
-# - invoked exactly as:
-# $FLOW_PR_CREATE_CMD --title <t> --body-file <f> [--draft] --base <branch> --head <branch>
-# - the expansion is whitespace-split, never eval'd — the command path must
-# not contain spaces; everything after it arrives as pre-quoted arguments
-# - success: exit 0 and print the PR URL (…/pull/<n>) somewhere in output.
-# Extra logging is TOLERATED — the URL is EXTRACTED from combined
-# stdout+stderr below, never raw-assigned
-# - failure: nonzero exit; combined output is surfaced verbatim. The retry
-# loop matches gh's two eventual-consistency substrings in that output, so
-# wrappers that proxy `gh` inherit the retry for free; direct-API wrappers
-# just fail fast, which is correct
+#   - invoked exactly as:
+#       $FLOW_PR_CREATE_CMD --title <t> --body-file <f> [--draft] --base <branch> --head <branch>
+#   - the expansion is whitespace-split, never eval'd — the command path must
+#     not contain spaces; everything after it arrives as pre-quoted arguments
+#   - success: exit 0 and print the PR URL (…/pull/<n>) somewhere in output.
+#     Extra logging is TOLERATED — the URL is EXTRACTED from combined
+#     stdout+stderr below, never raw-assigned
+#   - failure: nonzero exit; combined output is surfaced verbatim. The retry
+#     loop matches gh's two eventual-consistency substrings in that output, so
+#     wrappers that proxy `gh` inherit the retry for free; direct-API wrappers
+#     just fail fast, which is correct
 # Scope: CREATE only — authorship is fixed at creation. `gh pr view` /
 # `gh pr edit` (update mode, §4.6b repair) and all other calls still use `gh`,
 # which stays a preflight requirement. Identity work (App tokens, bots) belongs
@@ -297,47 +297,47 @@ PR_CREATE_CMD="${FLOW_PR_CREATE_CMD:-gh pr create}"
 # just produces the same error.
 PR_URL=""
 for attempt in 1 2 3; do
- if CREATE_OUT=$($PR_CREATE_CMD \
- --title "$PR_TITLE" \
- --body-file "$BODY_FILE" \
- $DRAFT_FLAG \
- --base "$BASE_BRANCH" \
- --head "$HEAD_BRANCH" 2>&1); then
- # EXTRACT the URL rather than assigning the raw capture: `2>&1` folds any
- # stderr chatter (gh's own upgrade notice, a wrapper's logging) into
- # CREATE_OUT, which would corrupt PR_URL and the `${PR_URL##*/}` number
- # derivation downstream (§5). Last match wins — a wrapper may log URLs
- # before printing the real one.
- PR_URL=$(printf '%s\n' "$CREATE_OUT" | grep -Eo 'https://[^[:space:]]+/pull/[0-9]+' | tail -n1 || true)
- if [[ -z "$PR_URL" ]]; then
- echo "Error: PR create reported success but printed no PR URL (FLOW_PR_CREATE_CMD contract: print the .../pull/<n> URL)." >&2
- echo "$CREATE_OUT" >&2
- exit 1
- fi
- break
- fi
+  if CREATE_OUT=$($PR_CREATE_CMD \
+    --title "$PR_TITLE" \
+    --body-file "$BODY_FILE" \
+    $DRAFT_FLAG \
+    --base "$BASE_BRANCH" \
+    --head "$HEAD_BRANCH" 2>&1); then
+    # EXTRACT the URL rather than assigning the raw capture: `2>&1` folds any
+    # stderr chatter (gh's own upgrade notice, a wrapper's logging) into
+    # CREATE_OUT, which would corrupt PR_URL and the `${PR_URL##*/}` number
+    # derivation downstream (§5). Last match wins — a wrapper may log URLs
+    # before printing the real one.
+    PR_URL=$(printf '%s\n' "$CREATE_OUT" | grep -Eo 'https://[^[:space:]]+/pull/[0-9]+' | tail -n1 || true)
+    if [[ -z "$PR_URL" ]]; then
+      echo "Error: PR create reported success but printed no PR URL (FLOW_PR_CREATE_CMD contract: print the .../pull/<n> URL)." >&2
+      echo "$CREATE_OUT" >&2
+      exit 1
+    fi
+    break
+  fi
 
- # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
- # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
- # "Head sha can't be blank, Base sha can't be blank, No commits between main and X"
- # while the GitHub API still propagates the push.
- case "$CREATE_OUT" in
- *"Head sha can't be blank"*|*"No commits between"*)
- sleep $((attempt * 2)) # 2s, 4s, 6s — total worst-case 12s before bailing
- continue
- ;;
- esac
+  # Eventual-consistency error class — retry. Empirically validated during fn-42 spike:
+  # even after `git push` returns 0 and `sleep 1` elapses, gh pr create can fail with
+  # "Head sha can't be blank, Base sha can't be blank, No commits between main and X"
+  # while the GitHub API still propagates the push.
+  case "$CREATE_OUT" in
+    *"Head sha can't be blank"*|*"No commits between"*)
+      sleep $((attempt * 2))   # 2s, 4s, 6s — total worst-case 12s before bailing
+      continue
+      ;;
+  esac
 
- # Any other error: fail fast.
- echo "Error: PR create failed ($PR_CREATE_CMD):" >&2
- echo "$CREATE_OUT" >&2
- exit 1
+  # Any other error: fail fast.
+  echo "Error: PR create failed ($PR_CREATE_CMD):" >&2
+  echo "$CREATE_OUT" >&2
+  exit 1
 done
 
 if [[ -z "$PR_URL" ]]; then
- echo "Error: PR create failed after 3 retries on eventual-consistency error." >&2
- echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
- exit 1
+  echo "Error: PR create failed after 3 retries on eventual-consistency error." >&2
+  echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
+  exit 1
 fi
 
 # 4.6b — Post-create ref verify/repair (fn-57 R4). §4.6a appends the ref to the
@@ -352,26 +352,26 @@ fi
 # §4.6a). Fully non-fatal: the PR is already open; every step degrades to a
 # no-op under `set -e`.
 if [ "$TRK_ACTIVE" = "true" ] && [ -n "$REF" ]; then
- if grep -qixF "$REF" "$BODY_FILE" 2>/dev/null; then
- : # §4.6a append verified locally — the create consumed $BODY_FILE, so the
- # live PR carries the ref; skip the refetch.
- else
- # Bypass case — §4.6a didn't run against this file. Verify/repair on the
- # LIVE PR body.
- if LIVE_BODY=$(gh pr view "$PR_URL" --json body --jq .body 2>/dev/null); then
- if ! printf '%s\n' "$LIVE_BODY" | grep -qixF "$REF"; then
- # Append-only read-modify-write: `gh pr edit` has NO append flag, so
- # fetch→edit has a narrow window where a concurrent body edit would be
- # overwritten — documented, accepted race (bodies are regenerable).
- NEW_BODY=$(printf '%s\n\n---\n%s\n' "$LIVE_BODY" "$REF")
- # Re-check GitHub's 65,536-char hard cap: §4.4 capped the LOCAL body at
- # 65,000, but the LIVE body may differ — a near-cap body + ref can 422.
- if [ "${#NEW_BODY}" -le 65536 ]; then
- printf '%s\n' "$NEW_BODY" | gh pr edit "$PR_URL" --body-file - 2>/dev/null || true
- fi
- fi
- fi
- fi
+  if grep -qixF "$REF" "$BODY_FILE" 2>/dev/null; then
+    : # §4.6a append verified locally — the create consumed $BODY_FILE, so the
+      # live PR carries the ref; skip the refetch.
+  else
+    # Bypass case — §4.6a didn't run against this file. Verify/repair on the
+    # LIVE PR body.
+    if LIVE_BODY=$(gh pr view "$PR_URL" --json body --jq .body 2>/dev/null); then
+      if ! printf '%s\n' "$LIVE_BODY" | grep -qixF "$REF"; then
+        # Append-only read-modify-write: `gh pr edit` has NO append flag, so
+        # fetch→edit has a narrow window where a concurrent body edit would be
+        # overwritten — documented, accepted race (bodies are regenerable).
+        NEW_BODY=$(printf '%s\n\n---\n%s\n' "$LIVE_BODY" "$REF")
+        # Re-check GitHub's 65,536-char hard cap: §4.4 capped the LOCAL body at
+        # 65,000, but the LIVE body may differ — a near-cap body + ref can 422.
+        if [ "${#NEW_BODY}" -le 65536 ]; then
+          printf '%s\n' "$NEW_BODY" | gh pr edit "$PR_URL" --body-file - 2>/dev/null || true
+        fi
+      fi
+    fi
+  fi
 fi
 ```
 
@@ -416,8 +416,8 @@ cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
- - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
- - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
+  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
 EOF
 ```
 
@@ -433,17 +433,17 @@ When `$WRITE_MEMORY == 1`, write a `knowledge/architecture-patterns/` memory ent
 
 ```bash
 if [[ "$WRITE_MEMORY" == "1" ]]; then
- SPEC_TAG="spec-$SPEC_ID"
- EXISTING_ENTRY=$("$FLOWCTL" memory list --track knowledge --category architecture-patterns --json 2>/dev/null \
- | jq -r --arg tag "$SPEC_TAG" \
- '.entries[]? | select((.tags // []) | index($tag)) | .entry_id' \
- | head -1)
+  SPEC_TAG="spec-$SPEC_ID"
+  EXISTING_ENTRY=$("$FLOWCTL" memory list --track knowledge --category architecture-patterns --json 2>/dev/null \
+    | jq -r --arg tag "$SPEC_TAG" \
+        '.entries[]? | select((.tags // []) | index($tag)) | .entry_id' \
+    | head -1)
 
- if [[ -n "$EXISTING_ENTRY" ]]; then
- echo "Note: memory entry already exists for $SPEC_ID ($EXISTING_ENTRY) — skipping --memory write." >&2
- else
- : "compose body, call flowctl memory add (see §5.2)"
- fi
+  if [[ -n "$EXISTING_ENTRY" ]]; then
+    echo "Note: memory entry already exists for $SPEC_ID ($EXISTING_ENTRY) — skipping --memory write." >&2
+  else
+    : "compose body, call flowctl memory add (see §5.2)"
+  fi
 fi
 ```
 
@@ -485,43 +485,43 @@ The "Impact" section is the only host-agent-prose section. Two-to-four sentences
 
 ```bash
 if [[ "$WRITE_MEMORY" == "1" && -z "$EXISTING_ENTRY" ]]; then
- MEMORY_BODY_FILE=$(mktemp -t make-pr-memory-XXXXXX.md)
- trap 'rm -f "$MEMORY_BODY_FILE" "$BODY_FILE"' EXIT
+  MEMORY_BODY_FILE=$(mktemp -t make-pr-memory-XXXXXX.md)
+  trap 'rm -f "$MEMORY_BODY_FILE" "$BODY_FILE"' EXIT
 
- # Host agent's Write tool emits the §5.2 body template into "$MEMORY_BODY_FILE",
- # filling slots from EXPORT_PAYLOAD.
+  # Host agent's Write tool emits the §5.2 body template into "$MEMORY_BODY_FILE",
+  # filling slots from EXPORT_PAYLOAD.
 
- MEMORY_TITLE="$SPEC_TITLE — what shipped"
- if [[ "${#MEMORY_TITLE}" -gt 80 ]]; then
- MEMORY_TITLE="${MEMORY_TITLE:0:77}..."
- fi
+  MEMORY_TITLE="$SPEC_TITLE — what shipped"
+  if [[ "${#MEMORY_TITLE}" -gt 80 ]]; then
+    MEMORY_TITLE="${MEMORY_TITLE:0:77}..."
+  fi
 
- # Tags: spec-<id> (idempotency key) + first 2 modules_touched (search relevance) +
- # any glossary terms added (cross-link signal).
- MODULES=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0:2] | join(",")')
- TAGS="spec-$SPEC_ID"
- [[ -n "$MODULES" ]] && TAGS="$TAGS,$MODULES"
+  # Tags: spec-<id> (idempotency key) + first 2 modules_touched (search relevance) +
+  # any glossary terms added (cross-link signal).
+  MODULES=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0:2] | join(",")')
+  TAGS="spec-$SPEC_ID"
+  [[ -n "$MODULES" ]] && TAGS="$TAGS,$MODULES"
 
- # Module field: most-touched module (first in modules_touched, already churn-sorted).
- PRIMARY_MODULE=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0] // ""')
+  # Module field: most-touched module (first in modules_touched, already churn-sorted).
+  PRIMARY_MODULE=$(printf '%s' "$EXPORT_PAYLOAD" | jq -r '.diff_summary.modules_touched // [] | .[0] // ""')
 
- MEMORY_ADD_OUT=$("$FLOWCTL" memory add \
- --track knowledge \
- --category architecture-patterns \
- --title "$MEMORY_TITLE" \
- ${PRIMARY_MODULE:+--module "$PRIMARY_MODULE"} \
- --tags "$TAGS" \
- --applies-when "Future spec touches $PRIMARY_MODULE or related modules — this entry shows what $SPEC_ID established." \
- --body-file "$MEMORY_BODY_FILE" \
- --json 2>&1) || {
- echo "Warning: --memory write failed (non-fatal — PR is open):" >&2
- echo "$MEMORY_ADD_OUT" >&2
- }
+  MEMORY_ADD_OUT=$("$FLOWCTL" memory add \
+    --track knowledge \
+    --category architecture-patterns \
+    --title "$MEMORY_TITLE" \
+    ${PRIMARY_MODULE:+--module "$PRIMARY_MODULE"} \
+    --tags "$TAGS" \
+    --applies-when "Future spec touches $PRIMARY_MODULE or related modules — this entry shows what $SPEC_ID established." \
+    --body-file "$MEMORY_BODY_FILE" \
+    --json 2>&1) || {
+      echo "Warning: --memory write failed (non-fatal — PR is open):" >&2
+      echo "$MEMORY_ADD_OUT" >&2
+    }
 
- MEMORY_ID=$(printf '%s' "$MEMORY_ADD_OUT" | jq -r '.entry_id // empty' 2>/dev/null)
- if [[ -n "$MEMORY_ID" ]]; then
- echo "Memory entry written: $MEMORY_ID" >&2
- fi
+  MEMORY_ID=$(printf '%s' "$MEMORY_ADD_OUT" | jq -r '.entry_id // empty' 2>/dev/null)
+  if [[ -n "$MEMORY_ID" ]]; then
+    echo "Memory entry written: $MEMORY_ID" >&2
+  fi
 fi
 ```
 
@@ -535,24 +535,24 @@ Under Ralph (`$RALPH == 1`), the success footer changes shape — the harness ex
 
 ```bash
 if [[ "$RALPH" == "1" ]]; then
- # Single-line stdout: PR_URL=<url>
- echo "PR_URL=$PR_URL"
- # Human-readable framing → stderr.
- echo "" >&2
- echo "✅ Draft PR opened: $PR_URL" >&2
- echo "Reviewer should run: /flow-next:resolve-pr ${PR_URL##*/}" >&2
+  # Single-line stdout: PR_URL=<url>
+  echo "PR_URL=$PR_URL"
+  # Human-readable framing → stderr.
+  echo "" >&2
+  echo "✅ Draft PR opened: $PR_URL" >&2
+  echo "Reviewer should run: /flow-next:resolve-pr ${PR_URL##*/}" >&2
 else
- # Interactive mode: §5.0 success footer to stdout.
- cat <<EOF
+  # Interactive mode: §5.0 success footer to stdout.
+  cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
- - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
- - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
+  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
 EOF
- if [[ -n "${MEMORY_ID:-}" ]]; then
- echo " - Memory entry written: $MEMORY_ID"
- fi
+  if [[ -n "${MEMORY_ID:-}" ]]; then
+    echo "  - Memory entry written: $MEMORY_ID"
+  fi
 fi
 ```
 
@@ -573,53 +573,53 @@ synthesis by name: Make PR synthesizes the PR URL and one-line opened-PR context
 The **primary linkage already happened in §4.6a** — the `Ref <identifier>` line in the PR body, which makes the host's tracker integration auto-link the PR. §5.6 is the **enhancement layer** and is **transport- and tracker-type-aware**:
 
 - **Linear (`tracker.type == linear`):** the §4.6a body ref is what makes **Linear Diffs** render the PR inside the issue (Linear's GitHub integration auto-links on the `WOR-N` identifier). On the **GraphQL rung**, additionally create the *rich* GitHub-PR attachment + status sync via `attachmentLinkURL(issueId, $PR_URL)` (Linear auto-detects the GitHub URL; do NOT use `attachmentCreate` — that yields a dumb attachment with no diff/status). On the **MCP rung** there is no URL-attach tool, so it relies entirely on the §4.6a auto-link (sufficient — the integration does the rest). Optionally also post a one-line breadcrumb comment.
- - *Prereqs are user-side and flow-next can't set them:* the Linear GitHub integration must have **code access**, the user needs a **personal GitHub connection**, and **"Enable code reviews"** must be on. Without these the PR still links (status sync works); only the rendered diff view requires them. (Documented in `docs/tracker-sync.md`.)
+  - *Prereqs are user-side and flow-next can't set them:* the Linear GitHub integration must have **code access**, the user needs a **personal GitHub connection**, and **"Enable code reviews"** must be on. Without these the PR still links (status sync works); only the rendered diff view requires them. (Documented in `docs/tracker-sync.md`.)
 - **GitHub (`tracker.type == github`):** the PR and issue share the repo — use a **native `Refs #N`** (non-closing) reference, handled by the GitHub adapter (`github.md`). No Linear-style attachment, no "Diffs".
 
 ```bash
 if [[ -n "$PR_URL" ]] \
- && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
- # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
- # reconcile snapshots and optional 0600 breadcrumb body, then makes exactly
- # one lifecycle call:
- # "$FLOWCTL" tracker sync "$SPEC_ID" --op reconcile --event makePr \
- # --pr-url "$PR_URL" <other legal file flags>
- # The `reconcile` op (open-PR evidence) moves the issue to In Review AND links $PR_URL —
- # BOTH ride this unconditional bridge-active path (NOT gated behind perEvent.makePr):
- # the link powers Diffs and In Review is the honest lifecycle state for an open PR.
- # WHY `reconcile`, NOT `push` (fn-66 regression fix): `push` renders the COMPLETE
- # spec body and writeIssue's it BEFORE setStatus (steps.md push() lines 134-136), so
- # opening a PR just to nudge In Review would CLOBBER any human tracker-side body edits
- # made since the last sync. `reconcile` runs the 3-way body merge (steps.md reconcile()
- # lines 177-185) that PRESERVES tracker-side edits, and sets In Review as part of the
- # SAME op via reconcileStatus(spec, issue, open) → in-review (status-sync.md row 4 / R2).
- # A genuine body conflict queues (sync defer) or asks — it NEVER blocks the open PR.
- # linear → rich attachment via attachmentLinkURL (GraphQL rung) + setStatus(in-review)
- # via reconcileStatus (open prEvidence → in-review, non-terminal, status-sync.md
- # row 4); the §4.6a body ref already enabled the auto-link + Diffs. Optional breadcrumb comment.
- # github → native `Refs #N` (github.md) + status:in-review label.
- # gitlab → the GitLab adapter posts a non-closing PR-URL **note** on the issue
- # (gitlab.md §makePr) — NEVER a `Closes #N` (flow-next owns terminal Done
- # via land.merged) — + the open/closed-side status:in-review label. A
- # GitHub-PR body ref can't auto-link a cross-instance GitLab issue, so the
- # note IS the cross-link; the §4.6a `Ref <project>#<iid>` is a human breadcrumb.
- # jira → the Jira adapter writes the PR link as a **remote link**
- # (POST /issue/{key}/remotelink, jira.md §makePr) — NEVER a transition to Done
- # (flow-next owns terminal Done via land.merged, gated on MERGED) — + the
- # In Review transition via reconcileStatus (open prEvidence → in-review). No
- # PR-body ref auto-links a Jira issue, so the remote link IS the cross-link.
- # On a remote-link POST failure (permission / older DC) it falls back to a
- # URL-deduplicated `Flow-Next PR: <url>` **comment**.
- # (PR URL source: make-pr passes the just-created `$PR_URL` explicitly as
- # `--pr-url`. Merge evidence still derives only the lifecycle state; it is
- # not a transport for link content. Provider link writes are idempotent or
- # URL-deduplicated, so a re-run never stacks duplicates.)
- # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
- # Unlinked spec → flow-first link (create + base-snapshot) first, then reconcile the now-linked
- # spec → link the PR / Diff + In Review (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
- # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
- # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
- :
+   && [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then
+  # Invoke the inline flow-next-tracker-sync wrapper. It prepares the approved
+  # reconcile snapshots and optional 0600 breadcrumb body, then makes exactly
+  # one lifecycle call:
+  #   "$FLOWCTL" tracker sync "$SPEC_ID" --op reconcile --event makePr \
+  #     --pr-url "$PR_URL" <other legal file flags>
+  # The `reconcile` op (open-PR evidence) moves the issue to In Review AND links $PR_URL —
+  # BOTH ride this unconditional bridge-active path (NOT gated behind perEvent.makePr):
+  # the link powers Diffs and In Review is the honest lifecycle state for an open PR.
+  # WHY `reconcile`, NOT `push` (fn-66 regression fix): `push` renders the COMPLETE
+  # spec body and writeIssue's it BEFORE setStatus (steps.md push() lines 134-136), so
+  # opening a PR just to nudge In Review would CLOBBER any human tracker-side body edits
+  # made since the last sync. `reconcile` runs the 3-way body merge (steps.md reconcile()
+  # lines 177-185) that PRESERVES tracker-side edits, and sets In Review as part of the
+  # SAME op via reconcileStatus(spec, issue, open) → in-review (status-sync.md row 4 / R2).
+  # A genuine body conflict queues (sync defer) or asks — it NEVER blocks the open PR.
+  #   linear → rich attachment via attachmentLinkURL (GraphQL rung) + setStatus(in-review)
+  #            via reconcileStatus (open prEvidence → in-review, non-terminal, status-sync.md
+  #            row 4); the §4.6a body ref already enabled the auto-link + Diffs. Optional breadcrumb comment.
+  #   github → native `Refs #N` (github.md) + status:in-review label.
+  #   gitlab → the GitLab adapter posts a non-closing PR-URL **note** on the issue
+  #            (gitlab.md §makePr) — NEVER a `Closes #N` (flow-next owns terminal Done
+  #            via land.merged) — + the open/closed-side status:in-review label. A
+  #            GitHub-PR body ref can't auto-link a cross-instance GitLab issue, so the
+  #            note IS the cross-link; the §4.6a `Ref <project>#<iid>` is a human breadcrumb.
+  #   jira   → the Jira adapter writes the PR link as a **remote link**
+  #            (POST /issue/{key}/remotelink, jira.md §makePr) — NEVER a transition to Done
+  #            (flow-next owns terminal Done via land.merged, gated on MERGED) — + the
+  #            In Review transition via reconcileStatus (open prEvidence → in-review). No
+  #            PR-body ref auto-links a Jira issue, so the remote link IS the cross-link.
+  #            On a remote-link POST failure (permission / older DC) it falls back to a
+  #            URL-deduplicated `Flow-Next PR: <url>` **comment**.
+  #   (PR URL source: make-pr passes the just-created `$PR_URL` explicitly as
+  #    `--pr-url`. Merge evidence still derives only the lifecycle state; it is
+  #    not a transport for link content. Provider link writes are idempotent or
+  #    URL-deduplicated, so a re-run never stacks duplicates.)
+  # The open PR is the merge-evidence `open` bucket → In Review, NEVER terminal (no MERGED).
+  # Unlinked spec → flow-first link (create + base-snapshot) first, then reconcile the now-linked
+  # spec → link the PR / Diff + In Review (tracker-sync §Phase 3 create-if-unlinked). No-op only if no transport reachable.
+  # Best-effort — the PR is already open; a tracker failure must NOT exit non-zero.
+  # Under Ralph, framing routes to stderr (keeps the PR_URL=<url> stdout invariant).
+  :
 fi
 ```
 
@@ -646,7 +646,7 @@ SINCE=$(gh pr view "$PR_URL" --json createdAt --jq .createdAt 2>/dev/null || tru
 1. Record the retro-fire start anchor (the re-check needs it as `--since`): `date -u +%Y-%m-%dT%H:%M:%SZ`
 2. Invoke the **inline flow-next-tracker-sync wrapper directly**. It prepares the same reconcile inputs and optional PR breadcrumb as §5.6, then makes exactly one `flowctl tracker sync <spec-id> --op reconcile --event makePr --pr-url "$PR_URL" <other legal file flags>` call. NEVER invoke this check block as a wrapper.
 3. Re-check with `--since` = the step-1 anchor:
- `"$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "<retro-fire-start>" --json`
+   `"$FLOWCTL" sync check "$SPEC_ID" --events makePr --since "<retro-fire-start>" --json`
 4. Record the final state in the summary slot. Still MISSING after the one cycle is a recorded, visible outcome — never a second retro-fire, never a block (the PR is already open; a tracker hiccup must not become a hard stop). Recovery guidance lives in the receipt note + `docs/tracker-sync.md`.
 
 **Mandatory summary slot — the LAST line the skill prints.** Exactly four states; an explicit `n/a` proves the check ran, an absent line is a skipped check:

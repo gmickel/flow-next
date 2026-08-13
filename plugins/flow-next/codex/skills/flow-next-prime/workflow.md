@@ -17,7 +17,7 @@ Classification is **deterministic and host-inline**: the raw signals come from t
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ROOT="${ROOT:-.}"
-"$FLOWCTL" prime classify --json "$ROOT" # JSON on stdout; progress/diagnostics on stderr
+"$FLOWCTL" prime classify --json "$ROOT"   # JSON on stdout; progress/diagnostics on stderr
 ```
 
 From the emitter payload, derive the five-axis classification per [classification.md](classification.md): resolve the Axis-5 delivery shape(s) from the raw `shape_markers`; set the final per-axis confidence, downgrading to `low` and using NOT ASSESSED wherever a `collectors[]` entry reports `complete: false` / `sampled` / `truncated` / `cap_hit` (partial data never yields high confidence). If the emitter is unavailable or errors, fall back to the bounded probes named in classification.md (never `cloc`, never exhaustive reads; POSIX character classes; portable timeouts - never bare `timeout(1)`); a classification that cannot be computed is reported as low-confidence with the reason, never guessed.
@@ -53,12 +53,12 @@ Run all 9 scouts in parallel (Codex spawns them as multi-agent threads):
 ### Agent Readiness Scouts (Pillars 1-5)
 
 ```
-Use the tooling_scout agent # linters, formatters, pre-commit, type checking → SV1-6
-Use the agents_md_scout agent # CLAUDE.md/AGENTS.md quality → DC2 (+ command-doc)
-Use the env_scout agent # .env.example, docker, devcontainer → DE/BS lock+runtime
-Use the testing_scout agent # test framework, coverage, commands → TS1-6
-Use the build_scout agent # build system, scripts, CI → BS1-6
-Use the docs_gap_scout agent # MODE: inventory (no planned change) — assess DC1/DC3-7 doc currency
+Use the tooling_scout agent    # linters, formatters, pre-commit, type checking → SV1-6
+Use the agents_md_scout agent  # CLAUDE.md/AGENTS.md quality → DC2 (+ command-doc)
+Use the env_scout agent        # .env.example, docker, devcontainer → DE/BS lock+runtime
+Use the testing_scout agent    # test framework, coverage, commands → TS1-6
+Use the build_scout agent      # build system, scripts, CI → BS1-6
+Use the docs_gap_scout agent   # MODE: inventory (no planned change) — assess DC1/DC3-7 doc currency
 ```
 
 > **docs-gap-scout runs in INVENTORY mode here** (it has no REQUEST to plan against). The dispatch MUST say "MODE: inventory — assess which docs exist and their currency for DC1/DC3/DC4/DC5/DC6/DC7; emit a criterion-ID table; skip 'Likely Updates Needed'." Without this the agent confabulates a change or no-ops, and Pillar 4 scores on no evidence.
@@ -66,9 +66,9 @@ Use the docs_gap_scout agent # MODE: inventory (no planned change) — assess DC
 ### Production Readiness Scouts (Pillars 6-8)
 
 ```
-Use the observability_scout agent # logging, tracing, metrics, health → OB1-6
-Use the security_scout agent # branch protection, CODEOWNERS, secrets → SE1-6
-Use the workflow_scout agent # CI/CD, templates, automation → WP1-6
+Use the observability_scout agent  # logging, tracing, metrics, health → OB1-6
+Use the security_scout agent       # branch protection, CODEOWNERS, secrets → SE1-6
+Use the workflow_scout agent       # CI/CD, templates, automation → WP1-6
 ```
 
 **Important**: Launch all 9 scout agents in parallel for speed (~15-20 seconds total).
@@ -89,13 +89,13 @@ weeks, or a CLAUDE.md whose stated test command fails would otherwise false-pass
 inherited from Phase 1 and pillars.md and never relaxed here:
 
 - **Unverified counts as fail.** A framework/command was detected but you did NOT run its probe
- (sandbox can't execute it, host-incompatible, budget exhausted) → score that criterion
- **⚠️ unverified - counts as fail**, never ✅. A command that exists but whose probe FAILS is
- **❌ with the error quoted**.
+  (sandbox can't execute it, host-incompatible, budget exhausted) → score that criterion
+  **⚠️ unverified - counts as fail**, never ✅. A command that exists but whose probe FAILS is
+  **❌ with the error quoted**.
 - **Every verdict quotes its evidence** - a file line or a command-output line. No evidence, no
- verdict: the criterion is **NOT ASSESSED**, never guessed (fabrication guard).
+  verdict: the criterion is **NOT ASSESSED**, never guessed (fabrication guard).
 - **Host-sensitive quoting.** When a probe surfaces harness/MCP/secret content (HP7 hooks, HP9
- MCP config), quote **key names only, never values** - same redaction contract as the emitter.
+  MCP config), quote **key names only, never values** - same redaction contract as the emitter.
 
 ### 2.0 Non-mutating execution policy (READ FIRST - hard; governs every executed probe below)
 
@@ -103,21 +103,21 @@ Assessment must **never mutate the assessed repo**. This supersedes any looser t
 wording. Seven rules bound what this phase may run:
 
 1. **Static resolution is always safe** - for every documented command, checking that it exists
- in a manifest / on `PATH` never mutates and is always allowed.
+   in a manifest / on `PATH` never mutates and is always allowed.
 2. **Execution only for allowlisted evidence classes:** lint/typecheck in **check mode**, test
- discovery/list (dry-run), a **bounded build**, `--help` / `--dry-run`, and the gated tier-3
- boot probe. Nothing else executes.
+   discovery/list (dry-run), a **bounded build**, `--help` / `--dry-run`, and the gated tier-3
+   boot probe. Nothing else executes.
 3. **Formatters run in check mode only** - never `--write` / `--fix` against the worktree.
 4. **NEVER executed** (static + cross-reference evidence only): setup, migrate, seed, deploy,
- destructive, or network commands. DE4 grades by content, not execution (§2.8).
+   destructive, or network commands. DE4 grades by content, not execution (§2.8).
 5. **BS3 dev-command evidence rides the tier-3 boot probe** (§2.5) - never a second long-lived
- server run. Absent a boot probe, BS3 is reported as resolving statically.
+   server run. Absent a boot probe, BS3 is reported as resolving statically.
 6. **Worktree snapshot guard.** Take a `git status --porcelain` snapshot immediately BEFORE and
- AFTER every executed probe. Any **unexpected tracked change** INVALIDATES that probe's
- evidence (the criterion falls to ⚠️ unverified) AND is itself a finding - a probe that dirties
- the tree is misbehaving.
+   AFTER every executed probe. Any **unexpected tracked change** INVALIDATES that probe's
+   evidence (the criterion falls to ⚠️ unverified) AND is itself a finding - a probe that dirties
+   the tree is misbehaving.
 7. **G3 splits two questions:** "resolves" (checked for **ALL** quoted commands, always safe) vs
- "safe sampled execution" (run only for the allowlisted classes above). §2.6.
+   "safe sampled execution" (run only for the allowlisted classes above). §2.6.
 
 Windows-only / license-bound / host-incompatible builds (Delphi, .NET Framework - see the
 `stacks.md` verify + gotcha columns) that cannot run on the current host are recorded
@@ -142,12 +142,12 @@ character classes** in every probe pattern (per classification.md's edge-case ru
 ```bash
 # Portable bounded run: run_bounded <seconds> <command...>. Re-declared per block.
 run_bounded() {
- _limit="$1"; shift
- "$@" & _pid=$!
- ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!
- wait "$_pid" 2>/dev/null; _rc=$?
- kill "$_watch" 2>/dev/null
- return "$_rc"
+  _limit="$1"; shift
+  "$@" & _pid=$!
+  ( sleep "$_limit"; kill -TERM "$_pid" 2>/dev/null; sleep 2; kill -KILL "$_pid" 2>/dev/null ) & _watch=$!
+  wait "$_pid" 2>/dev/null; _rc=$?
+  kill "$_watch" 2>/dev/null
+  return "$_rc"
 }
 ```
 
@@ -208,10 +208,10 @@ repo** (resolution 17). For a monorepo (the emitter's topology + workspace membe
 **SAMPLED, not exhaustive**:
 
 - **Sampling order:** deployable members first (web service/app, CLI, desktop), then default /
- entry members. **Max ~5 member executions** and a **~10 min global wall-clock cap** per run.
+  entry members. **Max ~5 member executions** and a **~10 min global wall-clock cap** per run.
 - **Graph-native `affected` commands may substitute** for per-member runs where the toolchain
- provides them (`turbo run … --affected`, `nx affected`) - one bounded affected run can stand in
- for many member runs.
+  provides them (`turbo run … --affected`, `nx affected`) - one bounded affected run can stand in
+  for many member runs.
 - **Unsampled members are listed NOT ASSESSED** - never silently skipped.
 
 **Progress observability (resolution 20) - a ~10-minute silent run is not acceptable UX.** Emit a
@@ -219,9 +219,9 @@ concise line per surface/member as the loop runs, with elapsed vs the global bud
 NOT ASSESSED list as the budget exhausts:
 
 ```
-[2.4] api (web) build … ok (12s) | elapsed 0:12 / 10:00
-[2.4] cli (CLI) --help … ok (1s) | elapsed 0:13 / 10:00
-[2.4] worker (web) boot probe … ready (28s) | elapsed 0:41 / 10:00
+[2.4] api (web)        build … ok (12s)          | elapsed 0:12 / 10:00
+[2.4] cli (CLI)        --help … ok (1s)           | elapsed 0:13 / 10:00
+[2.4] worker (web)     boot probe … ready (28s)   | elapsed 0:41 / 10:00
 [2.4] budget: 5/5 member executions used - NOT ASSESSED: web-admin, docs-site, packages/ui
 ```
 
@@ -231,13 +231,13 @@ A tier-3 "runs" claim requires an **executed** boot probe - it is the SOLE evide
 BS3 and for AO3 (parseable ready line + deterministic port). Rules:
 
 - **Ready-signal gate.** Run the boot probe **only when a cheap ready signal is detectable** - a
- health endpoint, a dev-server ready line - and always **time-bounded (~60s)**. If no ready
- signal is detectable, the tier is recorded **"not probed"**, never failed.
+  health endpoint, a dev-server ready line - and always **time-bounded (~60s)**. If no ready
+  signal is detectable, the tier is recorded **"not probed"**, never failed.
 - **External-SaaS gate.** A ready line + bound port is **NOT tier 3** when the backend of record
- is a cloud service requiring interactive auth (Convex/Firebase-class repos boot a nonfunctional
- shell). Report **"tier 3 gated on <service> credentials"** - never fabricate a pass.
+  is a cloud service requiring interactive auth (Convex/Firebase-class repos boot a nonfunctional
+  shell). Report **"tier 3 gated on <service> credentials"** - never fabricate a pass.
 - **Not-probed-on-this-host.** A surface whose boot cannot run here (platform/toolchain/license)
- is "not probed on this host", never ❌ and never ✅.
+  is "not probed on this host", never ❌ and never ✅.
 
 ```bash
 ROOT="${ROOT:-.}"
@@ -258,17 +258,17 @@ command's **leading token**, and resolve it against tracked files / manifest scr
 quoted, allowlisted-class commands (the DC2 execute check) under the §2.0 policy + worktree guard.
 
 - **Metacharacter rejection (argv-only execution).** An allowlisted leading token licenses ONLY
- that binary + simple arguments - conceptually argv-only execution. Before running any
- repo-derived command, REJECT (do not run; record as skipped with the reason) any candidate
- containing shell chaining, redirection, or substitution constructs beyond the bare argv:
- `;`, `&&`, `||`, `|`, backticks, `$(`, `>`, `>>`, `<`, `&`, or embedded newlines. A quoted
- `npm test && curl …` matches the allowlisted starter yet smuggles a chained action - rejection
- still counts the candidate for the "resolves" half of G3.
+  that binary + simple arguments - conceptually argv-only execution. Before running any
+  repo-derived command, REJECT (do not run; record as skipped with the reason) any candidate
+  containing shell chaining, redirection, or substitution constructs beyond the bare argv:
+  `;`, `&&`, `||`, `|`, backticks, `$(`, `>`, `>>`, `<`, `&`, or embedded newlines. A quoted
+  `npm test && curl …` matches the allowlisted starter yet smuggles a chained action - rejection
+  still counts the candidate for the "resolves" half of G3.
 - A CLAUDE.md whose stated test command **fails** is worse than none → feeds G3 ❌ with the error.
 - **Extraction-failure flag (load-bearing).** Zero commands extracted from a file that HAS fenced
- blocks = an **extraction-failure flag**, NEVER a vacuous G3 pass or a stub grade. (Eval: naive
- extraction found 1 of 15+ commands in a best-in-class file and 0 of 26 in another - both would
- have silently gutted the gate.) Re-extract more thoroughly before flagging.
+  blocks = an **extraction-failure flag**, NEVER a vacuous G3 pass or a stub grade. (Eval: naive
+  extraction found 1 of 15+ commands in a best-in-class file and 0 of 26 in another - both would
+  have silently gutted the gate.) Re-extract more thoroughly before flagging.
 
 **G3 = agent-file quoted commands resolve/execute.**
 
@@ -289,13 +289,13 @@ Diff declared `.env.example` vars against **env reads in SOURCE** (`process.env`
 eval-hardened:
 
 - **Iterate WORKSPACE MEMBER dirs, not root-only** - per-package `.env.example` is the correct
- monorepo pattern (a root-only probe false-negatived 4 real files).
+  monorepo pattern (a root-only probe false-negatived 4 real files).
 - **Scan only source extensions in the git index** - exclude tests/fixtures/eval corpora/docs
- snippets/`node_modules` (two eval repos' "stale" evidence was markdown runbook snippets and
- teaching content inside a test fixture - the quote-your-evidence rule makes such hits
- self-evidently invalid).
+  snippets/`node_modules` (two eval repos' "stale" evidence was markdown runbook snippets and
+  teaching content inside a test fixture - the quote-your-evidence rule makes such hits
+  self-evidently invalid).
 - **Filter well-known platform/CI vars.** `>~30%` undeclared = **"stale template" ⚠️**; downgrade
- to "template does not mirror documented config" when the vars are documented in a config doc.
+  to "template does not mirror documented config" when the vars are documented in a config doc.
 
 DE4 setup scripts are graded here too, **by content not execution** (rule 4): a setup script must
 chain real stages (install AND migrate/seed keywords found) - one that only prints instructions
@@ -308,21 +308,21 @@ Grade the 4-tier ladder (0 static-parse-only / 1 compile-only / 2 compile+test-s
 evidence live in the Operability-ladder section of the spec and [pillars.md](pillars.md):
 
 - **Per-surface tiers.** Each surface/member gets its own tier from its own executed evidence
- (§2.3 build → tier 1; §2.2 test discovery → tier 2; §2.5 boot probe → tier 3).
+  (§2.3 build → tier 1; §2.2 test discovery → tier 2; §2.5 boot probe → tier 3).
 - **Shape ceilings (Axis 5, from classification.md).** Library / plugin / prose surfaces cap at
- **tier 2** - report **"N/N at ceiling"** (never "2 of 3"), suppress the move-up, and offer the
- cheapest move **SIDEWAYS** into observable/drivable (AO/DR) instead. Desktop's honest tier
- evidence is the repo's own packaged-runtime smoke, not a boot probe. Never prescribe "start the
- app" for a stack OR shape whose realistic ceiling is tier 1-2.
+  **tier 2** - report **"N/N at ceiling"** (never "2 of 3"), suppress the move-up, and offer the
+  cheapest move **SIDEWAYS** into observable/drivable (AO/DR) instead. Desktop's honest tier
+  evidence is the repo's own packaged-runtime smoke, not a boot probe. Never prescribe "start the
+  app" for a stack OR shape whose realistic ceiling is tier 1-2.
 - **Min-deployable aggregation (resolution 17).** The **headline tier = the MINIMUM verified tier
- across deployable surfaces** (web service/app, CLI, desktop). Non-deployable surfaces (library,
- plugin/prose, docs) are reported **separately at their own ceilings and NEVER cap a runnable
- surface**. Monorepos carry **per-member tiers**, not one repo tier (a real repo was tier 3 in
- one app and cloud-gated in another).
+  across deployable surfaces** (web service/app, CLI, desktop). Non-deployable surfaces (library,
+  plugin/prose, docs) are reported **separately at their own ceilings and NEVER cap a runnable
+  surface**. Monorepos carry **per-member tiers**, not one repo tier (a real repo was tier 3 in
+  one app and cloud-gated in another).
 - The report (Phase 4 / playbooks.md catalog) names the CURRENT tier and the **cheapest move up
- one tier** (e.g. "add a console DUnitX target compiled in CI" at tier 1; "add `make bootstrap`
- chaining install → services → migrate → seed" at tier 2) - or the sideways move at ceiling.
- QA-readiness (per pillars.md's DR-core) evaluates the deployable web surface only.
+  one tier** (e.g. "add a console DUnitX target compiled in CI" at tier 1; "add `make bootstrap`
+  chaining install → services → migrate → seed" at tier 2) - or the sideways move at ceiling.
+  QA-readiness (per pillars.md's DR-core) evaluates the deployable web surface only.
 
 ### 2.10 Hard gates G1-G3 + the Level-2 cap
 
@@ -331,10 +331,10 @@ at **Level 2 regardless of score**, with the failing gate **named in the headlin
 "Level 5 with a broken build":
 
 - **G1** - the detected build command actually runs (§2.3) OR operability tier ≥ 1 evidence
- exists (§2.9). Feeds from BS2 + the ladder.
+  exists (§2.9). Feeds from BS2 + the ladder.
 - **G2** - tests are discoverable when a test framework is claimed (§2.2 / TS4).
 - **G3** - agent-file quoted commands resolve/execute (§2.6); an extraction-failure on a file that
- HAS fenced blocks is itself a flag, **never a vacuous pass**.
+  HAS fenced blocks is itself a flag, **never a vacuous pass**.
 
 Any gate failing → cap the maturity level at 2 and name the failure in the verdict headline.
 Windows-only / host-unbuildable targets are "not probed on this host", never a fabricated ✅; the
@@ -419,12 +419,12 @@ ROOT="${ROOT:-.}"
 DEFAULT_BRANCH="$(git -C "$ROOT" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
 [ -n "$DEFAULT_BRANCH" ] || DEFAULT_BRANCH="$(git -C "$ROOT" branch --show-current 2>/dev/null)"
 gh run list --limit 20 --json startedAt,updatedAt,status,conclusion,headBranch 2>/dev/null \
- | jq -r --arg br "$DEFAULT_BRANCH" '
- [ .[] | select(.status == "completed" and .headBranch == $br)
- | (( .updatedAt | fromdateiso8601 ) - ( .startedAt | fromdateiso8601 )) ]
- | sort
- | if length == 0 then "CI median: no completed default-branch runs"
- else "CI median: \(.[(length / 2) | floor])s over \(length) runs" end'
+  | jq -r --arg br "$DEFAULT_BRANCH" '
+      [ .[] | select(.status == "completed" and .headBranch == $br)
+        | (( .updatedAt | fromdateiso8601 ) - ( .startedAt | fromdateiso8601 )) ]
+      | sort
+      | if length == 0 then "CI median: no completed default-branch runs"
+        else "CI median: \(.[(length / 2) | floor])s over \(length) runs" end'
 ```
 
 `fromdateiso8601` is a jq builtin (portable - it avoids the non-portable `date -d`). A `>~10 min` median caps agent iteration and is called out in the report. When `gh` is absent or unauthenticated, the CI median is **"not available (gh)"**, never a fabricated zero.
@@ -434,7 +434,7 @@ gh run list --limit 20 --json startedAt,updatedAt,status,conclusion,headBranch 2
 ```bash
 GH_LINE="gh CLI: not installed"
 if command -v gh >/dev/null 2>&1; then
- if gh auth status >/dev/null 2>&1; then GH_LINE="gh CLI: present + authed"; else GH_LINE="gh CLI: present, not authed"; fi
+  if gh auth status >/dev/null 2>&1; then GH_LINE="gh CLI: present + authed"; else GH_LINE="gh CLI: present, not authed"; fi
 fi
 echo "$GH_LINE"
 ```
@@ -601,11 +601,11 @@ Glossary (DC8) lines — driven by the Phase 3 glossary signal:
 
 - When `GLOSSARY_TERMS == 0`, append:
 
- > GLOSSARY.md is absent or a husk — Phase 5.5 offers to seed it from the repo (read-back gated). Under `--report-only`, re-run prime without the flag to seed.
+  > GLOSSARY.md is absent or a husk — Phase 5.5 offers to seed it from the repo (read-back gated). Under `--report-only`, re-run prime without the flag to seed.
 
 - When `GLOSSARY_TERMS > 0`, report coverage instead:
 
- > GLOSSARY.md: [N] terms — canonical vocabulary available to interview / plan / audit. No action; pruning belongs to `/flow-next:audit`.
+  > GLOSSARY.md: [N] terms — canonical vocabulary available to interview / plan / audit. No action; pruning belongs to `/flow-next:audit`.
 
 DC8 is informational like DE7, but its remediation path differs: it is handled exclusively by the Phase 5.5 bootstrap (read-back gated), never as a Phase 5 question option.
 
@@ -655,29 +655,29 @@ Illustrative shape (Tooling category - the exact options come from the catalog f
 
 ```json
 {
- "questions": [{
- "question": "Which tooling improvements should I add? These give agents instant feedback instead of waiting for CI.",
- "header": "Tooling",
- "multiSelect": true,
- "options": [
- {
- "label": "Layered deterministic gates (Recommended)",
- "description": "Catalog #6 (High). Format/lint at the edit or commit layer (harness hook OR staged-files commit hook, file-scoped, <10s, auto-fix) - tests stay at the verify command + acceptance requirements + CI required check. Prime NEVER wires test suites into a pre-commit hook (known agent bypass/stall risk). Harness-hook portion is explicit-consent."
- },
- {
- "label": "File-scoped feedback commands",
- "description": "Catalog #4 (High). Single-test + single-file lint/typecheck commands so agents verify a change in seconds, not a full-suite wait. In-root, `--fix-all`."
- },
- {
- "label": "Add linter/formatter config",
- "description": "Catalog-adjacent (SV1/SV2). Only if NONE detected - never replace an existing tool. In-root, `--fix-all`."
- },
- {
- "label": "Add runtime version file",
- "description": "Catalog-adjacent (DE3). Pin the runtime from an evidenced version, never a literal. In-root, `--fix-all`."
- }
- ]
- }]
+  "questions": [{
+    "question": "Which tooling improvements should I add? These give agents instant feedback instead of waiting for CI.",
+    "header": "Tooling",
+    "multiSelect": true,
+    "options": [
+      {
+        "label": "Layered deterministic gates (Recommended)",
+        "description": "Catalog #6 (High). Format/lint at the edit or commit layer (harness hook OR staged-files commit hook, file-scoped, <10s, auto-fix) - tests stay at the verify command + acceptance requirements + CI required check. Prime NEVER wires test suites into a pre-commit hook (known agent bypass/stall risk). Harness-hook portion is explicit-consent."
+      },
+      {
+        "label": "File-scoped feedback commands",
+        "description": "Catalog #4 (High). Single-test + single-file lint/typecheck commands so agents verify a change in seconds, not a full-suite wait. In-root, `--fix-all`."
+      },
+      {
+        "label": "Add linter/formatter config",
+        "description": "Catalog-adjacent (SV1/SV2). Only if NONE detected - never replace an existing tool. In-root, `--fix-all`."
+      },
+      {
+        "label": "Add runtime version file",
+        "description": "Catalog-adjacent (DE3). Pin the runtime from an evidenced version, never a literal. In-root, `--fix-all`."
+      }
+    ]
+  }]
 }
 ```
 
@@ -750,7 +750,7 @@ EOF
 Verify after the last write:
 
 ```bash
-"$FLOWCTL" glossary list --json | jq -r '.total_terms' # must equal the accepted count
+"$FLOWCTL" glossary list --json | jq -r '.total_terms'   # must equal the accepted count
 ```
 
 Record the outcome for Phase 7: seeded N terms / user declined / count mismatch (report it, don't retry-loop).
@@ -764,8 +764,8 @@ For each approved fix:
 2. Detect project conventions (indent style, quote style, etc.)
 3. Adapt template to match conventions
 4. Check if target file exists:
- - **New file**: Create it
- - **Existing file**: Show diff and ask before modifying
+   - **New file**: Create it
+   - **Existing file**: Show diff and ask before modifying
 5. Report what was created/modified
 
 **Non-destructive rules:**

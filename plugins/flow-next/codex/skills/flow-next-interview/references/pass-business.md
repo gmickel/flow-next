@@ -22,8 +22,8 @@ Per-section write behavior (per the write-policy):
 - **Writable biz sections** (`Goal & Context`, `Boundaries`, outcome-AC, `### Motivation` under `## Decision Context`): write/refine from interview answers.
 - **Preserved tech sections** (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`): **come back byte-for-byte.** A single reworded, reordered, or re-wrapped line in any of the three is a broken pass. If a tech section is EMPTY (listed in `placeholder_write`), write the placeholder line `*Pending technical-scope interview pass.*` under its heading so the read-back makes the intentional emptiness visible. If a tech section has content, leave it untouched (refine-mode for a re-run on an already-tech-populated spec).
 - **`## Decision Context`** (per `decision_context` shape):
- - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
- - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
+  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == true` (FLAT body exists from a prior tech-only pass): promote the existing flat body byte-for-byte into a new `### Implementation Tradeoffs` H3 (preserve the prose verbatim — same content, just under a new H3), and write the new `### Motivation` H3 as a sibling.
+  - When `shape == "substructured"` and `promote_flat_to_implementation_tradeoffs == false` (H3s already exist): preserve `### Implementation Tradeoffs` byte-for-byte; write/refine ONLY `### Motivation`.
 - **`## Acceptance Criteria`**: append outcome-AC R-IDs (R-IDs are append-only across passes per fn-29 rules — never renumber, never replace; take the next unused number). Source-tag each criterion you append (`[user]` = the PO answering in this pass, `[paraphrase]`, `[inferred]`, `[strategy:<track>]`); never tag or retag a criterion another pass wrote — see `write-back.md` § Source tags on acceptance criteria.
 - **Auxiliary sections**: preserve byte-for-byte per the auxiliary-sections rule in SKILL.md; biz pass adds `Resolved via Project Docs` only.
 
@@ -66,12 +66,12 @@ If the user interrupts between phase 1 and phase 2, the biz sections are written
 **Two write-policy calls for `both`** — biz first, then recompute state + tech:
 
 ```bash
-# BIZ_POLICY=$(printf '%s' "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy business --current-sections-json -)
-# # ... run biz pass, write biz sections (in memory or to disk) ...
-# # Rebuild CURRENT_SECTIONS_AFTER_BIZ from the post-biz state — biz_pass_ran=true,
-# # decision_context_has_h3 likely true now (Motivation H3 written), placeholder lines
-# # under empty tech sections counted as "no content" for tech-pass overwrite logic:
-# CURRENT_SECTIONS_AFTER_BIZ='{"decision_context_has_h3": true, "biz_pass_ran": true, "tech_sections_have_content": {"Architecture & Data Models": <still-bool>, ...}}'
-# TECH_POLICY=$(printf '%s' "$CURRENT_SECTIONS_AFTER_BIZ" | "$FLOWCTL" scope write-policy technical --current-sections-json -)
-# # ... run tech pass under TECH_POLICY ...
+#   BIZ_POLICY=$(printf '%s' "$CURRENT_SECTIONS" | "$FLOWCTL" scope write-policy business --current-sections-json -)
+#   # ... run biz pass, write biz sections (in memory or to disk) ...
+#   # Rebuild CURRENT_SECTIONS_AFTER_BIZ from the post-biz state — biz_pass_ran=true,
+#   # decision_context_has_h3 likely true now (Motivation H3 written), placeholder lines
+#   # under empty tech sections counted as "no content" for tech-pass overwrite logic:
+#   CURRENT_SECTIONS_AFTER_BIZ='{"decision_context_has_h3": true, "biz_pass_ran": true, "tech_sections_have_content": {"Architecture & Data Models": <still-bool>, ...}}'
+#   TECH_POLICY=$(printf '%s' "$CURRENT_SECTIONS_AFTER_BIZ" | "$FLOWCTL" scope write-policy technical --current-sections-json -)
+#   # ... run tech pass under TECH_POLICY ...
 ```

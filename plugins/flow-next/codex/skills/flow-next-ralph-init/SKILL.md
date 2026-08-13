@@ -30,192 +30,192 @@ PLUGIN_ROOT="${CODEX_HOME:-$HOME/.codex}"
 1. Resolve repo root: `git rev-parse --show-toplevel`
 
 2. Check if `scripts/ralph/` exists:
- - If exists: ask "Update existing Ralph setup? (preserves config.env and runs/) [y/n]"
- - If no: stop
- - If yes: set UPDATE_MODE=1
- - If not exists: set UPDATE_MODE=0
+   - If exists: ask "Update existing Ralph setup? (preserves config.env and runs/) [y/n]"
+     - If no: stop
+     - If yes: set UPDATE_MODE=1
+   - If not exists: set UPDATE_MODE=0
 
 3. Detect available review backends (skip if UPDATE_MODE=1):
- ```bash
- if command -v rpce-cli >/dev/null 2>&1 \
- || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
- || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
- || command -v rp-cli >/dev/null 2>&1; then HAVE_RP=1; else HAVE_RP=0; fi
- HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
- HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
- HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
- ```
+   ```bash
+   if command -v rpce-cli >/dev/null 2>&1 \
+     || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+     || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+     || command -v rp-cli >/dev/null 2>&1; then HAVE_RP=1; else HAVE_RP=0; fi
+   HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
+   HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
+   HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
+   ```
 
 4. Determine review backend (skip if UPDATE_MODE=1):
- - If several are available, ask the user.
- Show only the options whose CLIs were detected:
- ```
- Multiple review backends available. Which one?
- a) RepoPrompt (macOS, visual builder)
- b) Codex CLI (cross-platform, GPT 5.5 High)
- c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
- d) Cursor CLI (cross-platform, runs cursor-agent; gpt-5.5-high via Cursor subscription)
+   - If several are available, ask the user.
+     Show only the options whose CLIs were detected:
+     ```
+     Multiple review backends available. Which one?
+     a) RepoPrompt (macOS, visual builder)
+     b) Codex CLI (cross-platform, GPT 5.5 High)
+     c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
+     d) Cursor CLI (cross-platform, runs cursor-agent; gpt-5.5-high via Cursor subscription)
 
- (Reply: "a", "rp", "b", "codex", "c", "copilot", "d", "cursor", or just tell me)
- ```
- Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot` > `cursor`.
- - If only the RepoPrompt CLI ladder resolves: use `rp`
- - If only codex available: use `codex`
- - If only copilot available: use `copilot`
- - If only cursor-agent available: use `cursor`
- - If none available: use `none`
+     (Reply: "a", "rp", "b", "codex", "c", "copilot", "d", "cursor", or just tell me)
+     ```
+     Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot` > `cursor`.
+   - If only the RepoPrompt CLI ladder resolves: use `rp`
+   - If only codex available: use `codex`
+   - If only copilot available: use `copilot`
+   - If only cursor-agent available: use `cursor`
+   - If none available: use `none`
 
 5. Copy files using bash — **the copies run through `cp`, never the Write tool.** A template reproduced by writing its contents has broken this:
 
- **If UPDATE_MODE=1 (updating):**
- ```bash
- # Backup config.env
- cp scripts/ralph/config.env /tmp/ralph-config-backup.env
+   **If UPDATE_MODE=1 (updating):**
+   ```bash
+   # Backup config.env
+   cp scripts/ralph/config.env /tmp/ralph-config-backup.env
 
- # Update templates (preserves runs/)
- cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralph.sh" scripts/ralph/
- cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralph_once.sh" scripts/ralph/
- cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_plan.md" scripts/ralph/
- cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_work.md" scripts/ralph/
- cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_completion.md" scripts/ralph/
- cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/watch-filter.py" scripts/ralph/
- cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralphctl.py" scripts/ralph/
- cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
- rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
- # fn-139.5: verify the tracker package post-copy - fail loudly here, never
- # later as an ImportError mid-run
- python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
- mkdir -p scripts/ralph/hooks
- cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
- chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
+   # Update templates (preserves runs/)
+   cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralph.sh" scripts/ralph/
+   cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralph_once.sh" scripts/ralph/
+   cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_plan.md" scripts/ralph/
+   cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_work.md" scripts/ralph/
+   cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/prompt_completion.md" scripts/ralph/
+   cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/watch-filter.py" scripts/ralph/
+   cp "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/ralphctl.py" scripts/ralph/
+   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
+   rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
+   # fn-139.5: verify the tracker package post-copy - fail loudly here, never
+   # later as an ImportError mid-run
+   python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
+   mkdir -p scripts/ralph/hooks
+   cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
+   chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
 
- # Restore config.env
- cp /tmp/ralph-config-backup.env scripts/ralph/config.env
- ```
+   # Restore config.env
+   cp /tmp/ralph-config-backup.env scripts/ralph/config.env
+   ```
 
- **If UPDATE_MODE=0 (fresh install):**
- ```bash
- mkdir -p scripts/ralph/runs scripts/ralph/hooks
- cp -R "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/." scripts/ralph/
- cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
- rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
- # fn-139.5: verify the tracker package post-copy - fail loudly here, never
- # later as an ImportError mid-run
- python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
- cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
- chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
- ```
- Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).
+   **If UPDATE_MODE=0 (fresh install):**
+   ```bash
+   mkdir -p scripts/ralph/runs scripts/ralph/hooks
+   cp -R "${CODEX_HOME:-$HOME/.codex}/templates/flow-next-ralph-init/." scripts/ralph/
+   cp "$PLUGIN_ROOT/scripts/flowctl" "$PLUGIN_ROOT/scripts/flowctl.cmd" "$PLUGIN_ROOT/scripts/flowctl.py" "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" "$PLUGIN_ROOT/scripts/flowctl-help.txt" "$PLUGIN_ROOT/scripts/lib/pick-python.sh" scripts/ralph/
+   rm -rf scripts/ralph/flowctl_tracker && cp -R "$PLUGIN_ROOT/scripts/flowctl_tracker" scripts/ralph/flowctl_tracker
+   # fn-139.5: verify the tracker package post-copy - fail loudly here, never
+   # later as an ImportError mid-run
+   python3 "$PLUGIN_ROOT/scripts/lib/verify_tracker_manifest.py" scripts/ralph
+   cp "$PLUGIN_ROOT/scripts/hooks/ralph-guard.py" "$PLUGIN_ROOT/scripts/hooks/ralph-guard" scripts/ralph/hooks/
+   chmod +x scripts/ralph/ralph.sh scripts/ralph/ralph_once.sh scripts/ralph/flowctl scripts/ralph/ralphctl.py scripts/ralph/hooks/ralph-guard.py scripts/ralph/hooks/ralph-guard
+   ```
+   Note: `cp -R templates/.` copies all files including dotfiles (.gitignore).
 
 6. Edit `scripts/ralph/config.env` to set the chosen review backend (skip if UPDATE_MODE=1):
- - Replace `PLAN_REVIEW={{PLAN_REVIEW}}` with `PLAN_REVIEW=<chosen>`
- - Replace `WORK_REVIEW={{WORK_REVIEW}}` with `WORK_REVIEW=<chosen>`
- - Replace `COMPLETION_REVIEW={{COMPLETION_REVIEW}}` with `COMPLETION_REVIEW=<chosen>`
+   - Replace `PLAN_REVIEW={{PLAN_REVIEW}}` with `PLAN_REVIEW=<chosen>`
+   - Replace `WORK_REVIEW={{WORK_REVIEW}}` with `WORK_REVIEW=<chosen>`
+   - Replace `COMPLETION_REVIEW={{COMPLETION_REVIEW}}` with `COMPLETION_REVIEW=<chosen>`
 
 7. **Register project hooks (agent-driven; required for the guard to fire).**
 
- Detect host (same signals as `/flow-next:setup` Step 0 when available; otherwise probe the settings paths below). Then **Read** the target file, **merge** the flow-next Ralph guard entries, **Edit/Write** the result. **The host's existing hooks survive the merge** — a settings file whose hooks object now contains only flow-next entries has broken this. Idempotent: if an entry's `command` already contains `scripts/ralph/hooks/ralph-guard`, leave that matcher group alone (or refresh the command string to the canonical form below if it drifted).
+   Detect host (same signals as `/flow-next:setup` Step 0 when available; otherwise probe the settings paths below). Then **Read** the target file, **merge** the flow-next Ralph guard entries, **Edit/Write** the result. **The host's existing hooks survive the merge** — a settings file whose hooks object now contains only flow-next entries has broken this. Idempotent: if an entry's `command` already contains `scripts/ralph/hooks/ralph-guard`, leave that matcher group alone (or refresh the command string to the canonical form below if it drifted).
 
- **Fingerprint** for "this is a flow-next Ralph guard entry": the hook `command` string contains `scripts/ralph/hooks/ralph-guard` (wrapper and/or `.py` fallback).
+   **Fingerprint** for "this is a flow-next Ralph guard entry": the hook `command` string contains `scripts/ralph/hooks/ralph-guard` (wrapper and/or `.py` fallback).
 
- **Canonical guard command** (same on every host that can run bash wrappers):
+   **Canonical guard command** (same on every host that can run bash wrappers):
 
- ```
- if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi
- ```
+   ```
+   if [ -f scripts/ralph/hooks/ralph-guard ]; then bash scripts/ralph/hooks/ralph-guard; elif [ -f scripts/ralph/hooks/ralph-guard.py ]; then scripts/ralph/hooks/ralph-guard.py; fi
+   ```
 
- Timeout: `5` seconds. Type: `command`.
+   Timeout: `5` seconds. Type: `command`.
 
- ### Claude Code → merge into `.claude/settings.json`
+   ### Claude Code → merge into `.claude/settings.json`
 
- Target: project file `.claude/settings.json` (create `{"hooks":{}}` skeleton if missing; preserve every non-hooks key).
+   Target: project file `.claude/settings.json` (create `{"hooks":{}}` skeleton if missing; preserve every non-hooks key).
 
- Merge these four event groups under `hooks` (Claude schema). Matchers use regex OR so Droid interop and Claude share one entry shape:
+   Merge these four event groups under `hooks` (Claude schema). Matchers use regex OR so Droid interop and Claude share one entry shape:
 
- | Event | Matcher | Notes |
- |---|---|---|
- | `PreToolUse` | `Bash\|Execute` | shell (Claude `Bash`, Droid `Execute`) |
- | `PreToolUse` | `Edit\|Write` | file tools (Claude host names) |
- | `PostToolUse` | `Bash\|Execute` | shell |
- | `PostToolUse` | `Edit\|Write` | file tools (receipt-path gate parity) |
- | `Stop` | *(no matcher)* | stop gate |
- | `SubagentStop` | *(no matcher)* | subagent stop gate |
+   | Event | Matcher | Notes |
+   |---|---|---|
+   | `PreToolUse` | `Bash\|Execute` | shell (Claude `Bash`, Droid `Execute`) |
+   | `PreToolUse` | `Edit\|Write` | file tools (Claude host names) |
+   | `PostToolUse` | `Bash\|Execute` | shell |
+   | `PostToolUse` | `Edit\|Write` | file tools (receipt-path gate parity) |
+   | `Stop` | *(no matcher)* | stop gate |
+   | `SubagentStop` | *(no matcher)* | subagent stop gate |
 
- Each event's array entry is one matcher group with a single hook object `{type, command, timeout}` using the canonical command above.
+   Each event's array entry is one matcher group with a single hook object `{type, command, timeout}` using the canonical command above.
 
- **Consent gate:** Claude Code's project-hooks trust prompt is the human consent surface. Do not invent a second consent ceremony. After merge, tell the user they may need to accept/trust project hooks in the host UI for them to load this session.
+   **Consent gate:** Claude Code's project-hooks trust prompt is the human consent surface. Do not invent a second consent ceremony. After merge, tell the user they may need to accept/trust project hooks in the host UI for them to load this session.
 
- ### Factory Droid → merge into `.factory/hooks.json`
+   ### Factory Droid → merge into `.factory/hooks.json`
 
- Target (verified against Factory hooks-reference): project file **`.factory/hooks.json`**. Prefer that path. Fallback only if the project already stores hooks under the `hooks` key of `.factory/settings.json` and has no `.factory/hooks.json` — merge there instead; never invent a third path.
+   Target (verified against Factory hooks-reference): project file **`.factory/hooks.json`**. Prefer that path. Fallback only if the project already stores hooks under the `hooks` key of `.factory/settings.json` and has no `.factory/hooks.json` — merge there instead; never invent a third path.
 
- Host-appropriate matchers for Droid (Factory's shell tool is `Execute`; file tools include `Create` / `ApplyPatch`). The guard body accepts the full dual-platform sets (`Bash`/`Execute`, `Edit`/`Write`/`Create`/`ApplyPatch`).
+   Host-appropriate matchers for Droid (Factory's shell tool is `Execute`; file tools include `Create` / `ApplyPatch`). The guard body accepts the full dual-platform sets (`Bash`/`Execute`, `Edit`/`Write`/`Create`/`ApplyPatch`).
 
- | Event | Matcher | Notes |
- |---|---|---|
- | `PreToolUse` | `Bash\|Execute` | shell |
- | `PreToolUse` | `Edit\|Write\|Create\|ApplyPatch` | Droid file tools |
- | `PostToolUse` | `Bash\|Execute` | shell |
- | `PostToolUse` | `Edit\|Write\|Create\|ApplyPatch` | file tools (receipt-path gate) |
- | `Stop` | *(no matcher)* | stop gate |
- | `SubagentStop` | *(no matcher)* | subagent stop gate |
+   | Event | Matcher | Notes |
+   |---|---|---|
+   | `PreToolUse` | `Bash\|Execute` | shell |
+   | `PreToolUse` | `Edit\|Write\|Create\|ApplyPatch` | Droid file tools |
+   | `PostToolUse` | `Bash\|Execute` | shell |
+   | `PostToolUse` | `Edit\|Write\|Create\|ApplyPatch` | file tools (receipt-path gate) |
+   | `Stop` | *(no matcher)* | stop gate |
+   | `SubagentStop` | *(no matcher)* | subagent stop gate |
 
- Prefer project-relative command as above (Ralph harness is repo-local). If the host requires absolute paths, rewrite with `"$FACTORY_PROJECT_DIR"/scripts/ralph/hooks/...` but keep the same fingerprint substring `scripts/ralph/hooks/ralph-guard`.
+   Prefer project-relative command as above (Ralph harness is repo-local). If the host requires absolute paths, rewrite with `"$FACTORY_PROJECT_DIR"/scripts/ralph/hooks/...` but keep the same fingerprint substring `scripts/ralph/hooks/ralph-guard`.
 
- ### Codex → write/merge project `.codex/hooks.json`
+   ### Codex → write/merge project `.codex/hooks.json`
 
- Codex has no Claude-schema plugin hooks auto-load from the marketplace plugin. Project scope is `.codex/hooks.json`.
+   Codex has no Claude-schema plugin hooks auto-load from the marketplace plugin. Project scope is `.codex/hooks.json`.
 
- Codex subset (no `SubagentStop`; no `Edit`/`Write` matchers — Codex only intercepts shell):
+   Codex subset (no `SubagentStop`; no `Edit`/`Write` matchers — Codex only intercepts shell):
 
- | Event | Matcher |
- |---|---|
- | `PreToolUse` | `Bash\|Execute` |
- | `PostToolUse` | `Bash\|Execute` |
- | `Stop` | *(no matcher)* |
+   | Event | Matcher |
+   |---|---|
+   | `PreToolUse` | `Bash\|Execute` |
+   | `PostToolUse` | `Bash\|Execute` |
+   | `Stop` | *(no matcher)* |
 
- **The top-level JSON is exactly `{"hooks":{...}}`** — a sibling `description` key has broken this (Codex rejects unknown fields and disables all hooks).
+   **The top-level JSON is exactly `{"hooks":{...}}`** — a sibling `description` key has broken this (Codex rejects unknown fields and disables all hooks).
 
- If `.codex/config.toml` exists, ensure exactly one `hooks = true` under `[features]` (drop deprecated `codex_hooks`). Same normalization intent as setup's historical Codex hooks step; do it with a careful edit, not a second copy of setup's python block unless you need it.
+   If `.codex/config.toml` exists, ensure exactly one `hooks = true` under `[features]` (drop deprecated `codex_hooks`). Same normalization intent as setup's historical Codex hooks step; do it with a careful edit, not a second copy of setup's python block unless you need it.
 
- ### Cursor / Grok
+   ### Cursor / Grok
 
- - **Cursor:** Ralph hooks are unsupported (Cursor hook schema is `afterFileEdit` / `beforeShellExecution`). Scaffold `scripts/ralph/` only; print that the guard will not fire on Cursor; do not invent a Cursor-format hook file.
- - **Grok Build:** reads Claude-compat plugin/project surfaces; use the Claude Code path (`.claude/settings.json`).
+   - **Cursor:** Ralph hooks are unsupported (Cursor hook schema is `afterFileEdit` / `beforeShellExecution`). Scaffold `scripts/ralph/` only; print that the guard will not fire on Cursor; do not invent a Cursor-format hook file.
+   - **Grok Build:** reads Claude-compat plugin/project surfaces; use the Claude Code path (`.claude/settings.json`).
 
- ### Re-run / update
+   ### Re-run / update
 
- On UPDATE_MODE=1 still re-merge hooks so a project that had scaffold but lost settings entries is repaired. Skip only when every required event already has a fingerprinted entry with the canonical command.
+   On UPDATE_MODE=1 still re-merge hooks so a project that had scaffold but lost settings entries is repaired. Skip only when every required event already has a fingerprinted entry with the canonical command.
 
- Done when: the host's registered event set matches its platform (Codex without `SubagentStop` or file-tool matchers; Droid with its own file-tool matchers; Cursor scaffold-only plus the printed will-not-fire note), every entry carries the canonical command, and unrelated hooks are still present.
+   Done when: the host's registered event set matches its platform (Codex without `SubagentStop` or file-tool matchers; Droid with its own file-tool matchers; Cursor scaffold-only plus the printed will-not-fire note), every entry carries the canonical command, and unrelated hooks are still present.
 
 8. Print next steps — **the run ends by printing them, never by starting the loop inside the session.** A session that executed `ralph.sh` has broken this:
 
- **If UPDATE_MODE=1:**
- ```
- Ralph updated! Your config.env was preserved.
+   **If UPDATE_MODE=1:**
+   ```
+   Ralph updated! Your config.env was preserved.
 
- Hooks: project settings were re-merged (idempotent). Accept the host's
- project-hooks trust prompt if it appears.
+   Hooks: project settings were re-merged (idempotent). Accept the host's
+   project-hooks trust prompt if it appears.
 
- Run from terminal:
- - ./scripts/ralph/ralph_once.sh (one iteration, observe)
- - ./scripts/ralph/ralph.sh (full loop, AFK)
- - ./scripts/ralph/ralphctl.py status|pause|resume|stop (run control; not flowctl)
- ```
+   Run from terminal:
+   - ./scripts/ralph/ralph_once.sh (one iteration, observe)
+   - ./scripts/ralph/ralph.sh (full loop, AFK)
+   - ./scripts/ralph/ralphctl.py status|pause|resume|stop  (run control; not flowctl)
+   ```
 
- **If UPDATE_MODE=0:**
- ```
- Ralph initialized!
+   **If UPDATE_MODE=0:**
+   ```
+   Ralph initialized!
 
- Next steps (run from terminal, NOT inside the agent session):
- - Accept project-hooks trust if the host prompts (required once)
- - Edit scripts/ralph/config.env to customize settings
- - ./scripts/ralph/ralph_once.sh (one iteration, observe)
- - ./scripts/ralph/ralph.sh (full loop, AFK)
- - ./scripts/ralph/ralphctl.py status|pause|resume|stop (run control; not flowctl)
+   Next steps (run from terminal, NOT inside the agent session):
+   - Accept project-hooks trust if the host prompts (required once)
+   - Edit scripts/ralph/config.env to customize settings
+   - ./scripts/ralph/ralph_once.sh (one iteration, observe)
+   - ./scripts/ralph/ralph.sh (full loop, AFK)
+   - ./scripts/ralph/ralphctl.py status|pause|resume|stop  (run control; not flowctl)
 
- Maintenance:
- - Re-run /flow-next:ralph-init after plugin updates to refresh scripts + re-merge hooks
- - Uninstall: /flow-next:uninstall removes hook entries; then manually rm -rf scripts/ralph/ if desired
- ```
+   Maintenance:
+   - Re-run /flow-next:ralph-init after plugin updates to refresh scripts + re-merge hooks
+   - Uninstall: /flow-next:uninstall removes hook entries; then manually rm -rf scripts/ralph/ if desired
+   ```

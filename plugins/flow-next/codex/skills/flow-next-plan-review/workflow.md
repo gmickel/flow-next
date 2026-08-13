@@ -17,12 +17,12 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 if command -v rpce-cli >/dev/null 2>&1 \
- || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
- || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
- || command -v rp-cli >/dev/null 2>&1; then
- RP_ELIGIBLE=1
+  || [ -x "$HOME/RepoPrompt/repoprompt_ce_cli" ] \
+  || [ -x "$HOME/Library/Application Support/RepoPrompt CE/repoprompt_ce_cli" ] \
+  || command -v rp-cli >/dev/null 2>&1; then
+  RP_ELIGIBLE=1
 else
- RP_ELIGIBLE=0
+  RP_ELIGIBLE=0
 fi
 ```
 
@@ -93,20 +93,20 @@ the same `ASK`/error behavior; never guess a backend.
 ## Common Terminal Contract
 
 - `NOT_RETRYABLE: artifact unchanged since last verdict` with exit `1` →
- human-action terminal. Do not refund it, dispatch again, apply `--force`, or
- run a reset in an autonomous flow. A human must edit the reviewed artifact,
- explicitly reset its counter, or deliberately re-run with `--force`.
+  human-action terminal. Do not refund it, dispatch again, apply `--force`, or
+  run a reset in an autonomous flow. A human must edit the reviewed artifact,
+  explicitly reset its counter, or deliberately re-run with `--force`.
 - `SHIP` → latest status/receipt says ship; reset the cumulative counter where
- the backend does not already do so; continue into SKILL.md's shared Fix Loop,
- which completes on `SHIP`.
+  the backend does not already do so; continue into SKILL.md's shared Fix Loop,
+  which completes on `SHIP`.
 - `NEEDS_WORK` → latest status/receipt says needs_work; continue immediately
- into SKILL.md's shared Fix Loop.
+  into SKILL.md's shared Fix Loop.
 - `MAJOR_RETHINK` → latest status/receipt says needs_work; continue immediately
- to SKILL.md's typed design-conflict escalation.
+  to SKILL.md's typed design-conflict escalation.
 - Backend unavailable/transport/no verdict → `<promise>RETRY</promise>` and
- stop. Flowctl records and refunds the reserved round; never manually reset
- the verdict counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops automatic retries.
- Never mix or fall back to another backend.
+  stop. Flowctl records and refunds the reserved round; never manually reset
+  the verdict counter. Exit 5 / `TRANSPORT_UNHEALTHY` stops automatic retries.
+  Never mix or fall back to another backend.
 
 ## Anti-patterns
 

@@ -34,11 +34,11 @@ Parse `$ARGUMENTS` for the literal token `mode:autofix`. If present, strip it fr
 RAW_ARGS="$ARGUMENTS"
 MODE="interactive"
 if [[ "$RAW_ARGS" == *"mode:autofix"* ]]; then
- MODE="autofix"
- # Strip token, collapse whitespace, trim.
- SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
+  MODE="autofix"
+  # Strip token, collapse whitespace, trim.
+  SCOPE_HINT=$(printf "%s" "$RAW_ARGS" | sed 's/mode:autofix//' | tr -s ' ' | sed 's/^ //;s/ $//')
 else
- SCOPE_HINT="$RAW_ARGS"
+  SCOPE_HINT="$RAW_ARGS"
 fi
 ```
 

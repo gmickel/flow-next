@@ -844,8 +844,37 @@ def strip_toolsearch_bullets(text):
 
 text = strip_toolsearch_bullets(text)
 
-# Collapse double spaces that result from strips.
-text = re.sub(r'  +', ' ', text)
+# Collapse double spaces that result from strips — fence-aware: fenced-block
+# whitespace is meaning-bearing (visual-skill trees, aligned file-tree
+# comments), and leading indentation outside fences is structure, not residue.
+# A fence closes only on a MATCHING delimiter (same char, run length >= the
+# opener's, no info string) — outer ```` wrappers keep inner ``` blocks intact.
+def collapse_interior_spaces(text):
+    out = []
+    fence = None  # (delimiter char, run length) of the open fence, else None
+    for line in text.split('\n'):
+        stripped = line.lstrip()
+        m = re.match(r'(`{3,}|~{3,})(.*)', stripped)
+        if m:
+            marker, rest = m.group(1), m.group(2)
+            if fence is None:
+                fence = (marker[0], len(marker))
+                out.append(line)
+                continue
+            if marker[0] == fence[0] and len(marker) >= fence[1] and not rest.strip():
+                fence = None
+                out.append(line)
+                continue
+            # Non-matching fence line inside an open fence is content —
+            # falls through to the in-fence branch below.
+        if fence is not None:
+            out.append(line)
+            continue
+        indent = line[:len(line) - len(stripped)]
+        out.append(indent + re.sub(r'  +', ' ', stripped))
+    return '\n'.join(out)
+
+text = collapse_interior_spaces(text)
 # Collapse blank-line runs to max 2.
 text = re.sub(r'\n{3,}', '\n\n', text)
 # Trim trailing whitespace per line.
@@ -1448,8 +1477,37 @@ elif had_ask_in_prose and 'plain-text numbered prompt' in text:
             out.append(line)
         text = '\n'.join(out)
 
-# Collapse double spaces / blank-line runs left over from substitutions.
-text = re.sub(r'  +', ' ', text)
+# Collapse double spaces / blank-line runs left over from substitutions —
+# fence-aware: fenced-block whitespace is meaning-bearing (visual-skill trees,
+# aligned file-tree comments); leading indent outside fences is structure.
+# A fence closes only on a MATCHING delimiter (same char, run length >= the
+# opener's, no info string) — outer ```` wrappers keep inner ``` blocks intact.
+def collapse_interior_spaces(text):
+    out = []
+    fence = None  # (delimiter char, run length) of the open fence, else None
+    for line in text.split('\n'):
+        stripped = line.lstrip()
+        m = re.match(r'(`{3,}|~{3,})(.*)', stripped)
+        if m:
+            marker, rest = m.group(1), m.group(2)
+            if fence is None:
+                fence = (marker[0], len(marker))
+                out.append(line)
+                continue
+            if marker[0] == fence[0] and len(marker) >= fence[1] and not rest.strip():
+                fence = None
+                out.append(line)
+                continue
+            # Non-matching fence line inside an open fence is content —
+            # falls through to the in-fence branch below.
+        if fence is not None:
+            out.append(line)
+            continue
+        indent = line[:len(line) - len(stripped)]
+        out.append(indent + re.sub(r'  +', ' ', stripped))
+    return '\n'.join(out)
+
+text = collapse_interior_spaces(text)
 text = re.sub(r'\n{3,}', '\n\n', text)
 text = '\n'.join(line.rstrip() for line in text.split('\n'))
 
@@ -1507,6 +1565,11 @@ generate_openai_yaml "flow-next-resolve-pr"  "Flow Resolve PR"            "Resol
 generate_openai_yaml "flow-next"       "Flow Tasks" "Manage .flow/ tasks and specs"                           "#3B82F6" true
 generate_openai_yaml "flow-next-prime" "Flow Prime" "Comprehensive codebase assessment for agent readiness"    "#F59E0B" true
 generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a semantic feature index (opt-in)" "#F59E0B" true
+# Visual stays OUT of the Codex catalog (explicit false): its trigger-rich
+# description is the whole point on hosts that match on it, and injecting that
+# text into every session's shared skills budget is exactly the cost the
+# digest exists to save. Reachable by /flow-next:visual and by $name.
+generate_openai_yaml "flow-next-visual" "Flow Visual" "Restate a spec, task, diff, or the current topic as a compact markdown digest" "#F59E0B" false
 generate_openai_yaml "flow-next-ralph-init" "Flow Ralph Init" "Scaffold the repo-local Ralph autonomous harness" "#3B82F6" true
 
 # Internal skills (gray, explicit-only). These are spawned by other skills,
@@ -1621,6 +1684,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next"
   "flow-next-prime"
   "flow-next-map"
+  "flow-next-visual"
   "flow-next-ralph-init"
   "flow-next-drive"
   "flow-next-sync"

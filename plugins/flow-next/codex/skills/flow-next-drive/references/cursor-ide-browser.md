@@ -21,18 +21,18 @@ There's no `command -v` for it — it's an MCP surface. Detect by listing MCP to
 ## Tool surface (universal flow → cursor tools)
 
 ```
-browser_tabs action: list # observe
-browser_navigate url, newTab # navigate
-browser_lock viewId, action: lock|unlock # one agent only
-browser_snapshot viewId, take_screenshot_afterwards: true # fresh refs (re-take after nav/click)
-browser_click viewId, ref, element # act
-browser_fill viewId, ref, value
-browser_press_key viewId, key
-browser_scroll viewId, direction, amount
-browser_console_messages viewId # verify / evidence
-browser_take_screenshot viewId # capture
-browser_cdp viewId, method, params # raw CDP escape hatch
-browser_highlight viewId, ref # debug a ref visually
+browser_tabs            action: list                     # observe
+browser_navigate        url, newTab                       # navigate
+browser_lock            viewId, action: lock|unlock       # one agent only
+browser_snapshot        viewId, take_screenshot_afterwards: true   # fresh refs (re-take after nav/click)
+browser_click           viewId, ref, element              # act
+browser_fill            viewId, ref, value
+browser_press_key       viewId, key
+browser_scroll          viewId, direction, amount
+browser_console_messages viewId                           # verify / evidence
+browser_take_screenshot viewId                            # capture
+browser_cdp             viewId, method, params            # raw CDP escape hatch
+browser_highlight       viewId, ref                       # debug a ref visually
 ```
 
 - **Re-snapshot after every DOM change** — refs go stale like every other rung.

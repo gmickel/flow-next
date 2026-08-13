@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Visual"
+  short_description: "Restate a spec, task, diff, or the current topic as a compact markdown digest"
+  brand_color: "#F59E0B"
+policy:
+  allow_implicit_invocation: false

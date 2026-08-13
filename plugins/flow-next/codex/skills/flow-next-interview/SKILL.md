@@ -73,8 +73,8 @@ The four doc-aware override flags must be stripped from `$ARGUMENTS` before inpu
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
-DOC_AWARE_FORCE="" # controls glossary + decisions
-STRATEGY_AWARE_FORCE="" # controls strategy independently
+DOC_AWARE_FORCE=""        # controls glossary + decisions
+STRATEGY_AWARE_FORCE=""   # controls strategy independently
 ```
 
 **When the invocation carried ANY of `--docs` / `--no-docs` / `--strategy` / `--no-strategy`**, STOP and read [`references/doc-aware.md`](references/doc-aware.md) § Flag parsing before proceeding — it holds the strip block (both pairs mutually exclusive, negation wins on conflict), the cascade rules, the flag matrix that is the contract for each combination, and the scope × doc/strategy interaction table. A bare invocation skips it: no flag token is present, so `RAW_ARGS` is `$ARGUMENTS` unchanged (whitespace-normalized) and both force variables stay empty (autodetect).
@@ -89,40 +89,40 @@ The default-autodetect rule is: doc-aware mode activates when **any** of three c
 # DOC_AWARE: glossary + decisions. Probes and parses fail OPEN (|| DOC_AWARE=1).
 DOC_AWARE=0
 if [[ "$DOC_AWARE_FORCE" == "on" ]]; then
- DOC_AWARE=1
+  DOC_AWARE=1
 elif [[ "$DOC_AWARE_FORCE" == "off" ]]; then
- DOC_AWARE=0
+  DOC_AWARE=0
 else
- # NO pipelines in the probe — capture raw first, rc-checked; parse separately.
- GLOSSARY_RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || DOC_AWARE=1
- DECISIONS_RAW="$("$FLOWCTL" memory list --track knowledge --category decisions --json 2>/dev/null)" || DOC_AWARE=1
- if [ "$DOC_AWARE" = "0" ]; then
- TERMS="$(printf '%s' "$GLOSSARY_RAW" | jq -r '.total_terms // 0' 2>/dev/null)" || DOC_AWARE=1
- DECS="$(printf '%s' "$DECISIONS_RAW" | jq -r '.entries | length // 0' 2>/dev/null)" || DOC_AWARE=1
- fi
- if [ "$DOC_AWARE" = "0" ] && { [ "${TERMS:-0}" -gt 0 ] || [ "${DECS:-0}" -gt 0 ]; }; then
- DOC_AWARE=1
- fi
+  # NO pipelines in the probe — capture raw first, rc-checked; parse separately.
+  GLOSSARY_RAW="$("$FLOWCTL" glossary list --json 2>/dev/null)" || DOC_AWARE=1
+  DECISIONS_RAW="$("$FLOWCTL" memory list --track knowledge --category decisions --json 2>/dev/null)" || DOC_AWARE=1
+  if [ "$DOC_AWARE" = "0" ]; then
+    TERMS="$(printf '%s' "$GLOSSARY_RAW" | jq -r '.total_terms // 0' 2>/dev/null)" || DOC_AWARE=1
+    DECS="$(printf '%s' "$DECISIONS_RAW" | jq -r '.entries | length // 0' 2>/dev/null)" || DOC_AWARE=1
+  fi
+  if [ "$DOC_AWARE" = "0" ] && { [ "${TERMS:-0}" -gt 0 ] || [ "${DECS:-0}" -gt 0 ]; }; then
+    DOC_AWARE=1
+  fi
 fi
 
 # STRATEGY_AWARE: strategy (independent of DOC_AWARE — autodetects on its own signal)
 STRATEGY_AWARE=0
 if [[ "$STRATEGY_AWARE_FORCE" == "on" ]]; then
- STRATEGY_AWARE=1
+  STRATEGY_AWARE=1
 elif [[ "$STRATEGY_AWARE_FORCE" == "off" ]]; then
- STRATEGY_AWARE=0
+  STRATEGY_AWARE=0
 else
- STRATEGY_RAW="$("$FLOWCTL" strategy status --json 2>/dev/null)" || STRATEGY_AWARE=1
- if [ "$STRATEGY_AWARE" = "0" ]; then
- STRAT_FILLED="$(printf '%s' "$STRATEGY_RAW" | jq -r '.sections_filled // 0' 2>/dev/null)" || STRATEGY_AWARE=1
- fi
- if [ "$STRATEGY_AWARE" = "0" ] && [ "${STRAT_FILLED:-0}" -ge 1 ]; then
- STRATEGY_AWARE=1
- fi
+  STRATEGY_RAW="$("$FLOWCTL" strategy status --json 2>/dev/null)" || STRATEGY_AWARE=1
+  if [ "$STRATEGY_AWARE" = "0" ]; then
+    STRAT_FILLED="$(printf '%s' "$STRATEGY_RAW" | jq -r '.sections_filled // 0' 2>/dev/null)" || STRATEGY_AWARE=1
+  fi
+  if [ "$STRATEGY_AWARE" = "0" ] && [ "${STRAT_FILLED:-0}" -ge 1 ]; then
+    STRATEGY_AWARE=1
+  fi
 fi
 
 if [ "$DOC_AWARE" = "1" ] || [ "$STRATEGY_AWARE" = "1" ]; then
- echo "DOC-AWARE GATE ACTIVE — STOP. Read references/doc-aware.md before drafting the first question."
+  echo "DOC-AWARE GATE ACTIVE — STOP. Read references/doc-aware.md before drafting the first question."
 fi
 ```
 
@@ -133,19 +133,19 @@ When the sentinel prints, STOP and **read [`references/doc-aware.md`](references
 **Handle-recognition rule (R16):** do NOT gate on a hard "must start with `fn-`" check. Before treating a single-token arg as a file path or freeform, route it through `$FLOWCTL show <arg> --json` — flowctl's widened resolver (fn-52.10) maps a tracker key (`wor-17` / `wor-17.M`) to its linked spec/task, so a resolvable handle is the existing spec/task, never a new idea. Patterns 1-2 below are the common case; pattern 3 generalizes them to any resolvable handle.
 
 1. **Flow spec ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?` (e.g., fn-1-add-oauth, fn-12, fn-2-fix-login-bug)
- - Fetch: `$FLOWCTL show <id> --json`
- - Read spec: `$FLOWCTL cat <id>`
+   - Fetch: `$FLOWCTL show <id> --json`
+   - Read spec: `$FLOWCTL cat <id>`
 
 2. **Flow task ID pattern**: matches `fn-\d+(-[a-z0-9-]+)?\.\d+` (e.g., fn-1-add-oauth.3, fn-12.5)
- - Fetch: `$FLOWCTL show <id> --json`
- - Read spec: `$FLOWCTL cat <id>`
- - Also get parent spec context: `$FLOWCTL cat <spec-id>`
+   - Fetch: `$FLOWCTL show <id> --json`
+   - Read spec: `$FLOWCTL cat <id>`
+   - Also get parent spec context: `$FLOWCTL cat <spec-id>`
 
 3. **Resolvable tracker handle**: any single-token arg (not an `.md` path) that `$FLOWCTL show <arg> --json` resolves — e.g. a Linear key `wor-17` (spec) or `wor-17.3` (task). Use the canonical id from the JSON; a `.`-containing handle is a task (fetch parent spec too), otherwise a spec. Treat exactly like patterns 1-2; never re-create.
 
 4. **File path**: a path-like token / `.md` extension that does NOT resolve via `flowctl show`
- - Read file contents
- - If file doesn't exist, ask user to provide valid path
+   - Read file contents
+   - If file doesn't exist, ask user to provide valid path
 
 Done when: the argument is classified as exactly one of the four patterns, every non-`.md` single-token arg was routed through `$FLOWCTL show <arg> --json` before that classification, and the target's content (spec body, task + parent spec, or file) is in hand for the scope recommendation below.
 
@@ -246,8 +246,8 @@ Concrete rules:
 
 1. **Each round asks the entire current frontier.** A question whose answer depends on another question still open in this round belongs to a *later* round, not this one — never ask a question alongside its own prerequisite.
 2. **Split the frontier across `plain-text numbered prompt` calls of up to 4 questions each**, grouped by topic (closest-related together), announced as one round ("Round N — part 1/2"). Never pad a call to reach 4; never hold a genuine frontier question back to a later round just to smooth pacing.
- **A frontier slot is earned.** Every genuinely open decision joins the round — NFR probes (failure modes, concurrency/races, scale, portability, testing) ALWAYS qualify, however thin the spec. Pure-cosmetic polish (message wording, label/flag spelling, visual formatting) does not get its own question: fold it into a related question's options, or carry it as a stated default the user can veto at write-back.
- Standalone checkpoint questions (scope selection, the code-mismatch question, the write-back consent checkpoint, the mark-ready offer) sit outside rounds — never labeled "Round N", never counted against round depth. Doc-aware meta-questions keep their own per-round budget (references/doc-aware.md): a meta-question deferred by that budget is pending for a later round, not dropped — the one sanctioned hold-back.
+   **A frontier slot is earned.** Every genuinely open decision joins the round — NFR probes (failure modes, concurrency/races, scale, portability, testing) ALWAYS qualify, however thin the spec. Pure-cosmetic polish (message wording, label/flag spelling, visual formatting) does not get its own question: fold it into a related question's options, or carry it as a stated default the user can veto at write-back.
+   Standalone checkpoint questions (scope selection, the code-mismatch question, the write-back consent checkpoint, the mark-ready offer) sit outside rounds — never labeled "Round N", never counted against round depth. Doc-aware meta-questions keep their own per-round budget (references/doc-aware.md): a meta-question deferred by that budget is pending for a later round, not dropped — the one sanctioned hold-back.
 3. **Recompute the frontier after each round.** Answers reshape the tree — settled decisions unblock their dependents; adapt the next round to what you heard. Don't lock the whole tree before you start: deeper rounds are discovered from answers, not pre-scripted.
 4. **Surface abandoned branches.** When an answer prunes a sub-tree, say so explicitly at the next round's opener: "Skipping persistence questions — you said no DB."
 5. **Cap branch depth at 4 rounds** down any one branch. Research shows >4 prior turns rarely improves question quality — drop deeper threads, ask about something else. Heuristic; revisit if too restrictive in real use.
@@ -308,10 +308,10 @@ Before writing anything back, build the current-sections-state JSON from the exi
 
 ```bash
 # Build CURRENT_SECTIONS by inspecting the existing spec markdown:
-# decision_context_has_h3: spec has `### Motivation` / `### Implementation Tradeoffs` under `## Decision Context`
-# biz_pass_ran: spec has populated `## Goal & Context` body OR a `### Motivation` H3
-# tech_sections_have_content: per-tech-section {name: bool} for whether the body has content
-# beyond the placeholder `*Pending technical-scope interview pass.*`
+#   decision_context_has_h3:    spec has `### Motivation` / `### Implementation Tradeoffs` under `## Decision Context`
+#   biz_pass_ran:               spec has populated `## Goal & Context` body OR a `### Motivation` H3
+#   tech_sections_have_content: per-tech-section {name: bool} for whether the body has content
+#                               beyond the placeholder `*Pending technical-scope interview pass.*`
 #
 # For a brand-new spec (no markdown yet), CURRENT_SECTIONS='{}' is fine.
 CURRENT_SECTIONS='{"decision_context_has_h3": <bool>, "biz_pass_ran": <bool>, "tech_sections_have_content": {"Architecture & Data Models": <bool>, "API Contracts": <bool>, "Edge Cases & Constraints": <bool>}}'
@@ -325,16 +325,16 @@ The policy JSON shape:
 
 ```json
 {
- "scope": "business|technical|both",
- "writable": ["<section names this scope may write>"],
- "preserved": ["<sections this scope MUST preserve byte-for-byte>"],
- "decision_context": {
- "shape": "flat|substructured",
- "writable_h3": ["<H3 names writable when substructured>"],
- "preserved_h3": ["<H3 names preserved byte-for-byte>"],
- "promote_flat_to_implementation_tradeoffs": <bool>
- },
- "placeholder_write": ["<tech sections under biz pass that should get the placeholder line>"]
+  "scope": "business|technical|both",
+  "writable": ["<section names this scope may write>"],
+  "preserved": ["<sections this scope MUST preserve byte-for-byte>"],
+  "decision_context": {
+    "shape": "flat|substructured",
+    "writable_h3": ["<H3 names writable when substructured>"],
+    "preserved_h3": ["<H3 names preserved byte-for-byte>"],
+    "promote_flat_to_implementation_tradeoffs": <bool>
+  },
+  "placeholder_write": ["<tech sections under biz pass that should get the placeholder line>"]
 }
 ```
 
@@ -387,15 +387,15 @@ TRACKER_GATE=0
 LEAF_RAW="$("$FLOWCTL" config get tracker.perEvent.interview --json 2>/dev/null)" || TRACKER_GATE=1
 ACTIVE_RAW="$("$FLOWCTL" sync active --json 2>/dev/null)" || TRACKER_GATE=1
 if [ "$TRACKER_GATE" = "0" ]; then
- LEAF="$(printf '%s' "$LEAF_RAW" | jq -r '.value' 2>/dev/null)" || TRACKER_GATE=1
- ACTIVE="$(printf '%s' "$ACTIVE_RAW" | jq -r '.active' 2>/dev/null)" || TRACKER_GATE=1
+  LEAF="$(printf '%s' "$LEAF_RAW" | jq -r '.value' 2>/dev/null)" || TRACKER_GATE=1
+  ACTIVE="$(printf '%s' "$ACTIVE_RAW" | jq -r '.active' 2>/dev/null)" || TRACKER_GATE=1
 fi
 if [ "$TRACKER_GATE" = "0" ] && [ "${ACTIVE:-false}" = "true" ] \
- && [ -n "${LEAF:-}" ] && [ "${LEAF:-null}" != "null" ] && [ "${LEAF:-off}" != "off" ]; then
- TRACKER_GATE=1
+   && [ -n "${LEAF:-}" ] && [ "${LEAF:-null}" != "null" ] && [ "${LEAF:-off}" != "off" ]; then
+  TRACKER_GATE=1
 fi
 if [ "$TRACKER_GATE" = "1" ]; then
- echo "TRACKER-SYNC GATE ACTIVE — STOP. Read references/post-write-back.md#tracker-sync before continuing."
+  echo "TRACKER-SYNC GATE ACTIVE — STOP. Read references/post-write-back.md#tracker-sync before continuing."
 fi
 
 # Mark-ready offer (flow spec inputs only — task ids and file paths carry no spec readiness).
@@ -403,14 +403,14 @@ READY_GATE=0
 READY_STATE_RAW="$("$FLOWCTL" config get tracker.readyState --json 2>/dev/null)" || READY_GATE=1
 SPECS_RAW="$("$FLOWCTL" specs --json 2>/dev/null)" || READY_GATE=1
 if [ "$READY_GATE" = "0" ]; then
- READY_STATE="$(printf '%s' "$READY_STATE_RAW" | jq -r '.value // empty' 2>/dev/null)" || READY_GATE=1
- READY_ADOPTED="$(printf '%s' "$SPECS_RAW" | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null)" || READY_GATE=1
- if [ "$READY_GATE" = "0" ] && [ "${READY_ADOPTED:-0}" -ge 1 ] && [ -z "${READY_STATE:-}" ]; then
- READY_GATE=1
- fi
+  READY_STATE="$(printf '%s' "$READY_STATE_RAW" | jq -r '.value // empty' 2>/dev/null)" || READY_GATE=1
+  READY_ADOPTED="$(printf '%s' "$SPECS_RAW" | jq '[.specs[] | select(.ready == true)] | length' 2>/dev/null)" || READY_GATE=1
+  if [ "$READY_GATE" = "0" ] && [ "${READY_ADOPTED:-0}" -ge 1 ] && [ -z "${READY_STATE:-}" ]; then
+    READY_GATE=1
+  fi
 fi
 if [ "$READY_GATE" = "1" ]; then
- echo "MARK-READY GATE ACTIVE — STOP. Read references/post-write-back.md#mark-ready-offer before continuing."
+  echo "MARK-READY GATE ACTIVE — STOP. Read references/post-write-back.md#mark-ready-offer before continuing."
 fi
 ```
 
@@ -438,6 +438,7 @@ Suggest next step based on input type:
 - Spec with tasks → `/flow-next:work fn-N` (or more interview on specific tasks)
 - Task → `/flow-next:work fn-N.M`
 - File → `/flow-next:plan <file>`
+- Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `/flow-next:visual fn-N` for a spec input, `/flow-next:visual fn-N.M` for a task input, `/flow-next:visual <file-path>` for the file input (an option the user picks, never run for them).
 
 ## Notes
 

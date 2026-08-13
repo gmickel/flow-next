@@ -108,9 +108,9 @@ Execute [workflow.md](workflow.md):
 
 0. **Route** - parse args, probe locator for URL-like selectors, choose mode.
 1. **Mode dispatch** - read only the routed mode's reference:
- - **Chart mode** - Grounding Snapshot (ordered) -> read-back Outcome/frontier/cost -> create or stop.
- - **Work mode** - re-anchor -> frontier -> claim -> evidence route -> resolve/scope/release -> sharpen -> re-chart -> one verdict; supersession when steering says the direction changed.
- - **Briefing handoff / reopen** - when briefable, propose clusters, confirm, `briefing --proposal-file`, hand to capture.
+   - **Chart mode** - Grounding Snapshot (ordered) -> read-back Outcome/frontier/cost -> create or stop.
+   - **Work mode** - re-anchor -> frontier -> claim -> evidence route -> resolve/scope/release -> sharpen -> re-chart -> one verdict; supersession when steering says the direction changed.
+   - **Briefing handoff / reopen** - when briefable, propose clusters, confirm, `briefing --proposal-file`, hand to capture.
 2. **Status mode** - compact show + frontier + cost; no mutations (inline in workflow.md).
 
 ## Forbidden

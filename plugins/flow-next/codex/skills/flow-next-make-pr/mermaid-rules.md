@@ -4,7 +4,7 @@ Reference for Phase 3 of `/flow-next:make-pr`. The host agent reads this file on
 
 The ref file is structured for fast lookup during emission, not for narrative reading. Sections are ordered so the agent can skim top-down: reserved words first (most common silent break), then escapes (second most common), then shape selection (when in doubt), then the final validation checklist (run before emitting).
 
-**Contents:** [§1 reserved words](#1-reserved-words) · [§2 special-character escapes](#2-special-character-escapes) · [§3 shape selection](#3-shape-selection) · [§4 hard caps + allocation](#4-hard-caps) · [§5 prose-summary rule](#5-prose-summary-precedes-diagram-rule-r13) · [§6 pre-emission validation](#6-pre-emission-validation-checklist) · [§7 Phase-3 hallucination guardrails](#7-hallucination-guardrails-phase-3-specifics)
+**Contents:** [§1 reserved words](#1-reserved-words) · [§2 special-character escapes](#2-special-character-escapes) · [§3 shape selection](#3-shape-selection) · [§4 hard caps + allocation](#4-hard-caps) · [§5 prose-summary rule](#5-prose-summary-precedes-diagram-rule-r13) · [§6 pre-emission validation](#6-pre-emission-validation-checklist) · [§7 Phase-3 hallucination guardrails](#7-hallucination-guardrails-phase-3-specifics) · [§8 diff-fenced structural sketches](#8-diff-fenced-structural-sketches-alternate-emission)
 
 ---
 
@@ -48,11 +48,11 @@ Labels containing the characters below MUST be quoted. Bare labels with these ch
 **HTML-entity fallback (decimal codes only — hex codes do NOT render):**
 
 ```
-" → #quot;
-# → #35;
-< → #60;
-> → #62;
-& → #38;
+"  →  #quot;
+#  →  #35;
+<  →  #60;
+>  →  #62;
+&  →  #38;
 ```
 
 The leading `#` plus decimal digits and trailing `;` is mermaid's documented escape syntax. Hex (`#x22;`) silently fails — always use decimal.
@@ -87,10 +87,10 @@ The four shapes the skill emits, with one canonical example per shape so the hos
 ````markdown
 ```mermaid
 flowchart LR
- skill["flow-next-make-pr<br/>skill"] --> flowctl["scripts/flowctl"]
- skill --> gh["gh CLI"]
- flowctl --> mem[".flow/memory/"]
- flowctl --> specs[".flow/specs/"]
+  skill["flow-next-make-pr<br/>skill"] --> flowctl["scripts/flowctl"]
+  skill --> gh["gh CLI"]
+  flowctl --> mem[".flow/memory/"]
+  flowctl --> specs[".flow/specs/"]
 ```
 ````
 
@@ -105,17 +105,17 @@ flowchart LR
 ````markdown
 ```mermaid
 classDiagram
- class CognitiveAidPayload {
- +spec: SpecMeta
- +tasks: Task[]
- +diff_summary: DiffSummary
- +memory_during_spec: MemorySnapshot
- }
- class SpecMeta {
- +id: string
- +acceptance_criteria: AcceptanceCriterion[]
- }
- CognitiveAidPayload *-- SpecMeta
+  class CognitiveAidPayload {
+    +spec: SpecMeta
+    +tasks: Task[]
+    +diff_summary: DiffSummary
+    +memory_during_spec: MemorySnapshot
+  }
+  class SpecMeta {
+    +id: string
+    +acceptance_criteria: AcceptanceCriterion[]
+  }
+  CognitiveAidPayload *-- SpecMeta
 ```
 ````
 
@@ -130,16 +130,16 @@ classDiagram
 ````markdown
 ```mermaid
 sequenceDiagram
- participant U as User
- participant S as /flow-next:make-pr
- participant F as flowctl
- participant G as gh CLI
- U->>S: invoke
- S->>F: spec export-cognitive-aid
- F-->>S: payload (JSON)
- S->>S: render body
- S->>G: gh pr create
- G-->>U: PR URL
+  participant U as User
+  participant S as /flow-next:make-pr
+  participant F as flowctl
+  participant G as gh CLI
+  U->>S: invoke
+  S->>F: spec export-cognitive-aid
+  F-->>S: payload (JSON)
+  S->>S: render body
+  S->>G: gh pr create
+  G-->>U: PR URL
 ```
 ````
 
@@ -154,12 +154,12 @@ sequenceDiagram
 ````markdown
 ```mermaid
 graph TB
- spec["fn-42 make-pr"]
- spec --> skill["plugins/flow-next/skills/flow-next-make-pr/"]
- spec --> flowctl["plugins/flow-next/scripts/flowctl.py"]
- spec --> tests["plugins/flow-next/scripts/make-pr_smoke_test.sh"]
- spec --> docs["docs (CHANGELOG, README, CLAUDE.md)"]
- spec --> sync["scripts/sync-codex.sh"]
+  spec["fn-42 make-pr"]
+  spec --> skill["plugins/flow-next/skills/flow-next-make-pr/"]
+  spec --> flowctl["plugins/flow-next/scripts/flowctl.py"]
+  spec --> tests["plugins/flow-next/scripts/make-pr_smoke_test.sh"]
+  spec --> docs["docs (CHANGELOG, README, CLAUDE.md)"]
+  spec --> sync["scripts/sync-codex.sh"]
 ```
 ````
 
@@ -188,23 +188,23 @@ Triggers 1+2+3 fire → 1 flowchart LR + 1 graph TB (still under cap)
 Triggers 1+2+3+5 fire → 1 graph TB overview only (cap collapses 4 candidate diagrams to one)
 ```
 
-The collapse-to-one rule prefers `graph TB` when the alternative is more than 3 separate diagrams — overview beats fragmented detail.
+The collapse-to-one rule prefers `graph TB` when the alternative is more than 3 separate diagrams — overview beats fragmented detail. When the collapse would drop a structural concern the reviewer needs, a diff-fenced structural sketch (§8) may carry that concern instead — sketches are outside the 3-diagram cap.
 
 **Node-cap grouping rule:** when a flowchart or classDiagram would have >12 nodes, group siblings by abstraction. `flowchart LR` example:
 
 ````
 Bad (15 nodes):
- skill --> agent_A
- skill --> agent_B
- skill --> agent_C
- skill --> agent_D
- skill --> agent_E
- ... (11 more)
+  skill --> agent_A
+  skill --> agent_B
+  skill --> agent_C
+  skill --> agent_D
+  skill --> agent_E
+  ... (11 more)
 
 Good (3 nodes):
- skill --> scouts["scouts (5)"]
- skill --> workers["workers (3)"]
- skill --> validators["validators (2)"]
+  skill --> scouts["scouts (5)"]
+  skill --> workers["workers (3)"]
+  skill --> validators["validators (2)"]
 ````
 
 The grouped label keeps the fan-out signal without burying it in 15 visually-similar nodes.
@@ -287,3 +287,60 @@ The §2.5 hallucination guardrails apply to Phase 3 with these specific reinforc
 - **No "for clarity" embellishment.** If a diagram has 6 real nodes and the agent thinks "adding 2 more would explain it better" — don't. The 6 are what changed. Adding context nodes that didn't change in this diff dilutes the signal.
 
 When in doubt: **fewer nodes, fewer edges, more honest.** A diagram with 4 nodes and 3 edges that all trace to the diff is a better cognitive aid than one with 12 nodes where 6 of them are inferred context.
+
+---
+
+## 8. Diff-fenced structural sketches (alternate emission)
+
+Mermaid is not the only shape `## Structural changes` may emit. A **diff-fenced structural sketch** — diff syntax applied to a file tree or a call tree — is licensed as an alternate to (or complement of) a diagram in exactly two situations, and carries the same signal with no silent-rendering-failure risk: a ` ```diff ` fence renders as colored text on every forge and in every terminal.
+
+**When a sketch is licensed:**
+
+1. **The collapse-to-one rule (§4) would fire** — more than 3 candidate diagrams, so the cap forces a single `graph TB` overview and detail the reviewer needs gets dropped. Emit the overview plus a sketch (or a sketch alone) instead of losing the concern.
+2. **A trigger fires marginally** — the diagram a trigger would produce has fewer than 4 nodes. A 2- or 3-node mermaid graph costs a render round-trip to say what one small text sketch says outright.
+
+Outside those two situations, mermaid stays the default emission for `## Structural changes`; a sketch is not a general substitute.
+
+**Shapes:** file tree (where the change lands) or call tree (what the control flow gains or loses). Match the shape to the topic; do not invent a third form here.
+
+File-layout change:
+
+````markdown
+```diff
+ src/
+ |-- ingest/
++|   `-- dedupe.ts        # drops repeated events
+ |-- index/
+-`-- query.ts
++`-- query/
++    |-- parser.ts
++    `-- ranker.ts
+```
+````
+
+Call-tree change:
+
+````markdown
+```diff
+ startMission
+   resolveFleet
+     claimSeat
++    verifyAuth
+     openSession
+-  streamEvents
++  streamEvents
++    replayBacklog
+```
+````
+
+**Rules a sketch inherits unchanged:**
+
+- **§7 hallucination guardrails.** Every path in a sketch comes from `diff_summary.files[]` (or `diff_summary.modules_touched[]`); every call edge traces to `cross_module_changes[]` or to a real relationship visible in the diff. No invented nodes, no "for clarity" context lines. Fewer lines, more honest.
+- **§5 prose-summary-precedes-diagram (R13).** A sketch is a visual: the same 3-5 sentence plain-language prose paragraph precedes it, anchored to real paths, self-contained without the sketch.
+- **Never quote diff content.** Paths, tree shape, and call names only — no code lines lifted from the diff.
+
+**Cap interaction:** sketches do **not** count against the 3-diagram mermaid cap in §4 — that cap exists for mermaid render clutter. Judgment still applies: one or two sketches, never a wall of them.
+
+**`--no-mermaid`:** unchanged semantics. The flag short-circuits Phase 3 entirely (§3.0 of `workflow.md`), so `## Structural changes` is omitted as a whole section — no diagrams, no prose, **and no sketches**. `--no-mermaid` means "no structural-changes section," not "diagrams off, text on."
+
+**§6 does not apply.** The pre-emission checklist targets mermaid parser failures; a diff fence has none. The guardrails above are the whole contract for a sketch.

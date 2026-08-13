@@ -63,17 +63,17 @@ ACTIVE=0
 RAW_SYNC="$("$FLOWCTL" sync active --json 2>/dev/null)" || ACTIVE=1
 RAW_CHARTS="$("$FLOWCTL" config get tracker.charts --json 2>/dev/null)" || ACTIVE=1
 if [ "$ACTIVE" = "0" ]; then
- BRIDGE="$(printf '%s' "$RAW_SYNC" | jq -r '.active // false' 2>/dev/null)" || ACTIVE=1
+  BRIDGE="$(printf '%s' "$RAW_SYNC" | jq -r '.active // false' 2>/dev/null)" || ACTIVE=1
 fi
 if [ "$ACTIVE" = "0" ]; then
- # perEvent verbs (pull|push|reconcile|comment) are not chart gates - only literal `on`.
- CHARTS_LEAF="$(printf '%s' "$RAW_CHARTS" | jq -r '.value // "off"' 2>/dev/null)" || ACTIVE=1
+  # perEvent verbs (pull|push|reconcile|comment) are not chart gates - only literal `on`.
+  CHARTS_LEAF="$(printf '%s' "$RAW_CHARTS" | jq -r '.value // "off"' 2>/dev/null)" || ACTIVE=1
 fi
 if [ "$ACTIVE" = "0" ] && [ "$BRIDGE" = "true" ] && [ "$CHARTS_LEAF" = "on" ]; then
- ACTIVE=1
+  ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
- echo "TRACKER PROJECTION GATE ACTIVE - STOP. Read references/tracker-projection.md before continuing."
+  echo "TRACKER PROJECTION GATE ACTIVE - STOP. Read references/tracker-projection.md before continuing."
 fi
 ```
 

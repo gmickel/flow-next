@@ -65,8 +65,8 @@ flow-next stores findings in the **bug memory track** (not `BUG-NNN.md` files). 
 # No-op cleanly when memory is disabled — still record the finding in the run notes
 # so Phase 6 can count it toward the verdict.
 if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
- mkdir -p .flow/tmp/qa-"$SPEC_ID"
- cat > .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md <<'EOF'
+  mkdir -p .flow/tmp/qa-"$SPEC_ID"
+  cat > .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md <<'EOF'
 ## Problem
 <persona> attempting <goal> hit <observed failure> on the live app.
 
@@ -89,17 +89,17 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
 - write side-effect: <server/DB row or API response, if a write path>
 
 ## Traceability
-- R-IDs: [R<i>, ...] scenario: S<n> driver_rung: <rung> viewport: <wxh>
+- R-IDs: [R<i>, ...]   scenario: S<n>   driver_rung: <rung>   viewport: <wxh>
 EOF
 
- $FLOWCTL memory add \
- --track bug --category "<ui|runtime-errors|integration|data|security|performance|...>" \
- --title "<persona> can't <goal> — <one-line symptom>" \
- --module "<surface / route / component>" \
- --tags "qa,<spec-id>,<surface>" \
- --symptoms "<observed actual, one line>" \
- --root-cause "(observed via live QA — unconfirmed)" \
- --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md
+  $FLOWCTL memory add \
+    --track bug --category "<ui|runtime-errors|integration|data|security|performance|...>" \
+    --title "<persona> can't <goal> — <one-line symptom>" \
+    --module "<surface / route / component>" \
+    --tags "qa,<spec-id>,<surface>" \
+    --symptoms "<observed actual, one line>" \
+    --root-cause "(observed via live QA — unconfirmed)" \
+    --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md
 fi
 ```
 
@@ -112,43 +112,43 @@ that §6.3b's narrow-pathspec commit depends on:
 ```bash
 # memory disabled → no-op cleanly (still record the finding in the run notes for the verdict).
 if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
- mkdir -p .flow/tmp/qa-"$SPEC_ID"
- # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
- # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the template above, then:
- # Prefer --update <prior-id> when this run (or a prior QA pass) already filed the same finding.
- _out="$($FLOWCTL memory add \
- --track bug --category "<ui|runtime-errors|integration|data|...>" \
- --title "<persona> can't <goal> — <one-line symptom>" \
- --module "<surface / route / component>" \
- --tags "qa,<spec-id>,<surface>" \
- --symptoms "<observed actual>" \
- --root-cause "(observed via live QA — unconfirmed)" \
- --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
- # fn-113.2: high-overlap match -> fold into the EXISTING entry and drop the
- # just-created duplicate, so autonomous QA never commits a near-copy.
- _lvl="$(printf '%s' "$_out" | jq -r '.overlap_level // empty')"
- _dup="$(printf '%s' "$_out" | jq -r '.path // empty')"
- if [ "$_lvl" = "high" ]; then
- _mid="$(printf '%s' "$_out" | jq -r '.matches[0].id // empty')"
- if [ -n "$_mid" ]; then
- _out="$("$FLOWCTL" memory add --track bug --category "<same category as the create above>" \
- --title "<same title>" --update "$_mid" \
- --module "<same module>" --tags "qa,<spec-id>,<surface>" \
- --symptoms "<same symptoms>" \
- --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
- # Remove the duplicate WE just created (safe: our own fresh file).
- [ -n "$_dup" ] && rm -f "$_dup"
- fi
- fi
- _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
- # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
- # runs in a subshell, so the assignment would be lost and the memory left uncommitted.
- [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
- # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
- # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check.
- # memory add always creates unless --update <id> (fn-113). Read .matches (scored):
- # high score → surface "matches existing entry X"; re-run with --update <id> when
- # this is the same finding. Moderate → related_to cross-reference on the new entry.
+  mkdir -p .flow/tmp/qa-"$SPEC_ID"
+  # Write the finding body (problem / repro / expected-vs-actual / evidence pointers / R-IDs)
+  # to .flow/tmp/qa-$SPEC_ID/finding-<sid>.md per the template above, then:
+  # Prefer --update <prior-id> when this run (or a prior QA pass) already filed the same finding.
+  _out="$($FLOWCTL memory add \
+    --track bug --category "<ui|runtime-errors|integration|data|...>" \
+    --title "<persona> can't <goal> — <one-line symptom>" \
+    --module "<surface / route / component>" \
+    --tags "qa,<spec-id>,<surface>" \
+    --symptoms "<observed actual>" \
+    --root-cause "(observed via live QA — unconfirmed)" \
+    --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
+  # fn-113.2: high-overlap match -> fold into the EXISTING entry and drop the
+  # just-created duplicate, so autonomous QA never commits a near-copy.
+  _lvl="$(printf '%s' "$_out" | jq -r '.overlap_level // empty')"
+  _dup="$(printf '%s' "$_out" | jq -r '.path // empty')"
+  if [ "$_lvl" = "high" ]; then
+    _mid="$(printf '%s' "$_out" | jq -r '.matches[0].id // empty')"
+    if [ -n "$_mid" ]; then
+      _out="$("$FLOWCTL" memory add --track bug --category "<same category as the create above>" \
+        --title "<same title>" --update "$_mid" \
+        --module "<same module>" --tags "qa,<spec-id>,<surface>" \
+        --symptoms "<same symptoms>" \
+        --body-file .flow/tmp/qa-"$SPEC_ID"/finding-<sid>.md --json)"
+      # Remove the duplicate WE just created (safe: our own fresh file).
+      [ -n "$_dup" ] && rm -f "$_dup"
+    fi
+  fi
+  _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
+  # Capture via command-substitution in the PARENT shell — a `… | { read … }` pipeline tail
+  # runs in a subshell, so the assignment would be lost and the memory left uncommitted.
+  [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
+  # Track the EXACT path filed (from --json) into QA_FILED_MEMORY — §6.3b commits precisely
+  # these, never a broad `.flow/memory` glob. NEVER pass --no-overlap-check.
+  # memory add always creates unless --update <id> (fn-113). Read .matches (scored):
+  # high score → surface "matches existing entry X"; re-run with --update <id> when
+  # this is the same finding. Moderate → related_to cross-reference on the new entry.
 fi
 ```
 

@@ -34,7 +34,7 @@ review). Delegation must NOT reuse that phrase. Delegation activates ONLY via:
 - the explicit arg token **`delegate:codex`** (off-switch **`delegate:local`**),
 - the flow config **`work.delegate=codex`**,
 - or an unambiguous natural phrase — "use codex **for implementation**" /
- "delegate implementation to codex".
+  "delegate implementation to codex".
 
 Bare **"use codex"** / **"no codex"** keep their existing review-backend meaning.
 
@@ -46,10 +46,10 @@ predicate the host evaluates before selection
 
 ```text
 delegation_requested =
- arg == "delegate:codex" → true
- arg == "delegate:local" → false
- arg absent AND config == "codex" → true
- arg absent AND config in (false, null) → false
+    arg == "delegate:codex"                  → true
+    arg == "delegate:local"                  → false
+    arg absent  AND  config == "codex"       → true
+    arg absent  AND  config in (false, null) → false
 # the generic "use codex" string is NOT the token → never activates delegation
 
 delegation_active = delegation_requested AND Phase 1.5 selection passed
@@ -81,9 +81,9 @@ selected path reuses that captured value here.
 # existing .md spec path) is NOT eligible for delegation, even after Phase 1
 # promotes it to a spec+task.
 if <original input is idea text — none of: Flow id, resolvable handle, existing .md spec path>; then
- INPUT_WAS_BARE_PROMPT=1
+  INPUT_WAS_BARE_PROMPT=1
 else
- INPUT_WAS_BARE_PROMPT=0
+  INPUT_WAS_BARE_PROMPT=0
 fi
 ```
 
@@ -100,7 +100,7 @@ Claude Code / Droid / OpenCode env markers at build):
 
 - the Claude-Code marker **`CLAUDECODE`** is present, AND
 - **`DROID_PLUGIN_ROOT`** is unset (Droid → off; Droid exposes
- `CLAUDE_PLUGIN_ROOT` as a *compat alias*, so do NOT key on that), AND
+  `CLAUDE_PLUGIN_ROOT` as a *compat alias*, so do NOT key on that), AND
 - **no OpenCode marker** (`OPENCODE` / `OPENCODE_*`).
 
 **Do NOT exclude on `CODEX_*` env.** `CODEX_SANDBOX=auto` is flow-next's own
@@ -115,14 +115,14 @@ gate on `CODEX_*` would disable delegation in every Ralph run.
 # DROID_PLUGIN_ROOT unset AND no OpenCode marker. NOT keyed on CODEX_* — so
 # CODEX_SANDBOX=auto (Ralph's review-backend knob) leaves delegation ELIGIBLE.
 platform_gate_ok() {
- [ -n "${CLAUDECODE:-}" ] || return 1 # not Claude Code → off
- [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1 # Droid → off (compat alias not keyed)
- # OpenCode → off. Match the bare `OPENCODE` var AND any `OPENCODE_*` marker
- # (OPENCODE_BIN, OPENCODE_SESSION, OPENCODE_ROOT, …) — a fixed two-var check
- # would miss future/unknown markers, contradicting "AND no OpenCode marker".
- [ -z "${OPENCODE:-}" ] || return 1
- env | grep -q '^OPENCODE_' && return 1
- return 0
+  [ -n "${CLAUDECODE:-}" ] || return 1            # not Claude Code → off
+  [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1     # Droid → off (compat alias not keyed)
+  # OpenCode → off. Match the bare `OPENCODE` var AND any `OPENCODE_*` marker
+  # (OPENCODE_BIN, OPENCODE_SESSION, OPENCODE_ROOT, …) — a fixed two-var check
+  # would miss future/unknown markers, contradicting "AND no OpenCode marker".
+  [ -z "${OPENCODE:-}" ] || return 1
+  env | grep -q '^OPENCODE_' && return 1
+  return 0
 }
 ```
 
@@ -132,13 +132,13 @@ Skip delegation if already running **inside a Codex runtime sandbox** (avoids
 recursion). The guard is **value-aware**, not a bare-presence check:
 
 - `CODEX_SESSION_ID` is **NOT** a real Codex env var (plan research:
- openai/codex#8923 — unmerged); do not key on it.
+  openai/codex#8923 — unmerged); do not key on it.
 - `CODEX_SANDBOX` is ALSO a flow-next config knob — **Ralph exports
- `CODEX_SANDBOX=auto`** for the review backend. A bare `-n "$CODEX_SANDBOX"`
- check would FALSE-trip in every Ralph run and disable delegation (breaks R9).
- Trip ONLY on a Codex **runtime** value — one **outside** the flow-next config
- set `{read-only, workspace-write, danger-full-access, auto}`, e.g. `seatbelt`
- — or on the runtime-only `CODEX_SANDBOX_NETWORK_DISABLED`.
+  `CODEX_SANDBOX=auto`** for the review backend. A bare `-n "$CODEX_SANDBOX"`
+  check would FALSE-trip in every Ralph run and disable delegation (breaks R9).
+  Trip ONLY on a Codex **runtime** value — one **outside** the flow-next config
+  set `{read-only, workspace-write, danger-full-access, auto}`, e.g. `seatbelt`
+  — or on the runtime-only `CODEX_SANDBOX_NETWORK_DISABLED`.
 
 ```bash
 # Gate 2: recursion guard. inside_sandbox=true ONLY when CODEX_SANDBOX holds a
@@ -146,16 +146,16 @@ recursion). The guard is **value-aware**, not a bare-presence check:
 # CODEX_SANDBOX_NETWORK_DISABLED is set. CODEX_SANDBOX=auto (Ralph's
 # review-backend knob) is NOT a sandbox signal → delegation stays eligible.
 not_inside_codex_sandbox() {
- case "${CODEX_SANDBOX:-}" in
- ""|read-only|workspace-write|danger-full-access|auto)
- RUNTIME_SANDBOX=0 ;; # unset OR a flow-next config knob → NOT a runtime sandbox
- *)
- RUNTIME_SANDBOX=1 ;; # value outside the config set → Codex runtime sandbox
- esac
- if [ -n "${CODEX_SANDBOX_NETWORK_DISABLED:-}" ] || [ "${RUNTIME_SANDBOX:-0}" = "1" ]; then
- return 1 # inside a Codex sandbox → recursion guard trips → off
- fi
- return 0
+  case "${CODEX_SANDBOX:-}" in
+    ""|read-only|workspace-write|danger-full-access|auto)
+      RUNTIME_SANDBOX=0 ;;   # unset OR a flow-next config knob → NOT a runtime sandbox
+    *)
+      RUNTIME_SANDBOX=1 ;;   # value outside the config set → Codex runtime sandbox
+  esac
+  if [ -n "${CODEX_SANDBOX_NETWORK_DISABLED:-}" ] || [ "${RUNTIME_SANDBOX:-0}" = "1" ]; then
+    return 1                 # inside a Codex sandbox → recursion guard trips → off
+  fi
+  return 0
 }
 ```
 
@@ -165,8 +165,8 @@ not_inside_codex_sandbox() {
 # Gate 3: codex CLI must resolve to an absolute path. Verified against
 # codex-cli 0.136.0 at build. Else → standard mode with a one-line hint.
 codex_available() {
- command -v codex >/dev/null 2>&1 || return 1
- return 0
+  command -v codex >/dev/null 2>&1 || return 1
+  return 0
 }
 # On failure, surface: "codex not found — install via `npm i -g @openai/codex`;
 # running in standard in-session mode." Then proceed standard (never block).
@@ -195,24 +195,24 @@ do NOT re-ask; use the persisted `work.delegateSandbox`.
 ```bash
 # Gate 4: exact no-question marker family.
 delegation_headless() {
- [ "${FLOW_RALPH:-}" = "1" ] && return 0
- [ -n "${REVIEW_RECEIPT_PATH:-}" ] && return 0
- [ "${FLOW_AUTONOMOUS:-}" = "1" ] && return 0
- [ "${AUTONOMOUS:-}" = "1" ] && return 0 # parsed mode:autonomous token
- return 1
+  [ "${FLOW_RALPH:-}" = "1" ] && return 0
+  [ -n "${REVIEW_RECEIPT_PATH:-}" ] && return 0
+  [ "${FLOW_AUTONOMOUS:-}" = "1" ] && return 0
+  [ "${AUTONOMOUS:-}" = "1" ] && return 0  # parsed mode:autonomous token
+  return 1
 }
 
 CONSENT="$($FLOWCTL config get work.delegateConsent --json | jq -r '.value')"
 if [ "$CONSENT" != "true" ]; then
- if delegation_headless; then
- : # delegation OFF; continue standard Work; no prompt and no config write
- else
- # Host asks the user for consent. Lead with the recommendation (yolo),
- # explain the network tradeoff, then on confirmation persist BOTH keys:
- $FLOWCTL config set work.delegateConsent true
- $FLOWCTL config set work.delegateSandbox <yolo|full-auto> # chosen mode
- # If the user declines → delegation OFF for this run (standard mode).
- fi
+  if delegation_headless; then
+    : # delegation OFF; continue standard Work; no prompt and no config write
+  else
+    # Host asks the user for consent. Lead with the recommendation (yolo),
+    # explain the network tradeoff, then on confirmation persist BOTH keys:
+    $FLOWCTL config set work.delegateConsent true
+    $FLOWCTL config set work.delegateSandbox <yolo|full-auto> # chosen mode
+    # If the user declines → delegation OFF for this run (standard mode).
+  fi
 fi
 ```
 
@@ -230,8 +230,8 @@ any nonempty receipt path is headless.
 # Gate 5: a bare-prompt-promoted spec is NOT eligible (decided on the ORIGINAL
 # input via Gate 0's INPUT_WAS_BARE_PROMPT). A real plan/spec/task IS.
 input_kind_ok() {
- [ "${INPUT_WAS_BARE_PROMPT:-0}" = "1" ] && return 1 # promoted bare prompt → off
- return 0
+  [ "${INPUT_WAS_BARE_PROMPT:-0}" = "1" ] && return 1   # promoted bare prompt → off
+  return 0
 }
 ```
 
@@ -241,10 +241,10 @@ After the gates pass, `work.delegateDecision` controls per-task prompting:
 
 - **`auto`** (default) → delegate every eligible task without a per-task prompt.
 - **`ask`** → in **interactive** mode the host asks the user via `plain-text numbered prompt`
- before delegating each task. **Headless / autonomous** means
- `delegation_headless` succeeds; it has no prompt path, so `ask` is treated as
- **`auto` only when** `work.delegateConsent` is already `true`; otherwise
- delegation stays off and standard Work continues without a config write.
+  before delegating each task. **Headless / autonomous** means
+  `delegation_headless` succeeds; it has no prompt path, so `ask` is treated as
+  **`auto` only when** `work.delegateConsent` is already `true`; otherwise
+  delegation stays off and standard Work continues without a config write.
 
 ```bash
 DECISION="$($FLOWCTL config get work.delegateDecision --json | jq -r '.value')"
@@ -267,10 +267,10 @@ DELEGATE_MODEL="$($FLOWCTL models resolve delegate --json | jq -r '.model')"
 ```
 
 ```text
-DELEGATE: codex # on; absent/`local` ⇒ standard in-session worker
+DELEGATE: codex                # on; absent/`local` ⇒ standard in-session worker
 DELEGATE_MODEL: <from models resolve delegate>
-DELEGATE_SANDBOX: <yolo|full-auto> # from consent
-DELEGATE_EFFORT_FLOOR: <work.delegateEffort> # default medium (per-run escalation floors here)
+DELEGATE_SANDBOX: <yolo|full-auto>        # from consent
+DELEGATE_EFFORT_FLOOR: <work.delegateEffort>  # default medium (per-run escalation floors here)
 DELEGATE_DECISION: <auto|ask>
 ```
 
@@ -303,43 +303,43 @@ flag in 0.136.0 and warns since 0.130.0; emit `-s workspace-write` for full-auto
 ```bash
 # yolo (default) — substitute the `-s workspace-write` line for full-auto:
 FLOW_DELEGATE_CODEX=1 codex exec \
- --ignore-user-config \
- -m "<DELEGATE_MODEL>" \
- -c 'model_reasoning_effort="<effective_effort>"' \
- --dangerously-bypass-approvals-and-sandbox \
- --output-schema "<scratch-dir>/result-schema.json" \
- -o "<scratch-dir>/result-batch-<n>.json" \
- - < "<scratch-dir>/prompt-batch-<n>.md"
+  --ignore-user-config \
+  -m "<DELEGATE_MODEL>" \
+  -c 'model_reasoning_effort="<effective_effort>"' \
+  --dangerously-bypass-approvals-and-sandbox \
+  --output-schema "<scratch-dir>/result-schema.json" \
+  -o "<scratch-dir>/result-batch-<n>.json" \
+  - < "<scratch-dir>/prompt-batch-<n>.md"
 ```
 
 - **Send it as a SINGLE LINE.** The `\`-continuations above are a reading aid only.
- `ralph-guard` is a single-command check that rejects ANY raw newline (along with
- `;` `&` `|` `` ` `` `>` `$(…)` `${…}` subshells) **before** tokenizing — a
- multi-line command (even `\`-continued) is non-canonical and **blocked** in
- Ralph. Flatten the invocation to one line before putting it in the
- `run_in_background` Bash call (only the stdin `<` redirect is permitted).
+  `ralph-guard` is a single-command check that rejects ANY raw newline (along with
+  `;` `&` `|` `` ` `` `>` `$(…)` `${…}` subshells) **before** tokenizing — a
+  multi-line command (even `\`-continued) is non-canonical and **blocked** in
+  Ralph. Flatten the invocation to one line before putting it in the
+  `run_in_background` Bash call (only the stdin `<` redirect is permitted).
 - **`FLOW_DELEGATE_CODEX=1` is an inline env prefix ON the command string** (NOT a
- pre-exported var). The `ralph-guard.py` PreToolUse hook (fn-55.5) sees only the
- command text and parses this full shape to allow the invocation; a separately
- `export`ed var would neither reach the hook nor persist across Bash prompt turns.
- Keep it in the command string verbatim.
+  pre-exported var). The `ralph-guard.py` PreToolUse hook (fn-55.5) sees only the
+  command text and parses this full shape to allow the invocation; a separately
+  `export`ed var would neither reach the hook nor persist across Bash prompt turns.
+  Keep it in the command string verbatim.
 - **`-m` / `-c` are ALWAYS passed explicitly** from `DELEGATE_MODEL`
- (resolved by `$FLOWCTL models resolve delegate`: raw on-disk
- `work.delegateModel` > `models.roles.delegate.codex` > baseline
- `gpt-5.6-terra`; a controlled 2026-07 pipeline eval (n=3) had terra-medium
- match gpt-5.6-sol on correctness at ~2/3 the wall-clock on frontier-authored
- specs; one task, motivation not guarantee. Escalate via
- `config set work.delegateModel gpt-5.6-sol` or the role map for gnarly tasks;
- needs codex CLI >= 0.144) and the per-run `effective_effort`
- (default `medium`, escalated below). **There is NO "defer to `~/.codex/config.toml`"
- path** - `--ignore-user-config` deliberately skips the user Codex config (MCP
- isolation wins), so model + effort MUST come from flow resolution, never the user's
- codex config.
+  (resolved by `$FLOWCTL models resolve delegate`: raw on-disk
+  `work.delegateModel` > `models.roles.delegate.codex` > baseline
+  `gpt-5.6-terra`; a controlled 2026-07 pipeline eval (n=3) had terra-medium
+  match gpt-5.6-sol on correctness at ~2/3 the wall-clock on frontier-authored
+  specs; one task, motivation not guarantee. Escalate via
+  `config set work.delegateModel gpt-5.6-sol` or the role map for gnarly tasks;
+  needs codex CLI >= 0.144) and the per-run `effective_effort`
+  (default `medium`, escalated below). **There is NO "defer to `~/.codex/config.toml`"
+  path** - `--ignore-user-config` deliberately skips the user Codex config (MCP
+  isolation wins), so model + effort MUST come from flow resolution, never the user's
+  codex config.
 - **Cross-check vs. the proven review-path invocation** in
- `run_codex_exec()` in `flowctl.py` (same `-m`, same `-c 'model_reasoning_effort="..."'`
- quoting, same stdin `-`). This delegation
- path ADDS `--output-schema` + `-o` + `--ignore-user-config`, which the review
- path lacks; everything else matches the battle-tested shape.
+  `run_codex_exec()` in `flowctl.py` (same `-m`, same `-c 'model_reasoning_effort="..."'`
+  quoting, same stdin `-`). This delegation
+  path ADDS `--output-schema` + `-o` + `--ignore-user-config`, which the review
+  path lacks; everything else matches the battle-tested shape.
 - **stdin `-`** carries the prompt (avoids CLI length limits + escaping; GH-35).
 
 ### MCP isolation (load-bearing) — `--ignore-user-config`, #15451
@@ -386,8 +386,8 @@ message lands, so `test -s` alone would accept a partial:
 ```bash
 RESULT_FILE="<scratch-dir>/result-batch-<n>.json"
 for i in $(seq 1 30); do
- test -s "$RESULT_FILE" && jq -e . "$RESULT_FILE" >/dev/null 2>&1 && echo DONE && exit 0
- sleep 2
+  test -s "$RESULT_FILE" && jq -e . "$RESULT_FILE" >/dev/null 2>&1 && echo DONE && exit 0
+  sleep 2
 done
 echo "Waiting for Codex..."
 ```
@@ -411,14 +411,14 @@ load-bearing — they make `flowctl codex classify-result` (fn-55.4) determinist
 
 ```json
 { "type": "object",
- "properties": {
- "status": { "enum": ["completed", "partial", "failed"] },
- "files_modified": { "type": "array", "items": { "type": "string" } },
- "issues": { "type": "array", "items": { "type": "string" } },
- "summary": { "type": "string" },
- "verification_summary": { "type": "string" } },
- "required": ["status", "files_modified", "issues", "summary", "verification_summary"],
- "additionalProperties": false }
+  "properties": {
+    "status": { "enum": ["completed", "partial", "failed"] },
+    "files_modified": { "type": "array", "items": { "type": "string" } },
+    "issues": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string" },
+    "verification_summary": { "type": "string" } },
+  "required": ["status", "files_modified", "issues", "summary", "verification_summary"],
+  "additionalProperties": false }
 ```
 
 ### Per-run effort (lifted — proportional to risk, floored at config)
@@ -433,15 +433,15 @@ the host-passed `DELEGATE_EFFORT_FLOOR` (`work.delegateEffort`, default `medium`
 | architectural / cross-cutting changes | `xhigh` |
 
 ```text
-effective_effort = max(picked, DELEGATE_EFFORT_FLOOR) # by enum ordinality
-# enum order: none < low < medium < high < xhigh
+effective_effort = max(picked, DELEGATE_EFFORT_FLOOR)   # by enum ordinality
+# enum order:  none < low < medium < high < xhigh
 ```
 
 - Emit the chosen value as `-c 'model_reasoning_effort="<effective_effort>"'`.
 - **Never emit the literal `"default"`** — it is not a valid effort value; the
- enum is exactly `none | low | medium | high | xhigh`.
+  enum is exactly `none | low | medium | high | xhigh`.
 - The floor means a per-run pick BELOW the configured floor is raised to the
- floor; a pick at/above it is kept.
+  floor; a pick at/above it is kept.
 
 ### Scratch dir
 
@@ -467,15 +467,15 @@ and decisions**. `codex exec` **only writes code** — it is **forbidden from gi
 (`commit`/`push`/PRs) and repo-scoped. This split is **enforced, not prompt-only**:
 
 - **Git ownership** — Codex is *told* not to commit, but a yolo sandbox CAN run
- git. The worker captures `BASE_COMMIT` (it already does, `worker.md:109-113`)
- and **asserts `git rev-parse HEAD == BASE_COMMIT` AFTER `codex exec`**. A
- committed Codex change is invisible to the `git status` cross-check, so this
- HEAD assertion is the real guard for "Claude owns all git."
+  git. The worker captures `BASE_COMMIT` (it already does, `worker.md:109-113`)
+  and **asserts `git rev-parse HEAD == BASE_COMMIT` AFTER `codex exec`**. A
+  committed Codex change is invisible to the `git status` cross-check, so this
+  HEAD assertion is the real guard for "Claude owns all git."
 - **`.flow/` integrity** — because the scoped rollback intentionally never
- touches `.flow/**` (to preserve plan-sync state), an unauthorized Codex write
- to a *non-scratch* `.flow/` path would otherwise survive a failed delegation.
- So the worker snapshots non-scratch `.flow/` BEFORE delegating and re-checks
- after.
+  touches `.flow/**` (to preserve plan-sync state), an unauthorized Codex write
+  to a *non-scratch* `.flow/` path would otherwise survive a failed delegation.
+  So the worker snapshots non-scratch `.flow/` BEFORE delegating and re-checks
+  after.
 
 The worker keeps Phase 3 commit, Phase 4 impl-review, Phase 5 done — only the
 spawned `codex exec` is git-forbidden. The worker's existing `BASE_COMMIT` is
@@ -514,10 +514,10 @@ the codex mirror (plugins/flow-next/codex/**) and `.flow/bin` dual-copies>.
 Constraints (hard rules):
 - Do NOT `git commit` / `git push` / open PRs - the orchestrator owns all git.
 - Restrict modifications to the repo root and keep scope tight to the allowed
- files.
+  files.
 - Do NOT write anywhere under `.flow/` EXCEPT your own
- `.flow/tmp/codex-<task-id>/` scratch dir - `.flow/specs`, `.flow/tasks`,
- `.flow/config.json`, `.flow/memory`, ... are host-owned.
+  `.flow/tmp/codex-<task-id>/` scratch dir - `.flow/specs`, `.flow/tasks`,
+  `.flow/config.json`, `.flow/memory`, ... are host-owned.
 
 Verify: run all named test files in ONE process; observe greenness via the command exit code, never by re-running a suite; `status:"completed"` is
 forbidden unless verification passes - verify and fix before reporting. Where
@@ -540,8 +540,8 @@ classify with:
 
 ```bash
 $FLOWCTL codex classify-result \
- --result "<scratch-dir>/result-batch-<n>.json" \
- --exit <codex-exit-code> --json
+  --result "<scratch-dir>/result-batch-<n>.json" \
+  --exit <codex-exit-code> --json
 # → { class, status, action, scoped_paths, valid_schema }
 ```
 
@@ -566,15 +566,15 @@ Before committing a `completed` result, intersect `git status --porcelain` with
 the result's `files_modified`:
 
 - **claimed-but-untouched** (in `files_modified`, not in `git status`) **or
- touched-but-unclaimed** (dirty in `git status`, not in `files_modified`) → a
- mismatch **downgrades** the result to `partial`/`failed` — don't commit blind.
+  touched-but-unclaimed** (dirty in `git status`, not in `files_modified`) → a
+  mismatch **downgrades** the result to `partial`/`failed` — don't commit blind.
 - This cross-check + an impl-review SHIP gate (`REVIEW_MODE != none`) together
- are the independent check, so the orchestrator **skips a duplicate test run**.
- **When `REVIEW_MODE=none`** (worker Phase 4 skipped), there is no independent
- gate → the worker runs its own **Phase 5 verification** on the delegated diff
- before `flowctl done` (fix + follow-up commit on failure — never trust
- `verification_summary` as the sole gate). fn-55.5 owns the `REVIEW_MODE=none`
- verification wiring.
+  are the independent check, so the orchestrator **skips a duplicate test run**.
+  **When `REVIEW_MODE=none`** (worker Phase 4 skipped), there is no independent
+  gate → the worker runs its own **Phase 5 verification** on the delegated diff
+  before `flowctl done` (fix + follow-up commit on failure — never trust
+  `verification_summary` as the sole gate). fn-55.5 owns the `REVIEW_MODE=none`
+  verification wiring.
 
 ### Safety — clean-baseline preflight (scoped, EXCLUDES `.flow/`)
 
@@ -588,7 +588,7 @@ files that `git diff --quiet HEAD` misses), **never auto-stashes**, and is
 # a whole-tree clean-baseline would false-disable delegation after task 1.
 DIRTY="$(git status --porcelain | grep -v '^.. \.flow/' || true)"
 if [ -n "$DIRTY" ]; then
- : # non-.flow dirtiness → offer commit / standard-mode; do NOT delegate dirty
+  : # non-.flow dirtiness → offer commit / standard-mode; do NOT delegate dirty
 fi
 ```
 
@@ -600,10 +600,10 @@ Only **non-`.flow/`** dirtiness counts as "dirty". A multi-task run with
 ```bash
 # AFTER codex exec (and after poll DONE): assert Claude still owns git.
 if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
- # Codex committed (yolo sandbox can run git). This is an enforcement failure →
- # force ACTION=rollback_and_disable, then run the scoped rollback below (which
- # un-commits with `--mixed` + reverts tracked from BASE) → DISABLE delegation.
- ACTION=rollback_and_disable
+  # Codex committed (yolo sandbox can run git). This is an enforcement failure →
+  # force ACTION=rollback_and_disable, then run the scoped rollback below (which
+  # un-commits with `--mixed` + reverts tracked from BASE) → DISABLE delegation.
+  ACTION=rollback_and_disable
 fi
 ```
 
@@ -642,59 +642,59 @@ git ls-files --others --exclude-standard -z > "$SCRATCH/pre-untracked.txt"
 # `partial` success KEEPS Codex's new files for Phase 3 to commit; cleaning them
 # unconditionally would delete a successful task's output.
 if [ "$ACTION" = rollback ] || [ "$ACTION" = rollback_and_disable ]; then
- # 1. Tracked revert — AUTHORITATIVELY from BASE_COMMIT, never from the index,
- # the result JSON, or files_modified (a missing/malformed/non-zero result has
- # no trustworthy list, yet Codex may have edited tracked files). `--mixed`
- # un-commits + unstages (so a yolo commit / `git add` can't survive the
- # index-restore); the tracked checkout reverts the worktree from BASE.
- # `:(exclude).flow` keeps host-owned .flow/ untouched (its integrity is the
- # snapshot/restore above).
- git reset --mixed "$BASE_COMMIT"
- git checkout -- . ':(exclude).flow'
+  # 1. Tracked revert — AUTHORITATIVELY from BASE_COMMIT, never from the index,
+  #    the result JSON, or files_modified (a missing/malformed/non-zero result has
+  #    no trustworthy list, yet Codex may have edited tracked files). `--mixed`
+  #    un-commits + unstages (so a yolo commit / `git add` can't survive the
+  #    index-restore); the tracked checkout reverts the worktree from BASE.
+  #    `:(exclude).flow` keeps host-owned .flow/ untouched (its integrity is the
+  #    snapshot/restore above).
+  git reset --mixed "$BASE_COMMIT"
+  git checkout -- . ':(exclude).flow'
 
- # 2. RE-SNAPSHOT untracked AFTER the reset. A file Codex *committed* as an add
- # only becomes untracked once `--mixed` un-commits it, so capturing post here
- # (not before the reset) puts it in `post − pre` and gets it cleaned.
- git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
+  # 2. RE-SNAPSHOT untracked AFTER the reset. A file Codex *committed* as an add
+  #    only becomes untracked once `--mixed` un-commits it, so capturing post here
+  #    (not before the reset) puts it in `post − pre` and gets it cleaned.
+  git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
 
- # 3. SAFE cleanup set (post − pre, sanitized) → scoped `git clean`:
- $FLOWCTL codex rollback-plan --repo-root . \
- --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
- --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
- # → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
+  # 3. SAFE cleanup set (post − pre, sanitized) → scoped `git clean`:
+  $FLOWCTL codex rollback-plan --repo-root . \
+    --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+    --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
+  # → { rollback_paths: [...sanitized repo-relative FILE paths...], rejected: [...] }
 
- # MANDATORY non-empty guard — NEVER let `git clean` run with an empty path list.
- # If EVERY new path was rejected (all .flow/**, backslash, absolute, traversal,
- # bare-dir), `rollback_paths` is empty and `git clean -fd --` would degrade into
- # a BARE clean (github/copilot-cli#1675). The guard makes that impossible.
- N="$(jq '.rollback_paths | length' "$SCRATCH/plan.json")"
- if [ "$N" -gt 0 ]; then
- # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe
- # argv) — never shell-split the JSON text. Clean ONLY codex-created FILES:
- $FLOWCTL codex rollback-plan --repo-root . \
- --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
- --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \
- | xargs -0 git clean -fd --
- fi
- # N == 0 → nothing codex-created to clean → DO NOT call `git clean`.
+  # MANDATORY non-empty guard — NEVER let `git clean` run with an empty path list.
+  # If EVERY new path was rejected (all .flow/**, backslash, absolute, traversal,
+  # bare-dir), `rollback_paths` is empty and `git clean -fd --` would degrade into
+  # a BARE clean (github/copilot-cli#1675). The guard makes that impossible.
+  N="$(jq '.rollback_paths | length' "$SCRATCH/plan.json")"
+  if [ "$N" -gt 0 ]; then
+    # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe
+    # argv) — never shell-split the JSON text. Clean ONLY codex-created FILES:
+    $FLOWCTL codex rollback-plan --repo-root . \
+      --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
+      --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \
+      | xargs -0 git clean -fd --
+  fi
+  # N == 0 → nothing codex-created to clean → DO NOT call `git clean`.
 fi
 ```
 
 Key guarantees (all enforced by `rollback-plan` + the non-empty guard, all
 covered by tests):
 - The cleanup set is **`post − pre`** — derived from the snapshots, **NOT** from
- the result's `files_modified` (absent on CLI-failure / missing / malformed, yet
- Codex may have created untracked files). So cleanup works even with no result.
+  the result's `files_modified` (absent on CLI-failure / missing / malformed, yet
+  Codex may have created untracked files). So cleanup works even with no result.
 - **Never bare `git clean`** — a bare clean has destroyed gigabytes of untracked
- output in the wild (github/copilot-cli#1675). `git clean` is fed ONLY the
- sanitized path list, **and only when that list is non-empty** (the `N -gt 0`
- guard — an all-rejected set must NEVER reach `git clean`).
+  output in the wild (github/copilot-cli#1675). `git clean` is fed ONLY the
+  sanitized path list, **and only when that list is non-empty** (the `N -gt 0`
+  guard — an all-rejected set must NEVER reach `git clean`).
 - **Never a pre-existing untracked file** (it's in `pre`, so excluded by the diff).
 - **Never a `.flow/**` path** — host-owned (plan-sync, specs, tasks); `.flow/`
- paths are rejected by `rollback-plan`.
+  paths are rejected by `rollback-plan`.
 - Rejected: absolute paths, `..` traversal, empty, `.`, backslash paths, bare
- directories, `.flow/**`. `git clean -fd <files>` removes the now-empty parent
- dirs.
+  directories, `.flow/**`. `git clean -fd <files>` removes the now-empty parent
+  dirs.
 
 ### Circuit breaker (host-owned)
 
@@ -719,41 +719,41 @@ On a delegated task, the worker (Phase 5, just before `flowctl done`) does TWO
 things so the host can run the breaker without re-reading the scratch dir:
 
 1. **Inline the result** into `flowctl done --evidence-json` as
- `evidence.delegation` (NOT a `result_file` pointer — the scratch dir is cleaned
- post-commit, so a path would dangle):
+   `evidence.delegation` (NOT a `result_file` pointer — the scratch dir is cleaned
+   post-commit, so a path would dangle):
 
- ```json
- {
- "delegation": {
- "result": {
- "status": "completed",
- "files_modified": ["src/foo.ts"],
- "issues": [],
- "summary": "...",
- "verification_summary": "..."
- },
- "model": "gpt-5.6-terra",
- "effort": "medium",
- "class": "success"
- }
- }
- ```
- On a `cli_failure` / missing / malformed result (no result body), inline what
- IS known — `class` + `model` + `effort` + a minimal `result` (`status:null`,
- empty arrays, the failure summary) — never omit `evidence.delegation`.
+   ```json
+   {
+     "delegation": {
+       "result": {
+         "status": "completed",
+         "files_modified": ["src/foo.ts"],
+         "issues": [],
+         "summary": "...",
+         "verification_summary": "..."
+       },
+       "model": "gpt-5.6-terra",
+       "effort": "medium",
+       "class": "success"
+     }
+   }
+   ```
+   On a `cli_failure` / missing / malformed result (no result body), inline what
+   IS known — `class` + `model` + `effort` + a minimal `result` (`status:null`,
+   empty arrays, the failure summary) — never omit `evidence.delegation`.
 
 2. **Emit terminal signal lines** as the LAST two lines of its return summary
- (the host parses them; `class` + `action` both come straight from
- `classify-result`):
+   (the host parses them; `class` + `action` both come straight from
+   `classify-result`):
 
- ```
- DELEGATION_RESULT=<success|partial|task_failure|cli_failure>
- DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
- ```
+   ```
+   DELEGATION_RESULT=<success|partial|task_failure|cli_failure>
+   DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
+   ```
 
- When delegation was **not active** for a task (gates failed mid-run, the task ran
- standard, or `DELEGATE: local`), the worker emits NO `DELEGATION_*` lines — the
- host treats a missing signal as "standard task, counter untouched."
+   When delegation was **not active** for a task (gates failed mid-run, the task ran
+   standard, or `DELEGATE: local`), the worker emits NO `DELEGATION_*` lines — the
+   host treats a missing signal as "standard task, counter untouched."
 
 ### Host circuit breaker (phases.md Phase 3 — pre-loop init + per-task bridge)
 
@@ -763,18 +763,18 @@ after each delegated worker returns:
 ```text
 # Pre-loop (host, once):
 consecutive_failures = 0
-delegation_active = <true after Phase 1.5 gates all passed>
+delegation_active     = <true after Phase 1.5 gates all passed>
 
 # After each worker returns, parse the terminal DELEGATION_* lines:
 case DELEGATION_ACTION:
- rollback_and_disable → # a cli_failure
- delegation_active = false # disable IMMEDIATELY for ALL remaining tasks
- rollback | finish_locally → # task_failure / partial
- consecutive_failures += 1
- if consecutive_failures >= 3:
- delegation_active = false # 3 strikes → standard mode for the rest
- commit → # success
- consecutive_failures = 0 # reset the streak
+  rollback_and_disable →                       # a cli_failure
+      delegation_active = false                # disable IMMEDIATELY for ALL remaining tasks
+  rollback | finish_locally →                  # task_failure / partial
+      consecutive_failures += 1
+      if consecutive_failures >= 3:
+          delegation_active = false            # 3 strikes → standard mode for the rest
+  commit →                                     # success
+      consecutive_failures = 0                 # reset the streak
 # (no DELEGATION_* lines → task ran standard; counter untouched)
 
 # When delegation_active flips false, the host stops appending the DELEGATE:* flags
@@ -782,15 +782,15 @@ case DELEGATION_ACTION:
 ```
 
 - **`rollback_and_disable` is immediate** — a CLI failure (`codex` crashed,
- not-on-PATH mid-run, sandbox refusal) means the tool itself is unhealthy, so we
- don't burn two more tasks proving it; disable now.
+  not-on-PATH mid-run, sandbox refusal) means the tool itself is unhealthy, so we
+  don't burn two more tasks proving it; disable now.
 - **`rollback` / `finish_locally` count toward 3** — a `task_failure`
- (malformed/failed result) or a `partial` (kept-but-incomplete) is a per-task
- miss, not a tool death; three in a row trips the breaker.
+  (malformed/failed result) or a `partial` (kept-but-incomplete) is a per-task
+  miss, not a tool death; three in a row trips the breaker.
 - **`commit` resets to 0** — the streak is *consecutive* failures; one success
- clears it.
+  clears it.
 - The counter is **host-owned** precisely because the worker is fresh-context: an
- in-worker `consecutive_failures` would reset on every task and never reach 3.
+  in-worker `consecutive_failures` would reset on every task and never reach 3.
 
 ### Autonomous-safe
 
@@ -798,23 +798,23 @@ Under any `delegation_headless` marker, delegation is **non-blocking** and
 consent-gated:
 
 - **Consent-gated:** delegation proceeds ONLY if `work.delegateConsent` is already
- `true` (Gate 4 — no headless/autonomous marker has an `plain-text numbered prompt` path).
- Otherwise it stays silently off; the loop runs standard-mode, unchanged,
- without persisting a synthetic consent decision.
+  `true` (Gate 4 — no headless/autonomous marker has an `plain-text numbered prompt` path).
+  Otherwise it stays silently off; the loop runs standard-mode, unchanged,
+  without persisting a synthetic consent decision.
 - **Never blocks the loop:** every delegation failure path
- (`rollback` / `rollback_and_disable` / `finish_locally`) degrades to standard
- in-session work — the task still completes, the loop still advances. A forced
- CLI failure disables delegation for the rest of the run but does NOT halt Ralph.
+  (`rollback` / `rollback_and_disable` / `finish_locally`) degrades to standard
+  in-session work — the task still completes, the loop still advances. A forced
+  CLI failure disables delegation for the rest of the run but does NOT halt Ralph.
 - **No human in the loop:** the per-run result block (summary / files /
- verification / issues) routes to the **Ralph log / receipt**, not a prompt. The
- inlined `evidence.delegation` in `flowctl done` IS the durable proof-of-work
- surface that Ralph's receipt/log machinery picks up.
+  verification / issues) routes to the **Ralph log / receipt**, not a prompt. The
+  inlined `evidence.delegation` in `flowctl done` IS the durable proof-of-work
+  surface that Ralph's receipt/log machinery picks up.
 - **Multi-cycle confabulation guard (memory `drop-receipt-to-break-codex`):** if a
- delegated task runs MULTIPLE impl-review fix cycles, drop the review receipt
- (`rm -f "$REVIEW_RECEIPT_PATH"`) before a re-review so a fresh reviewer thread
- reads the actual diff instead of reinforcing a prior turn's hallucinated
- narrative. (This is the impl-review skill's existing receipt-reset discipline;
- delegation does not change it.)
+  delegated task runs MULTIPLE impl-review fix cycles, drop the review receipt
+  (`rm -f "$REVIEW_RECEIPT_PATH"`) before a re-review so a fresh reviewer thread
+  reads the actual diff instead of reinforcing a prior turn's hallucinated
+  narrative. (This is the impl-review skill's existing receipt-reset discipline;
+  delegation does not change it.)
 
 ### ralph-guard amendment (the PreToolUse allowance)
 
@@ -831,42 +831,42 @@ a quoted positional prompt while `codex exec` actually receives none of them.
 ALL of the following must hold:
 
 - **a single command** — NO shell control operator (`;` / `&&` / `||` / `|` /
- `&` / newline / `$(…)` / `${…}` / subshell parens / any `>` output redirect).
- The hook allowance applies to the WHOLE Bash command, so a trailing
- `; codex exec --last` or `&& <destructive>` would otherwise inherit it. (`<` is
- the single permitted redirect — the stdin prompt.);
+  `&` / newline / `$(…)` / `${…}` / subshell parens / any `>` output redirect).
+  The hook allowance applies to the WHOLE Bash command, so a trailing
+  `; codex exec --last` or `&& <destructive>` would otherwise inherit it. (`<` is
+  the single permitted redirect — the stdin prompt.);
 - the argv parses cleanly (balanced quotes) and **every token is one the
- canonical invocation emits** — an unexpected token (a stray positional prompt,
- an extra flag, a smuggled quoted blob) → block;
+  canonical invocation emits** — an unexpected token (a stray positional prompt,
+  an extra flag, a smuggled quoted blob) → block;
 - leading `FLOW_DELEGATE_CODEX=1` env-prefix token, then `codex` `exec` —
- **exactly one** `codex` token, **never** `resume` / `review`;
+  **exactly one** `codex` token, **never** `resume` / `review`;
 - `--ignore-user-config` as a standalone token (load-bearing — without it MCP
- servers can re-enable and silently drop `--output-schema`);
+  servers can re-enable and silently drop `--output-schema`);
 - **`-c` is restricted to the reasoning-effort pair** —
- `model_reasoning_effort="(none|low|medium|high|xhigh)"` — and may appear at most
- once. An arbitrary `-c key=value` (e.g. `-c mcp_servers.evil.command=…`) would
- re-enable MCP and silently defeat `--ignore-user-config`, so any non-effort or
- duplicate `-c` is non-canonical;
+  `model_reasoning_effort="(none|low|medium|high|xhigh)"` — and may appear at most
+  once. An arbitrary `-c key=value` (e.g. `-c mcp_servers.evil.command=…`) would
+  re-enable MCP and silently defeat `--ignore-user-config`, so any non-effort or
+  duplicate `-c` is non-canonical;
 - an `-o` output target under a `.flow/tmp/codex-<id>/` scratch dir, AND
- `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir.
- Each path must be **exactly** `[./].flow/tmp/codex-<id>/<canonical-basename>`
- with NO nested subdir, NO `..` traversal, NO absolute/backslash path — the
- basenames are pinned to `result-batch-<n>.json` / `result-schema.json` /
- `prompt-batch-<n>.md`. So a path that prefix-matches the scratch dir yet escapes
- it (`codex-<id>/../../tasks/x.json`) is rejected, and a sibling-prefix dir
- (`codex-fn-1.2-evil`) is not confused with `codex-fn-1.2`. An inline prompt, or
- a schema/prompt elsewhere or split across dirs, is non-canonical;
+  `--output-schema` + the stdin prompt (`- < …`) under the **SAME** scratch dir.
+  Each path must be **exactly** `[./].flow/tmp/codex-<id>/<canonical-basename>`
+  with NO nested subdir, NO `..` traversal, NO absolute/backslash path — the
+  basenames are pinned to `result-batch-<n>.json` / `result-schema.json` /
+  `prompt-batch-<n>.md`. So a path that prefix-matches the scratch dir yet escapes
+  it (`codex-<id>/../../tasks/x.json`) is rejected, and a sibling-prefix dir
+  (`codex-fn-1.2-evil`) is not confused with `codex-fn-1.2`. An inline prompt, or
+  a schema/prompt elsewhere or split across dirs, is non-canonical;
 - a sandbox flag from the allowlist
- (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write` — `-s`
- must be exactly `workspace-write`);
+  (`--dangerously-bypass-approvals-and-sandbox` | `-s workspace-write` — `-s`
+  must be exactly `workspace-write`);
 - **every singleton appears exactly once** — a duplicate `--ignore-user-config`
- / `-c` / `--output-schema` / `-o` / sandbox flag / stdin prompt is rejected
- (no smuggling a second occurrence to undo the first);
+  / `-c` / `--output-schema` / `-o` / sandbox flag / stdin prompt is rejected
+  (no smuggling a second occurrence to undo the first);
 - **`-m` is a single safe model token** (charset `[A-Za-z0-9][A-Za-z0-9._:-]*`, no
- leading `-`) — so a flag can't be parked as the model value;
+  leading `-`) — so a flag can't be parked as the model value;
 - and **NO `--last`** ANYWHERE — a global token-level reject, so it can't be
- hidden as a consumed option value (`-m --last`), not just blocked as a
- standalone flag.
+  hidden as a consumed option value (`-m --last`), not just blocked as a
+  standalone flag.
 
 A sentinel-prefixed but otherwise-arbitrary command — e.g.
 `FLOW_DELEGATE_CODEX=1 codex exec --last`, one missing `--ignore-user-config`,
@@ -900,15 +900,15 @@ AI-Implementer: codex <model> (<effort>)
 ```
 
 - `<model>` is `DELEGATE_MODEL` (e.g. `gpt-5.6-terra`); `<effort>` is the per-run
- `effective_effort` (e.g. `medium`) — yielding `AI-Implementer: codex gpt-5.6-terra (medium)`.
+  `effective_effort` (e.g. `medium`) — yielding `AI-Implementer: codex gpt-5.6-terra (medium)`.
 - Append them as real trailer lines (own paragraph, blank line before the
- `Task:` trailer block) so `git interpret-trailers` / `make-pr` can read them.
+  `Task:` trailer block) so `git interpret-trailers` / `make-pr` can read them.
 - **Only on a delegated commit.** A standard in-session commit (no delegation, or
- a partial finished locally where Claude wrote the remainder) carries no
- `AI-Implementer` trailer — attribute honestly.
+  a partial finished locally where Claude wrote the remainder) carries no
+  `AI-Implementer` trailer — attribute honestly.
 - The trailers live in the **commit history** the PR carries, so when
- `/flow-next:make-pr` later runs against the spec, the `AI-Orchestrator: Claude`
- + `AI-Implementer: codex <model> (<effort>)` attribution travels with the
- PR's commits — both the orchestrator and the implementer are credited. (make-pr
- synthesizes its body honestly from spec/commit state; the trailers are the
- durable, machine-readable attribution surface it draws on.)
+  `/flow-next:make-pr` later runs against the spec, the `AI-Orchestrator: Claude`
+  + `AI-Implementer: codex <model> (<effort>)` attribution travels with the
+  PR's commits — both the orchestrator and the implementer are credited. (make-pr
+  synthesizes its body honestly from spec/commit state; the trailers are the
+  durable, machine-readable attribution surface it draws on.)
