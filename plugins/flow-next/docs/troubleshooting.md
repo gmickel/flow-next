@@ -222,6 +222,16 @@ rm -rf scripts/ralph/       # Ralph (if enabled)
 
 Or use `/flow-next:uninstall` which cleans up docs and prints commands to run. Doc cleanup removes two independent marker blocks from `CLAUDE.md`/`AGENTS.md`: the `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` instructions block and, if `/flow-next:setup` scaffolded one, the `<!-- flow-next:model-routing:start -->` … `<!-- flow-next:model-routing:end -->` model-routing block (removed only when its marker pair is well-formed — a damaged pair is reported and left untouched). `GLOSSARY.md` and `STRATEGY.md` at the repo root are intentionally preserved — they outlive flow-next per the survives-uninstall invariant.
 
+## Cursor in-IDE browser MCP missing (`cursor-ide-browser`)
+
+Drive / QA on Cursor probes the built-in browser by exact MCP id `cursor-ide-browser`. A catalog miss is not absence. If the probe still fails:
+
+1. Settings → Tools & MCP → **Browser Automation** = Browser Tab.
+2. In chat, type `@Browser` (no space), or open the Browser pane until it shows connected.
+3. Re-run the probe (`browser_tabs` list). One re-probe after that is enough; do not loop.
+
+A mid-run `MCP server does not exist: cursor-ide-browser` after the pane was already driving is a known Cursor flake, not a first-use miss. `@Browser` does not restore that session. Quit Cursor fully (Cmd-Q), wait ~10s, confirm the Browser pane shows connected, then start a **fresh chat**. Detail: [`platforms.md`](platforms.md) and [`cursor-ide-browser.md`](../skills/flow-next-drive/references/cursor-ide-browser.md).
+
 ## Renamed skill: `browser` → `flow-next-drive` (1.4.0)
 
 The `browser` skill was renamed `flow-next-drive` in 1.4.0 (surface-aware driver ladder). The invocation is now `/flow-next:flow-next-drive`; the Codex mirror is also `flow-next-drive` (previously `agent-browser`, which collided with the user's global `agent-browser` skill and Codex-native browser skills).

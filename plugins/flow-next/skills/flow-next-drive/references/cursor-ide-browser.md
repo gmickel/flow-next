@@ -23,6 +23,15 @@ Live passes (2026-08-13, interactive Cursor on macOS): a flowmeter dashboard at 
 
 On a Cursor host, **probe the server by exact id `cursor-ide-browser` at least once** (call any tool — typically `browser_tabs {action:"list"}`). The MCP catalog **can omit** it even when it is usable; a name-probe can return the full 16-tool surface right after a listing showed it missing. Catalog omission is not a negative. There is no install step.
 
+**If the probe fails in an attended session** (not `$CI`, not `FLOW_AUTONOMOUS=1`, not unattended QA/pilot) and this pass has not already driven the pane: the MCP is often unregistered until a Browser session has started. Ask **once** via `AskUserQuestion` (on portable hosts without that tool, a numbered prompt with a final `Other — type your own answer` option):
+
+1. Type `@Browser` in chat (no space), **or** open the Browser pane until it shows connected.
+2. Confirm Settings → Tools & MCP → **Browser Automation** is Browser Tab.
+
+After they confirm, **re-probe once**. A second miss is absence — fall through. Do not loop, do not ask again. **Skip the ask** when unattended / autonomous — degrade immediately.
+
+Do **not** ask `@Browser` for a mid-run `MCP server does not exist: cursor-ide-browser` after this pass already drove the pane. That is the lease-drop flake below; `@Browser` does not restore it.
+
 ## Order (load-bearing)
 
 You **cannot** lock before a tab exists. If a tab already exists (`browser_tabs` list), lock **first**, before any interaction.
