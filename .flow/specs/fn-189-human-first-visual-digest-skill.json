@@ -50,7 +50,7 @@
     "completion": 0
   },
   "spec_path": ".flow/specs/fn-189-human-first-visual-digest-skill.md",
-  "status": "open",
+  "status": "done",
   "title": "Human-first visual digest skill + structural sketches in make-pr",
   "tracker": {
     "baseHashFlow": null,
@@ -63,5 +63,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-12T21:27:05.657264Z"
+  "updated_at": "2026-08-13T00:18:52.934578Z"
 }
