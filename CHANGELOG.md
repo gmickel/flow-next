@@ -2,6 +2,16 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+## [flow-next 3.32.2] - 2026-08-13
+
+On Cursor, the in-IDE browser was documented as a last-resort curiosity with invented tool names, so agents skipped a driver that actually works. Probe it by id, recover from a mid-run drop, and do not treat a catalog miss as absence.
+
+### Fixed
+
+- **Agents on Cursor can drive the in-IDE browser instead of skipping it.** The old reference invented `browser_console_messages`, omitted `browser_select_option` (required for `<select>`), and treated a missing catalog entry as "rung absent." Detection is now probe-by-id (`cursor-ide-browser`); the real flake is the whole MCP unregistering mid-run — stop with a partial pass (re-probe is a long shot). Console/network from the driven surface remain unverified, so a `/flow-next:qa` pass routed here records an evidence gap rather than PASS. No install, no CLI/headless path. Details: [`cursor-ide-browser.md`](plugins/flow-next/skills/flow-next-drive/references/cursor-ide-browser.md), [`platforms.md`](plugins/flow-next/docs/platforms.md).
+
 ## [flow-next 3.32.1] - 2026-08-13
 
 ### Changed

@@ -1,16 +1,12 @@
 # Smoke-test the Cursor in-IDE browser rung for drive/QA
 
-> **STATUS: STUB.** Captured urgently to hold the shape and the doc dossier. The acceptance criteria below are written to be verifiable, but several facts marked **[VERIFY-LIVE]** can only be settled by running the rung inside a real Cursor IDE session — that live pass is the point of the spec, not a prerequisite for it. Interview/plan before working.
+> **STATUS: LIVE-PASS RECORDED (2026-08-13).** Rung 4 drives; it was documented wrong. R6 demotion is **not** the outcome. R3 (console + network from the driven surface) remains unresolved — a QA pass on this rung records an evidence gap, not PASS. Per-step table: [`.flow/artifacts/fn-162/live-pass.md`](../artifacts/fn-162/live-pass.md).
 
 ## Overview
 
-`flow-next-drive` already ships **rung 4 — `cursor-ide-browser`**: Cursor's built-in in-IDE browser, exposed to the agent as `browser_*` MCP tools. It was authored from Cursor's public docs and never driven for real. Its own reference file admits this in a "Drift-prone facts — **verify at build**" section: the tool names, the `viewId` parameter shape, and the Auto-Run approval modes are unconfirmed.
+`flow-next-drive` ships **rung 4 — `cursor-ide-browser`**: Cursor's built-in in-IDE browser, exposed as the `cursor-ide-browser` MCP. It was authored from public docs and never driven. A 2026-08-13 live pass inside Cursor showed the rung **works** (snapshot YAML, real screenshots, lock, 16-tool surface) and that the old reference was fiction in the ways that made it look broken: catalog omission was treated as absence, `browser_console_messages` does not exist, `browser_select_option` was missing from the inventory, and the flake is an MCP-level unregister, not garbage snapshots.
 
-That is a hole in the QA chain. `/flow-next:qa` refuses to green-light a pass on narration — its `qa_verdict` rests on captured evidence (DOM state **plus** clean console **plus** no failed API request). Rung 4 is a documented path to that evidence on the one host where the higher rungs may be missing, and nobody has ever proven it can produce it.
-
-This spec is a **smoke test plus documentation-truthing pass**, not a feature. Output: a live-verified rung reference, or a demotion of rung 4 to a documented limitation with the reason recorded.
-
-**Host dependence is known and accepted.** The rung exists only inside the Cursor IDE. Off Cursor (Claude Code / Codex / Droid terminals, cloud VMs, CI) it is simply absent and the ladder falls through — the existing "detect, never depend" contract stays exactly as-is. This spec does not try to make it portable.
+`/flow-next:qa` still cannot green-light a pass on this rung: console + network were not captured from the driven surface (MCP dropped before those channels; there is no console MCP tool). The corrected reference + ladder row carry that evidence-gap caveat. Host dependence is unchanged — off Cursor the rung is absent and the ladder falls through.
 
 ## Quick commands
 
@@ -49,36 +45,43 @@ Files in play (canonical only; the Codex mirror is regenerated, never hand-edite
 - `plugins/flow-next/docs/platforms.md` — where host-behavior differences are recorded.
 - `plugins/flow-next/codex/skills/flow-next-drive/**` — mirror, via `./scripts/sync-codex.sh` (run twice).
 
-**The smoke test is a scripted universal-flow pass**, run inside Cursor against a trivial local target (a `python3 -m http.server` page with a button, a deliberate `console.error`, and a `fetch()` to a 500 endpoint — enough to prove all three evidence channels at once):
+**The smoke test is a scripted universal-flow pass**, run inside Cursor. The planned target was a trivial local page with a button, a deliberate `console.error`, and a `fetch()` to a 500 endpoint. The executed pass used the flowmeter dashboard at `http://127.0.0.1:8788/` (already open) plus a follow-up attach in this repo. Console.error + 500 were **not** exercised — the MCP dropped first. That is recorded as R3 unresolved, not as a pass.
 
 ```
 observe   browser_tabs list
 navigate  browser_navigate <local url>
 lock      browser_lock (if the tool exists as documented)
 snapshot  browser_snapshot → refs
-act       browser_click / browser_fill on a known control
-verify    browser_console_messages  → is the deliberate console.error visible?
-          network                   → is the deliberate 500 visible at all? by what tool?
-capture   browser_take_screenshot   → does a real image reach the agent?
-release   unlock / close
+act       browser_click / browser_fill / browser_select_option on a known control
+verify    console + network — no MCP tool; CDP Log.enable / Network.enable not live-tested
+capture   browser_take_screenshot   → real image reached the agent
+release   unlock / close — MCP drop can leave a locked tab (Take Control)
 ```
 
-Each step yields one of three verdicts: **works as documented** / **works differently** (record actual shape) / **absent**. The deliverable is that table plus the corrected reference.
+Each step yields one of three verdicts: **works as documented** / **works differently** (record actual shape) / **absent**. The table lives at `.flow/artifacts/fn-162/live-pass.md`.
 
-### Documentation dossier (gathered 2026-08-03, pre-implementation)
+### Live pass (2026-08-13) — settled vs still open
 
-Canonical: <https://cursor.com/docs/agent/tools/browser>. Everything below is from upstream docs, not from a live run — all of it is **[VERIFY-LIVE]** input, not settled fact.
+Primary source of truth is Cursor's host cache (outside git, version-matched, appears after first use): `~/.cursor/projects/<workspace-slug>/mcps/cursor-ide-browser/` (`INSTRUCTIONS.md` + 16 `tools/*.json`). Secondary: <https://cursor.com/docs/agent/tools/browser> (fetched 2026-08-13).
+
+**Settled (R2, most of R1, R4, R5, not-R6):** 16 live tools; no `browser_console_messages`; `browser_select_option {ref, values[]}` required for `<select>`; `viewId` on every tool except `browser_tabs` (targets by `index`); `browser_cdp` real including `Input.*` denied; lock-first when a tab already exists; omit `position` for background navigate; snapshot YAML + opaque refs; real screenshots; catalog omit is not absence (id-probe attaches); flake is MCP unregister mid-run; re-probe restored the server 0 times after a drop; interactive-IDE-only; Manual approval blocks unattended use.
+
+**Still open (R3):** console + network from the driven surface. Public docs say logs go to files the agent greps, and network is "Agent panel only." Cursor's `INSTRUCTIONS.md` lists `Log.enable` / `Network.enable` as CDP examples — that is not live evidence. Do not claim either channel works.
+
+### Documentation dossier (gathered 2026-08-03, pre-implementation — historical)
+
+Canonical: <https://cursor.com/docs/agent/tools/browser>. Everything below was from upstream docs, not from a live run — retained as the pre-pass input. The live pass superseded the tool-inventory and CDP questions.
 
 - **Mechanism.** Native to Cursor, no external install. Runs as an extension exposing a **secure web view controlled via an MCP server**. Per-session random token auth; each tab gets a random id; browser context **isolated per workspace**, with cookies / `localStorage` / `sessionStorage` / IndexedDB persisting per workspace.
-- **Documented capability set (6–7 tools).** `browser_navigate` is the only name upstream spells out. The rest are described by function: click (incl. double/right-click, hover), type, scroll, screenshot, console output, network traffic. **Our reference file claims 11 `browser_*` tools** (`browser_tabs`, `browser_lock`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_press_key`, `browser_scroll`, `browser_console_messages`, `browser_take_screenshot`, `browser_cdp`, `browser_highlight`) — a superset of anything upstream documents. That delta is the single biggest thing to settle.
-- **Console evidence.** Logs are **written to files the agent greps and selectively reads**, deliberately not summarized after each action. Our reference implies a `browser_console_messages` call returns them inline. Different shape → different instructions.
-- **Network evidence.** Monitors requests, payloads, status codes — but **"currently only available in the Agent panel, coming soon to the layout."** Directly threatens the drive `verify` contract.
-- **Screenshots** are wired into the file-reading tool so the agent sees real images, not text descriptions.
+- **Pre-pass inventory delta (settled).** Upstream described 6–7 capabilities by function. The old reference claimed 11 `browser_*` tools including the nonexistent `browser_console_messages`. Live inventory is 16; see the artifact.
+- **Console evidence.** Logs are **written to files that Agent can grep and selectively read** (public docs 2026-08-13). There is no `browser_console_messages` tool. Grep-a-file vs CDP `Log.enable` was **not live-tested**.
+- **Network evidence.** Public docs (2026-08-13): **"currently only available in the Agent panel, coming soon to the layout."** Not live-tested from the driven surface.
+- **Screenshots** are wired into the file-reading tool so the agent sees real images — **confirmed live**.
 - **Approval model.** Browser tools require approval by default; three modes — **Manual approval** (recommended) / **allow-listed actions** / **Auto-run**. Configured at **Settings → Agents → Auto-Run**. Upstream calls the guardrails "best-effort" and warns explicitly against Auto-run on untrusted code or unfamiliar sites (prompt-injection).
 - **Enterprise origin allowlist (v2.1+).** Restricts `browser_navigate` destinations and gates MCP tool execution by origin. Documented bypasses: link clicks from an allowed origin to a non-allowed one succeed, allowed→non-allowed redirects are permitted, and JavaScript-based navigation bypasses the restriction. Manual navigation stays unrestricted while tools stay blocked on non-allowed origins.
-- **No CLI / headless path is documented.** Nothing in the Browser page or the CLI docs indicates `cursor-agent` can drive it; it reads as Agent-panel/IDE-pane only. This matters twice over — the rung can't be exercised from our `cursor-agent` bridges (`review.backend cursor:*`, the implementation bridge), and it can never serve a headless/CI QA pass.
-- **No CDP surface is documented.** Our reference exposes `browser_cdp` as a raw escape hatch (with an `Input.*`-is-broken caveat). Upstream mentions no CDP at all. Verify or delete — a fabricated escape hatch is worse than none.
-- **Version context.** Cursor 3 (2026-04-02) rebuilt the UI around agents; the 3.2 point release added **screenshot-based browser-automation clicking** and an Await tool for background runs; Design Mode annotates browser UI to feed visual feedback back to an agent. The public changelog through 2026-07-29 (iPad, Start plan, Router, 3.11 Side Chats) carries **no** browser entries, so the browser surface has been quiet for ~4 months — the docs page is the live reference.
+- **No CLI / headless path is documented.** Nothing in the Browser page or the CLI docs indicates `cursor-agent` can drive it; it reads as Agent-panel/IDE-pane only.
+- **CDP surface.** Public docs mention none. Cursor's host-cache `INSTRUCTIONS.md` and `browser_cdp.json` document it, including `Input.*` denied. Schema-confirmed 2026-08-13; not exercised beyond existence.
+- **Version context.** Cursor 3 (2026-04-02) rebuilt the UI around agents; the 3.2 point release added **screenshot-based browser-automation clicking**. Snapshot YAML + opaque refs remain the action model; screenshot is a separate vision path.
 - **Upstream model recommendation** for browser work: Sonnet 4.5, GPT-5, or Auto. Note for our routing table: it is *their* recommendation for *their* harness, not a flow-next routing claim.
 
 ## Acceptance Criteria
@@ -108,28 +111,29 @@ Canonical: <https://cursor.com/docs/agent/tools/browser>. Everything below is fr
 
 **Why a smoke test rather than deleting the rung.** On a Cursor host with no `agent-browser` install, rung 4 may be the only automated path to UI evidence. Deleting it unverified throws away a real capability; keeping it unverified ships instructions that may be fiction. One live pass resolves which.
 
-**Why "it doesn't work" is an acceptable outcome (R6).** The value is a truthful ladder. A documented limitation the agent can plan around beats a rung that fails halfway through a QA pass and leaves a half-driven session behind.
+**Why "it doesn't work" is an acceptable outcome (R6).** The value is a truthful ladder. A documented limitation the agent can plan around beats a rung that fails halfway through a QA pass and leaves a half-driven session behind. **2026-08-13: R6 not taken** — the rung drives; the docs were wrong.
 
-**Why the network channel is the crux.** flow-next's drive/QA contract treats a green DOM over a failed API call as a **finding, not a pass**. A rung that cannot see network traffic cannot support that contract, however well it clicks. That single question decides whether rung 4 is a QA-capable rung or only a look-at-the-page convenience.
+**Why the network channel is the crux.** flow-next's drive/QA contract treats a green DOM over a failed API call as a **finding, not a pass**. A rung that cannot see network traffic cannot support that contract, however well it clicks. That single question decides whether rung 4 is a QA-capable rung or only a look-at-the-page convenience. **2026-08-13: still unanswered from the driven surface** — evidence gap, not PASS.
 
 **Why the approval model is acceptance-level and not a note.** Default Manual approval makes an unattended pass impossible. A rung documented as available but silently attended-only would break exactly the autonomous flows (pilot, `pipeline.qa`) that would reach for it.
 
 ## Open questions (settle at interview or in the live pass)
 
-1. Do the 11 `browser_*` tools in our reference actually exist, and is `viewId` the real parameter name? **[VERIFY-LIVE]**
-2. Is network traffic reachable from the driven tool surface, or Agent-panel-only? **[VERIFY-LIVE]** — decides R3 and effectively R6.
-3. Does `browser_cdp` exist? If yes, is the `Input.*`-focus caveat in our reference real or inherited folklore? **[VERIFY-LIVE]**
-4. Console: inline return or grep-a-log-file? **[VERIFY-LIVE]**
-5. Which Auto-Run mode is the minimum for an unattended pass, and are we willing to recommend it at all given the prompt-injection warning?
-6. Did Cursor 3.2's screenshot-based clicking change the ref/snapshot model the reference describes?
-7. Who runs the live pass — it requires an interactive Cursor IDE on this machine, which no other flow-next task needs.
+1. Do the 11 `browser_*` tools in our reference actually exist, and is `viewId` the real parameter name? **SETTLED 2026-08-13:** 16 tools; `viewId` real on all except `browser_tabs` (targets by `index`).
+2. Is network traffic reachable from the driven tool surface, or Agent-panel-only? **UNRESOLVED** — dedicated smoke at `http://127.0.0.1:8762/` (fetch → 500) never loaded; MCP dropped after lock, before `Network.enable`. Public docs still say Agent-panel-only. Treat as unreachable for QA until a live capture exists.
+3. Does `browser_cdp` exist? If yes, is the `Input.*`-focus caveat in our reference real or inherited folklore? **SETTLED 2026-08-13:** tool exists; `Input.*` denied in Cursor's own `INSTRUCTIONS.md` + `browser_cdp.json` (schema-confirmed, not executed).
+4. Console: inline return or grep-a-log-file? **UNRESOLVED** — no `browser_console_messages` tool. Dedicated smoke (`console.error` on load) never loaded; `Log.enable` never returned. Public docs say grep-a-file.
+5. Which Auto-Run mode is the minimum for an unattended pass, and are we willing to recommend it at all given the prompt-injection warning? **SETTLED from dated docs (2026-08-13):** allow-listed or Auto-run required; Manual blocks unattended use; do not recommend Auto-run on untrusted origins.
+6. Did Cursor 3.2's screenshot-based clicking change the ref/snapshot model the reference describes? **SETTLED 2026-08-13:** snapshot YAML + opaque refs remain the action model; screenshot is a separate vision path (`browser_take_screenshot`).
+7. Who runs the live pass — it requires an interactive Cursor IDE on this machine, which no other flow-next task needs. **SETTLED:** maintainer, 2026-08-13, plus a follow-up attach in this repo the same day.
 
 ## References
 
+- `.flow/artifacts/fn-162/live-pass.md` (per-step verdict table)
 - `plugins/flow-next/skills/flow-next-drive/references/cursor-ide-browser.md` (rung 4 reference — the artifact under test)
 - `plugins/flow-next/skills/flow-next-drive/SKILL.md` Step 2 (verify contract), Step 3 (ladder table, rung 4 row)
 - `plugins/flow-next/skills/flow-next-qa/SKILL.md` (consumer; `qa_verdict` evidence rules)
-- `plugins/flow-next/docs/platforms.md` (host-behavior notes; already mentions the rung)
+- `plugins/flow-next/docs/platforms.md` (host-behavior notes)
 - `.flow/specs/fn-51-flow-next-drive-surface-aware-ui.md`, `.flow/specs/fn-53-flow-nextqa-live-app-real-user-qa-pass.md` (origin of the ladder and the QA verdict contract)
 - Upstream, Cursor browser tool: <https://cursor.com/docs/agent/tools/browser>
 - Upstream, Cursor CLI overview (no browser tool documented): <https://cursor.com/docs/cli/overview>

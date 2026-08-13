@@ -341,6 +341,7 @@ The interview skill's optional async fact-scout dispatch names Claude Code's `Ex
 - **Tracker lifecycle touchpoints use the deterministic facade.** Cursor keeps
   the same caller-side active and `perEvent` gates, then invokes
   `flowctl tracker sync` inline with the selected operation and event.
+- **`cursor-ide-browser` (drive/QA web-ladder rung 4) is interactive-IDE-only.** No install, no CLI / headless / `cursor-agent` path. Probe the MCP by exact id `cursor-ide-browser` — a catalog omission is not absence. The server can unregister mid-run (`MCP server does not exist: cursor-ide-browser`) while the Glass pane stays open; re-probe by id, and if it does not return, stop with a partial pass. Console/network from the driven surface are unverified, so a QA pass on this rung records an evidence gap rather than PASS. Detail: [`skills/flow-next-drive/references/cursor-ide-browser.md`](../skills/flow-next-drive/references/cursor-ide-browser.md).
 
 > **Status:** first-class on Cursor. Recommended path = team-marketplace repo import; local scripts = individual/fallback. Multi-agent, native asks, slash autocomplete, `review.backend host`, rules rail, and setup model-routing verified. Ralph intentionally not built for Cursor.
 
