@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.32.0] - 2026-08-13
 
 Reviewing a fresh plan used to mean reading a spec plus every task file — 500+
 lines for a seven-task spec — and reconstructing the shape in your head just to
