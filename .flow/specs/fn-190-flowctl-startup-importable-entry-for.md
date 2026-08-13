@@ -1,5 +1,17 @@
 # fn-190-flowctl-startup-importable-entry-for flowctl startup: importable entry for the main CLI path, one verdict→status site
 
+> **DEFERRED 2026-08-14 (Gordon) — nothing here is must-have.** Kept open, not
+> ready. The launcher half is ~0.16s per call on a path nobody waits on, against
+> an eight-site drift-guarded artifact graph plus the Windows twin; the
+> verdict-map half is prophylactic (all three sites are byte-identical today, so
+> there is no live bug). Pick it up when one of these becomes true: something
+> else has to edit that region anyway and the dedup can ride along free; the
+> per-call cost starts showing up in a real complaint rather than a benchmark; or
+> a compiled-binary port gets considered, at which point the launcher half is
+> moot and this spec should be re-read before anything is built.
+> Validated spike (reference implementation, not for merge): branch
+> `spike/fn-190-importable-entry`.
+
 ## Goal & Context
 <!-- scope: business -->
 
