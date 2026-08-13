@@ -36,8 +36,13 @@ Give `flowctl_review/` the same distribution integrity contract `flowctl_tracker
 - [ ] `test_tracker_distribution` still fully green (no regression to the tracker contract)
 
 ## Done summary
-TBD
+Blocked:
+Superseded by the 2026-08-13 spec split. This spec bundled a measured startup fix with a parity/navigation extraction; they have different risk profiles and different verification, so the low-risk half was waiting on the high-risk one.
 
+- Launcher (pyc-cached main CLI path) + single verdict→status site → `fn-190-flowctl-startup-importable-entry-for`
+- Package extraction + distribution integrity → `fn-191-flowctl-review-terminal-machinery` (depends on fn-190)
+
+Never implemented. Do not resume here — the successors carry this task's research (artifact graph, restamp trap, argv[0] parity, injection-over-import, symbol-not-coordinate boundary) with coordinates re-derived on main @ 9e111db4.
 ## Evidence
 - Commits:
 - Tests:

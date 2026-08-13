@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-13T21:11:16.217622Z",
+  "depends_on": [
+    "fn-191-flowctl-review-terminal-machinery.1"
+  ],
+  "id": "fn-191-flowctl-review-terminal-machinery.2",
+  "priority": null,
+  "spec": "fn-191-flowctl-review-terminal-machinery",
+  "spec_path": ".flow/tasks/fn-191-flowctl-review-terminal-machinery.2.md",
+  "status": "todo",
+  "title": "Distribution integrity contract for the new package",
+  "updated_at": "2026-08-13T21:11:16.217622Z"
+}

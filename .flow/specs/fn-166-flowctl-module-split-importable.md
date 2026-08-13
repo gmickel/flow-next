@@ -1,5 +1,26 @@
 # flowctl module split: importable launcher, package extraction on the flowctl_tracker pattern
 
+> **SUPERSEDED 2026-08-13 — split into two specs, closed without implementation.**
+> Its two halves had different justifications (a measured startup number vs a
+> parity/navigation bet), different risk profiles, and different verification, so
+> bundling them meant the low-risk half waited on the high-risk one.
+>
+> - **R1 (importable launcher) + R3 (single verdict→status site)** →
+>   `fn-190-flowctl-startup-importable-entry-for`
+> - **R2 + R4/R5 (package extraction, distribution integrity)** →
+>   `fn-191-flowctl-review-terminal-machinery` (depends on fn-190)
+>
+> Both successors carry this spec's research forward in their task files: the
+> launcher artifact graph and `init` restamp trap, the authenticated-fast-path
+> scoping, the `argv[0]`/`prog` parity trap, the injection-over-import rule that
+> avoids `__main__` split-brain, and the symbol-list-not-coordinates boundary.
+> Re-measured on main @ 9e111db4 (2026-08-13): 249ms as-script vs 109ms imported
+> (−56%); the extraction region is ~2,633 lines (5.1% of the module) and its
+> boundary had drifted 366 lines from the coordinates recorded below — which is
+> why the successors state symbols, never line numbers.
+>
+> Nothing here was implemented. Read the successors, not this file.
+
 ## Goal & Context
 <!-- scope: business -->
 

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-13T21:11:15.956585Z",
+  "depends_on": [
+    "fn-190-flowctl-startup-importable-entry-for.1"
+  ],
+  "id": "fn-190-flowctl-startup-importable-entry-for.2",
+  "priority": null,
+  "spec": "fn-190-flowctl-startup-importable-entry-for",
+  "spec_path": ".flow/tasks/fn-190-flowctl-startup-importable-entry-for.2.md",
+  "status": "todo",
+  "title": "Importable entry for the main CLI path + the whole launcher artifact graph",
+  "updated_at": "2026-08-13T21:11:15.956585Z"
+}

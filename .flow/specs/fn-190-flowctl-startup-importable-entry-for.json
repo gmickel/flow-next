@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-190-flowctl-startup-importable-entry-for",
+  "created_at": "2026-08-13T21:08:36.614748Z",
+  "depends_on_epics": [],
+  "id": "fn-190-flowctl-startup-importable-entry-for",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-190-flowctl-startup-importable-entry-for.md",
+  "status": "open",
+  "title": "flowctl startup: importable entry for the main CLI path, one verdict-status site",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-13T21:08:43.250094Z"
+}
