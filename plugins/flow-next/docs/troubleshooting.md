@@ -133,6 +133,14 @@ warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached 
 - **Force a specific model** (skip the ladder + cache entirely): pin it explicitly — `--spec codex:gpt-5.5`, a per-task/per-spec `review:` value, `FLOW_CODEX_MODEL`, or `review.backend`. An explicit unavailable model errors clearly instead of downgrading.
 - **Reset the cache:** `rm -rf .flow/.cache/` — it is regenerated (and gitignored) on the next review; a corrupt file is already treated as a cold start.
 
+## Worker reports a merge conflict at wave join (fn-176 wave dispatch)
+
+**Symptom:** a concurrent wave's workers all finished green in their own workspaces, but the conductor hits a merge conflict while joining one of their commits onto the target branch.
+
+**Why:** the wave is dispatched from each task's `**Touches:**` declaration, and dispatch assumes those file sets are disjoint. A conflict at join means two tasks in the wave actually wrote the same file — the declarations were wrong (or incomplete), not the merge.
+
+**What to do:** resolve the conflict, then re-run the affected task serially so it builds on the other task's committed result instead of racing it. Correct the `**Touches:**` lists on the tasks involved before the same pair is dispatched together again. Nothing was corrupted: each worker ran in an isolated workspace against a committed base, so the conflict is surfaced at the join rather than silently interleaved.
+
 ## Custom RepoPrompt CLI instructions conflicting
 
 > **Caution**: If you have custom RepoPrompt CLI instructions in your `CLAUDE.md` or `AGENTS.md`, they may conflict with Flow-Next's integration.
