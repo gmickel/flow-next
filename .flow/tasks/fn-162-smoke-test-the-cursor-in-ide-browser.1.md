@@ -10,9 +10,8 @@ Rewrite drive rung 4 against Cursor host-cache playbook and 2026-08-13 live pass
 Skill + platforms.md + Codex mirror match the live inventory and probe-by-id contract; R3 console/network remain an explicit evidence gap on the ladder row; sync-codex twice is byte-idempotent.
 
 ## Done summary
-TBD
-
+Rewrote drive rung 4 against the Cursor host-cache playbook and 2026-08-13 live passes. Probe-by-id (`cursor-ide-browser`) replaces catalog-omit-as-absent; the 16-tool inventory is live (no invented `browser_console_messages`); MCP unregister mid-run is a partial pass; R3 console/network remain an explicit evidence gap on the ladder row. Codex mirror regenerated twice (byte-idempotent). Shipped as 3.32.2. Notable-updates list left untouched by request.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d125ea573613d48e1c8c94ddfb24d0167b6bad9c
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_cursor_docs_contract -q, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh
 - PRs:
