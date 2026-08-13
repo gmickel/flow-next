@@ -130,6 +130,17 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 **sync-codex.sh impact:** the existing FLOWCTL rewrite rule (grep `\.codex/scripts/flowctl` in sync-codex.sh) and the local-fallback awk (grep the fallback string `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"`) continue to work with the once-per-file pattern. No sync edits needed for consolidation — the rewrite acts on the single FLOWCTL definition wherever it appears.
 
+## Remedy sentences name the verb that performs them (heuristic)
+
+Any sentence that tells a reader how to get unstuck — a recovery, a repair, an unblock, a "if this happens, do X" — names the command that does it, in that sentence. Prose that describes the shape of a remedy without its invocation is the same defect class as a stale router: it reads confident and sends the reader nowhere, and nothing detects it, because docs have no runtime.
+
+Two measured incidents:
+
+- **A recovery that could not exist.** `tracker-sync.md` and the site told operators that an explicit re-ready clears a pilot strike; since fn-87 a projection-set ready deliberately never clears one, and a deliberate board move is byte-identical to a projection echo in every durable artifact. The remedy sentence named a gesture, not a verb — so it survived unfalsified until a consumer measured it (fn-184, #325). The fix that stuck was naming `flowctl pilot strikes clear <spec-id>`.
+- **A router that lies.** The same class one surface over: `/flow-next:guide`'s inventory recommending a skill that no longer ships (see the router-staleness rule in that skill).
+
+**Failure signature.** A remedy paragraph with no command in it — or one whose command is described ("clear the strike", "re-run the gate", "hand-edit the ledger") rather than written. If the invocation does not exist yet, that is the finding: either build the verb or say plainly that no recovery exists and what to do instead.
+
 ## Prose-contract tests — pin content + reachability (heuristic)
 
 A prose-contract test asserts against skill/command/agent markdown (string pins, executed bash fences, cross-skill parity, verb inventories, mirror parity). It exists to stop a *behavior* from silently regressing — not to freeze the current file layout.
