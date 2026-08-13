@@ -48,6 +48,20 @@ Frontmatter and the `<!-- scope: ... -->` markers are authoring guidance, not sp
 - **Adding sections.** Free, and the main reason to customize. Nothing parses for an unknown heading, so an extra section is carried as prose.
 - **Reordering** sections, including moving an added section between canonical ones.
 - **Rewriting the guidance prose** under any heading. It is instruction to the authoring agent - make it say what your project actually needs. This is the highest-leverage edit and the most commonly missed one.
+
+  A worked example - **house style for acceptance criteria**. Want BDD-flavored (Given/When/Then) criteria on every spec? Rewrite the guidance under `## Acceptance Criteria` in your copied `SPEC.md`:
+
+  ```markdown
+  ## Acceptance Criteria
+
+  <!-- House style: write each criterion as a BDD scenario - Given <context>,
+       when <action>, then <observable outcome>. Keep the **R<n>:** marker;
+       use sibling ids (R4a, R4b) for scenario variants of one requirement. -->
+
+  - **R1:** Given a signed-in user with an expired session, when they submit the form, then the draft is preserved and they are returned to it after re-auth.
+  ```
+
+  Every spec the project authors from then on arrives with that instruction, and every interview/capture pass writes criteria in that shape. The only load-bearing parts are the heading name and the `**R<n>:**` bullet marker - the criterion *text* is yours (the parser reads wrapped multi-line bullets, and anything it cannot read is surfaced as `acceptance_criteria_residue` rather than silently dropped). The same move works for any house convention: user-story phrasing ("As a <role>..."), a mandated observability clause per criterion, or a severity tag.
 - **Adding project vocabulary**, links to your ADRs / design docs / glossary, or a house rule ("every spec names the observability signal that proves it worked").
 
 ### What breaks if you rename or remove a canonical heading
