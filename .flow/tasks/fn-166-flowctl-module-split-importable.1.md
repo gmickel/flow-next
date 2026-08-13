@@ -38,13 +38,9 @@ Route every Python verdict→status literal through the existing `_review_status
 - [ ] Propagation done (cp flowctl.py + gen_tracker_manifest.py)
 
 ## Done summary
-Blocked:
-Superseded by the 2026-08-13 spec split. This spec bundled a measured startup fix with a parity/navigation extraction; they have different risk profiles and different verification, so the low-risk half was waiting on the high-risk one.
+NOT IMPLEMENTED — closed as superseded, 2026-08-13.
 
-- Launcher (pyc-cached main CLI path) + single verdict→status site → `fn-190-flowctl-startup-importable-entry-for`
-- Package extraction + distribution integrity → `fn-191-flowctl-review-terminal-machinery` (depends on fn-190)
-
-Never implemented. Do not resume here — the successors carry this task's research (artifact graph, restamp trap, argv[0] parity, injection-over-import, symbol-not-coordinate boundary) with coordinates re-derived on main @ 9e111db4.
+This task's work moved in the fn-166 split: launcher + verdict-map work to `fn-190-flowctl-startup-importable-entry-for`, package extraction + distribution integrity to `fn-191-flowctl-review-terminal-machinery`. No code, docs, or tests were produced here; `done` is a lifecycle marker so the parent spec could be closed (`spec close` requires done tasks and flowctl has no supersede terminal). Read the successors.
 ## Evidence
 - Commits:
 - Tests:
