@@ -9,7 +9,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-162-smoke-test-the-cursor-in-ide-browser.md",
-  "status": "open",
+  "status": "done",
   "title": "Smoke-test the Cursor in-IDE browser rung for drive/QA",
   "tracker": {
     "baseHashFlow": null,
@@ -22,5 +22,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-13T14:43:31.926225Z"
+  "updated_at": "2026-08-13T20:46:22.640536Z"
 }
