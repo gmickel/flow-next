@@ -43,6 +43,18 @@ jq . plugins/flow-next/.codex-plugin/plugin.json   # 3. verify version
 #    to plugins/flow-next/docs/README.md § "Notable updates" (newest first; format is
 #    documented inline in that section). Same story on the flow-next.dev landing page
 #    when that surface exists for the release.
+# 7. BIG-PICTURE DOCS SWEEP (repo docs AND flow-next.dev) — a feature page is not enough.
+#    Ask: which OTHER pages does this change touch? Does it alter the pipeline picture
+#    (strategy/pipeline, teams.md lifecycle map, the guide's pipeline breakdown)? Does it
+#    give a team role a new surface (teams/collaboration, teams.md roles table)? Does it
+#    interact with an existing feature's page (cross-link both ways)? A new capability
+#    documented only on its own page is half-shipped.
+# 8. NEW OR CHANGED CONFIG KEYS → the flow-next.dev config reference
+#    (src/content/docs/flowctl/configuration.mdx) is generated from
+#    plugins/flow-next/schema/flow-config.schema.json and documents EVERY key. When a
+#    release adds/renames/retypes a key, the schema learns it (fn-138 drift test) AND the
+#    config page gets the row in the same downstream walk — half-hidden knobs that only
+#    exist in skill prose are the failure mode this step closes.
 
 git add -A && git commit -m "chore(flow-next): bump version to X.Y.Z"
 git push
