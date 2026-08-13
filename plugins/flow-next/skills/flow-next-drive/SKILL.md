@@ -68,7 +68,7 @@ Probe availability top-down and use the **highest rung that passes**; fail soft 
 | 1 (default) | **agent-browser** CLI | Always assumed present. CDP-based, headless-safe, no extra install. Drives web apps; drives Electron / WebView2 over CDP (`--cdp <port>` / `--auto-connect`). | `references/agent-browser.md` |
 | 2 | **chrome-devtools-mcp** | You want built-in auto-wait (fewer stale-ref failures), DevTools-grade network/console inspection, Lighthouse, or to **attach to your real signed-in Chrome** (`--browser-url` / `--autoConnect`) so bot defenses don't challenge an automated profile. | `references/chrome-devtools-mcp.md` |
 | 3 | **Playwright** (CLI or MCP) | The repo already has Playwright configured, or you need a headless CI-style run / large cross-browser regression suite. | `references/playwright.md` |
-| 4 | **cursor-ide-browser** MCP | Running inside Cursor with this MCP installed and you want its snapshot YAML + `browser_cdp` control. | `references/cursor-ide-browser.md` |
+| 4 | **cursor-ide-browser** MCP | On a Cursor host: no install, no `command -v`. Probe the server by id `cursor-ide-browser` (a catalog omission is not absence). If that probe fails in an attended session, ask once for `@Browser` (no space) or the Browser pane showing connected, then re-probe once — skip the ask when unattended. Real snapshot YAML + `browser_cdp`. **Cannot satisfy verify (console + network) unaided** — a `/flow-next:qa` pass here must set `QA_OUTCOME=BLOCKED` with `blocked_reason` naming the missing channels (do not invent `console_path` / network path values). When higher rungs are missing, prefer this over instructing an install. | `references/cursor-ide-browser.md` |
 | 5 (terminal) | **Manual + screenshot relay** | No browser driver available — drive yourself, paste console errors and screenshots into chat. | — |
 
 **Surface B note: an Electron / WebView2 app is driven through this same web ladder, over its CDP debug port.** Routing a Chromium-backed desktop app to the native rung has broken this. Attach to the app's remote-debugging port (`agent-browser --cdp <port>` / `--auto-connect`; chrome-devtools-mcp `--browser-url=http://127.0.0.1:<port>`). Launch the app with a dedicated debug port and a dedicated user-data-dir; treat the open debug port as a security exposure (any local app can drive that session).
@@ -93,7 +93,7 @@ All share the universal flow (Step 2) — `observe → act → verify → captur
 
 ## Driver detection & graceful degradation (all surfaces)
 
-1. **Probe, don't assume.** Detect each non-default rung before planning around it (`command -v`, MCP list, `uname -s` for the macOS-only paths). Treat anything above the default rung — incl. **Cua Driver** and **Computer Use** — as *probably absent*.
+1. **Probe, don't assume.** Detect each non-default rung before planning around it (`command -v`, MCP list, `uname -s` for the macOS-only paths). Treat anything above the default rung — incl. **Cua Driver** and **Computer Use** — as *probably absent*. On a Cursor host, probe `cursor-ide-browser` by exact server id at least once before concluding it is absent — catalog omission alone is not a negative, and there is no install step. If that probe fails in an **attended** session, ask once via `AskUserQuestion`: type `@Browser` in chat (no space), or open the Browser pane until it shows connected, and confirm Settings → Tools & MCP → Browser Automation is Browser Tab. On portable hosts without that tool, use a numbered prompt with a final `Other — type your own answer` option. After they confirm, re-probe **once**. Skip the ask when unattended / autonomous / `$CI` / `FLOW_AUTONOMOUS=1` and degrade. A mid-run `MCP server does not exist` after this pass already drove the pane is the lease-drop flake, not a first-use miss — do not ask `@Browser` for that; see `references/cursor-ide-browser.md`.
 2. **Pick the highest rung that passes; fail soft to the next.** The terminal rung is always manual / documented-limitation — the pass still completes.
 3. **No native driver is required or on a headless/CI path.** Neither the local Cua Driver nor Computer Use runs without a real display; most VMs/Linux/CI lack both. (Headless/CI native driving is the opt-in **Cua Sandbox** surface — see `references/cua.md`.)
 4. **Graceful degradation on the native rung (C):** *(Determine attended vs headless first — `$CI` ⇒ headless, else the empirical `cua-driver call get_screen_size` display probe; NOT `$DISPLAY` on macOS. See `references/cua.md` § "Determining headless / CI".)*
@@ -106,7 +106,7 @@ All share the universal flow (Step 2) — `observe → act → verify → captur
 
 ### Done when
 
-- **Every rung above `agent-browser` that the plan relies on was probed first** (`command -v`, MCP list, `uname -s`). A pass that planned around an unprobed rung has broken this.
+- **Every rung above `agent-browser` that the plan relies on was probed first** (`command -v`, MCP list, `uname -s`; for `cursor-ide-browser`, an id-probe — and on an attended Cursor miss, one `@Browser` ask plus one re-probe). A pass that planned around an unprobed rung has broken this.
 - An absent driver degraded to the next rung or to a documented limitation, and the pass still reached a stated outcome rather than ending there.
 
 ## Boundaries
