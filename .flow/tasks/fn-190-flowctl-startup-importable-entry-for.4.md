@@ -32,8 +32,11 @@ Point the unit suite's flowctl invocations at the entry so the local gate actual
 
 
 ## Done summary
-TBD
+CUT before implementation, 2026-08-13 — measured to do nothing at the level it claimed.
 
+This task existed to make the unit suite collect the startup saving. A spike applied the correct transform (spawn sites only; the same per-file constant also feeds `spec_from_file_location` module loads, so a blind switch broke 1,534 tests): the two spawn-heaviest files dropped 35% (75.7s->48.0s, 74.3->48.2s, both green), but FULL-SUITE WALL DID NOT MOVE — 573.96s before, 598.59s after, against +-5% run-to-run variance on the same tree. Only 18 of 193 files matched the reroute, spawn sites are spelled many ways, and the wall-setting files (one is 354s for 29 tests) have 1-2 spawn shapes and are slow for reasons unrelated to flowctl startup.
+
+Not implemented. If focused-suite latency ever matters on its own, the transform is known-good and narrow: add a spawn-only constant beside the import constant and reroute `[sys.executable, str(FLOWCTL_PY)` argv construction only. The real suite lever is whatever costs the chart tests ~12s per test - a different investigation.
 ## Evidence
 - Commits:
 - Tests:

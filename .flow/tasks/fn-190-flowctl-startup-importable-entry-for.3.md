@@ -11,7 +11,7 @@ Close the change out: the recorded measurement, the outcome-first CHANGELOG entr
 **Touches:** [CHANGELOG.md]
 
 ### Approach
-- CHANGELOG entry under `## Unreleased`, in the register documented in `agent_docs/releasing.md`: lead with what got faster for whom (the local gate, worker waves, autonomous ticks - and consumers, since plugin mode PATH-resolves the same wrapper), then the mechanism, then the numbers as outcomes. State the bound honestly: this is per-invocation startup, NOT an end-to-end or agent-speed claim.
+- CHANGELOG entry under `## Unreleased`, in the register documented in `agent_docs/releasing.md`. Lead with the hygiene outcome - a hot path stops recompiling ~51.7k lines on every call - then the mechanism, then the numbers. **Do NOT claim faster runs, a faster gate, or faster anything the spike disproved:** measured, full-suite wall did not move and an agent run recovers tens of seconds against multi-hour wall. The honest sentence is that the cost stops being paid, not that anything a user waits on got quicker.
 - Include the deliberate non-gain: read-only install dirs stay at today's speed by design.
 - Verify prompt-pin hashes are unchanged (`test_prompt_text_pinned`) - nothing in this spec should move an embedded prompt constant, so an unchanged hash is the proof, not a formality.
 - Full gate: `python3 scripts/run_tests_parallel.py` (capture the exit code directly, never via a pipe) plus `uvx ruff@0.16.0 check .`. Confirm the tree is clean after a warm run so no `__pycache__` leaks into the commit.
