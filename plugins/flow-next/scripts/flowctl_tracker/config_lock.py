@@ -291,6 +291,12 @@ def _timeout_message(lock: Path, timeout_s: float, last_error: OSError | None) -
     owner = _read_owner(lock)
     if owner is not None:
         age = max(0.0, time.time() - owner["acquired_at"])
+        # Honesty (PR #349 review): an owner the staleness probe has already
+        # proven reclaimable is not "alive" - reclamation itself is failing.
+        if _owner_is_stale(lock, time.time()):
+            return (head + f"owner (pid {owner['pid']} on {owner['host']}, "
+                    f"acquired {age:.0f}s ago) is stale but reclamation is "
+                    f"failing - check permissions on {lock.parent}")
         return (head + f"holder appears alive (pid {owner['pid']} on "
                 f"{owner['host']}, acquired {age:.0f}s ago; see owner.json)")
     try:
@@ -341,8 +347,22 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
             # But a denial with NO directory there is not a pending delete and
             # not contention: nothing holds the lock and nothing will change,
             # so waiting out the deadline only delays a wrong answer (#340).
+            # RACE GUARD (PR #349 review): a pending delete can finish
+            # disappearing between the denied mkdir and the exists probe -
+            # denied+absent on a SINGLE observation is not proof. Retry the
+            # mkdir once immediately; only a second consecutive denial with
+            # the path still absent is genuinely unavailable.
             if not os.path.lexists(lock):
-                raise _unavailable(lock, exc, creating=lock) from None
+                try:
+                    lock.mkdir()
+                    break
+                except FileExistsError:
+                    last_error = None
+                    continue
+                except PermissionError as exc2:
+                    if not os.path.lexists(lock):
+                        raise _unavailable(lock, exc2, creating=lock) from None
+                    exc = exc2
             last_error = exc
         # Held, un-reclaimable, delete-pending, or the reclaim rename failed
         # (permissions, antivirus, read-only fs): all of these go through the

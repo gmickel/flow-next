@@ -503,6 +503,20 @@ class TimeoutMessageReportsWhatWasObserved(unittest.TestCase):
         self.flow = Path(self.tmp.name)
         self.lock = self.flow / ".locks" / "config.d"
 
+    def test_stale_owner_with_failing_reclaim_is_not_reported_alive(self) -> None:
+        # PR #349 review: an owner the staleness probe already proved
+        # reclaimable must not read as "alive" - name the failing reclaim.
+        self.lock.mkdir(parents=True)
+        # Same host (foreign hostnames are never stale - fails closed) with a
+        # PID that cannot be alive, past the stale window.
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": 999999999, "host": CL.socket.gethostname(),
+            "acquired_at": time.time() - CL.STALE_OWNER_S - 60,
+        }), encoding="utf-8")
+        message = CL._timeout_message(self.lock, 1.0, None)
+        self.assertIn("stale but reclamation is failing", message)
+        self.assertNotIn("holder appears alive", message)
+
     def test_held_lock_names_the_holders_pid_and_host(self) -> None:
         self.lock.mkdir(parents=True)
         (self.lock / "owner.json").write_text(json.dumps({
