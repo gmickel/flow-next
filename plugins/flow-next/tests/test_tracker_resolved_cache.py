@@ -445,6 +445,111 @@ class LockBehavior(unittest.TestCase):
                 pass
 
 
+@unittest.skipIf(os.name == "nt", "POSIX permission bits")
+@unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores mode bits")
+class UnavailableLockIsNotContention(unittest.TestCase):
+    """fn-193 / #340: a denied mkdir with NO lock directory present is not a
+    holder. It must fail fast and say what the filesystem said."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.flow = Path(self.tmp.name)
+
+    def _seal(self, path: Path) -> None:
+        path.chmod(0o500)
+        self.addCleanup(lambda: path.chmod(0o700))
+
+    def test_unwritable_locks_dir_fails_fast_and_blames_permissions(self) -> None:
+        locks = self.flow / ".locks"
+        locks.mkdir()
+        self._seal(locks)
+        started = time.monotonic()
+        with self.assertRaises(CL.ConfigLockUnavailable) as raised:
+            with CL.config_lock(self.flow, timeout_s=10):
+                pass
+        elapsed = time.monotonic() - started
+        self.assertLess(elapsed, 1.0, "must not burn the deadline")
+        message = str(raised.exception)
+        self.assertIn("EACCES", message)
+        self.assertIn(str(self.flow / ".locks" / "config.d"), message)
+        self.assertNotIn("holder appears alive", message)
+
+    def test_unwritable_flow_dir_reports_the_lock_parent(self) -> None:
+        self._seal(self.flow)
+        with self.assertRaises(CL.ConfigLockUnavailable) as raised:
+            with CL.config_lock(self.flow, timeout_s=10):
+                pass
+        message = str(raised.exception)
+        self.assertIn("EACCES", message)
+        self.assertIn(str(self.flow / ".locks"), message)
+        self.assertNotIn("holder appears alive", message)
+
+    def test_unavailable_is_catchable_as_the_existing_timeout_type(self) -> None:
+        locks = self.flow / ".locks"
+        locks.mkdir()
+        self._seal(locks)
+        with self.assertRaises(CL.ConfigLockTimeout):
+            with CL.config_lock(self.flow, timeout_s=10):
+                pass
+
+
+class TimeoutMessageReportsWhatWasObserved(unittest.TestCase):
+    """fn-193 R2: 'holder appears alive' only when an owner was really read."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.flow = Path(self.tmp.name)
+        self.lock = self.flow / ".locks" / "config.d"
+
+    def test_held_lock_names_the_holders_pid_and_host(self) -> None:
+        self.lock.mkdir(parents=True)
+        (self.lock / "owner.json").write_text(json.dumps({
+            "pid": 999999999, "host": "holder-box.example",
+            "acquired_at": time.time()}), encoding="utf-8")
+        with self.assertRaises(CL.ConfigLockTimeout) as raised:
+            with CL.config_lock(self.flow, timeout_s=0.3):
+                pass
+        message = str(raised.exception)
+        self.assertIn("holder appears alive", message)
+        self.assertIn("999999999", message)
+        self.assertIn("holder-box.example", message)
+
+    def test_ownerless_dir_says_owner_absent_and_when_it_reclaims(self) -> None:
+        self.lock.mkdir(parents=True)
+        with self.assertRaises(CL.ConfigLockTimeout) as raised:
+            with CL.config_lock(self.flow, timeout_s=0.3):
+                pass
+        message = str(raised.exception)
+        self.assertNotIn("holder appears alive", message)
+        self.assertIn("no readable owner.json", message)
+        self.assertIn("stale-reclaimable in", message)
+
+    def test_permission_denied_while_the_path_exists_polls_to_the_deadline(self) -> None:
+        # Pins the Windows delete-pending carve-out: denied + present is
+        # transient, so it must NOT take the fail-fast branch.
+        self.lock.mkdir(parents=True)
+        real_mkdir = Path.mkdir
+
+        def denied(target: Path, *args, **kwargs):
+            if target == self.lock:
+                raise PermissionError(13, "Permission denied")
+            return real_mkdir(target, *args, **kwargs)
+
+        started = time.monotonic()
+        with mock.patch.object(Path, "mkdir", denied):
+            with self.assertRaises(CL.ConfigLockTimeout) as raised:
+                with CL.config_lock(self.flow, timeout_s=0.4):
+                    pass
+        self.assertGreaterEqual(time.monotonic() - started, 0.4)
+        self.assertNotIsInstance(raised.exception, CL.ConfigLockUnavailable)
+        message = str(raised.exception)
+        self.assertIn("Permission denied", message)
+        self.assertIn("while the path exists", message)
+        self.assertNotIn("holder appears alive", message)
+
+
 _WORKER = r"""
 import json, sys, time
 from pathlib import Path
