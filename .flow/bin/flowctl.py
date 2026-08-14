@@ -1164,7 +1164,9 @@ def print_tracked_write_advisory(path: Path) -> None:
         shown = path.relative_to(get_repo_root())
     except ValueError:
         shown = path
-    print(TRACKED_WRITE_DIRTY_NOTE.format(path=shown), file=sys.stderr)
+    # Posix form on every OS: the advisory is agent-read text and the path
+    # is for staging with git, which speaks forward slashes everywhere.
+    print(TRACKED_WRITE_DIRTY_NOTE.format(path=shown.as_posix()), file=sys.stderr)
 
 
 def save_task_runtime(task_id: str, updates: dict) -> None:
