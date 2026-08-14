@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 3.34.0] - 2026-08-14
 
 Autonomous merges get three long-requested capabilities, and land loses its
 most dangerous power. A repo whose branch protection excludes the tick's
