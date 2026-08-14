@@ -10,9 +10,8 @@ R1+R2: in validate's epic-status rule (flowctl.py ~:35305-35310, 'Epic marked do
 R1, R2, R5(i-iii) met; test_validate_all_diagnostics green; a fresh-clone simulation (spec done, sidecar todo, empty state dir) exits 0 with the warning visible; ruff clean.
 
 ## Done summary
-TBD
-
+validate's epic/task status mismatch downgrades to a warning when status came from the committed snapshot with no runtime progress markers (new committed_status_is_authoritative helper - content-based discrimination, since key-presence cannot separate legacy repos from fresh clones); runtime-sourced and legacy-progress cases stay errors. Fresh-clone probe: the 582-error class is now warnings, exit gated on the 23 genuinely-real residual errors only. 3 regression tests.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: fabfc8d6
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_validate_all_diagnostics -q, fresh-clone validate --all probe: status class all warnings
 - PRs:

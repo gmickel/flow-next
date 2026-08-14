@@ -10,9 +10,8 @@ R3: cmd_done (flowctl.py ~:34817-34837) gains "modified_paths": [str(task_spec_p
 R3 + R5(iv-v) met; focused suites green; Ralph/pilot guard behavior unchanged (exit codes + JSON status keys untouched); ruff clean.
 
 ## Done summary
-TBD
-
+done/block --json payloads gain modified_paths (the tracked file the command wrote); one stderr advisory when that file is tracked-and-now-dirty (single git diff --quiet spawn, returncode-1-only contract - untracked/clean/no-repo degrade to silence). New focused suite test_done_tracked_write.py (9 tests) + 307 neighboring tests green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: eebda874
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_done_tracked_write -q
 - PRs:

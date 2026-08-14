@@ -1,0 +1,476 @@
+{
+  "artifactId": "fn-162-aid-cf4efe50",
+  "baseSha": "d7107b08af13fde2cf6296eb7785cdaf2572e2d4",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [
+          "R2",
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "s-r2",
+          "s-r6"
+        ],
+        "summary": "Rung 4 exists on an interactive Cursor host, but the old reference invented browser_console_messages, omitted browser_select_option, and treated a catalog miss as 'rung absent', so agents skipped it. The flake is the whole MCP unregistering mid-run, not garbage snapshots.",
+        "taskIds": [],
+        "title": "A working driver looked absent"
+      },
+      {
+        "files": [
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/platforms.md",
+            "rIds": [
+              "R4",
+              "R7"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r4",
+              "s-r7",
+              "s-diff"
+            ],
+            "summary": "Cursor-host caveats: probe-by-id, MCP-drop, interactive-IDE-only.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-drive/SKILL.md",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "Rung-4 Use-when cell: probe-by-id; cannot satisfy verify unaided.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          },
+          {
+            "additions": 67,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 41,
+            "path": "plugins/flow-next/skills/flow-next-drive/references/cursor-ide-browser.md",
+            "rIds": [
+              "R2",
+              "R3",
+              "R4",
+              "R5",
+              "R8"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r2",
+              "s-r3",
+              "s-r4",
+              "s-r5",
+              "s-r8",
+              "s-diff"
+            ],
+            "summary": "Live 16-tool inventory, probe-by-id, lock order, MCP-drop recovery, evidence gap.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R2",
+          "R3",
+          "R4",
+          "R5",
+          "R7",
+          "R8"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r2",
+          "s-r3",
+          "s-r4",
+          "s-r5",
+          "s-r7",
+          "s-r8"
+        ],
+        "summary": "cursor-ide-browser.md now matches the 16 live tools, probe-by-id, lock order, MCP-drop recovery, and the R3 evidence-gap consequence. The SKILL.md ladder row and platforms.md Cursor caveats carry the same contract: interactive-IDE-only, no CLI/headless, QA records a gap not PASS.",
+        "taskIds": [
+          "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+        ],
+        "title": "Rewrite the canonical rung from the live inventory"
+      },
+      {
+        "files": [
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".agents/plugins/marketplace.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Codex marketplace version 3.32.2.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".claude-plugin/marketplace.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Claude marketplace version 3.32.2.",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "3.32.2 Fixed entry: probe-by-id, MCP drop, QA evidence gap.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/.claude-plugin/plugin.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Claude plugin version 3.32.2.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/.codex-plugin/plugin.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Codex plugin version 3.32.2.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/.cursor-plugin/plugin.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Cursor plugin version 3.32.2.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1"
+        ],
+        "summary": "Patch bump across the five version surfaces plus the repo CHANGELOG entry. Notable-updates lists were left untouched by request.",
+        "taskIds": [
+          "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+        ],
+        "title": "Ship as 3.32.2"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 3,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "s-r6"
+        ],
+        "summary": "No new driver, no changes to rungs 1-3, no portability off Cursor, no flowctl code, no automated harness for the MCP, no QA-skill redesign. R6 demotion was not taken: the rung drives; the docs were wrong. Console and network remain unresolved from the driven surface.",
+        "taskIds": [],
+        "title": "No new rung, no demotion, no QA redesign"
+      },
+      {
+        "files": [
+          {
+            "additions": 56,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-162/live-pass.md",
+            "rIds": [
+              "R1"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-spec",
+              "s-r1",
+              "s-diff"
+            ],
+            "summary": "Per-step Pass A/B/C verdict table from the 2026-08-13 live pass.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/specs/fn-162-smoke-test-the-cursor-in-ide-browser.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec record timestamp.",
+            "taskIds": []
+          },
+          {
+            "additions": 37,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 33,
+            "path": ".flow/specs/fn-162-smoke-test-the-cursor-in-ide-browser.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "STATUS LIVE-PASS RECORDED; R3 unresolved; R6 not taken.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-162-smoke-test-the-cursor-in-ide-browser.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 record.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-162-smoke-test-the-cursor-in-ide-browser.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-c2",
+              "s-diff"
+            ],
+            "summary": "Task 1 body and done summary.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-drive/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Codex mirror of the SKILL.md ladder-row change.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          },
+          {
+            "additions": 67,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 41,
+            "path": "plugins/flow-next/codex/skills/flow-next-drive/references/cursor-ide-browser.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-diff"
+            ],
+            "summary": "Codex mirror of the rewritten rung reference.",
+            "taskIds": [
+              "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+            ]
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 4,
+        "rIds": [
+          "R1",
+          "R7"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-c2",
+          "s-r1",
+          "s-r7"
+        ],
+        "summary": "Live-pass table (Pass A/B/C) plus spec/task sidecars. Codex mirror copies of the drive skill are regenerated by sync-codex.sh, not hand-edited. Focused prompt-pin and cursor-docs-contract tests plus ruff ran on the product commit.",
+        "taskIds": [
+          "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+        ],
+        "title": "Live-pass record, task evidence, Codex mirror"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Focused tests",
+        "sourceRefs": [
+          "s-t1"
+        ],
+        "value": "test_prompt_text_pinned + test_cursor_docs_contract OK; ruff 0.16.0 clean; sync-codex.sh run (byte-idempotent via bump)"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-c1"
+        ],
+        "value": "8/8 claimed on fn-162.1; R3 remains an explicit evidence gap on the ladder row, not a PASS"
+      },
+      {
+        "label": "Live pass",
+        "sourceRefs": [
+          "s-spec",
+          "s-r1"
+        ],
+        "value": "2026-08-13 interactive Cursor pass recorded at .flow/artifacts/fn-162/live-pass.md (Pass A/B/C)"
+      }
+    ],
+    "thesis": "On Cursor, agents skipped a working in-IDE browser because the drive rung-4 reference invented tool names and treated a missing catalog entry as absence. The live pass rewrites that rung: probe by id, use the real 16-tool inventory, treat a mid-run MCP drop as a partial pass, and record that console and network stay an evidence gap so a QA pass routed here does not PASS. Shipped as 3.32.2. R6 demotion was not taken."
+  },
+  "generatedAt": "2026-08-13T14:54:18Z",
+  "headSha": "cf4efe50fe0e9c2d50701faa01c583c372a79858",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-162-smoke-test-the-cursor-in-ide-browser"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-162-smoke-test-the-cursor-in-ide-browser.1"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-r7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "s-r8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "d125ea573613d48e1c8c94ddfb24d0167b6bad9c"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "cf4efe50fe0e9c2d50701faa01c583c372a79858"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "d7107b08af13fde2cf6296eb7785cdaf2572e2d4..cf4efe50fe0e9c2d50701faa01c583c372a79858"
+    }
+  ],
+  "specId": "fn-162-smoke-test-the-cursor-in-ide-browser"
+}

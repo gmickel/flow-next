@@ -309,6 +309,15 @@ STATUS_SOURCE_ABSENT_NOTE = (
     "and may be stale"
 )
 
+# fn-192 R3 / #346: `done` and `block` write the receipt into the TRACKED
+# task definition file. The documented loop commits before calling them, so
+# that write is left uncommitted with no signal. flowctl never stages or
+# commits - it names the path and lets the caller decide.
+TRACKED_WRITE_DIRTY_NOTE = (
+    "note: {path} is tracked and now has uncommitted changes - "
+    "the receipt belongs in a commit"
+)
+
 
 # --- Helpers ---
 
@@ -1078,6 +1087,32 @@ def merge_task_runtime(definition: dict, runtime: Optional[dict]) -> dict:
     return merged
 
 
+def committed_status_is_authoritative(task: dict) -> bool:
+    """True when a committed-sourced task status can be trusted (fn-192 R2).
+
+    Only meaningful for a merged task dict whose `status_source` is
+    STATUS_SOURCE_COMMITTED: in that case every runtime field on the dict
+    came from the tracked definition file. Two very different repos land
+    there:
+
+    - pre-state-dir (legacy) repos wrote real runtime progress into the
+      definition itself (merge_task_runtime's legacy-fields branch), so the
+      committed status IS the answer;
+    - a fresh clone of a modern repo carries only the inert baseline
+      (`todo`, nulls) because runtime state never travels with git — that
+      snapshot says nothing about whether the work happened.
+
+    Progress markers (a non-`todo` status, an assignee, a claim, evidence,
+    a block reason) are what separates the two.
+    """
+    if task.get("status") not in (None, "todo"):
+        return True
+    return any(
+        task.get(field)
+        for field in ("assignee", "claim_note", "claimed_at", "evidence", "blocked_reason")
+    )
+
+
 def runtime_state_absent() -> bool:
     """True when the runtime state directory does not exist (fn-181 R1).
 
@@ -1095,6 +1130,41 @@ def print_status_source_advisory() -> None:
     """Print the one-per-invocation stale-status advisory when warranted."""
     if runtime_state_absent():
         print(STATUS_SOURCE_ABSENT_NOTE)
+
+
+def print_tracked_write_advisory(path: Path) -> None:
+    """Name a TRACKED file this command just dirtied (fn-192 R3 / #346).
+
+    `done` and `block` write the receipt into the tracked task definition
+    file, but the documented loop commits BEFORE calling them - so the
+    receipt lands unstaged with nothing at the point of write saying so.
+    One stderr line when the path is tracked and now differs from the
+    index; silent when the path is untracked, already clean, or git is
+    unavailable.
+
+    `git diff --quiet -- <path>` exits 0 for clean AND for untracked (git
+    diff ignores untracked paths), 1 for a tracked-and-modified path, and
+    128 when there is no repo - so the single spawn answers the whole
+    question. flowctl never stages or commits: naming the path is the
+    entire contract (agentic-vs-deterministic doctrine).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--quiet", "--", str(path)],
+            cwd=str(get_repo_root()),
+            capture_output=True,
+            text=True, encoding="utf-8",
+            check=False,
+        )
+    except OSError:
+        return
+    if result.returncode != 1:
+        return
+    try:
+        shown = path.relative_to(get_repo_root())
+    except ValueError:
+        shown = path
+    print(TRACKED_WRITE_DIRTY_NOTE.format(path=shown), file=sys.stderr)
 
 
 def save_task_runtime(task_id: str, updates: dict) -> None:
@@ -34830,10 +34900,18 @@ def cmd_done(args: argparse.Namespace) -> None:
 
     if args.json:
         json_output(
-            {"id": args.id, "status": "done", "message": f"Task {args.id} completed"}
+            {
+                "id": args.id,
+                "status": "done",
+                "message": f"Task {args.id} completed",
+                # fn-192 R3: the tracked paths this command wrote, so a
+                # caller can stage them without guessing.
+                "modified_paths": [str(task_spec_path)],
+            }
         )
     else:
         print(f"Task {args.id} completed")
+    print_tracked_write_advisory(task_spec_path)
 
 
 def cmd_block(args: argparse.Namespace) -> None:
@@ -34890,10 +34968,17 @@ def cmd_block(args: argparse.Namespace) -> None:
 
     if args.json:
         json_output(
-            {"id": args.id, "status": "blocked", "message": f"Task {args.id} blocked"}
+            {
+                "id": args.id,
+                "status": "blocked",
+                "message": f"Task {args.id} blocked",
+                # fn-192 R3: same tracked-write manifest as `done`.
+                "modified_paths": [str(task_spec_path)],
+            }
         )
     else:
         print(f"Task {args.id} blocked")
+    print_tracked_write_advisory(task_spec_path)
 
 
 def _monotonic_now() -> float:
@@ -35310,9 +35395,25 @@ def validate_epic(
     if epic_data["status"] == "done":
         for task_id, task in tasks.items():
             if task["status"] != "done":
-                errors.append(
-                    f"Epic marked done but task {task_id} is {task['status']}"
-                )
+                finding = f"Epic marked done but task {task_id} is {task['status']}"
+                # fn-192 R1/R2: task status is runtime-only and never travels
+                # with the repo, so on a fresh clone every done spec would
+                # report this. When the status came from the committed
+                # snapshot AND that snapshot carries no runtime progress, the
+                # mismatch is unknowable rather than wrong — warn, don't fail.
+                # Runtime-sourced status, and legacy repos whose definition
+                # file carries the progress, stay errors.
+                if task.get(
+                    "status_source"
+                ) == STATUS_SOURCE_COMMITTED and not committed_status_is_authoritative(
+                    task
+                ):
+                    warnings.append(
+                        f"{finding} (committed snapshot; runtime state absent, "
+                        "status may be stale)"
+                    )
+                else:
+                    errors.append(finding)
 
     return errors, warnings, len(tasks)
 
