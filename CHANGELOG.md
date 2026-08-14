@@ -4,16 +4,16 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
-Two "the machinery knew the fact and dropped it" fixes. Every tracker op in a
-repo with an unwritable `.flow/.locks` failed with `holder appears alive (see
-owner.json)` - a 10-second wait for a contention story when no holder ever
-existed and the filesystem had simply refused `mkdir`. And the review-attempt
-ledger recorded which backend reviewed but not which MODEL - a fact the
-receipt already carries and that cannot be re-derived later (the fallback
-ladder and codex resume both move it). Fixes #340 - thanks @TechupBusiness
-for the measured report (your self-reentrancy hypothesis was disproven by a
-call-graph sweep; the real cause was a swallowed PermissionError). Addresses
-the model-recording half of #338 - thanks @sn-furali.
+When a permissions problem breaks tracker sync, you now find out in
+milliseconds with the actual cause - the path, the errno, and what to fix -
+instead of waiting out a 10-second stall and being told a phantom "holder
+appears alive". And when you ask which model reviewed your code, the attempt
+ledger can finally answer: rows record the model and effort that actually
+ran, which no config re-derivation could reconstruct after the fact. Fixes
+#340 - thanks @TechupBusiness for the measured report (your self-reentrancy
+hypothesis was disproven by a call-graph sweep; the real cause was a
+swallowed PermissionError). Addresses the model-recording half of #338 -
+thanks @sn-furali.
 
 ### Fixed
 
