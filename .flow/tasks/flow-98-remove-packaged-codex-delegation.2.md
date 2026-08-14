@@ -38,9 +38,15 @@ Remove the packaged delegation path from the work skill: the Phase 0 request che
 - [ ] TBD
 
 ## Done summary
-TBD
+Stripped the packaged codex-delegation machinery from the work skill and worker agent: phases.md Phase 0 + Phase 1.5 removed wholly (no renumber — hole kept), 3c DELEGATE flag block and 3d.2 circuit breaker removed (3d.1 sentinel retargeted to Phase 3e), SKILL.md activation/resolution section and arg tokens removed, both delegation reference files deleted, worker.md delegation phases + DELEGATION_* signal contract removed. WORK_CFG single root config snapshot moved into the Phase 1 spec-id mint gate (still exactly one config get; spec-id-mint.md pointer updated). Test retargets in same commit: work_reached_path_routes (anti-regrowth guard), foreground_rule_fences (no-carve-out assertion), worker_anchor_prose, skill_prose_diet. sync-codex.sh: comment reword only.
+
+Deferred by design: mirror regen (sync-codex.sh execution, plugins/flow-next/codex/**) → task .5 per spec wave-shape rule; delegation test-file retirement → task .4.
+
+Implemented in isolated worktree (wt/flow-98.2, e36c2859), integrated onto spec branch as afbb2ed1.
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.2.json; P3 worker.md:219 stale trailer sentence carried to .5)stage: plan-sync - ran (drift: yes; .5 scope expanded with orphaned flowctl codex subcommands + dangling refs + setup routing option; spec coverage table populated)
 
 ## Evidence
-- Commits:
-- Tests:
+- Commits: afbb2ed1202fc465e5b941ceec28fb840f7a26c2
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_work_reached_path_routes test_parallel_work_prose test_foreground_rule_fences -q (worker worktree, green), integrated verify @afbb2ed1: cd plugins/flow-next/tests && python3 -m unittest test_flow_config_schema_drift test_model_resolution test_removed_delegate_config_advisory test_work_reached_path_routes test_parallel_work_prose test_foreground_rule_fences -q (121 tests OK), uvx ruff@0.16.0 check . (All checks passed, integrated tree), python3 scripts/run_tests_parallel.py (worker worktree) -> 5 failing files ALL owned downstream: 3 delegation test files (.4), 2 mirror-parity halves (.5), impl-review: host backend SHIP (reviewer claude-fable-5, fresh read-only subagent; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.2.json)
 - PRs:

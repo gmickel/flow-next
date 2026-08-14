@@ -7,8 +7,9 @@ worker's context has decayed. Prose paragraphs above the fence demonstrably do n
 survive long runs (fn-110.1 stall, 2026-07-20).
 
 Also pins the inverse boundary: the rp workflow (chat-based, different call shape)
-carries no such comment, and worker.md's delegation step keeps its sanctioned
-background-launch disambiguation.
+carries no such comment, and worker.md's foreground rule carries no
+background-launch carve-out (flow-98 deleted the packaged delegation path that
+was its one sanctioned exception).
 """
 
 import re
@@ -112,12 +113,13 @@ class ForegroundRuleFenceTestCase(unittest.TestCase):
             if suite_rule in part:
                 self.assertEqual(i % 2, 1, "suite foreground rule found outside a code fence")
 
-    def test_worker_delegation_disambiguation_present_once(self):
+    def test_worker_foreground_rule_prose_present_with_no_background_carve_out(self):
+        """flow-98 retired the packaged delegation path — the ONE sanctioned
+        background-launch exception went with it, so the worker's foreground rule
+        is now unconditional."""
         text = (PLUGIN / "agents" / "worker.md").read_text(encoding="utf-8")
-        marker = "DELEGATION-ONLY exception"
-        self.assertEqual(text.count(marker), 1, "worker.md delegation disambiguation missing or duplicated")
-        # The prose Foreground rule paragraph must also still exist.
         self.assertIn("Foreground rule (do not background the review)", text)
+        self.assertNotIn("DELEGATION-ONLY exception", text)
 
 
 if __name__ == "__main__":

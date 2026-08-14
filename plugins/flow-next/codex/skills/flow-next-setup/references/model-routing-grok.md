@@ -1,7 +1,6 @@
 # Model routing: Grok
 
-Read only after the Model Routing answer is `Scaffold` or
-`Scaffold + enable codex delegation` on `PLATFORM=grok`.
+Read only after the Model Routing answer is `Scaffold` on `PLATFORM=grok`.
 
 1. Enumerate available Grok models from host knowledge; fallback to foreground,
    short-timeout `grok models` when `HAVE_GROK=1`. If unavailable, list
@@ -57,9 +56,6 @@ target:
 Confirm:
 `Model-routing section written to <file> — Grok host-native pins (single-family fail-closed for host review); re-run /flow-next:setup to refresh.`
 
-If delegation was selected, set `work.delegate=codex`, NEVER touch
-`work.delegateConsent`, read persisted `work.delegate` back with
-`flowctl config get work.delegate --raw --json`, and warn if it is not `codex`.
 The codex review-backend switch may run on Grok only when the scaffold was
 accepted, `HAVE_CODEX=1`, and `CURRENT_BACKEND` is nonempty and not already
 bare `codex` or `codex:...`: Codex is genuinely cross-family for a Grok writer.

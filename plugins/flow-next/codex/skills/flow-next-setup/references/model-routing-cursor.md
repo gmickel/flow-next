@@ -1,7 +1,6 @@
 # Model routing: Cursor
 
-Read only after the Model Routing answer is `Scaffold` or
-`Scaffold + enable codex delegation` on `PLATFORM=cursor`.
+Read only after the Model Routing answer is `Scaffold` on `PLATFORM=cursor`.
 
 1. Enumerate available Cursor model slugs from host knowledge; fallback to
    foreground, short-timeout `cursor-agent --list-models` (up to 200 lines)
@@ -58,8 +57,5 @@ is load-bearing. Per target:
 Confirm a write with:
 `Model-routing section written to <file> — Cursor host-native pins; re-run /flow-next:setup to refresh volatile ids.`
 
-If the answer included delegation, set `work.delegate=codex`, NEVER touch
-`work.delegateConsent`, read persisted `work.delegate` back with
-`flowctl config get work.delegate --raw --json`, and warn if it is not `codex`.
 Skip the codex review-backend switch on Cursor regardless of `CURRENT_BACKEND`;
 Host remains the recommended non-circular path.

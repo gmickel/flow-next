@@ -13,8 +13,8 @@ missing driver must NOT be read as "headless"):
 
 The behavioral run is POSIX-only (the host runs the probe under Git-bash on Windows,
 but executing the extracted snippet via a Python subprocess + a PATH-stub on the
-Windows runner tests shell plumbing, not probe logic — same posture as
-test_codex_delegation_gates). The prose-contract test runs on ALL platforms
+Windows runner tests shell plumbing, not probe logic). The prose-contract test
+runs on ALL platforms
 (incl. windows-latest) as the cross-platform drift guard.
 
 Real no-display behavior of `cua-driver` on headless Linux/Windows hosts stays a
@@ -56,8 +56,7 @@ exit 2
 
 def _cua_text() -> str:
     # Normalize CRLF→LF (no .gitattributes pins LF; Windows checks out CRLF, which
-    # would break `bash -c` on the extracted snippet — same fix as the codex-
-    # delegation gate test).
+    # would break `bash -c` on the extracted snippet).
     return CUA_MD.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
 
 

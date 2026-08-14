@@ -296,48 +296,6 @@ DESCRIPTIONS: dict[str, str] = {
         "Non-null only when all required destination fields, required "
         "normalized slots, and capability booleans are present."
     ),
-    "work": (
-        "/flow-next:work implementation-delegation settings (fn-55). "
-        "DEPRECATED - every work.delegate* key below is superseded by the "
-        "agentic route: the /flow-next:setup model-routing scaffold in "
-        "CLAUDE.md / AGENTS.md plus the .flow/usage.md bridge recipes. "
-        "Nothing is removed and existing setups keep working; removal is "
-        "specced as flow-98. See docs/running-lean.md."
-    ),
-    "work.delegate": (
-        "DEPRECATED - see the work group description for the replacement "
-        "route. Opt-in delegation of implementation to a local codex exec. Only the "
-        "literal string codex activates (any other value, including bool "
-        "true, is OFF). Resolution: arg token delegate:codex / "
-        "delegate:local > this config > hard default OFF."
-    ),
-    "work.delegateModel": (
-        "On-disk override for the model passed to codex exec (-m) for "
-        "delegated implementation. When raw-set on disk it wins over "
-        "models.roles.delegate.codex; skills resolve via flowctl models "
-        "resolve delegate. Requires codex CLI >= 0.144 for the default."
-    ),
-    "work.delegateEffort": (
-        "Reasoning-effort floor (none | low | medium | high | xhigh), "
-        "emitted as -c model_reasoning_effort= on the delegated codex exec. "
-        "Per-run risk escalation floors against this. The enum includes "
-        "none, not minimal."
-    ),
-    "work.delegateSandbox": (
-        "Codex sandbox mode (yolo | full-auto), persisted by the one-time "
-        "consent gate. yolo has a wider blast radius - the gate surfaces "
-        "this before first use."
-    ),
-    "work.delegateConsent": (
-        "One-time-consent flag written by the host consent gate after the "
-        "user opts in. Headless/Ralph requires this pre-set to true (no "
-        "live prompt path)."
-    ),
-    "work.delegateDecision": (
-        "Per-task delegation decision (auto | ask). auto delegates every "
-        "eligible task; ask prompts per-task in interactive mode (treated "
-        "as auto in headless only when delegateConsent=true)."
-    ),
     "land": "/flow-next:land babysit-loop settings (fn-60).",
     "land.release": (
         "Run the post-merge release-follow step (the project's own release "
@@ -452,7 +410,7 @@ DESCRIPTIONS: dict[str, str] = {
     "models.roles": (
         "Role-map pins: models.roles.<role>.<backend> = model or "
         "model:effort. Roles name semantic jobs (fastJudge, review, "
-        "delegate, scoutFast, scoutIntelligent), not call sites; backends "
+        "scoutFast, scoutIntelligent), not call sites; backends "
         "are codex, copilot, cursor. Schema-validated on config set. Empty "
         "= registry baselines."
     ),
@@ -727,16 +685,6 @@ def _build_table() -> list[tuple[str, dict]]:
         ),
         ("tracker.resolved.scopeResolvedAt", _scope_resolved_at_fragment()),
         ("tracker.resolved.resolvedAt", {"type": ["string", "null"]}),
-        ("work", {"kind": "object", "open": False}),
-        ("work.delegate", {"enum": ["codex", False]}),
-        ("work.delegateModel", {"type": "string"}),
-        (
-            "work.delegateEffort",
-            {"enum": ["none", "low", "medium", "high", "xhigh"]},
-        ),
-        ("work.delegateSandbox", {"enum": ["yolo", "full-auto"]}),
-        ("work.delegateConsent", {"type": "boolean"}),
-        ("work.delegateDecision", {"enum": ["auto", "ask"]}),
         ("land", {"kind": "object", "open": False}),
         ("land.release", {"type": "boolean"}),
         ("land.patienceMinutes", {"type": "integer"}),

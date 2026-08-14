@@ -1388,46 +1388,24 @@ def get_default_config() -> dict:
         "planSync": {"enabled": True, "crossSpec": False},
         # fn-168 R7 — `maxIterations` is the review-round cap's persistent rung
         # (env MAX_REVIEW_ITERATIONS still wins). Defaulted here, like the
-        # work.delegate* block, so `config get review.maxIterations` answers 8
+        # land.* block, so `config get review.maxIterations` answers 8
         # rather than null on a fresh repo. Raising it is a HUMAN act: ralph-guard
         # blocks the `config set`, a file-tool write to .flow/config.json, and the
         # env assignment, so an autonomous agent cannot extend its own gate.
         "review": {"backend": None, "maxIterations": DEFAULT_MAX_REVIEW_ITERATIONS},
         "scouts": {"github": False},
         "tracker": get_default_tracker_config(),
-        # fn-55.1 — Codex implementation-delegation defaults ("the law,
-        # defined once"). These are the spec's defaults so `config get
-        # work.delegate*` returns them (NOT null) on a fresh repo. The
-        # resolution chain for activation is:
-        #   arg token  `delegate:codex` / `delegate:local`   (highest)
-        #   > flow config `work.delegate`                     (this block)
-        #   > hard default OFF                                (delegate=false)
-        # The generic fuzzy "use codex" is NOT a delegation trigger — it
-        # stays mapped to the review backend; only the explicit
-        # `delegate:codex` / `delegate:local` tokens (and this config)
-        # resolve delegation. Top-level `work.*` is a DISTINCT namespace
-        # from the tracker bridge's `tracker.perEvent.work.*` lifecycle
-        # keys (phases.md:94-101) — no clash.
-        "work": {
-            "delegate": False,
-            # fn-97 / fn-115 - baseline gpt-5.6-terra (eval-motivated default).
-            # Effective model resolution (resolve_delegate_model): on-disk
-            # work.delegateModel > models.roles.delegate.codex > this baseline.
-            # Escalate via `config set work.delegateModel gpt-5.6-sol` or the
-            # role map. Requires codex CLI >= 0.144. No fn-76 ladder on this
-            # path (hard floor once resolved).
-            "delegateModel": "gpt-5.6-terra",
-            # Effort enum: none|low|medium|high|xhigh. `medium` is the floor
-            # default; the per-batch risk escalation (fn-55.3) floors against it.
-            "delegateEffort": "medium",
-            # Sandbox: yolo (default) | full-auto. Persisted by the
-            # one-time consent gate (fn-55.2).
-            "delegateSandbox": "yolo",
-            "delegateConsent": False,
-            # auto (default) | ask. The auto|ask behavior is implemented in
-            # fn-55.2; this task only sets the default + documents the enum.
-            "delegateDecision": "auto",
-        },
+        # flow-98 — the top-level `work.*` namespace is GONE. It held the
+        # fn-55 packaged codex-delegation keys (delegate, delegateModel,
+        # delegateEffort, delegateSandbox, delegateConsent,
+        # delegateDecision); implementation offload is now the agentic
+        # route (the /flow-next:setup model-routing scaffold in
+        # CLAUDE.md / AGENTS.md plus the .flow/usage.md bridge recipes),
+        # so there is nothing left to configure here. A config still
+        # carrying the keys gets ONE advisory line
+        # (REMOVED_DELEGATE_CONFIG_KEYS below) and runs unchanged. The
+        # tracker bridge's `tracker.perEvent.work.*` lifecycle keys are a
+        # DISTINCT namespace and are untouched.
         # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
         # `config get land.*` returns values (NOT null) on a fresh repo.
         # Consumed by the opt-in flow-next-land skill (fn-60.1); flowctl
@@ -1799,6 +1777,88 @@ def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
     if snapshot.raw is None:
         return _CONFIG_RAW_SENTINEL
     return _tree_probe(snapshot.raw, key)
+
+
+# --- flow-98: advisory for config keys the delegation removal deleted -------
+#
+# The packaged codex-delegation subsystem is gone, and with it the six
+# `work.delegate*` keys and the `models.roles.delegate` pin. A repo whose
+# .flow/config.json still carries them is NOT broken - flowctl ignores them
+# entirely - but silence would leave the user believing delegation is still
+# wired. Implementation offload now lives in the /flow-next:setup
+# model-routing scaffold (CLAUDE.md / AGENTS.md) plus the .flow/usage.md
+# bridge recipes, and the advisory points there.
+#
+# ONE line per invocation, naming every removed key found - never one line
+# per key, never per phase, never a failure.
+#
+# INSPECTION NOTE: the call sites are the config surfaces (`config get` /
+# `config set`) and the work entry points (`anchor` / `brief`) - where
+# someone is either looking at configuration or starting work. It is
+# deliberately NOT wired into load_flow_config(): every command reads
+# config, and a line on every invocation is noise rather than migration help.
+
+REMOVED_DELEGATE_CONFIG_KEYS: tuple[str, ...] = (
+    "work.delegate",
+    "work.delegateConsent",
+    "work.delegateDecision",
+    "work.delegateEffort",
+    "work.delegateModel",
+    "work.delegateSandbox",
+    "models.roles.delegate",
+)
+
+_removed_delegate_advisory_printed = False
+
+
+def removed_delegate_keys_present(
+    snapshot: "Optional[ConfigSnapshot]" = None,
+) -> list[str]:
+    """Removed delegation keys still present in the RAW config file.
+
+    Raw probe only: a key absent from disk never reports, and the merged
+    defaults no longer carry these keys at all. No file is written, nothing
+    is validated - presence is the whole question.
+    """
+    snap = snapshot if snapshot is not None else load_config_snapshot()
+    if snap.raw is None:
+        return []
+    return [
+        key
+        for key in REMOVED_DELEGATE_CONFIG_KEYS
+        if _tree_probe(snap.raw, key) is not _CONFIG_RAW_SENTINEL
+    ]
+
+
+def removed_delegate_keys_note(keys: list[str]) -> str:
+    """The one advisory line for a config still carrying removed keys."""
+    return (
+        f"note: .flow/config.json still carries removed delegation "
+        f"key(s): {', '.join(keys)}; flowctl ignores them. Implementation "
+        f"offload is now the model-routing section /flow-next:setup writes "
+        f"into CLAUDE.md / AGENTS.md plus the bridge recipes in "
+        f".flow/usage.md - route work there and delete these keys."
+    )
+
+
+def print_removed_delegate_keys_advisory(
+    snapshot: "Optional[ConfigSnapshot]" = None,
+) -> None:
+    """Print the advisory AT MOST once per invocation; never blocks.
+
+    stderr so a `--json` read stays machine-parseable. Any failure to read
+    config degrades to no advisory, never to a command failure.
+    """
+    global _removed_delegate_advisory_printed
+    if _removed_delegate_advisory_printed:
+        return
+    try:
+        keys = removed_delegate_keys_present(snapshot)
+    except Exception:
+        return
+    _removed_delegate_advisory_printed = True
+    if keys:
+        print(removed_delegate_keys_note(keys), file=sys.stderr)
 
 
 def resolve_config_key_for_read(key: str, snapshot: "Optional[ConfigSnapshot]" = None):
@@ -7845,7 +7905,6 @@ VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
 MODEL_ROLES: tuple[str, ...] = (
     "fastJudge",
     "review",
-    "delegate",
     "scoutFast",
     "scoutIntelligent",
 )
@@ -7861,7 +7920,6 @@ FAST_JUDGE_BASELINE: dict[str, tuple[str, str]] = {
     "codex": ("gpt-5.6-luna", "high"),
     "copilot": ("claude-haiku-4.5", "low"),
 }
-DELEGATE_BASELINE_MODEL = "gpt-5.6-terra"
 
 
 def _parse_role_pin(pin: str) -> tuple[str, Optional[str]]:
@@ -7910,7 +7968,7 @@ def resolve_role_model(
       1. ``explicit`` (CLI flag / per-task pin / caller override)
       2. env var named by ``env_var`` (when set)
       3. config role map ``models.roles.<role>.<backend>``
-      4. role baseline (fastJudge / delegate) or registry default (review)
+      4. role baseline (fastJudge) or registry default (review)
          - caller applies registry defaults when source is ``baseline`` and
          model is None.
 
@@ -7935,32 +7993,7 @@ def resolve_role_model(
     if role == "fastJudge" and backend in FAST_JUDGE_BASELINE:
         model, effort = FAST_JUDGE_BASELINE[backend]
         return model, effort, "baseline"
-    if role == "delegate" and backend == "codex":
-        return DELEGATE_BASELINE_MODEL, None, "baseline"
     return None, None, "baseline"
-
-
-def resolve_delegate_model() -> tuple[str, str]:
-    """Effective work.delegate model: raw work.delegateModel > role map > baseline.
-
-    ``work.delegateModel`` wins only when set on disk (not merely the merged
-    default). Role map pin is ``models.roles.delegate.codex``.
-    """
-    raw = _get_config_from_file("work.delegateModel")
-    if raw is not _CONFIG_RAW_SENTINEL and raw is not None and str(raw).strip():
-        raw_val = str(raw).strip()
-        # fn-115 (PR #225 review): `flowctl init` MATERIALIZES the seeded
-        # default into config.json, so an on-disk value identical to the seed
-        # is not evidence of a user pin - let the role map win there. A real
-        # user pin (any non-seed value) still beats the map.
-        seeded = str(
-            get_default_config().get("work", {}).get("delegateModel", "")
-        ).strip()
-        role_pin = get_role_map_pin("delegate", "codex")
-        if raw_val != seeded or role_pin is None:
-            return raw_val, "config"
-    model, _effort, source = resolve_role_model("delegate", "codex")
-    return model or DELEGATE_BASELINE_MODEL, source
 
 
 def resolve_fast_judge_model(
@@ -8047,8 +8080,6 @@ def resolve_models_role(
     ``explicit`` / ``env`` / ``role-map`` / ``config`` / ``baseline``.
     Role-specific resolvers own the precedence:
 
-    * ``delegate`` + codex → ``resolve_delegate_model`` (raw
-      ``work.delegateModel`` > role map > baseline)
     * ``fastJudge`` → ``resolve_fast_judge_model``
     * ``review`` → ``resolve_role_model`` + registry default fill
       (env ``FLOW_<BACKEND>_MODEL``)
@@ -8058,15 +8089,6 @@ def resolve_models_role(
     Scout roles have no flowctl baseline model (mirror-build constants live
     in ``sync-codex.sh``); when unset, model is None and source is baseline.
     """
-    if role == "delegate" and backend == "codex":
-        model, source = resolve_delegate_model()
-        effort: Optional[str] = None
-        if source == "role-map":
-            pin = get_role_map_pin("delegate", "codex")
-            if pin:
-                _m, effort = _parse_role_pin(pin)
-        return model, effort, source
-
     if role == "fastJudge":
         return resolve_fast_judge_model(backend)
 
@@ -8100,9 +8122,9 @@ def resolve_models_role(
 def cmd_models_resolve(args: argparse.Namespace) -> None:
     """Read-only role-map resolve: map + precedence only, no judgment.
 
-    The ONE new flowctl surface fn-115 adds. Skills that previously read
-    ``config get work.delegateModel`` (merged default, bypasses the role map)
-    must call this instead for the ``delegate`` role.
+    The ONE new flowctl surface fn-115 adds. Skills read a role pin through
+    this command rather than `config get`, so the role map (not a merged
+    config default) is the answer.
     """
     use_json = bool(getattr(args, "json", False))
     role = (getattr(args, "role", None) or "").strip()
@@ -20656,6 +20678,7 @@ def cmd_config_get(args: argparse.Namespace) -> None:
     raw = getattr(args, "raw", False)
     key = getattr(args, "key", None)
     snapshot = load_config_snapshot()
+    print_removed_delegate_keys_advisory(snapshot)
 
     if key is None:
         # Keyless root read (fn-110.1): the whole config in one call.
@@ -20710,6 +20733,8 @@ def cmd_config_set(args: argparse.Namespace) -> None:
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
+
+    print_removed_delegate_keys_advisory()
 
     canonical_key, _ = resolve_config_key_for_write(args.key)
 
@@ -35834,357 +35859,6 @@ def cmd_rp_setup_review(args: argparse.Namespace) -> None:
 # --- Codex Commands ---
 
 
-# --- Codex implementation-delegation helpers (fn-55.4) ---
-#
-# Two deterministic, pure helpers that make the implementation-delegation path
-# (the `DELEGATE: codex` worker hook) testable. Per the repo's
-# agentic-vs-deterministic split (CLAUDE.md), result-schema validation +
-# the 5-row classification + scoped-rollback path computation are MECHANICAL,
-# so they live here in flowctl — NOT in markdown the host re-interprets (which
-# would be untestable). The host AGENT keeps the judgment (delegate-or-not,
-# risk→effort, batching); these helpers only compute over (exit code, result
-# JSON) and (pre/post untracked snapshots).
-#
-# Both functions are pure (no git invocation, no filesystem mutation beyond
-# reading the snapshot/result inputs), so the mock-codex fixture can drive every
-# branch deterministically without a real model or repo mutation.
-
-# The lifted result schema's required keys (codex-delegation.md). A result JSON
-# is "valid_schema" only when it is an object carrying EXACTLY these keys (the
-# lifted schema is `additionalProperties:false`, R6) with a `status` in the
-# status enum. We enforce additionalProperties:false HERE too — not only at
-# `--output-schema` generation time — as the backstop for a degraded schema run
-# (e.g. MCP re-enabled, #15451): a free-form object with extra fields must read
-# as schema-INVALID → task_failure → rollback, never a blind commit.
-_DELEGATION_RESULT_REQUIRED = (
-    "status",
-    "files_modified",
-    "issues",
-    "summary",
-    "verification_summary",
-)
-_DELEGATION_STATUS_ENUM = ("completed", "partial", "failed")
-
-
-def classify_delegation_result(
-    exit_code: int, result: Optional[dict], valid_schema: bool
-) -> dict:
-    """Pure 5-row classifier for a Codex delegation result.
-
-    Maps (exit code, parsed result JSON, schema-validity) to the lifted
-    classification table (codex-delegation.md):
-
-      | Signal                                  | class        | action               |
-      |-----------------------------------------|--------------|----------------------|
-      | exit ≠ 0                                 | cli_failure  | rollback_and_disable |
-      | exit 0, result missing/malformed        | task_failure | rollback             |
-      | exit 0, status:"failed"                  | task_failure | rollback             |
-      | exit 0, status:"partial"                 | partial      | finish_locally       |
-      | exit 0, status:"completed"               | success      | commit               |
-
-    ``result`` is the parsed JSON (or ``None`` when missing/unparseable).
-    ``valid_schema`` is True iff ``result`` carries every required key with a
-    status in the enum.
-
-    A non-zero exit ALWAYS wins (CLI failure → fall back to standard for ALL
-    remaining work), regardless of what landed in the result file — a CLI
-    failure can still leave a partially-written or stale result behind.
-
-    Returns ``{class, status, action, scoped_paths, valid_schema}``.
-    - ``status`` echoes the result's status (or ``None`` when missing/malformed).
-    - ``scoped_paths`` is the result's ``files_modified`` (for context only — the
-      authoritative scoped-rollback set comes from ``rollback_plan`` over the
-      untracked snapshot diff, which works even when the result is absent).
-    """
-    # exit ≠ 0 → CLI failure wins unconditionally. Fall back to standard mode
-    # for ALL remaining work (the host disables delegation immediately).
-    if exit_code != 0:
-        return {
-            "class": "cli_failure",
-            "status": (result or {}).get("status") if valid_schema else None,
-            "action": "rollback_and_disable",
-            "scoped_paths": list((result or {}).get("files_modified") or [])
-            if valid_schema
-            else [],
-            "valid_schema": valid_schema,
-        }
-
-    # exit 0 but result missing / malformed / fails schema → task failure.
-    if result is None or not valid_schema:
-        return {
-            "class": "task_failure",
-            "status": None,
-            "action": "rollback",
-            "scoped_paths": [],
-            "valid_schema": False,
-        }
-
-    status = result.get("status")
-    files_modified = list(result.get("files_modified") or [])
-
-    if status == "failed":
-        return {
-            "class": "task_failure",
-            "status": "failed",
-            "action": "rollback",
-            "scoped_paths": files_modified,
-            "valid_schema": True,
-        }
-    if status == "partial":
-        # Keep the diff; the worker finishes locally + verifies + commits.
-        return {
-            "class": "partial",
-            "status": "partial",
-            "action": "finish_locally",
-            "scoped_paths": files_modified,
-            "valid_schema": True,
-        }
-    # status == "completed" → success → cross-check (host-side) then commit.
-    return {
-        "class": "success",
-        "status": "completed",
-        "action": "commit",
-        "scoped_paths": files_modified,
-        "valid_schema": True,
-    }
-
-
-def _result_is_valid_schema(result: Optional[dict]) -> bool:
-    """True iff ``result`` carries EXACTLY the required delegation-result keys
-    (additionalProperties:false, R6) with a status in the enum. The extra-key
-    check is the backstop for a degraded `--output-schema` run — a free-form
-    object with unexpected fields is schema-INVALID, not trusted."""
-    if not isinstance(result, dict):
-        return False
-    # additionalProperties:false — any key beyond the declared five → invalid.
-    if set(result) - set(_DELEGATION_RESULT_REQUIRED):
-        return False
-    for key in _DELEGATION_RESULT_REQUIRED:
-        if key not in result:
-            return False
-    if result.get("status") not in _DELEGATION_STATUS_ENUM:
-        return False
-    # files_modified / issues must be arrays OF STRINGS — the declared
-    # --output-schema requires `items: {type: string}`, so a non-string item
-    # (e.g. files_modified: [123]) is schema-INVALID and must not be trusted
-    # (those entries feed the trust cross-check; non-strings would corrupt it).
-    files_modified = result.get("files_modified")
-    if not isinstance(files_modified, list) or not all(
-        isinstance(x, str) for x in files_modified
-    ):
-        return False
-    issues = result.get("issues")
-    if not isinstance(issues, list) or not all(isinstance(x, str) for x in issues):
-        return False
-    if not isinstance(result.get("summary"), str):
-        return False
-    if not isinstance(result.get("verification_summary"), str):
-        return False
-    return True
-
-
-def cmd_codex_classify_result(args: argparse.Namespace) -> None:
-    """Classify a Codex delegation result file against the 5-row table.
-
-    Reads ``--result <file>`` (may be missing / empty / malformed) + ``--exit
-    <code>`` and emits ``{class, status, action, scoped_paths, valid_schema}``.
-    Pure function over (exit code, result JSON) → no LLM, no git.
-
-    A missing / empty / non-object / unparseable result file is treated as
-    "malformed" (→ task_failure on exit 0). This is the backstop branch: even
-    when `--output-schema` silently degraded, we never commit blind.
-    """
-    result: Optional[dict] = None
-    valid_schema = False
-    try:
-        raw = Path(args.result).read_text(encoding="utf-8")
-        parsed = json.loads(raw)
-        if isinstance(parsed, dict):
-            result = parsed
-            valid_schema = _result_is_valid_schema(parsed)
-    except (OSError, json.JSONDecodeError, ValueError):
-        # Missing / empty / unparseable → malformed → result stays None.
-        result = None
-        valid_schema = False
-
-    classification = classify_delegation_result(args.exit, result, valid_schema)
-
-    if args.json:
-        json_output(classification)
-    else:
-        print(
-            f"class={classification['class']} "
-            f"status={classification['status']} "
-            f"action={classification['action']} "
-            f"valid_schema={classification['valid_schema']}"
-        )
-
-
-def _read_nul_delimited(path: str) -> set:
-    """Read a NUL-delimited snapshot file into a set of repo-relative paths.
-
-    The pre/post untracked snapshots are captured with
-    ``git ls-files --others --exclude-standard -z`` (NUL-delimited — avoids
-    porcelain-v1 quoting of paths with spaces/backslashes/newlines, and
-    enumerates files INSIDE newly-created directories individually rather than
-    collapsing to ``?? dir/``). A missing snapshot file is treated as empty
-    (the pre-snapshot may legitimately be empty on the first delegated task).
-    """
-    try:
-        raw = Path(path).read_bytes()
-    except OSError:
-        return set()
-    if not raw:
-        return set()
-    # Split on NUL; drop the trailing empty element git's -z leaves.
-    parts = raw.split(b"\x00")
-    return {p.decode("utf-8", "surrogateescape") for p in parts if p}
-
-
-def sanitize_rollback_path(rel: str) -> Optional[str]:
-    """Validate a single repo-relative untracked path for `git clean -fd --`.
-
-    Returns the sanitized POSIX path, or ``None`` if it must be rejected.
-    A rejected path NEVER reaches ``git clean`` — feeding `git clean` a bare
-    directory, an absolute path, or a `..` escape risks destroying untracked
-    output outside scope (github/copilot-cli#1675). ``.flow/**`` is host-owned
-    (plan-sync edits, specs, tasks) and is NEVER reverted or cleaned.
-
-    Rejection reasons (mirrors the rollback-plan `rejected` contract):
-      - empty / "." → no concrete file
-      - absolute path → out-of-tree
-      - ".." traversal → escapes the repo root
-      - backslash present → ambiguous separator; never normalized (see below)
-      - bare directory (trailing "/") → `git clean` would recurse; we feed it
-        only individual FILES (the -z snapshot lists files inside new dirs)
-      - any ".flow/**" path → host-owned, never touched
-
-    The output bytes are NEVER rewritten — the function returns the raw ``rel``
-    verbatim on success, never a normalized form. `git ls-files -z` emits
-    byte-exact paths; trimming whitespace OR rewriting a literal backslash to
-    `/` could alias a DISTINCT codex-created path (`" new.py"`, `dir\file.py`)
-    onto a pre-existing untracked path (`"new.py"`, `dir/file.py`) and
-    `git clean` the user's file (breaks the "never a pre-existing file" guard).
-    A literal backslash is therefore REJECTED outright rather than normalized:
-    on POSIX, git uses `/` separators, so a backslash is an exotic literal
-    filename byte we refuse to risk feeding to `git clean`.
-    """
-    if rel is None:
-        return None
-    s = rel
-    if s == "" or s == ".":
-        return None
-    # Reject literal backslashes outright — NEVER rewrite them to `/` (that would
-    # mutate the output bytes and risk aliasing onto a pre-existing `/` path).
-    if "\\" in s:
-        return None
-    if s.startswith("/") or (len(s) >= 2 and s[1] == ":"):
-        # Absolute POSIX path or a Windows drive-letter path.
-        return None
-    # Reject any `..` segment (traversal). Checking segments avoids rejecting a
-    # legitimate filename that merely contains ".." as a substring (e.g.
-    # "a..b.txt"), while still catching "../x" and "a/../b".
-    if ".." in s.split("/"):
-        return None
-    if s.endswith("/"):
-        # Bare directory — never fed to `git clean` (it would recurse).
-        return None
-    # `.flow/` is host-owned: plan-sync edits, specs, tasks must never be
-    # reverted or cleaned. Reject the dir itself and anything beneath it.
-    if s == ".flow" or s.startswith(".flow/"):
-        return None
-    return s
-
-
-def rollback_plan(pre: set, post: set) -> dict:
-    """Compute the safe scoped-rollback FILE set from pre/post untracked snapshots.
-
-    The cleanup set is ``post − pre`` (newly-created untracked FILES) — derived
-    from the snapshots, NOT from the result's ``files_modified`` (which is absent
-    on a CLI-failure / missing / malformed result, yet Codex may still have
-    created files). Each candidate is run through ``sanitize_rollback_path``;
-    survivors land in ``rollback_paths``, rejects (with a reason) in ``rejected``.
-
-    Returns ``{rollback_paths: [...sorted...], rejected: ["<path>: <reason>"]}``.
-    Sorted output makes the helper deterministic for tests + reproducible runs.
-    """
-    new_paths = post - pre
-    rollback_paths = []
-    rejected = []
-    for rel in sorted(new_paths):
-        sanitized = sanitize_rollback_path(rel)
-        if sanitized is None:
-            rejected.append(f"{rel}: {_rollback_reject_reason(rel)}")
-        else:
-            rollback_paths.append(sanitized)
-    return {
-        "rollback_paths": sorted(rollback_paths),
-        "rejected": rejected,
-    }
-
-
-def _rollback_reject_reason(rel: str) -> str:
-    """Human-readable rejection reason for a path `sanitize_rollback_path` drops.
-    Mirrors the rejection branches so the `rejected` list is self-documenting."""
-    if rel is None:
-        return "empty"
-    s = rel  # raw — never trimmed/rewritten (mirrors sanitize_rollback_path)
-    if s == "" or s == ".":
-        return "empty or '.'"
-    if "\\" in s:
-        return "backslash (ambiguous separator)"
-    if s.startswith("/") or (len(s) >= 2 and s[1] == ":"):
-        return "absolute path"
-    if ".." in s.split("/"):
-        return ".. traversal"
-    if s.endswith("/"):
-        return "bare directory"
-    if s == ".flow" or s.startswith(".flow/"):
-        return ".flow/ is host-owned"
-    return "rejected"
-
-
-def cmd_codex_rollback_plan(args: argparse.Namespace) -> None:
-    """Derive the safe scoped-rollback FILE set from pre/post untracked snapshots.
-
-    ``--preexisting-untracked-file`` and ``--post-untracked-file`` are
-    NUL-delimited snapshot files captured with
-    ``git ls-files --others --exclude-standard -z`` BEFORE and AFTER the codex
-    run. The cleanup set = ``post − pre``, sanitized to repo-relative FILE paths
-    (absolute / ``..`` / empty / ``.`` / bare-directory / ``.flow/**`` rejected).
-
-    ``--repo-root`` is accepted for symmetry with the documented contract and
-    future use (e.g. resolving snapshot-relative paths); the computation itself
-    is a pure set diff over the two snapshots, so it does not touch the repo.
-
-    ``--print0`` emits ONLY the sanitized ``rollback_paths`` to stdout,
-    NUL-delimited (one trailing NUL per path), and nothing else — feed it
-    straight to ``xargs -0 git clean -fd --`` for a whitespace/newline-safe argv.
-    When the set is EMPTY (every new path rejected), it writes nothing, so
-    ``xargs -0 --no-run-if-empty`` never invokes a bare ``git clean``. (Pair it
-    with the documented ``rollback_paths | length`` guard for belt-and-braces.)
-    """
-    pre = _read_nul_delimited(args.preexisting_untracked_file)
-    post = _read_nul_delimited(args.post_untracked_file)
-    plan = rollback_plan(pre, post)
-
-    if getattr(args, "print0", False):
-        # NUL-delimited paths only — for `xargs -0 git clean -fd --`. Bytes are
-        # written verbatim (no rewrite): surrogateescape round-trips odd bytes.
-        data = "".join(p + "\x00" for p in plan["rollback_paths"])
-        sys.stdout.buffer.write(data.encode("utf-8", "surrogateescape"))
-        sys.stdout.buffer.flush()
-        return
-
-    if args.json:
-        json_output(plan)
-    else:
-        for p in plan["rollback_paths"]:
-            print(p)
-        for r in plan["rejected"]:
-            print(f"REJECTED {r}", file=sys.stderr)
-
-
 # ---------------------------------------------------------------------------
 # `flowctl anchor <task-id>` — single-call worker anchor bundle (fn-83.3, R8).
 #
@@ -36416,6 +36090,7 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     sections = _anchor_sections(task_id, spec_id)
     dependencies = _anchor_dependencies(flow_dir, task_data)
     stale = upstream_behind()  # fn-181 R3/R5: one check per invocation.
+    print_removed_delegate_keys_advisory()  # flow-98: stderr, never blocks.
 
     if use_json:
         payload = {
@@ -37389,6 +37064,8 @@ def cmd_brief(args: argparse.Namespace) -> None:
     data = _brief_collect(flow_dir, repo_root)
     if not full:
         data = _brief_apply_budget(data, BRIEF_BUDGET_CHARS)
+
+    print_removed_delegate_keys_advisory()  # flow-98: stderr, never blocks.
 
     if use_json:
         # Render includes success=; print raw (json_output would double-wrap).
@@ -49729,7 +49406,7 @@ def main() -> None:
     p_models_resolve.add_argument(
         "role",
         help=(
-            "Role name: fastJudge | review | delegate | scoutFast | scoutIntelligent"
+            "Role name: fastJudge | review | scoutFast | scoutIntelligent"
         ),
     )
     p_models_resolve.add_argument(
@@ -51700,60 +51377,6 @@ def main() -> None:
     _add_validate_parser(codex_sub, "codex")
     _add_deep_pass_parser(codex_sub, "codex")
 
-    # Implementation-delegation helpers (fn-55.4): deterministic classification
-    # + scoped-rollback path computation for the `DELEGATE: codex` worker hook.
-    p_codex_classify = codex_sub.add_parser(
-        "classify-result",
-        help="Classify a Codex delegation result against the 5-row table",
-    )
-    p_codex_classify.add_argument(
-        "--result",
-        required=True,
-        help="Path to result-batch-<n>.json (may be missing/empty/malformed)",
-    )
-    p_codex_classify.add_argument(
-        "--exit",
-        type=int,
-        required=True,
-        dest="exit",
-        help="Exit code of the codex exec invocation (non-zero → CLI failure)",
-    )
-    p_codex_classify.add_argument("--json", action="store_true", help="JSON output")
-    p_codex_classify.set_defaults(func=cmd_codex_classify_result)
-
-    p_codex_rollback = codex_sub.add_parser(
-        "rollback-plan",
-        help="Compute the safe scoped-rollback FILE set from untracked snapshots",
-    )
-    p_codex_rollback.add_argument(
-        "--repo-root",
-        dest="repo_root",
-        default=".",
-        help="Repo root (accepted for contract symmetry; computation is a pure "
-        "set diff over the two snapshots)",
-    )
-    p_codex_rollback.add_argument(
-        "--preexisting-untracked-file",
-        dest="preexisting_untracked_file",
-        required=True,
-        help="NUL-delimited untracked snapshot captured BEFORE delegation "
-        "(git ls-files --others --exclude-standard -z)",
-    )
-    p_codex_rollback.add_argument(
-        "--post-untracked-file",
-        dest="post_untracked_file",
-        required=True,
-        help="NUL-delimited untracked snapshot captured AFTER the run",
-    )
-    p_codex_rollback.add_argument("--json", action="store_true", help="JSON output")
-    p_codex_rollback.add_argument(
-        "--print0",
-        action="store_true",
-        help="Emit ONLY the sanitized rollback paths, NUL-delimited, for "
-        "`xargs -0 git clean -fd --` (empty set → no output → no bare clean)",
-    )
-    p_codex_rollback.set_defaults(func=cmd_codex_rollback_plan)
-
     # copilot (GitHub Copilot CLI helpers). Subcommand surface mirrors codex;
     # review subcommands (impl-review/plan-review/completion-review).
     p_copilot = subparsers.add_parser("copilot", help="GitHub Copilot CLI helpers")
@@ -51768,7 +51391,7 @@ def main() -> None:
 
     # cursor (cursor-agent CLI helpers — fn-74). Subcommand surface mirrors
     # codex/copilot: impl-review/plan-review/completion-review/validate/
-    # deep-pass (NOT classify-result/rollback-plan — those are codex-only).
+    # deep-pass.
     p_cursor = subparsers.add_parser("cursor", help="Cursor (cursor-agent CLI) helpers")
     cursor_sub = p_cursor.add_subparsers(dest="cursor_cmd", required=True)
 

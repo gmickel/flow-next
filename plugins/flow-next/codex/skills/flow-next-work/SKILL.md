@@ -149,30 +149,6 @@ If user chose review, pass the review mode to the worker. The worker agent invok
 
 **Unlink / re-link lifecycle:** documented with the touchpoints in [references/tracker-touchpoints.md](references/tracker-touchpoints.md) (`Unlink / re-link lifecycle`) — no work-run step.
 
-## Codex implementation-delegation (opt-in, off by default)
-
-**The in-session path is the documented default and is behaviorally unchanged.**
-With delegation off — the default — Work performs one cheap request check
-(phases.md Phase 0) and loads no delegation reference.
-
-**Activation is disambiguated from the review backend.** `/flow-next:work`
-already maps the generic fuzzy "use codex" to the **review backend** (Review-mode
-parsing above). **Delegation activates on exactly three signals**: the explicit arg
-token `delegate:codex` (off-switch `delegate:local`), the flow config
-`work.delegate=codex`, or an unambiguous "use codex **for implementation**" /
-"delegate implementation to codex". A run that turned delegation on from bare
-"use codex" has broken this.
-
-**Resolution chain (precedence):** arg token (`delegate:codex` / `delegate:local`)
-> flow config `work.delegate` > hard default OFF. Phase 0 combines that value
-with the cheap Claude-Code host check to compute `delegation_requested`. A
-requested path then reads
-[references/codex-delegation-selection.md](references/codex-delegation-selection.md)
-at Phase 1.5 for the exact host/config/input/consent/clean-tree selection; only
-a passing selection sets `delegation_active=true` and loads the active machinery
-in [references/codex-delegation.md](references/codex-delegation.md). Any
-selection failure runs the standard path and leaves the active reference cold.
-
 ## Guardrails
 
 - **The branch question is answered before the run starts.** A run that began on an unresolved branch choice has broken this.

@@ -75,11 +75,15 @@ Two planning rules this spec follows so the wave is actually reachable: propagat
 
 | R-ID | Task |
 |------|------|
-| R1 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R2 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R3 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R4 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R5 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R6 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R7 | fn-N.M (TBD - populate via /flow-next:plan) |
-| R8 | fn-N.M (TBD - populate via /flow-next:plan) |
+| R1 | flow-98-remove-packaged-codex-delegation.1 |
+| R2 | flow-98-remove-packaged-codex-delegation.2 |
+| R3 | flow-98-remove-packaged-codex-delegation.1 |
+| R4 | flow-98-remove-packaged-codex-delegation.5 |
+| R5 | flow-98-remove-packaged-codex-delegation.3 |
+| R6 | flow-98-remove-packaged-codex-delegation.4 |
+| R7 | flow-98-remove-packaged-codex-delegation.5 |
+| R8 | flow-98-remove-packaged-codex-delegation.4 |
+| R9 | flow-98-remove-packaged-codex-delegation.3 |
+| R10 | flow-98-remove-packaged-codex-delegation.5 |
+
+<!-- Updated by plan-sync: populated from tasks' satisfies frontmatter (all 5 tasks minted, .1/.2 done) — table was still TBD placeholders; R9/R10 rows were missing entirely -->

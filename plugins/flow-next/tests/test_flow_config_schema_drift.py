@@ -447,9 +447,13 @@ class FixtureValidation(unittest.TestCase):
             }
         )
 
-    def test_valid_work_delegate(self) -> None:
-        self._valid({"work": {"delegate": "codex"}})
-        self._valid({"work": {"delegate": False}})
+    def test_removed_work_namespace_is_invalid(self) -> None:
+        # flow-98: the packaged-delegation keys are gone from the reader AND
+        # the schema, so an editor flags a config that still carries them.
+        # flowctl itself never fails on them - it prints one advisory line.
+        self._invalid({"work": {"delegate": "codex"}})
+        self._invalid({"work": {"delegateModel": "gpt-5.6-terra"}})
+        self._invalid({"models": {"roles": {"delegate": {"codex": "m"}}}})
 
     def test_invalid_enums(self) -> None:
         self._invalid({"pipeline": {"qa": "yes"}})
@@ -467,7 +471,6 @@ class FixtureValidation(unittest.TestCase):
     def test_invalid_types(self) -> None:
         self._invalid({"memory": {"enabled": "yes"}})
         self._invalid({"land": {"patienceMinutes": True}})
-        self._invalid({"work": {"delegate": True}})
 
     def test_invalid_models_roles_closed(self) -> None:
         self._invalid(

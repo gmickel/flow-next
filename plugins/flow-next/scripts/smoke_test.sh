@@ -2059,7 +2059,7 @@ else
 fi
 
 # 2: Frozen option strings, as-built casing.
-if grep -qF '`Scaffold` / `Scaffold + enable codex delegation` / `Skip`' "$MR_WORKFLOW"; then
+if grep -qF '`Scaffold` / `Skip`' "$MR_WORKFLOW"; then
   echo -e "${GREEN}✓${NC} setup workflow carries the frozen Model Routing option set"
   PASS=$((PASS + 1))
 else
@@ -2067,14 +2067,14 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 3: Delegation opt-in never pre-sets the first-use consent gate. This is an
-# enabled-path contract, so fn-130 routes it into each selected host reference.
-if grep -qE "NEVER.{0,40}(set or touch )?work\.delegateConsent|NEVER touch" "${MR_ROUTING_REFS[@]}"; then
-  echo -e "${GREEN}✓${NC} setup workflow never pre-sets work.delegateConsent"
-  PASS=$((PASS + 1))
-else
-  echo -e "${RED}✗${NC} setup workflow missing never-pre-set-delegateConsent contract"
+# 3: The retired packaged-delegation option must not regrow in the option set
+# or in any selected host reference.
+if grep -qE "work\.delegate|Scaffold \+ enable codex delegation" "$MR_WORKFLOW" "${MR_ROUTING_REFS[@]}"; then
+  echo -e "${RED}✗${NC} setup workflow still carries retired packaged-delegation prose"
   FAIL=$((FAIL + 1))
+else
+  echo -e "${GREEN}✓${NC} setup workflow carries no packaged-delegation option"
+  PASS=$((PASS + 1))
 fi
 
 # 4: Scaffold processing is ordered AFTER the Docs block.

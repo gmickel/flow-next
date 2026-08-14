@@ -2,6 +2,39 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Choosing which model writes your code is now something you say, not something
+you configure. The packaged codex-delegation subsystem is removed: routing
+implementation to a second CLI is a bridge recipe you run, or standing prose in
+your `CLAUDE.md` / `AGENTS.md` that every session - including unattended pilot,
+land, and Ralph ticks - already reads and applies with judgment. One routing
+surface instead of two, and the two things worth keeping from the packaged path
+survive as rules rather than machinery.
+
+### BREAKING
+
+- **Packaged codex delegation is gone.** Removed: the six `work.delegate*`
+  config keys (`delegate`, `delegateConsent`, `delegateDecision`,
+  `delegateEffort`, `delegateModel`, `delegateSandbox`), the `models.roles.delegate`
+  role pin, the `delegate:codex` / `delegate:local` work arguments, the work
+  skill's delegation gating and result-classification path, the
+  `flowctl codex classify-result` / `codex rollback-plan` subcommands, and the
+  `/flow-next:setup` "Scaffold + enable codex delegation" option. Nothing in the
+  standard work loop changes - it was off by default, and the host already owned
+  gating, git, review, and commit.
+
+  **Migration (one step):** run `/flow-next:setup` and accept the model-routing
+  scaffold, then drive the other CLI with the bridge recipes in `flowctl usage`
+  (§ Orchestration & model steering). Leftover `work.delegate*` keys in
+  `.flow/config.json` are inert; flowctl prints one non-blocking advisory naming
+  them and the replacement route until you delete them. Two rules carry over and
+  are not optional: **the bridged child writes code while the host keeps git,
+  judgment, and the verdict**, and on well-specified work a value-tier
+  implementer matches a strong-tier one at roughly two-thirds the wall clock -
+  send clear tasks to the value tier, escalate the gnarly ones. Details:
+  [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#implementation-offload--the-bridge-route).
+
 ## [flow-next 3.34.0] - 2026-08-14
 
 Autonomous merges get three long-requested capabilities, and land loses its

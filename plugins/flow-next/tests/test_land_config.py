@@ -27,7 +27,7 @@ Plus: `config set` round-trips for the string enum and the integer knob
 no-clobber-of-siblings invariant, and the new top-level `land.*` namespace
 does not clash with existing blocks. Static assertions over workflow.md
 §2.6 back the comment-scan detection (no host-agent bash harness exists —
-see CommentScanWorkflowStaticTestCase). Mirrors test_work_delegate_config.py.
+see CommentScanWorkflowStaticTestCase).
 """
 
 from __future__ import annotations
@@ -189,17 +189,17 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
 
     def test_land_block_does_not_clash_with_existing_blocks(self) -> None:
         defaults = self.flowctl.get_default_config()
-        # land.* is its own top-level block, distinct from work.* and
+        # land.* is its own top-level block, distinct from pipeline.* and
         # tracker.* — no shared keys leak across.
         self.assertIn("land", defaults)
-        self.assertIn("work", defaults)
-        self.assertNotIn("release", defaults["work"])
-        self.assertNotIn("delegate", defaults["land"])
+        self.assertIn("pipeline", defaults)
+        self.assertNotIn("release", defaults["pipeline"])
+        self.assertNotIn("qa", defaults["land"])
 
-    def test_setting_land_key_does_not_clobber_work_defaults(self) -> None:
+    def test_setting_land_key_does_not_clobber_sibling_defaults(self) -> None:
         self._run_config_set_cli("land.reviewSignal", "approve")
         self.assertEqual(
-            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-terra"
+            self._run_config_get_cli("pipeline.qa")["value"], "off"
         )
 
     # ── fn-65.1: land.cleanReviewCommentPattern (R5) ─────────────────────

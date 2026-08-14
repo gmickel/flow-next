@@ -274,7 +274,7 @@ class TestFlowNextRule(unittest.TestCase):
         self.assertRegex(
             self.text,
             re.compile(
-                r"BEFORE delegating.*flowctl usage",
+                r"BEFORE bridging work.*flowctl usage",
                 re.IGNORECASE | re.DOTALL,
             ),
         )

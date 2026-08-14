@@ -83,12 +83,10 @@ chart show
 chart wire-decision
 checkpoint restore
 checkpoint save
-codex classify-result
 codex completion-review
 codex deep-pass
 codex impl-review
 codex plan-review
-codex rollback-plan
 codex validate
 config get
 config set

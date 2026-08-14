@@ -23,8 +23,9 @@ Four groups:
       (0/2 starts, 0/2 ends, out-of-order) → untouched. PLUS prose-contract
       assertions on `commands/uninstall.md`.
   (d) workflow prose contracts on the setup skill (canonical AND Codex mirror):
-      headless-skip rule, frozen option strings (as-built casing), never-pre-set
-      `work.delegateConsent`, scaffold processing ordered after the Docs block.
+      headless-skip rule, frozen option strings (as-built casing), retired
+      packaged-delegation vocabulary must not regrow, scaffold processing
+      ordered after the Docs block.
 
 Run:
     python3 -m unittest plugins.flow-next.tests.test_model_routing_scaffold -v
@@ -55,7 +56,7 @@ SENTINEL_RE = re.compile(r"^<!-- probe:(codex|cursor|grok) --> (.*)$")
 # here — they name rows in the scores table and rules and are valid anywhere;
 # only the binary / wiring invocations gate on a probe. (`grok-4.5-high` reached
 # via `cursor-agent --model` is a CURSOR route, not a grok-binary route.)
-CODEX_ROUTE_TOKENS = ("codex exec", "delegate:codex", "review.backend codex")
+CODEX_ROUTE_TOKENS = ("codex exec", "review.backend codex")
 CURSOR_ROUTE_TOKENS = ("cursor-agent", "review.backend cursor")
 # fn-121 follow-up: the route line teaches flags-BEFORE--p, so the distinctive
 # invocation token is the approval flag, not the old bare `grok -p` shape
@@ -367,15 +368,10 @@ class WorkflowProseContract(unittest.TestCase):
         self.assertIn("skipped SILENTLY", text, path)
         self.assertIn("ROUTING_ASK", text, path)
         # Frozen option set — as-built casing.
-        self.assertIn("`Scaffold` / `Scaffold + enable codex delegation` / `Skip`", text, path)
-        self.assertIn("Scaffold + enable codex delegation", text, path)
-        # Never pre-set the consent gate (R9).
-        self.assertIn("work.delegateConsent", text, path)
-        self.assertRegex(
-            text,
-            re.compile(r"NEVER\b.{0,60}work\.delegateConsent", re.DOTALL),
-            path,
-        )
+        self.assertIn("`Scaffold` / `Skip`", text, path)
+        # The retired packaged-delegation option must not regrow.
+        self.assertNotIn("Scaffold + enable codex delegation", text, path)
+        self.assertNotIn("work.delegate", text, path)
         # Scaffold processing runs AFTER the Docs block (markdown may bold
         # "after": `**after** the Docs block above`).
         self.assertRegex(

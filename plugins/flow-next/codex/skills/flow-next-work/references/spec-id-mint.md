@@ -11,7 +11,8 @@ Explicit user override in the invocation always wins. No runtime nag here - setu
 ```bash
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
-# REUSE the Phase 0 root snapshot - do NOT take another config read here (R7).
+# REUSE the root snapshot the Phase 1 mint gate just took - do NOT take another
+# config read here, and never a per-leaf `config get tracker.specIds` (R7).
 # Literal path; re-type it because variables die across prompt turns.
 WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
 SPEC_IDS=$(jq -r '.value.tracker.specIds // "flow"' "$WORK_CFG" 2>/dev/null)

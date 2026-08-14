@@ -86,11 +86,12 @@ class ModelPinCeremonyProseContract(unittest.TestCase):
             path,
         )
 
-        # Roles + backends exact keys task .1 validates.
+        # Roles + backends exact keys task .1 validates. `delegate` left the
+        # role map with the packaged delegation subsystem (flow-98), so the
+        # ceremony pins exactly the roles flowctl still accepts.
         for role in (
             "fastJudge",
             "review",
-            "delegate",
             "scoutFast",
             "scoutIntelligent",
         ):

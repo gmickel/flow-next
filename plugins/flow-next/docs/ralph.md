@@ -635,10 +635,6 @@ If the optional `/flow-next:tracker-sync` bridge is enabled (the discovery cerem
 
 With the opt-in HTML artifact mode active (`artifacts.html.enabled`, OFF by default), autonomous runs may **generate** render lenses at the normal lifecycle touchpoints — plan regenerates `.flow/artifacts/<spec-id>/spec.html`, make-pr emits `pr.html` with its narrow `chore(flow): pr artifact <spec-id>` commit — but they **never open a Lavish session and never run `lavish-axi poll`**: an autonomous loop never blocks on a human. The guard is mechanical in the skill snippets (the non-interactive marker family — `FLOW_RALPH`, `FLOW_AUTONOMOUS`, `REVIEW_RECEIPT_PATH` — forces `LAVISH_OK=false`), not prose-only. Artifact generation failure is non-fatal (one stderr note, the run proceeds), all artifact messaging routes to stderr, and the make-pr `PR_URL=<url>` single-line stdout contract plus every receipt are untouched. See [`html-artifacts.md`](html-artifacts.md).
 
-### Codex implementation-delegation is consent-gated and non-blocking
-
-The opt-in `/flow-next:work` Codex delegation mode (`work.delegate` / `delegate:codex`) is **off by default** and stays safe under autonomous mode. In Ralph / headless there is **no live consent prompt** (a spawned worker subagent has no interactive consent path), so delegation proceeds **only when `work.delegateConsent` is already `true`** — pre-set deliberately before the run. Otherwise the loop runs standard in-session, unchanged; there is no live `AskUserQuestion`. Every delegation failure path **falls back without stalling**: a `codex exec` CLI failure or a partial result rolls back the scoped diff (never a bare `git clean`) and the worker finishes the task locally — the loop keeps moving. A **host-owned circuit breaker** disables delegation for the rest of the run after repeated failures, again falling through to standard mode rather than blocking. `work.delegateSandbox=yolo` (the default) has the **wider blast radius** — for unattended runs prefer `full-auto`, or leave consent off entirely. The independent-verification backstop still applies: with `REVIEW_MODE=none` the worker runs its own tests/lint on the delegated diff before `flowctl done`, so a delegated commit is never trusted on the strength of the Codex `verification_summary` alone. See [`codex-delegation.md`](../skills/flow-next-work/references/codex-delegation.md).
-
 ---
 
 ## Controlling Ralph
@@ -806,8 +802,7 @@ Ralph guard hooks enforce workflow rules deterministically. They are **not** par
 | No `--new-chat` on re-reviews | Keep conversation context |
 | Receipt written after SHIP; Stop blocked without it | Prevent skipping reviews |
 | `setup-review` requires `--repo-root` + `--summary` | Ensure proper targeting |
-| Direct `codex` / `copilot` blocked (use `flowctl` wrappers) | Receipt + session continuity |
-| Canonical `FLOW_DELEGATE_CODEX=1 codex exec …` allowlist | fn-55 delegation carve-out only |
+| Direct `codex` / `copilot` blocked (use `flowctl` wrappers) | Receipt + session continuity. This also blocks the [bridge recipes](orchestration.md#implementation-offload--the-bridge-route) — under a registered Ralph guard, implementation offload via a direct bridge CLI is unavailable by design (flow-98's accepted trade: the guard reverted to its simple block rule rather than growing a recognizer for prose-routed bridges; unattended offload belongs to a script calling pilot + land, not Ralph) |
 | No `--last` (codex) / no `--continue` (copilot) | Session continuity via receipt `session_id` |
 | No review-counter reset or `--force` review dispatch/increment | Those recovery tools are human-only (wrappers — `sh -c`, `eval`, `timeout`, `env`, `xargs` — are unwrapped, not trusted; interpreter command strings are recognized in every combined spelling: `bash -lc`, `-xec`, `-c --`) |
 | `flowctl done` structured success only | Exit code / `--json` status=done / exact completion line (no word sniff) |

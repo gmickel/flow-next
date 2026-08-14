@@ -209,19 +209,19 @@ class ArtifactsConfigTestCase(unittest.TestCase):
 
     def test_artifacts_block_does_not_clash_with_existing_blocks(self) -> None:
         defaults = self.flowctl.get_default_config()
-        # artifacts.* is its own top-level block, distinct from work.*,
+        # artifacts.* is its own top-level block, distinct from pipeline.*,
         # land.*, and memory.* — no shared keys leak across.
         self.assertIn("artifacts", defaults)
-        self.assertIn("work", defaults)
+        self.assertIn("pipeline", defaults)
         self.assertIn("land", defaults)
-        self.assertNotIn("html", defaults["work"])
+        self.assertNotIn("html", defaults["pipeline"])
         self.assertNotIn("html", defaults["land"])
-        self.assertNotIn("delegate", defaults["artifacts"])
+        self.assertNotIn("qa", defaults["artifacts"])
 
     def test_setting_artifacts_key_does_not_clobber_other_defaults(self) -> None:
         self._run_config_set_cli("artifacts.html.enabled", "true")
         self.assertEqual(
-            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-terra"
+            self._run_config_get_cli("pipeline.qa")["value"], "off"
         )
         self.assertEqual(
             self._run_config_get_cli("land.ciFixBudget")["value"], 3

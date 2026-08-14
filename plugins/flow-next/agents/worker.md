@@ -19,7 +19,6 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `PARALLEL_WAVE` - true only when the conductor dispatched this task concurrently in an isolated mutable workspace. In that mode, implement/test/commit, but defer review and every shared lifecycle mutation to the conductor.
 - `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
 - `HANDOVER_SUMMARY` / `HANDOVER_EVIDENCE` - task-unique output paths chosen by the conductor. Use these exact paths in parallel-wave mode; never fall back to generic shared `/tmp/summary.md` or `/tmp/evidence.json`.
-- `DELEGATE` - codex to delegate Phase 2 implementation to `codex exec`; absent or `local` ⇒ standard in-session (the host only sets this when delegation is active and all pre-flight gates passed). `DELEGATE_MODEL` / `DELEGATE_SANDBOX` / `DELEGATE_EFFORT_FLOOR` / `DELEGATE_DECISION` accompany it — see Phase 2.
 
 ## Phase 0: Enter the assigned workspace (FIRST)
 
@@ -117,7 +116,7 @@ BASE_COMMIT=$(git rev-parse HEAD)
 printf '%s\n' "$BASE_COMMIT" > .flow/tmp/base_commit
 echo "BASE_COMMIT=$BASE_COMMIT (persisted to .flow/tmp/base_commit — gitignored)"
 ```
-`BASE_COMMIT` scopes the impl-review diff (Phase 4), anchors delegation git-ownership (Phase 2), and is recorded with the full commit list in the done evidence (Phase 5). **Every later Bash block that references it re-reads it from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — the Phase-1 assignment does not carry across tool calls, so a block that used the bare variable has broken this.
+`BASE_COMMIT` scopes the impl-review diff (Phase 4) and is recorded with the full commit list in the done evidence (Phase 5). **Every later Bash block that references it re-reads it from the file first: `BASE_COMMIT=$(cat .flow/tmp/base_commit)`** — the Phase-1 assignment does not carry across tool calls, so a block that used the bare variable has broken this.
 
 Done when: the anchor bundle has been read, the baseline result is recorded (`green` / `red (<cmd>)` / `none`), and `.flow/tmp/base_commit` holds the pre-edit HEAD.
 
@@ -168,117 +167,7 @@ Done when: every Required file named by `## Investigation targets` has been read
 
 ## Phase 2: Implement
 
-**`BASE_COMMIT` was captured at Phase-1 end (before any edit).** You'll pass it to impl-review so it only reviews THIS task's changes. (It is also the git-ownership anchor for the delegation path below.)
-
-**Delegation hook — reached only when `DELEGATE: codex` is in your prompt.** If `DELEGATE`
-is absent or `local`, skip this entire hook and implement in-session as usual
-(the rest of Phase 2 is unchanged). When `DELEGATE: codex` is set, the host has
-already run the pre-flight gates and one-time consent — your job is to delegate
-THIS task's implementation to `codex exec`:
-
-**Thin-task valve (you own the final call - the host's `DELEGATE:` flags are
-provisional).** Read the task file first. **A task that does not name its files
-and its acceptance, or whose allowed-file list is empty after removing
-orchestrator-owned artifacts (the codex mirror, `.flow/bin` dual-copies), is
-implemented in-session as a standard task** — emitting no `DELEGATION_*` lines, so
-the host's counter stays untouched (not a failure, not a strike). Delegating such
-a task, or emitting a `DELEGATION_*` line for it, has broken this.
-
-1. Read `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/skills/flow-next-work/references/codex-delegation.md`
-   — the "Invocation / result schema / background-launch+poll / per-run effort"
-   section is the mechanics; the classification / safety / rollback sections (and
-   the `flowctl codex classify-result` / `rollback-plan` helpers) govern what you
-   do with the result.
-2. Build the scratch dir `.flow/tmp/codex-<task-id>/`, write `result-schema.json`,
-   fill the fixed path-handoff template's 3 slots (task id, spec id, allowed-file
-   list) into `prompt-batch-1.md` - one run per task, nothing else composed. The
-   id slots take the CANONICAL ids from `flowctl show <TASK_ID> --json` (`.id` /
-   `.spec`), never a short alias - an alias-filled `.flow/tasks/<task-id>.md`
-   path does not exist. Pick the per-run effort (floored at
-   `DELEGATE_EFFORT_FLOOR`), and **launch `codex exec` via the Bash
-   `run_in_background` tool parameter** (NOT shell `&`) using `DELEGATE_MODEL` +
-   <!-- DELEGATION-ONLY exception: this is the ONE sanctioned background codex launch (result polled via foreground file reads). REVIEW commands are NEVER backgrounded - see the Foreground rule in Phase 3.5. -->
-   the **literal** sandbox flag inlined from `DELEGATE_SANDBOX` (yolo →
-   `--dangerously-bypass-approvals-and-sandbox`, full-auto → `-s workspace-write`).
-   Inline the literal flag — NOT a `$SANDBOX_FLAG` variable: ralph-guard inspects
-   the raw pre-expansion command and only allowlists the literal sandbox flags.
-3. **Poll the result file in separate FOREGROUND Bash calls** (non-empty AND
-   `jq -e .` parseable) until DONE. When the background `codex exec` task COMPLETES,
-   **capture its exit code as `CODEX_EXIT`** (the `run_in_background` task surfaces
-   it on completion — the poll-the-result-file loop is only a readiness check). A
-   non-zero `codex exec` exit MUST drive `cli_failure → rollback_and_disable` — so
-   never guess `0`. Then classify + cross-check + enforce git/`.flow` ownership
-   against `BASE_COMMIT`, and either commit (Phase 3), finish locally, or
-   scoped-rollback per the reference's "Orchestration split / one run per task / result
-   classification / safety" section. The concrete mechanics (all deterministic
-   flowctl, never re-derived in prose):
-
-   ```bash
-   # CODEX_EXIT = the background codex exec task's exit code (from the
-   # run_in_background task completion — NOT defaulted to 0). exit≠0 = cli_failure.
-   # Classify (the 5-row table — exit≠0 always wins):
-   CLASS_JSON="$($FLOWCTL codex classify-result \
-     --result "$SCRATCH/result-batch-1.json" --exit "$CODEX_EXIT" --json)"
-   ACTION="$(printf '%s' "$CLASS_JSON" | jq -r '.action')"
-
-   # Re-read BASE_COMMIT — bash vars do not survive across tool-call Bash blocks;
-   # an empty ref here would wrongly force-rollback a SUCCESSFUL delegated run and
-   # run `git reset --mixed ""`.
-   BASE_COMMIT=$(cat .flow/tmp/base_commit)
-
-   # Git-ownership assertion — a moved HEAD means Codex committed (yolo can run
-   # git); that is ALWAYS an enforcement failure → force a rollback + disable.
-   if [ "$(git rev-parse HEAD)" != "$BASE_COMMIT" ]; then
-     ACTION=rollback_and_disable
-   fi
-
-   # ROLLBACK — tracked revert + scoped untracked cleanup. The WHOLE block runs
-   # ONLY on a rollback action: a `completed`/`partial` success KEEPS Codex's new
-   # files for Phase 3 to commit (gating this is load-bearing — an unconditional
-   # clean would delete a successful task's new files).
-   if [ "$ACTION" = rollback ] || [ "$ACTION" = rollback_and_disable ]; then
-     # 1. Revert TRACKED files AUTHORITATIVELY from BASE_COMMIT — never from the
-     #    index, the result JSON, or files_modified. `--mixed` un-commits AND
-     #    unstages (a yolo commit / `git add` can't survive `checkout`'s
-     #    index-restore); the tracked checkout reverts the worktree from BASE.
-     git reset --mixed "$BASE_COMMIT"
-     git checkout -- . ':(exclude).flow'                 # excludes host-owned .flow/
-     # 2. RE-SNAPSHOT untracked AFTER the reset. A file Codex *committed* as an add
-     #    only becomes untracked once `--mixed` un-commits it, so the pre-reset
-     #    post-snapshot would miss it. Capturing here includes it in `post − pre`.
-     git ls-files --others --exclude-standard -z > "$SCRATCH/post-untracked.txt"
-     # 3. Scoped UNTRACKED cleanup — NEVER bare `git clean`:
-     $FLOWCTL codex rollback-plan --repo-root . \
-       --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
-       --post-untracked-file "$SCRATCH/post-untracked.txt" --json > "$SCRATCH/plan.json"
-     # MANDATORY non-empty guard: an empty rollback_paths would degrade
-     # `git clean -fd --` into a BARE clean wiping ALL untracked output.
-     # `--print0` emits the sanitized paths NUL-delimited (whitespace/newline-safe):
-     if [ "$(jq '.rollback_paths | length' "$SCRATCH/plan.json")" -gt 0 ]; then
-       $FLOWCTL codex rollback-plan --repo-root . \
-         --preexisting-untracked-file "$SCRATCH/pre-untracked.txt" \
-         --post-untracked-file "$SCRATCH/post-untracked.txt" --print0 \
-         | xargs -0 git clean -fd --
-     fi
-     #   → feeds ONLY the sanitized rollback_paths (never a pre-existing untracked
-     #     file, never a `.flow/**` path, never an empty/bare `git clean`).
-   fi
-   ```
-
-   - `pre-untracked.txt` is captured with `git ls-files --others --exclude-standard -z`
-     BEFORE `codex exec`; the post snapshot is (re)captured INSIDE the rollback
-     branch AFTER the `--mixed` reset (so a file Codex committed-as-add is seen).
-   - Snapshot non-scratch `.flow/` before delegating; if Codex mutated any
-     non-scratch `.flow/` path, restore those paths from the snapshot + disable
-     delegation (the rollback never touches `.flow/**`, so this is the only undo).
-   - Before committing a `completed` result, run the `git status --porcelain` ∩
-     `files_modified` trust cross-check; a mismatch downgrades to partial/failed.
-
-On the standard single-worker path, Phase 3 commit / Phase 4 review / Phase 5
-done are **unchanged** by delegation — the orchestrator (you) still owns all
-git, review, and `flowctl done`. The parallel-wave terminal contract still
-overrides review and done: commit in the assigned workspace, write the
-task-unique handovers, and return `in_progress` for the conductor.
+**`BASE_COMMIT` was captured at Phase-1 end (before any edit).** You'll pass it to impl-review so it only reviews THIS task's changes.
 
 Read relevant code, implement the feature/fix. Follow existing patterns.
 
@@ -327,28 +216,7 @@ Task: <TASK_ID>"
 
 Use conventional commits. Scope from task context.
 
-**Mixed-model attribution — only on a delegated commit (`DELEGATE: codex` and
-Codex wrote this commit's code).** Append these two trailers so `/flow-next:make-pr`
-can credit both models. Put them in their own paragraph (blank line before the
-`Task:` trailer) — `<model>` = `DELEGATE_MODEL`, `<effort>` = the per-run
-`effective_effort` you ran (e.g. `gpt-5.5` / `medium`):
-
-```bash
-git commit -m "feat(<scope>): <description>
-
-- <detail>
-
-AI-Orchestrator: Claude
-AI-Implementer: codex <DELEGATE_MODEL> (<effective_effort>)
-
-Task: <TASK_ID>"
-```
-
-**The `AI-Implementer` trailer appears only when delegation actually produced the
-code.** A standard in-session commit (no delegation, or a `partial` you finished
-locally) carrying that trailer has broken this — attribute honestly.
-
-Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`, and the attribution trailers match who actually wrote the code.
+Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`.
 
 ## Phase 4: Review (runs whenever REVIEW_MODE is not `none`)
 
@@ -357,20 +225,17 @@ The conductor reviews only after it joins the wave and integrates this commit
 onto the target branch. A parallel-wave worker that reported a review verdict has
 broken this; continue to Phase 5's parallel-wave handover branch.
 
-**If REVIEW_MODE is `none`, skip to Phase 5.** (When `DELEGATE: codex` is also set,
-there is no independent impl-review gate, so Phase 5 below runs its own
-verification on the delegated diff — Codex's `verification_summary` is never the
-sole gate. See Phase 5.)
+**If REVIEW_MODE is `none`, skip to Phase 5** — its Verify block is then the only gate, and it still runs.
 
 **Under `REVIEW_MODE: host-deferred` this phase's review dispatch does not run** — you cannot dispatch subagents and the conductor runs the host review after you return. A host-deferred worker that invoked impl-review, reported a verdict, or ran Phase 5's `flowctl done` has broken this — see the Phase 5 host-deferred branch.
 
 **Under any other non-`none` value (`rp`, `codex`, `copilot`, `cursor`), impl-review is invoked and a SHIP verdict received before this phase ends.** Proceeding on anything short of SHIP has broken this.
-(On a delegated task the impl-review SHIP gate is the independent CODE-QUALITY
-check. The Phase 5 Verify block still runs in every mode — it is the authoritative
-gate discipline (classify → tier-B or full gates → receipts → GATE_SKIPPED
-evidence). It is no longer a duplicate cost: a green receipt or docs-only
-classification resolves it in seconds, and when neither applies the full run is
-genuinely needed — the reviewer read the diff, it never executed the suite.)
+(The impl-review SHIP gate covers CODE QUALITY only. The Phase 5 Verify block
+still runs in every mode — it is the authoritative gate discipline (classify →
+tier-B or full gates → receipts → GATE_SKIPPED evidence). It is not a duplicate
+cost: a green receipt or docs-only classification resolves it in seconds, and
+when neither applies the full run is genuinely needed — the reviewer read the
+diff, it never executed the suite.)
 
 Invoke impl-review through the Skill tool, never `flowctl` directly. If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
 
@@ -390,7 +255,7 @@ re-resolving from config. The skill still handles everything else:
 - Parsing verdict (SHIP/NEEDS_WORK/MAJOR_RETHINK)
 - Fix loops until SHIP
 
-**Foreground rule (do not background the review).** When the impl-review workflow shells a `flowctl <backend> …` review command, run it as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). Never launch it with `run_in_background` + a monitor — a background completion does not reliably resume your (subagent) context, and you would idle on an already-finished review. Blocking is safe: the call is bounded. (This does NOT apply to codex-delegation's `codex exec` launch in Phase 2 — that pattern deliberately backgrounds and polls a result file in foreground calls.)
+**Foreground rule (do not background the review).** When the impl-review workflow shells a `flowctl <backend> …` review command, run it as one **blocking foreground** Bash call with a generous timeout (10 minutes; verdicts typically land in 1–7). Never launch it with `run_in_background` + a monitor — a background completion does not reliably resume your (subagent) context, and you would idle on an already-finished review. Blocking is safe: the call is bounded.
 
 **impl-review owns its internal fix loop** (fix + re-review up to `MAX_REVIEW_ITERATIONS`, default 8). **impl-review is invoked exactly once per task, and you act on the terminal verdict it returns.** A second invocation wrapping it in a re-invoke-until-SHIP loop resets the skill's iteration counter every round and makes the cap unbounded in aggregate — that has broken this.
 
@@ -518,19 +383,6 @@ assigned handovers, return `in_progress`, and report the exact workspace plus
 uncommitted state so the conductor can recover and commit it. A blocked commit
 is never a reason to discard finished work.
 
-**Delegation verification backstop — `DELEGATE: codex` with `REVIEW_MODE: none`.**
-When delegation was active and no impl-review gate ran (Phase 4 skipped), **the
-Phase 5 Verify block runs on the delegated diff before the standard path's
-`flowctl done` or the parallel path's handover.** Treating Codex's
-`verification_summary` as the sole gate has broken this. Delegated tasks route through this same Verify block; its Suite-output capture rule applies without a separate delegation test site. The Verify block is
-authoritative here too: classify first, honor green receipts, and run the full
-tests/lints when neither applies (a docs-only tier-B or receipt-honored outcome
-with its GATE_SKIPPED evidence lines satisfies this backstop); on failure, fix +
-follow-up commit (never blind-commit). When `REVIEW_MODE != none`, the
-impl-review SHIP gate covered the CODE-QUALITY judgment only — the Phase 5 Verify
-block above still runs (classify → receipts → gates); it is cheap when a receipt
-or docs-only classification applies and load-bearing when neither does.
-
 Write the evidence file — use the exact `HANDOVER_EVIDENCE` path in
 parallel-wave mode; otherwise use the existing `/tmp/evidence.json` path.
 Re-read `BASE_COMMIT` from the persisted file and compute the FULL commit list
@@ -553,35 +405,6 @@ cat > "$EVIDENCE_FILE" << EOF
 EOF
 ```
 
-**Delegation evidence — written only when `DELEGATE: codex` produced this task's code.**
-**The result fields are inlined into `evidence.delegation`**, never left as a
-scratch-file pointer — the `.flow/tmp/codex-*` dir is cleaned post-commit, so a
-recorded path would dangle. Evidence carrying a `.flow/tmp/codex-*` path instead of
-the fields has broken this. The
-`status`/`files_modified`/`issues`/`summary`/`verification_summary` come from the
-Codex `result-batch-*.json`; `class` comes from `flowctl codex classify-result`;
-`model`/`effort` are the `DELEGATE_MODEL` + per-run `effective_effort` you ran:
-
-```bash
-BASE_COMMIT=$(cat .flow/tmp/base_commit)
-COMMITS_JSON=$(git rev-list --reverse "$BASE_COMMIT"..HEAD | jq -R . | jq -s -c .)
-if [ "<PARALLEL_WAVE>" = "true" ]; then
-  EVIDENCE_FILE="<exact HANDOVER_EVIDENCE path from prompt>"
-else
-  EVIDENCE_FILE="/tmp/evidence.json"
-fi
-cat > "$EVIDENCE_FILE" << EOF
-{"commits": $COMMITS_JSON, "base_commit": "$BASE_COMMIT", "tests": ["<actual test commands + any GATE_SKIPPED lines>"], "prs": [],
- "delegation": {
-   "result": {"status": "completed", "files_modified": ["<f>"], "issues": [],
-              "summary": "<codex summary>", "verification_summary": "<codex verify>"},
-   "model": "<DELEGATE_MODEL>", "effort": "<effective_effort>", "class": "success"}}
-EOF
-```
-On a `cli_failure` / missing / malformed result (no result body), still inline
-`evidence.delegation` with the known `class` + `model` + `effort` and a minimal
-`result` (`status: null`, empty arrays, the failure summary) — never omit it.
-
 Write summary file — use exact `HANDOVER_SUMMARY` in parallel-wave mode,
 otherwise `/tmp/summary.md`:
 ```bash
@@ -594,18 +417,16 @@ cat > "$SUMMARY_FILE" << 'EOF'
 <1-2 sentence summary of what was implemented>
 
 stage: impl-review - ran [<start>..<end>] | skipped(config: REVIEW_MODE=none) | skipped(policy: host-deferred - conductor owns the gate) | failed(<reason>)
-stage: delegation - ran [<start>..<end>] | skipped(config: delegation off) | failed(<reason>)
 EOF
 ```
 
 **Stage-outcome lines (fn-178):** the summary records one `stage:` line for
-every optional/delegated stage THIS worker orchestrated (impl-review dispatch,
-delegation attempt) — pick the branch that happened and delete the others. A
+every optional stage THIS worker orchestrated (the impl-review dispatch) — pick
+the branch that happened and delete the others. A
 skipped stage is an event with a reason (policy/config/empty/error), never an
 absence; a stage with no line is treated by review as failed. Timestamps only
-where you know them. Stages you did not reach at all (e.g. no delegation flags
-in the prompt) need no line — the rule binds stages orchestrated, not the full
-catalog.
+where you know them. Stages you did not reach at all need no line — the rule
+binds stages orchestrated, not the full catalog.
 
 Complete the task only on the standard branch (parallel-wave and host-deferred
 branches return before this command). Recompute both standard paths in this
@@ -653,25 +474,7 @@ second copy of what it says:
 - One line for anything a pointer cannot reach — a `BLOCKED:` block, a commit
   the sandbox denied, a surprise the conductor must act on
 
-**Delegation signal — emitted only when `DELEGATE: codex` was active for this task.** Emit
-these as the **last two lines** of your return summary so the host circuit breaker
-(`phases.md` Phase 3) can update its counter without re-reading the scratch dir.
-Both values come straight from `flowctl codex classify-result` (`.class` /
-`.action`):
-
-```
-DELEGATION_RESULT=<success|partial|task_failure|cli_failure>
-DELEGATION_ACTION=<commit|finish_locally|rollback|rollback_and_disable>
-```
-
-The host bridges them: `rollback_and_disable` → disable delegation IMMEDIATELY for
-all remaining tasks; `rollback`/`finish_locally` → `consecutive_failures++`
-(disable at 3); `commit` → reset to 0. **When delegation was not active** (gates
-failed, the task ran standard, or `DELEGATE: local`), **no `DELEGATION_*` line is
-emitted** — a missing signal tells the host the counter is untouched. A
-`DELEGATION_*` line on a non-delegated task has broken this.
-
-Done when: the return names the task id, the terminal status, the summary and evidence paths, the commit range, the workspace and gate results on a parallel-wave task, and — where the path allows it — the review verdict; plus the two `DELEGATION_*` lines last, on a delegated task only.
+Done when: the return names the task id, the terminal status, the summary and evidence paths, the commit range, the workspace and gate results on a parallel-wave task, and — where the path allows it — the review verdict.
 
 ## Rules
 
