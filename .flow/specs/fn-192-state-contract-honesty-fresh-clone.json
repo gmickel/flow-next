@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-192-state-contract-honesty-fresh-clone.md",
-  "status": "open",
+  "status": "done",
   "title": "State-contract honesty: fresh-clone validate, done-summary durability (#346, #347)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T06:25:30.800330Z"
+  "updated_at": "2026-08-14T08:24:55.127064Z"
 }
