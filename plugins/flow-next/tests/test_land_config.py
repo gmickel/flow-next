@@ -629,5 +629,120 @@ class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
         self.assertNotIn("lcfg mergeCmd", self.text)
 
 
+class CatchUpWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over §3.3's server-side catch-up (fn-194 R2, #342).
+
+    The local rebase + `git push --force-with-lease` is gone: BEHIND and DIRTY
+    both plan `catch-up`, executed as one `gh pr update-branch` call. Pin the
+    invariants that regressions would quietly undo - land has no force-push
+    path left (the #302 orphaned-evidence cause), GitHub owns the conflict
+    decision (non-zero -> BLOCKED), the ledger sources the new head from the
+    API because no local checkout exists, and the action class is spelled
+    `catch-up` in every enumeration a reader keys on.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("### 3.3 — `catch-up`")
+        end = cls.text.find("### 3.4", start)
+        assert start != -1 and end != -1, "§3.3 catch-up section not found"
+        cls.act = cls.text[start:end]
+        cls.skill = (
+            HERE.parent.parent / "skills" / "flow-next-land" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+    def test_no_local_rebase_or_force_push_remains(self) -> None:
+        # The executable forms, not the prose that explains their absence.
+        self.assertNotIn("git push --force-with-lease", self.text)
+        self.assertNotIn('git rebase "origin/$BASE_REF"', self.text)
+        self.assertNotIn("git rebase --abort\n  git checkout", self.text)
+        # The ci-fix path keeps the only `gh pr checkout` in the workflow.
+        self.assertEqual(self.text.count('gh pr checkout "$PR_NUMBER"'), 1)
+
+    def test_catch_up_is_one_server_side_update_branch_call(self) -> None:
+        self.assertIn(
+            'CATCHUP_ERR="$(gh pr update-branch "$PR_NUMBER" 2>&1 >/dev/null)"',
+            self.act,
+        )
+        # Merge-based, never the rebase flag (which would reintroduce SHA rewrites).
+        self.assertNotIn("update-branch --rebase", self.text)
+        self.assertIn("never passes `--rebase`", self.act)
+
+    def test_non_zero_catch_up_routes_to_blocked(self) -> None:
+        self.assertIn('`CATCHUP_RC != 0` → verdict `BLOCKED`', self.act)
+        self.assertIn("hand-resolution", self.act)
+
+    def test_ledger_sources_new_head_from_the_api(self) -> None:
+        # No local checkout exists to read the new head from.
+        self.assertIn('gh pr view "$PR_NUMBER" --json headRefOid', self.act)
+        self.assertIn("land_pushed_sha", self.act)
+        self.assertIn("decision_at_push", self.act)
+
+    def test_both_behind_and_dirty_plan_catch_up(self) -> None:
+        gates = self.text[
+            self.text.find("### 2.8 — Merge-state gates") : self.text.find("### 2.9")
+        ]
+        self.assertIn('`MERGE_STATE == "BEHIND"`: plan `catch-up`', gates)
+        self.assertIn('`MERGE_STATE == "DIRTY"`: conflict path → plan `catch-up`', gates)
+        self.assertNotIn("plan `rebase`", gates)
+
+    def test_action_class_is_renamed_in_every_enumeration(self) -> None:
+        self.assertIn(
+            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`)",
+            self.text,
+        )
+        self.assertIn(
+            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|none>", self.text
+        )
+        self.assertNotIn("mechanical rebase", self.skill)
+        self.assertIn("server-side catch-up", self.skill)
+
+    def test_force_push_removal_rationale_is_stated(self) -> None:
+        self.assertIn("removes land's force-push capability", self.act)
+        self.assertIn("#302", self.act)
+        self.assertIn("Fork PRs", self.act)
+
+
+class ReviewSignalOrderingStaticTestCase(unittest.TestCase):
+    """§2.6/§2.7 evaluation order under `reviewSignal: approve` (fn-194 R4).
+
+    The ambiguity this pins: whether §2.7's stale-approval detector is
+    reachable under `approve` or shadowed by §2.6's earlier non-satisfaction.
+    It is reachable - §2.6 assigns a provisional verdict and falls through -
+    and the paragraph must keep saying so, because the durable label is what
+    breaks the dismissal loop.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+
+    def test_ordering_paragraph_sits_between_2_6_and_2_7(self) -> None:
+        pos_26 = self.text.find("### 2.6 — Review signal")
+        pos_para = self.text.find("**§2.6 does not exit the gate tree")
+        pos_27 = self.text.find("### 2.7 — CI-fix budget")
+        self.assertNotEqual(pos_para, -1, "R4 ordering paragraph missing")
+        self.assertLess(pos_26, pos_para)
+        self.assertLess(pos_para, pos_27)
+
+    def test_paragraph_states_the_detector_is_reachable(self) -> None:
+        para = self.text[
+            self.text.find("**§2.6 does not exit the gate tree") : self.text.find(
+                "### 2.7 — CI-fix budget"
+            )
+        ]
+        self.assertIn("REACHABLE under `approve`, never shadowed", para)
+        self.assertIn("stale-approval dismissal loop detected", para)
+        # §2.8 stays the one genuinely conditional gate - semantics unchanged.
+        self.assertIn("§2.8", para)
+        self.assertIn(
+            "### 2.8 — Merge-state gates (only when the review signal is satisfied)",
+            self.text,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

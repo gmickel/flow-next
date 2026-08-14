@@ -290,7 +290,7 @@ Gate on the latest committed `qa_outcome` for this PR head (the four-outcome fie
 | 404 / unparseable / `qa_outcome` ∈ {`SHIP`, `NA`, `BLOCKED`} or any other value | **No QA objection** — continue to 2.6. (`BLOCKED` = "no ship *claim* on a QA basis", not "the app is broken" — advisory, exactly as pilot treats it; QA never hard-blocks on couldn't-verify.) |
 | `qa_outcome == NEEDS_WORK` | verdict `NEEDS_HUMAN`, action `none`, reason `latest QA verdict at the PR head is NEEDS_WORK (open P0/P1 or uncovered UI R-ID) — merge blocked pending human review or a QA re-run to SHIP`. **No further gates for this PR.** |
 
-**No head_sha freshness check, deliberately.** The receipt read at `$HEAD_SHA` is the latest QA verdict for the commit being merged (each QA run overwrites the committed receipt). Land never re-runs QA, so a `NEEDS_WORK` that predates later commits is no proof the P0 was fixed — the later commits could be an unrelated `ci-fix`, a resolve-pr push, or land's own §3.3 rebase. **Fail-safe: any `NEEDS_WORK` at the head blocks** until QA re-runs to `SHIP` (which overwrites the receipt → no block) or a human clears it. A merge that proceeded past a head `NEEDS_WORK` has broken this — and closing that path is what shuts both the wrong-tree read and the stale-head laundering channel a naive `head_sha`-equality check would open.
+**No head_sha freshness check, deliberately.** The receipt read at `$HEAD_SHA` is the latest QA verdict for the commit being merged (each QA run overwrites the committed receipt). Land never re-runs QA, so a `NEEDS_WORK` that predates later commits is no proof the P0 was fixed — the later commits could be an unrelated `ci-fix`, a resolve-pr push, or land's own §3.3 catch-up. **Fail-safe: any `NEEDS_WORK` at the head blocks** until QA re-runs to `SHIP` (which overwrites the receipt → no block) or a human clears it. A merge that proceeded past a head `NEEDS_WORK` has broken this — and closing that path is what shuts both the wrong-tree read and the stale-head laundering channel a naive `head_sha`-equality check would open.
 
 ### 2.6 — Review signal (`land.reviewSignal`)
 
@@ -368,6 +368,8 @@ Signal evaluation (only reached with green CI and `UNRESOLVED == 0`):
 - **`approve`**: satisfied iff `REVIEW_DECISION == "APPROVED"` (the formal decision). Not approved within the window → `AWAITING_REVIEW`; not approved once the window has elapsed (`WINDOW_ELAPSED == 1`) → `NEEDS_HUMAN`, reason `no formal approval within the patience window` (the wait is bounded, same as the other signals); `CHANGES_REQUESTED` → threads should exist → the resolve path; an empty `reviewDecision` (repo has no review policy) is not a block for the OTHER signals, but `approve` explicitly requires the formal decision.
 - **`<github-login>`** (any other value): satisfied iff that reviewer's latest review is clean — fetch `gh pr view "$PR_NUMBER" --json latestReviews`, find the entry whose `author.login` matches the configured login (compare with any trailing `[bot]` stripped from both sides — GraphQL bot logins lack the suffix), and require its `state` to be `APPROVED`, or `COMMENTED` with `UNRESOLVED == 0`. `CHANGES_REQUESTED` or no review yet → `AWAITING_REVIEW` within the window, `NEEDS_HUMAN` beyond it.
 
+**§2.6 does not exit the gate tree — §2.7 still runs (the `approve` ordering).** Only §2.1's durable-label skip is terminal; every other gate assigns a PROVISIONAL verdict and falls through, so a later section's assignment wins. Under `reviewSignal: approve` that matters exactly once: when the head is land's own catch-up push, the ledger recorded `decision_at_push == APPROVED`, and the repo has since dismissed that approval, §2.6 assigns `AWAITING_REVIEW` (or `NEEDS_HUMAN` past the window) — and then §2.7's stale-approval detector, whose four conditions describe that same state, overwrites it with `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`. The detector is REACHABLE under `approve`, never shadowed; its durable label is the point, because it is what stops the next tick from re-entering the same loop. (§2.8 is the one gate that is genuinely conditional — it runs only when the signal is satisfied.) Server-side catch-up (§3.3) does not retire this path: it still advances the head, so a dismiss-on-push repo still dismisses.
+
 ### 2.7 — CI-fix budget + stale-approval detection (ledger reads)
 
 ```bash
@@ -383,11 +385,13 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 ### 2.8 — Merge-state gates (only when the review signal is satisfied)
 
 - `MERGE_STATE == "UNKNOWN"`: GitHub recomputes asynchronously — re-poll `gh pr view "$PR_NUMBER" --json mergeStateStatus` up to 3 times with `sleep 3` between; still UNKNOWN → verdict `RESOLVING`, action `none` (re-tick).
-- `MERGE_STATE == "DIRTY"`: conflict path → plan `rebase` (mechanical only; ACT 3.3).
-- `MERGE_STATE == "BEHIND"`: plan `rebase` (same mechanical update, then re-gate next tick).
+- `MERGE_STATE == "DIRTY"`: conflict path → plan `catch-up` (server-side; GitHub itself decides whether the base merges, and refuses when it would conflict; ACT 3.3).
+- `MERGE_STATE == "BEHIND"`: plan `catch-up` (the same server-side update, then re-gate next tick).
+
+Both merge states route to the SAME action deliberately: the catch-up is one `gh pr update-branch` call, and GitHub either performs the base merge or refuses it. That removes the old local-rebase-disagrees-with-`mergeStateStatus` surprise — there is no second opinion left to disagree.
 - Otherwise (`CLEAN`, `BLOCKED`, `HAS_HOOKS`, `UNSTABLE`): plan `merge`. (`BLOCKED`/`UNSTABLE` reflect server-side rules land already gates harder than — the merge attempt is authoritative; a refusal surfaces in ACT.)
 
-**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `rebase`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
+**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
 
 ### 2.9 — Repo merge-verdict gate (`land.mergeVerdictCommand`, opt-in, fail-closed)
 
@@ -514,19 +518,21 @@ Dispatch the resolve-pr skill via the Skill tool — slash-command form, autonom
 
 resolve-pr pushes commits itself when it fixes code; if it pushed, run the canonical post-push ledger write from 3.1 step 4 — read the fresh state via `gh pr view "$PR_NUMBER" --json headRefOid,reviewDecision` and write BOTH `land_pushed_sha` (the new `headRefOid`) and `decision_at_push` (the `reviewDecision` at push time, `-` when empty). Restore `ORIG_BRANCH` if resolve-pr left the worktree elsewhere; assert clean.
 
-### 3.3 — `rebase` (mechanical only — v1 never hand-resolves conflicts)
+### 3.3 — `catch-up` (server-side, merge-based — land never rebases and never force-pushes)
 
 ```bash
-gh pr checkout "$PR_NUMBER"
-git fetch origin "$BASE_REF"
-if ! git rebase "origin/$BASE_REF"; then
-  git rebase --abort
-  git checkout "$ORIG_BRANCH"
-  # ANY conflict hunk → BLOCKED (verdict), reason "merge conflict needs hand-resolution"
-fi
+CATCHUP_RC=0
+CATCHUP_ERR="$(gh pr update-branch "$PR_NUMBER" 2>&1 >/dev/null)" || CATCHUP_RC=$?
 ```
 
-Clean rebase → `git push --force-with-lease` (restarts the patience window) → run the canonical post-push ledger write from 3.1 step 4 (`land_pushed_sha` = the rebased HEAD, `decision_at_push` = the Phase 2 `REVIEW_DECISION`) → verdict `RESOLVING` (re-gate next tick). Restore `ORIG_BRANCH`, assert clean.
+One API call, no local checkout: GitHub merges `$BASE_REF` into the PR's head branch server-side (`gh pr update-branch` is merge-based by default — land never passes `--rebase`).
+
+- `CATCHUP_RC != 0` → verdict `BLOCKED`, reason `base merge conflicts need hand-resolution: <CATCHUP_ERR>`. GitHub refuses the update precisely when the merge would conflict, so the conflict verdict is the server's — land still never hand-resolves a hunk.
+- `CATCHUP_RC == 0` → run the canonical post-push ledger write from 3.1 step 4, sourcing the new head from `gh pr view "$PR_NUMBER" --json headRefOid` (no local checkout exists to read it from): `land_pushed_sha` = that `headRefOid`, `decision_at_push` = the Phase 2 `REVIEW_DECISION`. Verdict `RESOLVING` (the update advances the head, so the patience window restarts and the next tick re-gates).
+
+The worktree never moves in this path — no `gh pr checkout`, no branch restore, nothing to assert clean afterwards.
+
+**This removes land's force-push capability entirely.** No `git rebase`, no `--force-with-lease`: the PR's commit SHAs survive the catch-up, so the evidence recorded against them stays reachable — that is #302's orphaned-evidence CAUSE removed for every repo, not merely detected. Nothing observable is traded for the merge commit: land always squash-merges, so the branch-local shape disappears at merge time either way. Fork PRs are unchanged — `update-branch` fails on a fork whose maintainer-edit permission is off exactly as the old force-push failed → `BLOCKED`, no regression.
 
 ### 3.4 — `label` (durable needs-human marker)
 
@@ -714,7 +720,7 @@ Echo one evidence block per PR processed:
 PR <url> [<spec-id>]
   ci=<green|red|pending|none> checks=<pass>/<total> unresolved=<n> window=<AGE_MIN>/<PATIENCE_MIN>m
   signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|->
-  action=<ci-fix|resolve|rebase|merge|resume-tail|label|none> verdict=<VERDICT> reason="<one line>"
+  action=<ci-fix|resolve|catch-up|merge|resume-tail|label|none> verdict=<VERDICT> reason="<one line>"
   mergeVerdict=<green|refused|skipped|would-run>
 ```
 
