@@ -216,6 +216,103 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
         self.assertIn("Valid: True", text_result.stdout)
         self.assertNotIn("  Errors:", text_result.stdout)
 
+    # --- fn-192 R1/R2: epic-done vs task-status across the durability split ---
+
+    def _done_spec_with_open_task(self, title: str) -> tuple[str, str]:
+        """Create a spec with one task, then mark the spec JSON done.
+
+        The task stays `todo` in its tracked definition — the exact shape a
+        fresh clone of a healthy repo has, since task status is runtime-only.
+        """
+        spec_id = self._create_native_spec(title)
+        result = self._run(
+            "task",
+            "create",
+            "--spec",
+            spec_id,
+            "--title",
+            "Only task",
+            "--json",
+            check=True,
+        )
+        task_id = json.loads(result.stdout)["id"]
+        spec_json = self.tmpdir / ".flow" / "specs" / f"{spec_id}.json"
+        payload = json.loads(spec_json.read_text(encoding="utf-8"))
+        payload["status"] = "done"
+        spec_json.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        return spec_id, task_id
+
+    def _clear_runtime_state(self) -> None:
+        shutil.rmtree(self.tmpdir / ".git" / "flow-state", ignore_errors=True)
+
+    def _spec_findings(self, payload: dict, spec_id: str) -> tuple[list, list]:
+        for spec in payload["specs"]:
+            if spec["spec"] == spec_id:
+                return spec["errors"], spec.get("warnings") or []
+        self.fail(f"spec {spec_id} missing from validate payload")
+
+    def test_fresh_clone_epic_status_mismatch_is_warning_not_error(self) -> None:
+        """R1/R5(i): no runtime anywhere -> warning, exit 0."""
+        spec_id, task_id = self._done_spec_with_open_task("Fresh Clone")
+        self._clear_runtime_state()
+
+        result = self._run("validate", "--all", "--json")
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["valid"])
+        errors, warnings = self._spec_findings(payload, spec_id)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(warnings), 1)
+        self.assertIn(f"Epic marked done but task {task_id} is todo", warnings[0])
+        self.assertIn("committed snapshot", warnings[0])
+        self.assertEqual(
+            payload["total_warnings"], self._discoverable_warning_count(payload)
+        )
+
+        text_result = self._run("validate", "--all")
+        self.assertEqual(text_result.returncode, 0)
+        self.assertIn("Warnings:", text_result.stdout)
+
+    def test_runtime_sourced_status_mismatch_stays_error(self) -> None:
+        """R5(ii): runtime store answered -> still an error, exit 1."""
+        spec_id, task_id = self._done_spec_with_open_task("Runtime Sourced")
+        self._run("start", task_id, "--json", check=True)
+
+        result = self._run("validate", "--all", "--json")
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["valid"])
+        errors, _ = self._spec_findings(payload, spec_id)
+        self.assertIn(
+            f"Epic marked done but task {task_id} is in_progress", errors
+        )
+
+    def test_legacy_runtime_fields_in_definition_stay_error(self) -> None:
+        """R2/R5(iii): pre-state-dir repo -> committed status is authoritative."""
+        spec_id, task_id = self._done_spec_with_open_task("Legacy Fields")
+        self._clear_runtime_state()
+        task_json = self.tmpdir / ".flow" / "tasks" / f"{task_id}.json"
+        payload = json.loads(task_json.read_text(encoding="utf-8"))
+        payload["status"] = "in_progress"
+        payload["assignee"] = "someone"
+        payload["claimed_at"] = "2026-01-01T00:00:00Z"
+        task_json.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self._run("validate", "--all", "--json")
+        self.assertEqual(result.returncode, 1)
+        parsed = json.loads(result.stdout)
+        self.assertFalse(parsed["valid"])
+        errors, _ = self._spec_findings(parsed, spec_id)
+        self.assertIn(
+            f"Epic marked done but task {task_id} is in_progress", errors
+        )
+
     def test_live_fn122_pair_root_warnings_both_renderers(self) -> None:
         """R13: live fn-122 pair is a machine-readable warning in JSON + text.
 
