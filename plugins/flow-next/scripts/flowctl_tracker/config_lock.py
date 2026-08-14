@@ -47,6 +47,20 @@ class ConfigLockTimeout(TimeoutError):
     """Could not acquire the config lock within LOCK_TIMEOUT_S."""
 
 
+class ConfigLockUnavailable(ConfigLockTimeout):
+    """The lock could not be CREATED at all - the filesystem denied it.
+
+    Distinct from contention: no lock directory exists, so nobody holds it;
+    `mkdir` itself was refused (unwritable `.flow/.locks`, an ACL denying
+    add_subdirectory, a root-owned directory left by a container run). Waiting
+    cannot help, so acquisition fails immediately instead of burning the
+    deadline and then blaming a holder that never existed (#340).
+
+    Subclasses ConfigLockTimeout so every existing `except ConfigLockTimeout`
+    handler keeps working unchanged.
+    """
+
+
 class ConfigLockUnsafe(RuntimeError):
     """The lock path is a symlink (or otherwise not a plain directory).
 
@@ -238,6 +252,69 @@ def _try_reclaim(lock: Path) -> bool:
         _release_reclaimer_claim(claim)
 
 
+def _read_owner(lock: Path) -> dict | None:
+    """The owner facts, or None when there is no readable owner.json."""
+    try:
+        owner = json.loads((lock / "owner.json").read_text(encoding="utf-8"))
+        return {"pid": int(owner["pid"]), "host": str(owner["host"]),
+                "acquired_at": float(owner["acquired_at"])}
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def _denied_detail(exc: OSError) -> str:
+    """errno + strerror only. Interpreting *why* the OS said no (uid, mount
+    flags, ACLs) is the host's job, not the lock's - report the fact."""
+    code = errno.errorcode.get(exc.errno, exc.errno)
+    return f"[{code}] {exc.strerror or exc}"
+
+
+def _unavailable(lock: Path, exc: OSError, *, creating: Path) -> ConfigLockUnavailable:
+    return ConfigLockUnavailable(
+        f"config lock unavailable: cannot create {creating} - "
+        f"{_denied_detail(exc)}; the lock at {lock} cannot be created or "
+        f"inspected (a denied traversal also lands here, so holder state is "
+        f"unknowable) - fix permissions under {lock.parent}"
+    )
+
+
+def _timeout_message(lock: Path, timeout_s: float, last_error: OSError | None) -> str:
+    """Say what was actually observed. 'holder appears alive' is reserved for
+    the case where an owner really was read (#340)."""
+    head = f"could not acquire {lock} within {timeout_s:.0f}s; "
+    if last_error is not None:
+        # The path exists (fail-fast handled the absent case) but creating it
+        # kept being denied: on Windows a delete is still pending, elsewhere
+        # the parent or the directory itself is not writable by us.
+        return (head + f"creating it kept being denied ({_denied_detail(last_error)}) "
+                f"- on Windows a delete may still be pending, otherwise check "
+                f"permissions on {lock.parent}")
+    owner = _read_owner(lock)
+    if owner is not None:
+        age = max(0.0, time.time() - owner["acquired_at"])
+        # Honesty (PR #349 review): an owner the staleness probe has already
+        # proven reclaimable is not "alive" - reclamation itself is failing.
+        if _owner_is_stale(lock, time.time()):
+            return (head + f"owner (pid {owner['pid']} on {owner['host']}, "
+                    f"acquired {age:.0f}s ago) is stale but reclamation is "
+                    f"failing - check permissions on {lock.parent}")
+        return (head + f"holder appears alive (pid {owner['pid']} on "
+                f"{owner['host']}, acquired {age:.0f}s ago; see owner.json)")
+    try:
+        dir_age = max(0.0, time.time() - lock.stat().st_mtime)
+    except OSError:
+        return (head + "the directory exists with no readable owner.json and its "
+                "age could not be read")
+    remaining = STALE_OWNER_S - dir_age
+    if remaining > 0:
+        return (head + f"the directory exists with no readable owner.json "
+                f"(no holder was observed); it becomes stale-reclaimable in "
+                f"{remaining:.0f}s")
+    return (head + f"the directory exists with no readable owner.json (no holder "
+            f"was observed) and is already past the {STALE_OWNER_S:.0f}s stale "
+            f"window - reclaiming it is failing; check permissions on {lock.parent}")
+
+
 @contextlib.contextmanager
 def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterator[None]:
     """Acquire the shared config-writer lock, or raise ConfigLockTimeout.
@@ -247,31 +324,64 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
     """
     lock = _lock_dir(flow_dir)
     _assert_lock_path_safe(flow_dir, lock)
-    lock.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        lock.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        # PermissionError, EROFS (plain OSError), ENOSPC... - environment
+        # facts, not contention (#349 round 5).
+        raise _unavailable(lock, exc, creating=lock.parent) from None
     deadline = time.monotonic() + timeout_s
+    last_error: OSError | None = None
     while True:
         try:
             lock.mkdir()
             break
         except FileExistsError:
+            last_error = None  # real contention: the path is occupied, not denied
             if _owner_is_stale(lock, time.time()) and _try_reclaim(lock):
                 # Reclaimed: retry the mkdir immediately. If someone else
                 # acquires first, their FRESH owner is not stale, so this
                 # branch cannot repeat - the loop is bounded by the deadline.
                 continue
-        except PermissionError:
+        except OSError as exc:
+            # PermissionError and friends (EROFS arrives as plain OSError -
+            # #349 round 5; FileExistsError took its own branch above).
             # Windows: a directory whose deletion is still PENDING (the last
             # holder released while a reader kept a handle open) fails mkdir
             # with ERROR_ACCESS_DENIED, not FileExistsError. Transient - poll.
-            pass
+            # But a denial with NO directory there is not a pending delete and
+            # not contention: nothing holds the lock and nothing will change,
+            # so waiting out the deadline only delays a wrong answer (#340).
+            # RACE GUARD (PR #349 review): a pending delete can finish
+            # disappearing between the denied mkdir and the exists probe -
+            # denied+absent on a SINGLE observation is not proof. Retry the
+            # mkdir once immediately; only a second consecutive denial with
+            # the path still absent is genuinely unavailable.
+            denied = exc
+            if not os.path.lexists(lock):
+                try:
+                    lock.mkdir()
+                    break
+                except FileExistsError:
+                    last_error = None
+                    continue
+                except OSError as exc2:
+                    if not os.path.lexists(lock):
+                        # POSIX: denied twice with nothing there is a
+                        # permissions fact - fail fast. Windows: a pending
+                        # delete can misreport absent across both probes
+                        # (PR #349 round 2), so keep polling to the deadline;
+                        # the timeout message still reports the denial.
+                        if os.name != "nt":
+                            raise _unavailable(lock, exc2, creating=lock) from None
+                    denied = exc2
+            last_error = denied
         # Held, un-reclaimable, delete-pending, or the reclaim rename failed
         # (permissions, antivirus, read-only fs): all of these go through the
         # deadline so acquisition can never spin forever.
         if time.monotonic() >= deadline:
             raise ConfigLockTimeout(
-                f"could not acquire {lock} within {timeout_s:.0f}s; "
-                "holder appears alive (see owner.json)"
-            ) from None
+                _timeout_message(lock, timeout_s, last_error)) from None
         time.sleep(_POLL_S)
     try:
         (lock / "owner.json").write_text(json.dumps({

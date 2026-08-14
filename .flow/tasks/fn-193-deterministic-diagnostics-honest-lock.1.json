@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T08:25:32.684118Z",
+  "depends_on": [],
+  "id": "fn-193-deterministic-diagnostics-honest-lock.1",
+  "priority": null,
+  "spec": "fn-193-deterministic-diagnostics-honest-lock",
+  "spec_path": ".flow/tasks/fn-193-deterministic-diagnostics-honest-lock.1.md",
+  "status": "todo",
+  "title": "config_lock: fail fast + honest message composition on unavailable locks",
+  "updated_at": "2026-08-14T08:25:32.684118Z"
+}

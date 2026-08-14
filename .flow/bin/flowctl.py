@@ -4594,6 +4594,24 @@ def _dispatch_review_with_fallback(
     return _resolved(out, sid, rc, err, floor_model, True)
 
 
+def _effort_reached_cli(backend: str, model: Optional[str]) -> bool:
+    """Did the resolved effort actually govern the dispatched run? (#349 r3)
+
+    The attempt row must record what was SENT, not what was resolved:
+    - a ladder floor (model None) dispatches with CLI defaults - neither
+      model nor effort was pinned;
+    - copilot deliberately omits ``--effort`` for ``claude-*`` models
+      (they reject the flag);
+    - cursor bakes effort into the model slug and codex pins it via
+      ``-c`` - both really sent it.
+    """
+    if model is None:
+        return False
+    if backend == "copilot" and model.startswith("claude-"):
+        return False
+    return True
+
+
 def _receipt_model_effort(
     resolved_spec: "BackendSpec",
     resolution_out: Optional[dict],
@@ -10943,6 +10961,8 @@ def _record_review_attempt_locked(
     reviewed_head_sha: Optional[str] = None,
     reviewed_base_sha: Optional[str] = None,
     tool_calls: Optional[int] = None,
+    reviewed_model: Optional[str] = None,
+    reviewed_effort: Optional[str] = None,
     reservation_id: Optional[str] = None,
     receipt_target: Optional[str] = None,
     receipt_payload: Optional[dict] = None,
@@ -11151,6 +11171,11 @@ def _record_review_attempt_locked(
             "reviewed_head_sha": reviewed_head_sha,
             "reviewed_base_sha": reviewed_base_sha,
             "tool_calls": tool_calls,
+            # fn-193 (#338): the resolved model/effort are dispatcher-known
+            # facts that cannot be re-derived later (the fallback ladder and
+            # codex resume both move them), so they ride the journal too.
+            "reviewed_model": reviewed_model,
+            "reviewed_effort": reviewed_effort,
             "receipt_payload": receipt_payload,
             "receipt_target": receipt_target,
             "status_target": (
@@ -11334,6 +11359,18 @@ def _record_review_attempt_locked(
         row["tool_calls"] = int(tool_calls)
     if reviewed_base_sha:
         row["base_sha"] = reviewed_base_sha
+    # fn-193 (#338): the model that ACTUALLY ran, taken from the same
+    # `_receipt_model_effort` values the receipt records (so a ladder downgrade
+    # or a codex resume carry lands here honestly). Written only where the
+    # dispatcher resolved them - the rp/host `review-rounds record` path has no
+    # such fact and records no key, never "unknown"/"auto".
+    # Ladder floors pass None here (the sites gate on resolution["floor"] -
+    # #349 rounds 4-5): a floored "auto"/"default" is a selector placeholder,
+    # while an EXPLICIT cursor:auto pin really was sent and records honestly.
+    if reviewed_model:
+        row["model"] = reviewed_model
+        if reviewed_effort:
+            row["effort"] = reviewed_effort
     if findings_built and findings_digest is not None:
         row["findings_digest"] = dict(findings_digest)
     if (
@@ -12025,6 +12062,10 @@ def _enforce_and_increment_review_cap_locked(
                 reviewed_head_sha=(journal.get("reviewed_head_sha") if isinstance(journal.get("reviewed_head_sha"), str) else None),
                 reviewed_base_sha=(journal.get("reviewed_base_sha") if isinstance(journal.get("reviewed_base_sha"), str) else None),
                 tool_calls=(journal.get("tool_calls") if isinstance(journal.get("tool_calls"), int) and not isinstance(journal.get("tool_calls"), bool) else None),
+                # fn-193 (#338): same reasoning for the resolved model/effort -
+                # the dispatch that knew them is gone by replay time.
+                reviewed_model=(journal.get("reviewed_model") if isinstance(journal.get("reviewed_model"), str) else None),
+                reviewed_effort=(journal.get("reviewed_effort") if isinstance(journal.get("reviewed_effort"), str) else None),
                 # Journaled evidence is authoritative: the crashed process
                 # bound the criteria and built the findings container from the
                 # reviewer MESSAGE, which is gone. `response` is the transport
@@ -42492,6 +42533,11 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         injected_prompt=injected_prompt,
     )
 
+    # The effort the dispatch ACTUALLY sent: the bind below swaps in the
+    # prior receipt's values on codex resume (receipt semantics - the
+    # session's model persists), but the resume argv still pinned the
+    # CURRENT resolved effort via -c model_reasoning_effort (#349 round 6).
+    _dispatched_effort = resolved_spec.effort
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
         backend, resolved_spec, _resolution,
         prior_receipt_model=prior_receipt_model,
@@ -42555,6 +42601,31 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
+        # fn-193 (#338): the SAME resolved values the receipt records -
+        # except a ladder FLOOR records neither (the receipt's "auto"/
+        # "default" is a selector placeholder, not a resolved model; an
+        # explicit auto pin has floor unset and records honestly), and
+        # effort rides only when it actually reached the CLI (copilot
+        # omits --effort for claude-* models).
+        reviewed_model=(
+            None
+            if _resolution.get("floor")
+            # A codex resume carries the PRIOR receipt's model; when that
+            # prior was itself a ladder floor, the carried value is the
+            # selector placeholder, not a model (#349 round 7). Explicit
+            # cursor:auto pins never arrive via the resume carry.
+            or (
+                _resolution.get("resumed")
+                and effective_model in ("auto", "default")
+            )
+            else effective_model
+        ),
+        reviewed_effort=(
+            _dispatched_effort
+            if not _resolution.get("floor")
+            and _effort_reached_cli(backend, effective_model)
+            else None
+        ),
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -42671,6 +42742,8 @@ def _finish_backend_exec(
     attempt_out: Optional[dict] = None,
     reviewed_head_sha: Optional[str] = None,
     reviewed_base_sha: Optional[str] = None,
+    reviewed_model: Optional[str] = None,
+    reviewed_effort: Optional[str] = None,
     reservation_id: Optional[str] = None,
     findings_container: Optional[dict] = None,
     findings_digest: Optional[dict] = None,
@@ -42707,6 +42780,8 @@ def _finish_backend_exec(
                 reviewed_head_sha=reviewed_head_sha,
                 reviewed_base_sha=reviewed_base_sha,
                 tool_calls=tool_calls,
+                reviewed_model=reviewed_model,
+                reviewed_effort=reviewed_effort,
                 reservation_id=reservation_id,
                 findings_container=findings_container,
                 findings_digest=findings_digest,
@@ -42755,6 +42830,8 @@ def _finish_backend_exec(
             reviewed_head_sha=reviewed_head_sha,
             reviewed_base_sha=reviewed_base_sha,
             tool_calls=tool_calls,
+            reviewed_model=reviewed_model,
+            reviewed_effort=reviewed_effort,
             review_type=review_type,
             use_json=args.json,
             reservation_id=reservation_id,
@@ -42950,6 +43027,11 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         injected_prompt=injected_prompt,
     )
 
+    # The effort the dispatch ACTUALLY sent: the bind below swaps in the
+    # prior receipt's values on codex resume (receipt semantics - the
+    # session's model persists), but the resume argv still pinned the
+    # CURRENT resolved effort via -c model_reasoning_effort (#349 round 6).
+    _dispatched_effort = resolved_spec.effort
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
         backend, resolved_spec, _resolution,
         prior_receipt_model=prior_receipt_model,
@@ -43010,6 +43092,31 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
+        # fn-193 (#338): the SAME resolved values the receipt records -
+        # except a ladder FLOOR records neither (the receipt's "auto"/
+        # "default" is a selector placeholder, not a resolved model; an
+        # explicit auto pin has floor unset and records honestly), and
+        # effort rides only when it actually reached the CLI (copilot
+        # omits --effort for claude-* models).
+        reviewed_model=(
+            None
+            if _resolution.get("floor")
+            # A codex resume carries the PRIOR receipt's model; when that
+            # prior was itself a ladder floor, the carried value is the
+            # selector placeholder, not a model (#349 round 7). Explicit
+            # cursor:auto pins never arrive via the resume carry.
+            or (
+                _resolution.get("resumed")
+                and effective_model in ("auto", "default")
+            )
+            else effective_model
+        ),
+        reviewed_effort=(
+            _dispatched_effort
+            if not _resolution.get("floor")
+            and _effort_reached_cli(backend, effective_model)
+            else None
+        ),
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -43251,6 +43358,11 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         injected_prompt=injected_prompt,
     )
 
+    # The effort the dispatch ACTUALLY sent: the bind below swaps in the
+    # prior receipt's values on codex resume (receipt semantics - the
+    # session's model persists), but the resume argv still pinned the
+    # CURRENT resolved effort via -c model_reasoning_effort (#349 round 6).
+    _dispatched_effort = resolved_spec.effort
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
         backend, resolved_spec, _resolution,
         prior_receipt_model=prior_receipt_model,
@@ -43316,6 +43428,31 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
+        # fn-193 (#338): the SAME resolved values the receipt records -
+        # except a ladder FLOOR records neither (the receipt's "auto"/
+        # "default" is a selector placeholder, not a resolved model; an
+        # explicit auto pin has floor unset and records honestly), and
+        # effort rides only when it actually reached the CLI (copilot
+        # omits --effort for claude-* models).
+        reviewed_model=(
+            None
+            if _resolution.get("floor")
+            # A codex resume carries the PRIOR receipt's model; when that
+            # prior was itself a ladder floor, the carried value is the
+            # selector placeholder, not a model (#349 round 7). Explicit
+            # cursor:auto pins never arrive via the resume carry.
+            or (
+                _resolution.get("resumed")
+                and effective_model in ("auto", "default")
+            )
+            else effective_model
+        ),
+        reviewed_effort=(
+            _dispatched_effort
+            if not _resolution.get("floor")
+            and _effort_reached_cli(backend, effective_model)
+            else None
+        ),
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,

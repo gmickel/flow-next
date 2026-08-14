@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T08:25:32.684364Z",
+  "depends_on": [
+    "fn-193-deterministic-diagnostics-honest-lock.1"
+  ],
+  "id": "fn-193-deterministic-diagnostics-honest-lock.2",
+  "priority": null,
+  "spec": "fn-193-deterministic-diagnostics-honest-lock",
+  "spec_path": ".flow/tasks/fn-193-deterministic-diagnostics-honest-lock.2.md",
+  "status": "todo",
+  "title": "review-attempt rows carry the resolved model/effort (dispatcher-known only)",
+  "updated_at": "2026-08-14T08:25:32.684364Z"
+}

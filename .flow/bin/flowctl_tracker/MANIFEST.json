@@ -2,7 +2,7 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "2abfb911adc50b77d2f97a46e4c5793d876d1cfae2eb200ec85c1eeba53a88a1"
+      "sha256": "5ca3b89d382de82983d51ee6e4f8b4792e46e71b0660d92625ec83985a73e699"
     },
     {
       "path": "flowctl_tracker/__init__.py",
@@ -22,7 +22,7 @@
     },
     {
       "path": "flowctl_tracker/config_lock.py",
-      "sha256": "1f517b18bcfc8bee94c6d91739a79c47549cfb2a678e82ca8d25f0e0e24083d4"
+      "sha256": "72c96805c9a82f0718e056a58b01c138c4597d09e927feac35ebe885e4f95d5a"
     },
     {
       "path": "flowctl_tracker/credentials.py",
