@@ -306,5 +306,73 @@ class WorkflowProseContract(unittest.TestCase):
         self.assertNotIn("work.delegate", self.text)
 
 
+# ── (d) Codex mirror content pin ──────────────────────────────────────────────
+
+
+class MirrorRoutingProse(unittest.TestCase):
+    """The regenerated Codex mirror carries the same routing invariants (fn-195).
+
+    `sync-codex.sh`'s own guards police the TRANSFORM (tool names, dispatch
+    phrases); nothing there reads the routing prose. A mirror regenerated from
+    a stale source - or a deleted-ceremony file left behind by an incomplete
+    regen - would ship the pin ceremony to every Codex install while the
+    canonical assertions above stayed green. These are the mirror-side
+    equivalents, deliberately scoped to the same three questions the canonical
+    pins ask: the markers, the four tier names, and zero model identifiers.
+    """
+
+    MIRROR = PLUGIN / "codex" / "skills" / "flow-next-setup"
+
+    def setUp(self) -> None:
+        self.template = self.MIRROR / "templates" / "model-routing-snippet.md"
+        self.workflow = self.MIRROR / "workflow.md"
+        for path in (self.template, self.workflow):
+            self.assertTrue(
+                path.is_file(),
+                f"missing mirror file: {path} (run ./scripts/sync-codex.sh)",
+            )
+
+    def test_mirror_template_keeps_markers_and_tiers(self) -> None:
+        text = _read(self.template)
+        self.assertIn(START, text)
+        self.assertIn(END, text)
+        for tier in TIERS:
+            self.assertIn(tier, text, f"tier missing from the mirror block: {tier}")
+
+    def test_mirror_template_ships_no_model_identifier(self) -> None:
+        hit = MODEL_SLUG_RE.search(_read(self.template))
+        self.assertIsNone(
+            hit,
+            f"mirror routing block ships a concrete model identifier: "
+            f"{hit.group(0) if hit else ''}",
+        )
+
+    def test_mirror_workflow_pin_ceremony_cannot_regrow(self) -> None:
+        text = _read(self.workflow)
+        for gone in (
+            "MODELS_ASK",
+            "models.roles",
+            "models.verifiedAt",
+            "codex accept-probe",
+            "SCOUT_PIN",
+            "REVIEW_PIN",
+            "references/model-pins.md",
+            "references/model-routing-",
+            "work.delegate",
+        ):
+            self.assertNotIn(gone, text, f"pin ceremony regrew in the mirror: {gone}")
+
+    def test_deleted_ceremony_references_are_gone_from_the_mirror(self) -> None:
+        # An incomplete regen (rsync without --delete) leaves the retired
+        # reference files on disk where the mirror skill can still load them.
+        stale = sorted(
+            p.name
+            for p in (self.MIRROR / "references").glob("model-*.md")
+        )
+        self.assertEqual(
+            stale, [], f"retired routing references still in the mirror: {stale}"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

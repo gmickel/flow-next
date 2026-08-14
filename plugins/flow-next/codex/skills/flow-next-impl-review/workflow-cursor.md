@@ -2,13 +2,13 @@
 
 Use when `BACKEND="cursor"`. Prerequisite: Phase 0 backend detection in [workflow-common.md](workflow-common.md) has resolved `BACKEND`, `FLOWCTL`, and (optionally) `TASK_ID` / `BASE_COMMIT`.
 
-Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`), billed against the user's Cursor subscription. It reaches reviewer models the other backends can't (`gpt-5.5-high` 1M-ctx default, the `gpt-5.3-codex` family, `composer-2.5`, `claude-opus-4-8-thinking-high`). This is the **review backend**, independent of the Cursor-as-primary-host-driver path.
+Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`), billed against the user's Cursor subscription. It reaches reviewer models the other backends can't — ask `cursor-agent --list-models` for the current set. This is the **review backend**, independent of the Cursor-as-primary-host-driver path.
 
 ## Critical Rules (cursor backend)
 
 1. Use `$FLOWCTL cursor impl-review` exclusively
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
-3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
+3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default. **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
 
 ## Step 1: Identify Task and Diff Base
@@ -38,10 +38,10 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_
 # Runtime config:
 #   --spec <spec>           full spec (cursor:<model>), highest priority
 #   FLOW_REVIEW_BACKEND     env (spec-form ok: cursor:gpt-5.5-high)
-#   FLOW_CURSOR_MODEL       env (fills missing model only; default gpt-5.5-high)
+#   FLOW_CURSOR_MODEL       env (fills missing model only; else registry default)
 #   per-task stored review  via `flowctl task set-backend` (highest if set)
 #
-# Cursor folds reasoning effort INTO the model name (e.g. gpt-5.3-codex-xhigh),
+# Cursor folds reasoning effort INTO the model name (a `-high` / `-xhigh` suffix),
 # so there is NO effort field — `cursor:<model>:<effort>` is rejected, and there
 # is no FLOW_CURSOR_EFFORT env var.
 
@@ -93,6 +93,6 @@ See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination 
 
 - **Direct cursor-agent calls** - Must use `flowctl cursor` wrappers
 - **Inventing a `--model` CLI flag** - Use `--spec` for a full `cursor:<model>` value, or the `FLOW_CURSOR_MODEL` env var to fill the model
-- **Passing an effort** - Cursor has no effort field; `cursor:<model>:<effort>` is rejected. Pick a model whose name already encodes the effort (e.g. `gpt-5.3-codex-xhigh`)
+- **Passing an effort** - Cursor has no effort field; `cursor:<model>:<effort>` is rejected. Pick a model whose name already encodes the effort
 - **Fabricating a first-call `--resume` id** - The first call omits `--resume`; persist Cursor's returned `session_id` and resume with that. Session resume uses `--resume=<uuid>` under the hood via `--receipt`
 - **Assuming cross-backend session continuity** - Resume only works when prior receipt has `mode == "cursor"`

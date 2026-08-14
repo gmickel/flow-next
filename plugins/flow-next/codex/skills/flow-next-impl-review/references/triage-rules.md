@@ -45,5 +45,5 @@ Ralph-script changes required.
 | Anything else | REVIEW (conservative fallthrough) |
 
 When `FLOW_TRIAGE_LLM=1`, ambiguous diffs get a one-shot fast-model call
-(`gpt-5.6-luna` @high for codex backend, `claude-haiku-4.5` @low for copilot backend).
+(each backend's own triage default model and effort).
 Malformed LLM output falls through to REVIEW.

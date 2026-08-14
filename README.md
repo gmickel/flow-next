@@ -387,7 +387,7 @@ scripts/ralph/ralph.sh          # Run from terminal
 | Stale project memory polluting future work | **`/flow-next:audit` + categorized memory schema**: agent reviews each entry, flags stale (never deletes) |
 | 10K-line diffs with no focus signal | **PR-as-cognitive-aid**: R-ID coverage, critical changes, decisions, where-to-look |
 | GitHub PR review threads piling up | **`/flow-next:resolve-pr`**: fetch → triage → dispatch resolver agents → reply → resolve via GraphQL |
-| One model doing everything | **Orchestration & model routing**: tiered subagents, per-task reviewer routing, opt-in `codex exec` implementation offload, promptable overrides ([docs](plugins/flow-next/docs/orchestration.md)) |
+| One model doing everything | **Orchestration & model routing**: four named tiers (`reviewer` / `implementer` / `fast scout` / `thinking scout`) you fill in once in your own `CLAUDE.md`, a reach page per harness, per-task reviewer routing, promptable overrides ([docs](plugins/flow-next/docs/orchestration.md)) |
 
 ## What Flow-Next is *not*
 

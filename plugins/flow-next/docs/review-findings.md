@@ -340,7 +340,7 @@ Three places carry it, all optional and all additive:
 |---|---|---|
 | Review receipt | `model` (with `effort`) | The dispatcher resolved the model it ran |
 | Review attempt row (`review_attempts[]`) | `model`, `effort` | The same dispatch resolved them; the rp/host path records neither, because a narrating agent's claim is not an observation |
-| Stage-outcome line | trailing `(model: <what ran>)` | The harness exposed what ran that stage. Accepted on read; the orchestrator prose that emits it lands with the routing docs — a corpus written before then simply tallies `unknown` |
+| Stage-outcome line | trailing `(model: <what ran>)` | The harness exposed what ran that stage. Emitted by the two stage-line grammar sites (the work skill's final summary, a pilot tick's evidence echo) when the orchestrator knows what executed; omitted otherwise, and a corpus written before those emitters simply tallies `unknown` |
 
 One rule governs all three: **an absent value means unknown, never the
 configured or preferred model.** A preference is not an observation, so a

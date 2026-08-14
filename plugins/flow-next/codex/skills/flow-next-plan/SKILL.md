@@ -92,7 +92,7 @@ Parse the arguments for these patterns. If found, use them and skip questions:
 **Research approach**: always `repo-scout` — there is no research-backend choice. `--research=grep` is accepted as a no-op; any other `--research` value is ignored.
 
 **Review mode**:
-- `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.5 High)
+- `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
 - `--review=host` or "review with host" or "host review" or "use host" → host-native fresh-context reviewer subagent (fn-123 R5; pins in AGENTS.md model-routing)
 - `--review=export` or "export review" or "external llm" → export for external LLM

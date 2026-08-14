@@ -446,6 +446,8 @@ After all tasks complete (or periodically for large specs):
 
   **Both axis dispatches go out in the same message.** A run that dispatched one axis and waited for its report before sending the other has broken this — the split exists so neither axis can spend the whole budget on the other's territory, and serializing them re-imports the cost the split removed.
 
+  The auditor grades work someone else produced, so it is the **reviewer** tier. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
+
   **Aggregation — both reports verbatim, under two headings:**
   - `### Correctness axis` — that report, unedited.
   - `### Standards axis` — that report, unedited.
@@ -544,8 +546,17 @@ already writes — the task's `## Done summary` for task-scoped stages, this
 final summary for run-scoped ones:
 
 ```
-stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)
+stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>) (model: <what actually ran>)
 ```
+
+**Append `(model: <what actually ran>)` when this orchestrator knows what ran that
+stage** — a subagent it dispatched on a named model, a bridged CLI it invoked with
+an explicit model, or a review whose backend reported one. **Record only, never
+prescribe:** write the model that *executed*, not the one your routing block asked
+for; omit the annotation entirely when the harness did not expose it (absent reads
+as `unknown`), and never write a selector placeholder (`auto`, `default`,
+`unknown`) — an unrouted stage and a ladder floor are both honestly unknown.
+Recording the configured preference as if it were an observation has broken this.
 
 **A skipped stage is an event with a reason, never an absence** — review treats a
 stage with no line as failed (that inversion is the point: "no record" can never

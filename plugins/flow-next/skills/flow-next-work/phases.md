@@ -557,8 +557,17 @@ already writes — the task's `## Done summary` for task-scoped stages, this
 final summary for run-scoped ones:
 
 ```
-stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)
+stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>) (model: <what actually ran>)
 ```
+
+**Append `(model: <what actually ran>)` when this orchestrator knows what ran that
+stage** — a subagent it dispatched on a named model, a bridged CLI it invoked with
+an explicit model, or a review whose backend reported one. **Record only, never
+prescribe:** write the model that *executed*, not the one your routing block asked
+for; omit the annotation entirely when the harness did not expose it (absent reads
+as `unknown`), and never write a selector placeholder (`auto`, `default`,
+`unknown`) — an unrouted stage and a ladder floor are both honestly unknown.
+Recording the configured preference as if it were an observation has broken this.
 
 **A skipped stage is an event with a reason, never an absence** — review treats a
 stage with no line as failed (that inversion is the point: "no record" can never

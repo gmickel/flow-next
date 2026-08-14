@@ -176,6 +176,8 @@ Run `/flow-next:plan-review` again on the plan itself. The plan is a separate ha
 
 `/flow-next:work <spec-id>` inspects the full ready frontier on every loop. When several tasks are independent and their mutable surfaces can be isolated, the host may dispatch a safe subset concurrently; otherwise it explains the constraint and serializes. Each task runs in a **worker subagent with fresh context** (no token bleed from prior tasks). Before each task, the worker re-anchors: re-reads the spec, the task, and `git log` since branch base.
 
+**Which model implements is a team routing choice, not a flag on this command.** Workers run on the session model unless the project's routing block names an `implementer` tier — one `<tier>: <model>` line in the repo's `CLAUDE.md` / `AGENTS.md`, which every teammate's harness reads. What each tier means: [`orchestration.md`](orchestration.md#tiers--what-kind-of-model-a-job-wants); what your harness can actually reach: [`reach/`](reach/README.md).
+
 Parallel workers implement, test, commit, and return task-unique handover files. The conductor joins the whole wave, integrates the commits, then owns the existing per-task review, completion, and tracker gates; plan-sync runs only after the wave is joined and resolved. Atomic claims prevent duplicate ownership, but do not make concurrent edits in one checkout safe.
 
 Per-task output remains an evidence record (commits, tests, files touched) plus a `done_summary` block. The summary is the conversation the worker had with itself about *why* it made the choices it made — load-bearing for `/make-pr` to write the Decisions section without confabulating.

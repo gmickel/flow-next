@@ -115,6 +115,24 @@ Clearing a strike **does not re-ready the spec** - the two signals are orthogona
 - The default is 8, resolved as env `MAX_REVIEW_ITERATIONS` > config `review.maxIterations` > 8. Tune it with `flowctl config set review.maxIterations <n>` for a persistent change; the cap remains enabled (minimum 1) and escalation remains preferable to a larger budget. Under Ralph both rungs are human-only.
 - Full semantics: [`flowctl.md` § Deterministic review cap](flowctl.md#codex-impl-review) and [`ralph.md` § Review Loops Until SHIP](ralph.md#3-review-loops-until-ship).
 
+## flowctl says my config carries removed keys, or my routing block is ignored (fn-195)
+
+**Symptom:** one non-blocking line like
+
+```
+note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block /flow-next:setup writes into CLAUDE.md / AGENTS.md plus the recipes in .flow/usage.md - route work there and delete these keys.
+```
+
+**This is expected, not an error.** The role map (`models.roles`) and its staleness stamps (`models.verifiedAt` / `models.verifiedWith`), like the `work.delegate*` keys, are removed - flowctl reads none of them. The advisory prints at most once per invocation, on the config and work entry points only, and never blocks. Delete the keys when convenient.
+
+**Routing not taking effect?** Routing is prose read by the agent, not config parsed by flowctl, so check in this order:
+
+- **The block is in the file the host actually reads** (`CLAUDE.md` on Claude Code / Droid / Grok, `AGENTS.md` on Codex / Cursor / Grok - see [`platforms.md`](platforms.md)), and its lines are **uncommented**. `/flow-next:setup` writes every line commented out on purpose; nothing routes until you uncomment one.
+- **The grammar is `<tier>: <model>`** (optionally `at <effort>`), with a tier name from the four: `reviewer`, `implementer`, `fast scout`, `thinking scout`. An unrecognized name is treated as unset with one advisory; an unparseable line is ignored.
+- **Something higher in the precedence chain won.** Highest first: an explicit instruction in the invocation, then the routing block, then the agent definition's own default, then the session model. A model this harness cannot reach falls back to the session model, says so once, and continues - routing never fails closed.
+- **The harness may not have that reach at all.** Check its page under [`reach/`](reach/README.md): a host with no subagent primitive and no second CLI runs the work in session, and that is the documented degradation, not a fault.
+- **Check what actually ran.** Stage records carry the model where the harness exposes it - an absent value means unknown, never the configured value.
+
 ## Review reports a model downgrade / floor (fn-76 resolution ladder)
 
 **Symptom:** a review prints one stderr line like

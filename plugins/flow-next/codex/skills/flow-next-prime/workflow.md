@@ -3,7 +3,7 @@
 Execute these phases in order. Load each reference only when its consuming
 phase says to read it; never pre-read remediation templates.
 
-**Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run per their agent frontmatter: 7 haiku fast scanners (tooling, env, testing, build, observability, security, workflow); agents-md-scout and docs-gap-scout on sonnet for judgment quality.
+**Tier guidance**: synthesis and report generation run on the session model. Scouts run per their agent frontmatter: 7 fast-scout-tier scanners (tooling, env, testing, build, observability, security, workflow); agents-md-scout and docs-gap-scout on the thinking scout tier for judgment quality.
 
 ---
 
@@ -46,7 +46,7 @@ Some classification facts are LOW-CONFIDENCE (probes disagree) or UNINFERABLE IN
 
 ## Phase 1: Parallel Assessment
 
-Run all 9 scouts in parallel (Codex spawns them as multi-agent threads):
+Run all 9 scouts in parallel using the Task tool. The pillar scanners are **fast scout** dispatches — mechanical inventory scanning where the cheapest tier is the correct one — except `docs-gap-scout` and `agents-md-scout`, which are **thinking scout** dispatches (documentation-quality judgment degrades badly on a fast model). **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
 
 **Dispatch contract (every scout prompt).** Each scout returns criteria for a specific pillar - its output must be keyed to those criterion IDs (SV1-6, TS1-6, …), NOT its own internal "X/5 health score" (those denominators don't match the pillars and must never be reused as a pillar score). If you pass a repo-root argument (see below), each scout prompt starts "Assess the repo at ROOT". A scout whose output has no criterion-ID mapping is treated as a failure (below). **Every scout prompt also carries a one-line classification context sentence from Phase 0.5** so the scout probes the right thing and does not fail the repo against conventions that do not apply (e.g. "This is a huge Delphi tier-1 repo - assess the Delphi verify command per stacks.md, do not assess Node/TS conventions"; "This is a greenfield scaffold - expect deferrals, not gaps"; "This is a CLI-shaped library - grade the agent-first-CLI drivability row, not a web boot"). build-scout and testing-scout additionally receive the detected stack's `stacks.md` verify column so they probe the correct commands.
 

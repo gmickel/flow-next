@@ -53,6 +53,8 @@ The script's validation block (search for `# ─── Validation ───` in 
 
 Each guard prints `file:line` hits where available so the fix is mechanical: clean canonical first, then re-run sync.
 
+**The guards police the transform, not the prose.** They check tool names, dispatch phrasing, and structural drift — nothing in the script reads what a mirrored page *says*. Where mirrored content carries a user-facing contract of its own, the pin lives in the test suite instead: `tests/test_model_routing_scaffold.py` asserts the mirrored routing block keeps its markers and the four tier names, ships no model identifier, and that the retired pin-ceremony references are actually gone from the mirror (an incomplete regen leaves them loadable). A canonical-only assertion would stay green while every Codex install shipped the deleted ceremony.
+
 ## Plain-text transform (fn-45)
 
 The Codex Default-mode + CLI surface errors on `request_user_input` calls ([openai/codex#10384](https://github.com/openai/codex/issues/10384), [#11536](https://github.com/openai/codex/issues/11536), [#12694](https://github.com/openai/codex/issues/12694)). Stage 3 rewrites canonical `AskUserQuestion` blocks into plain-text numbered prompts in the mirror, appending an `N+1. Other — type your own answer` option so the mirror still offers the freeform-input affordance. The R6 mirror scan re-runs after the rewrite to catch any surviving references.
