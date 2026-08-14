@@ -327,6 +327,35 @@ standing global criteria in `.flow/criteria.md` (see
 - When `.flow/criteria.md` is absent, the review prompt contains no criteria
   content and receipts carry no `criteria` field - absence is a silent no-op.
 
+## Execution provenance (which model ran a stage)
+
+Routing is expressed as intent in prose, so it is best-effort by nature. The
+receipt surfaces therefore record which model *actually executed* a stage,
+wherever the harness exposes that fact — recording only: nothing prescribes a
+model, and nothing fails because a stage went unrecorded.
+
+Three places carry it, all optional and all additive:
+
+| Surface | Field | Written when |
+|---|---|---|
+| Review receipt | `model` (with `effort`) | The dispatcher resolved the model it ran |
+| Review attempt row (`review_attempts[]`) | `model`, `effort` | The same dispatch resolved them; the rp/host path records neither, because a narrating agent's claim is not an observation |
+| Stage-outcome line | trailing `(model: <what ran>)` | The harness exposed what ran that stage |
+
+One rule governs all three: **an absent value means unknown, never the
+configured or preferred model.** A preference is not an observation, so a
+selector placeholder (`auto`, `default`, a literal `unknown`) records no value
+at all — a ladder floor and an unrouted stage are both honestly unknown.
+
+`flowctl usage --stages <spec-id>` aggregates the result: every counted stage
+gets a `models` tally whose keys are the observed models plus `unknown`. That
+tally is the after-the-fact check on prose routing.
+
+Consumers read this provenance for reporting only. It is optional metadata on
+records that already existed; no consumer may branch on it, require it, or
+treat its absence as a failure — a receipt without a `model` is exactly as
+valid as one carrying it.
+
 ## Memory relationship
 
 Receipts and memory serve different lifetimes. A receipt records what one

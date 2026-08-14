@@ -19863,11 +19863,33 @@ def cmd_init(args: argparse.Namespace) -> None:
 # that opens with `stage:` but does not fully parse lands in the `unknown`
 # bucket — the summarizer surfaces malformed/truncated lines instead of
 # counting them as valid outcomes, and never crashes (R5).
+#
+# fn-195 R7: an optional trailing `(model: <what ran>)` records the model that
+# ACTUALLY executed the stage, where the harness exposes it. It is recording
+# only — absent means unknown, never the configured or preferred model, and no
+# consumer branches on it.
 _STAGE_LINE_RE = re.compile(
     r"^stage:\s*(?P<name>[A-Za-z0-9_.-]+)\s*[-—]\s*"
     r"(?:(?P<ran>ran)(?:\s*\[[^\]]*\])?"
-    r"|(?P<outcome>skipped|failed)\s*\((?P<reason>[^)]*)\))\s*$",
+    r"|(?P<outcome>skipped|failed)\s*\((?P<reason>[^)]*)\))"
+    r"(?:\s*\(model:\s*(?P<model>[^)]*)\))?\s*$",
 )
+
+# fn-195 R7: the one spelling for "the harness did not expose what ran". A
+# recorded value that means "no model was pinned" (a review ladder floor) is
+# unknown too — a selector placeholder is not an observation.
+_STAGE_MODEL_UNKNOWN = "unknown"
+_STAGE_MODEL_PLACEHOLDERS = frozenset({"", "auto", "default", "unknown", "none"})
+
+
+def _stage_model_value(raw: Any) -> str:
+    """Normalize an observed stage model onto the recorded/unknown split."""
+    if not isinstance(raw, str):
+        return _STAGE_MODEL_UNKNOWN
+    value = raw.strip()
+    if value.casefold() in _STAGE_MODEL_PLACEHOLDERS:
+        return _STAGE_MODEL_UNKNOWN
+    return value
 
 
 def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
@@ -19894,8 +19916,15 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
         return stages.setdefault(
             name.replace("_", "-"),
             {"ran": 0, "skipped": 0, "failed": 0, "unknown": 0,
-             "receipts": 0, "reasons": []},
+             "receipts": 0, "reasons": [], "models": {}},
         )
+
+    def record_model(entry: dict, raw: Any) -> None:
+        # fn-195 R7: recording only. Every counted stage contributes exactly
+        # one tally — the observed model, or `unknown` when the harness did
+        # not expose one — so an unrouted stage is a fact in the record.
+        value = _stage_model_value(raw)
+        entry["models"][value] = entry["models"].get(value, 0) + 1
 
     unknown_lines = 0
     tasks_dir = flow_dir / "tasks"
@@ -19914,6 +19943,7 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
                 continue
             entry = bucket(match.group("name"))
             entry["ran" if match.group("ran") else match.group("outcome")] += 1
+            record_model(entry, match.group("model"))
             reason = match.group("reason")
             if reason:
                 entry["reasons"].append(reason.strip())
@@ -19932,7 +19962,11 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
             # already describe — count it under its own `receipts` key, never
             # a second `ran`, so one review is never double-counted.
             kind = str(receipt.get("type") or "review")
-            bucket(kind)["receipts"] += 1
+            entry = bucket(kind)
+            entry["receipts"] += 1
+            # The receipt already carries the model that ran (fn-193); a
+            # receipt without one is unknown, never the configured value.
+            record_model(entry, receipt.get("model"))
 
     result = {
         "success": True,
@@ -19954,6 +19988,12 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
             f"receipts={entry['receipts']}"
         )
         print(f"  {name}: {counts}")
+        if entry["models"]:
+            models = " ".join(
+                f"{model}={count}"
+                for model, count in sorted(entry["models"].items())
+            )
+            print(f"    models: {models}")
         for reason in entry["reasons"]:
             print(f"    - {reason}")
     if unknown_lines:
@@ -49099,6 +49139,11 @@ def main() -> None:
         ],
         help="Explicit no-verdict failure class",
     )
+    # fn-193 (#338) / fn-195 R7: deliberately NO --model here. This is the
+    # rp/host path, where the only available "model" is a narrating agent's
+    # claim - and a claim is not an observation. The row stays honestly silent
+    # (absent = unknown); observed provenance rides the dispatcher paths that
+    # actually resolved a model.
     p_rr_record.add_argument("--json", action="store_true", help="JSON output")
     p_rr_record.set_defaults(func=cmd_review_rounds_record)
 
