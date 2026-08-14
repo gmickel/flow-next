@@ -744,5 +744,86 @@ class ReviewSignalOrderingStaticTestCase(unittest.TestCase):
         )
 
 
+class PostMergeTailOrderStaticTestCase(unittest.TestCase):
+    """§3.5's post-merge tail order (fn-194 R3, #345).
+
+    The bug being pinned out: persisting the close FIRST meant one refused
+    push (a base that only accepts pull requests refuses it permanently)
+    skipped release-follow AND the tracker touchpoint after a real merge - the
+    board stuck at In Review, which is the exact outcome the active-by-default
+    `land.merged` projection exists to prevent. The tail now closes locally,
+    runs release-follow and the touchpoint, and pushes last, with the rollback
+    scoped to the push step alone.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("### 3.5 — `merge` + post-merge tail")
+        end = cls.text.find("### 3.6", start)
+        assert start != -1 and end != -1, "§3.5 section not found"
+        cls.tail = cls.text[start:end]
+
+    def test_tail_steps_are_numbered_in_the_new_order(self) -> None:
+        close = self.tail.index("1. **Spec close")
+        release = self.tail.index("2. **Release-follow**")
+        tracker = self.tail.index("3. **Tracker touchpoint")
+        persist = self.tail.index("4. **Persist —")
+        self.assertLess(close, release)
+        self.assertLess(release, tracker)
+        self.assertLess(tracker, persist)
+
+    def test_the_only_tail_push_comes_after_release_and_tracker(self) -> None:
+        push = self.tail.index("git push || { git pull --rebase && git push; }")
+        self.assertLess(self.tail.index("2. **Release-follow**"), push)
+        self.assertLess(self.tail.index("3. **Tracker touchpoint"), push)
+        # Exactly one push line in the tail (`git push || { ... && git push; }`)
+        # - the close and the sync state ride it together.
+        self.assertEqual(self.tail.count("git push"), 2)
+
+    def test_close_step_commits_without_pushing(self) -> None:
+        close = self.tail[
+            self.tail.index("1. **Spec close") : self.tail.index("2. **Release-follow**")
+        ]
+        self.assertIn('git commit -m "chore(flow): close ${spec}', close)
+        self.assertNotIn("git push", close)
+
+    def test_tracker_sync_state_commit_does_not_push(self) -> None:
+        tracker = self.tail[
+            self.tail.index("3. **Tracker touchpoint") : self.tail.index("4. **Persist —")
+        ]
+        self.assertIn('git commit -m "chore(flow): sync state for ${spec}', tracker)
+        self.assertNotIn("git push", tracker)
+
+    def test_rollback_is_scoped_to_the_persist_step(self) -> None:
+        persist = self.tail[self.tail.index("4. **Persist —") :]
+        self.assertIn('git reset --hard "$TAIL_BASE_OID"', persist)
+        self.assertIn("TAIL_BASE_OID=\"$(git rev-parse HEAD)\"", self.tail)
+        self.assertIn("scoped to THIS step and skips NOTHING else", persist)
+        self.assertIn("spec close not pushed", persist)
+        # The old rollback target (one commit back) cannot express two commits.
+        self.assertNotIn("git reset --hard HEAD^", self.text)
+
+    def test_re_tick_safety_reasoning_is_stated_inline(self) -> None:
+        persist = self.tail[self.tail.index("4. **Persist —") :]
+        self.assertIn("idempotency probe", persist)
+        self.assertIn("evidence=<merge-commit-sha>", persist)
+
+    def test_release_and_tracker_preconditions_are_stated_at_the_close(self) -> None:
+        close = self.tail[
+            self.tail.index("1. **Spec close") : self.tail.index("2. **Release-follow**")
+        ]
+        self.assertIn("clean non-`.flow/` tree", close)
+        self.assertIn("fresh GitHub `MERGED` probe", close)
+
+    def test_resume_tail_prose_matches_the_new_order(self) -> None:
+        resume = self.text[self.text.find("### 3.6 — `resume-tail`") :]
+        self.assertIn(
+            "spec close (local commit) → release-follow → tracker touchpoint → persist-push",
+            resume,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
