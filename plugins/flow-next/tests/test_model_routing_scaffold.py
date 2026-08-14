@@ -23,8 +23,9 @@ Four groups:
       (0/2 starts, 0/2 ends, out-of-order) → untouched. PLUS prose-contract
       assertions on `commands/uninstall.md`.
   (d) workflow prose contracts on the setup skill (canonical AND Codex mirror):
-      headless-skip rule, frozen option strings (as-built casing), never-pre-set
-      `work.delegateConsent`, scaffold processing ordered after the Docs block.
+      headless-skip rule, frozen option strings (as-built casing), retired
+      packaged-delegation vocabulary must not regrow, scaffold processing
+      ordered after the Docs block.
 
 Run:
     python3 -m unittest plugins.flow-next.tests.test_model_routing_scaffold -v
