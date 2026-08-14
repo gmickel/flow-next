@@ -532,7 +532,7 @@ One API call, no local checkout: GitHub merges `$BASE_REF` into the PR's head br
 
 The worktree never moves in this path — no `gh pr checkout`, no branch restore, nothing to assert clean afterwards.
 
-**This removes land's force-push capability entirely.** No `git rebase`, no `--force-with-lease`: the PR's commit SHAs survive the catch-up, so the evidence recorded against them stays reachable — that is #302's orphaned-evidence CAUSE removed for every repo, not merely detected. Nothing observable is traded for the merge commit: land always squash-merges, so the branch-local shape disappears at merge time either way. Fork PRs are unchanged — `update-branch` fails on a fork whose maintainer-edit permission is off exactly as the old force-push failed → `BLOCKED`, no regression.
+**This removes land's force-push capability entirely.** No `git rebase`, no `--force-with-lease`: the PR's commit SHAs survive the catch-up, so the evidence recorded against them stays reachable — that is #302's orphaned-evidence CAUSE removed for every repo, not merely detected. Nothing observable is traded for the merge commit: land always squash-merges, so the branch-local shape disappears at merge time either way. Fork PRs are no worse off — `update-branch` fails on a fork whose maintainer-edit permission is off just as the old force-push failed; the refusal rides the classification above (first failure `RESOLVING`, an identical repeat escalates to the labeled `NEEDS_HUMAN`), so it surfaces as work for a human within two ticks.
 
 ### 3.4 — `label` (durable needs-human marker)
 
