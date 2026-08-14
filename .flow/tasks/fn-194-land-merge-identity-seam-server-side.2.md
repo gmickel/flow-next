@@ -10,9 +10,8 @@ R2+R4 in the land skill. R2: §2.8 (~:388-389) - BEHIND plans `catch-up` (rename
 R2+R4 met; the rebase machinery is gone; ordering paragraph states the §2.6/§2.7 truth; all pins green; sync-codex idempotent.
 
 ## Done summary
-TBD
-
+§3.3 is now server-side, merge-based catch-up: one gh pr update-branch call (BEHIND + DIRTY both route here), BLOCKED on refusal (the conflict verdict is the server's), ledger head sourced from the API, RESOLVING on success - no local checkout, no rebase, no force-push, the #302 orphaned-evidence cause removed for every repo. Action class renamed catch-up in every enumeration. §2.6/§2.7 ordering under reviewSignal: approve stated: the stale-approval detector IS reachable (only 2.1 stops the fall-through), so the durable label is what breaks the dismissal loop. 9 static tests, 88 green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 0e1320bb
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_skill_prose_diet -q
 - PRs:
