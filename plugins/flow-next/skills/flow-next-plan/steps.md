@@ -181,14 +181,16 @@ Run ALL of these scouts in parallel:
 
 **Anti-pattern**: cherry-picking scouts *within a tier* "because they seem most relevant" — that judgment-skip causes incomplete plans. (This is distinct from the DEPTH tier above: dropping the web-research scouts on a user-chosen SHORT plan is a deterministic, user-signaled tradeoff, not a relevance guess.)
 
-**Portable hosts (Cursor / Droid / Grok Build):** the agent files' `model:`
-fields are Claude family aliases the host may not resolve. When the host does
-not honor them, judgment-tier dispatches — the sonnet-tier scouts
-(`repo-scout`, `spec-scout`, `docs-gap-scout`, `docs-scout`, `practice-scout`,
-`github-scout`) and Step 3's `flow-gap-analyst` — run on the SESSION model,
-never a fast/cheap default: requirement analysis and pattern judgment are
-judgment, not scans. The haiku-tier scanner scouts may ride the host's fast
-default.
+**Scout tiers.** `repo-scout`, `spec-scout`, `docs-gap-scout`, `docs-scout`,
+`practice-scout` and `github-scout` — and Step 3's `flow-gap-analyst` — are
+**thinking scout** dispatches: requirement analysis and pattern judgment
+degrade badly on a fast model. The scanner scouts are **fast scout**
+dispatches. **Routing precedence, highest first: an explicit argument in the
+invocation, then the project routing block in the instruction file, then the
+agent definition's own default, then the session model.** Where a harness
+cannot honor an agent definition's default, a thinking scout runs on the
+SESSION model, never a fast/cheap one; consult the harness's reach page for
+what it can do.
 
 Must capture:
 - File paths + line refs
@@ -259,9 +261,12 @@ This shapes what the plan needs to cover. A pure backend refactor needs differen
 Run the gap analyst subagent:
 - Task flow-next:flow-gap-analyst(<request>, research_findings)
 
-The gap analyst is a judgment-tier dispatch — Step 1's portable-host rule
-applies: on a host that does not resolve the `model:` alias, run it on the
-session model, never a fast/cheap default.
+The gap analyst is a **thinking scout** dispatch — Step 1's rule applies.
+**Routing precedence, highest first: an explicit argument in the invocation,
+then the project routing block in the instruction file, then the agent
+definition's own default, then the session model.** Where the harness cannot
+honor the agent definition's default, run it on the session model, never a
+fast/cheap one.
 
 Fold gaps + questions into the plan.
 

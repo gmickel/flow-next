@@ -99,3 +99,51 @@ _Relates to_: Gate
 The always-loaded body of a `SKILL.md` under branch disclosure: the universal path every run needs, with branch-only content read from `references/*.md` at the branch point. A reference is the cold-path file; the spine is the hot path. Safety nets and every-run contracts stay in the spine by rule.
 
 _Avoid_: prompt, main file, header, preamble
+
+## Tier
+
+What kind of model a job wants: `reviewer`, `implementer`, `fast scout`, `thinking scout`, or unset (the session model). A tier binds a model to a stage's execution, never to which stages run — which stages run is decided by what you invoked. The four names are a user-facing interface defined in exactly one place, [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants); an unrecognized name is treated as unset with one advisory.
+
+_Avoid_: role, pin, model tier, capability level, role map
+
+_Relates to_: Reach, Review backend
+
+## Reach
+
+How the active harness obtains a model for a tier: the in-session model, an in-host subagent, shelling out to another CLI, or not available. Documented once per harness under [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md) and never inside a skill — a skill asks for a tier and names no spawn primitive, CLI flag, or vendor path. An undetectable harness resolves to the generic page and says so.
+
+_Avoid_: bridge, delegation, dispatch mechanism, availability, probe
+
+_Relates to_: Tier
+
+## Reviewer tier
+
+The tier for anything grading work someone else produced. The only tier carrying a family rule: a reviewer from the writer's own family is not an independent verdict. The rule is advice, not enforcement — the receipt records what ran, and nothing fails closed on it. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+
+_Avoid_: judge, grader, review model, critic
+
+_Relates to_: Tier, Review backend
+
+## Implementer tier
+
+The tier for work handed to another harness — plan on the session model, implement somewhere cheaper or faster. Absent, the session model implements. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+
+_Avoid_: delegate, delegation, offload, bridged worker, executor
+
+_Relates to_: Tier, Task
+
+## Fast scout tier
+
+The tier for mechanical inventory scanning, where the cheapest model is the correct one. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+
+_Avoid_: cheap tier, scanner model, fast model, low tier
+
+_Relates to_: Tier
+
+## Thinking scout tier
+
+The tier for analysis that degrades badly on a fast model — requirement analysis and pattern judgment, not scans. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+
+_Avoid_: judgment tier, smart scout, intelligent scout, deep scout
+
+_Relates to_: Tier

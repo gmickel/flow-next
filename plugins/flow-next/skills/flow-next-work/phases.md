@@ -184,6 +184,8 @@ When the sentinel prints, read [references/tracker-touchpoints.md](references/tr
 
 ### 3c. Spawn Worker
 
+Implementation is the **implementer** tier: absent any preference, the worker runs on the session model. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** How this harness reaches a non-session model — and what the degradation is when it cannot — lives in its reach page, never here.
+
 Use the Task tool to spawn a `worker` subagent. For a multi-task wave, create
 one isolated mutable workspace and task-unique summary/evidence paths per
 worker, then dispatch the selected workers concurrently. For a one-task wave,
@@ -454,6 +456,8 @@ After all tasks complete (or periodically for large specs):
   `<sha>` is the spec base you already resolved this phase (`cat .flow/tmp/spec_base`) — substitute the value into both dispatch strings. A dispatch that shipped the literal `<sha>` has broken this.
 
   **Both axis dispatches go out in the same message.** A run that dispatched one axis and waited for its report before sending the other has broken this — the split exists so neither axis can spend the whole budget on the other's territory, and serializing them re-imports the cost the split removed.
+
+  The auditor grades work someone else produced, so it is the **reviewer** tier. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
 
   **Aggregation — both reports verbatim, under two headings:**
   - `### Correctness axis` — that report, unedited.

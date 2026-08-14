@@ -4,7 +4,65 @@ flow-next is an orchestration layer, not a single-agent workflow. The host agent
 
 The pattern this page serves: use your smartest model to orchestrate and judge, route mechanical or token-hungry work to faster/cheaper models, and pick reviewers from a different family than the writer. flow-next was built in this shape — this page maps the dials.
 
-**None of this is required.** The skills and subagents ship pre-tuned to work well out of the box for everyone — model tiers A/B-verified before every downgrade, review defaults sensible, the pipeline complete with zero routing config. Steering is a capability, not a prerequisite: reach for the dials below when your model mix, subscriptions, or taste differ from the defaults, and ignore this page entirely until they do. The same doctrine applied to subsystems rather than models — which layers to switch on at all, and what each costs — is [`running-lean.md`](running-lean.md).
+**None of this is required.** The skills and subagents ship pre-tuned to work well out of the box for everyone — review defaults sensible, the pipeline complete with zero routing config. Steering is a capability, not a prerequisite: reach for the dials below when your model mix, subscriptions, or taste differ from the defaults, and ignore this page entirely until they do. The same doctrine applied to subsystems rather than models — which layers to switch on at all, and what each costs — is [`running-lean.md`](running-lean.md).
+
+## Tiers — what kind of model a job wants
+
+Two words carry the whole routing story. A **tier** is what kind of model a job wants. **Reach** is how the active harness obtains one — the in-session model, an in-host subagent, shelling out to another CLI, or not available.
+
+**This section is the single definition of the tier names.** They are a user-facing interface, chosen once; anywhere else in flow-next that routes work refers back here rather than restating them.
+
+| Tier | What it means |
+|---|---|
+| **reviewer** | Anything grading work someone else produced. The only tier carrying a family rule: a reviewer from the writer's own family is not an independent verdict. |
+| **implementer** | Work handed to another harness. The load-bearing case — plan on the session model, implement somewhere cheaper or faster. Absent, the session model implements. |
+| **fast scout** | Mechanical inventory scanning, where the cheapest model is the correct one. |
+| **thinking scout** | Analysis that degrades badly on a fast model. |
+| **unset** | The default, and the majority: planning, capture, interviews, requirement analysis, every verdict, and the worker run on the session model. This is the never-delegate-judgment doctrine, stated as the default rather than as a special case. |
+
+A fifth name would be a breaking change to a user-facing interface. An **unrecognized tier name is treated as unset**, with one advisory line — never an error.
+
+**A tier says which model executes a stage, not which stages run.** Which stages run is decided by what you invoked; asking for a leaner pipeline is a separate instruction that already works.
+
+**The family rule is advice, not enforcement.** A model's family cannot be verified from a name you invented, so the reviewer tier documents the rule, the receipt records what ran, and nothing fails closed on it.
+
+### The routing block
+
+Preferences live in **your** instruction file (`CLAUDE.md` / `AGENTS.md`), in your own words, naming models you can verify against your own account. One line per tier:
+
+```markdown
+reviewer: <model>
+implementer: <model> at <effort>
+fast scout: <model>
+thinking scout: <model>
+```
+
+An absent tier means the session model. An unparseable line is ignored with one advisory, never an error. Effort semantics stay the host's — flow-next passes effort through and never translates between vendors' scales. `/flow-next:setup` proposes this block commented out, for you to edit; nothing infers availability into it, and nothing rewrites a block a human has edited.
+
+The block is the durable form of an ad-hoc instruction. Written once, it is read every turn — and an explicit instruction in the moment still wins over it, which is exactly the precedence below.
+
+Worked example, in a consumer's own words:
+
+```text
+you conduct + review (frontier, medium effort); implementation goes to
+<another model> via <its CLI>, one task per dispatch
+```
+
+### Routing precedence
+
+**Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
+
+There is no error surface: the chain terminates at the session model by construction. Agent definitions keep their model field as the **floor** — what applies when nothing overrides — which is why a repo with no routing block behaves exactly as it always has. The review backend is separate: it keeps its own `backend[:model[:effort]]` configuration and its own documented precedence ([Review backends](#review-backends--cross-model-review)).
+
+A model this harness cannot reach — another vendor's identifier, a retired one, one your account lacks — falls back to the session model, says so once, and continues. No probing, no question, no failure.
+
+## Reach — how this harness gets one
+
+Reach is documented **once per harness**, never inside a skill: a skill asks for a tier, and never names a spawn primitive, a CLI flag, or a vendor path. Each page states which mechanisms exist there, which do not, the degradation when one is missing, and how to discover what the harness offers instead of trusting a stored answer.
+
+[`reach/README.md`](reach/README.md) — index and the four questions every page answers · [Claude Code](reach/claude-code.md) · [Codex](reach/codex.md) · [Droid](reach/droid.md) · [Cursor](reach/cursor.md) · [Grok Build](reach/grok-build.md) · [OpenCode](reach/opencode.md) · [generic fallback](reach/generic.md)
+
+An undetectable harness resolves to the generic page and says so. **Discovery beats declaration:** where a harness can list what it offers, ask it — one command beats a stored fact that goes stale.
 
 ## Two ways to route
 
@@ -26,7 +84,7 @@ The table above is really two layers with a clean seam, and knowing which layer 
 - **Session steering** — your prompts and per-task pins. Top of the precedence chain, ephemeral, done the moment the task is done. Saying *"implement via grok-4.6 and review with sol"* just works: the agent runs the grok bridge for the draft and pins sol for the review, and **nothing persists afterward** — pins and defaults resume untouched. Your `CLAUDE.md` routing prose lives in this layer too: deterministic plumbing never reads prose, but the *agent* reads it every turn and feeds explicit values downward, so a `CLAUDE.md` pipeline dominates everything the agent orchestrates by occupying the higher-precedence rung — not by editing config.
 - **Machinery steering** — config resolved by deterministic plumbing that never reads prose: `review.backend`, the `models.roles` role map. This is what autonomous loops (pilot, Ralph, land ticks) and unattended gates use when nobody is prompting. Standing changes for autonomous runs belong here, not in prose.
 
-The full precedence chain, highest first: **prompt > per-task/per-spec pin (`review:` field, `spec set-backend`) > env (`FLOW_REVIEW_BACKEND`) > `models.roles` role map > registry baseline.** One consequence worth spelling out: a prompt can steer only the session it is typed in — if you want pilot ticks at 3am to use a different reviewer, that is a config change (`flowctl config set review.backend ...`), because at 3am there is no prompt.
+For the models that execute stages, the chain is the one stated above: **routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** The review backend resolves separately, through its own configuration grammar (`review:` field / `spec set-backend` > `FLOW_REVIEW_BACKEND` > `.flow/config.json` > registry default). One consequence worth spelling out: a prompt can steer only the session it is typed in — if you want pilot ticks at 3am to use a different reviewer, that is a config change (`flowctl config set review.backend ...`), because at 3am there is no prompt.
 
 ## Deterministic routing — the parameter surfaces
 
@@ -34,11 +92,11 @@ The full precedence chain, highest first: **prompt > per-task/per-spec pin (`rev
 
 You pick it in your harness (e.g. `/model`). The host owns everything that requires judgment: gating, task classification, git, review-verdict interpretation, user consent. Workers and resolvers ship with `model: inherit`, so the session model *is* the implementation model unless you route implementation out over a bridge (below). Practical consequence: a frontier session model gives you a frontier planner *and* frontier workers; dropping the session model for a mechanical spec drops both.
 
-### Subagent tiers
+### Agent defaults — the floor
 
-The bundled agents are pre-tiered by task shape (each A/B-verified before downgrade — see `agents/*.md` frontmatter):
+Bundled agents carry a model field grouped by task shape (see `agents/*.md` frontmatter). These are **defaults**, not pins: they are the third rung of the routing precedence, so an explicit argument or your routing block overrides them, and a repo with neither behaves exactly as shipped.
 
-| Tier | Agents | Why |
+| Agent group | Agents | Why |
 |------|--------|-----|
 | fast (`haiku`) | prime's pillar scanners (build/env/security/testing/tooling/workflow/observability) + memory-scout | mechanical scan-and-report |
 | judgment (`sonnet`) | planning scouts (repo/context/spec/docs/github/practice, …), flow-gap-analyst, plan-sync | read-and-judge, bounded scope |
