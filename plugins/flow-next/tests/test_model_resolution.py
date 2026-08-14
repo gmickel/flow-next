@@ -876,7 +876,6 @@ class TestRoleMapConfigSchema(unittest.TestCase):
             [
                 "fastJudge",
                 "review",
-                "delegate",
                 "scoutFast",
                 "scoutIntelligent",
             ],
@@ -1197,95 +1196,6 @@ class TestRoleMapResolutionOrder(unittest.TestCase):
             finally:
                 os.chdir(prev)
 
-    # -- delegate consumer --
-
-    def test_delegate_baseline(self) -> None:
-        with _repo() as root:
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                model, src = flowctl.resolve_delegate_model()
-                self.assertEqual(model, "gpt-5.6-terra")
-                self.assertEqual(src, "baseline")
-            finally:
-                os.chdir(prev)
-
-    def test_delegate_role_map_beats_baseline(self) -> None:
-        with _repo() as root:
-            (root / ".flow" / "config.json").write_text(
-                json.dumps(
-                    {
-                        "models": {
-                            "roles": {
-                                "delegate": {"codex": "gpt-5.6-sol"}
-                            }
-                        }
-                    }
-                ),
-                encoding="utf-8",
-            )
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                model, src = flowctl.resolve_delegate_model()
-                self.assertEqual(model, "gpt-5.6-sol")
-                self.assertEqual(src, "role-map")
-            finally:
-                os.chdir(prev)
-
-    def test_delegate_work_delegate_model_beats_role_map(self) -> None:
-        with _repo() as root:
-            (root / ".flow" / "config.json").write_text(
-                json.dumps(
-                    {
-                        "work": {"delegateModel": "gpt-5.5"},
-                        "models": {
-                            "roles": {
-                                "delegate": {"codex": "gpt-5.6-sol"}
-                            }
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                model, src = flowctl.resolve_delegate_model()
-                self.assertEqual(model, "gpt-5.5")
-                self.assertEqual(src, "config")
-            finally:
-                os.chdir(prev)
-
-    def test_delegate_merged_default_does_not_beat_role_map(self) -> None:
-        # work.delegateModel only wins when RAW-set, not via defaults merge.
-        with _repo() as root:
-            (root / ".flow" / "config.json").write_text(
-                json.dumps(
-                    {
-                        "models": {
-                            "roles": {
-                                "delegate": {"codex": "gpt-5.6-sol"}
-                            }
-                        }
-                    }
-                ),
-                encoding="utf-8",
-            )
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                # Merged default still surfaces gpt-5.6-terra via config get,
-                # but resolve_delegate_model prefers the role map.
-                self.assertEqual(
-                    flowctl.get_config("work.delegateModel"), "gpt-5.6-terra"
-                )
-                model, src = flowctl.resolve_delegate_model()
-                self.assertEqual(model, "gpt-5.6-sol")
-                self.assertEqual(src, "role-map")
-            finally:
-                os.chdir(prev)
-
 
 class TestModelsStalenessNudge(unittest.TestCase):
     """Mechanical date check only — never blocks, absent = quiet."""
@@ -1368,105 +1278,6 @@ class TestModelsStalenessNudge(unittest.TestCase):
 
 class TestModelsResolveCli(unittest.TestCase):
     """fn-115.3: thin read-only ``models resolve`` (map + precedence only)."""
-
-    def test_delegate_baseline_text_and_json(self) -> None:
-        import argparse
-        from contextlib import redirect_stdout
-
-        with _repo() as root:
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                ns = argparse.Namespace(
-                    role="delegate", backend="codex", json=False
-                )
-                buf = io.StringIO()
-                with redirect_stdout(buf):
-                    flowctl.cmd_models_resolve(ns)
-                self.assertEqual(buf.getvalue().strip(), "gpt-5.6-terra")
-
-                ns.json = True
-                buf = io.StringIO()
-                with redirect_stdout(buf):
-                    flowctl.cmd_models_resolve(ns)
-                payload = json.loads(buf.getvalue())
-                self.assertTrue(payload["success"])
-                self.assertEqual(payload["role"], "delegate")
-                self.assertEqual(payload["backend"], "codex")
-                self.assertEqual(payload["model"], "gpt-5.6-terra")
-                self.assertEqual(payload["source"], "baseline")
-            finally:
-                os.chdir(prev)
-
-    def test_delegate_role_map_beats_merged_default(self) -> None:
-        """Skill must not use config get work.delegateModel (merged default)."""
-        import argparse
-        from contextlib import redirect_stdout
-
-        with _repo() as root:
-            (root / ".flow" / "config.json").write_text(
-                json.dumps(
-                    {
-                        "models": {
-                            "roles": {
-                                "delegate": {"codex": "gpt-5.6-sol"}
-                            }
-                        }
-                    }
-                ),
-                encoding="utf-8",
-            )
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                # Merged default still looks like terra via config get.
-                self.assertEqual(
-                    flowctl.get_config("work.delegateModel"), "gpt-5.6-terra"
-                )
-                ns = argparse.Namespace(
-                    role="delegate", backend="codex", json=True
-                )
-                buf = io.StringIO()
-                with redirect_stdout(buf):
-                    flowctl.cmd_models_resolve(ns)
-                payload = json.loads(buf.getvalue())
-                self.assertEqual(payload["model"], "gpt-5.6-sol")
-                self.assertEqual(payload["source"], "role-map")
-            finally:
-                os.chdir(prev)
-
-    def test_delegate_raw_work_delegate_model_beats_role_map(self) -> None:
-        import argparse
-        from contextlib import redirect_stdout
-
-        with _repo() as root:
-            (root / ".flow" / "config.json").write_text(
-                json.dumps(
-                    {
-                        "work": {"delegateModel": "gpt-5.5"},
-                        "models": {
-                            "roles": {
-                                "delegate": {"codex": "gpt-5.6-sol"}
-                            }
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                ns = argparse.Namespace(
-                    role="delegate", backend="codex", json=True
-                )
-                buf = io.StringIO()
-                with redirect_stdout(buf):
-                    flowctl.cmd_models_resolve(ns)
-                payload = json.loads(buf.getvalue())
-                self.assertEqual(payload["model"], "gpt-5.5")
-                self.assertEqual(payload["source"], "config")
-            finally:
-                os.chdir(prev)
 
     def test_scout_role_map_and_env_precedence(self) -> None:
         import argparse
@@ -1621,35 +1432,3 @@ class TestReviewPinLadderStart(unittest.TestCase):
             floor_model=None, version_fn=lambda: "v",
         )
         self.assertEqual(calls[0], pin, "ladder must start at the role-map pin")
-
-
-class TestDelegateSeededDefaultVsRoleMap(unittest.TestCase):
-    """PR #225 review: an init-materialized seeded default must not shadow the role map."""
-
-    def _resolve_with(self, config: dict):
-        with _repo() as root:
-            (root / ".flow" / "config.json").write_text(
-                json.dumps(config), encoding="utf-8"
-            )
-            prev = Path.cwd()
-            try:
-                os.chdir(root)
-                return flowctl.resolve_delegate_model()
-            finally:
-                os.chdir(prev)
-
-    def test_seeded_default_yields_to_role_map(self) -> None:
-        model, source = self._resolve_with({
-            "work": {"delegateModel": "gpt-5.6-terra"},
-            "models": {"roles": {"delegate": {"codex": "gpt-5.6-sol"}}},
-        })
-        self.assertEqual(model, "gpt-5.6-sol")
-        self.assertEqual(source, "role-map")
-
-    def test_real_user_pin_beats_role_map(self) -> None:
-        model, source = self._resolve_with({
-            "work": {"delegateModel": "gpt-5.6-sol"},
-            "models": {"roles": {"delegate": {"codex": "gpt-5.6-terra"}}},
-        })
-        self.assertEqual(model, "gpt-5.6-sol")
-        self.assertEqual(source, "config")

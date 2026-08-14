@@ -194,16 +194,16 @@ class PipelineQaConfigTestCase(unittest.TestCase):
         # pipeline.* is its own top-level block, distinct from work.*,
         # land.*, artifacts.*, and memory.* — no shared keys leak across.
         self.assertIn("pipeline", defaults)
-        self.assertIn("work", defaults)
+        self.assertIn("land", defaults)
         self.assertIn("artifacts", defaults)
-        self.assertNotIn("qa", defaults["work"])
+        self.assertNotIn("qa", defaults["land"])
         self.assertNotIn("qa", defaults["artifacts"])
         self.assertNotIn("html", defaults["pipeline"])
 
     def test_setting_pipeline_key_does_not_clobber_other_defaults(self) -> None:
         self._run_config_set_cli("pipeline.qa", "on")
         self.assertEqual(
-            self._run_config_get_cli("work.delegateModel")["value"], "gpt-5.6-terra"
+            self._run_config_get_cli("land.reviewSignal")["value"], "silence"
         )
         self.assertEqual(
             self._run_config_get_cli("land.ciFixBudget")["value"], 3

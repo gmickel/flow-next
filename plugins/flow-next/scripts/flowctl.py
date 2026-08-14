@@ -1388,46 +1388,24 @@ def get_default_config() -> dict:
         "planSync": {"enabled": True, "crossSpec": False},
         # fn-168 R7 — `maxIterations` is the review-round cap's persistent rung
         # (env MAX_REVIEW_ITERATIONS still wins). Defaulted here, like the
-        # work.delegate* block, so `config get review.maxIterations` answers 8
+        # land.* block, so `config get review.maxIterations` answers 8
         # rather than null on a fresh repo. Raising it is a HUMAN act: ralph-guard
         # blocks the `config set`, a file-tool write to .flow/config.json, and the
         # env assignment, so an autonomous agent cannot extend its own gate.
         "review": {"backend": None, "maxIterations": DEFAULT_MAX_REVIEW_ITERATIONS},
         "scouts": {"github": False},
         "tracker": get_default_tracker_config(),
-        # fn-55.1 — Codex implementation-delegation defaults ("the law,
-        # defined once"). These are the spec's defaults so `config get
-        # work.delegate*` returns them (NOT null) on a fresh repo. The
-        # resolution chain for activation is:
-        #   arg token  `delegate:codex` / `delegate:local`   (highest)
-        #   > flow config `work.delegate`                     (this block)
-        #   > hard default OFF                                (delegate=false)
-        # The generic fuzzy "use codex" is NOT a delegation trigger — it
-        # stays mapped to the review backend; only the explicit
-        # `delegate:codex` / `delegate:local` tokens (and this config)
-        # resolve delegation. Top-level `work.*` is a DISTINCT namespace
-        # from the tracker bridge's `tracker.perEvent.work.*` lifecycle
-        # keys (phases.md:94-101) — no clash.
-        "work": {
-            "delegate": False,
-            # fn-97 / fn-115 - baseline gpt-5.6-terra (eval-motivated default).
-            # Effective model resolution (resolve_delegate_model): on-disk
-            # work.delegateModel > models.roles.delegate.codex > this baseline.
-            # Escalate via `config set work.delegateModel gpt-5.6-sol` or the
-            # role map. Requires codex CLI >= 0.144. No fn-76 ladder on this
-            # path (hard floor once resolved).
-            "delegateModel": "gpt-5.6-terra",
-            # Effort enum: none|low|medium|high|xhigh. `medium` is the floor
-            # default; the per-batch risk escalation (fn-55.3) floors against it.
-            "delegateEffort": "medium",
-            # Sandbox: yolo (default) | full-auto. Persisted by the
-            # one-time consent gate (fn-55.2).
-            "delegateSandbox": "yolo",
-            "delegateConsent": False,
-            # auto (default) | ask. The auto|ask behavior is implemented in
-            # fn-55.2; this task only sets the default + documents the enum.
-            "delegateDecision": "auto",
-        },
+        # flow-98 — the top-level `work.*` namespace is GONE. It held the
+        # fn-55 packaged codex-delegation keys (delegate, delegateModel,
+        # delegateEffort, delegateSandbox, delegateConsent,
+        # delegateDecision); implementation offload is now the agentic
+        # route (the /flow-next:setup model-routing scaffold in
+        # CLAUDE.md / AGENTS.md plus the .flow/usage.md bridge recipes),
+        # so there is nothing left to configure here. A config still
+        # carrying the keys gets ONE advisory line
+        # (REMOVED_DELEGATE_CONFIG_KEYS below) and runs unchanged. The
+        # tracker bridge's `tracker.perEvent.work.*` lifecycle keys are a
+        # DISTINCT namespace and are untouched.
         # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
         # `config get land.*` returns values (NOT null) on a fresh repo.
         # Consumed by the opt-in flow-next-land skill (fn-60.1); flowctl
@@ -1799,6 +1777,88 @@ def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
     if snapshot.raw is None:
         return _CONFIG_RAW_SENTINEL
     return _tree_probe(snapshot.raw, key)
+
+
+# --- flow-98: advisory for config keys the delegation removal deleted -------
+#
+# The packaged codex-delegation subsystem is gone, and with it the six
+# `work.delegate*` keys and the `models.roles.delegate` pin. A repo whose
+# .flow/config.json still carries them is NOT broken - flowctl ignores them
+# entirely - but silence would leave the user believing delegation is still
+# wired. Implementation offload now lives in the /flow-next:setup
+# model-routing scaffold (CLAUDE.md / AGENTS.md) plus the .flow/usage.md
+# bridge recipes, and the advisory points there.
+#
+# ONE line per invocation, naming every removed key found - never one line
+# per key, never per phase, never a failure.
+#
+# INSPECTION NOTE: the call sites are the config surfaces (`config get` /
+# `config set`) and the work entry points (`anchor` / `brief`) - where
+# someone is either looking at configuration or starting work. It is
+# deliberately NOT wired into load_flow_config(): every command reads
+# config, and a line on every invocation is noise rather than migration help.
+
+REMOVED_DELEGATE_CONFIG_KEYS: tuple[str, ...] = (
+    "work.delegate",
+    "work.delegateConsent",
+    "work.delegateDecision",
+    "work.delegateEffort",
+    "work.delegateModel",
+    "work.delegateSandbox",
+    "models.roles.delegate",
+)
+
+_removed_delegate_advisory_printed = False
+
+
+def removed_delegate_keys_present(
+    snapshot: "Optional[ConfigSnapshot]" = None,
+) -> list[str]:
+    """Removed delegation keys still present in the RAW config file.
+
+    Raw probe only: a key absent from disk never reports, and the merged
+    defaults no longer carry these keys at all. No file is written, nothing
+    is validated - presence is the whole question.
+    """
+    snap = snapshot if snapshot is not None else load_config_snapshot()
+    if snap.raw is None:
+        return []
+    return [
+        key
+        for key in REMOVED_DELEGATE_CONFIG_KEYS
+        if _tree_probe(snap.raw, key) is not _CONFIG_RAW_SENTINEL
+    ]
+
+
+def removed_delegate_keys_note(keys: list[str]) -> str:
+    """The one advisory line for a config still carrying removed keys."""
+    return (
+        f"note: .flow/config.json still carries removed delegation "
+        f"key(s): {', '.join(keys)}; flowctl ignores them. Implementation "
+        f"offload is now the model-routing section /flow-next:setup writes "
+        f"into CLAUDE.md / AGENTS.md plus the bridge recipes in "
+        f".flow/usage.md - route work there and delete these keys."
+    )
+
+
+def print_removed_delegate_keys_advisory(
+    snapshot: "Optional[ConfigSnapshot]" = None,
+) -> None:
+    """Print the advisory AT MOST once per invocation; never blocks.
+
+    stderr so a `--json` read stays machine-parseable. Any failure to read
+    config degrades to no advisory, never to a command failure.
+    """
+    global _removed_delegate_advisory_printed
+    if _removed_delegate_advisory_printed:
+        return
+    try:
+        keys = removed_delegate_keys_present(snapshot)
+    except Exception:
+        return
+    _removed_delegate_advisory_printed = True
+    if keys:
+        print(removed_delegate_keys_note(keys), file=sys.stderr)
 
 
 def resolve_config_key_for_read(key: str, snapshot: "Optional[ConfigSnapshot]" = None):
@@ -7845,7 +7905,6 @@ VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
 MODEL_ROLES: tuple[str, ...] = (
     "fastJudge",
     "review",
-    "delegate",
     "scoutFast",
     "scoutIntelligent",
 )
@@ -7861,7 +7920,6 @@ FAST_JUDGE_BASELINE: dict[str, tuple[str, str]] = {
     "codex": ("gpt-5.6-luna", "high"),
     "copilot": ("claude-haiku-4.5", "low"),
 }
-DELEGATE_BASELINE_MODEL = "gpt-5.6-terra"
 
 
 def _parse_role_pin(pin: str) -> tuple[str, Optional[str]]:
@@ -7910,7 +7968,7 @@ def resolve_role_model(
       1. ``explicit`` (CLI flag / per-task pin / caller override)
       2. env var named by ``env_var`` (when set)
       3. config role map ``models.roles.<role>.<backend>``
-      4. role baseline (fastJudge / delegate) or registry default (review)
+      4. role baseline (fastJudge) or registry default (review)
          - caller applies registry defaults when source is ``baseline`` and
          model is None.
 
@@ -7935,32 +7993,7 @@ def resolve_role_model(
     if role == "fastJudge" and backend in FAST_JUDGE_BASELINE:
         model, effort = FAST_JUDGE_BASELINE[backend]
         return model, effort, "baseline"
-    if role == "delegate" and backend == "codex":
-        return DELEGATE_BASELINE_MODEL, None, "baseline"
     return None, None, "baseline"
-
-
-def resolve_delegate_model() -> tuple[str, str]:
-    """Effective work.delegate model: raw work.delegateModel > role map > baseline.
-
-    ``work.delegateModel`` wins only when set on disk (not merely the merged
-    default). Role map pin is ``models.roles.delegate.codex``.
-    """
-    raw = _get_config_from_file("work.delegateModel")
-    if raw is not _CONFIG_RAW_SENTINEL and raw is not None and str(raw).strip():
-        raw_val = str(raw).strip()
-        # fn-115 (PR #225 review): `flowctl init` MATERIALIZES the seeded
-        # default into config.json, so an on-disk value identical to the seed
-        # is not evidence of a user pin - let the role map win there. A real
-        # user pin (any non-seed value) still beats the map.
-        seeded = str(
-            get_default_config().get("work", {}).get("delegateModel", "")
-        ).strip()
-        role_pin = get_role_map_pin("delegate", "codex")
-        if raw_val != seeded or role_pin is None:
-            return raw_val, "config"
-    model, _effort, source = resolve_role_model("delegate", "codex")
-    return model or DELEGATE_BASELINE_MODEL, source
 
 
 def resolve_fast_judge_model(
@@ -8047,8 +8080,6 @@ def resolve_models_role(
     ``explicit`` / ``env`` / ``role-map`` / ``config`` / ``baseline``.
     Role-specific resolvers own the precedence:
 
-    * ``delegate`` + codex → ``resolve_delegate_model`` (raw
-      ``work.delegateModel`` > role map > baseline)
     * ``fastJudge`` → ``resolve_fast_judge_model``
     * ``review`` → ``resolve_role_model`` + registry default fill
       (env ``FLOW_<BACKEND>_MODEL``)
@@ -8058,15 +8089,6 @@ def resolve_models_role(
     Scout roles have no flowctl baseline model (mirror-build constants live
     in ``sync-codex.sh``); when unset, model is None and source is baseline.
     """
-    if role == "delegate" and backend == "codex":
-        model, source = resolve_delegate_model()
-        effort: Optional[str] = None
-        if source == "role-map":
-            pin = get_role_map_pin("delegate", "codex")
-            if pin:
-                _m, effort = _parse_role_pin(pin)
-        return model, effort, source
-
     if role == "fastJudge":
         return resolve_fast_judge_model(backend)
 
@@ -8100,9 +8122,9 @@ def resolve_models_role(
 def cmd_models_resolve(args: argparse.Namespace) -> None:
     """Read-only role-map resolve: map + precedence only, no judgment.
 
-    The ONE new flowctl surface fn-115 adds. Skills that previously read
-    ``config get work.delegateModel`` (merged default, bypasses the role map)
-    must call this instead for the ``delegate`` role.
+    The ONE new flowctl surface fn-115 adds. Skills read a role pin through
+    this command rather than `config get`, so the role map (not a merged
+    config default) is the answer.
     """
     use_json = bool(getattr(args, "json", False))
     role = (getattr(args, "role", None) or "").strip()
@@ -20656,6 +20678,7 @@ def cmd_config_get(args: argparse.Namespace) -> None:
     raw = getattr(args, "raw", False)
     key = getattr(args, "key", None)
     snapshot = load_config_snapshot()
+    print_removed_delegate_keys_advisory(snapshot)
 
     if key is None:
         # Keyless root read (fn-110.1): the whole config in one call.
@@ -20710,6 +20733,8 @@ def cmd_config_set(args: argparse.Namespace) -> None:
         error_exit(
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
+
+    print_removed_delegate_keys_advisory()
 
     canonical_key, _ = resolve_config_key_for_write(args.key)
 
@@ -36416,6 +36441,7 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     sections = _anchor_sections(task_id, spec_id)
     dependencies = _anchor_dependencies(flow_dir, task_data)
     stale = upstream_behind()  # fn-181 R3/R5: one check per invocation.
+    print_removed_delegate_keys_advisory()  # flow-98: stderr, never blocks.
 
     if use_json:
         payload = {
@@ -37389,6 +37415,8 @@ def cmd_brief(args: argparse.Namespace) -> None:
     data = _brief_collect(flow_dir, repo_root)
     if not full:
         data = _brief_apply_budget(data, BRIEF_BUDGET_CHARS)
+
+    print_removed_delegate_keys_advisory()  # flow-98: stderr, never blocks.
 
     if use_json:
         # Render includes success=; print raw (json_output would double-wrap).
@@ -49729,7 +49757,7 @@ def main() -> None:
     p_models_resolve.add_argument(
         "role",
         help=(
-            "Role name: fastJudge | review | delegate | scoutFast | scoutIntelligent"
+            "Role name: fastJudge | review | scoutFast | scoutIntelligent"
         ),
     )
     p_models_resolve.add_argument(
