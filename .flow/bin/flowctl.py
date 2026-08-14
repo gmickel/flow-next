@@ -4594,6 +4594,24 @@ def _dispatch_review_with_fallback(
     return _resolved(out, sid, rc, err, floor_model, True)
 
 
+def _effort_reached_cli(backend: str, model: Optional[str]) -> bool:
+    """Did the resolved effort actually govern the dispatched run? (#349 r3)
+
+    The attempt row must record what was SENT, not what was resolved:
+    - a ladder floor (model None) dispatches with CLI defaults - neither
+      model nor effort was pinned;
+    - copilot deliberately omits ``--effort`` for ``claude-*`` models
+      (they reject the flag);
+    - cursor bakes effort into the model slug and codex pins it via
+      ``-c`` - both really sent it.
+    """
+    if model is None:
+        return False
+    if backend == "copilot" and model.startswith("claude-"):
+        return False
+    return True
+
+
 def _receipt_model_effort(
     resolved_spec: "BackendSpec",
     resolution_out: Optional[dict],
@@ -42575,9 +42593,15 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
-        # fn-193 (#338): the SAME resolved values the receipt records.
+        # fn-193 (#338): the SAME resolved values the receipt records -
+        # except effort is recorded only when it actually reached the CLI
+        # (copilot omits --effort for claude-* models; floors pin nothing).
         reviewed_model=effective_model,
-        reviewed_effort=effective_effort,
+        reviewed_effort=(
+            effective_effort
+            if _effort_reached_cli(backend, effective_model)
+            else None
+        ),
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -43039,9 +43063,15 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
-        # fn-193 (#338): the SAME resolved values the receipt records.
+        # fn-193 (#338): the SAME resolved values the receipt records -
+        # except effort is recorded only when it actually reached the CLI
+        # (copilot omits --effort for claude-* models; floors pin nothing).
         reviewed_model=effective_model,
-        reviewed_effort=effective_effort,
+        reviewed_effort=(
+            effective_effort
+            if _effort_reached_cli(backend, effective_model)
+            else None
+        ),
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -43348,9 +43378,15 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
-        # fn-193 (#338): the SAME resolved values the receipt records.
+        # fn-193 (#338): the SAME resolved values the receipt records -
+        # except effort is recorded only when it actually reached the CLI
+        # (copilot omits --effort for claude-* models; floors pin nothing).
         reviewed_model=effective_model,
-        reviewed_effort=effective_effort,
+        reviewed_effort=(
+            effective_effort
+            if _effort_reached_cli(backend, effective_model)
+            else None
+        ),
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
