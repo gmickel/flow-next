@@ -874,7 +874,7 @@ Per target, in order:
 
 Then say what was written, once, in one sentence:
 `Wrote a commented model-routing example to <file> — every line is commented out; edit it to name the models you want for each tier, or delete the block.`
-(Nothing was written → say `kept (yours)` / `skipped (shim)` instead and move on.)
+(Nothing was written → say `kept (yours)` / `skipped (shim)` / `skipped (docs declined)` / `skipped (headless)` instead and move on.)
 
 **Ralph** (only when its question was asked; Cursor/Grok remain
 unsupported and read no Ralph reference):
@@ -974,7 +974,7 @@ Configuration (use flowctl config set to change):
 Documentation updated:
 - <files updated or "none">
 
-Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "skipped (shim)">
+Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "skipped (shim)" | "skipped (docs declined)" | "skipped (headless)">
 - The block is a commented example; edit it to name the models you want per tier.
 
 Notes:

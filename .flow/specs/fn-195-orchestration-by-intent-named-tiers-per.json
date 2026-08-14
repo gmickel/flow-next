@@ -12,7 +12,7 @@
   "id": "fn-195-orchestration-by-intent-named-tiers-per",
   "impl_review_rounds": {
     "fn-195-orchestration-by-intent-named-tiers-per.1": 0,
-    "fn-195-orchestration-by-intent-named-tiers-per.2": 1
+    "fn-195-orchestration-by-intent-named-tiers-per.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -123,10 +123,43 @@
       "task": "fn-195-orchestration-by-intent-named-tiers-per.2",
       "timestamp": "2026-08-14T19:49:25.968770Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "a1188c1410c2883d766cfe52ceef66d16c47f21b4ee7854590aeb12eafc0dea1",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "host",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a67390ceba07989b643b2acafbc9592bd73fd4ad",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 635,
+      "output_sha256": "5ac82b19d9dc00f308d4a2f7af4d13da571d8782bbce1c0e069a5cc8b63a49bf",
+      "reservation_id": "ab04113bcc9642dd9c66afb61adba6a0",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.2",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.2",
+      "timestamp": "2026-08-14T19:59:18.334708Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
-    "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 1
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 1,
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
@@ -148,5 +181,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T19:49:26.389249Z"
+  "updated_at": "2026-08-14T19:59:18.797394Z"
 }
