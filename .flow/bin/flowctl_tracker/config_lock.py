@@ -285,8 +285,8 @@ def _timeout_message(lock: Path, timeout_s: float, last_error: OSError | None) -
         # The path exists (fail-fast handled the absent case) but creating it
         # kept being denied: on Windows a delete is still pending, elsewhere
         # the parent or the directory itself is not writable by us.
-        return (head + f"creating it was denied ({_denied_detail(last_error)}) while "
-                f"the path exists - a pending delete on Windows, otherwise check "
+        return (head + f"creating it kept being denied ({_denied_detail(last_error)}) "
+                f"- on Windows a delete may still be pending, otherwise check "
                 f"permissions on {lock.parent}")
     owner = _read_owner(lock)
     if owner is not None:
@@ -362,7 +362,13 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
                     continue
                 except PermissionError as exc2:
                     if not os.path.lexists(lock):
-                        raise _unavailable(lock, exc2, creating=lock) from None
+                        # POSIX: denied twice with nothing there is a
+                        # permissions fact - fail fast. Windows: a pending
+                        # delete can misreport absent across both probes
+                        # (PR #349 round 2), so keep polling to the deadline;
+                        # the timeout message still reports the denial.
+                        if os.name != "nt":
+                            raise _unavailable(lock, exc2, creating=lock) from None
                     denied = exc2
             last_error = denied
         # Held, un-reclaimable, delete-pending, or the reclaim rename failed

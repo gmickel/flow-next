@@ -560,7 +560,7 @@ class TimeoutMessageReportsWhatWasObserved(unittest.TestCase):
         self.assertNotIsInstance(raised.exception, CL.ConfigLockUnavailable)
         message = str(raised.exception)
         self.assertIn("Permission denied", message)
-        self.assertIn("while the path exists", message)
+        self.assertIn("kept being denied", message)
         self.assertNotIn("holder appears alive", message)
 
 
