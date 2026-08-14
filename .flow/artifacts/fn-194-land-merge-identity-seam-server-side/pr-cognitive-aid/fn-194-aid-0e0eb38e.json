@@ -1,0 +1,546 @@
+{
+  "artifactId": "fn-194-aid-0e0eb38e",
+  "baseSha": "77854fb01bd2d6eea4e92ee0c513a84c0037681c",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "The create side has had an identity seam since 3.11.0 (FLOW_PR_CREATE_CMD) but the merge side had none - a repo whose branch protection excludes the tick's human identity simply could not merge (#337). A PR behind its base was caught up by local rebase + force-push, which rewrites every commit SHA (the CAUSE of #302's orphaned evidence, previously only detected) and, on repos that dismiss stale approvals on push, voids the approval the merge was waiting for - deterministic non-convergence (#342). And the post-merge tail persisted the spec close by pushing to the base FIRST, so on a PR-only base the refused push skipped release-follow AND the tracker touchpoint - the board stuck at In Review after a real merge, the exact outcome land.merged exists to prevent (#345). All three from @sn-furali; every structural claim verified against the file.",
+        "taskIds": [],
+        "title": "Three ways land could not finish what it started"
+      },
+      {
+        "files": [
+          {
+            "additions": 70,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 30,
+            "path": "plugins/flow-next/skills/flow-next-land/workflow.md",
+            "rIds": [
+              "R1",
+              "R2",
+              "R3",
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-t2",
+              "s-t3",
+              "s-c1",
+              "s-c2",
+              "s-c3",
+              "s-r1",
+              "s-r2",
+              "s-r3",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "§3.5 seam + contract (task 1); §3.3 server-side catch-up + §2.6/§2.7 ordering paragraph (task 2); tail reorder + §3.6 (task 3). Single-file skill.",
+            "taskIds": [
+              "fn-194-land-merge-identity-seam-server-side.1",
+              "fn-194-land-merge-identity-seam-server-side.2",
+              "fn-194-land-merge-identity-seam-server-side.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r7",
+              "s-diff"
+            ],
+            "summary": "FLOW_PR_MERGE_CMD bullet next to FLOW_PR_CREATE_CMD.",
+            "taskIds": [
+              "fn-194-land-merge-identity-seam-server-side.1"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/skills.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r7",
+              "s-diff"
+            ],
+            "summary": "land row lists the seam.",
+            "taskIds": [
+              "fn-194-land-merge-identity-seam-server-side.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R7"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1",
+          "s-r7"
+        ],
+        "summary": "The §3.5 merge call runs through MERGE_CMD (default gh pr merge), unquoted #277-shape expansion, with a STABLE inline contract: fixed argument order; exit 0 = merged; stderr proxied VERBATIM (the RESOLVING/BLOCKED classification reads gh's head-mismatch stderr text - a wrapper that eats it turns benign races into BLOCKED); never --auto or merge-queue (the merge-license boundary binds the interposed command); merge-call-only scope (every other gh call stays on the session identity); the --delete-branch second-permission note. Env-only, deliberately never a land.* key - fn-188's own trust guard proved config-sourced command strings are PR-author-influenceable and session env is not.",
+        "taskIds": [
+          "fn-194-land-merge-identity-seam-server-side.1"
+        ],
+        "title": "FLOW_PR_MERGE_CMD - the merge-side identity seam"
+      },
+      {
+        "files": [
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-land/SKILL.md",
+            "rIds": [
+              "R2",
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-t3",
+              "s-c2",
+              "s-c3",
+              "s-r2",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "Safety line: server-side catch-up only; tail summary corrected (was stale before this spec).",
+            "taskIds": [
+              "fn-194-land-merge-identity-seam-server-side.2",
+              "fn-194-land-merge-identity-seam-server-side.3"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R2",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r2",
+          "s-r4"
+        ],
+        "summary": "BEHIND and DIRTY both plan catch-up: one gh pr update-branch call (merge-based; GitHub's conflict refusal IS the BLOCKED verdict - land still never hand-resolves a hunk), ledger head sourced from the API, RESOLVING on success. No local checkout, no git rebase, no --force-with-lease anywhere in the skill - commit SHAs survive, so the #302 orphaned-evidence cause is removed for every repo, and land loses its single most dangerous capability. No land.catchUp key: land always squash-merges, so branch-local linearity is invisible after merge - a key would buy a forever five-host contract for an unobservable property. The §2.6/§2.7 evaluation order under reviewSignal: approve is stated where the agent had to guess: the stale-approval detector IS reachable (only §2.1 stops the fall-through) and the durable label is what breaks the dismissal loop.",
+        "taskIds": [
+          "fn-194-land-merge-identity-seam-server-side.2"
+        ],
+        "title": "catch-up goes server-side; the force-push dies"
+      },
+      {
+        "files": [
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "agent_docs/conduct/land.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-t3",
+              "s-c1",
+              "s-c3",
+              "s-r5",
+              "s-diff"
+            ],
+            "summary": "Merge line binds the seam (task 1); tail line states the new order (task 3).",
+            "taskIds": [
+              "fn-194-land-merge-identity-seam-server-side.1",
+              "fn-194-land-merge-identity-seam-server-side.3"
+            ]
+          },
+          {
+            "additions": 259,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_land_config.py",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-t2",
+              "s-t3",
+              "s-c1",
+              "s-c2",
+              "s-c3",
+              "s-r6",
+              "s-diff"
+            ],
+            "summary": "24 new static pins across three classes: seam contract tokens, no-rebase/no-force-push absence, catch-up routing, tail ordering indexes, rollback scope.",
+            "taskIds": [
+              "fn-194-land-merge-identity-seam-server-side.1",
+              "fn-194-land-merge-identity-seam-server-side.2",
+              "fn-194-land-merge-identity-seam-server-side.3"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R3",
+          "R5",
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-t3",
+          "s-c3",
+          "s-r3",
+          "s-r5",
+          "s-r6"
+        ],
+        "summary": "New order: spec close (file-scoped local commit) -> release-follow (clean-tree precondition holds, the close is committed) -> tracker touchpoint (gates on its own fresh MERGED probe, never on the pushed close) -> ONE persist-push carrying both .flow commits, rollback scoped to the persist via the recorded pre-tail base tip. A refused push on a PR-only base now costs a per-spec NEEDS_HUMAN bookkeeping note; the board updates and the release runs regardless. Re-tick safety stated inline: verdict comments dedupe on the merge-commit identity, release-follow has its idempotency probe. Part B (a close-PR route) deliberately held - it would be the only config key in the batch; the issue reply states the reopen condition.",
+        "taskIds": [
+          "fn-194-land-merge-identity-seam-server-side.3"
+        ],
+        "title": "The tail finishes before the push that can fail"
+      },
+      {
+        "files": [
+          {
+            "additions": 34,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "s-c4",
+              "s-r7",
+              "s-diff"
+            ],
+            "summary": "Unreleased: the three capabilities + the removed force-push, outcome-first.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/specs/fn-149-land-hardening-survive-stacked-pr-auto.md",
+            "rIds": [
+              "R7"
+            ],
+            "sourceRefs": [
+              "s-c4",
+              "s-r7",
+              "s-diff"
+            ],
+            "summary": "R8 amended: re-plan against server-side catch-up.",
+            "taskIds": []
+          },
+          {
+            "additions": 70,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 30,
+            "path": "plugins/flow-next/codex/skills/flow-next-land/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c1",
+              "s-c2",
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Mirror of all three tasks.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-land/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c2",
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Mirror.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-194-land-merge-identity-seam-server-side.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec record.",
+            "taskIds": []
+          },
+          {
+            "additions": 36,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-194-land-merge-identity-seam-server-side.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec body with R1-R7.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-194-land-merge-identity-seam-server-side.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-194-land-merge-identity-seam-server-side.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-194-land-merge-identity-seam-server-side.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-194-land-merge-identity-seam-server-side.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-194-land-merge-identity-seam-server-side.3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t3",
+              "s-diff"
+            ],
+            "summary": "Task 3 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-194-land-merge-identity-seam-server-side.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t3",
+              "s-diff"
+            ],
+            "summary": "Task 3 body + done summary.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 4,
+        "rIds": [
+          "R7"
+        ],
+        "sourceRefs": [
+          "s-c4",
+          "s-r7"
+        ],
+        "summary": "Full gate 4590 tests OK, ruff clean, codex mirror regenerated twice per task (idempotent each time). CHANGELOG under Unreleased credits @sn-furali for all three, states the env-not-config rationale and the held Part B. Open spec fn-149's R8 - which restated the mechanical-rebase conflict rule this spec deletes - is amended in place to re-plan against the server-side §3.3 before implementation.",
+        "taskIds": [],
+        "title": "Gate, mirror, CHANGELOG, and the fn-149 hand-off"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-c4"
+        ],
+        "value": "4590 tests, 0 failures; ruff 0.16.0 clean; sync-codex idempotent per task"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-t2",
+          "s-t3"
+        ],
+        "value": "24 static pins: seam contract, force-push absence, catch-up routing, tail ordering + rollback scope"
+      },
+      {
+        "label": "Config surface",
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "value": "0 new keys across three issues (env seam; unconditional catch-up; reorder) - Part B held"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-c3",
+          "s-c4"
+        ],
+        "value": "7/7 satisfied across three tasks + close-out"
+      }
+    ],
+    "thesis": "land can finish what it starts on locked-down repos, with zero new config keys: an env-only merge-identity seam mirroring the create side's #277 contract (stderr proxied verbatim so the RESOLVING/BLOCKED judgment survives interposition), a server-side merge-based catch-up that deletes land's rebase and force-push entirely (removing the cause of orphaned evidence and the stale-approval dismissal dead-end), and a post-merge tail that runs the release and the board update before the one push a PR-only base can refuse (issues #337, #342, #345 part A)."
+  },
+  "generatedAt": "2026-08-14T13:10:00Z",
+  "headSha": "0e0eb38e0d0f9958287028152f273317a4eacc20",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-194-land-merge-identity-seam-server-side"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-194-land-merge-identity-seam-server-side.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-194-land-merge-identity-seam-server-side.2"
+    },
+    {
+      "id": "s-t3",
+      "kind": "task",
+      "ref": "fn-194-land-merge-identity-seam-server-side.3"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-r7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "3b782ff3dac4d97866d646caf3bd311ff96be8aa"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "0e1320bb88b639b7195cfa7665283493863d0283"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "2d3f4a0e936ec995fd5de18c2f0e4f878f23a528"
+    },
+    {
+      "id": "s-c4",
+      "kind": "commit",
+      "ref": "0e0eb38e0d0f9958287028152f273317a4eacc20"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "77854fb01bd2d6eea4e92ee0c513a84c0037681c..0e0eb38e0d0f9958287028152f273317a4eacc20"
+    }
+  ],
+  "specId": "fn-194-land-merge-identity-seam-server-side"
+}
