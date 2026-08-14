@@ -1,0 +1,559 @@
+{
+  "artifactId": "fn-192-aid-178fa1a2",
+  "baseSha": "5b9f9cecc2126df1856678bac8ee93ffb5573b76",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "Task status lives in runtime state (git common-dir) and never travels with git; the Done summary lives in the tracked task file. flowctl done writes both in one call. On the read side, validate compared the tracked spec status against runtime-preferred task status, so a fresh clone - where runtime is absent and every committed sidecar says todo - failed unconditionally: 582 structurally-false errors on this repo's own clone, and the work skill's Phase 5 validate verify step guaranteed-red for any spec closed elsewhere, violating the repo's own fn-181 doctrine (a task looking not-started in committed files is never grounds for a finding). On the write side, the documented loop commits BEFORE done, so the receipt lands in a tracked file after the commit with zero signal - the final task's summary never reaches another checkout - and three doc surfaces stated three different orderings (issues #346, #347).",
+        "taskIds": [],
+        "title": "One command writes across the durability boundary and neither side is told"
+      },
+      {
+        "files": [
+          {
+            "additions": 106,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R1",
+              "R2"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r1",
+              "s-r2",
+              "s-diff"
+            ],
+            "summary": "committed_status_is_authoritative helper + the status_source-gated warning branch in validate_epic; also carries task 2's done/block changes (single-file monolith).",
+            "taskIds": [
+              "fn-192-state-contract-honesty-fresh-clone.1"
+            ]
+          },
+          {
+            "additions": 97,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_validate_all_diagnostics.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r5",
+              "s-diff"
+            ],
+            "summary": "3 regression tests: fresh-clone warning + exit 0, runtime-sourced error, legacy-progress error.",
+            "taskIds": [
+              "fn-192-state-contract-honesty-fresh-clone.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2",
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1",
+          "s-r2",
+          "s-r5"
+        ],
+        "summary": "The epic/task mismatch downgrades to a warning when the task status came from the committed snapshot AND that snapshot carries no runtime progress markers. Discrimination is content-based via a new committed_status_is_authoritative helper - key-presence cannot work because RUNTIME_FIELDS keys exist in every modern tracked sidecar, so the legacy branch is taken on every runtime-absent read. A non-todo status, assignee, claim, evidence, or block reason in the committed file means a pre-state-dir repo where committed status IS authoritative: still an error. Runtime-sourced mismatches: still errors. Exit code stays gated on errors only. Fresh-clone probe: the 582-error class became warnings; the 23 residual errors are genuinely real (ancient tasks missing required headings).",
+        "taskIds": [
+          "fn-192-state-contract-honesty-fresh-clone.1"
+        ],
+        "title": "validate: durability-aware status findings"
+      },
+      {
+        "files": [
+          {
+            "additions": 188,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_done_tracked_write.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "9 tests: manifest presence for done+block, advisory on dirty, silence for untracked/clean/no-repo, plain-mode coverage.",
+            "taskIds": [
+              "fn-192-state-contract-honesty-fresh-clone.2"
+            ]
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_prompt_constraints.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Frozen subprocess inventory learns the one path-scoped git diff spawn (orchestrator catch - the worker's gate missed this suite).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_prompt_text_pinned.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "TRACKED_WRITE_DIRTY_NOTE pinned with rationale (agents read it and decide whether to stage).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R3"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r3"
+        ],
+        "summary": "Both commands' --json payloads gain modified_paths (the tracked task file), and one stderr advisory fires when that file is tracked-and-now-dirty - a single path-scoped git diff --quiet whose returncode-1-only contract makes untracked, clean, and no-repo all degrade to silence. flowctl never stages or commits: naming the path is the entire contract (the --stage/--amend alternatives were rejected as doctrine breaks - index races across wave workers, amend re-orphans the just-recorded evidence SHA). New advisory constant pinned as agent-read text.",
+        "taskIds": [
+          "fn-192-state-contract-honesty-fresh-clone.2"
+        ],
+        "title": "done/block: name the tracked file they wrote"
+      },
+      {
+        "files": [
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/agents/worker.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-c3",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "Stage-the-receipt step after the done invocation.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/templates/usage.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-c3",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "Workflow gains the commit step and the receipt step; escape hatch reworded.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CLAUDE.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-c3",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "Quickstart comment states the receipt contract.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Dogfood copy of the template (byte-parity pinned).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/agents/worker.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Codex mirror of the worker change.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Codex mirror of the usage template.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-c3",
+          "s-r4"
+        ],
+        "summary": "worker.md Phase 5 gains an explicit stage-the-receipt step after done; templates/usage.md's workflow (which never mentioned commit at all, and told sandbox-blocked callers to done without committing) now states commit-then-done-then-stage, with the escape hatch noting the receipt needs a later commit; the CLAUDE.md quickstart comment says the same. Dogfood .flow/usage.md copy synced (byte-parity suites).",
+        "taskIds": [],
+        "title": "One canonical ordering across the three disagreeing surfaces"
+      },
+      {
+        "files": [
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-c3",
+              "s-r6",
+              "s-diff"
+            ],
+            "summary": "validate section: the durability-aware mismatch finding.",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-c3",
+              "s-r6",
+              "s-diff"
+            ],
+            "summary": "Unreleased entry, both halves, credits the reporter.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/knowledge/decisions/tracked-vs-runtime-durability-contract-2026-08-14.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-c3",
+              "s-r6",
+              "s-diff"
+            ],
+            "summary": "The contract + rejected alternatives, as a decision record.",
+            "taskIds": []
+          },
+          {
+            "additions": 106,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Vendored copy (dual-copy propagation).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Regenerated hash.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Regenerated hash.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-192-state-contract-honesty-fresh-clone.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec record.",
+            "taskIds": []
+          },
+          {
+            "additions": 37,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-192-state-contract-honesty-fresh-clone.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec body with R1-R6.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-192-state-contract-honesty-fresh-clone.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-192-state-contract-honesty-fresh-clone.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-192-state-contract-honesty-fresh-clone.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-192-state-contract-honesty-fresh-clone.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 body + done summary.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 4,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-c3",
+          "s-r6"
+        ],
+        "summary": "docs/flowctl.md documents the durability-aware finding; CHANGELOG under Unreleased (duplicated headers consolidated) credits @sn-furali; a knowledge/decisions memory entry records the durability contract and the rejected alternatives. Full gate 4539 tests OK, ruff clean, dual-copy propagation + tracker manifest + codex mirror x2. A concurrent session's untracked fn-162 artifact was swept in by the close-out git add -A and unstaged in a follow-up commit (files left on disk).",
+        "taskIds": [],
+        "title": "Docs, gate, propagation, lifecycle artifacts"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-c3"
+        ],
+        "value": "4539 tests, 0 failures; ruff 0.16.0 clean; sync-codex + dogfood parity green"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-t2"
+        ],
+        "value": "12 regression tests (3 validate classes + 9 manifest/advisory) + inventory and pin entries"
+      },
+      {
+        "label": "Fresh-clone probe",
+        "sourceRefs": [
+          "s-t1"
+        ],
+        "value": "the 582-error class became warnings; 23 residual errors are genuinely real defects"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-c3"
+        ],
+        "value": "6/6 satisfied across two tasks + close-out"
+      }
+    ],
+    "thesis": "The tracked/runtime durability boundary becomes honest on both sides: validate downgrades the structurally-false fresh-clone status mismatch to a warning (content-discriminated so legacy repos and runtime-sourced mismatches stay errors), done/block report the tracked receipt file they write plus a one-line advisory when it is left dirty, and the loop ordering - commit, done, stage the receipt - is stated identically on all three documented surfaces (issues #346 + #347, one contract break)."
+  },
+  "generatedAt": "2026-08-14T08:20:00Z",
+  "headSha": "178fa1a29868fab0733e4ab42f6356ba254ab316",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-192-state-contract-honesty-fresh-clone"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-192-state-contract-honesty-fresh-clone.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-192-state-contract-honesty-fresh-clone.2"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "fabfc8d68e91c8c96eb2cd087e9b82dbb5332353"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "eebda8749bd40a3ec79b1e2513f0ceeeb551d4c3"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "78b3920b4be95b217e0d1254b59983d9d385a716"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "5b9f9cecc2126df1856678bac8ee93ffb5573b76..178fa1a29868fab0733e4ab42f6356ba254ab316"
+    }
+  ],
+  "specId": "fn-192-state-contract-honesty-fresh-clone"
+}

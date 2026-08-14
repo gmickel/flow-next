@@ -135,10 +135,11 @@ Make any of this durable by writing it into `CLAUDE.md`/`AGENTS.md` — the host
 1. `.flow/bin/flowctl specs` - list all specs
 2. `.flow/bin/flowctl ready --spec fn-N-slug` - find available tasks
 3. `.flow/bin/flowctl start fn-N-slug.M` - claim task
-4. Implement the task
+4. Implement the task, then `git commit` the work (the evidence JSON cites this commit)
 5. `.flow/bin/flowctl done fn-N-slug.M --summary-file ... --evidence-json ...` - complete
+6. Stage the receipt: `done` writes the summary into the tracked task file AFTER your commit - include it in your next commit (it lists the path under `modified_paths` and prints a note when the file is left dirty)
 
-If a sandbox denies `git commit`, still complete `done` with the evidence you have and record the restriction in the summary - never block the task on a commit you cannot make.
+If a sandbox denies `git commit`, still complete `done` with the evidence you have and record the restriction in the summary - never block the task on a commit you cannot make; the receipt then needs a later commit by whoever can make one.
 
 ## Verification scoping
 

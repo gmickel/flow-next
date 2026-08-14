@@ -184,6 +184,10 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 ("subprocess.run", "run_rp_cli_unchecked"): 1,
                 ("subprocess.run", "try_run_rp_cli"): 1,
                 ("subprocess.run", "get_changed_files"): 1,
+                # fn-192 R3 / #346: done/block advisory - one path-scoped
+                # `git diff --quiet` to ask "did I just dirty a tracked
+                # file?". Read-only; flowctl never stages or commits.
+                ("subprocess.run", "print_tracked_write_advisory"): 1,
                 ("subprocess.run", "find_references"): 1,
                 ("subprocess.run", "get_codex_version"): 1,
                 ("subprocess.run", "_cursor_list_models"): 1,

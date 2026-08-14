@@ -126,6 +126,11 @@ PROMPT_HASHES = {
     # were just given, so its wording is deliberate-change territory.
     "STATUS_SOURCE_ABSENT_NOTE":
         "0f6697e1ed3d099666d5be48252bacfb5172871dd4e2e4bfc1d2e99268e6ac24",
+    # fn-192 R3 / #346: printed on stderr when done/block dirty a tracked
+    # task file. Agents read it and decide whether to stage the receipt, so
+    # its wording is deliberate-change territory.
+    "TRACKED_WRITE_DIRTY_NOTE":
+        "eca66532a7ea6812b5c23d8f1af1312a6d099dd39ad908d4117a5b4231321d38",
     # Lands in the receipt `note` field and on stdout; agents read receipts.
     "HOST_JUDGES_NOTE":
         "47b75b60635754b4267077dc782a7b026af6dce3669619c4ffca6ec920c5d878",

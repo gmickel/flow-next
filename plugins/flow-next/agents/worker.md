@@ -617,6 +617,15 @@ EVIDENCE_FILE="/tmp/evidence.json"
 <FLOWCTL> done <TASK_ID> --summary-file "$SUMMARY_FILE" --evidence-json "$EVIDENCE_FILE"
 ```
 
+**Stage the receipt (fn-192 / #346):** `done` writes the summary into the
+TRACKED task file after your Phase 3 commit - it reports the path under
+`modified_paths` (and prints a note when the file is left dirty). Commit it
+now with the standard catch-all staging (`git add -A && git commit -m
+"chore(flow): task receipt <TASK_ID>"` - the same staging rule as every other
+commit in this file, which also sweeps any review/gate-receipt files Phase
+4/5 wrote); a receipt left uncommitted on the final task of a run is lost to
+every other checkout.
+
 Verify completion:
 ```bash
 <FLOWCTL> show <TASK_ID> --json

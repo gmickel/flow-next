@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-192-state-contract-honesty-fresh-clone",
+  "created_at": "2026-08-14T06:25:30.798651Z",
+  "depends_on_epics": [],
+  "id": "fn-192-state-contract-honesty-fresh-clone",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-192-state-contract-honesty-fresh-clone.md",
+  "status": "open",
+  "title": "State-contract honesty: fresh-clone validate, done-summary durability (#346, #347)",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-14T06:25:30.800330Z"
+}

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T06:25:49.879363Z",
+  "depends_on": [
+    "fn-192-state-contract-honesty-fresh-clone.1"
+  ],
+  "id": "fn-192-state-contract-honesty-fresh-clone.2",
+  "priority": null,
+  "spec": "fn-192-state-contract-honesty-fresh-clone",
+  "spec_path": ".flow/tasks/fn-192-state-contract-honesty-fresh-clone.2.md",
+  "status": "todo",
+  "title": "done/block: modified_paths manifest + dirty-tracked stderr advisory",
+  "updated_at": "2026-08-14T06:25:49.879363Z"
+}

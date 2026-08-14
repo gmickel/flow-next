@@ -869,6 +869,17 @@ flowctl validate --spec fn-1 [--json]
 flowctl validate --all [--json]
 ```
 
+The **epic/task status mismatch** finding ("Epic marked done but task X is
+...") is durability-aware (fn-192, #347): task status is runtime-only and
+never travels with git, so on a fresh clone every done spec's tasks read as
+their committed snapshot (`todo`). When the status came from that snapshot
+and it carries no runtime progress markers, the finding is a WARNING
+(`committed snapshot; runtime state absent, status may be stale`) and does
+not fail the run; a runtime-sourced mismatch, or a legacy repo whose tracked
+definition carries real progress, stays an error. `validate` on a fresh
+clone is therefore meaningful again - including the work skill's own Phase 5
+`validate --spec` verify step.
+
 Validate also reports **orphaned evidence commits** (fn-180, #302): a warning
 per `evidence.commits[]` entry that exists in the object store but is no
 longer an ancestor of HEAD - the state a rebase, amend, or squash-merge leaves

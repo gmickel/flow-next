@@ -4,6 +4,30 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+`flowctl validate` could not pass on a fresh clone: task status is
+runtime-only and never travels with git, so every done spec's tasks read as
+`todo` from the committed snapshot and the epic/task mismatch rule failed the
+run - 582 structurally-guaranteed false errors on this repo's own clone, and
+the work skill's Phase 5 verify step was red on any spec closed on another
+machine. And `flowctl done` writes its receipt into the tracked task file
+AFTER the loop's documented commit, silently - the final task's summary never
+reached any other checkout. Fixes #346 and #347 - thanks @sn-furali for
+identifying both halves of the durability-boundary contract break.
+
+### Fixed
+
+- **Fresh-clone `validate` is meaningful again.** The epic/task status
+  mismatch downgrades to a warning when the status came from the committed
+  snapshot with no runtime progress markers (a fresh clone); runtime-sourced
+  mismatches, and legacy repos whose tracked definition carries real
+  progress, stay errors. Exit code still gates on errors only.
+- **`done`/`block` name the tracked file they wrote.** The `--json` payload
+  gains `modified_paths` and one stderr advisory fires when the receipt
+  leaves a tracked file dirty - flowctl never stages or commits; it names the
+  path and the caller decides. The documented loop ordering is now canonical
+  across all three surfaces (worker agent, usage template, quickstart):
+  commit the work, `done`, then stage the receipt.
+
 ## [flow-next 3.33.0] - 2026-08-14
 
 If a spec's tasks were genuinely independent, flow-next was supposed to implement
