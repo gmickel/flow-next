@@ -1,0 +1,34 @@
+{
+  "branch_name": "fn-197-copy-less-installs",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-08-14T17:07:09.765122Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [
+    "flow-98-remove-packaged-codex-delegation",
+    "fn-195-orchestration-by-intent-named-tiers-per"
+  ],
+  "id": "fn-197-copy-less-installs-resolve-flowctl-from",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-197-copy-less-installs-resolve-flowctl-from.md",
+  "status": "open",
+  "title": "Copy-less installs: resolve flowctl from the plugin install on every host; retire copy mode",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-14T17:12:56.611693Z"
+}

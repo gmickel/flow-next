@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T17:09:16.149249Z",
+  "depends_on": [
+    "fn-197-copy-less-installs-resolve-flowctl-from.3"
+  ],
+  "id": "fn-197-copy-less-installs-resolve-flowctl-from.4",
+  "priority": null,
+  "spec": "fn-197-copy-less-installs-resolve-flowctl-from",
+  "spec_path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.4.md",
+  "status": "todo",
+  "title": "Stop dogfooding a tracked .flow/bin in this repo",
+  "updated_at": "2026-08-14T17:12:54.777452Z"
+}

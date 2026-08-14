@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T17:09:16.598812Z",
+  "depends_on": [
+    "fn-197-copy-less-installs-resolve-flowctl-from.4"
+  ],
+  "id": "fn-197-copy-less-installs-resolve-flowctl-from.5",
+  "priority": null,
+  "spec": "fn-197-copy-less-installs-resolve-flowctl-from",
+  "spec_path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.5.md",
+  "status": "todo",
+  "title": "Docs sweep: retire the dual-mode story from every in-repo doc",
+  "updated_at": "2026-08-14T17:12:55.259301Z"
+}
