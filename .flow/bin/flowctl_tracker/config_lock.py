@@ -352,6 +352,7 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
             # denied+absent on a SINGLE observation is not proof. Retry the
             # mkdir once immediately; only a second consecutive denial with
             # the path still absent is genuinely unavailable.
+            denied = exc
             if not os.path.lexists(lock):
                 try:
                     lock.mkdir()
@@ -362,8 +363,8 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
                 except PermissionError as exc2:
                     if not os.path.lexists(lock):
                         raise _unavailable(lock, exc2, creating=lock) from None
-                    exc = exc2
-            last_error = exc
+                    denied = exc2
+            last_error = denied
         # Held, un-reclaimable, delete-pending, or the reclaim rename failed
         # (permissions, antivirus, read-only fs): all of these go through the
         # deadline so acquisition can never spin forever.
