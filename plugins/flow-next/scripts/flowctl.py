@@ -42608,7 +42608,17 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         # effort rides only when it actually reached the CLI (copilot
         # omits --effort for claude-* models).
         reviewed_model=(
-            None if _resolution.get("floor") else effective_model
+            None
+            if _resolution.get("floor")
+            # A codex resume carries the PRIOR receipt's model; when that
+            # prior was itself a ladder floor, the carried value is the
+            # selector placeholder, not a model (#349 round 7). Explicit
+            # cursor:auto pins never arrive via the resume carry.
+            or (
+                _resolution.get("resumed")
+                and effective_model in ("auto", "default")
+            )
+            else effective_model
         ),
         reviewed_effort=(
             _dispatched_effort
@@ -43089,7 +43099,17 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         # effort rides only when it actually reached the CLI (copilot
         # omits --effort for claude-* models).
         reviewed_model=(
-            None if _resolution.get("floor") else effective_model
+            None
+            if _resolution.get("floor")
+            # A codex resume carries the PRIOR receipt's model; when that
+            # prior was itself a ladder floor, the carried value is the
+            # selector placeholder, not a model (#349 round 7). Explicit
+            # cursor:auto pins never arrive via the resume carry.
+            or (
+                _resolution.get("resumed")
+                and effective_model in ("auto", "default")
+            )
+            else effective_model
         ),
         reviewed_effort=(
             _dispatched_effort
@@ -43415,7 +43435,17 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         # effort rides only when it actually reached the CLI (copilot
         # omits --effort for claude-* models).
         reviewed_model=(
-            None if _resolution.get("floor") else effective_model
+            None
+            if _resolution.get("floor")
+            # A codex resume carries the PRIOR receipt's model; when that
+            # prior was itself a ladder floor, the carried value is the
+            # selector placeholder, not a model (#349 round 7). Explicit
+            # cursor:auto pins never arrive via the resume carry.
+            or (
+                _resolution.get("resumed")
+                and effective_model in ("auto", "default")
+            )
+            else effective_model
         ),
         reviewed_effort=(
             _dispatched_effort

@@ -2671,6 +2671,24 @@ class TestAttemptRowResolvedModel(TestCombinedFinalizeWrite):
         self.assertEqual(row["outcome"], "transport_failure")
         self.assertEqual(row["model"], "gpt-5.6-sol")
 
+    def test_resume_carried_floor_placeholder_records_no_model(self) -> None:
+        # PR #349 round 7: a resume carrying a prior floor's "default" has
+        # floor unset on the CURRENT resolution - the carried placeholder
+        # must still not land as the row's model.
+        resolution = {"resumed": True}
+        spec = flowctl.BackendSpec(backend="codex", model="gpt-5.6-sol", effort="high")
+        model, effort = flowctl._receipt_model_effort(
+            spec, resolution, prior_model="default", prior_effort=None
+        )
+        self.assertEqual(model, "default")
+        row_model = (
+            None
+            if resolution.get("floor")
+            or (resolution.get("resumed") and model in ("auto", "default"))
+            else model
+        )
+        self.assertIsNone(row_model)
+
     def test_copilot_claude_model_records_no_effort(self) -> None:
         # PR #349 round 3: copilot omits --effort for claude-* models, so
         # the row must not attribute an effort that never reached the CLI.
