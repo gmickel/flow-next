@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T12:03:15.710537Z",
+  "depends_on": [
+    "flow-98-remove-packaged-codex-delegation.1"
+  ],
+  "id": "flow-98-remove-packaged-codex-delegation.2",
+  "priority": null,
+  "spec": "flow-98-remove-packaged-codex-delegation",
+  "spec_path": ".flow/tasks/flow-98-remove-packaged-codex-delegation.2.md",
+  "status": "todo",
+  "title": "Strip the delegation machinery out of the work skill and its worker",
+  "updated_at": "2026-08-14T12:03:15.710537Z"
+}

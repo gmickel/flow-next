@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T12:04:30.699100Z",
+  "depends_on": [
+    "fn-195-orchestration-by-intent-named-tiers-per.4"
+  ],
+  "id": "fn-195-orchestration-by-intent-named-tiers-per.5",
+  "priority": null,
+  "spec": "fn-195-orchestration-by-intent-named-tiers-per",
+  "spec_path": ".flow/tasks/fn-195-orchestration-by-intent-named-tiers-per.5.md",
+  "status": "todo",
+  "title": "Docs sweep, dictionary, CHANGELOG, and the full gate",
+  "updated_at": "2026-08-14T12:04:30.699100Z"
+}

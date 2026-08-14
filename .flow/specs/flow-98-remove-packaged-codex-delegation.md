@@ -26,6 +26,8 @@ Decision (option b): keep flow-next agentic - CLAUDE.md-scaffold prose is the ca
 - **R5:** Migration route: a repo with `work.delegate` set gets a clear, actionable message pointing at the scaffold/bridge route (no silent behavior change); CHANGELOG frames the removal as a breaking change for the next major release. [user]
 - **R6:** Delegation-specific tests are removed or repointed (test_codex_delegation_*, test_work_delegate_config, test_ralph_guard_codex_delegation, work-skill delegation route tests); full gate green. [paraphrase]
 - **R7:** `spec set-backend` per-spec impl/review/sync fields are retained untouched as data carriage for flow-swarm and other control planes. [paraphrase]
+- **R9:** Two things survive the deletion in prose rather than dying with the machinery: (a) the measured tier advice that motivated the packaged default in the first place - a value-tier implementer matched a strong-tier one on correctness at roughly two-thirds the wall on well-specified work - restated as guidance without benchmark tables; (b) the safety half the packaged path enforced, namely that a bridged child writes code while the host keeps git, judgment, and the verdict. Errors: prose that drops (b) turns every bridge recipe into an unbounded second agent, which is the regression this criterion exists to prevent.
+- **R10:** The removal lands before the orchestration successor and both ship in one major release; nothing in this spec introduces a replacement vocabulary, because the successor owns it. Errors: shipping this alone would remove a capability with no replacement in the same release, which is the sequencing this criterion forbids.
 - **R8:** An explicit decision is recorded in the spec/plan on what ralph-guard keeps: whether the deterministic "bridge child is forbidden from git" enforcement survives for prose-routed bridges, or is dropped with the rationale stated. [inferred]
 
 ## Boundaries
@@ -45,6 +47,14 @@ Decision (option b): keep flow-next agentic - CLAUDE.md-scaffold prose is the ca
 - Product boundary: flow-swarm owns precise per-stage staffing (its `impl_backend`/`review_backend`/staffing API); flow-next stays skill-driven/agentic. The CLAUDE.md scaffold may still interact with flow-swarm-driven repos, but flow-swarm is optional - acceptable. [user]
 - Removal risk accepted on low field usage of delegation. [user]
 - Prioritization: cleanliness of the routing surface beats preserving a packaged feature the prose route already covers. [paraphrase]
+
+### Sequencing with the orchestration successor (added 2026-08-14)
+
+This spec deletes; a successor spec defines what replaces it. That successor turns routing into intent expressed to the orchestrator - a small set of named tiers (reviewer, implementer, fast scout, thinking scout, otherwise the session model), consumer-written preferences in the project instruction file, per-harness reach pages, and no shipped model identifiers. `implementer` is the tier that carries this spec's capability forward, which is why the two must ship together: the deletion alone removes something users had, while the pair reads as "implementation routing became a preference you write instead of a subsystem you configure."
+
+Field evidence that the prose route is sufficient, gathered before this was scheduled: an autonomous loop drove an entire spec to a pull request with the session model conducting and reviewing while sixteen implementation dispatches ran on another vendor's CLI, having first asked that CLI which models it offered. Nothing packaged was involved.
+
+Measured deletion surface at planning time: roughly 1,074 lines of delegation reference prose, six config keys, two dedicated reference files, four dedicated test files, plus delegation mentions across 59 canonical files.
 
 ## Requirement coverage
 

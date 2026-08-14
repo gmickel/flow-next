@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T12:04:30.698959Z",
+  "depends_on": [
+    "fn-195-orchestration-by-intent-named-tiers-per.1"
+  ],
+  "id": "fn-195-orchestration-by-intent-named-tiers-per.2",
+  "priority": null,
+  "spec": "fn-195-orchestration-by-intent-named-tiers-per",
+  "spec_path": ".flow/tasks/fn-195-orchestration-by-intent-named-tiers-per.2.md",
+  "status": "todo",
+  "title": "Setup proposes a commented routing block and stops asking pin questions",
+  "updated_at": "2026-08-14T12:04:30.698959Z"
+}
