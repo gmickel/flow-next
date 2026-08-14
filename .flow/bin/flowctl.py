@@ -11364,10 +11364,13 @@ def _record_review_attempt_locked(
     # or a codex resume carry lands here honestly). Written only where the
     # dispatcher resolved them - the rp/host `review-rounds record` path has no
     # such fact and records no key, never "unknown"/"auto".
-    if reviewed_model:
+    # Floor selectors ("auto" copilot/cursor, "default" codex) are ladder
+    # placeholders, not resolved models - the dispatcher never knew what ran
+    # (#349 round 4). Absent beats a placeholder, per the field's contract.
+    if reviewed_model and reviewed_model not in ("auto", "default"):
         row["model"] = reviewed_model
-    if reviewed_effort:
-        row["effort"] = reviewed_effort
+        if reviewed_effort:
+            row["effort"] = reviewed_effort
     if findings_built and findings_digest is not None:
         row["findings_digest"] = dict(findings_digest)
     if (

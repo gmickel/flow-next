@@ -2695,7 +2695,11 @@ class TestAttemptRowResolvedModel(TestCombinedFinalizeWrite):
             reviewed_model=model, reviewed_effort=effort,
         )
         row = self._row()
-        self.assertEqual(row["model"], "default")
+        # Spec R3 / PR #349 round 4: "default"/"auto" are ladder floor
+        # SELECTORS, not resolved models - the receipt records them, the
+        # row records nothing (absent beats a placeholder).
+        self.assertNotIn("model", row)
+        self.assertNotIn("effort", row)
         self.assertNotIn("effort", row)
 
 
