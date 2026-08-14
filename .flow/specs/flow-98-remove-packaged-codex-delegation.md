@@ -64,6 +64,13 @@ Field evidence that the prose route is sufficient, gathered before this was sche
 
 Measured deletion surface at planning time: roughly 1,074 lines of delegation reference prose, six config keys, two dedicated reference files, four dedicated test files, plus delegation mentions across 59 canonical files.
 
+
+### Wave shape (planned 2026-08-14)
+
+First wave dispatches .1 (deterministic keys + advisory) and .2 (work-skill prose) concurrently: dependency-free, pairwise-disjoint write scopes, neither touching the always-serial set. Then .3 (prose survivors, always-serial: it carries the parity-checked dogfood copy), then .4 after .2, then .5 which owns all propagation and the gate.
+
+Two planning rules this spec follows so the wave is actually reachable: propagation to the dogfood copies, the manifest and the generated mirror is deferred to the close-out task, because any task touching those paths is always-serial by rule; and write scopes are declared as explicit paths rather than broad globs, because two `docs/**` declarations intersect by definition and force serial dispatch.
+
 ## Requirement coverage
 
 | R-ID | Task |

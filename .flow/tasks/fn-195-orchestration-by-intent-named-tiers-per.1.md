@@ -8,7 +8,7 @@ Author the contract before deleting anything that contradicts it. Define the fou
 
 **Size:** M/L
 **Files:** NEW single tier-vocabulary section (implementer names its home - the usage guide is the natural one, since it is read on demand); NEW one reach page per harness under the docs tree (six: the four first-class hosts, the community port, and a generic fallback); `plugins/flow-next/skills/flow-next-work/phases.md` and `agents/worker.md` (dispatch-site precedence line); `plugins/flow-next/skills/flow-next-plan/steps.md` (scout fan-out dispatch sites); `plugins/flow-next/docs/orchestration.md` (becomes the tier-guidance page)
-**Touches:** [plugins/flow-next/templates/usage.md, plugins/flow-next/docs/**, plugins/flow-next/skills/flow-next-work/**, plugins/flow-next/skills/flow-next-plan/**, plugins/flow-next/agents/worker.md]
+**Touches:** [plugins/flow-next/docs/orchestration.md, plugins/flow-next/docs/glossary.md, plugins/flow-next/skills/flow-next-work/phases.md, plugins/flow-next/skills/flow-next-plan/steps.md, plugins/flow-next/agents/worker.md]
 
 ### Approach
 - Tier names are exactly the four in the spec plus unset. They are a user-facing interface: choose the wording once, and do not invent synonyms in different files (the dictionary already bans synonym drift - add these terms to it).

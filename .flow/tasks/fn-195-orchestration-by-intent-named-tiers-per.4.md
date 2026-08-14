@@ -8,7 +8,7 @@ Where the harness exposes it, record the model that executed a stage on the rece
 
 **Size:** M
 **Files:** `plugins/flow-next/scripts/flowctl.py` (the stage-receipt and review-attempt writers), the receipt schema documentation in the docs tree
-**Touches:** [plugins/flow-next/scripts/flowctl.py, plugins/flow-next/docs/**, .flow/bin/flowctl.py]
+**Touches:** [plugins/flow-next/scripts/flowctl.py, plugins/flow-next/docs/review-findings.md]
 
 ### Approach
 - Extend the existing provenance rows rather than adding a second store. Review attempts already carry work-volume and head-origin fields; a stage's executing model belongs in the same shape.

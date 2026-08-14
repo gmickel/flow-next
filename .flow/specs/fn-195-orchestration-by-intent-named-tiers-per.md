@@ -99,6 +99,13 @@ Who benefits: a user configures routing once, in their own file, in their own wo
 
 **Rejected: shipping a capability or intelligence table.** It rots faster than slugs do, and ranking models in shipped prose violates the no-benchmark-claims rule. Tier guidance describes kinds of work instead.
 
+
+### Wave shape (planned 2026-08-14)
+
+First wave dispatches .1 (the routing contract) and .2 (setup's commented block) concurrently: dependency-free, pairwise-disjoint write scopes, neither touching the always-serial set. Then .3 (the identifier sweep, necessarily broad), then .4, then .5 which owns propagation and the gate.
+
+Two planning rules this spec follows so the wave is actually reachable: propagation to the dogfood copies, the manifest and the generated mirror is deferred to the close-out task, because any task touching those paths is always-serial by rule; and write scopes are declared as explicit paths rather than broad globs, because two `docs/**` declarations intersect by definition and force serial dispatch.
+
 ## Parked unknowns
 
 - Whether the `fast scout` / `thinking scout` split survives contact with users, or collapses into one `scout` tier. It is a real question about how many knobs people will set, and only usage answers it. What would resolve it: whether anyone sets the two tiers to different models once the block exists.

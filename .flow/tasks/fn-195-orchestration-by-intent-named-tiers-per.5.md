@@ -8,7 +8,7 @@ Close out: the big-picture docs sweep across every page the change touches, the 
 
 **Size:** M
 **Files:** `plugins/flow-next/docs/README.md` (notable updates + index rows), `platforms.md`, `orchestration.md`, `teams.md`, `troubleshooting.md`, `glossary.md`, `plugins/flow-next/README.md`, root `CLAUDE.md` where it describes routing, `CHANGELOG.md`
-**Touches:** [plugins/flow-next/docs/**, plugins/flow-next/README.md, CLAUDE.md, CHANGELOG.md]
+**Touches:** [plugins/flow-next/docs/README.md, plugins/flow-next/docs/platforms.md, plugins/flow-next/docs/teams.md, plugins/flow-next/docs/troubleshooting.md, plugins/flow-next/templates/usage.md, .flow/usage.md, .flow/bin/**, plugins/flow-next/README.md, CLAUDE.md, CHANGELOG.md]
 
 ### Approach
 - Sweep by asking which other pages the change touches, not just the obvious ones: the platform pages carried per-host tier tables, teams carried routing advice, troubleshooting carried pin failures, and the notable-updates list needs one line.

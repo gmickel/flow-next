@@ -8,14 +8,15 @@ Point every doc that described packaged delegation at the prose route, confirm t
 
 **Size:** M
 **Files:** `plugins/flow-next/docs/orchestration.md`, `ralph.md`, `teams.md`, `flowctl.md`, `skills.md`, `docs/README.md`, repo `CLAUDE.md` (the delegation carve-out prose), `CHANGELOG.md`
-**Touches:** [plugins/flow-next/docs/**, CLAUDE.md, CHANGELOG.md]
+**Touches:** [plugins/flow-next/docs/orchestration.md, plugins/flow-next/docs/ralph.md, plugins/flow-next/docs/teams.md, plugins/flow-next/docs/flowctl.md, plugins/flow-next/docs/skills.md, plugins/flow-next/docs/README.md, CLAUDE.md, CHANGELOG.md, .flow/usage.md, .flow/bin/**]
 
 ### Approach
 - Sweep by grep, not by memory: find every mention of the removed vocabulary across canonical docs and the repo instruction file, and either delete it or repoint it at the bridge recipe plus the routing preference.
 - The repo's own instruction file carries a sanctioned-carve-out paragraph naming delegation as the one licensed second-LLM spawn. That paragraph must be rewritten, not deleted: the carve-out list still has members (review dispatch, the triage-skip judge), and the sentence that names them is doctrine.
 - Confirm and state that `spec set-backend`'s per-spec impl/review/sync fields are untouched - they are data carriage for other control planes, not delegation.
 - CHANGELOG under `## Unreleased`, outcome-first, framed as a breaking change for the next major: what disappears, what replaces it, and the one-line migration. Say plainly that routing became a preference you write rather than a subsystem you configure. No benchmark tables, no speed claims.
-- Full gate: the parallel suite with the exit code captured directly, plus the pinned linter. Mirror regenerated twice.
+- **This task owns ALL propagation for the spec** (the earlier tasks deliberately skip it so they can wave): copy the module to the dogfood bin, regenerate the manifest, sync the mirror twice, and confirm the tree is clean.
+- Full gate: the parallel suite with the exit code captured directly, plus the pinned linter.
 
 ### Investigation targets
 **Required** (read before coding):
