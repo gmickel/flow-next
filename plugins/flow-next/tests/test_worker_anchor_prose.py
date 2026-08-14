@@ -25,8 +25,8 @@ DOES ship from fn-83 — and what this test locks:
    - the dead gate signal `PLAN_DEVIATION` is fully deleted from agents +
      skills.
 4. BASE_COMMIT + done-evidence provenance are RETAINED (load-bearing
-   independent of the gate: impl-review diff scoping, delegation
-   git-ownership, commit-range provenance): ``base_commit`` + the FULL
+   independent of the gate: impl-review diff scoping and commit-range
+   provenance): ``base_commit`` + the FULL
    base..HEAD commit list in the evidence templates, verified by a real
    `flowctl done` round-trip against a tmp-repo fixture (production CLI
    wire form).
@@ -115,27 +115,13 @@ class WorkerAnchorCallProse(unittest.TestCase):
         self.assertEqual(
             text.count("BASE_COMMIT=$(cat .flow/tmp/base_commit)") >= 2, True, path
         )
-        # The delegation rollback block reloads BASE_COMMIT BEFORE its
-        # git-ownership assertion + `git reset --mixed` — a fresh shell with an
-        # empty ref would wrongly roll back a SUCCESSFUL delegated run and reset
-        # against "" (codex review, worker.md 221b955a). Locked by ordering, not
-        # a loose count (prose mentions inflate the count).
-        self.assertRegex(
-            text,
-            re.compile(
-                r"BASE_COMMIT=\$\(cat \.flow/tmp/base_commit\)"
-                r".{0,400}?Git-ownership assertion"
-                r'.{0,240}?!= "\$BASE_COMMIT"',
-                re.DOTALL,
-            ),
-        )
-        # base_commit provenance in BOTH evidence templates (standard +
-        # delegation) — retained per fn-83 R4 (only the removed probe's
-        # CONSUMPTION of it is gone).
+        # base_commit provenance in the evidence template — retained per fn-83
+        # R4 (only the removed probe's CONSUMPTION of it is gone). flow-98
+        # deleted the second (delegation) template with the packaged path.
         self.assertEqual(
-            text.count('"base_commit": "$BASE_COMMIT"'), 2, path
+            text.count('"base_commit": "$BASE_COMMIT"'), 1, path
         )
-        self.assertEqual(text.count('"commits": $COMMITS_JSON'), 2, path)
+        self.assertEqual(text.count('"commits": $COMMITS_JSON'), 1, path)
 
     def test_canonical_worker(self) -> None:
         self._assert_anchor_contract(CANONICAL_WORKER)

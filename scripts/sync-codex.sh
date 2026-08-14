@@ -1351,8 +1351,8 @@ def is_negative_context(line):
         return True
     # Capability-negation prose ("cannot call X", "can't ask via X", "cannot
     # use X"). These describe a subagent/context that is UNABLE to ask — a
-    # descriptive site (e.g. the delegation reference's "the worker is a
-    # subagent and cannot call `plain-text numbered prompt`"), NOT a live ask.
+    # descriptive site (e.g. "the worker is a subagent and cannot call
+    # `plain-text numbered prompt`"), NOT a live ask.
     # Injecting the R2 block here flips the meaning into an instruction to ask.
     if re.search(r"\b(?:cannot|can[’']?t|could not|couldn[’']?t)\s+(?:call|use|ask\b[^.]*?via)\b", line) \
             and 'plain-text numbered prompt' in line:

@@ -20,53 +20,6 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-## Phase 0: Delegation request check (cheap, single step)
-
-**Codex delegation adds exactly this one step to the default work path.** With
-delegation off (the default) it resolves to a no-op and Work's observable
-lifecycle is unchanged (R1/R3). A default run that gained a second delegation
-step, or that read a delegation reference, has broken this.
-
-Done when: `delegation_requested` is resolved to true or false, and — when false —
-nothing else in this phase ran.
-
-```bash
-# Cheap host short-circuit FIRST — delegation is Claude-Code-only. On a non-Claude
-# orchestrator (Codex / Droid / OpenCode) this resolves delegation OFF *before* the
-# ~45k references/codex-delegation.md is ever read, so that reference never loads
-# into a non-Claude host's context just to be disabled by Gate 1. (Gate 1 in the
-# reference stays the authoritative full platform check — incl. the OPENCODE_* env
-# scan; this is its cheap pre-check subset, run pre-load.)
-host_is_claude_code() {
-  [ -n "${CLAUDECODE:-}" ] || return 1        # not Claude Code → off
-  [ -z "${DROID_PLUGIN_ROOT:-}" ] || return 1 # Droid → off (compat alias not keyed)
-  [ -z "${OPENCODE:-}" ] || return 1          # OpenCode → off
-  return 0
-}
-# Single value-check — same shape as the tracker-sync touchpoints (SKILL.md).
-# Guard a missing .flow/: a fresh repo / idea-or-markdown input has not been
-# `flowctl init`ed yet (that happens in Phase 1), and `config get` errors on an
-# absent .flow/. Treat missing .flow/ as delegation OFF — a bare-idea input is
-# never delegation-eligible anyway (delegation requires a plan/spec/task input).
-if [ -d .flow ]; then
-  # ONE root snapshot (fn-110) serving work.delegate here AND the Phase 1 mint's
-  # tracker.specIds: one config read per run, not two. Re-type the literal path.
-  WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
-  $FLOWCTL config get --json > "$WORK_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$WORK_CFG"
-  DELEGATE_CFG=$(jq -r '.value.work.delegate // false' "$WORK_CFG" 2>/dev/null)
-else
-  DELEGATE_CFG=false
-fi
-# delegation_requested = host_is_claude_code && (arg delegate:codex | DELEGATE_CFG == "codex") && not arg delegate:local
-#   On a non-Claude-Code host delegation_requested is FALSE here. The generic
-#   "use codex" is NOT the token — it still selects the review backend.
-```
-
-If `delegation_requested` is **false** (the default), do nothing more here and run
-Phase 1 onward exactly as written — no `INPUT_WAS_BARE_PROMPT` capture, no gates,
-and no delegation-reference read. **If and only if `delegation_requested` is
-true**, also capture `INPUT_WAS_BARE_PROMPT` inside Phase 1 and run Phase 1.5.
-
 ## Phase 1: Resolve Input
 
 Detect input type in this order (first match wins):
@@ -80,15 +33,6 @@ Detect input type in this order (first match wins):
 **Handle-recognition rule (R16):** **every single-token arg goes through `$FLOWCTL show <arg> --json` before it can be treated as idea text.** If it resolves (rc 0) it is an existing spec/task — use the canonical id from the JSON. Only a non-resolving token that isn't an `.md` path falls through to idea text. A run that gated on a "starts with `fn-`" check, or that re-created `wor-17` / `wor-17.1` as a new spec, has broken this.
 
 **Track the mode** — it controls looping in Phase 3.
-
-**Original-input-kind capture — runs only when `delegation_requested` (Phase 0).** A bare
-idea-text input (match #5 above) gets promoted into a spec+task by the steps below, so
-its original kind must be recorded **before** that promotion. Read
-[references/codex-delegation-selection.md](references/codex-delegation-selection.md) now and
-execute its `Gate 0 — original input kind` block: set `INPUT_WAS_BARE_PROMPT` here, on the
-ORIGINAL input, immediately after detection and **before** running any "Spec file start" /
-"Spec-less start" promotion step. On the default (delegation-off) path this step does not
-exist — Phase 0 already returned.
 
 ---
 
@@ -107,7 +51,12 @@ exist — Phase 0 already returned.
 1. Check file exists: `test -f "<path>"` — if not, treat as idea text
 2. Initialize: `$FLOWCTL init --json`
 3. Read file and extract title from first `# Heading` or use filename
-4. Create spec — mint gate (tracker-first vs flow-first): [references/spec-id-mint.md](references/spec-id-mint.md), read only when minting.
+4. Create spec — mint gate (tracker-first vs flow-first): [references/spec-id-mint.md](references/spec-id-mint.md), read only when minting. Take the ONE root config snapshot the gate reads (fn-110 — one config read, never a per-leaf `config get tracker.specIds`; re-type the literal path, bash vars die across tool calls):
+
+   ```bash
+   WORK_CFG="${TMPDIR:-/tmp}/flow-work-config-<suffix>.json"
+   $FLOWCTL config get --json > "$WORK_CFG" 2>/dev/null || printf '{"key":null,"value":{}}' > "$WORK_CFG"
+   ```
 
 5. Set spec from file: `$FLOWCTL spec set-plan <spec-id> --file <path> --json`
 6. Create single task: `$FLOWCTL task create --spec <spec-id> --title "Implement <title>" --json`
@@ -120,15 +69,6 @@ exist — Phase 0 already returned.
 4. Continue with spec-id
 
 Done when: the input is classified into exactly one of the five kinds, the mode (`SPEC_MODE` / `SINGLE_TASK_MODE`) is recorded, and a spec id exists to carry into Phase 2.
-
-## Phase 1.5: Select the Codex-delegation path (runs only when requested)
-
-**Skip unless `delegation_requested=true`.** When requested, **read
-[references/codex-delegation-selection.md](references/codex-delegation-selection.md)
-top to bottom, execute its exact ordered gates, consent ceremony, clean-tree
-check, and terminal routing, then continue with Phase 2**. A failed or declined
-selection continues standard mode without loading active-only machinery.
-Only a passing selection loads `references/codex-delegation.md`.
 
 ## Phase 2: Apply Branch Choice
 
@@ -156,10 +96,6 @@ Done when: the run is on the branch the choice named (under autonomy, exactly th
 In SPEC_MODE, inspect the whole ready frontier and prefer a concurrent safe
 subset. In SINGLE_TASK_MODE, the selected wave is always the requested task
 alone. Every task still gets a fresh-context worker.
-
-When `delegation_active=true`, initialize the **host-owned** circuit breaker
-once before the loop exactly as specified in the already-loaded delegation
-reference. Default/declined paths initialize nothing.
 
 ### 3a. Inspect Ready Frontier and Select a Wave
 
@@ -315,16 +251,6 @@ host-deferred shape is independent of `REVIEW_MODE`; the conductor preserves
 the resolved backend and applies it after integration. The prompt fields are an
 internal handoff, not a public CLI or stored schema.
 
-**Codex-delegation flags — appended only when `delegation_active`, Phase 1.5's
-gates all passed, and (for `work.delegateDecision=ask` interactive) the host
-confirmed this task.** Append the resolved flags to the worker prompt; the worker
-delegates its Phase 2 implementation to `codex exec` per
-[references/codex-delegation.md](references/codex-delegation.md) — whose
-`Gate outcome — the resolved flags passed to each worker` block is the exact
-set to append (model resolved via `flowctl models resolve delegate`). Omit them
-entirely (or pass `DELEGATE: local`) when delegation is off or a gate failed —
-the worker then runs standard in-session implementation, unchanged. **The flags are provisional — the worker owns the final per-task call**: its thin-task valve (worker.md Phase 2) may still run the task standard in-session, emitting no `DELEGATION_*` lines (counter untouched). A conductor that counted an unemitted signal as a strike has broken this.
-
 **Worker returns** (both paths): task id, terminal status, commit range, and the
 summary/evidence paths (plus the review receipt path when the single-worker path
 ran review). Content lives in those files — read them, never a restatement.
@@ -350,7 +276,7 @@ $FLOWCTL show <task-id> --json
 
 A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `/flow-next:impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
 
-If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker failed. Diagnose from ground truth (below) then retry — **but the retry is bounded**: keep a per-task standard-failure strike counter (the mirror of the delegation circuit breaker in 3d.2, which only covers `delegation_active`). **After 2 consecutive non-`done` returns for the *same task*** (a worker that keeps aborting early or a persistently red Quick command), retrying stops and the failure escalates. A third respawn of the same task has broken this. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.
+If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker failed. Diagnose from ground truth (below) then retry — **but the retry is bounded**: keep a per-task failure strike counter. **After 2 consecutive non-`done` returns for the *same task*** (a worker that keeps aborting early or a persistently red Quick command), retrying stops and the failure escalates. A third respawn of the same task has broken this. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would respawn workers forever); interactively, surface the failure and stop.
 
 **Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
 
@@ -381,20 +307,11 @@ if [ "$ACTIVE" = "0" ]; then
   [ "$VAL" = "true" ] && ACTIVE=1
 fi
 if [ "$ACTIVE" = "1" ]; then
-  echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#task-done, then continue with Phase 3d.2."
+  echo "GATE ACTIVE — read and execute references/tracker-touchpoints.md#task-done, then continue with Phase 3e."
 fi   # default branch: bare no-op — NO link, NO read path
 ```
 
-When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Task done` section (`work.done` leaf check + best-effort dispatch), then continue with Phase 3d.2. When the gate is silent (bridge inactive), continue — nothing fires here.
-
-#### 3d.2 Delegated worker signal (runs only when `delegation_active`)
-
-Apply the already-loaded delegation reference's host circuit-breaker contract
-after each returned delegated worker. A missing `DELEGATION_*` signal leaves
-the counter untouched; a tool failure disables delegation immediately; three
-consecutive task misses disable it; success resets the streak. Once disabled,
-omit `DELEGATE:*` flags from later workers and continue standard mode. Preserve
-the inlined delegation evidence as the durable Ralph/log receipt surface.
+When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Task done` section (`work.done` leaf check + best-effort dispatch), then continue with Phase 3e. When the gate is silent (bridge inactive), continue — nothing fires here.
 
 ### 3e. Plan Sync After the Resolved Wave (if enabled) — both modes
 
@@ -630,8 +547,8 @@ The `Next:` line is the executable handoff — the reader runs it, rather than
 re-deriving which command comes next from the summary above it.
 
 **Stage-outcome lines (fn-178, binding on every stage this run orchestrated).**
-Each optional or delegated stage the run reached (plan-sync, impl-review,
-completion review, QA, a delegation attempt, a wave dispatch) records exactly
+Each optional stage the run reached (plan-sync, impl-review,
+completion review, QA, a wave dispatch) records exactly
 one line in the receipt surface it already writes — the task's `## Done
 summary` for task-scoped stages, this final summary for run-scoped ones:
 

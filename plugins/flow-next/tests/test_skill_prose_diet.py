@@ -408,7 +408,9 @@ class InlineControlTransferSeamTestCase(unittest.TestCase):
             )
         for path in both_copies("flow-next-work/phases.md"):
             text = read(path)
-            for phase in ("Phase 2", "Phase 3c", "Phase 3d.2", "Phase 4"):
+            # flow-98 deleted the delegation Phase 1.5 (-> Phase 2) and 3d.2
+            # routes; 3d.1 now continues into 3e.
+            for phase in ("Phase 3c", "Phase 3e", "Phase 4"):
                 self.assertIn(
                     f"then continue with {phase}",
                     text,
