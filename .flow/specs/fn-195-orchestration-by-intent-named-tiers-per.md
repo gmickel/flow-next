@@ -22,6 +22,19 @@ Who benefits: a user configures routing once, in their own file, in their own wo
 - **thinking scout** — analysis that degrades badly on a fast tier.
 - **unset** — planning, capture, interview, requirement analysis, every verdict, and the worker run on the session model. This is the existing never-delegate-judgment doctrine, restated as the default rather than as a special case.
 
+**A tier selects WHO executes a stage, never WHICH pipeline runs.** This is the ambiguity that makes the whole idea safe or unsafe. "Implementation goes to model X" means: when the work skill dispatches implementation, that implementation executes on X — and every other obligation still holds, unchanged. The spec is still the brief, the baseline still runs before the first edit, the task's own checks still run, gates still gate, review still reviews, evidence is still recorded, and completion still passes through the normal lifecycle. It is emphatically not a licence to hand a task to another model freeform and accept whatever comes back.
+
+**Failure signature:** a run that read a routing preference as permission to skip the pipeline — no baseline, no gates, no evidence, no verified completion — has broken this. So has a run that treated a named implementer as a reason not to review.
+
+**Worked example, in a consumer's own words** (this shape has already driven whole specs to a pull request under an autonomous loop):
+
+```text
+Routing: you conduct + review (frontier model, medium effort).
+Implementation goes to <another model> via <its CLI>, one task per dispatch.
+```
+
+Read as: the session model conducts and reviews; the implementation phase inside the normal work lifecycle executes elsewhere; everything else is unchanged.
+
 **Preferences live in the consumer's instruction file, expressed as concrete models with optional effort.** We ship no model identifiers outside a single reference page and the review-backend grammar. The block is short, because the instruction file is loaded every turn; the reasoning behind the tiers lives in the on-demand usage guide.
 
 **Resolution is prose at the dispatch site, not a resolver.** Wherever a skill spawns or shells out, one line states the order: an explicit argument wins, then the project's routing block, then the agent definition's own default, then the session model. No new verb, no validation pass, no staleness math.
@@ -30,6 +43,8 @@ Who benefits: a user configures routing once, in their own file, in their own wo
 
 **Reach is documented once per harness, never inside skills.** One short page per supported harness states which reach mechanisms exist there, which do not, and what the degradation is when one is missing. A skill says "hand this to the implementer tier"; it never names a spawn tool or a CLI flag.
 
+**Discovery beats declaration.** Where a harness can list what it offers, the reach page says to ask it rather than to trust a stored answer. That habit — list, then invoke — is what the deleted pinning ceremony was badly approximating, and it costs one command instead of a stored fact that goes stale.
+
 **Routing becomes observable.** Prose routing is best-effort by nature, so the receipt surfaces already carrying review provenance record what actually ran for a stage wherever the harness exposes it. Recording, never prescribing: an unrouted stage is a fact in the record, not a failure.
 
 ## API Contracts
@@ -37,6 +52,7 @@ Who benefits: a user configures routing once, in their own file, in their own wo
 
 - Tier names are exactly: `reviewer`, `implementer`, `fast scout`, `thinking scout`. A fifth name is a breaking change to a user-facing interface.
 - A routing block entry is `<tier>: <model>` or `<tier>: <model> at <effort>`; an absent tier means the session model; an unparseable line is ignored with one advisory, never an error.
+- A tier binds a model to a stage's execution. It never removes, reorders, or substitutes a stage: same lifecycle, same gates, same evidence, same completion path, whichever model executes.
 - The review backend keeps its existing `backend[:model[:effort]]` configuration and its receipts unchanged. This spec does not touch it.
 - Deleted configuration keys are reported by name once when encountered, with the sentence that routing now lives in the instruction file. A stale key never blocks a run.
 
@@ -61,6 +77,7 @@ Who benefits: a user configures routing once, in their own file, in their own wo
 - **R5:** Setup proposes a routing block in the project instruction file with values commented out and tier guidance as comments, then closes by saying it wrote an example to edit. It never asserts which models are installed, and it never overwrites a human-edited block. Errors: an existing block is left untouched and reported.
 - **R6:** The pinning ceremony and the per-backend role map are removed: no probe-verified pin requirement, no staleness stamp, no role-map validation on write. Deleted keys are reported by name once and never block. Errors: a config carrying deleted keys runs unchanged.
 - **R7:** Where the harness exposes it, the stage receipt records the model that actually ran, so routing is checkable after the fact. Errors: unavailable provenance is recorded as unknown, never as the configured value.
+- **R7a:** A routing preference changes only which model executes a stage. With any tier set, the lifecycle is identical to an unrouted run: baseline before first edit, the task's own checks, gates, review where configured, recorded evidence, and verified completion. Errors: a run that skipped any of those because a tier was set is a defect, not a configuration choice — and the tier documentation states that failure signature.
 - **R8:** Full suite, lint, mirror parity and the OS matrix are green; the docs sweep covers the reach pages, the usage guide, the setup flow, and the platform pages together. Errors: no error surface beyond the gate.
 
 ## Boundaries
@@ -77,6 +94,8 @@ Who benefits: a user configures routing once, in their own file, in their own wo
 <!-- scope: both -->
 
 **Why intent beats configuration here.** Two independent signals. Our own platform documentation already records that config-based per-agent model application is unreliable on one major host and that steering by explicit invocation is preferable there. And a human operator gets correct routing today by writing preferences in prose, with no machinery at all — the orchestrator reads them and acts. Enumeration was solving a problem the orchestrator does not have, while creating one we pay for every vendor release.
+
+**This is documentation of behavior that already works, not a new mechanism.** Field-validated repeatedly across three harnesses in the week before this spec, including an autonomous loop that drove an entire spec to a pull request with the session model conducting and reviewing while sixteen implementation dispatches ran on another vendor's CLI — and which listed that CLI's available models before invoking one. The product simply never told anyone this was the intended shape; it shipped a ceremony modelling the opposite. That lowers the risk profile: the sweep is deletion and documentation, not invention.
 
 **Why the user writes the slugs.** Model identifiers are a property of a machine and an account, not of a project or a framework. A consumer naming their own models in their own instruction file owns exactly one place, can verify it against their own CLI, and is never surprised by our list going stale. This is the same reasoning that rejected a setup-time availability snapshot: config that claims what is installed becomes config that lies.
 
