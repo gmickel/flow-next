@@ -14,7 +14,7 @@
     "fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.2": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.3": 0,
-    "fn-195-orchestration-by-intent-named-tiers-per.4": 1
+    "fn-195-orchestration-by-intent-named-tiers-per.4": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -215,29 +215,47 @@
       "task": "fn-195-orchestration-by-intent-named-tiers-per.3",
       "timestamp": "2026-08-14T21:33:31.839205Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "7588170f5aa426fb8175e5da5a22d246e44ada2ea1791011bfea20f7a240b853",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "965648022c2c6b9a210eea33c506d634cdc4fd19",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1069,
+      "output_sha256": "fe0f0f29629a8f77f1adbde0bbefdfadf78f15b7e686a0753f30c7e09c78e560",
+      "reservation_id": "bf5b687b968b43b79de515681402c59e",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.4",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.4",
+      "timestamp": "2026-08-14T22:33:49.000852Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 1,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 1,
-    "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 1
-  },
-  "review_pending_rounds": {
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 1,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 1
   },
-  "review_reservations": {
-    "bf5b687b968b43b79de515681402c59e": {
-      "artifact_sha256": "7588170f5aa426fb8175e5da5a22d246e44ada2ea1791011bfea20f7a240b853",
-      "counter_scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.4",
-      "epoch": 0,
-      "forced": false,
-      "review_type": "impl"
-    }
-  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
   "review_transport_failures": {
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 0,
-    "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 0
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 0,
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 0
   },
   "spec_path": ".flow/specs/fn-195-orchestration-by-intent-named-tiers-per.md",
   "status": "open",
@@ -253,5 +271,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T22:16:12.618954Z"
+  "updated_at": "2026-08-14T22:33:49.529061Z"
 }
