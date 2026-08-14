@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-198-review-journal-wedge-transport-failure",
+  "created_at": "2026-08-14T18:58:50.815966Z",
+  "depends_on_epics": [],
+  "id": "fn-198-review-journal-wedge-transport-failure",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-198-review-journal-wedge-transport-failure.md",
+  "status": "open",
+  "title": "Review-journal wedge: transport-failure record leaves unfinalizable pending legs",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-14T18:58:50.817660Z"
+}
