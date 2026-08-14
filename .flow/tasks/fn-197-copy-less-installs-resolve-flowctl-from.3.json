@@ -12,5 +12,5 @@
   "spec_path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.3.md",
   "status": "todo",
   "title": "Retire the copy plumbing in flowctl and replace plan's drift check with the migration nudge",
-  "updated_at": "2026-08-14T17:12:54.315680Z"
+  "updated_at": "2026-08-14T17:34:59.719810Z"
 }

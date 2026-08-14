@@ -1,24 +1,49 @@
 # fn-197-copy-less-installs-resolve-flowctl-from.1 Add the plugin-root derivation rung to every flowctl preamble, fix the hardcoded sites, rewrite the Cursor rail
 
 ## Description
-**What:** Add the probe-proven plugin-root derivation rung (rung 2) to every canonical FLOWCTL preamble, fix the two sites that hard-code `.flow/bin/flowctl`, and rewrite the Cursor guidance rail.
+**What:** Add the probe-proven plugin-root derivation rung (rung 2) to every canonical FLOWCTL preamble, fix the hardcoded and broken sites, rewrite the Cursor rail, and make sync-codex + ralph-guard rung-2-aware — all in one commit so mirror parity and sync guards never go red.
 
-**Details:**
-- Insert rung 2 between the env-var probe and the `.flow/bin` fallback at every canonical preamble site (~49: skills' SKILL.md / workflow.md / phases.md / steps.md / references, `agents/quality-auditor.md`, `agents/repo-scout.md`). Exact wording (proven live on Cursor CLI, Cursor app, Grok on 2026-08-14):
-  `[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally`
-- Fix hardcoded sites: `skills/flow-next-tracker-sync/references/status-sync.md:57` (uses `.flow/bin/flowctl` directly for BRANCH_NAME) and `agents/docs-gap-scout.md:47` (silently degrades to `find` — give it the full chain).
-- Rewrite `rules/flow-next.mdc` (Cursor rail): replace its five `.flow/bin/flowctl` invocations and the "if `.flow/bin/flowctl` is not found run setup" remedy with the three-rung chain.
-- Regenerate the Codex mirror via `scripts/sync-codex.sh` in the SAME commit. Check the SECTION3C heredoc (~line 359-414) — if `work/phases.md` §3c text changes, update the heredoc in the same commit or the canonical edit is silently dropped. Codex mirror keeps `${CODEX_HOME}` as rung 1; only add rung 2 there if sync patching handles it cleanly (Codex never needs it).
-- Before every literal edit: grep `plugins/flow-next/tests/` AND `scripts/sync-codex.sh` for pins; retarget in the same commit, same substance, never weaken.
+**The new canonical preamble (exact wording, proven live on Cursor CLI + Cursor app + Grok, 2026-08-14):**
+```bash
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+```
 
-**Touches:** plugins/flow-next/skills/**, plugins/flow-next/agents/**, plugins/flow-next/rules/**, plugins/flow-next/codex/** (regenerated), scripts/sync-codex.sh, plugins/flow-next/tests/**
+**Execution checklist:**
+1. **Bulk preamble edit — 49 standard sites** (one 2-line pair each, mechanically identical; insert rung 2 between the pair): `agents/quality-auditor.md` (NOTE: line ~208 uses a single-line `; `-joined form — convert it to the 3-line form), `agents/repo-scout.md` (2 pairs), and the 46 skill-file sites under `plugins/flow-next/skills/` (flow-next-audit, -capture ×3, -chart ×6, -deps, -export-context, -guide, -impl-review, -interview ×3, -land ×2, -make-pr ×2, -map ×2, -memory-migrate ×2, -pilot ×2, -plan, -plan-review, -prime/workflow.md ×3-in-one-file, -prospect ×2, -qa ×2, -resolve-pr ×2, -spec-completion-review, -strategy, -sync, -tracker-sync, -visual, -work ×3, flow-next/SKILL.md).
+2. **Fix the nonstandard/broken sites:**
+   - `agents/worker.md:283` — carries rung 1 with NO fallback at all (latent bug); give it the full 3-rung chain.
+   - `skills/flow-next-tracker-sync/references/status-sync.md:57` — hardcodes `.flow/bin/flowctl` for BRANCH_NAME; use `$FLOWCTL`.
+   - `agents/docs-gap-scout.md:47` — hardcodes `.flow/bin/flowctl` then silently degrades to `find`; give it the chain.
+3. **Rewrite `rules/flow-next.mdc`** (Cursor rail, lines 8-14): replace the five `.flow/bin/flowctl` invocations and the "if `.flow/bin/flowctl` is not found run `/flow-next:setup`" remedy with the chain + "If `flowctl` is not found: run `/flow-next:setup`".
+4. **scripts/sync-codex.sh — make the mirror rung-2-aware (three sub-edits):**
+   - Fallback injector #1 (skill files, ~L272-304: equality test L287, trigger L292, inject L295) and injector #2 (agent bodies, ~L1785-1823: equality L1798, trigger L1802, inject L1812) both key on exact next-line equality with the OLD fallback string — with rung 2 inserted they inject a DUPLICATE `.flow/bin` rung into every mirrored file. Either make them scan the following block for the fallback literal, or delete them (the canonical text now carries rungs 2+3 which flow through the line-1 sed untouched). Verify by regenerating and grepping the mirror for duplicate fallback lines.
+   - The line-1 sed (env vars → `${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`) is unchanged; the mirror ships CODEX_HOME rung 1 + the same rung-2/rung-3 tail.
+   - Run `./scripts/sync-codex.sh` TWICE (idempotence) in the same commit; commit the regenerated `plugins/flow-next/codex/**` including `codex/agents/*.toml` (they have `.flow/bin` baked in at worker.toml:418, repo-scout.toml:30,45, quality-auditor.toml:208, docs-gap-scout.toml:47).
+5. **`plugins/flow-next/scripts/hooks/ralph-guard.py` ~L798-802**: the composition screen exempts the exact current preamble as "the standard preamble … NOT composition". Add rung 2 to that exemption or Ralph fails closed on every skill invocation. Its other `.flow/bin` mentions (docstrings/examples at 737, 752, 802, 1028, 1284, 1643) stay — the guard must keep recognizing legacy spellings.
+6. **`agent_docs/adding-skills.md` ~L102-131**: this is the preamble's contributor spec. Update the pattern to the 3-rung chain, rewrite L111's copy-mode caveat, and update L131's description of the sync-codex fallback interplay to match whatever step 4 did.
+7. **Explicitly unchanged:** `plugins/flow-next/bin/flowctl` (the plugin's own Claude Code PATH-injection launcher) and the review-prompt protected-path lists.
+
+**Test pins to retarget in the same commit (named; grep for more):**
+- `tests/test_guide_routing.py:130,134-138` — asserts BOTH preamble lines (line 1 split across two Python string literals — a naive sed won't match); add rung 2 to the assertion.
+- `tests/test_cursor_plugin_surface.py:249-253` `test_flowctl_resolved_via_flow_bin` — asserts `.flow/bin/flowctl` in flow-next.mdc; retarget to the new rail text (rename the test to match its new meaning).
+- `plugins/flow-next/scripts/map_smoke_test.sh:166` — asserts preamble line 1 only; verify still passes.
+- `tests/test_ralph_guard.py:1027` — composed-token fixture embedding line 1; verify against the step-5 exemption change.
+- Full suite green; capture exit codes directly (no piping to tail).
+
+**Live probe before done:** tmp repo with `.flow/` data and no `.flow/bin`; `cursor-agent -p "list my flow tasks"` resolves the installed plugin's flowctl and succeeds.
+
+**Touches:** plugins/flow-next/skills/**, plugins/flow-next/agents/**, plugins/flow-next/rules/**, plugins/flow-next/codex/** (regenerated), scripts/sync-codex.sh, plugins/flow-next/scripts/hooks/ralph-guard.py, agent_docs/adding-skills.md, plugins/flow-next/scripts/map_smoke_test.sh, plugins/flow-next/tests/**
 ## Acceptance
-- [ ] Every canonical preamble site carries the three-rung chain in order (env probe → skill-path derivation → `.flow/bin`), byte-identical wording across sites.
-- [ ] `status-sync.md:57` and `docs-gap-scout.md:47` no longer reference `.flow/bin/flowctl` without the chain.
-- [ ] `rules/flow-next.mdc` teaches the chain; no bare `.flow/bin/flowctl` remedy remains.
-- [ ] `scripts/sync-codex.sh` run; mirror regenerated in the same commit; SECTION3C heredoc checked (updated if §3c changed).
-- [ ] All test pins on edited literals retargeted in the same commit; full test suite green (exit code captured directly, not piped).
-- [ ] Live probe: in a tmp repo with `.flow/` data and no `.flow/bin`, `cursor-agent -p` "list my flow tasks" resolves the installed plugin's flowctl and succeeds.
+- [ ] All 49 standard sites + worker.md + quality-auditor's one-line form carry the three-rung chain, byte-identical rung-2 wording everywhere.
+- [ ] status-sync.md:57 and docs-gap-scout.md:47 use the chain; no bare `.flow/bin/flowctl` invocation remains outside protected-path lists and gate rules.
+- [ ] `rules/flow-next.mdc` teaches the chain; `test_cursor_plugin_surface` retargeted.
+- [ ] `./scripts/sync-codex.sh` runs clean TWICE; regenerated mirror greps show exactly one `.flow/bin` fallback line per preamble (no injector duplicates); codex/agents/*.toml regenerated.
+- [ ] ralph-guard's standard-preamble exemption covers the new rung (test_ralph_guard green, incl. the L1027 fixture).
+- [ ] `agent_docs/adding-skills.md` shows the new pattern + updated sync interplay.
+- [ ] test_guide_routing + map_smoke_test.sh pins retargeted; full suite green (exit codes captured directly).
+- [ ] Live probe: bin-less tmp repo, `cursor-agent -p "list my flow tasks"` resolves the installed plugin's flowctl.
 ## Done summary
 TBD
 
