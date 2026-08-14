@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-194-land-merge-identity-seam-server-side.md",
-  "status": "open",
+  "status": "done",
   "title": "land: merge-identity seam, server-side catch-up, tail persistence (#337, #342, #345)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T11:15:17.136504Z"
+  "updated_at": "2026-08-14T12:48:42.111539Z"
 }
