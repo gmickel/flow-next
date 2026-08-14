@@ -18,8 +18,11 @@ SRC_AGENTS="$PLUGIN_DIR/agents"
 # Mirror-regen only: env > baseline. The fn-115 role map is gone (fn-195) -
 # routing is a preference the user writes in their instruction file, not
 # config flowctl stores; env still wins for one-shot overrides.
-_SCOUT_INTELLIGENT_BASELINE="gpt-5.5"
-_SCOUT_FAST_BASELINE="gpt-5.4-mini"
+# These baselines ARE the shipped mirror truth (fn-195.5 review P1): a regen
+# with no env must reproduce the committed mirror byte-for-byte. Bump them
+# deliberately (with a CHANGELOG line), never by exporting env at sync time.
+_SCOUT_INTELLIGENT_BASELINE="gpt-5.6-terra"
+_SCOUT_FAST_BASELINE="gpt-5.6-luna"
 
 CODEX_MODEL_INTELLIGENT="${CODEX_MODEL_INTELLIGENT:-$_SCOUT_INTELLIGENT_BASELINE}"
 CODEX_MODEL_FAST="${CODEX_MODEL_FAST:-$_SCOUT_FAST_BASELINE}"

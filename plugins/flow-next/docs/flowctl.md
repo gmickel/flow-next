@@ -1041,8 +1041,8 @@ Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.
 
 | Backend form | Meaning |
 |--------------|---------|
-| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent pinned to a cross-family model via the AGENTS.md model-routing section — never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
-| `host:<model>` | **REJECTED.** Errors with a hint to set a caller-side pin in the AGENTS.md model-routing section instead (pins never ride the backend string). |
+| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent on a cross-family model resolved via the reviewer tier of the AGENTS.md model-routing block — never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
+| `host:<model>` | **REJECTED.** Errors with a hint to name the model on the `reviewer` tier of the AGENTS.md model-routing block instead (a model never rides the `host` backend string). |
 
 #### Model resolution (strongest-available, never-fail — fn-76)
 

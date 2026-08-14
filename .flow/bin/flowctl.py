@@ -8009,8 +8009,8 @@ class BackendSpec:
                 if backend == "host":
                     raise ValueError(
                         f"Backend 'host' does not accept a model "
-                        f"(got {model!r}). Pins live in the AGENTS.md "
-                        f"model-routing section (caller routing instructions), "
+                        f"(got {model!r}). Name the model on the `reviewer` tier of the "
+                        f"AGENTS.md model-routing block, "
                         f"not the backend string. Use bare `host`."
                     )
                 raise ValueError(
@@ -8035,8 +8035,8 @@ class BackendSpec:
                 if backend == "host":
                     raise ValueError(
                         f"Backend 'host' does not accept an effort "
-                        f"(got {effort!r}). Pins live in the AGENTS.md "
-                        f"model-routing section (caller routing instructions), "
+                        f"(got {effort!r}). Name the model on the `reviewer` tier of the "
+                        f"AGENTS.md model-routing block, "
                         f"not the backend string. Use bare `host`."
                     )
                 raise ValueError(
@@ -20412,8 +20412,8 @@ def cmd_config_set(args: argparse.Namespace) -> None:
         if _rb_first == "host" and ":" in args.value.strip():
             error_exit(
                 f"Backend 'host' does not accept a model/effort (got {args.value!r}). "
-                f"Pins live in the AGENTS.md model-routing section, not the backend "
-                f"string. Use: flowctl config set review.backend host",
+                f"Name the model on the `reviewer` tier of the AGENTS.md model-routing "
+                f"block, not the backend string. Use: flowctl config set review.backend host",
                 use_json=args.json,
             )
 

@@ -55,6 +55,20 @@ MODEL_SLUG_RE = re.compile(
     re.IGNORECASE,
 )
 
+# fn-195: the pin-ceremony strings that must never regrow. ONE tuple, shared by
+# the canonical and mirror assertions so the two can't drift (fn-195.5 review).
+PIN_CEREMONY_GONE = (
+    "MODELS_ASK",
+    "models.roles",
+    "models.verifiedAt",
+    "cursor-agent --list-models",
+    "codex accept-probe",
+    "SCOUT_PIN",
+    "REVIEW_PIN",
+    "references/model-pins.md",
+    "references/model-routing-",
+)
+
 # Budget: the block is always-loaded context in every future session of the
 # target repo (≤ ~45 lines including markers + provenance).
 LINE_BUDGET = 45
@@ -288,17 +302,7 @@ class WorkflowProseContract(unittest.TestCase):
             self.assertNotIn(gone, self.text, f"routing-question machinery regrew: {gone}")
 
     def test_pin_ceremony_cannot_regrow(self) -> None:
-        for gone in (
-            "MODELS_ASK",
-            "models.roles",
-            "models.verifiedAt",
-            "cursor-agent --list-models",
-            "codex accept-probe",
-            "SCOUT_PIN",
-            "REVIEW_PIN",
-            "references/model-pins.md",
-            "references/model-routing-",
-        ):
+        for gone in PIN_CEREMONY_GONE:
             self.assertNotIn(gone, self.text, f"pin ceremony regrew: {gone}")
 
     def test_retired_packaged_delegation_vocabulary_absent(self) -> None:
@@ -349,17 +353,7 @@ class MirrorRoutingProse(unittest.TestCase):
 
     def test_mirror_workflow_pin_ceremony_cannot_regrow(self) -> None:
         text = _read(self.workflow)
-        for gone in (
-            "MODELS_ASK",
-            "models.roles",
-            "models.verifiedAt",
-            "codex accept-probe",
-            "SCOUT_PIN",
-            "REVIEW_PIN",
-            "references/model-pins.md",
-            "references/model-routing-",
-            "work.delegate",
-        ):
+        for gone in PIN_CEREMONY_GONE + ("work.delegate",):
             self.assertNotIn(gone, text, f"pin ceremony regrew in the mirror: {gone}")
 
     def test_deleted_ceremony_references_are_gone_from_the_mirror(self) -> None:
@@ -376,3 +370,57 @@ class MirrorRoutingProse(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MirrorAgentFloors(unittest.TestCase):
+    """The regenerated Codex agent floors are reproducible from the generator.
+
+    fn-195.5 review P1: a mirror regen run without env overrides silently
+    downgraded 18 shipped agent floors and dropped 8 effort settings, because
+    sync-codex.sh's baselines had drifted from the committed mirror. The
+    baselines in sync-codex.sh ARE the shipped truth now; this pin fails the
+    moment the committed TOMLs and the generator disagree, whichever moved.
+    """
+
+    SYNC = REPO_ROOT / "scripts" / "sync-codex.sh"
+    CODEX_AGENTS = REPO_ROOT / "plugins" / "flow-next" / "codex" / "agents"
+    CANON_AGENTS = REPO_ROOT / "plugins" / "flow-next" / "agents"
+
+    def _baseline(self, name: str) -> str:
+        match = re.search(rf'{name}="([^"]+)"', self.SYNC.read_text(encoding="utf-8"))
+        assert match, f"{name} not found in sync-codex.sh"
+        return match.group(1)
+
+    def test_committed_floors_match_generator_baselines(self) -> None:
+        fast = self._baseline("_SCOUT_FAST_BASELINE")
+        intelligent = self._baseline("_SCOUT_INTELLIGENT_BASELINE")
+        alias_to_floor = {"haiku": fast, "sonnet": intelligent, "opus": intelligent}
+        checked = 0
+        for md in sorted(self.CANON_AGENTS.glob("*.md")):
+            match = re.search(r"^model:\s*(\S+)", md.read_text(encoding="utf-8"), re.M)
+            if not match or match.group(1) == "inherit":
+                continue
+            floor = alias_to_floor.get(match.group(1))
+            if floor is None:
+                continue
+            # claude-md-scout is renamed agents-md-scout on the Codex side
+            # (sync-codex.sh rename map).
+            stem = "agents-md-scout" if md.stem == "claude-md-scout" else md.stem
+            toml = self.CODEX_AGENTS / f"{stem}.toml"
+            self.assertTrue(toml.is_file(), f"mirror agent missing: {toml.name}")
+            text = toml.read_text(encoding="utf-8")
+            got = re.search(r'^model = "([^"]+)"', text, re.M)
+            self.assertIsNotNone(got, f"{toml.name}: no model floor")
+            self.assertEqual(
+                got.group(1), floor,
+                f"{toml.name}: floor {got.group(1)!r} != generator baseline "
+                f"{floor!r} — regen ran with env overrides or a baseline moved "
+                f"without a deliberate bump",
+            )
+            if "mini" not in floor and "spark" not in floor:
+                self.assertIn(
+                    'model_reasoning_effort = "', text,
+                    f"{toml.name}: reasoning effort dropped",
+                )
+            checked += 1
+        self.assertGreaterEqual(checked, 15, "pin lost its subjects — agent set shrank?")

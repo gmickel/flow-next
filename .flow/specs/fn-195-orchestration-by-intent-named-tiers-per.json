@@ -14,7 +14,8 @@
     "fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.2": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.3": 0,
-    "fn-195-orchestration-by-intent-named-tiers-per.4": 0
+    "fn-195-orchestration-by-intent-named-tiers-per.4": 0,
+    "fn-195-orchestration-by-intent-named-tiers-per.5": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -241,6 +242,32 @@
       "task": "fn-195-orchestration-by-intent-named-tiers-per.4",
       "timestamp": "2026-08-14T22:33:49.000852Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "9d7ddf1c4381e5389ae5291ba016aefb2ab1e3001e113d5794357ba87e893575",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e2517bdc2ef8d1658302378b269d3ebdd96a545f",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1523,
+      "output_sha256": "a7200195e3ce12c668977e46546ee7855738cfcb100422ab3240bcf806e5afe4",
+      "reservation_id": "333dbc9ddace47888280c95b4708b110",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.5",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.5",
+      "timestamp": "2026-08-14T23:24:16.841776Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -255,7 +282,8 @@
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 0,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 0,
-    "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 0
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 0,
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.5": 0
   },
   "spec_path": ".flow/specs/fn-195-orchestration-by-intent-named-tiers-per.md",
   "status": "open",
@@ -271,5 +299,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T22:33:49.529061Z"
+  "updated_at": "2026-08-14T23:24:17.334581Z"
 }
