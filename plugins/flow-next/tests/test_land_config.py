@@ -671,7 +671,11 @@ class CatchUpWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn("never passes `--rebase`", self.act)
 
     def test_non_zero_catch_up_routes_to_blocked(self) -> None:
-        self.assertIn('`CATCHUP_RC != 0` → verdict `BLOCKED`', self.act)
+        # PR #350 review: non-zero classifies from stderr - conflict ->
+        # BLOCKED, benign race/transient -> RESOLVING re-tick.
+        self.assertIn('`CATCHUP_RC != 0` → classify from `CATCHUP_ERR`', self.act)
+        self.assertIn('verdict `BLOCKED`', self.act)
+        self.assertIn('verdict `RESOLVING`, evidence line carries `CATCHUP_ERR`', self.act)
         self.assertIn("hand-resolution", self.act)
 
     def test_ledger_sources_new_head_from_the_api(self) -> None:
@@ -780,7 +784,9 @@ class PostMergeTailOrderStaticTestCase(unittest.TestCase):
         self.assertLess(self.tail.index("3. **Tracker touchpoint"), push)
         # Exactly one push line in the tail (`git push || { ... && git push; }`)
         # - the close and the sync state ride it together.
-        self.assertEqual(self.tail.count("git push"), 2)
+        # 3 mentions: the persist push, the pull-rebase retry, and the
+        # release-instructions ride-along note (PR #350 review).
+        self.assertEqual(self.tail.count("git push"), 3)
 
     def test_close_step_commits_without_pushing(self) -> None:
         close = self.tail[

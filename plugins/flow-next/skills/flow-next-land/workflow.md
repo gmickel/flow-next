@@ -125,7 +125,7 @@ Discovery outcomes per spec:
 - `OPEN_COUNT > 1`: two open PRs on one spec branch → `NEEDS_HUMAN` entry, no mutation.
 - `OPEN_COUNT == 1` AND a MERGED PR also exists for the branch: ambiguous reopened/re-pushed state → `NEEDS_HUMAN` entry, no mutation.
 - `OPEN_COUNT == 1`: babysit path → `PR_NUMBER="$(printf '%s\n' "$OPEN_PRS" | jq -r '.[0].number')"`, then the authorship check (below) → babysit candidate.
-- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec is merged-but-unclosed → `PR_NUMBER="$MERGED_PR_NUM"`, then the authorship check → **re-entry candidate** (resume the post-merge tail: close → tracker → release; never a second merge).
+- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec is merged-but-unclosed → `PR_NUMBER="$MERGED_PR_NUM"`, then the authorship check → **re-entry candidate** (resume the post-merge tail in its §3.5 order: close → release-follow → tracker → persist-push; never a second merge).
 - `OPEN_COUNT == 0` and no MERGED PR (no PR, or CLOSED-without-merge only): not land's work — skip silently (pilot owns the no-PR state; a closed-unmerged PR is human-rejected work land must not resurrect).
 
 **Authorship requires both signals before any mutation** — the branch match above **and** the make-pr breadcrumb in the PR body. A hand-opened PR on a spec branch that got auto-merged has broken this. **`PR_NUMBER` comes from the outcome branch above** (babysit: the single open PR's number; re-entry: `MERGED_PR_NUM`); a `PR_NUMBER` carried over from a prior loop iteration has broken this.
@@ -529,7 +529,7 @@ CATCHUP_ERR="$(gh pr update-branch "$PR_NUMBER" 2>&1 >/dev/null)" || CATCHUP_RC=
 
 One API call, no local checkout: GitHub merges `$BASE_REF` into the PR's head branch server-side (`gh pr update-branch` is merge-based by default — land never passes `--rebase`).
 
-- `CATCHUP_RC != 0` → verdict `BLOCKED`, reason `base merge conflicts need hand-resolution: <CATCHUP_ERR>`. GitHub refuses the update precisely when the merge would conflict, so the conflict verdict is the server's — land still never hand-resolves a hunk.
+- `CATCHUP_RC != 0` → classify from `CATCHUP_ERR`, mirroring §3.5's stderr split: a merge-conflict refusal (GitHub names the conflict) → verdict `BLOCKED`, reason `base merge conflicts need hand-resolution: <CATCHUP_ERR>` — the conflict verdict is the server's, land still never hand-resolves a hunk. Anything else (already up to date after a race, transient API/auth failure) → verdict `RESOLVING`, evidence line carries `CATCHUP_ERR`, the next tick re-reads `mergeStateStatus` and re-plans — a benign race classified `BLOCKED` would strand the PR behind a verdict no human needs to act on.
 - `CATCHUP_RC == 0` → run the canonical post-push ledger write from 3.1 step 4, sourcing the new head from `gh pr view "$PR_NUMBER" --json headRefOid` (no local checkout exists to read it from): `land_pushed_sha` = that `headRefOid`, `decision_at_push` = the Phase 2 `REVIEW_DECISION`. Verdict `RESOLVING` (the update advances the head, so the patience window restarts and the next tick re-gates).
 
 The worktree never moves in this path — no `gh pr checkout`, no branch restore, nothing to assert clean afterwards.
@@ -703,11 +703,21 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    git push || { git pull --rebase && git push; }
    ```
 
-   If the push STILL fails, ROLL BACK exactly what this step failed to persist — the tail's local `.flow` commits — so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail):
+   Release instructions discovered in step 2 may run their own `git push`
+   (this repo's releasing.md does): that push carries the pending close
+   commit along - fine on a pushable base (the persist becomes a no-op;
+   verify with `git status -sb` before pushing again), and on a
+   pull-request-only base it is refused exactly like this one.
+
+   If the push STILL fails, ROLL BACK exactly what this step failed to persist — the tail's local `.flow` commits — so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail). **Guard first**: the rollback may run ONLY when every commit after `$TAIL_BASE_OID` is one of the tail's own file-scoped `.flow` commits — when release-follow committed anything (a version bump, a changelog roll) on top, do NOT reset; leave the tree as it stands and report `NEEDS_HUMAN` with reason `close + release commits unpushed` instead. A reset that dropped a release commit has broken this:
 
    ```bash
-   git rebase --abort 2>/dev/null || true
-   git reset --hard "$TAIL_BASE_OID"   # the pre-tail base tip; safe — every commit dropped was staged file-scoped and carries ONLY this spec's close/sync state
+   if git log --format=%s "$TAIL_BASE_OID"..HEAD | grep -vq "^chore(flow):"; then
+     echo "Evidence: non-tail commits since TAIL_BASE_OID - leaving tree intact"
+   else
+     git rebase --abort 2>/dev/null || true
+     git reset --hard "$TAIL_BASE_OID"   # the pre-tail base tip; safe — every commit dropped was staged file-scoped and carries ONLY this spec's close/sync state
+   fi
    ```
 
    Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`. **The rollback is scoped to THIS step and skips NOTHING else** — the merge, release-follow, and the tracker touchpoint already ran and stand; on a pull-request-only base the residue is a cosmetic bookkeeping note, not a stalled lifecycle. Re-ticking after a refused persist is safe by construction: `spec close` succeeds idempotently, release-follow's idempotency probe (step 2) resumes past completed steps and never re-tags, and every verdict comment starts with the stable merge identity `evidence=<merge-commit-sha>` (step 3), so a repeat touchpoint for the same merge deduplicates.
