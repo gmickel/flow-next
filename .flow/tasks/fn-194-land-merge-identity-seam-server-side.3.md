@@ -10,9 +10,8 @@ R3 in the land skill. Reorder §3.5's post-merge tail (~:580-673): 1 spec close 
 R3 met; ordering pinned; conduct line added; a persist refusal demonstrably (by prose + pins) cannot skip release/tracker; sync-codex idempotent.
 
 ## Done summary
-TBD
-
+Post-merge tail reordered: close (local commit) -> release-follow -> tracker touchpoint -> one persist-push carrying both .flow commits, rollback scoped to the persist via the recorded pre-tail base tip - a refused push yields only the bookkeeping NEEDS_HUMAN; merge/release/tracker stand. Re-tick safety stated inline (MERGED probe, comment dedupe, release idempotency). §3.6 + SKILL summary (which was already stale) + conduct line updated. 8 ordering pins, 96 tests green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2d3f4a0e
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_skill_prose_diet -q
 - PRs:

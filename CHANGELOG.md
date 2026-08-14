@@ -4,6 +4,40 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Autonomous merges get three long-requested capabilities, and land loses its
+most dangerous power. A repo whose branch protection excludes the tick's
+human identity can now hand just the merge to an App or bot
+(`FLOW_PR_MERGE_CMD`, the merge-side counterpart of 3.11.0's
+`FLOW_PR_CREATE_CMD`). A PR that fell behind its base catches up server-side
+- land never rebases and never force-pushes again, which also removes the
+CAUSE of orphaned evidence commits that 3.26.0 could only detect. And a base
+that requires pull requests no longer breaks the post-merge lifecycle: the
+board update and the release run before the one push that can fail. Fixes
+#337, #342, and the lifecycle half of #345 - thanks @sn-furali for all
+three, each verified claim-by-claim.
+
+### Added
+
+- **`FLOW_PR_MERGE_CMD`** - env-only (deliberately never a `land.*` key: the
+  §2.9 trust guard exists because config-sourced command strings are
+  PR-author-influenceable; session env is not), with a STABLE contract:
+  fixed argument order, stderr proxied verbatim (the RESOLVING/BLOCKED split
+  reads gh's head-mismatch text), never `--auto`, merge-call-only scope.
+
+### Changed
+
+- **The `rebase` action class is now `catch-up`, and it is server-side.**
+  One `gh pr update-branch` call replaces checkout + rebase +
+  force-push; GitHub's own conflict refusal is the BLOCKED verdict; commit
+  SHAs survive, so recorded evidence stays reachable. BEHIND and DIRTY both
+  route here. §2.6/§2.7 evaluation order under `reviewSignal: approve` is
+  now stated explicitly (the stale-approval detector is reachable; the
+  durable label is what breaks the dismissal loop).
+- **Post-merge tail: close -> release-follow -> tracker -> persist-push.**
+  A refused push to a PR-only base now costs a bookkeeping note instead of
+  a stuck board and a skipped release. The close-PR route (#345's part B)
+  is deliberately held pending residual need.
+
 When a permissions problem breaks tracker sync, you now find out in
 milliseconds with the actual cause - the path, the errno, and what to fix -
 instead of waiting out a 10-second stall and being told a phantom "holder
