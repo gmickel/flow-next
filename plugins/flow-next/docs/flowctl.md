@@ -390,15 +390,15 @@ flowctl spec rm-dep  fn-2 fn-1 [--json]   # remove the dependency
 Set default backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
 
 ```bash
-flowctl spec set-backend fn-1 --impl codex:gpt-5.4 [--json]
-flowctl spec set-backend fn-1 --impl codex:gpt-5.4-high --review claude:opus [--json]
+flowctl spec set-backend fn-1 --impl codex:<model> [--json]
+flowctl spec set-backend fn-1 --impl codex:<model> --review claude:<model> [--json]
 flowctl spec set-backend fn-1 --impl "" [--json]  # Clear impl (inherit from config)
 ```
 
 Options:
-- `--impl SPEC`: Default impl backend (e.g., `codex:gpt-5.4-high`, `claude:opus`)
-- `--review SPEC`: Default review backend (e.g., `claude:opus`, `agent:opus-4.5-thinking`)
-- `--sync SPEC`: Default sync backend (e.g., `claude:haiku`, `gemini:gemini-2.5-flash`)
+- `--impl SPEC`: Default impl backend (e.g., `codex:<model>`, `claude:<model>`)
+- `--review SPEC`: Default review backend (e.g., `claude:<model>`, `agent:<model>`)
+- `--sync SPEC`: Default sync backend (e.g., `claude:<model>`, `gemini:<model>`)
 
 Format: `backend:model` where backend is a CLI name and model is backend-specific.
 
@@ -554,15 +554,15 @@ Use `--cascade` to also reset dependent tasks within the same spec.
 Set backend specs for impl/review/sync workers. Used by orchestration products (e.g., flow-swarm).
 
 ```bash
-flowctl task set-backend fn-1.1 --impl codex:gpt-5.4-high [--json]
-flowctl task set-backend fn-1.1 --impl codex:gpt-5.4-high --review claude:opus [--json]
+flowctl task set-backend fn-1.1 --impl codex:<model> [--json]
+flowctl task set-backend fn-1.1 --impl codex:<model> --review claude:<model> [--json]
 flowctl task set-backend fn-1.1 --impl "" [--json]  # Clear impl (inherit from spec/config)
 ```
 
 Options:
-- `--impl SPEC`: Impl backend (e.g., `codex:gpt-5.4-high`, `claude:opus`)
-- `--review SPEC`: Review backend (e.g., `claude:opus`, `agent:opus-4.5-thinking`)
-- `--sync SPEC`: Sync backend (e.g., `claude:haiku`, `gemini:gemini-2.5-flash`)
+- `--impl SPEC`: Impl backend (e.g., `codex:<model>`, `claude:<model>`)
+- `--review SPEC`: Review backend (e.g., `claude:<model>`, `agent:<model>`)
+- `--sync SPEC`: Sync backend (e.g., `claude:<model>`, `gemini:<model>`)
 
 Format: `backend:model` where backend is a CLI name and model is backend-specific.
 
@@ -980,9 +980,6 @@ flowctl config set memory.enabled false [--json]
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. Strict enum: invalid CLI writes are rejected, and malformed persisted values return runtime `INVALID_INPUT` before status claims or lifecycle sequence work. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
 | `tracker.readyState` | string | `null` | **Readiness projection (fn-58, 1.12.0+).** The tracker workflow state that means "ready for work" — a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready — a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag — **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
-| `models.roles.<role>.<backend>` | string | (none) | **Role-map pin (fn-115).** Semantic jobs, not call-site pins. Roles: `fastJudge`, `review`, `scoutFast`, `scoutIntelligent`. Backends: `codex`, `copilot`, `cursor`. Value is `model` or `model:effort`. Schema-validated on `config set` (unknown role/backend rejected with the valid list). Feeds triage judge, review dispatch defaults, and sync-codex scout pins (mirror-regen only). |
-| `models.verifiedAt` | string (ISO date) | (none) | Stamp written by `/flow-next:setup` after the model-pin refresh ceremony. When older than ~90 days, `flowctl status` / setup print one line (never blocks). Absent = no nudge (fresh repos stay quiet). |
-| `models.verifiedWith` | mixed | (none) | Optional free-form record of CLI versions probed during the refresh ceremony. |
 | `land.release` | bool | `true` | **`/flow-next:land` (fn-60, 1.14.0+).** Run the post-merge release-follow step (the project's own release docs; also no-ops when no release docs are discovered). `false` = stop at merge. |
 | `land.patienceMinutes` | int | `30` | Land's reviewer patience window, anchored to the LAST push (a land-authored CI-fix push restarts it). |
 | `land.reviewSignal` | string | `silence` | Land's merge review-signal: `silence` (automated review present + zero unresolved threads + window elapsed), `approve` (formal `reviewDecision == APPROVED`), or a GitHub login (that reviewer's latest review must be clean). |
@@ -1004,37 +1001,6 @@ flowctl config set memory.enabled false [--json]
 Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` > error.
 
 No auto-detect. Run `/flow-next:setup` (or `flowctl config set review.backend ...`) to configure.
-
-### models resolve
-
-Read-only role-map lookup (fn-115). Pure map + precedence via the existing resolvers; no probing, no ranking, no LLM. Skills read a role pin through this command rather than `config get`, so the role map — not a merged config default — is the answer.
-
-```bash
-flowctl models resolve <role> [--backend <codex|copilot|cursor>] [--json]
-```
-
-Roles: `fastJudge` | `review` | `scoutFast` | `scoutIntelligent`. Default backend is `codex`.
-
-Resolution order (extends fn-76):
-
-1. Role-specific overrides (CLI/env for the consumers that have one)
-2. Env when the role has one (`FLOW_<BACKEND>_MODEL` for review; `CODEX_MODEL_FAST` / `CODEX_MODEL_INTELLIGENT` for scouts)
-3. Config role map `models.roles.<role>.<backend>`
-4. Registry / role baseline (`fastJudge` / review defaults; scouts have no flowctl baseline: empty model + `source: baseline` when unset; `sync-codex.sh` keeps its own baseline constants)
-
-Text mode prints the bare model id (empty when none). JSON:
-
-```json
-{"success": true, "role": "fastJudge", "backend": "codex", "model": "gpt-5.6-terra", "effort": null, "source": "baseline"}
-```
-
-`source` ∈ `env` | `role-map` | `config` | `baseline` (and `explicit` when a caller override is wired through the same resolvers).
-
-Skill callsite:
-
-```bash
-JUDGE_MODEL="$($FLOWCTL models resolve fastJudge --json | jq -r '.model')"
-```
 
 ### review-backend
 
@@ -1085,7 +1051,7 @@ When a review runs **without an explicit model** (unconfigured `codex` / `copilo
 - **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-5.6-sol`, `copilot` → `gpt-5.5`, `cursor` → `gpt-5.6-sol-high`). The ranking is a *preference*, never a parse-time gate — an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
 - **Happy path (zero overhead).** The top model dispatches directly — no probe, no list call, no extra subprocess. On a current CLI where the default just works, the argv is byte-identical to a hardcoded default.
 - **Fallback ladder (failure only).** If — and only if — that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails — codex omits `--model`, copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged — the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
-- **Cache.** The resolved fallback is memoized per **`(backend, CLI version, effective routing intent)`** in `.flow/.cache/model-resolution.json` (locked atomic write, gitignored). Changing a role-map pin or the registry ladder changes the intent and forces a fresh resolution even when the requested model name happens to match the old default. Downgrade/floor entries expire after 24 hours so newly available stronger models are re-probed without requiring a CLI upgrade. A corrupt, missing, legacy, or expired entry is a cold start, never an error; concurrent mutations preserve unrelated entries; explicit models bypass the cache entirely.
+- **Cache.** The resolved fallback is memoized per **`(backend, CLI version, effective routing intent)`** in `.flow/.cache/model-resolution.json` (locked atomic write, gitignored). Changing the registry ladder or the requested routing intent forces a fresh resolution even when the requested model name happens to match the old default. Downgrade/floor entries expire after 24 hours so newly available stronger models are re-probed without requiring a CLI upgrade. A corrupt, missing, legacy, or expired entry is a cold start, never an error; concurrent mutations preserve unrelated entries; explicit models bypass the cache entirely.
 - **Hygiene.** A downgrade or floor emits **one** stderr warning naming what was tried and what ran; the receipt records the model **actually used** (else `"auto"` / `"default"`), never a fabricated name.
 
 Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `review` > env > config) are byte-identical to before — no probing, no cache, no retry-downgrade; an explicit unavailable model errors clearly.
@@ -2226,7 +2192,7 @@ Spec form: `copilot[:model[:effort]]`. Default model resolved via env (`FLOW_COP
 
 ### cursor
 
-Cursor `cursor-agent` CLI wrappers — alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and Cursor reviewer models the others can't reach in one place: `gpt-5.6-sol-high` (1M ctx, the default since 2.10.3 — verified live via `--list-models`), the `gpt-5.6-terra`/`gpt-5.6-luna` variants, `gpt-5.5-high`, the `gpt-5.3-codex` family, `composer-2.5`, `claude-opus-5-thinking-high`, `claude-opus-4-8-thinking-high`.
+Cursor `cursor-agent` CLI wrappers — alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and reviewer models from families the other backends can't reach in one place — ask `cursor-agent --list-models` for the current set rather than copying identifiers from here.
 
 ```bash
 # Implementation review

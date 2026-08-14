@@ -81,8 +81,8 @@ The two compose: parameters set the floor, prompting steers above it. And either
 
 The table above is really two layers with a clean seam, and knowing which layer you are talking to answers most "will this override that?" questions:
 
-- **Session steering** — your prompts and per-task pins. Top of the precedence chain, ephemeral, done the moment the task is done. Saying *"implement via grok-4.6 and review with sol"* just works: the agent runs the grok bridge for the draft and pins sol for the review, and **nothing persists afterward** — pins and defaults resume untouched. Your `CLAUDE.md` routing prose lives in this layer too: deterministic plumbing never reads prose, but the *agent* reads it every turn and feeds explicit values downward, so a `CLAUDE.md` pipeline dominates everything the agent orchestrates by occupying the higher-precedence rung — not by editing config.
-- **Machinery steering** — config resolved by deterministic plumbing that never reads prose: `review.backend`, the `models.roles` role map. This is what autonomous loops (pilot, Ralph, land ticks) and unattended gates use when nobody is prompting. Standing changes for autonomous runs belong here, not in prose.
+- **Session steering** — your prompts and per-task pins. Top of the precedence chain, ephemeral, done the moment the task is done. Naming a model for a tier in the moment — *"implement via that CLI and review with the other family"* — just works: the agent runs the bridge for the draft and pins the named reviewer, and **nothing persists afterward** — pins and defaults resume untouched. Your `CLAUDE.md` routing prose lives in this layer too: deterministic plumbing never reads prose, but the *agent* reads it every turn and feeds explicit values downward, so a `CLAUDE.md` pipeline dominates everything the agent orchestrates by occupying the higher-precedence rung — not by editing config.
+- **Machinery steering** — config resolved by deterministic plumbing that never reads prose: `review.backend` and the per-spec/per-task backend fields. This is what autonomous loops (pilot, Ralph, land ticks) and unattended gates use when nobody is prompting. Standing changes for autonomous runs belong here, not in prose.
 
 For the models that execute stages, the chain is the one stated above: **routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** The review backend resolves separately, through its own configuration grammar — see [Review backends](#review-backends--cross-model-review) for that chain; the tiers above never touch it. One consequence worth spelling out: a prompt can steer only the session it is typed in — if you want pilot ticks at 3am to use a different reviewer, that is a config change (`flowctl config set review.backend ...`), because at 3am there is no prompt.
 
@@ -94,42 +94,20 @@ You pick it in your harness (e.g. `/model`). The host owns everything that requi
 
 ### Agent defaults — the floor
 
-Bundled agents carry a model field grouped by task shape (see `agents/*.md` frontmatter). These are **defaults**, not pins: they are the third rung of the routing precedence, so an explicit argument or your routing block overrides them, and a repo with neither behaves exactly as shipped.
+Bundled agents carry a model field grouped by task shape — the family alias in each agent's own frontmatter is the source of truth (`agents/*.md`). These are **defaults**, not pins: they are the third rung of the routing precedence, so an explicit argument or your routing block overrides them, and a repo with neither behaves exactly as shipped.
 
 | Agent group | Agents | Why |
 |------|--------|-----|
-| fast (`haiku`) | prime's pillar scanners (build/env/security/testing/tooling/workflow/observability) + memory-scout | mechanical scan-and-report |
-| judgment (`sonnet`) | planning scouts (repo/context/spec/docs/github/practice, …), flow-gap-analyst, plan-sync | read-and-judge, bounded scope |
-| heavy (`opus`) | quality-auditor | adversarial audit |
+| fast | prime's pillar scanners (build/env/security/testing/tooling/workflow/observability) + memory-scout | mechanical scan-and-report |
+| judgment | planning scouts (repo/context/spec/docs/github/practice, …), flow-gap-analyst, plan-sync | read-and-judge, bounded scope |
+| heavy | quality-auditor | adversarial audit |
 | `inherit` | worker, pr-comment-resolver | implementation follows the session model |
 
-The Codex mirror maps these to `gpt-5.5` / `gpt-5.4-mini` at sync time (`scripts/sync-codex.sh` `map_model`). Precedence at regen: env (`CODEX_MODEL_INTELLIGENT` / `CODEX_MODEL_FAST`) > role-map pins (`models.roles.scoutIntelligent.codex` / `scoutFast.codex` when present in the repo `.flow/config.json`) > those baselines. The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`, recommended `gpt-5.6-terra` @ `medium`) lets Codex-host work threads ride the efficient tier. Details: [`platforms.md`](platforms.md).
+The Codex mirror maps these groups to that host's own tiers at sync time (`scripts/sync-codex.sh` `map_model`); the sync-time environment overrides them. The worker keeps `inherit` on both platforms (your session model rules); an OPT-IN sync-time pin lets Codex-host work threads ride a cheaper tier. Details: [`platforms.md`](platforms.md).
 
-**Cursor host:** canonical `agents/*.md` family aliases (`haiku` / `sonnet` / `opus`) resolve to **inherit** (the session model) when running on a Cursor host. Caller-side model pins (Cursor slugs like `claude-opus-4-8-thinking-high`) are the escape hatch for picking a specific model. There is no alias-to-slug rewrite mechanism and none is planned.
+**Cursor host:** canonical `agents/*.md` family aliases resolve to **inherit** (the session model) when running on a Cursor host. Caller-side model pins in the dispatch itself are the escape hatch for picking a specific model. There is no alias-to-slug rewrite mechanism and none is planned.
 
-### Role map: the one place pins rot (fn-115)
-
-Hardcoded model pins used to scatter across the registry, triage defaults, and sync-codex scout constants. They all rot as providers ship tiers. The **role map** is the single config surface that is allowed to hold those pins:
-
-```bash
-flowctl config set models.roles.fastJudge.codex gpt-5.6-luna
-flowctl config set models.roles.review.codex gpt-5.6-sol:medium
-flowctl config set models.roles.scoutFast.codex gpt-5.6-luna
-flowctl config set models.roles.scoutIntelligent.codex gpt-5.5
-flowctl config set models.verifiedAt 2026-07-21
-```
-
-Roles name **jobs** (`fastJudge` / `review` / `scoutFast` / `scoutIntelligent`), not call sites. Resolution order extends the existing review precedence: explicit CLI / per-task pin > env > role map > registry baseline. Registry ladders stay as availability fallbacks (they heal pin-too-new); the role map heals pin-too-old.
-
-**Refresh path is the setup ceremony**, not Python judgment. `/flow-next:setup` probes installed CLIs, the host agent judges which tiers fit each role, proposes Accept / Stamp-only / Skip, and writes accepted pins + `models.verifiedAt`. When `verifiedAt` is older than ~90 days, `flowctl status` prints one non-blocking line. Skills resolve pins with:
-
-```bash
-flowctl models resolve <role> [--backend codex] [--json]
-```
-
-Read a role pin through `models resolve`, never `config get`: a merged config default bypasses the role map.
-
-**Known Codex limitation (Jul 2026):** on GPT-5.6 Sol / Multi-Agent V2 builds, per-spawn model steering is unreliable end to end - `spawn_agent` stripped `model`/`reasoning_effort`/`agent_type` from its schema (openai/codex#31814, partially restored by #32749; `agent_type` still missing per #32782), explicit overrides are silently dropped when the agent carries a role layer (#33268), and role-profile application is not verifiable (#33314). Until those settle, the ROBUST way to steer a different model from a Codex host is the **same-family self-bridge**: `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<self-contained prompt>"` - a fresh process taking `-m` on the command line, immune to the spawn_agent path entirely. Caveats: the child needs process-spawn + network inside the parent sandbox, and keep the child prompt flat (a child that spawns MAv2 subagents of its own can return undecodable results, #33267).
+**Per-host reach — including which hosts cannot honor an agent's model field, and what the degradation is — lives in [`reach/`](reach/README.md), one page per harness.**
 
 ### Review backends — cross-model review
 
@@ -139,12 +117,12 @@ The review subsystem is the most routable surface. Spec grammar `backend[:model[
 
 ```bash
 flowctl config set review.backend codex                    # project default
-flowctl config set review.backend cursor:composer-2.5     # cursor folds effort into the model name
-flowctl config set review.backend codex:gpt-5.4:xhigh     # explicit model + effort
+flowctl config set review.backend cursor:<model>          # cursor folds effort into the model name
+flowctl config set review.backend codex:<model>:xhigh     # explicit model + effort
 flowctl config set review.maxIterations 6                 # review-round cap (env MAX_REVIEW_ITERATIONS wins; >= 1, human-only under Ralph)
 ```
 
-Precedence (highest wins): per-task `review:` / per-spec `default_review` → `FLOW_REVIEW_BACKEND` → `.flow/config.json` `review.backend` → backend-specific env → registry default. A single task can pin a different reviewer than the project default and the override routes end-to-end. The `cursor` backend unlocks reviewer models the others can't reach in one place (`gpt-5.6-sol-high` at 1M context — the default, `gpt-5.6-terra`/`-luna`, `grok-4.6-high` / `grok-4.5-high` (fast cross-family pass), `composer-2.5`, the `gpt-5.3-codex` family, `claude-opus-5-thinking-high`, `claude-opus-4-8-thinking-high`) on your existing Cursor subscription. Full grammar + registry: [`flowctl.md`](flowctl.md#review-backend).
+Precedence (highest wins): per-task `review:` / per-spec `default_review` → `FLOW_REVIEW_BACKEND` → `.flow/config.json` `review.backend` → backend-specific env → registry default. A single task can pin a different reviewer than the project default and the override routes end-to-end. The `cursor` backend reaches reviewer models from several families in one place, on your existing Cursor subscription — ask its CLI for the current list rather than copying identifiers from a document. Full grammar + registry: [`flowctl.md`](flowctl.md#review-backend).
 
 **The review prompt carries identities, not payloads (fn-169).** A reviewer runs
 in your checkout with a shell, so it is an executor like any other agent: flow-next
@@ -194,8 +172,8 @@ On both backends flow-next prepends an explicit **persona-override preamble** on
 Offloading the token-heavy part (writing code) to a second CLI is a **routing decision you write, not a subsystem you configure**. There is no packaged delegation mode and no `work.delegate*` config: you drive the other CLI through a headless bridge, either ad hoc in the session or as standing policy in `CLAUDE.md` / `AGENTS.md`.
 
 ```bash
-codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<self-contained prompt>"
-cursor-agent --model <slug> --force "<self-contained prompt>"
+codex exec -m <model> -c model_reasoning_effort=<effort> "<self-contained prompt>"
+cursor-agent --model <model> --force "<self-contained prompt>"
 claude -p "<self-contained prompt>"     # the same bridge in reverse, from a Codex/Cursor host
 ```
 
@@ -208,7 +186,7 @@ Full recipes (including the thin-wrapper pattern for unattended loops): the usag
 
 ### Per-spec backend fields — external orchestrators
 
-The data model carries routing even where flow-next itself doesn't consume it: `flowctl spec set-backend fn-1 --impl codex:gpt-5.4 --review claude:opus --sync claude:haiku` sets per-spec impl/review/sync backend specs for orchestration products built on top of flow-next (e.g. control planes that dispatch one CLI per spec). See [`flowctl.md`](flowctl.md#spec-set-backend).
+The data model carries routing even where flow-next itself doesn't consume it: `flowctl spec set-backend fn-1 --impl codex:<model> --review claude:<model> --sync claude:<model>` sets per-spec impl/review/sync backend specs for orchestration products built on top of flow-next (e.g. control planes that dispatch one CLI per spec). See [`flowctl.md`](flowctl.md#spec-set-backend).
 
 ## Prompted orchestration — routing with judgment
 
@@ -239,7 +217,7 @@ review comes back NEEDS_WORK twice, stop bridging that task and implement it
 yourself on the session model.
 ```
 
-**Prompting a capability into existence** — the registry has no `fable` review backend; that didn't stop this repo's own eval loop from running Fable-reviewed rounds:
+**Prompting a capability into existence** — no registry entry exists for a session-model reviewer; that didn't stop this repo's own loop from running fresh-context, session-model-reviewed rounds:
 
 ```text
 /flow-next:plan-review fn-12 — don't use the configured backend; spawn a
@@ -247,7 +225,7 @@ fresh-context subagent on the session model with the same review criteria,
 and feed its verdict into the fix loop like any other reviewer.
 ```
 
-Backends, reviewers, and bridged implementers are prompts plus plumbing — when a rung you want is missing, describe it and the host builds the arrangement on the spot. The deterministic flags (`--review=cursor:composer-2.5`, `--depth=short`) still work inline for the parts that *are* parameterized; prompting composes around them.
+Backends, reviewers, and bridged implementers are prompts plus plumbing — when a rung you want is missing, describe it and the host builds the arrangement on the spot. The deterministic flags (`--review=<backend>`, `--depth=short`) still work inline for the parts that *are* parameterized; prompting composes around them.
 
 ## Field patterns, mapped to flow-next
 
@@ -255,41 +233,34 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 
 | Pattern from the field | The idea | flow-next expression |
 |------------------------|----------|----------------------|
-| **Orchestrator → executor** | The frontier model plans and judges; a cheaper, highly steerable model (GPT-5.5 via the Codex CLI, on the sub you already pay for) writes the code | A `codex exec` bridge recipe, ad hoc or as standing prose in `CLAUDE.md`. Host keeps gating/git/review; the bridged child writes code |
+| **Orchestrator → executor** | The frontier model plans and judges; a cheaper, highly steerable model (the implementer tier, on a subscription you already pay for) writes the code | A `codex exec` bridge recipe, ad hoc or as standing prose in `CLAUDE.md`. Host keeps gating/git/review; the bridged child writes code |
 | **Orchestrator → reader** | Token-hungry, low-judgment reads (codebase analysis, doc sweeps) run on fast models that report summaries back — the orchestrator never holds the raw tokens | Already the default: planning scouts and prime scanners run on the fast tiers and return digests. Add `/flow-next:map` for token-efficient exploration |
-| **Cross-family reviewer** | The model that writes is never the model that reviews — uncorrelated blind spots | `review.backend codex` / `cursor:composer-2.5` / `copilot:...` — per-task `review:` pins exceptions |
+| **Cross-family reviewer** | The model that writes is never the model that reviews — uncorrelated blind spots | `review.backend <backend>` — per-task `review:` pins exceptions |
 | **Effort discipline** | Run the orchestrator at high, not max — top effort tiers are token furnaces with flat-or-worse output on routine work | Session effort is yours; a bridged child takes its effort inline (`-c model_reasoning_effort=medium` is the recommended floor — raise it for gnarly tasks) |
 | **Token-hungry offload** | Computer use, live-app verification, bulk analysis go to other models/agents; results come back as evidence | `/flow-next:qa` drives the app in its own context and files P0/P1/P2 findings; workers run fresh-context and return receipts |
 
-## A proven default pipeline
+## A default pipeline, expressed as tiers
 
-One controlled pipeline eval (2026-07-14: a hidden 39-check oracle suite for the work stage, a planted-bug review eval at n=3 reps per arm with matched reasoning efforts, dual cross-family blind judges for plans) produced a concrete default routing. It is one task's worth of evidence - motivation, not a guarantee - but it is the shape this repo now runs.
+The routing this repo runs, stated in [tier](#tiers--what-kind-of-model-a-job-wants) terms. It names no model identifiers on purpose: which model fills a tier is a property of your account and your harness, and only you can name it.
 
-The roles are **model-per-role, not host-relative**: the bridges run in both directions (`codex exec` reaches GPT from a Claude host, `claude -p` reaches Claude from a Codex host), so the recommended model for each role is the same everywhere - only the *reach mechanism* differs by host.
+| Stage | Tier | Why |
+|---|---|---|
+| Plan (capture / interview / plan / plan-review critique) | unset — the session model | Spec authoring is inline and judgment-heavy; this is the never-delegate-judgment default |
+| Plan-review | reviewer, from a different family than the planner | Uncorrelated blind spots on the highest-leverage artifact |
+| Work (implementation) | implementer | Well-specified work runs correctly on a cheaper or faster tier; the saving is real only when the spec is clear |
+| Impl-review, first pass | reviewer, measured from the **writer** — not the host | A reviewer from the family that wrote the diff re-correlates the blind spots |
+| Impl-review, final gate | unset — the session model | The verdict, the severity call, and the blast-radius judgment stay with the conductor |
 
-Model-generation note (2026-07-24, effort pin added 2026-07-25): Claude Opus 5 shipped after this eval - near-Fable intelligence at half the price, same $5/$25 pricing as Opus 4.8. On Claude-family hosts it is now the recommended tier for the "session frontier model" rows below (Plan, final gate), with Fable 5 as the escalation rung rather than the default. Run Opus 5 at MEDIUM effort: its own model card's FrontierCode curve peaks at medium and degrades through high/xhigh (Fig 8.4.A/B), and a full opus-5@medium-conducted pilot-to-land run on this repo (fn-122, 2026-07-25) chained cleanly end to end. The eval numbers stay attributed to the models actually measured.
+Notes that keep this honest:
 
-| Role | Model | Why | Reach from a Claude Code host | Reach from a Codex host |
-|------|-------|-----|-------------------------------|-------------------------|
-| Plan (spec authoring: capture / interview / plan / plan-review critique) | Session frontier model | Two cross-family blind judges ranked frontier plans clearly ahead; raising effort on a weaker planner did not close the gap | Session-native | Session-native * |
-| Plan-review | Cross-family frontier | Uncorrelated blind spots on the highest-leverage artifact | `--review=codex` / `review.backend codex` | `review.backend` to a non-GPT family (e.g. `cursor:...`) |
-| Work (implementation) | `gpt-5.6-terra` @ `medium` | Matched `gpt-5.6-sol` on hidden-suite correctness at ~2/3 wall-clock on frontier-authored specs; effort above medium was pure overhead | `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium` bridge; session model natively | the same self-bridge (robust today); session model natively; opt-in sync-time pin `CODEX_MODEL_WORKER=gpt-5.6-terra` once MAv2 profile application is trustworthy |
-| Impl-review, first pass | Cross-family from the writer - `gpt-5.6-sol` @ `high` when the writer is Claude-family | 12/12 recall on planted bugs, 0 false positives, fastest reviewer in the fleet (103s mean) | `review.backend codex` (pin `codex:gpt-5.6-sol:high`) - the session writes, sol reviews; no codex CLI? `cursor:gpt-5.6-sol-high` reaches sol through cursor | The worker writes GPT (terra), so sol would be SAME-family: route the first pass to a non-GPT reviewer instead - packaged rungs `review.backend copilot:claude-opus-4.5` / `cursor:claude-opus-5-thinking-high` (or `cursor:claude-opus-4-8-thinking-high`; cursor also carries `claude-fable-5-thinking-high` — NO ZDR — and, for the reverse direction, `gpt-5.6-sol-high`), or Claude Code ad hoc via the `claude -p` reverse bridge (no packaged rung; prefer opus/sonnet targets - fable via `claude -p` can hit CLI credit limits) |
-| Impl-review, final gate | Session frontier model | Only the frontier tier volunteered correct severity tiering and blast-radius judgment unprompted | Session-native (the host interprets the verdict; escalate disagreements to it) | Session-native |
-
-\* Spec authoring is **session-native by design** — capture, interview, and plan are inline skills, so the session model is who writes and refines every spec - there is no packaged cross-family plan rung. Ad-hoc bridging works (`claude -p` can author a plan from a Codex host) but frontier-Claude via `claude -p` can hit CLI credit limits on plan-sized prompts (observed 2026-07-14); plan on whatever frontier model your session runs.
-
-Notes that keep the table honest:
-
-- **Single subscription? The table still reads correctly.** Most orgs run ONE harness subscription. Every row degrades to "the session model" and the pipeline works exactly as shipped - multi-model routing is optional garnish, never a prerequisite.
-- **`gpt-5.6-luna` @ `xhigh`** is the equal-recall alternative for the first-pass reviewer (12/12) at ~2.5x the time; luna-medium is the budget implementer alternative (same hidden-suite correctness, tightest code, more tool-loop round-trips).
-- **`grok-4.x` is a classic-bug quick pass ONLY - never the gate.** grok-4.5 missed the eval's subtle latent bug in all 3 runs; fine as a cheap extra pass, but a ship decision must not rest on it. grok-4.6 (2026-08-12) has not been re-evaled here - its independent numbers argue for keeping this posture (AA-Omniscience: invents ~1/3 of the time when it doesn't know; Terminal-Bench v3 26%), even though its supervised-editing scores and real-user reports improved markedly.
-- Build-tier models are excluded from review roles entirely (in the same eval one missed a planted bug, another returned a false all-clear).
-- **"Cross-family" is measured from the WRITER, not the host.** sol-high's 12/12 was earned reviewing Claude-family-written code; when your writer is GPT (e.g. the Codex mirror's terra-pinned worker), a GPT reviewer re-correlates the blind spots - pick the reviewer from whichever family did NOT write the diff.
+- **Single subscription? It still reads correctly.** Every tier degrades to the session model, and the pipeline works exactly as shipped — routing is optional garnish, never a prerequisite.
+- **Reach differs per harness, the tiers do not.** The bridges run in both directions, so the same tier assignment holds everywhere; only how you get there changes. See [`reach/`](reach/README.md).
+- **The family rule is advice, not enforcement.** Nothing can verify a model's family from a name you invented; the reviewer tier documents the rule and the receipt records what ran.
+- **Scouting splits by kind of work, not by price.** Mechanical inventory goes to the fast scout tier; analysis that degrades on a fast tier goes to the thinking scout tier.
 
 ### The wrapper pattern - self-healing bridges for unattended loops
 
-Raw bridge calls have a silent-failure class: outside a trusted git directory, `codex exec` refuses in about a second with the error only in its log, and `cursor-agent` blocks on an interactive workspace-trust prompt, then exits "successfully" with empty output. An interactive host sees the stderr and just fixes it; an **autonomous loop dies silently**. The pattern that closed this in the eval: wrap the bridge in a thin fast-tier subagent (sonnet-class) instead of calling it raw. The wrapper composes the self-contained prompt, runs the bridge, verifies output is non-empty/parseable, repairs the environment if not, and retries once. Output quality was identical to raw calls.
+Raw bridge calls have a silent-failure class: outside a trusted git directory, `codex exec` refuses in about a second with the error only in its log, and `cursor-agent` blocks on an interactive workspace-trust prompt, then exits "successfully" with empty output. An interactive host sees the stderr and just fixes it; an **autonomous loop dies silently**. The pattern that closed this in the eval: wrap the bridge in a thin fast-tier subagent instead of calling it raw. The wrapper composes the self-contained prompt, runs the bridge, verifies output is non-empty/parseable, repairs the environment if not, and retries once. Output quality was identical to raw calls.
 
 Two rules are load-bearing:
 
@@ -307,26 +278,13 @@ Applies to **ad-hoc bridge reviews only** - a hand-rolled `codex exec` review wh
 
 The **packaged** `/flow-next:impl-review` prompt is deliberately NOT changed to this shape: its find-vs-fix split (the reviewer returns findings; the internal fix loop investigates and fixes, with validator and iteration caps) is by design, and its rubric already carries confidence anchors and introduced-vs-pre-existing classification. Deep-pass/validator merge math is autonomous-only (fn-113.4): under `FLOW_RALPH` / `REVIEW_RECEIPT_PATH` / `FLOW_AUTONOMOUS` flowctl mutates the receipt; interactive surfaces raw findings and the host judges.
 
-## Durable routing — a model table in CLAUDE.md
+## Durable routing — the routing block in your instruction file
 
-The emergent pattern (mid-2026): a standing "which model for what" section in your agent instructions — a ranking of the models you can reach plus routing rules. This is **prompted orchestration made durable**: the table is interpreted by intelligence, not parsed by a config loader. The host reads it every session and applies it *with judgment* when it dispatches subagents, picks reviewers, or decides to bridge implementation out — which is exactly why the rules grant standing permission to escalate.
+Session steering is a sentence you type; **durable** steering is the same sentence written once into `CLAUDE.md` / `AGENTS.md`, where the host reads it every turn. That is the routing block: `<tier>: <model>` lines, optionally `at <effort>`, interpreted by intelligence rather than parsed by a config loader — which is why it can be prose and why an unreachable name degrades instead of failing.
 
-flow-next ships this as a canonical scaffold — [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): a scores table (cost / speed / intelligence / taste) over the session model, `gpt-5.6` (sol/terra), `grok-4.5`, `composer-2.5`, and a fast Claude tier, plus how-to-apply rules and the exact flow-next surface each route drives (the worker, the bridge recipes, review backends, scouts, the thin-wrapper). `/flow-next:setup` offers to write it into your `CLAUDE.md`/`AGENTS.md` live, annotated for the CLIs you actually have installed. The shape, illustrated (cost = subscription-quota lightness, not list $/token; speed = at default reasoning effort):
+`/flow-next:setup` offers to scaffold it from [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): the four tier lines with their guidance, **every value commented out**, so nothing routes until you fill one in. Setup never asserts which models are installed and never overwrites a block a human has edited. Marker-fenced, so `/flow-next:uninstall` removes it cleanly.
 
-```markdown
-| model                    | cost | speed | intelligence | taste |
-|--------------------------|------|-------|--------------|-------|
-| session model (frontier) | 2    | 2     | 10           | 9     |
-| gpt-5.6-sol              | 8    | 5     | 9            | 6     |
-| grok-4.5                 | 9    | 9     | 7            | 5     |
-| composer-2.5             | 9    | 10    | 6            | 6     |
-
-- Defaults, not limits — escalate to a smarter model when output misses the bar.
-- Bridged implementation → gpt-5.6-terra @ medium (escalate to gpt-5.6-sol when a task looks gnarly); fast/cheap first-draft implementation → grok-4.5 (`grok -p`); cheap bulk reads → gpt-5.6-terra; reviews cross-family; user-facing needs taste ≥ 7.
-- Graceful degrade: a routed CLI that is missing or errors → fall back to the session model.
-```
-
-The template is the single source — edit your scaffolded copy freely; the excerpt above only shows the shape. Role labels are durable; model IDs are volatile. Write the table in terms of roles, re-rank as the frontier moves, and the routing rules survive every model generation.
+The grammar and the tier meanings are [above](#the-routing-block); the block is yours to edit afterwards. Tier names are durable; model identifiers are volatile — that asymmetry is the whole reason routing is expressed as tiers here and as model names only in your file.
 
 ## Chaining the loops
 
@@ -343,7 +301,7 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
 ```text
 /loop 30m — one tick: run /flow-next:pilot --review=codex --depth=deep.
   If PILOT_VERDICT=DEFERRED_TO_LAND, run /flow-next:land in the same tick.
-  Bridge implementation tasks to codex exec on gpt-5.6-terra,
+  Send implementation tasks to the implementer tier,
   keep UI tasks on the session model, reviews come from codex.
   Stop when pilot prints NO_WORK and land prints LAND_VERDICT=NO_WORK,
   or on any NEEDS_HUMAN.
@@ -379,7 +337,7 @@ Plain-language steering still works for humans; the exact flags and `flowctl cha
 This page lives in the plugin's doc tree — *outside* the repo you're working in. At use time the host agent reads two files that ship into your project, so the steering recipes are put where agents already look:
 
 - **The usage guide** carries an `## Orchestration & model steering` section, read on demand - the always-loaded CLAUDE.md/AGENTS.md block points agents at it. In plugin mode (fn-121, Claude Code) agents pull it live via `flowctl usage` (always current with the installed plugin); in copy-mode repos it is also installed on disk as `.flow/usage.md`. It contains: the headless `codex exec` / `cursor-agent` / `claude -p` bridge commands and the flow-next shortcuts (`review.backend`, per-task `review:`, prompted-orchestration examples). The bridges run in **every direction** — `claude -p` lets a Codex or Cursor host conduct Claude the same way; any harness that can run Bash can be the conductor.
-- **`CLAUDE.md` / `AGENTS.md`** can hold the durable model-routing table above: `/flow-next:setup` offers, as an optional ceremony step, to scaffold it live — annotated for the CLIs you actually have installed, shown in full before writing, yours to edit after. Marker-fenced so `/flow-next:uninstall` can remove it cleanly.
+- **`CLAUDE.md` / `AGENTS.md`** can hold the durable routing block above: `/flow-next:setup` offers, as an optional ceremony step, to scaffold it live — annotated for the CLIs you actually have installed, shown in full before writing, yours to edit after. Marker-fenced so `/flow-next:uninstall` can remove it cleanly.
 
 ## What stays fixed
 
@@ -393,7 +351,7 @@ Steering is broad but not unbounded — these hold no matter what the routing ta
 ## See also
 
 - [`platforms.md`](platforms.md) — install matrix, Codex model mapping, cross-platform patterns.
-- [`flowctl.md`](flowctl.md) — `review.backend` grammar, the `models.roles` role map, `spec set-backend`.
+- [`flowctl.md`](flowctl.md) — `review.backend` grammar, `spec set-backend`.
 - [`running-lean.md`](running-lean.md) — which layers to run at all, what each costs, and the human-driven vs autonomous profiles.
 - [`ralph.md`](ralph.md) — autonomous-mode internals (deprecated).
 - [`teams.md`](teams.md) — the handover objects that make cross-model hand-offs safe.

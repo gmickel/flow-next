@@ -3,7 +3,7 @@
 Execute these phases in order. Load each reference only when its consuming
 phase says to read it; never pre-read remediation templates.
 
-**Model guidance**: This skill uses sonnet for synthesis and report generation. Scouts run per their agent frontmatter: 7 haiku fast scanners (tooling, env, testing, build, observability, security, workflow); claude-md-scout and docs-gap-scout on sonnet for judgment quality.
+**Tier guidance**: synthesis and report generation run on the session model. Scouts run per their agent frontmatter: 7 fast-scout-tier scanners (tooling, env, testing, build, observability, security, workflow); claude-md-scout and docs-gap-scout on the thinking scout tier for judgment quality.
 
 ---
 

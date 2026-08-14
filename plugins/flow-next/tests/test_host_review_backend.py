@@ -43,7 +43,6 @@ def _load_flowctl() -> Any:
 flowctl = _load_flowctl()
 BackendSpec = flowctl.BackendSpec
 BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
-MODEL_ROLE_BACKENDS = flowctl.MODEL_ROLE_BACKENDS
 
 REPO = Path(__file__).resolve().parents[3]
 SKILLS = REPO / "plugins" / "flow-next" / "skills"
@@ -87,9 +86,11 @@ class TestHostBackendRegistry(unittest.TestCase):
         self.assertIsNone(BACKEND_REGISTRY["host"]["models"])
         self.assertIsNone(BACKEND_REGISTRY["host"]["efforts"])
 
-    def test_host_not_in_model_role_backends(self) -> None:
-        # Pins live in AGENTS.md model-routing — not models.roles.<role>.host.
-        self.assertNotIn("host", MODEL_ROLE_BACKENDS)
+    def test_host_takes_no_model_axis(self) -> None:
+        # The model is named on the AGENTS.md routing block, never on the
+        # backend string - so host carries no model/effort axis at all.
+        self.assertIsNone(BACKEND_REGISTRY["host"].get("default_model"))
+        self.assertIsNone(BACKEND_REGISTRY["host"].get("default_effort"))
 
 
 class TestHostBackendSpecParse(unittest.TestCase):

@@ -8,7 +8,7 @@ Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`)
 
 1. Use `$FLOWCTL cursor completion-review` exclusively
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
-3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default (`gpt-5.5-high`). **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
+3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-spec `default_review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default. **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
 
 ## Step 1: Identify Spec
@@ -28,7 +28,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.j
 # Runtime config:
 #   --spec <spec>           full spec (cursor:<model>), highest priority
 #   FLOW_REVIEW_BACKEND     spec-form ok: cursor:gpt-5.5-high
-#   FLOW_CURSOR_MODEL       fills missing model only (default gpt-5.5-high)
+#   FLOW_CURSOR_MODEL       fills missing model only (else registry default)
 #
 # Cursor folds reasoning effort INTO the model name, so there is NO effort
 # field (no FLOW_CURSOR_EFFORT, no `cursor:<model>:<effort>`).

@@ -54,7 +54,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
      a) RepoPrompt (macOS, visual builder)
      b) Codex CLI (cross-platform, GPT 5.5 High)
      c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
-     d) Cursor CLI (cross-platform, runs cursor-agent; gpt-5.5-high via Cursor subscription)
+     d) Cursor CLI (cross-platform, runs cursor-agent; reviewer models via a Cursor subscription)
 
      (Reply: "a", "rp", "b", "codex", "c", "copilot", "d", "cursor", or just tell me)
      ```

@@ -161,20 +161,20 @@ All user-facing skills ship `allow_implicit_invocation: true`, so prose like "pl
 
 | Tier | Codex Model | Reasoning | Agents |
 |------|-------------|-----------|--------|
-| Review-shaped | `gpt-5.5` | `high` | quality-auditor |
-| Scout / editorial | `gpt-5.5` | `medium` | flow-gap-analyst, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
-| Fast scouts | `gpt-5.4-mini` | n/a | build, env, testing, tooling, observability, security, workflow, memory scouts |
+| Review-shaped | `$CODEX_MODEL_INTELLIGENT` | `high` | quality-auditor |
+| Scout / editorial | `$CODEX_MODEL_INTELLIGENT` | `medium` | flow-gap-analyst, docs-scout, github-scout, practice-scout, repo-scout, plan-sync, spec-scout, agents-md-scout, docs-gap-scout |
+| Fast scouts | `$CODEX_MODEL_FAST` | n/a | build, env, testing, tooling, observability, security, workflow, memory scouts |
 | Worker (default) | *inherit (session model)* | *session default* | worker |
 | Inherited | parent model | parent | pr-comment-resolver |
 
-`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The worker defaults to `inherit` on BOTH platforms - your session model rules, and flow-next never hardcodes a model opinion into generated config. An OPT-IN pin is available at sync time (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`); the eval-motivated recommendation is `gpt-5.6-terra` @ `medium`. Note (Jul 2026): on Sol/Multi-Agent-V2 builds role-profile model application is currently unreliable (openai/codex#33268, #33314) - prefer the `codex exec -m` self-bridge to steer models from a Codex host until those are fixed (fn-97, 2026-07 controlled pipeline eval at n=3: terra-medium matched `gpt-5.6-sol` correctness at ~2/3 wall-clock on frontier-authored specs). The actual review backend (`flowctl <backend> impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults on its own to the backend's ranking-top model at `high` effort (current ids in [`flowctl.md`](flowctl.md)).
+`quality-auditor` is review-shaped (a second pair of eyes on uncommitted changes) and stays at `high` — undershooting risks missed regressions. Other intelligent agents do scout/editorial work and run efficiently at `medium`. The worker defaults to `inherit` on BOTH platforms - your session model rules, and flow-next never hardcodes a model opinion into generated config. An OPT-IN pin is available at sync time (`CODEX_MODEL_WORKER` / `CODEX_REASONING_EFFORT_WORKER`) - name a model your own account serves. Note (Jul 2026): on Sol/Multi-Agent-V2 builds role-profile model application is currently unreliable (openai/codex#33268, #33314) - prefer the `codex exec -m` self-bridge to steer models from a Codex host until those are fixed (fn-97). Reach detail: [`reach/codex.md`](reach/codex.md). The actual review backend (`flowctl <backend> impl-review` / `plan-review` / `completion-review`) is configured separately in `flowctl.py` and defaults on its own to the backend's ranking-top model at `high` effort (current ids in [`flowctl.md`](flowctl.md)).
 
 Override model defaults: the `CODEX_MODEL_*` / `CODEX_REASONING_EFFORT_*` env vars are read by **`sync-codex.sh`** (which generates the agent `.toml` files) — `install-codex.sh` only copies the pre-built mirror, so regenerate first, then install:
 
 ```bash
-CODEX_MODEL_INTELLIGENT=gpt-5.5 \
-CODEX_MODEL_FAST=gpt-5.4-mini \
-CODEX_MODEL_WORKER=gpt-5.6-terra \
+CODEX_MODEL_INTELLIGENT=<model> \
+CODEX_MODEL_FAST=<model> \
+CODEX_MODEL_WORKER=<model> \
 CODEX_REASONING_EFFORT=medium \
 CODEX_REASONING_EFFORT_AUDITOR=high \
 CODEX_REASONING_EFFORT_WORKER=medium \
@@ -261,7 +261,7 @@ Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-ne
 - **Slash commands.** Drive with `/flow-next:<name>` - **not** Codex `$flow-next-` syntax. Type `/flow-next:` to discover the namespaced command surface. The separately indexed `/flow-next-…` skill names are an implementation surface, not the documented invocation contract.
 - **Multi-agent flows work - verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate. Grok **dispatches flow-next's custom `subagent_type`s** even when `grok inspect` does not list them in its agent UI.
 - **MCP servers** resolve (e.g. RepoPrompt, linear-server); after setup, `flowctl` resolves via **`.flow/bin/flowctl`** (copy mode).
-- **Review menu includes `host`.** Setup offers `host` alongside `rp` / `codex` / `copilot` / `cursor` / `none`. **Single-family fail-closed:** Grok's only native model family is grok (`grok-4.6` / `grok-4.5`), so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot`), not a native multi-family subagent. Host-native model-routing scaffold lands in AGENTS.md and documents the same honesty.
+- **Review menu includes `host`.** Setup offers `host` alongside `rp` / `codex` / `copilot` / `cursor` / `none`. **Single-family fail-closed:** this host reaches only one model family natively, so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot`), not a native multi-family subagent. Host-native model-routing scaffold lands in AGENTS.md and documents the same honesty.
 
 ### Caveats / intentional limits
 
@@ -325,18 +325,18 @@ Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.c
 
 - **Skills, commands, and subagents** register and run. Slash autocomplete **lists** flow-next commands (hyphenated form, e.g. `/flow-next-plan`); the colon form (`/flow-next:plan`) also works when typed. Natural-language skill triggering works.
 - **AskUserQuestion** renders natively, including multi-question batches (auto "Other...", Skip honored).
-- **Multi-agent:** a full `/flow-next:plan` fans out scout subagents in parallel and drives `flowctl` end-to-end. Explicit subagent model pins (Cursor slugs, e.g. `claude-opus-4-8-thinking-high`) are honored; the host self-corrects near-miss ids.
+- **Multi-agent:** a full `/flow-next:plan` fans out scout subagents in parallel and drives `flowctl` end-to-end. Explicit subagent model pins (this host's own slugs, named caller-side in the dispatch) are honored; the host self-corrects near-miss ids.
 - **`readonly: true`** on read-only agents (scouts, reviewers) enforces write restriction on Cursor (`disallowedTools` is not consumed there).
 - **`review.backend host`:** fresh-context subagent review pinned via AGENTS.md routing / caller-side slug pins to a family that did not write the diff (preferred from inside Cursor; existing `codex` / `copilot` / `cursor` CLI / `rp` backends remain selectable).
 - **`rules/flow-next.mdc`:** Cursor-native guidance rail (flowctl lifecycle + `flowctl usage` pull directives).
-- **AGENTS.md model-routing scaffold** from setup: date-stamped Cursor slugs + dispatch-pin rules (cheap slug for scouts, cross-family for review, inherit otherwise); re-run setup to refresh.
+- **AGENTS.md model-routing block** from setup: the tier lines, commented out, for you to fill with slugs this host serves (see [`reach/cursor.md`](reach/cursor.md)).
 - **`flowctl`** resolves via `.flow/bin/flowctl` after setup (Cursor exposes no plugin-root env var).
 
 The interview skill's optional async fact-scout dispatch names Claude Code's `Explore` builtin; Cursor has no such builtin, so the skill's portable-host clause applies — generic read-only dispatch, falling back to inline investigation if none is available.
 
 ### Caveats / intentional limits
 
-- **Agents frontmatter aliases → inherit.** On Cursor, `agents/*.md` family aliases (`opus`, `sonnet`, …) are ignored; subagents inherit the session model. Caller-side in-prompt slug pins are the escape hatch — no alias-to-slug rewrite pass (marketplace import consumes canonical files as-is).
+- **Agents frontmatter aliases → inherit.** On Cursor, `agents/*.md` family aliases are ignored; subagents inherit the session model. Caller-side in-prompt slug pins are the escape hatch — no alias-to-slug rewrite pass (marketplace import consumes canonical files as-is).
 - **Ralph autonomous mode is intentionally not built for Cursor.** Cursor has a full agent-hook set (and Claude Code hook compatibility exists upstream), but flow-next does **not** register Ralph guards on Cursor — interactive plan / work / review is the supported surface. Scaffolding `scripts/ralph/` does not enable the autonomous loop here.
 - **Tracker lifecycle touchpoints use the deterministic facade.** Cursor keeps
   the same caller-side active and `perEvent` gates, then invokes

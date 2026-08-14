@@ -1403,7 +1403,7 @@ def get_default_config() -> dict:
         # CLAUDE.md / AGENTS.md plus the .flow/usage.md bridge recipes),
         # so there is nothing left to configure here. A config still
         # carrying the keys gets ONE advisory line
-        # (REMOVED_DELEGATE_CONFIG_KEYS below) and runs unchanged. The
+        # (REMOVED_CONFIG_KEYS below) and runs unchanged. The
         # tracker bridge's `tracker.perEvent.work.*` lifecycle keys are a
         # DISTINCT namespace and are untouched.
         # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
@@ -1531,16 +1531,6 @@ def get_default_config() -> dict:
         # land.*, this materializes on init (NOT in
         # _INIT_UNMATERIALIZED_BLOCKS — no setup-ceremony `--raw` null probe).
         "pilot": {"autonomy": "ready", "gateClasses": []},
-        # fn-115.1 - model-pin role map. Semantic roles (not call-site pins);
-        # flowctl stores + validates + does mechanical staleness math only.
-        # The setup skill (fn-115.2) probes/judges/refreshes pins. Empty
-        # roles = use registry baselines; absent verifiedAt = no nudge.
-        # Shape: models.roles.<role>.<backend> = "model" | "model:effort".
-        "models": {
-            "roles": {},
-            "verifiedAt": None,
-            "verifiedWith": None,
-        },
     }
 
 
@@ -1779,15 +1769,16 @@ def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
     return _tree_probe(snapshot.raw, key)
 
 
-# --- flow-98: advisory for config keys the delegation removal deleted -------
+# --- advisory for config keys removed by flow-98 and fn-195 ----------------
 #
-# The packaged codex-delegation subsystem is gone, and with it the six
-# `work.delegate*` keys and the `models.roles.delegate` pin. A repo whose
-# .flow/config.json still carries them is NOT broken - flowctl ignores them
-# entirely - but silence would leave the user believing delegation is still
-# wired. Implementation offload now lives in the /flow-next:setup
-# model-routing scaffold (CLAUDE.md / AGENTS.md) plus the .flow/usage.md
-# bridge recipes, and the advisory points there.
+# The packaged codex-delegation subsystem is gone (flow-98), and with it the
+# six `work.delegate*` keys; the model-pin role map and its staleness stamp
+# are gone too (fn-195), and with them the `models.*` block. A repo whose
+# .flow/config.json still carries any of them is NOT broken - flowctl ignores
+# them entirely - but silence would leave the user believing the machinery is
+# still wired. Routing now lives in the /flow-next:setup model-routing block
+# (CLAUDE.md / AGENTS.md) plus the .flow/usage.md recipes, and the advisory
+# points there.
 #
 # ONE line per invocation, naming every removed key found - never one line
 # per key, never per phase, never a failure.
@@ -1798,23 +1789,25 @@ def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
 # deliberately NOT wired into load_flow_config(): every command reads
 # config, and a line on every invocation is noise rather than migration help.
 
-REMOVED_DELEGATE_CONFIG_KEYS: tuple[str, ...] = (
+REMOVED_CONFIG_KEYS: tuple[str, ...] = (
     "work.delegate",
     "work.delegateConsent",
     "work.delegateDecision",
     "work.delegateEffort",
     "work.delegateModel",
     "work.delegateSandbox",
-    "models.roles.delegate",
+    "models.roles",
+    "models.verifiedAt",
+    "models.verifiedWith",
 )
 
-_removed_delegate_advisory_printed = False
+_removed_config_advisory_printed = False
 
 
-def removed_delegate_keys_present(
+def removed_config_keys_present(
     snapshot: "Optional[ConfigSnapshot]" = None,
 ) -> list[str]:
-    """Removed delegation keys still present in the RAW config file.
+    """Removed config keys still present in the RAW config file.
 
     Raw probe only: a key absent from disk never reports, and the merged
     defaults no longer carry these keys at all. No file is written, nothing
@@ -1825,23 +1818,23 @@ def removed_delegate_keys_present(
         return []
     return [
         key
-        for key in REMOVED_DELEGATE_CONFIG_KEYS
+        for key in REMOVED_CONFIG_KEYS
         if _tree_probe(snap.raw, key) is not _CONFIG_RAW_SENTINEL
     ]
 
 
-def removed_delegate_keys_note(keys: list[str]) -> str:
+def removed_config_keys_note(keys: list[str]) -> str:
     """The one advisory line for a config still carrying removed keys."""
     return (
-        f"note: .flow/config.json still carries removed delegation "
-        f"key(s): {', '.join(keys)}; flowctl ignores them. Implementation "
-        f"offload is now the model-routing section /flow-next:setup writes "
-        f"into CLAUDE.md / AGENTS.md plus the bridge recipes in "
+        f"note: .flow/config.json still carries removed "
+        f"key(s): {', '.join(keys)}; flowctl ignores them. Routing "
+        f"is now the model-routing block /flow-next:setup writes "
+        f"into CLAUDE.md / AGENTS.md plus the recipes in "
         f".flow/usage.md - route work there and delete these keys."
     )
 
 
-def print_removed_delegate_keys_advisory(
+def print_removed_config_keys_advisory(
     snapshot: "Optional[ConfigSnapshot]" = None,
 ) -> None:
     """Print the advisory AT MOST once per invocation; never blocks.
@@ -1849,16 +1842,16 @@ def print_removed_delegate_keys_advisory(
     stderr so a `--json` read stays machine-parseable. Any failure to read
     config degrades to no advisory, never to a command failure.
     """
-    global _removed_delegate_advisory_printed
-    if _removed_delegate_advisory_printed:
+    global _removed_config_advisory_printed
+    if _removed_config_advisory_printed:
         return
     try:
-        keys = removed_delegate_keys_present(snapshot)
+        keys = removed_config_keys_present(snapshot)
     except Exception:
         return
-    _removed_delegate_advisory_printed = True
+    _removed_config_advisory_printed = True
     if keys:
-        print(removed_delegate_keys_note(keys), file=sys.stderr)
+        print(removed_config_keys_note(keys), file=sys.stderr)
 
 
 def resolve_config_key_for_read(key: str, snapshot: "Optional[ConfigSnapshot]" = None):
@@ -4356,9 +4349,9 @@ def _model_cache_intent(
 ) -> str:
     """Fingerprint the effective non-explicit routing ladder.
 
-    CLI version alone cannot identify a resolution: role-map mutations and
-    registry updates can change the requested start/candidates without changing
-    the installed CLI. Hash the complete deterministic model-selection intent.
+    CLI version alone cannot identify a resolution: registry updates can
+    change the requested start/candidates without changing the installed CLI.
+    Hash the complete deterministic model-selection intent.
     """
     payload = {
         "backend": backend,
@@ -4550,10 +4543,10 @@ def _dispatch_review_with_fallback(
     """
     reg = BACKEND_REGISTRY[backend]
     ranking = list(reg.get("models") or [])
-    # fn-115 (PR #225 review): a role-map pin resolves NON-explicit (ladder-
-    # eligible by design), so the ladder must START at the pin and step down
-    # from there - not restart at the registry top, which ignored the pin.
-    # With no role map, spec.model == ranking[0] and this is a no-op.
+    # A non-explicit start below the ranking top (e.g. a resolved default
+    # carried through a re-resolve) must START there and step down - not
+    # restart at the registry top. Usually spec.model == ranking[0] and this
+    # is a no-op.
     if spec.model and ranking and spec.model != ranking[0]:
         if spec.model in ranking:
             ranking = ranking[ranking.index(spec.model):]
@@ -7893,107 +7886,20 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
 VALID_BACKENDS: list[str] = sorted(BACKEND_REGISTRY.keys())
 
 
-# --- fn-115.1 model-pin role map (mechanical only: store / resolve / date math) ---
+# --- triage fast-judge model defaults --------------------------------------
 #
-# Roles name *jobs*, not call sites. Pins live at models.roles.<role>.<backend>
-# in .flow/config.json. Resolution extends fn-76:
-#   explicit CLI / per-task pin > env > config role map > registry baseline.
-# Role-map fills are ladder-eligible (model_explicit=False) so a pin-too-new
-# still steps down the registry ranking; the role map heals pin-too-old.
-# NO probing, NO ranking, NO LLM calls here - setup (fn-115.2) owns intelligence.
+# The fn-115 role map, its staleness stamp and the `models resolve` verb are
+# gone (fn-195): routing is a preference the user writes in their instruction
+# file, not configuration flowctl stores and validates. What survives here is
+# the review subsystem's own backend configuration - a per-backend default
+# model for the triage judge, in the same category as BACKEND_REGISTRY's
+# ranking, and out of scope for the identifier sweep.
 
-MODEL_ROLES: tuple[str, ...] = (
-    "fastJudge",
-    "review",
-    "scoutFast",
-    "scoutIntelligent",
-)
-# Backends that accept a model pin in the role map (rp/none/host have no model axis).
-MODEL_ROLE_BACKENDS: tuple[str, ...] = ("codex", "copilot", "cursor")
-MODELS_STALE_DAYS = 90
-
-# Registry-baseline pins for roles that do not ride BACKEND_REGISTRY.default_model.
-# review → BACKEND_REGISTRY[*].default_model; scout pins are mirror-build only
-# (fn-115.3) and have no runtime baseline in flowctl.
 FAST_JUDGE_BASELINE: dict[str, tuple[str, str]] = {
     # (model, default effort) - fn-113.1 interim defaults re-homed as baseline.
     "codex": ("gpt-5.6-luna", "high"),
     "copilot": ("claude-haiku-4.5", "low"),
 }
-
-
-def _parse_role_pin(pin: str) -> tuple[str, Optional[str]]:
-    """Split a role-map value into (model, effort|None).
-
-    Accepts ``model`` or ``model:effort``. No validation against the registry
-    ranking (the CLI is the availability authority; role pins are free-form
-    like explicit models).
-    """
-    raw = str(pin).strip()
-    if not raw:
-        return "", None
-    if ":" in raw:
-        model, effort = raw.split(":", 1)
-        model = model.strip()
-        effort = effort.strip() or None
-        return model, effort
-    return raw, None
-
-
-def get_role_map_pin(role: str, backend: str) -> Optional[str]:
-    """Return the on-disk ``models.roles.<role>.<backend>`` pin, or None.
-
-    Reads the RAW config file (not merged defaults) so only an explicitly
-    written pin counts. Mechanical - no probing, no judgment.
-    """
-    raw = _get_config_from_file(f"models.roles.{role}.{backend}")
-    if raw is _CONFIG_RAW_SENTINEL or raw is None:
-        return None
-    if isinstance(raw, (dict, list)):
-        return None
-    text = str(raw).strip()
-    return text or None
-
-
-def resolve_role_model(
-    role: str,
-    backend: str,
-    *,
-    explicit: Optional[str] = None,
-    env_var: Optional[str] = None,
-) -> tuple[Optional[str], Optional[str], str]:
-    """Resolve (model, effort, source) for a role + backend.
-
-    Precedence (fn-115 extends fn-76):
-      1. ``explicit`` (CLI flag / per-task pin / caller override)
-      2. env var named by ``env_var`` (when set)
-      3. config role map ``models.roles.<role>.<backend>``
-      4. role baseline (fastJudge) or registry default (review)
-         - caller applies registry defaults when source is ``baseline`` and
-         model is None.
-
-    Returns source in {``explicit``, ``env``, ``role-map``, ``baseline``}.
-    Effort is only filled from an explicit ``model:effort`` role pin or left
-    None for the caller to default.
-    """
-    if explicit is not None and str(explicit).strip():
-        model, effort = _parse_role_pin(str(explicit).strip())
-        return model or None, effort, "explicit"
-    if env_var:
-        env_val = os.environ.get(env_var, "").strip()
-        if env_val:
-            model, effort = _parse_role_pin(env_val)
-            return model or None, effort, "env"
-    pin = get_role_map_pin(role, backend)
-    if pin:
-        model, effort = _parse_role_pin(pin)
-        return model or None, effort, "role-map"
-    # Baselines for non-review roles. review leaves model None so
-    # BackendSpec.resolve falls through to BACKEND_REGISTRY defaults.
-    if role == "fastJudge" and backend in FAST_JUDGE_BASELINE:
-        model, effort = FAST_JUDGE_BASELINE[backend]
-        return model, effort, "baseline"
-    return None, None, "baseline"
 
 
 def resolve_fast_judge_model(
@@ -8004,280 +7910,16 @@ def resolve_fast_judge_model(
 ) -> tuple[str, str, str]:
     """Resolve triage-judge (model, effort, source) for codex/copilot.
 
-    ``--model`` / ``--effort`` are explicit. Else role map ``fastJudge``, else
-    the fn-113.1 baseline (gpt-5.6-luna@high / claude-haiku-4.5@low).
+    ``--model`` / ``--effort`` are explicit; otherwise the backend baseline.
+    Source is ``explicit`` or ``baseline``.
     """
-    model, pin_effort, source = resolve_role_model(
-        "fastJudge", backend, explicit=explicit_model
-    )
     base_model, base_effort = FAST_JUDGE_BASELINE.get(
         backend, ("gpt-5.6-luna", "high")
     )
-    effective_model = model or base_model
-    if explicit_effort is not None and str(explicit_effort).strip():
-        effective_effort = str(explicit_effort).strip()
-    elif pin_effort:
-        effective_effort = pin_effort
-    else:
-        effective_effort = base_effort
-    return effective_model, effective_effort, source
-
-
-def parse_models_verified_at(value: Any) -> Optional[date]:
-    """Parse models.verifiedAt (ISO date or datetime) to a date, or None."""
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    # Date-only first.
-    try:
-        return date.fromisoformat(text[:10]) if len(text) >= 10 and text[4] == "-" else date.fromisoformat(text)
-    except ValueError:
-        pass
-    # Full ISO datetime (allow trailing Z).
-    try:
-        normalized = text.replace("Z", "+00:00")
-        return datetime.fromisoformat(normalized).date()
-    except ValueError:
-        return None
-
-
-def models_pin_nudge_message(
-    verified_at: Any = None,
-    *,
-    now: Optional[datetime] = None,
-) -> Optional[str]:
-    """One-line staleness notice when verifiedAt is older than MODELS_STALE_DAYS.
-
-    Never blocks, never judges. Absent / unparseable verifiedAt = no nudge
-    (fresh repos stay quiet). Pure date math - no I/O when verified_at given.
-    """
-    if verified_at is None:
-        verified_at = _get_config_from_file("models.verifiedAt")
-        if verified_at is _CONFIG_RAW_SENTINEL:
-            return None
-    parsed = parse_models_verified_at(verified_at)
-    if parsed is None:
-        return None
-    today = (now or datetime.now(timezone.utc)).date()
-    age_days = (today - parsed).days
-    if age_days < MODELS_STALE_DAYS:
-        return None
-    return (
-        f"model pins last verified {parsed.isoformat()}; "
-        f"re-run setup to refresh"
-    )
-
-
-def resolve_models_role(
-    role: str,
-    backend: str,
-) -> tuple[Optional[str], Optional[str], str]:
-    """Pure map + precedence lookup for ``models resolve`` (no judgment).
-
-    Returns ``(model, effort, source)``. Source is one of
-    ``explicit`` / ``env`` / ``role-map`` / ``config`` / ``baseline``.
-    Role-specific resolvers own the precedence:
-
-    * ``fastJudge`` → ``resolve_fast_judge_model``
-    * ``review`` → ``resolve_role_model`` + registry default fill
-      (env ``FLOW_<BACKEND>_MODEL``)
-    * ``scoutFast`` / ``scoutIntelligent`` → ``resolve_role_model``
-      (env ``CODEX_MODEL_FAST`` / ``CODEX_MODEL_INTELLIGENT`` on codex)
-
-    Scout roles have no flowctl baseline model (mirror-build constants live
-    in ``sync-codex.sh``); when unset, model is None and source is baseline.
-    """
-    if role == "fastJudge":
-        return resolve_fast_judge_model(backend)
-
-    if role == "review":
-        env_var = f"FLOW_{backend.upper()}_MODEL"
-        model, effort, source = resolve_role_model(
-            "review", backend, env_var=env_var
-        )
-        reg = BACKEND_REGISTRY.get(backend) or {}
-        if reg.get("models") is None:
-            return None, None, "baseline"
-        if model is None:
-            model = reg.get("default_model")
-            source = "baseline"
-        if effort is None and reg.get("efforts") is not None:
-            effort = (
-                os.environ.get(f"FLOW_{backend.upper()}_EFFORT", "").strip()
-                or reg.get("default_effort")
-            )
-        return model, effort, source
-
-    # scoutFast / scoutIntelligent (and any future role that is map-only)
-    scout_env = {
-        "scoutFast": "CODEX_MODEL_FAST",
-        "scoutIntelligent": "CODEX_MODEL_INTELLIGENT",
-    }
-    env_var = scout_env.get(role) if backend == "codex" else None
-    return resolve_role_model(role, backend, env_var=env_var)
-
-
-def cmd_models_resolve(args: argparse.Namespace) -> None:
-    """Read-only role-map resolve: map + precedence only, no judgment.
-
-    The ONE new flowctl surface fn-115 adds. Skills read a role pin through
-    this command rather than `config get`, so the role map (not a merged
-    config default) is the answer.
-    """
-    use_json = bool(getattr(args, "json", False))
-    role = (getattr(args, "role", None) or "").strip()
-    if role not in MODEL_ROLES:
-        error_exit(
-            f"Unknown model role: {role!r}. Valid: {list(MODEL_ROLES)}",
-            use_json=use_json,
-        )
-
-    backend = (getattr(args, "backend", None) or "").strip() or "codex"
-    if backend not in MODEL_ROLE_BACKENDS:
-        error_exit(
-            f"Unknown model-role backend: {backend!r}. "
-            f"Valid: {list(MODEL_ROLE_BACKENDS)}",
-            use_json=use_json,
-        )
-
-    if not ensure_flow_exists():
-        error_exit(
-            ".flow/ does not exist. Run 'flowctl init' first.",
-            use_json=use_json,
-        )
-
-    model, effort, source = resolve_models_role(role, backend)
-
-    if use_json:
-        json_output(
-            {
-                "role": role,
-                "backend": backend,
-                "model": model,
-                "effort": effort,
-                "source": source,
-            }
-        )
-    else:
-        # Bare model for shell capture (``MODEL=$(flowctl models resolve X)``).
-        # Empty when no pin and no baseline (scouts without a role-map entry).
-        print(model if model is not None else "")
-
-
-def _validate_models_config_key(key: str, value: Any) -> Optional[str]:
-    """Validate a models.* config set. Return error message or None if OK.
-
-    Unknown role/backend rejected with the valid list. verifiedAt must be an
-    ISO date (or datetime). verifiedWith is free-form. Mechanical only.
-    """
-    parts = key.split(".")
-    if not parts or parts[0] != "models":
-        return None
-    if len(parts) == 1:
-        # Setting the whole models block (JSON object).
-        if value is None:
-            return None
-        if not isinstance(value, dict):
-            return "models must be a JSON object"
-        if "roles" in value:
-            err = _validate_models_roles_tree(value.get("roles"))
-            if err:
-                return err
-        if "verifiedAt" in value and value["verifiedAt"] is not None:
-            if parse_models_verified_at(value["verifiedAt"]) is None:
-                return (
-                    f"models.verifiedAt must be an ISO date "
-                    f"(YYYY-MM-DD); got {value['verifiedAt']!r}"
-                )
-        return None
-    leaf = parts[1]
-    if leaf == "verifiedAt":
-        if value is None or value == "":
-            return None
-        if parse_models_verified_at(value) is None:
-            return (
-                f"models.verifiedAt must be an ISO date "
-                f"(YYYY-MM-DD); got {value!r}"
-            )
-        return None
-    if leaf == "verifiedWith":
-        return None  # free-form (string or JSON object of CLI versions)
-    if leaf == "roles":
-        if len(parts) == 2:
-            return _validate_models_roles_tree(value)
-        role = parts[2]
-        if role not in MODEL_ROLES:
-            return (
-                f"Unknown model role: {role!r}. "
-                f"Valid: {list(MODEL_ROLES)}"
-            )
-        if len(parts) == 3:
-            # models.roles.<role> = {backend: pin, ...}
-            if value is None:
-                return None
-            if not isinstance(value, dict):
-                return (
-                    f"models.roles.{role} must be a JSON object of "
-                    f"backend → model pin"
-                )
-            for backend in value:
-                if backend not in MODEL_ROLE_BACKENDS:
-                    return (
-                        f"Unknown model-role backend: {backend!r}. "
-                        f"Valid: {list(MODEL_ROLE_BACKENDS)}"
-                    )
-            return None
-        if len(parts) == 4:
-            backend = parts[3]
-            if backend not in MODEL_ROLE_BACKENDS:
-                return (
-                    f"Unknown model-role backend: {backend!r}. "
-                    f"Valid: {list(MODEL_ROLE_BACKENDS)}"
-                )
-            # Pin value: string model or model:effort; null clears.
-            if value is None or value == "":
-                return None
-            if isinstance(value, (dict, list)):
-                return (
-                    f"models.roles.{role}.{backend} must be a model "
-                    f"pin string (model or model:effort)"
-                )
-            return None
-        return f"Invalid models config key: {key!r}"
-    return (
-        f"Unknown models key: {leaf!r}. "
-        f"Valid: roles, verifiedAt, verifiedWith"
-    )
-
-
-def _validate_models_roles_tree(value: Any) -> Optional[str]:
-    """Validate a models.roles object (role → backend → pin)."""
-    if value is None:
-        return None
-    if not isinstance(value, dict):
-        return "models.roles must be a JSON object"
-    for role, backends in value.items():
-        if role not in MODEL_ROLES:
-            return (
-                f"Unknown model role: {role!r}. "
-                f"Valid: {list(MODEL_ROLES)}"
-            )
-        if backends is None:
-            continue
-        if not isinstance(backends, dict):
-            return (
-                f"models.roles.{role} must be a JSON object of "
-                f"backend → model pin"
-            )
-        for backend in backends:
-            if backend not in MODEL_ROLE_BACKENDS:
-                return (
-                    f"Unknown model-role backend: {backend!r}. "
-                    f"Valid: {list(MODEL_ROLE_BACKENDS)}"
-                )
-    return None
+    explicit = (explicit_model or "").strip()
+    effective_model = explicit or base_model
+    effective_effort = (explicit_effort or "").strip() or base_effort
+    return effective_model, effective_effort, "explicit" if explicit else "baseline"
 
 
 @dataclass(frozen=True)
@@ -8414,41 +8056,25 @@ class BackendSpec:
         )
 
     def resolve(self) -> "BackendSpec":
-        """Fill missing fields from env vars, role map, then registry defaults.
+        """Fill missing fields from env vars, then registry defaults.
 
-        Precedence (per field, most specific wins) - fn-76 extended by fn-115:
+        Precedence (per field, most specific wins) - fn-76:
           1. explicit value on this spec
           2. ``FLOW_<BACKEND>_MODEL`` / ``FLOW_<BACKEND>_EFFORT`` env var
-          3. config role map ``models.roles.review.<backend>`` (model[:effort])
-          4. registry ``default_model`` / ``default_effort``
-
-        Role-map fills are non-explicit (ladder-/cache-eligible) so a pin that
-        is too new for the installed CLI still steps down the ranking; the role
-        map's job is healing pin-too-old, not hard-locking the dispatch.
+          3. registry ``default_model`` / ``default_effort``
 
         Backends with ``models is None`` (rp, none, host) always resolve
-        ``model`` to ``None`` - env vars and the role map are ignored for
-        fields the backend doesn't accept. Same for ``effort``. This prevents
-        a stray ``FLOW_RP_MODEL`` from leaking into an RP spec.
+        ``model`` to ``None`` - env vars are ignored for fields the backend
+        doesn't accept. Same for ``effort``. This prevents a stray
+        ``FLOW_RP_MODEL`` from leaking into an RP spec.
         """
         reg = BACKEND_REGISTRY[self.backend]
         env_model_key = f"FLOW_{self.backend.upper()}_MODEL"
         env_effort_key = f"FLOW_{self.backend.upper()}_EFFORT"
 
-        # Role-map pin for the review role (fn-115). Read once; apply to model
-        # and (when the pin carries :effort) to effort below.
-        role_model: Optional[str] = None
-        role_effort: Optional[str] = None
-        if reg["models"] is not None:
-            pin = get_role_map_pin("review", self.backend)
-            if pin:
-                role_model, role_effort = _parse_role_pin(pin)
-                if not role_model:
-                    role_model = None
-
         # fn-76: track whether the resolved model was pinned explicitly (spec or
-        # env) vs filled from the role map / registry default. Only the
-        # non-explicit case is ladder-/cache-eligible downstream.
+        # env) vs filled from the registry default. Only the non-explicit case
+        # is ladder-/cache-eligible downstream.
         if reg["models"] is None:
             model = None
             model_explicit = False
@@ -8466,10 +8092,6 @@ class BackendSpec:
             model = os.environ.get(env_model_key)
             model_explicit = True
             routing_intent = None
-        elif role_model is not None:
-            model = role_model
-            model_explicit = False
-            routing_intent = f"role-map:review:{pin}"
         else:
             model = reg.get("default_model")
             model_explicit = False
@@ -8481,7 +8103,6 @@ class BackendSpec:
             effort = (
                 self.effort
                 or os.environ.get(env_effort_key)
-                or role_effort
                 or reg.get("default_effort")
             )
 
@@ -20637,12 +20258,6 @@ def cmd_status(args: argparse.Namespace) -> None:
             else:
                 print("No active runs")
 
-        # fn-115.1 - mechanical model-pin staleness nudge (never blocks).
-        if flow_exists:
-            nudge = models_pin_nudge_message()
-            if nudge:
-                print(nudge)
-
 
 
 def cmd_config_get(args: argparse.Namespace) -> None:
@@ -20678,7 +20293,7 @@ def cmd_config_get(args: argparse.Namespace) -> None:
     raw = getattr(args, "raw", False)
     key = getattr(args, "key", None)
     snapshot = load_config_snapshot()
-    print_removed_delegate_keys_advisory(snapshot)
+    print_removed_config_keys_advisory(snapshot)
 
     if key is None:
         # Keyless root read (fn-110.1): the whole config in one call.
@@ -20734,7 +20349,7 @@ def cmd_config_set(args: argparse.Namespace) -> None:
             ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
         )
 
-    print_removed_delegate_keys_advisory()
+    print_removed_config_keys_advisory()
 
     canonical_key, _ = resolve_config_key_for_write(args.key)
 
@@ -20780,27 +20395,6 @@ def cmd_config_set(args: argparse.Namespace) -> None:
                 "always-ask|flow-wins|tracker-wins",
                 use_json=args.json,
             )
-
-    # fn-115.1 - validate models.roles / verifiedAt before write. Coerce the
-    # value the same way set_config will so JSON object pins validate as dicts.
-    if canonical_key == "models" or canonical_key.startswith("models."):
-        coerce_value = args.value
-        if isinstance(coerce_value, str):
-            low = coerce_value.lower()
-            if low == "true":
-                coerce_value = True
-            elif low == "false":
-                coerce_value = False
-            elif low == "null":
-                coerce_value = None
-            elif coerce_value.lstrip()[:1] in ("{", "["):
-                try:
-                    coerce_value = json.loads(coerce_value)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-        err = _validate_models_config_key(canonical_key, coerce_value)
-        if err:
-            error_exit(err, use_json=args.json)
 
     set_config(canonical_key, args.value)
     new_value = get_config(canonical_key)
@@ -36090,7 +35684,7 @@ def cmd_anchor(args: argparse.Namespace) -> None:
     sections = _anchor_sections(task_id, spec_id)
     dependencies = _anchor_dependencies(flow_dir, task_data)
     stale = upstream_behind()  # fn-181 R3/R5: one check per invocation.
-    print_removed_delegate_keys_advisory()  # flow-98: stderr, never blocks.
+    print_removed_config_keys_advisory()  # flow-98: stderr, never blocks.
 
     if use_json:
         payload = {
@@ -37065,7 +36659,7 @@ def cmd_brief(args: argparse.Namespace) -> None:
     if not full:
         data = _brief_apply_budget(data, BRIEF_BUDGET_CHARS)
 
-    print_removed_delegate_keys_advisory()  # flow-98: stderr, never blocks.
+    print_removed_config_keys_advisory()  # flow-98: stderr, never blocks.
 
     if use_json:
         # Render includes success=; print raw (json_output would double-wrap).
@@ -43877,8 +43471,8 @@ def _triage_run_codex_judge(
     """Invoke codex as the triage judge. Returns (verdict, reason, model_used).
 
     verdict is ``SKIP`` / ``REVIEW`` / ``None`` (on tooling failure or malformed).
-    Model resolution (fn-115): explicit --model > models.roles.fastJudge.codex
-    > baseline gpt-5.6-luna@high (fn-113.1 interim re-homed as baseline).
+    Model resolution: explicit --model, else the codex triage baseline
+    (fn-113.1 interim re-homed as baseline).
     """
     codex = shutil.which("codex")
     if not codex:
@@ -43923,8 +43517,7 @@ def _triage_run_copilot_judge(
 ) -> tuple[Optional[str], str, Optional[str]]:
     """Invoke copilot as the triage judge.
 
-    Model resolution (fn-115): explicit --model > models.roles.fastJudge.copilot
-    > baseline claude-haiku-4.5@low.
+    Model resolution: explicit --model, else the copilot triage baseline.
     """
     copilot = shutil.which("copilot")
     if not copilot:
@@ -49390,36 +48983,6 @@ def main() -> None:
     p_findings_attach.add_argument("--json", action="store_true", help="JSON output")
     p_findings_attach.set_defaults(func=cmd_review_findings_attach)
 
-    # models resolve (fn-115.3) — pure map + precedence lookup for skills
-    p_models = subparsers.add_parser(
-        "models",
-        help="Model role-map helpers (read-only resolve; no judgment)",
-    )
-    models_sub = p_models.add_subparsers(dest="models_cmd", required=True)
-    p_models_resolve = models_sub.add_parser(
-        "resolve",
-        help=(
-            "Resolve a role pin via precedence "
-            "(explicit/env/role-map/baseline; pure lookup, no probing)"
-        ),
-    )
-    p_models_resolve.add_argument(
-        "role",
-        help=(
-            "Role name: fastJudge | review | scoutFast | scoutIntelligent"
-        ),
-    )
-    p_models_resolve.add_argument(
-        "--backend",
-        default="codex",
-        choices=list(MODEL_ROLE_BACKENDS),
-        help="Backend axis (default: codex)",
-    )
-    p_models_resolve.add_argument(
-        "--json", action="store_true", help="JSON output"
-    )
-    p_models_resolve.set_defaults(func=cmd_models_resolve)
-
     # review-rounds (fn-90 R5, rp surface) — prose-driven rp workflows hit the
     # same deterministic cap counter the codex/copilot/cursor handlers wire
     # internally at dispatch time.
@@ -51171,14 +50734,14 @@ def main() -> None:
     p_triage.add_argument(
         "--model",
         help=(
-            "Fast model override (else models.roles.fastJudge.<backend>, else "
+            "Fast model override (else the "
             "baseline gpt-5.6-luna / claude-haiku-4.5)"
         ),
     )
     p_triage.add_argument(
         "--effort",
         help=(
-            "Reasoning effort for LLM judge (else role-map pin effort, else "
+            "Reasoning effort for LLM judge (else "
             "baseline high for codex / low for copilot)"
         ),
     )

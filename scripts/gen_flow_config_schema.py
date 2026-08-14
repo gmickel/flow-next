@@ -403,28 +403,6 @@ DESCRIPTIONS: dict[str, str] = {
         "question instead of advanced full-auto. Empty = full-auto for every "
         "workable item."
     ),
-    "models": (
-        "Model-pin role map (fn-115). flowctl stores + validates + does "
-        "staleness math only; /flow-next:setup probes and refreshes pins."
-    ),
-    "models.roles": (
-        "Role-map pins: models.roles.<role>.<backend> = model or "
-        "model:effort. Roles name semantic jobs (fastJudge, review, "
-        "scoutFast, scoutIntelligent), not call sites; backends "
-        "are codex, copilot, cursor. Schema-validated on config set. Empty "
-        "= registry baselines."
-    ),
-    "models.roles.<role>": "Per-backend pins for one semantic role.",
-    "models.roles.<role>.<backend>": "Pin value: model or model:effort.",
-    "models.verifiedAt": (
-        "ISO date stamped by /flow-next:setup after the model-pin refresh "
-        "ceremony. Older than ~90 days prints one nudge line (never blocks); "
-        "absent = no nudge."
-    ),
-    "models.verifiedWith": (
-        "Optional free-form record of CLI versions probed during the "
-        "refresh ceremony."
-    ),
 }
 
 _PER_EVENT = ["off", "pull", "push", "reconcile", "comment"]
@@ -489,44 +467,6 @@ def _review_backend_fragment() -> dict:
         ],
     }
 
-
-def _models_roles_fragment() -> dict:
-    role_pat = "^(" + "|".join(flowctl.MODEL_ROLES) + ")$"
-    backend_pat = "^(" + "|".join(flowctl.MODEL_ROLE_BACKENDS) + ")$"
-    return {
-        # roles-level null is also a validator-accepted clear path.
-        "type": ["object", "null"],
-        "patternProperties": {
-            role_pat: {
-                # `config set models.roles.<role> null` is a supported clear
-                # path (_validate_models_config_key accepts + persists null;
-                # nested reads treat it as absent) - null must stay valid.
-                "type": ["object", "null"],
-                "description": DESCRIPTIONS["models.roles.<role>"],
-                "patternProperties": {
-                    backend_pat: {
-                        # A pin is `model[:effort]`; the supported clear path
-                        # (`config set ... null` / empty value) PERSISTS null
-                        # or "" and get_role_map_pin treats both as no-pin -
-                        # cleared configs must stay editor-valid.
-                        "anyOf": [
-                            {"type": "null"},
-                            {"enum": [""]},
-                            {
-                                "type": "string",
-                                "pattern": "^[^:\\s]+(:[^:\\s]+)?$",
-                            },
-                        ],
-                        "description": DESCRIPTIONS[
-                            "models.roles.<role>.<backend>"
-                        ],
-                    },
-                },
-                "additionalProperties": False,
-            },
-        },
-        "additionalProperties": False,
-    }
 
 
 def _scope_resolved_at_fragment() -> dict:
@@ -730,14 +670,6 @@ def _build_table() -> list[tuple[str, dict]]:
                 ]
             },
         ),
-        # Whole-block and roles-level nulls are validator-accepted clear
-        # paths (_validate_models_config_key / _validate_models_roles_tree
-        # both accept None and set_config persists it) - preempted here so a
-        # cleared block never fails editors.
-        ("models", {"kind": "object", "open": False, "nullable": True}),
-        ("models.roles", _models_roles_fragment()),
-        ("models.verifiedAt", {"type": ["string", "null"]}),
-        ("models.verifiedWith", {}),
     ]
 
 
@@ -775,7 +707,7 @@ def compute() -> dict:
             node: dict[str, Any] = {
                 "description": DESCRIPTIONS[path],
                 # nullable: validator-accepted whole-block clear paths persist
-                # null (e.g. `config set models null`) and must stay valid.
+                # null and must stay valid.
                 "type": ["object", "null"] if spec.get("nullable") else "object",
                 "additionalProperties": bool(spec["open"]),
                 "properties": {},

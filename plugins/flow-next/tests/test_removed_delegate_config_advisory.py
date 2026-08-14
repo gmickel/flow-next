@@ -1,11 +1,11 @@
-"""Advisory for configs still carrying the removed delegation keys (flow-98, R1/R5).
+"""Advisory for configs still carrying removed keys (flow-98 R1/R5, fn-195 R6).
 
-The packaged codex-delegation subsystem is gone: the six `work.delegate*`
-keys and the `models.roles.delegate` pin are no longer read by anything.
-A repo whose `.flow/config.json` still carries them keeps working - flowctl
-ignores the keys - and gets ONE advisory line per invocation naming them and
-pointing at the agentic route (the /flow-next:setup model-routing scaffold
-plus the .flow/usage.md bridge recipes).
+The packaged codex-delegation subsystem is gone (the six `work.delegate*`
+keys) and so is the model-pin role map with its staleness stamp (the
+`models.*` block). A repo whose `.flow/config.json` still carries them keeps
+working - flowctl ignores the keys - and gets ONE advisory line per
+invocation naming them and pointing at the agentic route (the
+/flow-next:setup model-routing block plus the .flow/usage.md recipes).
 
 Pinned here: presence detection is raw-file-only, the advisory is one line
 per invocation (never one per key), it goes to stderr so `--json` stays
@@ -51,7 +51,11 @@ LEGACY_CONFIG = {
         "delegateConsent": True,
         "delegateDecision": "auto",
     },
-    "models": {"roles": {"delegate": {"codex": "gpt-5.6-terra:medium"}}},
+    "models": {
+        "roles": {"review": {"codex": "gpt-5.6-terra:medium"}},
+        "verifiedAt": "2026-07-19",
+        "verifiedWith": {"codex": "0.144"},
+    },
 }
 
 
@@ -85,30 +89,30 @@ class RemovedDelegateAdvisoryTestCase(unittest.TestCase):
     def test_all_removed_keys_detected(self) -> None:
         self._write_config(LEGACY_CONFIG)
         self.assertEqual(
-            self.flowctl.removed_delegate_keys_present(),
-            list(self.flowctl.REMOVED_DELEGATE_CONFIG_KEYS),
+            self.flowctl.removed_config_keys_present(),
+            list(self.flowctl.REMOVED_CONFIG_KEYS),
         )
 
     def test_fresh_repo_detects_nothing(self) -> None:
-        self.assertEqual(self.flowctl.removed_delegate_keys_present(), [])
+        self.assertEqual(self.flowctl.removed_config_keys_present(), [])
         self._write_config({"memory": {"enabled": True}})
-        self.assertEqual(self.flowctl.removed_delegate_keys_present(), [])
+        self.assertEqual(self.flowctl.removed_config_keys_present(), [])
 
     def test_single_key_detected(self) -> None:
         self._write_config({"work": {"delegate": "codex"}})
         self.assertEqual(
-            self.flowctl.removed_delegate_keys_present(), ["work.delegate"]
+            self.flowctl.removed_config_keys_present(), ["work.delegate"]
         )
 
     # -- the advisory line --
 
     def test_note_is_one_actionable_line_naming_the_keys(self) -> None:
-        note = self.flowctl.removed_delegate_keys_note(
-            ["work.delegate", "models.roles.delegate"]
+        note = self.flowctl.removed_config_keys_note(
+            ["work.delegate", "models.roles"]
         )
         self.assertEqual(note.count("\n"), 0)
         self.assertIn("work.delegate", note)
-        self.assertIn("models.roles.delegate", note)
+        self.assertIn("models.roles", note)
         # Actionable: names the replacement route, not just the removal.
         self.assertIn("usage.md", note)
         self.assertIn("AGENTS.md", note)
@@ -148,13 +152,10 @@ class RemovedDelegateAdvisoryTestCase(unittest.TestCase):
             payload, _err = self._config_get(key)
             self.assertIsNone(payload["value"], key)
 
-    def test_delegate_is_not_a_model_role(self) -> None:
-        self.assertNotIn("delegate", self.flowctl.MODEL_ROLES)
-        err = self.flowctl._validate_models_config_key(
-            "models.roles.delegate.codex", "gpt-5.6-terra"
-        )
-        self.assertIsNotNone(err)
-        self.assertIn("Unknown model role", err)
+    def test_models_block_is_not_validated_or_read(self) -> None:
+        # fn-195: no role-map validation on write, no merged default.
+        self.assertFalse(hasattr(self.flowctl, "_validate_models_config_key"))
+        self.assertNotIn("models", self.flowctl.get_default_config())
 
 
 if __name__ == "__main__":
