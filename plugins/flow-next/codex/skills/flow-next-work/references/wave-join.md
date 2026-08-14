@@ -74,7 +74,17 @@ two passes:
 
 1. confirm the task's code, tests, commit, and handover files;
 2. normalize each task's evidence to the integrated commit IDs and retain its
-   exact task-specific normalized integrated base **and head**;
+   exact task-specific normalized integrated base **and head**. **The worker's
+   handover evidence names commits that exist only on its own workspace branch**
+   — integration (cherry-pick, merge, rebase) gives them new IDs on the target,
+   and the workspace branch is deleted at cleanup. Passing the handover evidence
+   to `flowctl done` unchanged therefore records commits that are unreachable
+   from HEAD the moment the workspace goes away; `flowctl validate` reports them
+   as orphaned, and the task's evidence no longer points at the code that
+   shipped. Rewrite the SHAs to the integrated ones before step 5, not after.
+   **Failure signature:** `flowctl validate` warning
+   "evidence commit &lt;sha&gt; is not reachable from HEAD" on a task this wave just
+   completed. Observed 2026-08-14 on the first live wave dispatch;
 3. when its resolved `REVIEW_MODE` is not `none`, run
    `$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
    from a safe review context whose `HEAD` is that task's normalized integrated

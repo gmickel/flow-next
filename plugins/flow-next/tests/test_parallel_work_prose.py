@@ -77,6 +77,12 @@ class ParallelWorkConductorProse(unittest.TestCase):
         self.assertIn("Join: complete", join_text)
         self.assertIn("HANDOVER_SUMMARY", join_text)
         self.assertIn("HANDOVER_EVIDENCE", join_text)
+        # Both preconditions were found by the first live wave dispatch
+        # (2026-08-14) and are load-bearing, not advice: an uncommitted spec
+        # leaves every parallel worker unable to re-anchor, and un-normalized
+        # handover evidence records commits that die with the workspace.
+        self.assertIn("Commit the spec and task files BEFORE creating the", text)
+        self.assertIn("is not reachable from HEAD", join_text)
 
     def test_canonical(self) -> None:
         self._assert_contract(CANONICAL_WORK, CANONICAL_WAVE_JOIN)

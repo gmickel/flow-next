@@ -364,6 +364,16 @@ wave, create one isolated mutable workspace and task-unique summary/evidence
 paths per worker, then dispatch the selected workers concurrently. For a
 one-task wave, use the existing single-worker path.
 
+**Commit the spec and task files BEFORE creating the workspaces.** A wave
+workspace is branched from a commit, so anything still uncommitted in the
+conductor's checkout does not exist inside it — and a freshly planned spec is
+uncommitted by default. A worker dispatched into such a workspace cannot
+re-anchor at all: `$FLOWCTL show <task-id>` finds no task there, and the failure
+looks like a broken worker rather than a missing commit. Commit `.flow/` first
+(`git add -A`), then create the workspaces from that commit. Verified 2026-08-14
+on the first live wave dispatch. Single-worker runs are unaffected — they share
+the conductor's checkout.
+
 The worker gets fresh context and handles:
 - Re-anchoring (reading spec, git status, task-relevant glossary terms when populated)
 - Implementation

@@ -553,16 +553,28 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    - Use bare R-ID tokens (`--satisfies R1,R3`; rendered as `satisfies: [R1, R3]`), not quoted strings.
    - Frontmatter is additive — tasks created without it parse unchanged.
 
-   **`**Touches:**` line rules (optional, additive):**
+   **`**Touches:**` line rules — write one on EVERY task:**
    - Repo-relative paths/globs the task expects to MODIFY (not merely read),
      authored at plan time from the `**Files:**` analysis and checked at plan
      review. Example: `**Touches:** [src/auth/**, src/routes/auth.ts]`.
    - A BODY line beside `**Files:**`, not YAML frontmatter — the one-call
      `task create --from-json` route renders frontmatter from `satisfies`
      only, so a frontmatter `touches:` would silently land in the body anyway.
-   - Unknown or hard to predict → OMIT the line entirely; downstream
-     concurrency planning treats omission as always-serial, which is the safe
-     default by design.
+   - **Uncertain → declare WIDER, never omit.** A too-wide declaration
+     intersects a sibling and sends the wave serial, which is exactly today's
+     behavior; an omitted line does the same thing while telling the conductor
+     nothing. Since both err toward serial, the wide declaration is strictly
+     better: it is the only one that can ever become a wave once the overlap
+     turns out to be false. Omit only when a task genuinely cannot name any
+     path it will modify.
+   - **Why this is worth the line:** wave dispatch is fail-closed on it, so a
+     spec whose tasks omit it can never run concurrently no matter how
+     independent the tasks are. Measured 2026-08-14: zero of 37 tasks across
+     eleven consecutive specs carried the line, so no wave had ever been
+     dispatched; a probe wave with the line present ran two tasks in 96s against
+     187s serial. A wrong declaration is cheap by construction — workers write
+     in isolated workspaces, so an overlap surfaces as a merge conflict at the
+     join and costs one serial re-run, never correctness.
    - Inert metadata to flowctl — models read it; no deterministic parsing.
 
 5. Add task dependencies (if not already set via `--deps`):

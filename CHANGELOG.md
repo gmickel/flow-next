@@ -4,6 +4,40 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+## [Unreleased]
+
+### Fixed
+
+- **Concurrent task waves work now - the feature shipped, but its precondition
+  was written as an opt-out, so no wave had ever run.** A wave dispatches only
+  when every task in it declares the paths it will modify, and the planning
+  guidance said to leave that line out whenever it was hard to predict. Across
+  eleven consecutive specs, not one task carried it, so every run stayed
+  sequential no matter how independent its tasks were. Planning now writes the
+  line on every task, and says to declare wider rather than omit when uncertain:
+  a too-wide declaration keeps the tasks serial, which is exactly what omitting
+  did, while a declared one can actually become a wave. Getting it wrong stays
+  cheap by construction - workers write in isolated workspaces, so an overlap
+  surfaces as a merge conflict at the join and costs one serial re-run, never
+  correctness.
+- **Two things that broke a live wave are now stated where the conductor reads
+  them.** A wave workspace is branched from a commit, so a freshly planned spec
+  that has not been committed yet does not exist inside it and every parallel
+  worker fails to re-anchor - looking like a broken worker rather than a missing
+  commit. And a worker's handover evidence names commits that live only on its
+  own workspace branch: recording those unchanged leaves each finished task
+  pointing at commits that vanish with the workspace, which `flowctl validate`
+  then reports as orphaned. Both are now preconditions in the work phases and
+  the join reference, pinned by tests, with the second carrying its own failure
+  signature.
+
+### Docs
+
+- **Troubleshooting gains the wave-join merge conflict entry** - what it means
+  when concurrent workers were green in isolation but the join conflicts (the
+  declarations overlapped in reality), what to do (resolve, re-run the affected
+  task serially, correct the declarations), and why nothing was corrupted.
+
 ## [flow-next 3.32.2] - 2026-08-13
 
 On Cursor, the in-IDE browser was documented as a last-resort curiosity with invented tool names, so agents skipped a driver that actually works. Probe it by id, recover from a mid-run drop, and do not treat a catalog miss as absence.
