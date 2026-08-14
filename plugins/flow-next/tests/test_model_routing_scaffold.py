@@ -367,11 +367,6 @@ class MirrorRoutingProse(unittest.TestCase):
             stale, [], f"retired routing references still in the mirror: {stale}"
         )
 
-
-if __name__ == "__main__":
-    unittest.main()
-
-
 class MirrorAgentFloors(unittest.TestCase):
     """The regenerated Codex agent floors are reproducible from the generator.
 
@@ -394,18 +389,36 @@ class MirrorAgentFloors(unittest.TestCase):
     def test_committed_floors_match_generator_baselines(self) -> None:
         fast = self._baseline("_SCOUT_FAST_BASELINE")
         intelligent = self._baseline("_SCOUT_INTELLIGENT_BASELINE")
-        alias_to_floor = {"haiku": fast, "sonnet": intelligent, "opus": intelligent}
+        sync_text = self.SYNC.read_text(encoding="utf-8")
+        scouts_match = re.search(
+            r'INTELLIGENT_SCOUTS="([^"]+)"', sync_text
+        )
+        intelligent_scouts = set(scouts_match.group(1).split()) if scouts_match else None
+
+        def floor_for(stem: str, alias: str) -> str | None:
+            if alias == "haiku":
+                return fast
+            if alias == "opus":
+                return intelligent
+            if alias == "sonnet":
+                # sync-codex routes sonnet via INTELLIGENT_SCOUTS membership,
+                # falling back to fast — mirror that instead of assuming.
+                if intelligent_scouts is None:
+                    return intelligent
+                return intelligent if stem in intelligent_scouts else fast
+            return None
         checked = 0
         for md in sorted(self.CANON_AGENTS.glob("*.md")):
             match = re.search(r"^model:\s*(\S+)", md.read_text(encoding="utf-8"), re.M)
             if not match or match.group(1) == "inherit":
                 continue
-            floor = alias_to_floor.get(match.group(1))
+            # claude-md-scout is renamed agents-md-scout on the Codex side
+            # (sync-codex.sh rename map) - INTELLIGENT_SCOUTS uses that name too,
+            # so resolve the rename BEFORE the floor lookup.
+            stem = "agents-md-scout" if md.stem == "claude-md-scout" else md.stem
+            floor = floor_for(stem, match.group(1))
             if floor is None:
                 continue
-            # claude-md-scout is renamed agents-md-scout on the Codex side
-            # (sync-codex.sh rename map).
-            stem = "agents-md-scout" if md.stem == "claude-md-scout" else md.stem
             toml = self.CODEX_AGENTS / f"{stem}.toml"
             self.assertTrue(toml.is_file(), f"mirror agent missing: {toml.name}")
             text = toml.read_text(encoding="utf-8")
@@ -424,3 +437,7 @@ class MirrorAgentFloors(unittest.TestCase):
                 )
             checked += 1
         self.assertGreaterEqual(checked, 15, "pin lost its subjects — agent set shrank?")
+
+
+if __name__ == "__main__":
+    unittest.main()

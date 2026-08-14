@@ -6,7 +6,7 @@ Run:
 ``host`` is a NON-EXECUTABLE selection sentinel: review runs as a host-native
 fresh-context subagent (skill-owned). flowctl only registers/parses it —
 no model/effort on the string, no run_exec hook, never a subprocess path.
-Pins live in the AGENTS.md model-routing section.
+The model is named on the reviewer tier of the AGENTS.md model-routing block.
 """
 
 from __future__ import annotations

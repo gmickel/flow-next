@@ -15,7 +15,7 @@
     "fn-195-orchestration-by-intent-named-tiers-per.2": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.3": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.4": 0,
-    "fn-195-orchestration-by-intent-named-tiers-per.5": 1
+    "fn-195-orchestration-by-intent-named-tiers-per.5": 2
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -276,8 +276,18 @@
     "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 1,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 1
   },
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.5": 1
+  },
+  "review_reservations": {
+    "e5b5b916ccba4e589c401be04fc5b48e": {
+      "artifact_sha256": "ecfcb6652aa60ce5c1ecf3599c3f892d176fcb9b5445690a6589038c44b0490d",
+      "counter_scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.5",
+      "epoch": 0,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 0,
@@ -299,5 +309,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T23:24:17.334581Z"
+  "updated_at": "2026-08-14T23:39:10.002040Z"
 }
