@@ -564,8 +564,36 @@ if [[ "$MV_STALE_BASE" == 1 ]]; then
   # STOP HERE for this PR: no gh pr ready, no merge, no post-merge tail.
 else
   [[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER"   # idempotent flip; non-draft skips
+  # PR-merge seam (#337), same shape as make-pr's `FLOW_PR_CREATE_CMD` (#277).
+  # FLOW_PR_MERGE_CMD names the command that MERGES the PR; default
+  # `gh pr merge`. Repos that require an App/bot to perform the merge (branch
+  # protection that excludes the human identity the tick runs as) point it at
+  # a wrapper that supplies its own identity. ENV ONLY - never a `land.*`
+  # config key: §2.9's trust guard exists because config-sourced command
+  # strings are PR-author-influenceable on a non-base checkout; session env is
+  # not.
+  # Contract (STABLE - integrators depend on it):
+  #   - invoked exactly as, in this fixed argument order:
+  #       $FLOW_PR_MERGE_CMD <pr> --squash --delete-branch --match-head-commit <sha>
+  #   - the expansion is whitespace-split, never eval'd - the command path must
+  #     not contain spaces; everything after it arrives as pre-quoted arguments
+  #   - success: exit 0 and the PR is merged. Nonzero = not merged
+  #   - the wrapper MUST proxy gh's stderr VERBATIM. Only stderr is captured
+  #     here, and the classification below splits head-race (`RESOLVING`,
+  #     re-tick) from policy refusal (`BLOCKED`) by reading gh's
+  #     head-mismatch text. A wrapper that swallows or rewrites stderr turns
+  #     benign races into `BLOCKED` PRs
+  #   - never `--auto`, never merge-queue enrollment - the merge stays explicit
+  #     (the merge-license boundary binds the interposed command too)
+  #   - `--delete-branch` needs a second permission (branch delete) that a
+  #     merge-only App may lack; grant it or the merge succeeds and the branch
+  #     survives
+  # Scope: THIS merge call ONLY. `gh pr ready` above, the post-merge
+  # mergeCommit read, the tail, and every other gh call in the tick stay on the
+  # session identity, and `gh` stays a preflight requirement.
+  MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"
   MERGE_RC=0
-  MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+  MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
   if [[ "$MERGE_RC" -ne 0 ]]; then
     echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
   fi

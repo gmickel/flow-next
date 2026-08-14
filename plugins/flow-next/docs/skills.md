@@ -30,7 +30,7 @@ The idea-to-merge pipeline, in order. Chart and guide sit **upstream of capture*
 | Skill | Trigger | What it does |
 |---|---|---|
 | [`flow-next-pilot`](../skills/flow-next-pilot/SKILL.md) | `/flow-next:pilot` | Single-tick build-loop conductor — advances one *ready* spec by one pipeline stage per tick, ends with a `PILOT_VERDICT` line; your host's `/loop` or `/goal` owns iteration. |
-| [`flow-next-land`](../skills/flow-next-land/SKILL.md) | `/flow-next:land` | Cadence-tick ship loop — babysits build-loop-authored PRs through CI fixes, review convergence, gated explicit merge, spec close, and release-follow; ends with a `LAND_VERDICT` line. |
+| [`flow-next-land`](../skills/flow-next-land/SKILL.md) | `/flow-next:land` | Cadence-tick ship loop — babysits build-loop-authored PRs through CI fixes, review convergence, gated explicit merge (merge call interposable via `FLOW_PR_MERGE_CMD` for App/bot-performed merges), spec close, and release-follow; ends with a `LAND_VERDICT` line. |
 | [`flow-next-ralph-init`](../skills/flow-next-ralph-init/SKILL.md) | `/flow-next:ralph-init` | **Deprecated** — prefer a script calling `/flow-next:pilot` + `/flow-next:land` ([why](running-lean.md#ralph-deprecated)); existing installs keep working. Scaffold the repo-local Ralph hardened harness under `scripts/ralph/` — external shell loop, fresh session per iteration, hook guardrails, receipts. |
 
 ## Knowledge & maintenance

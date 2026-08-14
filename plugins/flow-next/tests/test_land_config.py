@@ -566,5 +566,68 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn("mergeVerdict=<green|refused|skipped|would-run>", self.text)
 
 
+class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over §3.5's `FLOW_PR_MERGE_CMD` seam (fn-194 R1, #337).
+
+    Same harness limitation as the other workflow classes: the merge call is
+    host-agent BASH inside the skill workflow, not flowctl Python. Pin the
+    load-bearing invariants: the seam exists in the #277 shape, the fixed
+    argument order survives it, the stderr-proxy requirement is stated (the
+    RESOLVING-vs-BLOCKED split reads gh's stderr), no `--auto`/merge-queue,
+    and the seam is env-only - never a `land.*` config key.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("# PR-merge seam (#337)")
+        end = cls.text.find("### 3.6", start)
+        assert start != -1 and end != -1, "§3.5 merge seam not found"
+        cls.seam = cls.text[start:end]
+
+    def test_seam_default_is_gh_pr_merge(self) -> None:
+        self.assertIn('MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"', self.text)
+
+    def test_merge_call_goes_through_the_seam_unquoted(self) -> None:
+        # Unquoted expansion: whitespace-split, never eval'd (#277 shape).
+        self.assertIn(
+            'MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch '
+            '--match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?',
+            self.text,
+        )
+        # The literal pre-seam call is gone - no ungoverned merge path.
+        self.assertNotIn('$(gh pr merge "$PR_NUMBER" --squash', self.text)
+
+    def test_contract_states_fixed_argument_order(self) -> None:
+        self.assertIn(
+            "$FLOW_PR_MERGE_CMD <pr> --squash --delete-branch --match-head-commit <sha>",
+            self.seam,
+        )
+        self.assertIn("never eval'd", self.seam)
+
+    def test_contract_requires_verbatim_stderr(self) -> None:
+        # A wrapper that eats stderr converts benign head races into BLOCKED.
+        self.assertIn("proxy gh's stderr VERBATIM", self.seam)
+        self.assertIn("RESOLVING", self.seam)
+        self.assertIn("BLOCKED", self.seam)
+
+    def test_contract_forbids_auto_and_merge_queue(self) -> None:
+        self.assertIn("never `--auto`, never merge-queue enrollment", self.seam)
+        # The explicit-merge restatement outside the contract block stays.
+        self.assertIn("always explicit, never `gh pr merge --auto`", self.seam)
+
+    def test_contract_scopes_the_seam_to_the_merge_call(self) -> None:
+        self.assertIn("THIS merge call ONLY", self.seam)
+        self.assertIn("session identity", self.seam)
+        # --delete-branch is a second permission a merge-only App may lack.
+        self.assertIn("--delete-branch` needs a second permission", self.seam)
+
+    def test_seam_is_env_only_never_a_config_key(self) -> None:
+        self.assertIn("ENV ONLY", self.seam)
+        self.assertNotIn("land.mergeCmd", self.text)
+        self.assertNotIn("lcfg mergeCmd", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()
