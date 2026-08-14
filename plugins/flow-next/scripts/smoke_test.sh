@@ -2043,14 +2043,10 @@ echo -e "${YELLOW}--- model-routing scaffold ceremony prose (fn-88.4) ---${NC}"
 # pattern as the sync block above. These guard the ceremony prose the
 # deterministic transforms (test_model_routing_scaffold.py) depend on.
 MR_WORKFLOW="$PLUGIN_ROOT/skills/flow-next-setup/workflow.md"
-MR_ROUTING_REFS=(
-  "$PLUGIN_ROOT/skills/flow-next-setup/references/model-routing-bridge.md"
-  "$PLUGIN_ROOT/skills/flow-next-setup/references/model-routing-cursor.md"
-  "$PLUGIN_ROOT/skills/flow-next-setup/references/model-routing-grok.md"
-)
+MR_SNIPPET="$PLUGIN_ROOT/skills/flow-next-setup/templates/model-routing-snippet.md"
 
-# 1: Headless / non-interactive setup skips the Model Routing question silently.
-if grep -q "skipped SILENTLY" "$MR_WORKFLOW"; then
+# 1: Headless / autonomous setup never writes the routing block.
+if grep -q "skipped (headless)" "$MR_WORKFLOW"; then
   echo -e "${GREEN}✓${NC} setup workflow states the headless-skip rule"
   PASS=$((PASS + 1))
 else
@@ -2058,18 +2054,18 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 2: Frozen option strings, as-built casing.
-if grep -qF '`Scaffold` / `Skip`' "$MR_WORKFLOW"; then
-  echo -e "${GREEN}✓${NC} setup workflow carries the frozen Model Routing option set"
+# 2: The one-sentence commented-example closing line (fn-195 R5).
+if grep -qF 'Wrote a commented model-routing example to' "$MR_WORKFLOW"; then
+  echo -e "${GREEN}✓${NC} setup workflow carries the commented-example closing line"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} setup workflow missing frozen option strings"
+  echo -e "${RED}✗${NC} setup workflow missing commented-example closing line"
   FAIL=$((FAIL + 1))
 fi
 
-# 3: The retired packaged-delegation option must not regrow in the option set
-# or in any selected host reference.
-if grep -qE "work\.delegate|Scaffold \+ enable codex delegation" "$MR_WORKFLOW" "${MR_ROUTING_REFS[@]}"; then
+# 3: The retired packaged-delegation option must not regrow in the workflow
+# or the routing-block template.
+if grep -qE "work\.delegate|Scaffold \+ enable codex delegation" "$MR_WORKFLOW" "$MR_SNIPPET"; then
   echo -e "${RED}✗${NC} setup workflow still carries retired packaged-delegation prose"
   FAIL=$((FAIL + 1))
 else
@@ -2077,8 +2073,8 @@ else
   PASS=$((PASS + 1))
 fi
 
-# 4: Scaffold processing is ordered AFTER the Docs block.
-if grep -q "the Docs block above" "$MR_WORKFLOW"; then
+# 4: Routing-block processing is ordered AFTER the Docs block.
+if grep -qF 'Run this **after** the Docs block' "$MR_WORKFLOW"; then
   echo -e "${GREEN}✓${NC} scaffold processing ordered after the Docs block"
   PASS=$((PASS + 1))
 else

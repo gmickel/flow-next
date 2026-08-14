@@ -834,12 +834,16 @@ The marker-block boundaries are load-bearing: **docs snippets are written throug
 
 **Routing block** — one proposal, no question. Run this **after** the Docs block
 above and before Ralph/Star. Always re-read target files from disk after Docs;
-never interleave the two writes.
+never interleave the two writes. Two hard outs before the ladder: a **Docs
+answer of `Skip`** is a decline of documentation edits and declines this write
+too — record `skipped (docs declined)` and move on; a **headless or autonomous
+run** (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, `FLOW_AUTONOMOUS=1`, or
+`mode:autonomous`) never writes the block — instruction-file edits are the
+user's, so record `skipped (headless)` and move on.
 
 Resolve the target with this ladder, first match wins:
 
-1. Docs answered this run: mirror `CLAUDE.md only`, `AGENTS.md only`, or `Both`
-   (`Skip` falls through).
+1. Docs answered this run: mirror `CLAUDE.md only`, `AGENTS.md only`, or `Both`.
 2. Otherwise the files already carrying `<!-- BEGIN FLOW-NEXT -->`.
 3. Otherwise Codex / Cursor / Grok → `AGENTS.md`; Claude Code / Droid →
    `CLAUDE.md`.
@@ -857,6 +861,11 @@ Per target, in order:
   `kept (yours)`. Setup is re-run after every release; a block the user edited
   (or emptied) is theirs from the moment it exists. Rewriting one has broken
   this (fn-195 R5).
+- **Unmarked routing prose.** A target already carrying a user-authored
+  routing-shaped heading (a heading line containing `model routing` or
+  `model-routing`, case-insensitive, without our markers) is theirs too: skip
+  the write, record `kept (yours)`. Never append a second routing section
+  beside one a human wrote.
 - **No block.** Write [templates/model-routing-snippet.md](templates/model-routing-snippet.md)
   **verbatim** — markers included, every routing line still commented out. There
   is no composition step: no probe sentinels, no detected models, no date stamp,

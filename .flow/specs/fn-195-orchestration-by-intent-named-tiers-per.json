@@ -11,7 +11,8 @@
   ],
   "id": "fn-195-orchestration-by-intent-named-tiers-per",
   "impl_review_rounds": {
-    "fn-195-orchestration-by-intent-named-tiers-per.1": 2
+    "fn-195-orchestration-by-intent-named-tiers-per.1": 0,
+    "fn-195-orchestration-by-intent-named-tiers-per.2": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -70,13 +71,68 @@
       "task": "fn-195-orchestration-by-intent-named-tiers-per.1",
       "timestamp": "2026-08-14T19:43:51.525632Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "92bf019166c113c04e731f2f66718b8921cf41304132820c1c1e99c40c153830",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "877d953d537b908e61b775b806e2d0338a0e775e",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 589,
+      "output_sha256": "52cb930fe8f222347db32171051b7fd7cd6ecbc34263d0ee01fec5ee33fa4e3e",
+      "reservation_id": "edafd7bc63d7459ea20248170b25b93c",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.1",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.1",
+      "timestamp": "2026-08-14T19:45:48.209230Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "ca165c6ecc2be0eecf2328eb0616d86fa0bb695dda04323a9b526b372de31b20",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "45379f2c5c32edd58ff2c06fcd542a726f0bf6bf",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1318,
+      "output_sha256": "9d5bcdd3a9d7efab753e9850adc5c4ee5460ccc9edad7c8abaab77441fb3c595",
+      "reservation_id": "c0e1150c97e749ca8f58b6fc3b2ccea6",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.2",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.2",
+      "timestamp": "2026-08-14T19:49:25.968770Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
-    "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0,
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 0
   },
   "spec_path": ".flow/specs/fn-195-orchestration-by-intent-named-tiers-per.md",
   "status": "open",
@@ -92,5 +148,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T19:43:51.958729Z"
+  "updated_at": "2026-08-14T19:49:26.389249Z"
 }
