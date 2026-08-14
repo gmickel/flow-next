@@ -44,7 +44,8 @@ Deferred by design: mirror regen (sync-codex.sh execution, plugins/flow-next/cod
 
 Implemented in isolated worktree (wt/flow-98.2, e36c2859), integrated onto spec branch as afbb2ed1.
 
-stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.2.json; P3 worker.md:219 stale trailer sentence carried to .5)
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.2.json; P3 worker.md:219 stale trailer sentence carried to .5)stage: plan-sync - ran (drift: yes; .5 scope expanded with orphaned flowctl codex subcommands + dangling refs + setup routing option; spec coverage table populated)
+
 ## Evidence
 - Commits: afbb2ed1202fc465e5b941ceec28fb840f7a26c2
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_work_reached_path_routes test_parallel_work_prose test_foreground_rule_fences -q (worker worktree, green), integrated verify @afbb2ed1: cd plugins/flow-next/tests && python3 -m unittest test_flow_config_schema_drift test_model_resolution test_removed_delegate_config_advisory test_work_reached_path_routes test_parallel_work_prose test_foreground_rule_fences -q (121 tests OK), uvx ruff@0.16.0 check . (All checks passed, integrated tree), python3 scripts/run_tests_parallel.py (worker worktree) -> 5 failing files ALL owned downstream: 3 delegation test files (.4), 2 mirror-parity halves (.5), impl-review: host backend SHIP (reviewer claude-fable-5, fresh read-only subagent; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.2.json)
