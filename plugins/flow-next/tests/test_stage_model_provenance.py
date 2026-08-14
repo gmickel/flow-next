@@ -124,9 +124,9 @@ class StageLineModelTest(_RepoCase):
         )
         stages = self.stages_json()["stages"]
         self.assertEqual(
-            stages["plan-review"]["models"], {"some-reviewer-slug": 1}
+            stages["plan-review"]["receipt_models"], {"some-reviewer-slug": 1}
         )
-        self.assertEqual(stages["impl-review"]["models"], {"unknown": 1})
+        self.assertEqual(stages["impl-review"]["receipt_models"], {"unknown": 1})
 
     def test_malformed_annotation_still_lands_in_unknown_lines(self) -> None:
         self.append_summary(
@@ -147,3 +147,28 @@ class StageLineModelTest(_RepoCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CombinedSourceTallyTest(StageLineModelTest):
+    """A prose stage line AND a receipt for the same review never merge tallies.
+
+    The pilot's real shape: `stage: plan-review - ran` (no model annotation)
+    plus a plan_review receipt carrying the dispatcher-resolved model. Merging
+    the two made a fully receipt-observed review read as half `unknown`; the
+    split maps mirror the deliberate ran/receipts counter split.
+    """
+
+    def test_stage_line_and_receipt_keep_separate_maps(self) -> None:
+        self.append_summary("stage: plan-review - ran")
+        receipts = self.repo / ".flow" / "review-receipts"
+        receipts.mkdir(parents=True, exist_ok=True)
+        (receipts / f"plan-{self.spec_id}.json").write_text(
+            '{"type": "plan_review", "verdict": "SHIP",'
+            ' "model": "some-reviewer-slug"}',
+            encoding="utf-8",
+        )
+        entry = self.stages_json()["stages"]["plan-review"]
+        self.assertEqual(entry["models"], {"unknown": 1})
+        self.assertEqual(entry["receipt_models"], {"some-reviewer-slug": 1})
+        self.assertEqual(entry["ran"], 1)
+        self.assertEqual(entry["receipts"], 1)

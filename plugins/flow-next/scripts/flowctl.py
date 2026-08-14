@@ -19916,15 +19916,19 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
         return stages.setdefault(
             name.replace("_", "-"),
             {"ran": 0, "skipped": 0, "failed": 0, "unknown": 0,
-             "receipts": 0, "reasons": [], "models": {}},
+             "receipts": 0, "reasons": [], "models": {}, "receipt_models": {}},
         )
 
-    def record_model(entry: dict, raw: Any) -> None:
+    def record_model(entry: dict, raw: Any, key: str = "models") -> None:
         # fn-195 R7: recording only. Every counted stage contributes exactly
         # one tally — the observed model, or `unknown` when the harness did
         # not expose one — so an unrouted stage is a fact in the record.
+        # Stage-line and receipt provenance stay in SEPARATE maps (mirroring
+        # the ran/receipts counter split): a receipt is the same review a
+        # prose line may already describe, and merging the two made a fully
+        # receipt-observed review read as half `unknown`.
         value = _stage_model_value(raw)
-        entry["models"][value] = entry["models"].get(value, 0) + 1
+        entry[key][value] = entry[key].get(value, 0) + 1
 
     unknown_lines = 0
     tasks_dir = flow_dir / "tasks"
@@ -19966,7 +19970,7 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
             entry["receipts"] += 1
             # The receipt already carries the model that ran (fn-193); a
             # receipt without one is unknown, never the configured value.
-            record_model(entry, receipt.get("model"))
+            record_model(entry, receipt.get("model"), key="receipt_models")
 
     result = {
         "success": True,
@@ -19994,6 +19998,12 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
                 for model, count in sorted(entry["models"].items())
             )
             print(f"    models: {models}")
+        if entry["receipt_models"]:
+            receipt_models = " ".join(
+                f"{model}={count}"
+                for model, count in sorted(entry["receipt_models"].items())
+            )
+            print(f"    receipt models: {receipt_models}")
         for reason in entry["reasons"]:
             print(f"    - {reason}")
     if unknown_lines:

@@ -13,7 +13,8 @@
   "impl_review_rounds": {
     "fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.2": 0,
-    "fn-195-orchestration-by-intent-named-tiers-per.3": 0
+    "fn-195-orchestration-by-intent-named-tiers-per.3": 0,
+    "fn-195-orchestration-by-intent-named-tiers-per.4": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -221,8 +222,18 @@
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 1,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 1
   },
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 1
+  },
+  "review_reservations": {
+    "bf5b687b968b43b79de515681402c59e": {
+      "artifact_sha256": "7588170f5aa426fb8175e5da5a22d246e44ada2ea1791011bfea20f7a240b853",
+      "counter_scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.4",
+      "epoch": 0,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 0,
@@ -242,5 +253,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T21:33:32.382281Z"
+  "updated_at": "2026-08-14T22:16:12.618954Z"
 }
