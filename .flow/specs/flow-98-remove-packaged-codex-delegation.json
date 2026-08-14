@@ -8,12 +8,107 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "flow-98-remove-packaged-codex-delegation",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "flow-98-remove-packaged-codex-delegation.1": 0,
+    "flow-98-remove-packaged-codex-delegation.2": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "99e72ed5271ce562ddd76bfecb677db762661533722bbec9c1864c8c23356783",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "88ca14e3ef868c8ea02b8338eed4b49a84804d1f",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 1124,
+      "output_sha256": "d16ab2486733b7d3b6978d674f0e2c85ed7c2667a1a29c2582cfe94893cd38b3",
+      "reservation_id": "1d6584c0f0c94f11bfff47e21fd841f7",
+      "round_consumed": false,
+      "scope": "impl:flow-98-remove-packaged-codex-delegation.1",
+      "superseded_by": null,
+      "task": "flow-98-remove-packaged-codex-delegation.1",
+      "timestamp": "2026-08-14T13:49:45.741641Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "99e72ed5271ce562ddd76bfecb677db762661533722bbec9c1864c8c23356783",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "88ca14e3ef868c8ea02b8338eed4b49a84804d1f",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1148,
+      "output_sha256": "3b894951bd64ef9571d8c15a166157c4a935eadfb32a097bc1b901a6524bb44a",
+      "reservation_id": "054eef9aaaaa4069aaf6c8726fc7f122",
+      "round_consumed": true,
+      "scope": "impl:flow-98-remove-packaged-codex-delegation.1",
+      "superseded_by": null,
+      "task": "flow-98-remove-packaged-codex-delegation.1",
+      "timestamp": "2026-08-14T13:52:49.974213Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "b3850c9b89dc9c77418335515162cf5e8c1a4ba6992a26bcc6a601513646ceb1",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "afbb2ed1202fc465e5b941ceec28fb840f7a26c2",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1420,
+      "output_sha256": "bb409b0c7b682340bdad94e458f11e0fb7c366890772f994b7a33147e286217b",
+      "reservation_id": "051c503be9714a6697dd18be3b908a0e",
+      "round_consumed": true,
+      "scope": "impl:flow-98-remove-packaged-codex-delegation.2",
+      "superseded_by": null,
+      "task": "flow-98-remove-packaged-codex-delegation.2",
+      "timestamp": "2026-08-14T14:07:59.257706Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:flow-98-remove-packaged-codex-delegation.1": 2,
+    "impl:flow-98-remove-packaged-codex-delegation.2": 1,
+    "plan": 1,
+    "plan#completion": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:flow-98-remove-packaged-codex-delegation.1": 0,
+    "impl:flow-98-remove-packaged-codex-delegation.2": 0
+  },
   "spec_path": ".flow/specs/flow-98-remove-packaged-codex-delegation.md",
   "status": "open",
   "title": "Remove packaged codex delegation subsystem",
@@ -29,5 +124,5 @@
     "mergeBaseTracker": "## Conversation Evidence\n\n> user (turn 6): \"we will need to clean this up at some point it is convoluted, i can easily prompt it to do what i want but this makes no sense\"\n> user (turn 7): \"its because we built the delegate thing first, then replaced it with a more dynamic way of just orchestrating\"\n> user (turn 8): \"usage.md covers using it without delegate already right, any downside to just deleting all of the delegate stuff\"\n> user (turn 9): \"point 2 isn't true surely, setup allows writing the orchestration config into CLAUDE.md which is then called on every turn\"\n> user (turn 10): \"we have two options a) we also have flow-swarm (see ~/work/flow-swarm), that has a similar thing but allows the configuration of which model for what more precisely, essentially extending the config model, but if we were to adopt this, then we would have the config twice, one in flow-next, one in flow-swarm\"\n> user (turn 10): \"b) we keep it agentic, CLAUDE.md only and deprecate or remove cleanly in a major release, perhaps with clear docs and a migration route, not sure\"\n> user (turn 11): \"the claude.md thing might still interfere with flow-swarm, butt flow-swarm is optional\"\n> user (turn 11): \"i don't think people use the delegate thing much, we'll be fine, capture it\"\n\n## Goal & Context\n\n<!-- Goal & Context: 60% [user], 40% [paraphrase] -->\n\nThe model-routing config surface has grown by strata: the packaged codex delegation subsystem (`work.delegate*`, fn-55) was built first, then superseded by the more dynamic agentic orchestration approach - the `/flow-next:setup` CLAUDE.md routing scaffold (standing prose loaded every turn, including autonomous runs) plus the usage.md bridge recipes and the `models.roles` role map. Both layers are live today, producing duplicated pins (`work.delegateModel` vs `models.roles.delegate`), half-inert role-map entries, and a config surface the maintainer describes as \"convoluted ... this makes no sense.\"\n\nDecision (option b): keep flow-next agentic - CLAUDE.md-scaffold prose is the canonical implementation-offload route - and remove the packaged delegation subsystem cleanly in a major release with clear docs and a migration route. Precise per-stage model staffing is flow-swarm's product, not flow-next's; adopting flow-swarm-style config into flow-next (option a) would duplicate routing truth across two products. Delegation usage in the field is believed low (\"i don't think people use the delegate thing much\"), so the removal risk is accepted.\n\n## Acceptance Criteria\n\n* **R1:** All `work.delegate*` config keys (`delegate`, `delegateConsent`, `delegateDecision`, `delegateEffort`, `delegateModel`, `delegateSandbox`) are removed from flowctl and the published config schema (gen_flow_config_schema.py TABLE + regenerated artifact); schema-drift test green. [paraphrase]\n* **R2:** The delegation machinery is removed from the work skill: Phase 0 delegation gating/resolution chain, the `delegate:codex`/`delegate:local` arg tokens, the classify judge, and `references/codex-delegation.md`. [user]\n* **R3:** The `models.roles.delegate` pin is removed and the role map is pruned to entries deterministic machinery actually reads. [user]\n* **R4:** The CLAUDE.md setup scaffold + usage.md bridge recipes are the documented canonical implementation-offload route; every doc referencing packaged delegation (orchestration.md, ralph.md, teams.md, flowctl.md, skills.md, docs README, repo CLAUDE.md carve-out prose) is updated to point there. [paraphrase]\n* **R5:** Migration route: a repo with `work.delegate` set gets a clear, actionable message pointing at the scaffold/bridge route (no silent behavior change); CHANGELOG frames the removal as a breaking change for the next major release. [user]\n* **R6:** Delegation-specific tests are removed or repointed (test_codex_delegation_*, test_work_delegate_config, test_ralph_guard_codex_delegation, work-skill delegation route tests); full gate green. [paraphrase]\n* **R7:** `spec set-backend` per-spec impl/review/sync fields are retained untouched as data carriage for flow-swarm and other control planes. [paraphrase]\n* **R8:** An explicit decision is recorded in the spec/plan on what ralph-guard keeps: whether the deterministic \"bridge child is forbidden from git\" enforcement survives for prose-routed bridges, or is dropped with the rationale stated. [inferred]\n\n## Boundaries\n\n* Do NOT adopt flow-swarm-style precise per-stage model config into flow-next (option a rejected - config would exist twice across the two products). [user]\n* `review.backend` machinery and the review-backend registry stay - the cross-model review gate is a sanctioned deterministic carve-out, not delegation strata. [paraphrase]\n* The other sanctioned subprocess-LLM carve-outs (review-backend dispatch, triage-skip judge) are untouched; only the fn-55 delegation carve-out is retired. [paraphrase]\n* Parked - explicitly NOT in the current weekend queue. [user]\n* No version bump at implementation time; the major-release framing lands via the batched release process (CHANGELOG `## Unreleased`). [paraphrase]\n\n## Decision Context\n\n### Motivation\n\n* Strata history: delegation (fn-55) predates the dynamic orchestration approach; the newer layer (setup scaffold + role map + bridge recipes, fn-88/97/103/115) superseded it without retiring it. [user]\n* The CLAUDE.md scaffold is standing prose loaded every turn - including autonomous pilot/land/Ralph sessions - so agentic routing covers the promptless-runs case that previously justified packaged machinery. [user]\n* Product boundary: flow-swarm owns precise per-stage staffing (its `impl_backend`/`review_backend`/staffing API); flow-next stays skill-driven/agentic. The CLAUDE.md scaffold may still interact with flow-swarm-driven repos, but flow-swarm is optional - acceptable. [user]\n* Removal risk accepted on low field usage of delegation. [user]\n* Prioritization: cleanliness of the routing surface beats preserving a packaged feature the prose route already covers. [paraphrase]\n\n## Requirement coverage\n\n| R-ID | Task |\n| -- | -- |\n| R1 | fn-N.M (TBD - populate via /flow-next:plan) |\n| R2 | fn-N.M (TBD - populate via /flow-next:plan) |\n| R3 | fn-N.M (TBD - populate via /flow-next:plan) |\n| R4 | fn-N.M (TBD - populate via /flow-next:plan) |\n| R5 | fn-N.M (TBD - populate via /flow-next:plan) |\n| R6 | fn-N.M (TBD - populate via /flow-next:plan) |\n| R7 | fn-N.M (TBD - populate via /flow-next:plan) |\n| R8 | fn-N.M (TBD - populate via /flow-next:plan) |",
     "url": "https://linear.app/gmickel/issue/FLOW-98"
   },
-  "updated_at": "2026-08-07T20:25:49.980450Z"
+  "updated_at": "2026-08-14T14:07:59.819838Z"
 }

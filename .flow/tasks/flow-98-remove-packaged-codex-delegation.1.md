@@ -36,9 +36,15 @@ Remove the six `work.delegate*` keys and the `models.roles.delegate` pin from th
 - [ ] TBD
 
 ## Done summary
-TBD
+Removed the six `work.delegate*` config keys (whole top-level `work.*` namespace) and the `models.roles.delegate` pin from flowctl, the schema-generator TABLE, and the regenerated `flow-config.schema.json`. A config still carrying any removed key gets one non-blocking stderr advisory line (per process, latched) naming the keys and pointing at the /flow-next:setup model-routing scaffold + .flow/usage.md bridge recipes; wired at config get/set, anchor, brief. New test file test_removed_delegate_config_advisory.py; namespace-coexistence assertions repointed off work.* in four sibling test files.
 
+Deferred by design: propagation (.flow/bin, tracker manifest, codex mirror) → task .5; test_work_delegate_config.py deletion → task .4.
+
+Implemented in isolated worktree (wt/flow-98.1, c194dec7), integrated onto spec branch as 88ca14e3.
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.1.json)
+stage: delegation - skipped(config: delegation off)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 88ca14e3ef868c8ea02b8338eed4b49a84804d1f
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_flow_config_schema_drift test_model_resolution test_removed_delegate_config_advisory -q (107 tests OK, worker worktree), integrated verify @88ca14e3+.2: cd plugins/flow-next/tests && python3 -m unittest test_flow_config_schema_drift test_model_resolution test_removed_delegate_config_advisory test_work_reached_path_routes test_parallel_work_prose test_foreground_rule_fences -q (121 tests OK), uvx ruff@0.16.0 check . (All checks passed, integrated tree), python3 scripts/run_tests_parallel.py (worker worktree) -> failures ALL owned by deferrals: test_work_delegate_config (.4), dogfood/manifest/mirror propagation (.5), impl-review: host backend SHIP (reviewer claude-fable-5, fresh read-only subagent; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.1.json)
 - PRs:
