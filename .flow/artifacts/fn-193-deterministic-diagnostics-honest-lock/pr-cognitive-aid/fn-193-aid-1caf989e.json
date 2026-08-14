@@ -1,0 +1,459 @@
+{
+  "artifactId": "fn-193-aid-1caf989e",
+  "baseSha": "4d155939d30a7dee717a8f9a36f99c5d4feb161e",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 0,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "config_lock had one failure exit for three different situations: a swallowed PermissionError on mkdir (the Windows delete-pending carve-out) meant a lock that could NEVER be created burned the full 10s deadline and then reported the hard-coded 'holder appears alive (see owner.json)' - a contention story for a permissions failure, with no errno, no path, and no owner ever read (issue #340; the reporter's self-reentrancy hypothesis was disproven by a runtime probe and an AST call-graph sweep). And the review-attempt ledger recorded which BACKEND reviewed but not which MODEL - while the receipt already carries model/effort/spec, and the row is where post-hoc analysis reads; the value cannot be re-derived from config because the fallback ladder and codex resume both move it (issue #338, recording half - the fn-183 provenance family simply never considered it).",
+        "taskIds": [],
+        "title": "The machinery knew the fact and dropped it - twice"
+      },
+      {
+        "files": [
+          {
+            "additions": 84,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/config_lock.py",
+            "rIds": [
+              "R1",
+              "R2"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r1",
+              "s-r2",
+              "s-diff"
+            ],
+            "summary": "Fail-fast class + observation-composed timeout messages; _denied_detail is errno+strerror only (no environment diagnosis by design).",
+            "taskIds": [
+              "fn-193-deterministic-diagnostics-honest-lock.1"
+            ]
+          },
+          {
+            "additions": 105,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_tracker_resolved_cache.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-t1",
+              "s-c1",
+              "s-r5",
+              "s-diff"
+            ],
+            "summary": "6 tests: unavailable-fast (x2 incl. parent), catchable-as-timeout, held-lock owner facts, ownerless reclaim-at, denied-while-exists polls.",
+            "taskIds": [
+              "fn-193-deterministic-diagnostics-honest-lock.1"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R2",
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-t1",
+          "s-c1",
+          "s-r1",
+          "s-r2",
+          "s-r5"
+        ],
+        "summary": "ConfigLockUnavailable (subclass of ConfigLockTimeout - every existing except site keeps working) fails FAST when the lock path is absent and mkdir was denied, naming errno/strerror and the parent path; the pre-loop parent mkdir (previously a raw traceback past every handler) wraps to the same class. Real timeouts compose the message from observations: owner facts (pid/host/age) when owner.json was read; owner-absent plus when-it-reclaims when not; denied-while-exists keeps polling (the Windows pending-delete carve-out, preserved and pinned). FileExistsError resets the last-error tracker, so genuine contention can never reach the permission branch. No lock semantics, constants, or config changed.",
+        "taskIds": [
+          "fn-193-deterministic-diagnostics-honest-lock.1"
+        ],
+        "title": "config_lock reports what it observed"
+      },
+      {
+        "files": [
+          {
+            "additions": 35,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r3",
+              "s-diff"
+            ],
+            "summary": "Kwargs + conditional row keys + journal/replay threading; purely additive.",
+            "taskIds": [
+              "fn-193-deterministic-diagnostics-honest-lock.2"
+            ]
+          },
+          {
+            "additions": 127,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_convergence_cap.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r5",
+              "s-diff"
+            ],
+            "summary": "6 tests incl. ladder-floor honesty and the read-surface pin.",
+            "taskIds": [
+              "fn-193-deterministic-diagnostics-honest-lock.2"
+            ]
+          },
+          {
+            "additions": 41,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_review_convergence_journal.py",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r5",
+              "s-diff"
+            ],
+            "summary": "Crash-replay preserves the resolved model.",
+            "taskIds": [
+              "fn-193-deterministic-diagnostics-honest-lock.2"
+            ]
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/architecture.md",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "s-t2",
+              "s-c2",
+              "s-r4",
+              "s-diff"
+            ],
+            "summary": "Keys documented under the absence-means-unknown paragraph.",
+            "taskIds": [
+              "fn-193-deterministic-diagnostics-honest-lock.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R3",
+          "R4",
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-t2",
+          "s-c2",
+          "s-r3",
+          "s-r4",
+          "s-r5"
+        ],
+        "summary": "reviewed_model/reviewed_effort ride from the existing _bind_receipt_model_effort call in each in-process pipeline (the SAME downgrade-aware, resume-carrying values the receipt records) through _finish_backend_exec on both the verdict and transport-failure record calls, onto conditional row keys (absent when unresolved - never 'unknown'), into the journal, and through crash replay. attempts --json passes rows unprojected (pinned); review-rounds record still rejects --model at argparse (pinned) - the rp/host path must not let a narrating agent claim a model, mirroring the measured_tool_calls codex-only posture.",
+        "taskIds": [
+          "fn-193-deterministic-diagnostics-honest-lock.2"
+        ],
+        "title": "The attempt row records the model that actually ran"
+      },
+      {
+        "files": [
+          {
+            "additions": 27,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R6"
+            ],
+            "sourceRefs": [
+              "s-c3",
+              "s-r6",
+              "s-diff"
+            ],
+            "summary": "Unreleased entry: both fixes, reporters credited.",
+            "taskIds": []
+          },
+          {
+            "additions": 35,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Vendored copy.",
+            "taskIds": []
+          },
+          {
+            "additions": 84,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/bin/flowctl_tracker/config_lock.py",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Vendored tracker copy (rsync).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Regenerated hashes.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-c3",
+              "s-diff"
+            ],
+            "summary": "Regenerated hashes.",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-193-deterministic-diagnostics-honest-lock.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec record.",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-193-deterministic-diagnostics-honest-lock.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-spec",
+              "s-diff"
+            ],
+            "summary": "Spec body with R1-R6.",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-193-deterministic-diagnostics-honest-lock.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-193-deterministic-diagnostics-honest-lock.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t1",
+              "s-diff"
+            ],
+            "summary": "Task 1 body + done summary.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-193-deterministic-diagnostics-honest-lock.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 record.",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-193-deterministic-diagnostics-honest-lock.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "s-t2",
+              "s-diff"
+            ],
+            "summary": "Task 2 body + done summary.",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 3,
+        "rIds": [
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-c3",
+          "s-r6"
+        ],
+        "summary": "Full gate 4563 tests OK, ruff clean; dual-copy propagation including the flowctl_tracker rsync (config_lock.py changed) + manifest regen + codex mirror x2. CHANGELOG under Unreleased credits both reporters and records the disproven-hypothesis note for #340. Wave 1's done-advisory fired live on this spec's own lifecycle calls - the receipt-staging canon it documents is what this branch follows.",
+        "taskIds": [],
+        "title": "Gate, propagation, lifecycle artifacts"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "s-c3"
+        ],
+        "value": "4563 tests, 0 failures; ruff 0.16.0 clean; sync-codex idempotent"
+      },
+      {
+        "label": "New coverage",
+        "sourceRefs": [
+          "s-t1",
+          "s-t2"
+        ],
+        "value": "13 regression tests (6 lock message shapes + 7 model-provenance incl. crash replay and the argparse rejection)"
+      },
+      {
+        "label": "R-ID coverage",
+        "sourceRefs": [
+          "s-c1",
+          "s-c2",
+          "s-c3"
+        ],
+        "value": "6/6 satisfied across two tasks + close-out"
+      }
+    ],
+    "thesis": "Two deterministic-tier honesty fixes: config_lock fails fast with errno and path when a lock can never be created and reserves 'holder appears alive' for an owner it actually read (the reporter's 10s phantom-holder stall eliminated), and review-attempt rows record the dispatcher-resolved model/effort - the fact the receipt already carries, journaled and crash-replayed, absent rather than guessed everywhere the dispatcher did not resolve it (issues #340 + #338 recording half)."
+  },
+  "generatedAt": "2026-08-14T09:30:00Z",
+  "headSha": "1caf989eb55c12312ffb6f8d231cf85cebad79d2",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-193-deterministic-diagnostics-honest-lock"
+    },
+    {
+      "id": "s-t1",
+      "kind": "task",
+      "ref": "fn-193-deterministic-diagnostics-honest-lock.1"
+    },
+    {
+      "id": "s-t2",
+      "kind": "task",
+      "ref": "fn-193-deterministic-diagnostics-honest-lock.2"
+    },
+    {
+      "id": "s-r1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "s-r2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "s-r3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "s-r4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "s-r5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "s-r6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "s-c1",
+      "kind": "commit",
+      "ref": "d15f63a5de6eb69d55f1160c3609c409fa3fc6d2"
+    },
+    {
+      "id": "s-c2",
+      "kind": "commit",
+      "ref": "3ac52bd566cead91e3e1558cdfa5559745fe8b4b"
+    },
+    {
+      "id": "s-c3",
+      "kind": "commit",
+      "ref": "1caf989eb55c12312ffb6f8d231cf85cebad79d2"
+    },
+    {
+      "id": "s-diff",
+      "kind": "diff_metadata",
+      "ref": "4d155939d30a7dee717a8f9a36f99c5d4feb161e..1caf989eb55c12312ffb6f8d231cf85cebad79d2"
+    }
+  ],
+  "specId": "fn-193-deterministic-diagnostics-honest-lock"
+}
