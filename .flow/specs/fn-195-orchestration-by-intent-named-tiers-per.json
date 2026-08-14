@@ -1,13 +1,21 @@
 {
   "branch_name": "fn-195-orchestration-by-intent-named-tiers-per",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-14T11:43:52.829897Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [
     "flow-98-remove-packaged-codex-delegation"
   ],
   "id": "fn-195-orchestration-by-intent-named-tiers-per",
+  "impl_review_rounds": {},
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "ready": true,
   "spec_path": ".flow/specs/fn-195-orchestration-by-intent-named-tiers-per.md",
   "status": "open",
   "title": "Orchestration by intent: named tiers, per-harness reach, zero shipped model slugs",
@@ -22,5 +30,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T11:44:39.613913Z"
+  "updated_at": "2026-08-14T12:14:31.573627Z"
 }
