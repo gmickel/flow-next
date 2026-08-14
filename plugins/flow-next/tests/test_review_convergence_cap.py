@@ -2684,20 +2684,21 @@ class TestAttemptRowResolvedModel(TestCombinedFinalizeWrite):
         """The row takes the SAME values the receipt does - `_receipt_model_effort`
         output, floor/downgrade included - never the optimistic spec model."""
         spec = flowctl.BackendSpec(backend="codex", model="gpt-5.6-sol", effort="high")
-        model, effort = flowctl._receipt_model_effort(
-            spec, {"model": None, "floor": True}
-        )
+        resolution = {"model": None, "floor": True}
+        model, effort = flowctl._receipt_model_effort(spec, resolution)
+        # The RECEIPT records the floor selector (fn-76 contract)...
         self.assertEqual((model, effort), ("default", None))
+        # ...while the dispatch sites gate on resolution["floor"] and pass
+        # None to the row (spec R3 / PR #349 rounds 4-5: absent beats a
+        # placeholder; an explicit auto pin has floor unset).
+        row_model = None if resolution.get("floor") else model
         self._reserve()
         flowctl.record_review_attempt(
             self.spec_id, "plan", backend="codex",
             output="<verdict>SHIP</verdict>", verdict="SHIP",
-            reviewed_model=model, reviewed_effort=effort,
+            reviewed_model=row_model, reviewed_effort=effort,
         )
         row = self._row()
-        # Spec R3 / PR #349 round 4: "default"/"auto" are ladder floor
-        # SELECTORS, not resolved models - the receipt records them, the
-        # row records nothing (absent beats a placeholder).
         self.assertNotIn("model", row)
         self.assertNotIn("effort", row)
         self.assertNotIn("effort", row)

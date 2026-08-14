@@ -11364,10 +11364,10 @@ def _record_review_attempt_locked(
     # or a codex resume carry lands here honestly). Written only where the
     # dispatcher resolved them - the rp/host `review-rounds record` path has no
     # such fact and records no key, never "unknown"/"auto".
-    # Floor selectors ("auto" copilot/cursor, "default" codex) are ladder
-    # placeholders, not resolved models - the dispatcher never knew what ran
-    # (#349 round 4). Absent beats a placeholder, per the field's contract.
-    if reviewed_model and reviewed_model not in ("auto", "default"):
+    # Ladder floors pass None here (the sites gate on resolution["floor"] -
+    # #349 rounds 4-5): a floored "auto"/"default" is a selector placeholder,
+    # while an EXPLICIT cursor:auto pin really was sent and records honestly.
+    if reviewed_model:
         row["model"] = reviewed_model
         if reviewed_effort:
             row["effort"] = reviewed_effort
@@ -42597,12 +42597,18 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
         # fn-193 (#338): the SAME resolved values the receipt records -
-        # except effort is recorded only when it actually reached the CLI
-        # (copilot omits --effort for claude-* models; floors pin nothing).
-        reviewed_model=effective_model,
+        # except a ladder FLOOR records neither (the receipt's "auto"/
+        # "default" is a selector placeholder, not a resolved model; an
+        # explicit auto pin has floor unset and records honestly), and
+        # effort rides only when it actually reached the CLI (copilot
+        # omits --effort for claude-* models).
+        reviewed_model=(
+            None if _resolution.get("floor") else effective_model
+        ),
         reviewed_effort=(
             effective_effort
-            if _effort_reached_cli(backend, effective_model)
+            if not _resolution.get("floor")
+            and _effort_reached_cli(backend, effective_model)
             else None
         ),
         reservation_id=reservation_id,
@@ -43067,12 +43073,18 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
         # fn-193 (#338): the SAME resolved values the receipt records -
-        # except effort is recorded only when it actually reached the CLI
-        # (copilot omits --effort for claude-* models; floors pin nothing).
-        reviewed_model=effective_model,
+        # except a ladder FLOOR records neither (the receipt's "auto"/
+        # "default" is a selector placeholder, not a resolved model; an
+        # explicit auto pin has floor unset and records honestly), and
+        # effort rides only when it actually reached the CLI (copilot
+        # omits --effort for claude-* models).
+        reviewed_model=(
+            None if _resolution.get("floor") else effective_model
+        ),
         reviewed_effort=(
             effective_effort
-            if _effort_reached_cli(backend, effective_model)
+            if not _resolution.get("floor")
+            and _effort_reached_cli(backend, effective_model)
             else None
         ),
         reservation_id=reservation_id,
@@ -43382,12 +43394,18 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
         # fn-193 (#338): the SAME resolved values the receipt records -
-        # except effort is recorded only when it actually reached the CLI
-        # (copilot omits --effort for claude-* models; floors pin nothing).
-        reviewed_model=effective_model,
+        # except a ladder FLOOR records neither (the receipt's "auto"/
+        # "default" is a selector placeholder, not a resolved model; an
+        # explicit auto pin has floor unset and records honestly), and
+        # effort rides only when it actually reached the CLI (copilot
+        # omits --effort for claude-* models).
+        reviewed_model=(
+            None if _resolution.get("floor") else effective_model
+        ),
         reviewed_effort=(
             effective_effort
-            if _effort_reached_cli(backend, effective_model)
+            if not _resolution.get("floor")
+            and _effort_reached_cli(backend, effective_model)
             else None
         ),
         reservation_id=reservation_id,

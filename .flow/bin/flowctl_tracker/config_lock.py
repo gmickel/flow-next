@@ -325,7 +325,9 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
     _assert_lock_path_safe(flow_dir, lock)
     try:
         lock.parent.mkdir(parents=True, exist_ok=True)
-    except PermissionError as exc:
+    except OSError as exc:
+        # PermissionError, EROFS (plain OSError), ENOSPC... - environment
+        # facts, not contention (#349 round 5).
         raise _unavailable(lock, exc, creating=lock.parent) from None
     deadline = time.monotonic() + timeout_s
     last_error: OSError | None = None
@@ -340,7 +342,9 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
                 # acquires first, their FRESH owner is not stale, so this
                 # branch cannot repeat - the loop is bounded by the deadline.
                 continue
-        except PermissionError as exc:
+        except OSError as exc:
+            # PermissionError and friends (EROFS arrives as plain OSError -
+            # #349 round 5; FileExistsError took its own branch above).
             # Windows: a directory whose deletion is still PENDING (the last
             # holder released while a reader kept a handle open) fails mkdir
             # with ERROR_ACCESS_DENIED, not FileExistsError. Transient - poll.
@@ -360,7 +364,7 @@ def config_lock(flow_dir: Path, *, timeout_s: float = LOCK_TIMEOUT_S) -> Iterato
                 except FileExistsError:
                     last_error = None
                     continue
-                except PermissionError as exc2:
+                except OSError as exc2:
                     if not os.path.lexists(lock):
                         # POSIX: denied twice with nothing there is a
                         # permissions fact - fail fast. Windows: a pending
