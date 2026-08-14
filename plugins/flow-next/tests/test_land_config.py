@@ -676,6 +676,9 @@ class CatchUpWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn('`CATCHUP_RC != 0` → classify from `CATCHUP_ERR`', self.act)
         self.assertIn('verdict `BLOCKED`', self.act)
         self.assertIn('verdict `RESOLVING`, evidence line carries `CATCHUP_ERR`', self.act)
+        # Repeated identical non-conflict failures escalate (PR #350 r2).
+        self.assertIn("catch_up_fail", self.act)
+        self.assertIn("catch-up failing repeatedly", self.act)
         self.assertIn("hand-resolution", self.act)
 
     def test_ledger_sources_new_head_from_the_api(self) -> None:
