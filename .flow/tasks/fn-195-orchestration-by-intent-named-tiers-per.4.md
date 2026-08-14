@@ -38,7 +38,8 @@ stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 
 Post-review conductor fixes (965648022c2c6b9a210eea33c506d634cdc4fd19): receipt_models split from stage-line models tally, accepted-on-read docs clause, combined-source regression test; emitter prose routed to .5 (Touches + acceptance extended).
 
-stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1 with 2 P2 + 1 P3 suggestions applied by conductor)
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1 with 2 P2 + 1 P3 suggestions applied by conductor)stage: plan-sync - ran (drift: no; .5 already carries the emitter scope; review-findings.md fully documented by .4; cross-spec deferred to conductor)
+
 ## Evidence
 - Commits: 38220479889cbafc1616e148b58cad112581c5ca, 965648022c2c6b9a210eea33c506d634cdc4fd19
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_stage_model_provenance test_usage_stages test_review_findings_docs test_review_convergence_cap test_tracker_distribution test_startup_bootstrap -q, python3 scripts/run_tests_parallel.py (files=192 ran=4386 failures=0 errors=0), uvx ruff@0.16.0 check ., post-fix focused: test_stage_model_provenance test_usage_stages test_review_convergence_cap test_startup_bootstrap (243 tests OK); ruff clean, impl-review: host backend SHIP round 1 (reviewer claude-fable-5, fresh subagent; receipt /tmp/impl-review-receipt-fn-195-orchestration-by-intent-named-tiers-per.4.json)
