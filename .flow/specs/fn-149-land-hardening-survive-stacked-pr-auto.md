@@ -31,7 +31,7 @@ This spec makes land correct on stacked PRs: recognize retargets and re-gate, me
 - **R5:** Land merges a stacked PR (bottom-most open layer, all gates green) via the stack merge endpoint (merge-async, squash, direct merge): submit, verify the response's server-captured expected head SHA equals the head land's gates just evaluated (mismatch is NEEDS_HUMAN - the endpoint has no client-side head pin), poll to a terminal status within the tick's bounded budget, and record the outcome. `pending` beyond budget is reported and re-checked next tick, never re-submitted blindly. [paraphrase]
 - **R6:** Non-stacked PRs keep the existing merge call and guard byte-identically (stack absent means zero behavior change). [paraphrase]
 - **R7:** Behavior for non-stacked PRs is unchanged across the whole gate tree - identical verdicts and ledger writes (R4's stack read adds one `gh api` PR fetch to every tick, folded into an existing fetch where possible; verdict-affecting behavior is byte-identical). [inferred]
-- **R8:** The mechanical-rebase conflict rule is unchanged: a conflict produced by a stack retarget aborts to BLOCKED, never hand-resolved. [paraphrase]
+- **R8:** The catch-up conflict rule is unchanged: a conflict produced by a stack retarget is BLOCKED, never hand-resolved. *(AMENDED by fn-194/#342: §3.3 is now server-side `gh pr update-branch` - no local rebase exists; GitHub's refusal IS the conflict verdict. Re-plan this R against the new §3.3 before implementing.)* [paraphrase]
 
 ## Boundaries
 

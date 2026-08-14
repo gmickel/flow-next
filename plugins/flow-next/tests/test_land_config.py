@@ -566,5 +566,273 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn("mergeVerdict=<green|refused|skipped|would-run>", self.text)
 
 
+class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over §3.5's `FLOW_PR_MERGE_CMD` seam (fn-194 R1, #337).
+
+    Same harness limitation as the other workflow classes: the merge call is
+    host-agent BASH inside the skill workflow, not flowctl Python. Pin the
+    load-bearing invariants: the seam exists in the #277 shape, the fixed
+    argument order survives it, the stderr-proxy requirement is stated (the
+    RESOLVING-vs-BLOCKED split reads gh's stderr), no `--auto`/merge-queue,
+    and the seam is env-only - never a `land.*` config key.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("# PR-merge seam (#337)")
+        end = cls.text.find("### 3.6", start)
+        assert start != -1 and end != -1, "§3.5 merge seam not found"
+        cls.seam = cls.text[start:end]
+
+    def test_seam_default_is_gh_pr_merge(self) -> None:
+        self.assertIn('MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"', self.text)
+
+    def test_merge_call_goes_through_the_seam_unquoted(self) -> None:
+        # Unquoted expansion: whitespace-split, never eval'd (#277 shape).
+        self.assertIn(
+            'MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch '
+            '--match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?',
+            self.text,
+        )
+        # The literal pre-seam call is gone - no ungoverned merge path.
+        self.assertNotIn('$(gh pr merge "$PR_NUMBER" --squash', self.text)
+
+    def test_contract_states_fixed_argument_order(self) -> None:
+        self.assertIn(
+            "$FLOW_PR_MERGE_CMD <pr> --squash --delete-branch --match-head-commit <sha>",
+            self.seam,
+        )
+        self.assertIn("never eval'd", self.seam)
+
+    def test_contract_requires_verbatim_stderr(self) -> None:
+        # A wrapper that eats stderr converts benign head races into BLOCKED.
+        self.assertIn("proxy gh's stderr VERBATIM", self.seam)
+        self.assertIn("RESOLVING", self.seam)
+        self.assertIn("BLOCKED", self.seam)
+
+    def test_contract_forbids_auto_and_merge_queue(self) -> None:
+        self.assertIn("never `--auto`, never merge-queue enrollment", self.seam)
+        # The explicit-merge restatement outside the contract block stays.
+        self.assertIn("always explicit, never `gh pr merge --auto`", self.seam)
+
+    def test_contract_scopes_the_seam_to_the_merge_call(self) -> None:
+        self.assertIn("THIS merge call ONLY", self.seam)
+        self.assertIn("session identity", self.seam)
+        # --delete-branch is a second permission a merge-only App may lack.
+        self.assertIn("--delete-branch` needs a second permission", self.seam)
+
+    def test_seam_is_env_only_never_a_config_key(self) -> None:
+        self.assertIn("ENV ONLY", self.seam)
+        self.assertNotIn("land.mergeCmd", self.text)
+        self.assertNotIn("lcfg mergeCmd", self.text)
+
+
+class CatchUpWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over §3.3's server-side catch-up (fn-194 R2, #342).
+
+    The local rebase + `git push --force-with-lease` is gone: BEHIND and DIRTY
+    both plan `catch-up`, executed as one `gh pr update-branch` call. Pin the
+    invariants that regressions would quietly undo - land has no force-push
+    path left (the #302 orphaned-evidence cause), GitHub owns the conflict
+    decision (non-zero -> BLOCKED), the ledger sources the new head from the
+    API because no local checkout exists, and the action class is spelled
+    `catch-up` in every enumeration a reader keys on.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("### 3.3 — `catch-up`")
+        end = cls.text.find("### 3.4", start)
+        assert start != -1 and end != -1, "§3.3 catch-up section not found"
+        cls.act = cls.text[start:end]
+        cls.skill = (
+            HERE.parent.parent / "skills" / "flow-next-land" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+
+    def test_no_local_rebase_or_force_push_remains(self) -> None:
+        # The executable forms, not the prose that explains their absence.
+        self.assertNotIn("git push --force-with-lease", self.text)
+        self.assertNotIn('git rebase "origin/$BASE_REF"', self.text)
+        self.assertNotIn("git rebase --abort\n  git checkout", self.text)
+        # The ci-fix path keeps the only `gh pr checkout` in the workflow.
+        self.assertEqual(self.text.count('gh pr checkout "$PR_NUMBER"'), 1)
+
+    def test_catch_up_is_one_server_side_update_branch_call(self) -> None:
+        self.assertIn(
+            'CATCHUP_ERR="$(gh pr update-branch "$PR_NUMBER" 2>&1 >/dev/null)"',
+            self.act,
+        )
+        # Merge-based, never the rebase flag (which would reintroduce SHA rewrites).
+        self.assertNotIn("update-branch --rebase", self.text)
+        self.assertIn("never passes `--rebase`", self.act)
+
+    def test_non_zero_catch_up_routes_to_blocked(self) -> None:
+        # PR #350 review: non-zero classifies from stderr - conflict ->
+        # BLOCKED, benign race/transient -> RESOLVING re-tick.
+        self.assertIn("CATCHUP_ERR", self.act)
+        self.assertIn("BLOCKED", self.act)
+        self.assertIn("RESOLVING", self.act)
+        # Repeated identical non-conflict failures escalate (PR #350 r2).
+        self.assertIn("catch_up_fail", self.act)
+        self.assertIn("catch_up_fail", self.act)  # ledger token (dedup: also below)
+        self.assertIn("hand-resolution", self.act)
+
+    def test_ledger_sources_new_head_from_the_api(self) -> None:
+        # No local checkout exists to read the new head from.
+        self.assertIn('gh pr view "$PR_NUMBER" --json headRefOid', self.act)
+        self.assertIn("land_pushed_sha", self.act)
+        self.assertIn("decision_at_push", self.act)
+
+    def test_both_behind_and_dirty_plan_catch_up(self) -> None:
+        gates = self.text[
+            self.text.find("### 2.8 — Merge-state gates") : self.text.find("### 2.9")
+        ]
+        self.assertIn('`MERGE_STATE == "BEHIND"`: plan `catch-up`', gates)
+        self.assertIn('`MERGE_STATE == "DIRTY"`: conflict path → plan `catch-up`', gates)
+        self.assertNotIn("plan `rebase`", gates)
+
+    def test_action_class_is_renamed_in_every_enumeration(self) -> None:
+        self.assertIn(
+            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`)",
+            self.text,
+        )
+        self.assertIn(
+            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|none>", self.text
+        )
+        self.assertNotIn("mechanical rebase", self.skill)
+        self.assertIn("server-side catch-up", self.skill)
+
+    def test_force_push_removal_rationale_is_stated(self) -> None:
+        self.assertIn("removes land's force-push capability", self.act)
+        self.assertIn("#302", self.act)
+        self.assertIn("Fork PRs", self.act)
+
+
+class ReviewSignalOrderingStaticTestCase(unittest.TestCase):
+    """§2.6/§2.7 evaluation order under `reviewSignal: approve` (fn-194 R4).
+
+    The ambiguity this pins: whether §2.7's stale-approval detector is
+    reachable under `approve` or shadowed by §2.6's earlier non-satisfaction.
+    It is reachable - §2.6 assigns a provisional verdict and falls through -
+    and the paragraph must keep saying so, because the durable label is what
+    breaks the dismissal loop.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+
+    def test_ordering_paragraph_sits_between_2_6_and_2_7(self) -> None:
+        pos_26 = self.text.find("### 2.6 — Review signal")
+        pos_para = self.text.find("**§2.6 does not exit the gate tree")
+        pos_27 = self.text.find("### 2.7 — CI-fix budget")
+        self.assertNotEqual(pos_para, -1, "R4 ordering paragraph missing")
+        self.assertLess(pos_26, pos_para)
+        self.assertLess(pos_para, pos_27)
+
+    def test_paragraph_states_the_detector_is_reachable(self) -> None:
+        para = self.text[
+            self.text.find("**§2.6 does not exit the gate tree") : self.text.find(
+                "### 2.7 — CI-fix budget"
+            )
+        ]
+        self.assertIn("REACHABLE under `approve`, never shadowed", para)
+        self.assertIn("stale-approval dismissal loop detected", para)
+        # §2.8 stays the one genuinely conditional gate - semantics unchanged.
+        self.assertIn("§2.8", para)
+        self.assertIn(
+            "### 2.8 — Merge-state gates (only when the review signal is satisfied)",
+            self.text,
+        )
+
+
+class PostMergeTailOrderStaticTestCase(unittest.TestCase):
+    """§3.5's post-merge tail order (fn-194 R3, #345).
+
+    The bug being pinned out: persisting the close FIRST meant one refused
+    push (a base that only accepts pull requests refuses it permanently)
+    skipped release-follow AND the tracker touchpoint after a real merge - the
+    board stuck at In Review, which is the exact outcome the active-by-default
+    `land.merged` projection exists to prevent. The tail now closes locally,
+    runs release-follow and the touchpoint, and pushes last, with the rollback
+    scoped to the push step alone.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        wf = HERE.parent.parent / "skills" / "flow-next-land" / "workflow.md"
+        cls.text = wf.read_text(encoding="utf-8")
+        start = cls.text.find("### 3.5 — `merge` + post-merge tail")
+        end = cls.text.find("### 3.6", start)
+        assert start != -1 and end != -1, "§3.5 section not found"
+        cls.tail = cls.text[start:end]
+
+    def test_tail_steps_are_numbered_in_the_new_order(self) -> None:
+        close = self.tail.index("1. **Spec close")
+        release = self.tail.index("2. **Release-follow**")
+        tracker = self.tail.index("3. **Tracker touchpoint")
+        persist = self.tail.index("4. **Persist —")
+        self.assertLess(close, release)
+        self.assertLess(release, tracker)
+        self.assertLess(tracker, persist)
+
+    def test_the_only_tail_push_comes_after_release_and_tracker(self) -> None:
+        push = self.tail.index("git push || { git pull --rebase && git push; }")
+        self.assertLess(self.tail.index("2. **Release-follow**"), push)
+        self.assertLess(self.tail.index("3. **Tracker touchpoint"), push)
+        # Exactly one push line in the tail (`git push || { ... && git push; }`)
+        # - the close and the sync state ride it together.
+        # 3 mentions: the persist push, the pull-rebase retry, and the
+        # release-instructions ride-along note (PR #350 review).
+        self.assertEqual(self.tail.count("git push"), 3)
+
+    def test_close_step_commits_without_pushing(self) -> None:
+        close = self.tail[
+            self.tail.index("1. **Spec close") : self.tail.index("2. **Release-follow**")
+        ]
+        self.assertIn('git commit -m "chore(flow): close ${spec}', close)
+        self.assertNotIn("git push", close)
+
+    def test_tracker_sync_state_commit_does_not_push(self) -> None:
+        tracker = self.tail[
+            self.tail.index("3. **Tracker touchpoint") : self.tail.index("4. **Persist —")
+        ]
+        self.assertIn('git commit -m "chore(flow): sync state for ${spec}', tracker)
+        self.assertNotIn("git push", tracker)
+
+    def test_rollback_is_scoped_to_the_persist_step(self) -> None:
+        persist = self.tail[self.tail.index("4. **Persist —") :]
+        self.assertIn('git reset --hard "$TAIL_BASE_OID"', persist)
+        self.assertIn("TAIL_BASE_OID=\"$(git rev-parse HEAD)\"", self.tail)
+        self.assertIn("scoped to THIS step and skips NOTHING else", persist)
+        self.assertIn("spec close not pushed", persist)
+        # The old rollback target (one commit back) cannot express two commits.
+        self.assertNotIn("git reset --hard HEAD^", self.text)
+
+    def test_re_tick_safety_reasoning_is_stated_inline(self) -> None:
+        persist = self.tail[self.tail.index("4. **Persist —") :]
+        self.assertIn("idempotency probe", persist)
+        self.assertIn("evidence=<merge-commit-sha>", persist)
+
+    def test_release_and_tracker_preconditions_are_stated_at_the_close(self) -> None:
+        close = self.tail[
+            self.tail.index("1. **Spec close") : self.tail.index("2. **Release-follow**")
+        ]
+        self.assertIn("clean non-`.flow/` tree", close)
+        self.assertIn("fresh GitHub `MERGED` probe", close)
+
+    def test_resume_tail_prose_matches_the_new_order(self) -> None:
+        resume = self.text[self.text.find("### 3.6 — `resume-tail`") :]
+        self.assertIn(
+            "spec close (local commit) → release-follow → tracker touchpoint → persist-push",
+            resume,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

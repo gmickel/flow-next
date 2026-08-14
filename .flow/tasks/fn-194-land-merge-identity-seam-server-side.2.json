@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-14T11:15:51.648072Z",
+  "depends_on": [
+    "fn-194-land-merge-identity-seam-server-side.1"
+  ],
+  "id": "fn-194-land-merge-identity-seam-server-side.2",
+  "priority": null,
+  "spec": "fn-194-land-merge-identity-seam-server-side",
+  "spec_path": ".flow/tasks/fn-194-land-merge-identity-seam-server-side.2.md",
+  "status": "todo",
+  "title": "Server-side catch-up replaces the rebase; \u00a72.6/\u00a72.7 ordering clarified",
+  "updated_at": "2026-08-14T11:15:51.648072Z"
+}

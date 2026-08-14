@@ -124,7 +124,7 @@ Discovery outcomes per spec:
 - `OPEN_COUNT > 1`: two open PRs on one spec branch → `NEEDS_HUMAN` entry, no mutation.
 - `OPEN_COUNT == 1` AND a MERGED PR also exists for the branch: ambiguous reopened/re-pushed state → `NEEDS_HUMAN` entry, no mutation.
 - `OPEN_COUNT == 1`: babysit path → `PR_NUMBER="$(printf '%s\n' "$OPEN_PRS" | jq -r '.[0].number')"`, then the authorship check (below) → babysit candidate.
-- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec is merged-but-unclosed → `PR_NUMBER="$MERGED_PR_NUM"`, then the authorship check → **re-entry candidate** (resume the post-merge tail: close → tracker → release; never a second merge).
+- `OPEN_COUNT == 0` and `MERGED_PR_NUM` non-empty: the spec is merged-but-unclosed → `PR_NUMBER="$MERGED_PR_NUM"`, then the authorship check → **re-entry candidate** (resume the post-merge tail in its §3.5 order: close → release-follow → tracker → persist-push; never a second merge).
 - `OPEN_COUNT == 0` and no MERGED PR (no PR, or CLOSED-without-merge only): not land's work — skip silently (pilot owns the no-PR state; a closed-unmerged PR is human-rejected work land must not resurrect).
 
 **Authorship requires both signals before any mutation** — the branch match above **and** the make-pr breadcrumb in the PR body. A hand-opened PR on a spec branch that got auto-merged has broken this. **`PR_NUMBER` comes from the outcome branch above** (babysit: the single open PR's number; re-entry: `MERGED_PR_NUM`); a `PR_NUMBER` carried over from a prior loop iteration has broken this.
@@ -290,7 +290,7 @@ Gate on the latest committed `qa_outcome` for this PR head (the four-outcome fie
 | 404 / unparseable / `qa_outcome` ∈ {`SHIP`, `NA`, `BLOCKED`} or any other value | **No QA objection** — continue to 2.6. (`BLOCKED` = "no ship *claim* on a QA basis", not "the app is broken" — advisory, exactly as pilot treats it; QA never hard-blocks on couldn't-verify.) |
 | `qa_outcome == NEEDS_WORK` | verdict `NEEDS_HUMAN`, action `none`, reason `latest QA verdict at the PR head is NEEDS_WORK (open P0/P1 or uncovered UI R-ID) — merge blocked pending human review or a QA re-run to SHIP`. **No further gates for this PR.** |
 
-**No head_sha freshness check, deliberately.** The receipt read at `$HEAD_SHA` is the latest QA verdict for the commit being merged (each QA run overwrites the committed receipt). Land never re-runs QA, so a `NEEDS_WORK` that predates later commits is no proof the P0 was fixed — the later commits could be an unrelated `ci-fix`, a resolve-pr push, or land's own §3.3 rebase. **Fail-safe: any `NEEDS_WORK` at the head blocks** until QA re-runs to `SHIP` (which overwrites the receipt → no block) or a human clears it. A merge that proceeded past a head `NEEDS_WORK` has broken this — and closing that path is what shuts both the wrong-tree read and the stale-head laundering channel a naive `head_sha`-equality check would open.
+**No head_sha freshness check, deliberately.** The receipt read at `$HEAD_SHA` is the latest QA verdict for the commit being merged (each QA run overwrites the committed receipt). Land never re-runs QA, so a `NEEDS_WORK` that predates later commits is no proof the P0 was fixed — the later commits could be an unrelated `ci-fix`, a resolve-pr push, or land's own §3.3 catch-up. **Fail-safe: any `NEEDS_WORK` at the head blocks** until QA re-runs to `SHIP` (which overwrites the receipt → no block) or a human clears it. A merge that proceeded past a head `NEEDS_WORK` has broken this — and closing that path is what shuts both the wrong-tree read and the stale-head laundering channel a naive `head_sha`-equality check would open.
 
 ### 2.6 — Review signal (`land.reviewSignal`)
 
@@ -368,6 +368,8 @@ Signal evaluation (only reached with green CI and `UNRESOLVED == 0`):
 - **`approve`**: satisfied iff `REVIEW_DECISION == "APPROVED"` (the formal decision). Not approved within the window → `AWAITING_REVIEW`; not approved once the window has elapsed (`WINDOW_ELAPSED == 1`) → `NEEDS_HUMAN`, reason `no formal approval within the patience window` (the wait is bounded, same as the other signals); `CHANGES_REQUESTED` → threads should exist → the resolve path; an empty `reviewDecision` (repo has no review policy) is not a block for the OTHER signals, but `approve` explicitly requires the formal decision.
 - **`<github-login>`** (any other value): satisfied iff that reviewer's latest review is clean — fetch `gh pr view "$PR_NUMBER" --json latestReviews`, find the entry whose `author.login` matches the configured login (compare with any trailing `[bot]` stripped from both sides — GraphQL bot logins lack the suffix), and require its `state` to be `APPROVED`, or `COMMENTED` with `UNRESOLVED == 0`. `CHANGES_REQUESTED` or no review yet → `AWAITING_REVIEW` within the window, `NEEDS_HUMAN` beyond it.
 
+**§2.6 does not exit the gate tree — §2.7 still runs (the `approve` ordering).** Only §2.1's durable-label skip and §2.5b's terminal QA outcome (its own "No further gates" stop) end the gate tree early; every other gate assigns a PROVISIONAL verdict and falls through, so a later section's assignment wins. Under `reviewSignal: approve` that matters exactly once: when the head is land's own catch-up push, the ledger recorded `decision_at_push == APPROVED`, and the repo has since dismissed that approval, §2.6 assigns `AWAITING_REVIEW` (or `NEEDS_HUMAN` past the window) — and then §2.7's stale-approval detector, whose four conditions describe that same state, overwrites it with `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`. The detector is REACHABLE under `approve`, never shadowed; its durable label is the point, because it is what stops the next tick from re-entering the same loop. (§2.8 is the one gate that is genuinely conditional — it runs only when the signal is satisfied.) Server-side catch-up (§3.3) does not retire this path: it still advances the head, so a dismiss-on-push repo still dismisses.
+
 ### 2.7 — CI-fix budget + stale-approval detection (ledger reads)
 
 ```bash
@@ -383,11 +385,13 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 ### 2.8 — Merge-state gates (only when the review signal is satisfied)
 
 - `MERGE_STATE == "UNKNOWN"`: GitHub recomputes asynchronously — re-poll `gh pr view "$PR_NUMBER" --json mergeStateStatus` up to 3 times with `sleep 3` between; still UNKNOWN → verdict `RESOLVING`, action `none` (re-tick).
-- `MERGE_STATE == "DIRTY"`: conflict path → plan `rebase` (mechanical only; ACT 3.3).
-- `MERGE_STATE == "BEHIND"`: plan `rebase` (same mechanical update, then re-gate next tick).
+- `MERGE_STATE == "DIRTY"`: conflict path → plan `catch-up` (server-side; GitHub itself decides whether the base merges, and refuses when it would conflict; ACT 3.3).
+- `MERGE_STATE == "BEHIND"`: plan `catch-up` (the same server-side update, then re-gate next tick).
+
+Both merge states route to the SAME action deliberately: the catch-up is one `gh pr update-branch` call, and GitHub either performs the base merge or refuses it. That removes the old local-rebase-disagrees-with-`mergeStateStatus` surprise — there is no second opinion left to disagree.
 - Otherwise (`CLEAN`, `BLOCKED`, `HAS_HOOKS`, `UNSTABLE`): plan `merge`. (`BLOCKED`/`UNSTABLE` reflect server-side rules land already gates harder than — the merge attempt is authoritative; a refusal surfaces in ACT.)
 
-**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `rebase`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
+**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
 
 ### 2.9 — Repo merge-verdict gate (`land.mergeVerdictCommand`, opt-in, fail-closed)
 
@@ -514,19 +518,21 @@ Dispatch the resolve-pr skill via the Skill tool — slash-command form, autonom
 
 resolve-pr pushes commits itself when it fixes code; if it pushed, run the canonical post-push ledger write from 3.1 step 4 — read the fresh state via `gh pr view "$PR_NUMBER" --json headRefOid,reviewDecision` and write BOTH `land_pushed_sha` (the new `headRefOid`) and `decision_at_push` (the `reviewDecision` at push time, `-` when empty). Restore `ORIG_BRANCH` if resolve-pr left the worktree elsewhere; assert clean.
 
-### 3.3 — `rebase` (mechanical only — v1 never hand-resolves conflicts)
+### 3.3 — `catch-up` (server-side, merge-based — land never rebases and never force-pushes)
 
 ```bash
-gh pr checkout "$PR_NUMBER"
-git fetch origin "$BASE_REF"
-if ! git rebase "origin/$BASE_REF"; then
-  git rebase --abort
-  git checkout "$ORIG_BRANCH"
-  # ANY conflict hunk → BLOCKED (verdict), reason "merge conflict needs hand-resolution"
-fi
+CATCHUP_RC=0
+CATCHUP_ERR="$(gh pr update-branch "$PR_NUMBER" 2>&1 >/dev/null)" || CATCHUP_RC=$?
 ```
 
-Clean rebase → `git push --force-with-lease` (restarts the patience window) → run the canonical post-push ledger write from 3.1 step 4 (`land_pushed_sha` = the rebased HEAD, `decision_at_push` = the Phase 2 `REVIEW_DECISION`) → verdict `RESOLVING` (re-gate next tick). Restore `ORIG_BRANCH`, assert clean.
+One API call, no local checkout: GitHub merges `$BASE_REF` into the PR's head branch server-side (`gh pr update-branch` is merge-based by default — land never passes `--rebase`).
+
+- `CATCHUP_RC != 0` → classify from `CATCHUP_ERR`, mirroring §3.5's stderr split: a merge-conflict refusal (GitHub names the conflict) → verdict `BLOCKED`, reason `base merge conflicts need hand-resolution: <CATCHUP_ERR>` — the conflict verdict is the server's, land still never hand-resolves a hunk. Anything else (already up to date after a race, transient API failure) → verdict `RESOLVING`, evidence line carries `CATCHUP_ERR`, the next tick re-reads `mergeStateStatus` and re-plans — a benign race classified `BLOCKED` would strand the PR behind a verdict no human needs to act on. **Bounded**: record `catch_up_fail` (the error's first line) in the PR's ledger entry on every non-conflict failure and clear it on success; when the SAME first line is already recorded from a previous tick, the failure is not transient (a token without update permission, a fork with maintainer edits off) — apply the §3.4 durable label, verdict `NEEDS_HUMAN`, reason `catch-up failing repeatedly: <CATCHUP_ERR>`. An unattended loop that retried an identical refusal forever has broken this.
+- `CATCHUP_RC == 0` → run the canonical post-push ledger write from 3.1 step 4, sourcing the new head from `gh pr view "$PR_NUMBER" --json headRefOid` (no local checkout exists to read it from): `land_pushed_sha` = that `headRefOid`, `decision_at_push` = the Phase 2 `REVIEW_DECISION`. Verdict `RESOLVING` (the update advances the head, so the patience window restarts and the next tick re-gates).
+
+The worktree never moves in this path — no `gh pr checkout`, no branch restore, nothing to assert clean afterwards.
+
+**This removes land's force-push capability entirely.** No `git rebase`, no `--force-with-lease`: the PR's commit SHAs survive the catch-up, so the evidence recorded against them stays reachable — that is #302's orphaned-evidence CAUSE removed for every repo, not merely detected. Nothing observable is traded for the merge commit: land always squash-merges, so the branch-local shape disappears at merge time either way. Fork PRs are no worse off — `update-branch` fails on a fork whose maintainer-edit permission is off just as the old force-push failed; the refusal rides the classification above (first failure `RESOLVING`, an identical repeat escalates to the labeled `NEEDS_HUMAN`), so it surfaces as work for a human within two ticks.
 
 ### 3.4 — `label` (durable needs-human marker)
 
@@ -562,8 +568,36 @@ if [[ "$MV_STALE_BASE" == 1 ]]; then
   # STOP HERE for this PR: no gh pr ready, no merge, no post-merge tail.
 else
   [[ "$IS_DRAFT" == "true" ]] && gh pr ready "$PR_NUMBER"   # idempotent flip; non-draft skips
+  # PR-merge seam (#337), same shape as make-pr's `FLOW_PR_CREATE_CMD` (#277).
+  # FLOW_PR_MERGE_CMD names the command that MERGES the PR; default
+  # `gh pr merge`. Repos that require an App/bot to perform the merge (branch
+  # protection that excludes the human identity the tick runs as) point it at
+  # a wrapper that supplies its own identity. ENV ONLY - never a `land.*`
+  # config key: §2.9's trust guard exists because config-sourced command
+  # strings are PR-author-influenceable on a non-base checkout; session env is
+  # not.
+  # Contract (STABLE - integrators depend on it):
+  #   - invoked exactly as, in this fixed argument order:
+  #       $FLOW_PR_MERGE_CMD <pr> --squash --delete-branch --match-head-commit <sha>
+  #   - the expansion is whitespace-split, never eval'd - the command path must
+  #     not contain spaces; everything after it arrives as pre-quoted arguments
+  #   - success: exit 0 and the PR is merged. Nonzero = not merged
+  #   - the wrapper MUST proxy gh's stderr VERBATIM. Only stderr is captured
+  #     here, and the classification below splits head-race (`RESOLVING`,
+  #     re-tick) from policy refusal (`BLOCKED`) by reading gh's
+  #     head-mismatch text. A wrapper that swallows or rewrites stderr turns
+  #     benign races into `BLOCKED` PRs
+  #   - never `--auto`, never merge-queue enrollment - the merge stays explicit
+  #     (the merge-license boundary binds the interposed command too)
+  #   - `--delete-branch` needs a second permission (branch delete) that a
+  #     merge-only App may lack; grant it or the merge succeeds and the branch
+  #     survives
+  # Scope: THIS merge call ONLY. `gh pr ready` above, the post-merge
+  # mergeCommit read, the tail, and every other gh call in the tick stay on the
+  # session identity, and `gh` stays a preflight requirement.
+  MERGE_CMD="${FLOW_PR_MERGE_CMD:-gh pr merge}"
   MERGE_RC=0
-  MERGE_ERR="$(gh pr merge "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
+  MERGE_ERR="$($MERGE_CMD "$PR_NUMBER" --squash --delete-branch --match-head-commit "$HEAD_OID" 2>&1 >/dev/null)" || MERGE_RC=$?
   if [[ "$MERGE_RC" -ne 0 ]]; then
     echo "Evidence: merge refused (rc=$MERGE_RC) — $MERGE_ERR"
   fi
@@ -579,6 +613,7 @@ Only on `MERGE_RC == 0`, move the worktree onto the merged base BEFORE any tail 
 
 ```bash
 git checkout "$BASE_REF" && git pull --ff-only
+TAIL_BASE_OID="$(git rev-parse HEAD)"   # pre-tail base tip — step 4's rollback target
 MERGE_OID="$(gh pr view "$PR_NUMBER" --json mergeCommit --jq '.mergeCommit.oid')"
 TAIL_OK=1
 if [[ -z "$MERGE_OID" ]] || ! git merge-base --is-ancestor "$MERGE_OID" HEAD; then
@@ -590,29 +625,20 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 
 `TAIL_OK == 0` → verdict `NEEDS_HUMAN` for this PR, reason `squash commit missing from local base — tail not run`. **No tail step runs in that state** — no spec close, no tracker, no release; one that did has broken this. Continue to the next PR; a later tick re-enters via the merged-but-unclosed path once the base is fixed. Only with `TAIL_OK == 1` run the tail, in order:
 
-1. **Spec close** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state. Step 2 persists the close immediately — the tracker touchpoint runs later (step 4, after release-follow) so its verdict comment can carry the release outcome, and persists its own sync state best-effort.
-2. **Persist the `.flow` close** — commit + push the spec close before anything else in the tail. The dirty-tree guards exclude `.flow/`, so an unpushed close would silently sit forever while every other clone (and CI) still sees the spec open:
+1. **Spec close — local commit, NOT pushed here (#345)** — `"$FLOWCTL" spec close "$spec" --json`. flowctl hard-requires all tasks done; stray non-done tasks at close time → verdict `NEEDS_HUMAN`, reason `spec close refused: <flowctl error>` (report, never force) — the merge stands, a later tick re-enters via the merged-but-unclosed path after a human fixes the task state. Commit the close file-scoped and move on; the push is step 4:
 
    ```bash
    git add ".flow/specs/${spec}.json" ".flow/specs/${spec}.md" && git commit -m "chore(flow): close ${spec} (landed PR #${PR_NUMBER})"   # stage ONLY this spec's files — pre-existing .flow dirtiness (allowed by the guards) must not ride the close commit
-   git push || { git pull --rebase && git push; }
    ```
 
-   If the push STILL fails, ROLL BACK the local close so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail):
-
-   ```bash
-   git rebase --abort 2>/dev/null || true
-   git reset --hard HEAD^   # safe: the commit was staged file-scoped, so it contains ONLY this spec's close state
-   ```
-
-   Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`; skip release-follow for this PR and continue to the next — a later tick re-enters via merged-but-unclosed and retries the whole tail (`spec close` succeeds idempotently on a re-run).
-3. **Release-follow** (only when `LAND_RELEASE == true`) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
+   **Committing here rather than pushing here is what keeps the rest of the tail reachable on a base that only accepts pull requests** — such a base refuses the push permanently, and persisting first meant one refusal skipped release-follow and the tracker touchpoint after a real merge. Both later steps are safe with the close committed but unpushed: release-follow's precondition is a clean non-`.flow/` tree, which the *commit* satisfies, and the tracker touchpoint gates on its own fresh GitHub `MERGED` probe (step 3), never on the close having been pushed. The tracker touchpoint stays after release-follow so its verdict comment can carry the release outcome, and it commits its own sync state locally for the same step-4 push.
+2. **Release-follow** (only when `LAND_RELEASE == true`) — discovery order, first hit wins: `docs/RELEASING.md` → `RELEASING.md` → `agent_docs/releasing.md` → release docs referenced from CLAUDE.md/AGENTS.md → none (stop at merge, verdict `MERGED`). Bounds, all binding:
    - Deterministic, non-interactive commands from the discovered docs ONLY — no invented steps, no prompts, no secrets handling.
    - Clean non-`.flow/` tree required before starting and asserted after.
    - **Idempotency probe BEFORE acting**: check for an existing tag/GitHub release for the target version (`git tag -l <v>`, `gh release view <v>`); already present → resume past completed steps, never re-tag.
    - Release-step failure AFTER the successful merge → verdict `NEEDS_HUMAN` + durable label on the (merged) PR via 3.4 — the merge is NEVER retried, and later ticks never blindly re-run the failed step (re-entry only resumes via the idempotency probe).
    - Release completed → verdict `RELEASED`.
-4. **Tracker touchpoint — the only `Done` driver (fn-66, R3/R10)** — deliberately after release-follow so the verdict comment can carry the release outcome. **`land.merged` is active-by-default whenever the bridge is active**, not gated behind `tracker.perEvent.land.merged != off`. This is deliberate (fn-66, R10): a real merge is the only event that legitimately projects `Done`, so leaving it opt-in would let boards stick at `In Review` forever after a merge. Like make-pr's unconditional PR-link path, the merge→Done projection rides the bridge-active predicate alone; a run that gated the status on the `land.merged` leaf has broken this (the leaf, if a repo set it, only tunes the optional verdict comment):
+3. **Tracker touchpoint — the only `Done` driver (fn-66, R3/R10)** — deliberately after release-follow so the verdict comment can carry the release outcome. **`land.merged` is active-by-default whenever the bridge is active**, not gated behind `tracker.perEvent.land.merged != off`. This is deliberate (fn-66, R10): a real merge is the only event that legitimately projects `Done`, so leaving it opt-in would let boards stick at `In Review` forever after a merge. Like make-pr's unconditional PR-link path, the merge→Done projection rides the bridge-active predicate alone; a run that gated the status on the `land.merged` leaf has broken this (the leaf, if a repo set it, only tunes the optional verdict comment):
 
    The complete `tracker.perEvent.land.merged` mapping is explicit: for
    `off`, `pull`, `push`, `reconcile`, and `comment`, a confirmed merge resolves
@@ -668,13 +694,45 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
      "$FLOWCTL" tracker sync "$spec" --op comment --event land.merged --body-file "$BODY_FILE" # verdict comment only
      ```
 
-   Best-effort either way: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Persist any tracked sync state the touchpoint updated with a best-effort follow-up commit (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint" && git push` — file-scoped so pre-existing .flow dirtiness never rides along; no rollback needed, it carries this spec's sync state + receipts only).
+   Best-effort either way: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Commit any tracked sync state the touchpoint updated, locally and file-scoped (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint"` — file-scoped so pre-existing .flow dirtiness never rides along; it carries this spec's sync state + receipts only). **This commit is not pushed here** — it rides step 4's single push together with the close commit, and shares that step's rollback.
+4. **Persist — push the tail's `.flow` commits (close + any tracker sync state) together.** Last, after every consequential step has already run. The dirty-tree guards exclude `.flow/`, so an unpushed close would silently sit forever while every other clone (and CI) still sees the spec open:
+
+   ```bash
+   git push || { git pull --rebase && git push; }
+   ```
+
+   Release instructions discovered in step 2 may run their own `git push`
+   (this repo's releasing.md does): that push carries the pending close
+   commit along - fine on a pushable base (the persist becomes a no-op;
+   verify with `git status -sb` before pushing again), and on a
+   pull-request-only base it is refused exactly like this one. **A refused
+   release push does not stop the tail**: record it as release-follow
+   evidence (the release resumes via its idempotency probe on a later
+   tick) and continue to step 3 - the tracker touchpoint depends on the
+   MERGED probe, never on the release. A tail that skipped the touchpoint
+   because the release could not push has broken this.
+
+   If the push STILL fails, ROLL BACK exactly what this step failed to persist — the tail's local `.flow` commits — so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail). **Guard first**: the rollback may run ONLY when every commit after `$TAIL_BASE_OID` is one of the tail's own file-scoped `.flow` commits — when release-follow committed anything (a version bump, a changelog roll) on top, do NOT reset; leave the tree as it stands and report `NEEDS_HUMAN` with reason `close + release commits unpushed` instead. A reset that dropped a release commit has broken this:
+
+   ```bash
+   # Verify by CHANGED PATHS, not commit subjects - a release commit could
+   # legitimately wear any subject. Reset only when the whole range touches
+   # .flow/ alone.
+   if git log --format= --name-only "$TAIL_BASE_OID"..HEAD | grep -v '^$' | grep -vq '^\.flow/'; then
+     echo "Evidence: non-.flow paths in TAIL_BASE_OID..HEAD - leaving tree intact"
+   else
+     git rebase --abort 2>/dev/null || true
+     git reset --hard "$TAIL_BASE_OID"   # the pre-tail base tip; safe — every commit dropped touches only .flow/ and carries ONLY this spec's close/sync state
+   fi
+   ```
+
+   Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`. **The rollback is scoped to THIS step and skips NOTHING else** — the merge, release-follow, and the tracker touchpoint already ran and stand; on a pull-request-only base the residue is a cosmetic bookkeeping note, not a stalled lifecycle. Re-ticking after a refused persist is safe by construction: `spec close` succeeds idempotently, release-follow's idempotency probe (step 2) resumes past completed steps and never re-tags, and every verdict comment starts with the stable merge identity `evidence=<merge-commit-sha>` (step 3), so a repeat touchpoint for the same merge deduplicates.
 
 Verdict `MERGED` (or `RELEASED`). On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
 
 ### 3.6 — `resume-tail` (re-entry idempotency)
 
-A merged-but-unclosed spec resumes the tail exactly as 3.5 post-merge: checkout base + `git pull --ff-only` + verify the merge commit (via `gh pr view <MERGED_PR_NUM> --json mergeCommit`), then spec close → persist `.flow` → release-follow → tracker touchpoint. Never a second merge, never an error for already-completed steps (the release idempotency probe skips them; `spec close` succeeds idempotently on an already-closed spec). Verdict `MERGED`/`RELEASED` per how far the tail ran.
+A merged-but-unclosed spec resumes the tail exactly as 3.5 post-merge: checkout base + `git pull --ff-only` + verify the merge commit (via `gh pr view <MERGED_PR_NUM> --json mergeCommit`), then spec close (local commit) → release-follow → tracker touchpoint → persist-push of the tail's `.flow` commits. Never a second merge, never an error for already-completed steps (the release idempotency probe skips them; `spec close` succeeds idempotently on an already-closed spec; the touchpoint's verdict comment dedupes on the merge identity). A previous tick that reached the merge but had its persist refused re-enters here and re-runs the whole tail — the earlier release and tracker work is not repeated destructively, and a second refusal again costs only the bookkeeping note. Verdict `MERGED`/`RELEASED` per how far the tail ran.
 
 Done when: each PR has had exactly one action class executed, the worktree is back on `ORIG_BRANCH` (or the merged base after 3.5/3.6), and the non-`.flow/` tree is clean.
 
@@ -686,7 +744,7 @@ Echo one evidence block per PR processed:
 PR <url> [<spec-id>]
   ci=<green|red|pending|none> checks=<pass>/<total> unresolved=<n> window=<AGE_MIN>/<PATIENCE_MIN>m
   signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|->
-  action=<ci-fix|resolve|rebase|merge|resume-tail|label|none> verdict=<VERDICT> reason="<one line>"
+  action=<ci-fix|resolve|catch-up|merge|resume-tail|label|none> verdict=<VERDICT> reason="<one line>"
   mergeVerdict=<green|refused|skipped|would-run>
 ```
 
