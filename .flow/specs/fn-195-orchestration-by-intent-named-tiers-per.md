@@ -22,20 +22,7 @@ Who benefits: a user configures routing once, in their own file, in their own wo
 - **thinking scout** — analysis that degrades badly on a fast tier.
 - **unset** — planning, capture, interview, requirement analysis, every verdict, and the worker run on the session model. This is the existing never-delegate-judgment doctrine, restated as the default rather than as a special case.
 
-**A tier selects WHO executes a stage. It does not, by itself, change WHICH stages run.** This is the ambiguity that makes the whole idea safe or unsafe. "Implementation goes to model X" means: when the work skill dispatches implementation, that implementation executes on X — and every other obligation still holds, unchanged. The spec is still the brief, the baseline still runs before the first edit, the task's own checks still run, gates still gate, review still reviews, evidence is still recorded, and completion still passes through the normal lifecycle.
-
-**Skipping or substituting a stage stays available — it is just a different instruction.** A consumer who wants fewer stages says so (an explicit argument, an explicit prompt, or a durable line of their own), and that has always been supported. What must never happen is a stage disappearing as a *side effect* of naming a model, because then nobody chose it and nothing records it.
-
-**Failure signature:** a run that dropped baseline, gates, evidence or verified completion *because a tier was set*, with no one having asked for that, has broken this. So has a run that treated a named implementer as an implicit reason not to review. A consumer explicitly asking for a leaner pipeline is not this failure.
-
-**Worked example, in a consumer's own words** (this shape has already driven whole specs to a pull request under an autonomous loop):
-
-```text
-Routing: you conduct + review (frontier model, medium effort).
-Implementation goes to <another model> via <its CLI>, one task per dispatch.
-```
-
-Read as: the session model conducts and reviews; the implementation phase inside the normal work lifecycle executes elsewhere; everything else is unchanged.
+**A tier says which model executes a stage, not which stages run.** Which stages run is decided by what the consumer invoked — the work skill runs its phases whether implementation happens in session or elsewhere, and asking for a leaner pipeline is a separate instruction that already works. Worked example, in a consumer's own words: *"you conduct + review (frontier, medium effort); implementation goes to <another model> via <its CLI>, one task per dispatch"* — a shape that has already driven whole specs to a pull request under an autonomous loop.
 
 **Preferences live in the consumer's instruction file, expressed as concrete models with optional effort.** We ship no model identifiers outside a single reference page and the review-backend grammar. The block is short, because the instruction file is loaded every turn; the reasoning behind the tiers lives in the on-demand usage guide.
 
@@ -54,7 +41,7 @@ Read as: the session model conducts and reviews; the implementation phase inside
 
 - Tier names are exactly: `reviewer`, `implementer`, `fast scout`, `thinking scout`. A fifth name is a breaking change to a user-facing interface.
 - A routing block entry is `<tier>: <model>` or `<tier>: <model> at <effort>`; an absent tier means the session model; an unparseable line is ignored with one advisory, never an error.
-- A tier binds a model to a stage's execution. On its own it never removes, reorders, or substitutes a stage: same lifecycle, same gates, same evidence, same completion path, whichever model executes. Changing which stages run is a separate, explicit instruction and remains fully supported.
+- A tier binds a model to a stage's execution; the invoked skill still decides which stages run.
 - The review backend keeps its existing `backend[:model[:effort]]` configuration and its receipts unchanged. This spec does not touch it.
 - Deleted configuration keys are reported by name once when encountered, with the sentence that routing now lives in the instruction file. A stale key never blocks a run.
 
@@ -79,7 +66,6 @@ Read as: the session model conducts and reviews; the implementation phase inside
 - **R5:** Setup proposes a routing block in the project instruction file with values commented out and tier guidance as comments, then closes by saying it wrote an example to edit. It never asserts which models are installed, and it never overwrites a human-edited block. Errors: an existing block is left untouched and reported.
 - **R6:** The pinning ceremony and the per-backend role map are removed: no probe-verified pin requirement, no staleness stamp, no role-map validation on write. Deleted keys are reported by name once and never block. Errors: a config carrying deleted keys runs unchanged.
 - **R7:** Where the harness exposes it, the stage receipt records the model that actually ran, so routing is checkable after the fact. Errors: unavailable provenance is recorded as unknown, never as the configured value.
-- **R7a:** A routing preference on its own changes only which model executes a stage: with a tier set and nothing else asked for, the lifecycle is identical to an unrouted run — baseline before first edit, the task's own checks, gates, review where configured, recorded evidence, verified completion. Explicitly requesting a leaner pipeline remains supported and unchanged by this spec. Errors: a stage that disappears as a side effect of naming a model is a defect, and the tier documentation states that failure signature; an explicitly requested skip is honored and recorded as the existing skip machinery already does.
 - **R8:** Full suite, lint, mirror parity and the OS matrix are green; the docs sweep covers the reach pages, the usage guide, the setup flow, and the platform pages together. Errors: no error surface beyond the gate.
 
 ## Boundaries
