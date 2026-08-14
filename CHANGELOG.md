@@ -4,6 +4,33 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+Two "the machinery knew the fact and dropped it" fixes. Every tracker op in a
+repo with an unwritable `.flow/.locks` failed with `holder appears alive (see
+owner.json)` - a 10-second wait for a contention story when no holder ever
+existed and the filesystem had simply refused `mkdir`. And the review-attempt
+ledger recorded which backend reviewed but not which MODEL - a fact the
+receipt already carries and that cannot be re-derived later (the fallback
+ladder and codex resume both move it). Fixes #340 - thanks @TechupBusiness
+for the measured report (your self-reentrancy hypothesis was disproven by a
+call-graph sweep; the real cause was a swallowed PermissionError). Addresses
+the model-recording half of #338 - thanks @sn-furali.
+
+### Fixed
+
+- **`config_lock` reports what it observed.** A lock that can never be
+  created (denied `mkdir`, path absent) fails fast with errno + path instead
+  of burning the deadline; timeouts compose the message from observations -
+  owner facts when read, owner-absent + when-it-reclaims when not; "holder
+  appears alive" is reserved for an actually-observed owner. The Windows
+  pending-delete poll is preserved; no lock semantics changed.
+
+### Added
+
+- **Review-attempt rows record the resolved model/effort.** Conditional keys,
+  present only where the dispatcher resolved them (never "unknown"), sourced
+  from the same values the receipt records, journaled and crash-replayed.
+  The rp/host record path deliberately cannot claim a model.
+
 `flowctl validate` could not pass on a fresh clone: task status is
 runtime-only and never travels with git, so every done spec's tasks read as
 `todo` from the committed snapshot and the epic/task mismatch rule failed the

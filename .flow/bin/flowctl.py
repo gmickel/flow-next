@@ -10943,6 +10943,8 @@ def _record_review_attempt_locked(
     reviewed_head_sha: Optional[str] = None,
     reviewed_base_sha: Optional[str] = None,
     tool_calls: Optional[int] = None,
+    reviewed_model: Optional[str] = None,
+    reviewed_effort: Optional[str] = None,
     reservation_id: Optional[str] = None,
     receipt_target: Optional[str] = None,
     receipt_payload: Optional[dict] = None,
@@ -11151,6 +11153,11 @@ def _record_review_attempt_locked(
             "reviewed_head_sha": reviewed_head_sha,
             "reviewed_base_sha": reviewed_base_sha,
             "tool_calls": tool_calls,
+            # fn-193 (#338): the resolved model/effort are dispatcher-known
+            # facts that cannot be re-derived later (the fallback ladder and
+            # codex resume both move them), so they ride the journal too.
+            "reviewed_model": reviewed_model,
+            "reviewed_effort": reviewed_effort,
             "receipt_payload": receipt_payload,
             "receipt_target": receipt_target,
             "status_target": (
@@ -11334,6 +11341,15 @@ def _record_review_attempt_locked(
         row["tool_calls"] = int(tool_calls)
     if reviewed_base_sha:
         row["base_sha"] = reviewed_base_sha
+    # fn-193 (#338): the model that ACTUALLY ran, taken from the same
+    # `_receipt_model_effort` values the receipt records (so a ladder downgrade
+    # or a codex resume carry lands here honestly). Written only where the
+    # dispatcher resolved them - the rp/host `review-rounds record` path has no
+    # such fact and records no key, never "unknown"/"auto".
+    if reviewed_model:
+        row["model"] = reviewed_model
+    if reviewed_effort:
+        row["effort"] = reviewed_effort
     if findings_built and findings_digest is not None:
         row["findings_digest"] = dict(findings_digest)
     if (
@@ -12025,6 +12041,10 @@ def _enforce_and_increment_review_cap_locked(
                 reviewed_head_sha=(journal.get("reviewed_head_sha") if isinstance(journal.get("reviewed_head_sha"), str) else None),
                 reviewed_base_sha=(journal.get("reviewed_base_sha") if isinstance(journal.get("reviewed_base_sha"), str) else None),
                 tool_calls=(journal.get("tool_calls") if isinstance(journal.get("tool_calls"), int) and not isinstance(journal.get("tool_calls"), bool) else None),
+                # fn-193 (#338): same reasoning for the resolved model/effort -
+                # the dispatch that knew them is gone by replay time.
+                reviewed_model=(journal.get("reviewed_model") if isinstance(journal.get("reviewed_model"), str) else None),
+                reviewed_effort=(journal.get("reviewed_effort") if isinstance(journal.get("reviewed_effort"), str) else None),
                 # Journaled evidence is authoritative: the crashed process
                 # bound the criteria and built the findings container from the
                 # reviewer MESSAGE, which is gone. `response` is the transport
@@ -42555,6 +42575,9 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
+        # fn-193 (#338): the SAME resolved values the receipt records.
+        reviewed_model=effective_model,
+        reviewed_effort=effective_effort,
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -42671,6 +42694,8 @@ def _finish_backend_exec(
     attempt_out: Optional[dict] = None,
     reviewed_head_sha: Optional[str] = None,
     reviewed_base_sha: Optional[str] = None,
+    reviewed_model: Optional[str] = None,
+    reviewed_effort: Optional[str] = None,
     reservation_id: Optional[str] = None,
     findings_container: Optional[dict] = None,
     findings_digest: Optional[dict] = None,
@@ -42707,6 +42732,8 @@ def _finish_backend_exec(
                 reviewed_head_sha=reviewed_head_sha,
                 reviewed_base_sha=reviewed_base_sha,
                 tool_calls=tool_calls,
+                reviewed_model=reviewed_model,
+                reviewed_effort=reviewed_effort,
                 reservation_id=reservation_id,
                 findings_container=findings_container,
                 findings_digest=findings_digest,
@@ -42755,6 +42782,8 @@ def _finish_backend_exec(
             reviewed_head_sha=reviewed_head_sha,
             reviewed_base_sha=reviewed_base_sha,
             tool_calls=tool_calls,
+            reviewed_model=reviewed_model,
+            reviewed_effort=reviewed_effort,
             review_type=review_type,
             use_json=args.json,
             reservation_id=reservation_id,
@@ -43010,6 +43039,9 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
+        # fn-193 (#338): the SAME resolved values the receipt records.
+        reviewed_model=effective_model,
+        reviewed_effort=effective_effort,
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
@@ -43316,6 +43348,9 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         attempt_out=attempt_summary,
         reviewed_head_sha=reviewed_head_sha,
         reviewed_base_sha=reviewed_base_sha,
+        # fn-193 (#338): the SAME resolved values the receipt records.
+        reviewed_model=effective_model,
+        reviewed_effort=effective_effort,
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,

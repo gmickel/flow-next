@@ -10,9 +10,8 @@ R1+R2 in plugins/flow-next/scripts/flowctl_tracker/config_lock.py: keep the last
 R1+R2+R5(a-d) met; cd plugins/flow-next/tests && python3 -m unittest test_tracker_resolved_cache test_portable_locks -q green (run BARE, never piped); ruff clean.
 
 ## Done summary
-TBD
-
+ConfigLockUnavailable (subclass of ConfigLockTimeout) fails fast when the lock can never be created (denied mkdir + path absent - errno/strerror + parent path in the message); real timeouts compose the message from observations: owner facts when read, owner-absent + reclaim-at when not, denied-while-exists keeps the Windows pending-delete poll; "holder appears alive" reserved for an actually-observed owner. FileExistsError resets last_error so contention never hits the permission branch. Bonus in-family: the pre-loop parent mkdir (previously a raw traceback) wraps to the same class. 6 new tests, 81 total green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d15f63a5
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_resolved_cache test_portable_locks -q
 - PRs:

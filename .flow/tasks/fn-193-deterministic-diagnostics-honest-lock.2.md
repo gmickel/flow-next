@@ -10,9 +10,8 @@ R3+R4 in plugins/flow-next/scripts/flowctl.py: add reviewed_model/reviewed_effor
 R3+R4+R5(e-f) met; test_review_convergence_cap + test_review_convergence_journal green (BARE runs); ruff clean.
 
 ## Done summary
-TBD
-
+Attempt rows gain conditional model/effort keys sourced from the same _receipt_model_effort values as the receipt (ladder downgrades and codex-resume carries land honestly), threaded through _finish_backend_exec on both verdict and transport-failure records, journaled and crash-replayed; attempts --json passes rows unprojected (pinned); record still rejects --model at argparse (pinned). 7 new tests, 314 total green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3ac52bd5
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_cap test_review_convergence_journal -q
 - PRs:
