@@ -15,7 +15,7 @@
     "fn-195-orchestration-by-intent-named-tiers-per.2": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.3": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.4": 0,
-    "fn-195-orchestration-by-intent-named-tiers-per.5": 2
+    "fn-195-orchestration-by-intent-named-tiers-per.5": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -268,26 +268,49 @@
       "task": "fn-195-orchestration-by-intent-named-tiers-per.5",
       "timestamp": "2026-08-14T23:24:16.841776Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "ecfcb6652aa60ce5c1ecf3599c3f892d176fcb9b5445690a6589038c44b0490d",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "host",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "bf3003dd62a711f0b87bfa0e47e284d4c26ea63b",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 822,
+      "output_sha256": "cc8418448c99b7e272a9b4aa9d030bdd421bc9c3dbbcc4069d6022f1c0d7b309",
+      "reservation_id": "e5b5b916ccba4e589c401be04fc5b48e",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.5",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.5",
+      "timestamp": "2026-08-14T23:43:56.382896Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 1,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 1,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 1,
-    "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 1
-  },
-  "review_pending_rounds": {
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.4": 1,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.5": 1
   },
-  "review_reservations": {
-    "e5b5b916ccba4e589c401be04fc5b48e": {
-      "artifact_sha256": "ecfcb6652aa60ce5c1ecf3599c3f892d176fcb9b5445690a6589038c44b0490d",
-      "counter_scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.5",
-      "epoch": 0,
-      "forced": false,
-      "review_type": "impl"
-    }
-  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
   "review_transport_failures": {
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 0,
@@ -309,5 +332,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T23:39:10.002040Z"
+  "updated_at": "2026-08-14T23:43:56.882064Z"
 }

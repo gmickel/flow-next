@@ -38,9 +38,28 @@ Close out: the big-picture docs sweep across every page the change touches, the 
 - [ ] TBD
 
 ## Done summary
-TBD
+Closed out fn-195: swept every page the routing change touches (docs README index + reach row + notable-updates line, platforms.md, teams.md, troubleshooting.md, sync-codex.md, review-findings.md, root README, root CLAUDE.md, the byte-identical usage.md pair), taught the two stage-line grammar sites to emit the R7 `(model: <what ran>)` annotation, closed the mirror content-pin gap with a real test, and staged the major-release CHANGELOG entry under `## Unreleased` with no version bump.
 
+Decisions and evidence for review:
+
+- **Mirror content-pin gap: closed with option (a), not recorded as accepted.** `MirrorRoutingProse` in `plugins/flow-next/tests/test_model_routing_scaffold.py` pins the regenerated mirror's routing block (markers, four tier names, zero model identifier) and asserts the retired ceremony references (`references/model-*.md`) are actually gone from the mirror — an incomplete regen leaves them loadable while the canonical assertions stay green. Recorded in the docs sweep too: `docs/sync-codex.md` now states that the sync guards police the transform, not the prose, and names the test as where mirrored user-facing contracts get pinned.
+- **`test_cursor_host_docs` was asserting the opposite of R2** — it required a concrete Cursor slug in `usage.md`. Inverted: it now asserts no shipped identifier plus a `<model>` placeholder. This was pinning the machinery the spec deletes, not catching drift.
+- **Root `CLAUDE.md` routing block rewritten into the shipped shape** (tier lines + precedence + preferences prose). Removed: the model ranking/score table, the probe-marked "live only if installed" lines, role-pin/registry-rung vocabulary, and benchmark claims. The concrete model names stay — this file is the consumer's own instruction file, which is exactly where the spec says identifiers belong.
+- **R2 residue is only the declared exceptions.** Final scan over shipped prose (plugin tree, excluding the mirror and tests) returns review-backend grammar surfaces only (`codex:<model>:<effort>`, `cursor:<model>-<effort>`, ralph-init prompt templates showing spec form) — the exception .3 declared and the conductor said not to re-litigate. `orchestration.md`, the other declared exception, currently names no identifier at all.
+- **Glossary verified, not re-authored:** 18 terms, including Tier, Reach, and the four tier terms with their `avoid` lists — all survived .3's sweep.
+- **Mirror regen:** `./scripts/sync-codex.sh` run three times total (twice consecutively with an identical 63-file working tree, then once more after the `sync-codex.md` edit) — idempotent, exit 0 each time, and the transforms verified as fired on the changed files (mirror `usage.md`, `phases.md`, `pilot/workflow.md`, routing snippet) rather than assumed. The regen also deleted seven stale `flow-next-setup/references/model-*.md` mirror files left over from the deleted ceremony.
+- **Version:** no bump, no `bump.sh`, no manifest touch — CHANGELOG lands under `## Unreleased` for the 4.0.0 batch with flow-98. The docs-site changelog is a release-time downstream step, not done here.
+- **Baseline:** green (full suite exit 0 before any edit).
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+Review fixes c327e766 (mirror floors restored via corrected generator baselines + MirrorAgentFloors pin; terra sentence; reviewer-tier rejection hints; MODEL_SLUG_RE cursor scan; shared gone-list) + bf3003dd (test-hygiene nits).
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewers; r1 NEEDS_WORK (P1 mirror floors) -> fixes -> r2 SHIP)
+stage: plan-sync - skipped(empty: no downstream todo tasks)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e2517bdc2ef8d1658302378b269d3ebdd96a545f, c327e766885a62c8084e5a6f6163bcedddcdb5f9, bf3003dd
+- Tests: python3 scripts/run_tests_parallel.py (files=192 ran=4396 failures=0 errors=0 skipped=8, exit 0), uvx ruff@0.16.0 check . (All checks passed), cd plugins/flow-next/tests && python3 -m unittest test_model_routing_scaffold test_cursor_host_docs -q (33 tests, OK), ./scripts/sync-codex.sh x2 (idempotent, exit 0), post-fix full gate: python3 scripts/run_tests_parallel.py (192 files, 4397 tests, 0F 0E; receipt c327e766-unittest) + ruff clean; sync-codex.sh idempotent across consecutive runs, impl-review: host backend r1 NEEDS_WORK (P1 mirror agent floors + 4 lower), r2 SHIP (reviewer claude-fable-5, fresh subagents; receipt /tmp/impl-review-receipt-fn-195-orchestration-by-intent-named-tiers-per.5.json)
 - PRs:
