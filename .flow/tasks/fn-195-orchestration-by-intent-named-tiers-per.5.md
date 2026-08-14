@@ -15,6 +15,7 @@ Close out: the big-picture docs sweep across every page the change touches, the 
 - The CHANGELOG entry ships in the same major release as the delegation removal and reads as one story: routing became a preference you write instead of a subsystem you configure. Name the removed keys, the replacement, and the one-line migration. No benchmark tables, no speed claims, no model identifiers beyond the declared exceptions.
 - Mirror regenerated twice for idempotency; verify the generator's transforms actually fired on the changed files rather than assuming.
 - Full gate: the parallel suite with the exit code captured directly, plus the pinned linter. Docs trees here are test-pinned and the local classifier calls them docs-only, so the full suite runs regardless of tier.
+- **Codex mirror content-pin gap (flagged during .2/.3):** `test_model_routing_scaffold.py`'s canonical assertions (`WorkflowProseContract`, `TemplateShape`) run against the canonical `plugins/flow-next/skills/flow-next-setup/workflow.md` and its template only — nothing re-pins the equivalent *mirror* content at `plugins/flow-next/codex/**` after `sync-codex.sh` regenerates it (deliberately dropped: the mirror is a generated rewrite, and `sync-codex.sh`'s own validation guards police the transform, not the prose). After the mirror regen in this task, either (a) add a mirror-side content pin equivalent to the canonical `WorkflowProseContract`/`TemplateShape` checks (routing-block markers, no model slug, pin-ceremony vocabulary absent) scoped to the Codex-rewritten paths, or (b) explicitly record the accepted gap - which surface asserts the mirror stayed in sync with the routing prose, and why a content pin was decided against - in this task's Done summary and in the docs sweep. Silence is not an acceptable outcome for this item. <!-- Updated by plan-sync: fn-195-orchestration-by-intent-named-tiers-per.2 flagged that mirror-content pins were deliberately dropped and no downstream task re-added or recorded the gap -->
 
 ### Investigation targets
 **Required** (read before writing):
@@ -23,9 +24,10 @@ Close out: the big-picture docs sweep across every page the change touches, the 
 
 ### Acceptance
 - [ ] Every page the change touches is updated, not only the routing page; notable-updates line added
-- [ ] Four tier terms in the dictionary with synonym bans
+- [ ] Four tier terms present in the dictionary with synonym bans (already added by `.1` - verify they survived `.3`'s sweep rather than re-adding) <!-- Updated by plan-sync: fn-195-orchestration-by-intent-named-tiers-per.1 already added Tier/Reach + the four tier terms to the dictionary; this task verifies, does not author -->
 - [ ] `## Unreleased` CHANGELOG entry framed for the major release, one story with the delegation removal, migration line included; no version bump
 - [ ] Mirror regenerated twice with transforms verified on the changed files
+- [ ] Mirror routing-prose content is either re-pinned by a new test or the accepted gap is explicitly recorded (Done summary + docs sweep) — not silently left unpinned
 - [ ] Full suite + linter green with exit codes captured directly; OS matrix green in CI
 
 ## Acceptance

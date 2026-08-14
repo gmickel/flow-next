@@ -52,7 +52,8 @@ stage: delegation - skipped(config: delegation off)
 
 Integrated onto spec branch as 3be3d785; review fixes 1f863fae + 4976cf11 (precedence coverage widened to 9 sites, glossary avoid-list trims, prime fan-out tier statement corrected, reach index links); stray-artifact cleanup 877d953d.
 
-stage: impl-review - ran (host backend, fresh fable-5 reviewers; r1 NEEDS_WORK -> fixes -> r2 NEEDS_WORK -> fixes -> r3 SHIP)
+stage: impl-review - ran (host backend, fresh fable-5 reviewers; r1 NEEDS_WORK -> fixes -> r2 NEEDS_WORK -> fixes -> r3 SHIP)stage: plan-sync - ran (drift: yes; .3 gained R3 + workflow-host pin-table ownership, .5 dictionary item reworded to survival-check; cross-spec deferred to conductor)
+
 ## Evidence
 - Commits: 3be3d785ecdb1fbda07efc27c716f019c3cd51a2, 1f863fae65d4296ce853251e75538779f28502da, 4976cf11df7ccf2e293f0ffa134981fcfb973efe
 - Tests: python3 scripts/run_tests_parallel.py (192 files, 4407 tests, OK), cd plugins/flow-next/tests && python3 -m unittest test_cursor_host_docs test_chart_docs_inventory test_parallel_work_prose test_worker_anchor_prose test_skill_prose_diet test_review_findings_docs test_two_axis_audit_contract test_r22_invariant test_gate_classify test_prompt_text_pinned -q (142 tests, OK), uvx ruff@0.16.0 check . (All checks passed), integrated verify: python3 scripts/run_tests_parallel.py @4976cf11 (192 files, 4407 tests, 0F 0E) + uvx ruff@0.16.0 check . (clean), impl-review: host backend r1 NEEDS_WORK (2 P2 + 3 P3), r2 NEEDS_WORK (fix mislabeled prime tier + vocab leak), r3 SHIP (reviewer claude-fable-5, fresh subagents; receipt /tmp/impl-review-receipt-fn-195-orchestration-by-intent-named-tiers-per.1.json)
