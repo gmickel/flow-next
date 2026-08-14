@@ -30,33 +30,36 @@ identifying both halves of the durability-boundary contract break.
 
 ## [flow-next 3.33.0] - 2026-08-14
 
-If a spec's tasks were genuinely independent, flow-next was supposed to implement
-them at the same time. It never did - not once. The rule that decides a
-concurrent wave is fail-closed on a per-task declaration of the paths that task
-will modify, and the planning guidance told authors to leave that line out
-whenever it was hard to predict. So they left it out, every time, and every run
-stayed sequential no matter how parallel the work was. This release makes the
-declaration standard, fixes the two things that broke the first live wave, and
-writes down what it is worth: two independent tasks that took 187 seconds one
-after the other took 96 seconds side by side, with no extra tokens - the same
-work, overlapped rather than repeated.
+When a spec's tasks are genuinely independent, flow-next can implement them at
+the same time - and it has, but far less often than it should. The rule that
+decides a concurrent wave is fail-closed on a per-task declaration of the paths
+that task will modify, and the planning guidance told authors to leave that line
+out whenever it was hard to predict. Taken at its word, that turned a default
+into an exception: specs whose tasks would have run side by side ran one after
+the other instead, because nothing had declared what they touch. This release
+makes the declaration standard rather than optional, fixes two things that break
+a wave when the declarations are there, and writes down what it is worth: two
+independent tasks that took 187 seconds one after the other took 96 seconds side
+by side, with no extra tokens - the same work, overlapped rather than repeated.
 
 ### Fixed
 
-- **Concurrent task waves work now - the feature shipped, but its precondition
-  was written as an opt-out, so no wave had ever run.** A wave dispatches only
-  when every task in it declares the paths it will modify, and the planning
-  guidance said to leave that line out whenever it was hard to predict. Across
-  eleven consecutive specs, not one task carried it, so every run stayed
-  sequential no matter how independent its tasks were. Planning now writes the
-  line on every task, and says to declare wider rather than omit when uncertain:
+- **Concurrent task waves are the default now, not the exception - their
+  precondition was written as an opt-out and went under-authored.** A wave
+  dispatches only when every task in it declares the paths it will modify, and
+  the planning guidance said to leave that line out whenever it was hard to
+  predict. How often waves fired therefore came down to how boldly each planning
+  pass read that advice; in this repository's own recent history not one task
+  carried the line, so its runs stayed sequential regardless of how independent
+  the tasks were. Planning now writes the line on every task, and says to declare
+  wider rather than omit when uncertain:
   a too-wide declaration keeps the tasks serial, which is exactly what omitting
   did, while a declared one can actually become a wave. Getting it wrong stays
   cheap by construction - workers write in isolated workspaces, so an overlap
   surfaces as a merge conflict at the join and costs one serial re-run, never
   correctness.
-- **Two things that broke a live wave are now stated where the conductor reads
-  them.** A wave workspace is branched from a commit, so a freshly planned spec
+- **Two things that break a wave are now stated where the conductor reads
+  them** - both found by running the path end to end before shipping this. A wave workspace is branched from a commit, so a freshly planned spec
   that has not been committed yet does not exist inside it and every parallel
   worker fails to re-anchor - looking like a broken worker rather than a missing
   commit. And a worker's handover evidence names commits that live only on its
