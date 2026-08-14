@@ -4,7 +4,18 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
-## [Unreleased]
+## [flow-next 3.33.0] - 2026-08-14
+
+If a spec's tasks were genuinely independent, flow-next was supposed to implement
+them at the same time. It never did - not once. The rule that decides a
+concurrent wave is fail-closed on a per-task declaration of the paths that task
+will modify, and the planning guidance told authors to leave that line out
+whenever it was hard to predict. So they left it out, every time, and every run
+stayed sequential no matter how parallel the work was. This release makes the
+declaration standard, fixes the two things that broke the first live wave, and
+writes down what it is worth: two independent tasks that took 187 seconds one
+after the other took 96 seconds side by side, with no extra tokens - the same
+work, overlapped rather than repeated.
 
 ### Fixed
 
