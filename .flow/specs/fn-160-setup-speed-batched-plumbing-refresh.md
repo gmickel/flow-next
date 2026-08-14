@@ -103,3 +103,7 @@ Task fn-160-setup-speed-batched-plumbing-refresh.1 validates the core approach (
 - `agent_docs/adding-skills.md` L26-81 (split + gated-reference patterns), `agent_docs/setup-modes.md`
 - Prior art specs: fn-130 (reached-path harness + frozen matrix), fn-121 (plugin mode), fn-115 (pin ceremony), fn-126 (Grok detection), fn-138 (config schema), fn-139-141 (plumbing extraction template)
 - Memory: abort-option-copy-must-reflect-pre-2026-05-18, audit-sync-codexsh-during-planning-for-2026-04-30, mirror-regen-exposes-latent-canonical-2026-06-11, skill-workflow-snippets-must-enforce-2026-06-11, spec-named-config-keys-must-be-checked-2026-07-15
+
+## Cross-spec drift note (plan-sync, 2026-08-14)
+
+fn-195.2 deleted the model-pins ceremony this spec optimizes: `references/model-pins.md`, the live CLI probes, `models.verifiedAt`, and the routing questions no longer exist — setup now writes one commented routing block with no probes and no asks. R5 and every model-pins/probe line above are moot as written; the remaining value here (regrouped asks, batched plumbing) needs re-scoping against post-fn-195 setup before this spec is workable. Re-plan before starting.
