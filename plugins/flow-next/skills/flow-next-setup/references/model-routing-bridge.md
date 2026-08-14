@@ -1,8 +1,7 @@
 # Model routing: Claude Code, Droid, and Codex
 
-Read this reference only after the Model Routing answer is `Scaffold` or
-`Scaffold + enable codex delegation` and `PLATFORM` is `claude-code`, `droid`,
-or `codex`. The question has already been answered. Re-read target files from
+Read this reference only after the Model Routing answer is `Scaffold` and
+`PLATFORM` is `claude-code`, `droid`, or `codex`. The question has already been answered. Re-read target files from
 disk after the Docs write; never reuse an in-memory copy.
 
 ## Resolve targets
@@ -21,7 +20,8 @@ existing in-repo file and apply the guard again. Missing pointer target drops
 that target with:
 `Model-routing scaffold: <file> is a shim pointing at a missing <path>.md — skipping`.
 Never turn a shim into a mixed file. If all targets drop,
-`ROUTING_OUTCOME="skipped (shim)"`, then continue to delegation below.
+`ROUTING_OUTCOME="skipped (shim)"`, then continue to the review-backend
+switch offer below.
 
 For multiple targets, run composition, comparison, read-back, and write
 separately. A per-file terminal ends only that file. Join outcomes in the
@@ -62,19 +62,6 @@ Inspect the target before read-back:
 On a would-write path, show the complete composed block, then ask `write` /
 `skip`. Only `write` appends or marker-replaces the whole block. Confirm:
 `Model-routing section written to <file> — this section is yours now; edit the scores/rules freely, or re-run /flow-next:setup to regenerate.`
-
-## Delegation opt-in
-
-This branch runs even when the block was unchanged/kept if the answer was
-`Scaffold + enable codex delegation`:
-
-```bash
-"${PLUGIN_ROOT}/scripts/flowctl" config set work.delegate codex --json
-DELEGATE_SET=$("${PLUGIN_ROOT}/scripts/flowctl" config get work.delegate --raw --json 2>/dev/null | jq -r 'if .value == null then "" else (.value | tostring) end')
-```
-
-NEVER set or touch `work.delegateConsent`. Persisted `codex` sets
-`ROUTING_DELEGATE="enabled"`; otherwise warn and set `failed`.
 
 ## Review-backend switch offer
 

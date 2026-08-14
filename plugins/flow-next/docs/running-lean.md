@@ -57,7 +57,6 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 | [Autonomous loops](#autonomous-loops) | none | manual | `/flow-next:pilot`, `/flow-next:land` |
 | [GitHub scouts](#github-scouts) | `scouts.github` | off | ask a scout in conversation |
 | [Ralph](#ralph-deprecated) | none | off, **deprecated** | see below |
-| [Packaged codex delegation](#packaged-codex-delegation-deprecated) | `work.delegate` | off, **deprecated** | see below |
 
 ### Tracker sync
 
@@ -144,9 +143,9 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 
 **Deprecated.** A shell script that calls the orchestration primitives - `/flow-next:pilot` to build and `/flow-next:land` to ship, driven by a host loop or `cron` - does what the hardened harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Nothing is removed yet and existing Ralph installs keep working unchanged; new adopters should reach for pilot + land. Details and the full comparison: [`ralph.md`](ralph.md).
 
-### Packaged codex delegation (deprecated)
+### Implementation offload (no layer to enable)
 
-**Deprecated.** The agentic route supersedes it: the `/flow-next:setup` model-routing scaffold writes standing routing prose into `CLAUDE.md` / `AGENTS.md` that is loaded every turn, including unattended runs, and `.flow/usage.md` carries the bridge recipes. That covers what the packaged `work.delegate*` subsystem was built for, without a second config surface that duplicates the role map. Nothing is removed yet and existing `work.delegate` setups keep working; removal is specced separately in `flow-98-remove-packaged-codex-delegation`. Details: [`orchestration.md`](orchestration.md#implementation-delegation--work--codex-exec).
+Offloading implementation to a second CLI is **not an optional layer** — there is no config key to switch on and nothing to price. You drive the other CLI through a headless bridge, ad hoc or as standing routing prose in `CLAUDE.md` / `AGENTS.md` (written for you by the `/flow-next:setup` model-routing scaffold). The recipes, the tier advice, and the rule that the bridged child writes code while the host keeps git, judgment, and the verdict live in the usage guide's `## Orchestration & model steering` section. Details: [`orchestration.md`](orchestration.md#implementation-offload--the-bridge-route).
 
 ## A lean run still leaves a record
 

@@ -216,7 +216,7 @@ Task: <TASK_ID>"
 
 Use conventional commits. Scope from task context.
 
-Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`, and the attribution trailers match who actually wrote the code.
+Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`.
 
 ## Phase 4: Review (runs whenever REVIEW_MODE is not `none`)
 

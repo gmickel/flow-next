@@ -191,7 +191,7 @@ class PipelineQaConfigTestCase(unittest.TestCase):
 
     def test_pipeline_block_does_not_clash_with_existing_blocks(self) -> None:
         defaults = self.flowctl.get_default_config()
-        # pipeline.* is its own top-level block, distinct from work.*,
+        # pipeline.* is its own top-level block, distinct from
         # land.*, artifacts.*, and memory.* — no shared keys leak across.
         self.assertIn("pipeline", defaults)
         self.assertIn("land", defaults)

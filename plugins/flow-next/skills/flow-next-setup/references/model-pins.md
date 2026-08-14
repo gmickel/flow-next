@@ -55,7 +55,6 @@ whose CLI is present or which already has an on-disk pin.
 |---|---|---|
 | `fastJudge` | fast/cheap triage | codex: luna-class; copilot: haiku-class; cursor: composer / luna-low |
 | `review` | strongest acceptable review gate | codex: sol:medium; never mini/nano or a weak silent-ship default |
-| `delegate` | value-tier implementer | codex: terra-class; feeds `work.delegateModel` only when that leaf is unset |
 | `scoutFast` | cheap codex-mirror scout | luna-class |
 | `scoutIntelligent` | judgment codex-mirror scout | stronger 5.6-family tier |
 

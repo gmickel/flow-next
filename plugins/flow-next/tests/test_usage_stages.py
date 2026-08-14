@@ -66,7 +66,7 @@ class UsageStagesTest(unittest.TestCase):
         self.append_summary(
             "stage: plan-sync - skipped(config: planSync.enabled != true)\n"
             "stage: impl-review - ran [2026-08-08T10:00:00Z..2026-08-08T10:05:00Z]\n"
-            "stage: delegation - failed(error: bridge returned empty output)"
+            "stage: qa - failed(error: no live app reachable)"
         )
         data = self.stages_json()
         self.assertEqual(data["stages"]["plan-sync"]["skipped"], 1)
@@ -75,7 +75,7 @@ class UsageStagesTest(unittest.TestCase):
             data["stages"]["plan-sync"]["reasons"],
         )
         self.assertEqual(data["stages"]["impl-review"]["ran"], 1)
-        self.assertEqual(data["stages"]["delegation"]["failed"], 1)
+        self.assertEqual(data["stages"]["qa"]["failed"], 1)
         self.assertEqual(data["unknown_lines"], 0)
 
     def test_malformed_lines_count_as_unknown_and_exit_zero(self) -> None:

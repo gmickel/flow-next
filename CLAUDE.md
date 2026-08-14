@@ -34,7 +34,7 @@ A workflow that walks files, makes per-item judgments, investigates code, compos
 
 **Do not spawn `codex`/`copilot`/other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one.
 
-**Narrow carve-out — `/flow-next:work` Codex delegation (fn-55 decision):** the opt-in `work.delegate` / `delegate:codex` mode is **host-orchestrated implementation-offload, not a judgment hand-off**. The host work skill spawns a local `codex exec` to *write code* for a task while the host retains all judgment (gating, classification, git ownership, review, commit). This is the one sanctioned second-LLM spawn — it is OFF by default, consent-gated, never spawned from inside flowctl, and `codex exec` is forbidden from git/decisions. It does **not** license spawning LLMs for judgment from flowctl. See [`skills/flow-next-work/references/codex-delegation.md`](plugins/flow-next/skills/flow-next-work/references/codex-delegation.md).
+**Implementation offload is prose-routed, not packaged (flow-98 decision).** The `work.delegate*` subsystem is gone: bridging implementation to a second CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) is a routing decision the host reads from the model-routing section in `CLAUDE.md` / `AGENTS.md` plus the bridge recipes in `flowctl usage`, and it is **host-orchestrated implementation-offload, never a judgment hand-off**: the bridged child writes code while the host keeps git, judgment, and the verdict. Nothing about that route licenses spawning an LLM for judgment from inside flowctl. See [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#implementation-offload--the-bridge-route).
 
 ### When to use DETERMINISTIC flowctl Python
 
@@ -63,7 +63,7 @@ Symptoms suggesting deterministic when you should build skill-based:
 
 If three or more apply, stop and convert to a skill. The deterministic path is harder to maintain, more brittle, and produces worse output.
 
-**Sanctioned carve-out (subprocess LLM judgment):** do not "fix" these licensed cases when the symptom list matches. Review-backend dispatch, the triage-skip judge, and fn-55 delegation classify may spawn a subprocess LLM for judgment. Rationale: cross-model verdicts about pipeline-written code must not be self-issued by the host.
+**Sanctioned carve-out (subprocess LLM judgment):** do not "fix" these licensed cases when the symptom list matches. Review-backend dispatch and the triage-skip judge may spawn a subprocess LLM for judgment. Rationale: cross-model verdicts about pipeline-written code must not be self-issued by the host.
 
 ## Cross-platform patterns
 
@@ -127,7 +127,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Spec-driven team workflow + handover objects | [`plugins/flow-next/docs/teams.md`](plugins/flow-next/docs/teams.md) |
 | Build-loop conductor (`/flow-next:pilot` — single-tick spec-to-PR pipeline; host `/loop`/`/goal` drives) | [`plugins/flow-next/skills/flow-next-pilot/SKILL.md`](plugins/flow-next/skills/flow-next-pilot/SKILL.md) |
 | Ralph autonomous mode internals | [`plugins/flow-next/docs/ralph.md`](plugins/flow-next/docs/ralph.md) |
-| Orchestration & model routing (steering tiers, review-backend precedence, `delegate:codex`, CLAUDE.md model tables, pilot+land chaining) | [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md) |
+| Orchestration & model routing (steering tiers, review-backend precedence, the bridge route for implementation offload, CLAUDE.md model tables, pilot+land chaining) | [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md) |
 | Full `flowctl` CLI reference | [`plugins/flow-next/docs/flowctl.md`](plugins/flow-next/docs/flowctl.md) |
 | `.flow/` directory layout + spec-first task model | [`plugins/flow-next/docs/architecture.md`](plugins/flow-next/docs/architecture.md) |
 | Memory schema (bug/knowledge tracks, audit lifecycle) | [`plugins/flow-next/docs/memory-schema.md`](plugins/flow-next/docs/memory-schema.md) |
@@ -224,11 +224,11 @@ How to apply — defaults, not limits. Unless prompted otherwise, route work acr
 - Reviews prefer a different family than the writer — uncorrelated blind spots.
 - Graceful degrade: a routed CLI that is missing, unauthenticated, or errors → report it unavailable and fall back to the session model. Never block.
 
-Recommended default pipeline (swap any row to taste): opus-5 as the session model authors specs — capture, interview, plan; that is where plan quality is made — then gpt-5.6-terra @ medium implements via the implementation routes below (packaged delegation on Claude Code; the same-family self-bridge on a Codex host until MAv2 role pins are reliable), then reviews go to the strongest reviewer from a DIFFERENT family than the writer (single-subscription fallback: the strongest same-family model that did not write the diff). On Claude Code this resolves to opus-5 → terra → sol; on a Codex host to sol → terra → opus-5 when a Claude CLI is installed, else sol. fable-5 is the escalation rung, not the default: reach for it on frontier-hard plans or as an extra final gate when the stakes warrant the burn.
+Recommended default pipeline (swap any row to taste): opus-5 as the session model authors specs — capture, interview, plan; that is where plan quality is made — then gpt-5.6-terra @ medium implements via the bridge routes below (a codex bridge from a Claude Code host; the same-family self-bridge on a Codex host until MAv2 role pins are reliable), then reviews go to the strongest reviewer from a DIFFERENT family than the writer (single-subscription fallback: the strongest same-family model that did not write the diff). On Claude Code this resolves to opus-5 → terra → sol; on a Codex host to sol → terra → opus-5 when a Claude CLI is installed, else sol. fable-5 is the escalation rung, not the default: reach for it on frontier-hard plans or as an extra final gate when the stakes warrant the burn.
 
 flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claude tiers run natively (spawn subagents with the model parameter); other families ride the headless bridges — recipes in `.flow/usage.md` § Orchestration & model steering. Probe-marked lines are live only if their CLI is installed:
 - Implementation, native: a worker/subagent on opus-5 (quality) or sonnet-5 (speed) via the model parameter.
-Implementation via gpt-5.6-terra @ medium (the packaged delegate default): `/flow-next:work <id> delegate:codex` (consent-gated, host keeps git/review) or a direct `codex exec` bridge. Eval-matched gpt-5.6-sol correctness at ~2/3 wall-clock on strong specs; escalate work.delegateModel to gpt-5.6-sol for gnarly tasks.
+Implementation via gpt-5.6-terra @ medium (the recommended value tier): a `codex exec` bridge — the child writes code, the host keeps git, judgment, and the verdict. Eval-matched gpt-5.6-sol correctness at ~2/3 wall-clock on strong specs; escalate to gpt-5.6-sol for gnarly tasks.
 Implementation via composer-2.5: the `cursor-agent` bridge (`--force` to apply); host reviews + commits.
 Implementation via grok-4.6: a fast, cheap first-draft worker via the grok CLI bridge (`grok --always-approve -m grok-4.6 --reasoning-effort high -p "<task>"` - flags BEFORE `-p`; acceptEdits skips Bash and silently truncates shell-using headless runs); host reviews + commits on a taste-heavier tier. Route it to supervised editor-shaped bulk/implementation - NOT long unsupervised terminal loops (Terminal-Bench v3 26%), NOT UI or taste-critical work (hallucination unresolved: invents ~1/3 when it doesn't know, AA-Omniscience). Prefer the cursor bridge for it: `cursor-agent --model cursor-grok-4.6-high --force` (permanent 2x Cursor usage pool). API long sessions: cache reads +67% vs 4.5.
 Review, cross-family (recommended default when the writer is Claude-family; on a GPT-writer host pick a non-GPT reviewer instead): `review.backend codex`; per-task `review:` pins exceptions; escalate reviewer↔worker disagreements to the session model.

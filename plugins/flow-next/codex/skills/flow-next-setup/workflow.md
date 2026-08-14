@@ -23,11 +23,11 @@ PLATFORM="codex"
 
 **Cursor ordering matters.** Cursor exposes **no** plugin-root env var, so without the `CURSOR_AGENT` check it would fall through to the `codex` branch and get Codex-shaped project instructions (`$flow-next-plan` command names + `.codex/` setup) — wrong, because a Cursor install (local or team-marketplace) drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`. `CURSOR_AGENT` is Cursor's own signal (set in its agent shell; it also sets `CI=1` / `CURSOR_TRACE_ID`, but `CURSOR_AGENT` is the canonical one). The `CURSOR_AGENT` branch MUST come before the `else → codex` fallback.
 
-**Why the `.cursor-plugin/plugin.json` guard (don't classify Codex-hosted-in-Cursor as Cursor).** `CURSOR_AGENT` is **inherited by child processes** — so when Codex is launched *from* a Cursor Agent shell, the Codex process also sees `CURSOR_AGENT`, and a bare env check would misclassify a genuine Codex setup as `cursor` (skipping the `.codex/` agent + hook copy and writing the `/flow-next:` snippet instead of the Codex `$flow-next-` one — leaving the Codex setup incomplete). The env var alone only proves "a Cursor agent is somewhere in the process ancestry," not "this plugin is a Cursor install." So the branch ALSO requires the `.cursor-plugin/plugin.json` manifest at the **resolved `PLUGIN_ROOT`**: present in real Cursor installs and in the dual-manifest source tree, but **absent** from a pure `~/.codex` install. A Codex process that merely inherited `CURSOR_AGENT` and resolves a Codex-home `PLUGIN_ROOT` (no Cursor manifest) correctly falls through to `codex`. (Same inherited-env-var class as the codex-delegation `CLAUDECODE` guard.)
+**Why the `.cursor-plugin/plugin.json` guard (don't classify Codex-hosted-in-Cursor as Cursor).** `CURSOR_AGENT` is **inherited by child processes** — so when Codex is launched *from* a Cursor Agent shell, the Codex process also sees `CURSOR_AGENT`, and a bare env check would misclassify a genuine Codex setup as `cursor` (skipping the `.codex/` agent + hook copy and writing the `/flow-next:` snippet instead of the Codex `$flow-next-` one — leaving the Codex setup incomplete). The env var alone only proves "a Cursor agent is somewhere in the process ancestry," not "this plugin is a Cursor install." So the branch ALSO requires the `.cursor-plugin/plugin.json` manifest at the **resolved `PLUGIN_ROOT`**: present in real Cursor installs and in the dual-manifest source tree, but **absent** from a pure `~/.codex` install. A Codex process that merely inherited `CURSOR_AGENT` and resolves a Codex-home `PLUGIN_ROOT` (no Cursor manifest) correctly falls through to `codex`. (Same inherited-env-var class as the `CLAUDECODE` host guard below.)
 
 **Positive path discriminator — `PLUGIN_ROOT` under `~/.cursor/` (never `codex/` absence).** The manifest + env checks alone are not enough when Codex runs from the **checked-in plugin source** inside a Cursor shell (Codex marketplace points at `./plugins/flow-next`, which carries `.cursor-plugin/`, `.codex-plugin/`, and the `codex/` mirror) — there the Cursor manifest is present in the workspace tree, so env+manifest would misfire. The positive signal is that a **real Cursor install** resolves `PLUGIN_ROOT` under `~/.cursor/` — local `install-cursor.sh`/`.ps1` → `~/.cursor/plugins/local/flow-next/`; team-marketplace repo-import → Cursor's marketplace plugin cache under `~/.cursor/` (and that cache **may contain `codex/`** because the whole plugin source is imported; explicit component paths in `.cursor-plugin/plugin.json` keep Cursor from loading the mirror as skills). A genuine Codex install resolves under `$CODEX_HOME` (default `~/.codex`); the shared source tree resolves to a workspace path. Neither is under `~/.cursor/`, so both correctly fall through to `codex` even with inherited `CURSOR_AGENT`. **Do not** key detection on the `codex/` directory being absent — that misclassifies marketplace repo-imports as Codex.
 
-**Claude Code signal - `CLAUDECODE` + the Claude plugin manifest, and why the rung sits low (#306).** `CLAUDE_PLUGIN_ROOT` is **never set in the Bash environment of a running plugin skill** on Claude Code (probe-verified against 2.1.221 and re-verified at v3.16.3), so the branch that keyed on it could not fire on our PRIMARY host: every rung failed and setup fell through to `else -> codex`, writing Codex `$flow-next-` snippets into a repo driven by `/flow-next:` slash commands. The signal that IS present is `CLAUDECODE=1` - the same marker the codex-delegation platform gate keys on. It is set by Claude Code itself, in every install mode (marketplace cache, local marketplace, `--plugin-dir` dev load), so it needs no plugin-root env var; `PLUGIN_ROOT` is already resolved from this file's own location.
+**Claude Code signal - `CLAUDECODE` + the Claude plugin manifest, and why the rung sits low (#306).** `CLAUDE_PLUGIN_ROOT` is **never set in the Bash environment of a running plugin skill** on Claude Code (probe-verified against 2.1.221 and re-verified at v3.16.3), so the branch that keyed on it could not fire on our PRIMARY host: every rung failed and setup fell through to `else -> codex`, writing Codex `$flow-next-` snippets into a repo driven by `/flow-next:` slash commands. The signal that IS present is `CLAUDECODE=1`. It is set by Claude Code itself, in every install mode (marketplace cache, local marketplace, `--plugin-dir` dev load), so it needs no plugin-root env var; `PLUGIN_ROOT` is already resolved from this file's own location.
 
 `CLAUDECODE` is **inherited by child processes** - same class as the `CURSOR_AGENT` misfire above - so it is paired with a positive discriminator and a lowered position, never used bare:
 
@@ -554,8 +554,7 @@ Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `
 
 **Model Routing question** — include only when `ROUTING_ASK=1` AND
 (`BRIDGE_DETECTED=1` OR `PLATFORM=cursor` OR `PLATFORM=grok`). The frozen
-option set is `Scaffold` / `Scaffold + enable codex delegation` / `Skip`; the
-delegation option exists only when `HAVE_CODEX=1`.
+option set is `Scaffold` / `Skip`.
 
 Resolve `PLATFORM` first, then **MUST read exactly one applicable direct
 question reference** and add its question object to the grouped prompt:
@@ -826,7 +825,7 @@ after the Docs block above and before Ralph/Star. Always re-read target files fr
 disk after Docs; never interleave the two writes.
 
 - `Skip` → `ROUTING_OUTCOME="skipped"`; read no implementation reference.
-- `Scaffold` or `Scaffold + enable codex delegation` → resolve `PLATFORM`, then
+- `Scaffold` → resolve `PLATFORM`, then
   **MUST read and follow exactly one direct implementation reference**:
   - `cursor` → [references/model-routing-cursor.md](references/model-routing-cursor.md)
   - `grok` → [references/model-routing-grok.md](references/model-routing-grok.md)
@@ -834,8 +833,7 @@ disk after Docs; never interleave the two writes.
     [references/model-routing-bridge.md](references/model-routing-bridge.md)
 
 Unknown `PLATFORM` fails open to the bridge reference. Never read more than one
-implementation reference for one run. The delegation opt-in remains
-independent of whether a selected reference writes, keeps, or no-ops the block.
+implementation reference for one run.
 
 **Ralph** (only when its question was asked; Cursor/Grok remain
 unsupported and read no Ralph reference):
@@ -927,11 +925,9 @@ Documentation updated:
 - <files updated or "none">
 
 Model routing scaffold: <ROUTING_OUTCOME — e.g. "written to CLAUDE.md" | "kept (customized)" | "unchanged (already current)" | "skipped" | "skipped (shim)" | "not offered">
-<if Scaffold + enable codex delegation was chosen, also:>
-- Codex delegation: <ROUTING_DELEGATE — "enabled (work.delegate=codex; first-use consent still required)" | "failed">
 
 Model-pin ceremony (fn-115.2): <MODELS_CEREMONY — "written" | "stamped" | "skipped" | "skipped (autonomous)">
-- Role map keys: models.roles.<fastJudge|review|delegate|scoutFast|scoutIntelligent>.<codex|copilot|cursor>
+- Role map keys: models.roles.<fastJudge|review|scoutFast|scoutIntelligent>.<codex|copilot|cursor>
 - Stamp key: models.verifiedAt (ISO date). Re-run setup to refresh; flowctl status nudges after ~90 days.
 
 Notes:

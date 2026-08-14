@@ -205,7 +205,7 @@ Then, per R-ID in the coverage spine, decide subtract-vs-live with **all three**
 
 **Never subtract on:**
 - `files_touched` / `commits` / `prs` — these prove code *changed*, never that the criterion *holds*. They never subtract.
-- A `delegation.verification_summary` or any prose "I verified X" — that is the worker's **self-report** (`flow-next-work/references/codex-delegation.md` says don't trust it as the sole gate). Narration is never QA-grade captured evidence; the hard rule (§Preamble, R5) forbids honoring it.
+- Any prose "I verified X" — a worker's or a bridged child's **self-report** is never the gate. Narration is never QA-grade captured evidence; the hard rule (§Preamble, R5) forbids honoring it.
 
 Record, per R-ID, a `coverage_source ∈ {live, subtracted:<task-id>:<test-cmd>}` and **carry it into the §2.2 coverage table** (a `subtracted` row is a deliberate non-live row backed by a named re-runnable command, distinct from a `⚠️ no live scenario` gap). When in doubt, **keep the live scenario** — conservative subtraction never trades a live pass for a narrated claim. With zero recorded work-evidence (no `tasks[]`, empty `tests[]`), nothing subtracts — every UI-observable AC stays live (the safe default).
 

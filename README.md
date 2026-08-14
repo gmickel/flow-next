@@ -195,11 +195,11 @@ The 5-command path is the opinionated default: rails for your first week, with e
 ```text
 Skip stages       Tiny fix? plan + work, nothing else: /flow-next:plan "rename the config key" → /flow-next:work fn-N
 One-shot chain    "Plan fn-12, run plan-review until SHIP, work every task, then make-pr." One sentence, full pipeline.
-Prompt into steps "/flow-next:work fn-12 - keep the UI tasks yourself; delegate the API plumbing to codex"
+Prompt into steps "/flow-next:work fn-12 - keep the UI tasks yourself; send the API plumbing to a codex bridge"
 Reorder / re-run  Interview again after planning; /flow-next:sync re-aligns tasks after implementation drift.
 Parallelize       /flow-next:plan reports execution waves. /flow-next:work inspects the ready frontier, dispatches
                   a safe subset in isolated workspaces when useful, joins it, then continues; otherwise it serializes.
-Route models      flowctl config set review.backend codex · per-task review: pins · delegate:codex for implementation.
+Route models      flowctl config set review.backend codex · per-task review: pins · a codex exec bridge for implementation.
 ```
 
 Skills are prompts executed by the host agent. If the variation you want is not already a parameter, describe it and the host builds the arrangement on the spot ([orchestration guide](plugins/flow-next/docs/orchestration.md)). Use the smallest sufficient workflow. Full recipe catalog: [flow-next.dev/cookbook](https://flow-next.dev/cookbook).
@@ -407,7 +407,7 @@ The 25 command-backed skills are invocable as `/flow-next:<name>` or in plain la
 
 **Phrase-triggered skills** (no dedicated slash command, just ask): `flow-next-deps` ("what's blocking what?", dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?"). On hosts that surface skills as commands (Claude Code does), each is also invocable by its full skill name, e.g. `/flow-next:flow-next-worktree-kit`.
 
-Full catalog of all 30 skills (25 slash-command, 5 phrase-triggered), with triggers, one-liners, and every flag: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every command, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it, from model routing to review backends, delegation, and loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
+Full catalog of all 30 skills (25 slash-command, 5 phrase-triggered), with triggers, one-liners, and every flag: [`docs/skills.md`](plugins/flow-next/docs/skills.md). Full CLI reference (every command, every default): [`docs/flowctl.md`](plugins/flow-next/docs/flowctl.md). Steering all of it, from model routing to review backends, bridged implementation, and loop chaining: [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md).
 
 ---
 

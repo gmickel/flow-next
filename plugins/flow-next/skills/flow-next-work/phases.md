@@ -547,10 +547,10 @@ The `Next:` line is the executable handoff — the reader runs it, rather than
 re-deriving which command comes next from the summary above it.
 
 **Stage-outcome lines (fn-178, binding on every stage this run orchestrated).**
-Each optional stage the run reached (plan-sync, impl-review,
-completion review, QA, a wave dispatch) records exactly
-one line in the receipt surface it already writes — the task's `## Done
-summary` for task-scoped stages, this final summary for run-scoped ones:
+Each optional stage the run reached (plan-sync, impl-review, completion
+review, QA, a wave dispatch) records exactly one line in the receipt surface it
+already writes — the task's `## Done summary` for task-scoped stages, this
+final summary for run-scoped ones:
 
 ```
 stage: <name> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)
