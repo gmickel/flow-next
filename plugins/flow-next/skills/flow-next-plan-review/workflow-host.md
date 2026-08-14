@@ -78,26 +78,27 @@ After the reviewer returns, continue to **Receipt and status**. Assemble its
 receipt input, receipt target, status target, and reviewer output file there
 BEFORE calling `record`; the reservation is not consumable until then.
 
-Read the AGENTS.md model-routing section, identify the writer family, and select
-a reviewer slug from another family.
+The reviewer runs on the **reviewer tier** — a verdict from the writer's own
+family is not an independent one. **Routing precedence, highest first: an
+explicit argument in the invocation, then the project routing block in the
+instruction file, then the agent definition's own default, then the session
+model.** How *this* harness reaches that model - and what degrades when it
+cannot - is its reach page: [`docs/reach/README.md`](../../docs/reach/README.md).
+A harness that reaches only one model family natively fails closed when the
+writer shares that family (interactive -> ask; autonomous -> stop with
+`NEEDS_HUMAN: host review needs a cross-family reviewer in the AGENTS.md
+routing block`); cross-family then comes through a bridge backend.
 
-If no cross-family pin is available:
+Dispatch one fresh read-only reviewer. Immediately beforehand capture
+`REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and retain that literal through
+receipt writing. Read-only is enforced by TOOLS, never by prompt: dispatch
+through a read-only agent definition or the host's read-only subagent mode
+(`disallowedTools: Edit, Write, Task` where the host consumes it) - never a
+mutation-capable subagent, because the reviewer reads untrusted content. Where
+the host cannot enforce it, say so in the receipt.
 
-- Interactive: ask explicitly which reviewer family/model to use.
-- Autonomous / Ralph / `REVIEW_RECEIPT_PATH`: stop with
-  `NEEDS_HUMAN: host review needs a cross-family model pin in AGENTS.md model-routing`.
-
-Dispatch one fresh read-only reviewer using the host primitive:
-Immediately beforehand capture `REVIEW_HEAD_SHA="$(git rev-parse HEAD)"` and
-retain that literal through receipt writing.
-
-| Host | Pin/read-only contract |
-|---|---|
-| Claude Code | native model parameter + `disallowedTools: Edit, Write, Task` |
-| Codex | `spawn_agent`, pin in prompt, platform read-only sandbox |
-| Cursor | in-prompt slug + tool-enforced `readonly: true` agent |
-| Grok | host pin + tool-enforced read-only; same-family writer fails closed |
-| Other | fresh context; record that pin enforcement is host-dependent |
+Receipt in every case: `mode: "host"`, the actual reviewer model,
+`session_id: null`.
 
 Give it the repo-relative PATHS to the current spec and every task spec — not
 their contents (fn-169: the subagent has the same checkout you do, and a plan
