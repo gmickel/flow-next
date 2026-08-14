@@ -148,6 +148,14 @@ Each row also answers "was this verdict measured, and against what?"
   judged diff can be located and re-rendered; absent, never guessed,
   elsewhere.
 
+- `model` / `effort` (fn-193, #338) - the model that ACTUALLY ran, taken from
+  the same resolution the receipt records, so a fallback-ladder downgrade
+  (`auto` / `default`) or a codex-resume carry lands on the row honestly.
+  Written only on the in-process dispatch paths, which are the only place the
+  fact exists: the rp/host `review-rounds record` CLI carries no `--model`
+  flag, by design - a narrating agent must not be able to claim a model. Effort
+  is absent for backends that do not take one.
+
 On every one of these fields, **absence means unknown - never zero**: rows
 written by older versions carry none of them and read back untouched.
 `session_id`-style identity is deliberately NOT a work-evidence signal - a

@@ -309,6 +309,47 @@ class TestFinalizationJournalReplay(_JournalReplayBase):
         self.assertEqual(row["base_sha"], "c" * 40)
         self.assertEqual(row["tool_calls"], 22)
 
+    def test_crash_replay_preserves_the_resolved_model(self):
+        """fn-193 (#338): the dispatch that resolved model/effort is gone by
+        replay time and config cannot re-derive them (ladder downgrades, codex
+        resume carries), so the journal carries them and the replay forwards
+        them onto the recovered row."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        real_write = flowctl.atomic_write_json
+
+        def crash_before_sidecar(path, data):
+            if str(path).endswith(f"{self.spec_id}.json"):
+                raise RuntimeError("crash before sidecar write")
+            return real_write(path, data)
+
+        with mock.patch.object(
+            flowctl, "atomic_write_json", side_effect=crash_before_sidecar
+        ):
+            with self.assertRaises(RuntimeError):
+                flowctl.record_review_attempt(
+                    self.spec_id, "plan", backend="codex",
+                    output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+                    review_type="plan", reservation_id=reservation_id,
+                    receipt_target=str(target),
+                    receipt_payload=self._payload(),
+                    reviewed_head_sha="a" * 40,
+                    reviewed_model="gpt-5.6-sol",
+                    reviewed_effort="high",
+                )
+        journal = json.loads(self._journal_path(reservation_id).read_text())
+        self.assertEqual(journal["reviewed_model"], "gpt-5.6-sol")
+        self.assertEqual(journal["reviewed_effort"], "high")
+        self.assertEqual(self._data().get("review_attempts", []), [])
+
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", return_reservation=True
+        )
+        self.assertTrue(result.get("replayed"))
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["model"], "gpt-5.6-sol")
+        self.assertEqual(row["effort"], "high")
+
     def test_gate_replays_receipt_typed_result_zero_dispatch(self):
         reservation_id = self._reserve()
         target = self.root / "receipt.json"

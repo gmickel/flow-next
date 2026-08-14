@@ -2598,6 +2598,98 @@ class TestAttemptRowWorkVolumeAndProvenance(TestCombinedFinalizeWrite):
         self.assertEqual(new["base_sha"], "c" * 40)
 
 
+class TestAttemptRowResolvedModel(TestCombinedFinalizeWrite):
+    """fn-193 R3 (#338): the row records WHICH model produced the verdict.
+
+    The model cannot be re-derived from config after the fact - the fallback
+    ladder downgrades and a codex resume carries the prior dispatch's model -
+    so the dispatcher's own resolved values must land on the row, and only
+    where the dispatcher genuinely resolved them.
+    """
+
+    def _row(self) -> dict:
+        return self._spec_data()["review_attempts"][-1]
+
+    def test_model_and_effort_absent_unless_dispatcher_resolved_them(self) -> None:
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="rp",
+            output="<verdict>NEEDS_WORK</verdict>", verdict="NEEDS_WORK",
+        )
+        row = self._row()
+        self.assertNotIn("model", row)
+        self.assertNotIn("effort", row)
+
+    def test_finish_backend_exec_threads_the_resolved_model_onto_the_row(self) -> None:
+        """The dispatch path is the one that knows; it must hand the fact on."""
+        self._reserve()
+        verdict = flowctl._finish_backend_exec(
+            backend="codex",
+            reg={
+                "has_sandbox": False,
+                "cli_label": "codex exec",
+                "no_verdict_label": "Codex",
+            },
+            args=mock.Mock(json=False),
+            receipt_path=None,
+            output="<verdict>SHIP</verdict>",
+            stderr="",
+            exit_code=0,
+            spec_id=self.spec_id,
+            review_kind="plan",
+            review_type="plan",
+            reviewed_model="gpt-5.6-sol",
+            reviewed_effort="high",
+        )
+        self.assertEqual(verdict, "SHIP")
+        row = self._row()
+        self.assertEqual(row["model"], "gpt-5.6-sol")
+        self.assertEqual(row["effort"], "high")
+
+    def test_transport_failure_row_also_carries_the_resolved_model(self) -> None:
+        self._reserve()
+        with self.assertRaises(SystemExit):
+            flowctl._finish_backend_exec(
+                backend="codex",
+                reg={
+                    "has_sandbox": False,
+                    "cli_label": "codex exec",
+                    "no_verdict_label": "Codex",
+                },
+                args=mock.Mock(json=False),
+                receipt_path=None,
+                output="",
+                stderr="",
+                exit_code=0,
+                spec_id=self.spec_id,
+                review_kind="plan",
+                review_type="plan",
+                reviewed_model="gpt-5.6-sol",
+                reviewed_effort="high",
+            )
+        row = self._row()
+        self.assertEqual(row["outcome"], "transport_failure")
+        self.assertEqual(row["model"], "gpt-5.6-sol")
+
+    def test_ladder_floor_values_are_what_lands_never_the_ranking_top(self) -> None:
+        """The row takes the SAME values the receipt does - `_receipt_model_effort`
+        output, floor/downgrade included - never the optimistic spec model."""
+        spec = flowctl.BackendSpec(backend="codex", model="gpt-5.6-sol", effort="high")
+        model, effort = flowctl._receipt_model_effort(
+            spec, {"model": None, "floor": True}
+        )
+        self.assertEqual((model, effort), ("default", None))
+        self._reserve()
+        flowctl.record_review_attempt(
+            self.spec_id, "plan", backend="codex",
+            output="<verdict>SHIP</verdict>", verdict="SHIP",
+            reviewed_model=model, reviewed_effort=effort,
+        )
+        row = self._row()
+        self.assertEqual(row["model"], "default")
+        self.assertNotIn("effort", row)
+
+
 class TestCodexToolCallCount(unittest.TestCase):
     """fn-183 (#312): tool calls are counted from the real codex event stream
     and are None - never 0 - when no stream was returned."""
@@ -2779,6 +2871,41 @@ class TestAttemptsReadSurface(unittest.TestCase):
             "--kind", "plan", "--review-type", "plan",
         )
         self.assertEqual(code, 0)
+
+    def test_resolved_model_reaches_the_cli_read_surface(self):
+        """fn-193 R4 (#338): model/effort ride the same unprojected read."""
+        self._seed(self._row(model="gpt-5.6-sol", effort="high", tool_calls=22))
+        row = self._attempts_json()["attempts"][-1]
+        self.assertEqual(row["model"], "gpt-5.6-sol")
+        self.assertEqual(row["effort"], "high")
+
+    def test_rp_recorded_row_claims_no_model(self):
+        """fn-193 (#338): `review-rounds record` is the rp/host path and takes
+        no --model flag, so a narrating agent cannot claim one - the row is
+        honestly silent rather than recording "unknown"."""
+        self._run(
+            "review-rounds", "increment", self.spec_id, "--kind", "plan", "--json"
+        )
+        output_path = self.root / "review.txt"
+        output_path.write_text("<verdict>NEEDS_WORK</verdict>", encoding="utf-8")
+        code, _, _ = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--backend", "rp", "--output-file", str(output_path), "--json",
+        )
+        self.assertEqual(code, 0)
+        row = self._attempts_json()["attempts"][-1]
+        self.assertNotIn("model", row)
+        self.assertNotIn("effort", row)
+        # And the flag itself does not exist on that command.
+        code, _, err = self._run(
+            "review-rounds", "record", self.spec_id,
+            "--kind", "plan", "--review-type", "plan",
+            "--backend", "rp", "--output-file", str(output_path),
+            "--model", "gpt-5.6-sol", "--json",
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("--model", err)
 
     def test_mixed_legacy_and_new_ledger_reads_cleanly(self):
         self._seed(
