@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-193-deterministic-diagnostics-honest-lock.md",
-  "status": "open",
+  "status": "done",
   "title": "Deterministic diagnostics: honest lock unavailability, model on the attempt row (#340, #338)",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T08:25:08.463684Z"
+  "updated_at": "2026-08-14T11:15:04.369689Z"
 }
