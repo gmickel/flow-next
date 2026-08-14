@@ -272,8 +272,9 @@ def _denied_detail(exc: OSError) -> str:
 def _unavailable(lock: Path, exc: OSError, *, creating: Path) -> ConfigLockUnavailable:
     return ConfigLockUnavailable(
         f"config lock unavailable: cannot create {creating} - "
-        f"{_denied_detail(exc)}; no lock directory exists at {lock}, so nothing "
-        f"holds it - the filesystem refused creation under {lock.parent}"
+        f"{_denied_detail(exc)}; the lock at {lock} cannot be created or "
+        f"inspected (a denied traversal also lands here, so holder state is "
+        f"unknowable) - fix permissions under {lock.parent}"
     )
 
 
