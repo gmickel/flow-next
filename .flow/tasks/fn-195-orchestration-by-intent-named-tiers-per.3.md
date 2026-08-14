@@ -44,9 +44,61 @@ Remove the model identifiers from shipped prose - the count at planning time was
 - [ ] TBD
 
 ## Done summary
-TBD
+Deleted the shipped model identifiers and the pin machinery they fed: `models.roles` storage, write validation, the 90-day staleness stamp/nudge and the `models resolve` verb are gone (schema regenerated, drift test green), and concrete model identifiers are swept out of the docs tree, skills, templates and references, leaving the two declared exceptions.
+
+### Enumerated hit list, with dispositions
+
+Enumeration: `grep -rInE 'opus|sonnet|haiku|fable|gpt-5|grok-[0-9]|composer-[0-9]|claude-[0-9a-z]+-[0-9]|gemini|o3-mini'` over `plugins/flow-next` (excluding `codex/`, `tests/`) plus the `models.roles|verifiedAt|models resolve` symbol grep over `flowctl.py`, `gen_flow_config_schema.py`, `sync-codex.sh`.
+
+**Deleted / replaced with tier or placeholder language:**
+- `docs/orchestration.md` — role-map section removed whole; the "proven default pipeline" table rewritten as tiers (no models, no eval numbers, no speed claims, per the spec's no-rankings boundary); the "model table in CLAUDE.md" section rewritten as the routing block `.2` actually ships (it described a scores table that no longer exists); agent-defaults table, review-backend reach list, bridge recipes, chaining example all de-slugged. **Now contains zero model identifiers.**
+- `docs/flowctl.md` — `models resolve` section and the three `models.*` config rows deleted; `spec/task set-backend` examples genericized (they carried retired `gemini:`/`agent:` ids); cursor reviewer-model enumeration replaced with "ask `--list-models`".
+- `docs/platforms.md` — Codex model-mapping table now names the env vars, not slugs; sync example placeholders; Grok single-family sentence and Cursor alias/slug lines de-slugged.
+- `docs/troubleshooting.md`, `docs/ralph.md`, `docs/spec-template.md` — ladder sample output, `FLOW_RALPH_CLAUDE_MODEL` example, triage LLM layer.
+- `skills/flow-next-prime/{SKILL,workflow}.md`, `skills/flow-next-interview/references/fact-scouts.md` — scout tiers restated in the fn-195 tier vocabulary (fast scout / thinking scout / session model).
+- `skills/flow-next-impl-review/{references/backend-specs.md,references/triage-rules.md,workflow-cursor.md,workflow-copilot.md}` and the matching `flow-next-spec-completion-review/*` — backend model *enumerations* and "default `<slug>`" claims replaced by the registry pointer / `--list-models`; the `backend[:model[:effort]]` grammar examples are kept (exception B).
+- `skills/flow-next-ralph-init/SKILL.md` — cursor reviewer slug.
+- `scripts/sync-codex.sh` — the `models.roles` scout-pin read deleted (precedence is now env > baseline). Not in the task's declared Touches, but it was a live consumer of a key this task deletes; leaving it would have left a dangling read.
+
+**Task-file-named items, all three done:**
+- `skills/flow-next-impl-review/workflow-host.md` (and the identical table in `flow-next-spec-completion-review/workflow-host.md`) — the "How to pin" table is gone: `grok-4.6` removed, per-host spawn primitives (`spawn_agent`, native `model` param) removed, replaced by the reviewer-tier precedence sentence + a link to the `.1` reach pages, with the read-only-by-TOOLS invariant kept in the skill (it is a security contract, not reach). `host:opus` anti-pattern → `host:<model>`.
+- `commands/uninstall.md` — "the block contains a markdown table" corrected to the commented-example shape `.2` shipped.
+- `skills/flow-next-setup/workflow.md` — both `grok-4.5` occurrences replaced with single-native-family language; the fail-closed logic is unchanged and does not need the literal.
+
+### Declared exceptions (identifiers that survive, with reasons)
+
+1. **The review-backend configuration grammar** (spec's exception). Concrete ids remain only inside `backend[:model[:effort]]` examples and the registry that backs them: `flowctl.md` (`review.backend` row, spec-grammar line, ranking defaults, `triage-skip` / `codex`/`copilot`/`cursor` command examples), `schema/flow-config.schema.json` `review.backend` description, the two review skills' SKILL/workflow-common/backend-reference spec examples, the ralph-init prompt templates' `spec form, e.g. …` lines, `setup/workflow.md` power-user spec examples. Reason: the grammar's shape is the contract being taught; a placeholder-only example stops demonstrating that the middle segment is a model id.
+2. **`flowctl.py` `BACKEND_REGISTRY` + `FAST_JUDGE_BASELINE`** — same exception, code side. The registry ranking is the review backend's own configuration (and the ladder's data); the fast-judge baselines are per-backend triage defaults in that subsystem. Both explicitly out of scope per the spec's Boundaries ("the review backend stays … untouched here").
+3. **The tier-guidance page exception went unused** — `orchestration.md` ended with zero model identifiers, so the end state is exception 1/2 only.
+4. **`agents/*.md` model fields untouched** (spec: they are the floor). The `orchestration.md` agent-defaults table no longer restates the aliases; the frontmatter is the single source.
+
+### Machinery removed (R6)
+
+`MODEL_ROLES`, `MODEL_ROLE_BACKENDS`, `MODELS_STALE_DAYS`, `_parse_role_pin`, `get_role_map_pin`, `resolve_role_model`, `resolve_models_role`, `cmd_models_resolve`, `parse_models_verified_at`, `models_pin_nudge_message`, `_validate_models_config_key`, `_validate_models_roles_tree`, the `models` default-config block, the `models` argparse subparser, the `flowctl status` staleness line, the role-map rung in `BackendSpec.resolve`, and the schema generator's `models*` entries. `resolve_fast_judge_model` survives as explicit-else-baseline (triage still needs a model). Deleted keys (`models.roles`, `models.verifiedAt`, `models.verifiedWith`) joined the flow-98 advisory tuple, renamed `REMOVED_CONFIG_KEYS` / `removed_config_keys_*` since it is no longer delegation-only — one stderr line per invocation, never blocking.
+
+### Test-corpus retargets (same commit)
+
+`test_model_resolution.py` (role-map/staleness/resolve classes replaced by a removal-contract class + a review-precedence class; the role-pin cache-intent test rebuilt on a carried non-explicit spec), `test_flowctl_surface.py` (`models resolve` leaf), `test_removed_delegate_config_advisory.py` (renamed symbols, models fixture), `test_host_review_backend.py` (`MODEL_ROLE_BACKENDS` import → host has no model axis), `test_flow_config_schema_drift.py` (models fixtures now invalid-by-schema). No test file deleted; `test_model_pin_ceremony_prose.py` was already gone from `.2`.
+
+### Deferred / notes for the conductor
+
+- **Mirror regen (`codex/**`) NOT run** — `.5` owns it, as planned. The mirror is stale against this commit by design.
+- **`templates/usage.md` + `.flow/usage.md` untouched** — both are `.5`'s Touches and `test_cursor_host_docs` pins them byte-identical. They still carry bridge-recipe slugs (`grok-4.6`, `gpt-5.6-terra`, cursor slugs); `.5` owns that pair, and editing one copy here would have gone red on the parity test.
+- **Root `CLAUDE.md` model table untouched** — `.5`'s Touches, per the conductor's note.
+- **Dogfood propagation DONE here** (`.flow/bin/flowctl.py`, `flowctl_tracker` rsync, `gen_tracker_manifest.py`) because `.flow/bin/flowctl.py` is in this task's Touches and `test_tracker_distribution` would otherwise be red. Only `sync-codex.sh` remains for `.5`.
+- Pre-existing untracked `.flow/artifacts/flow-98-…/` was deliberately NOT staged (877d953d untracked it on purpose); staging used `git add -A -- . ':(exclude).flow/artifacts'`.
+
+baseline: green (full suite + ruff verified on this branch head before edits, per conductor)
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+Review fixes cfdf0b2b: --help snapshot + HELP_SHA256 regenerated (P1), space-form identifier sweep (P2, 5 sites), set-backend argparse placeholderized (P3), manifest regen.
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewers; r1 NEEDS_WORK -> fixes cfdf0b2b -> r2 SHIP)stage: plan-sync - ran (drift: yes; .5 approach corrected - propagation already done by .3, only sync-codex x2 remains, deferred slug files named; .4 clean; cross-spec deferred to conductor)
 
 ## Evidence
-- Commits:
-- Tests:
+- Commits: cb0388f7d7789303d8af9bd3dcff5e3501be23bb, cfdf0b2b587dfa428f586ab79596a781d53a2fb5
+- Tests: python3 scripts/run_tests_parallel.py (191 files, 4381 tests, 0 failures, 0 errors, suite_rc=0), uvx ruff@0.16.0 check . (All checks passed), cd plugins/flow-next/tests && python3 -m unittest test_model_resolution test_flowctl_surface test_removed_delegate_config_advisory test_host_review_backend test_backend_spec test_model_routing_scaffold test_cursor_host_docs test_cursor_docs_contract test_ralph_docs_truth test_skill_prose_diet test_flow_config_schema_drift -q, post-fix full gate: python3 scripts/run_tests_parallel.py (191 files, 4381 tests, 0F 0E) + uvx ruff@0.16.0 check . (clean), impl-review: host backend r1 NEEDS_WORK (P1 help snapshot, P2 space-form slugs, P3 argparse literals), r2 SHIP (reviewer claude-fable-5, fresh subagents; receipt /tmp/impl-review-receipt-fn-195-orchestration-by-intent-named-tiers-per.3.json)
 - PRs:

@@ -13,7 +13,7 @@
   "impl_review_rounds": {
     "fn-195-orchestration-by-intent-named-tiers-per.1": 0,
     "fn-195-orchestration-by-intent-named-tiers-per.2": 0,
-    "fn-195-orchestration-by-intent-named-tiers-per.3": 1
+    "fn-195-orchestration-by-intent-named-tiers-per.3": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -182,11 +182,44 @@
       "task": "fn-195-orchestration-by-intent-named-tiers-per.3",
       "timestamp": "2026-08-14T21:16:40.932957Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "2ce19af6d3c87b3b9bb8e28b0f76041fe639a8da132c3a9b506ed78eb260f5cc",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "host",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "cfdf0b2b587dfa428f586ab79596a781d53a2fb5",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 546,
+      "output_sha256": "a74c380e7b31aa2c4df761759b5dde017ccb80df02fa07f046af115b813bb889",
+      "reservation_id": "afba1e46cf2f4ea5a99203ee0f9ae1cb",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.3",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.3",
+      "timestamp": "2026-08-14T21:33:31.839205Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 1,
-    "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 1
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.2": 1,
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.3": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
@@ -209,5 +242,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T21:16:41.483195Z"
+  "updated_at": "2026-08-14T21:33:32.382281Z"
 }
