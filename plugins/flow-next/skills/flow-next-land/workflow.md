@@ -707,16 +707,24 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    (this repo's releasing.md does): that push carries the pending close
    commit along - fine on a pushable base (the persist becomes a no-op;
    verify with `git status -sb` before pushing again), and on a
-   pull-request-only base it is refused exactly like this one.
+   pull-request-only base it is refused exactly like this one. **A refused
+   release push does not stop the tail**: record it as release-follow
+   evidence (the release resumes via its idempotency probe on a later
+   tick) and continue to step 3 - the tracker touchpoint depends on the
+   MERGED probe, never on the release. A tail that skipped the touchpoint
+   because the release could not push has broken this.
 
    If the push STILL fails, ROLL BACK exactly what this step failed to persist — the tail's local `.flow` commits — so the merged-but-unclosed re-entry path stays reachable from this clone (discovery selects `status == "open"` specs only — a stranded local `done` would orphan the tail). **Guard first**: the rollback may run ONLY when every commit after `$TAIL_BASE_OID` is one of the tail's own file-scoped `.flow` commits — when release-follow committed anything (a version bump, a changelog roll) on top, do NOT reset; leave the tree as it stands and report `NEEDS_HUMAN` with reason `close + release commits unpushed` instead. A reset that dropped a release commit has broken this:
 
    ```bash
-   if git log --format=%s "$TAIL_BASE_OID"..HEAD | grep -vq "^chore(flow):"; then
-     echo "Evidence: non-tail commits since TAIL_BASE_OID - leaving tree intact"
+   # Verify by CHANGED PATHS, not commit subjects - a release commit could
+   # legitimately wear any subject. Reset only when the whole range touches
+   # .flow/ alone.
+   if git log --format= --name-only "$TAIL_BASE_OID"..HEAD | grep -v '^$' | grep -vq '^\.flow/'; then
+     echo "Evidence: non-.flow paths in TAIL_BASE_OID..HEAD - leaving tree intact"
    else
      git rebase --abort 2>/dev/null || true
-     git reset --hard "$TAIL_BASE_OID"   # the pre-tail base tip; safe — every commit dropped was staged file-scoped and carries ONLY this spec's close/sync state
+     git reset --hard "$TAIL_BASE_OID"   # the pre-tail base tip; safe — every commit dropped touches only .flow/ and carries ONLY this spec's close/sync state
    fi
    ```
 
