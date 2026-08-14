@@ -13,8 +13,8 @@ Delete the tests that exist only for the packaged path, repoint the ones that as
 ### Approach
 - Classify each of the four dedicated files first: purely-delegation (delete) versus asserting a surviving invariant under a delegation-shaped name (repoint, keep the substance).
 - Then sweep the shared files for delegation assertions. A test that gets EASIER after this change is a regression, not a cleanup - if an assertion has to weaken, say so explicitly in the summary and justify it.
-- **The ralph-guard decision is the point of this task, not a footnote.** The guard mechanically forbade a bridged child from touching git. With bridges prose-routed, either the enforcement survives for any bridged child (keep the hook, widen its trigger away from delegation-specific markers) or it is dropped and the safety rule lives only in prose (weaker, and it must be stated as such). Record which, with the reasoning, in the task summary and in a memory decision entry.
-- Autonomous runs are the case that decides it: unattended loops are exactly where a prose-only rule is least reliable.
+- **The ralph-guard question is already answered in the spec: revert, do not widen.** The guard's delegation amendment (the canonical-invocation recognizer, the allowed sandbox-flag list, the accepted scratch-path shape) exists to bound one machine-generated command shape and reverts with it. Restore the guard to its pre-amendment behavior; add nothing for prose-routed bridges. Ralph is deprecated and predates the packaged path, so it simply returns to what it did before.
+- Record the revert in the task summary and write one memory decision entry noting the accepted trade: for prose-routed bridges the safety rule is prose-only, which is weaker than a hook and deliberate.
 
 ### Investigation targets
 **Required** (read before coding):

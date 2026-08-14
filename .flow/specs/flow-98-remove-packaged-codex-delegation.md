@@ -48,6 +48,14 @@ Decision (option b): keep flow-next agentic - CLAUDE.md-scaffold prose is the ca
 - Removal risk accepted on low field usage of delegation. [user]
 - Prioritization: cleanliness of the routing surface beats preserving a packaged feature the prose route already covers. [paraphrase]
 
+### R8 answered: the Ralph guard reverts, nothing widens (decided 2026-08-14)
+
+The guard grew a delegation-specific amendment when the packaged path landed: a canonical-invocation recognizer, an allowed sandbox-flag list, and a scratch-path shape it would accept. All of it exists to bound one machine-generated command shape that this spec deletes, so it reverts with the feature and the guard returns to exactly what it enforced before the amendment.
+
+Deliberately NOT widened to cover prose-routed bridges. Ralph is already deprecated - a shell script calling the pipeline primitives does what the harness did, and that is the documented route - so building new enforcement into a harness we are steering people away from would be paying maintenance for a path with no future. Ralph worked before the packaged path existed and returns to that behavior; anyone who wants an unattended loop writes a script around the primitives.
+
+The consequence is stated rather than hidden: for prose-routed bridges the "child writes code, host keeps git and judgment" rule lives in prose only (R9b), not in a hook. That is weaker than a mechanical guard, and it is the accepted trade for deleting a subsystem whose enforcement only ever covered one generated command shape.
+
 ### Sequencing with the orchestration successor (added 2026-08-14)
 
 This spec deletes; a successor spec defines what replaces it. That successor turns routing into intent expressed to the orchestrator - a small set of named tiers (reviewer, implementer, fast scout, thinking scout, otherwise the session model), consumer-written preferences in the project instruction file, per-harness reach pages, and no shipped model identifiers. `implementer` is the tier that carries this spec's capability forward, which is why the two must ship together: the deletion alone removes something users had, while the pair reads as "implementation routing became a preference you write instead of a subsystem you configure."
