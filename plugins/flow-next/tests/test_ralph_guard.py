@@ -1,8 +1,12 @@
 """fn-114.3 - Ralph guard defect fixes (structured done-signal, dual-platform,
 gated debug, file-tool receipt gate).
 
-Pins the section-C guard fixes without touching the fn-55 canonical-delegation
-assertions in test_ralph_guard_codex_delegation.py.
+Pins the section-C guard fixes. flow-98 retired the packaged codex-delegation
+path, so the guard's delegation amendment (the canonical-invocation recognizer
+and its allowed sandbox flags / scratch paths) reverted with it; the codex
+section's PRE-amendment invariants that the deleted
+`test_ralph_guard_codex_delegation.py` also covered now live in
+`CodexSectionGuardTestCase` below.
 """
 
 from __future__ import annotations
@@ -144,6 +148,73 @@ class DualPlatformMatchersTestCase(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 2)
         self.assertIn("protected file", proc.stderr)
+
+
+@unittest.skipIf(
+    sys.platform == "win32",
+    "Drives the shipped ralph-guard hook as a subprocess; the guard writes session "
+    "state to a POSIX /tmp path, so the hook exits 1 on Windows.",
+)
+class CodexSectionGuardTestCase(unittest.TestCase):
+    """The codex section of the guard, back to its pre-delegation behavior.
+
+    flow-98 deleted the packaged delegation path, so the guard no longer carries
+    an allowance for any `codex exec` shape: every direct call blocks, only the
+    `flowctl codex` wrappers pass, and `--last` blocks even through a wrapper.
+    """
+
+    ALLOWED = 0
+    BLOCKED = 2
+
+    def _rc(self, command: str) -> int:
+        return _drive_hook(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": "codex-section",
+                "tool_input": {"command": command},
+            }
+        ).returncode
+
+    def test_direct_codex_exec_blocked(self) -> None:
+        self.assertEqual(self._rc("codex exec --output-schema x.json"), self.BLOCKED)
+
+    def test_direct_codex_review_blocked(self) -> None:
+        self.assertEqual(self._rc("codex review --base main"), self.BLOCKED)
+
+    def test_last_blocked_through_wrapper(self) -> None:
+        self.assertEqual(
+            self._rc("flowctl codex impl-review fn-1.2 --last"), self.BLOCKED
+        )
+
+    def test_copilot_still_blocked(self) -> None:
+        self.assertEqual(self._rc("copilot --prompt foo"), self.BLOCKED)
+
+    def test_flowctl_codex_wrapper_allowed(self) -> None:
+        self.assertEqual(self._rc("flowctl codex impl-review fn-1.2"), self.ALLOWED)
+
+    def test_non_codex_command_allowed(self) -> None:
+        self.assertEqual(self._rc("git status"), self.ALLOWED)
+
+    def test_delegation_shaped_codex_exec_no_longer_allowed(self) -> None:
+        """Regrowth guard: the fn-55 canonical shape has no allowance left."""
+        canonical = (
+            'FLOW_DELEGATE_CODEX=1 codex exec --ignore-user-config -m "gpt-5.5" '
+            "-c 'model_reasoning_effort=\"medium\"' "
+            "--dangerously-bypass-approvals-and-sandbox "
+            "--output-schema .flow/tmp/codex-fn-1.2/result-schema.json "
+            "-o .flow/tmp/codex-fn-1.2/result-batch-1.json "
+            "- < .flow/tmp/codex-fn-1.2/prompt-batch-1.md"
+        )
+        self.assertEqual(self._rc(canonical), self.BLOCKED)
+
+    def test_guard_carries_no_delegation_recognizer(self) -> None:
+        guard = _load_guard()
+        self.assertFalse(hasattr(guard, "is_canonical_codex_delegation"))
+        self.assertFalse(hasattr(guard, "_scratch_dir_of"))
+        self.assertNotIn(
+            "FLOW_DELEGATE_CODEX", GUARD_PY.read_text(encoding="utf-8")
+        )
 
 
 class FileToolReceiptGateTestCase(unittest.TestCase):

@@ -27,7 +27,7 @@ Plus: `config set` round-trips for the string enum and the integer knob
 no-clobber-of-siblings invariant, and the new top-level `land.*` namespace
 does not clash with existing blocks. Static assertions over workflow.md
 §2.6 back the comment-scan detection (no host-agent bash harness exists —
-see CommentScanWorkflowStaticTestCase). Mirrors test_work_delegate_config.py.
+see CommentScanWorkflowStaticTestCase).
 """
 
 from __future__ import annotations
