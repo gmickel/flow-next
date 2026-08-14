@@ -1,6 +1,6 @@
 ---
 name: flow-next-setup
-description: Optional local install of flowctl CLI and CLAUDE.md/AGENTS.md instructions, plus an optional model-routing scaffold for the project instruction file. Use when user runs /flow-next:setup.
+description: Optional local install of flowctl CLI and CLAUDE.md/AGENTS.md instructions, plus a commented model-routing example proposed into the project instruction file. Use when user runs /flow-next:setup.
 user-invocable: false
 ---
 
@@ -20,8 +20,8 @@ Read [workflow.md](workflow.md) and follow each step in order.
 
 `workflow.md` is the common router. Resolve each documented gate before reading
 its direct `references/*.md` target. When a branch says **MUST read exactly
-one**, read that complete reference before acting; never preload sibling host,
-model-routing, model-pin, or Ralph references. Unknown/malformed routing state
+one**, read that complete reference before acting; never preload sibling host or
+Ralph references. Unknown/malformed routing state
 uses the safe/common fallback named at that gate.
 
 ## Notes

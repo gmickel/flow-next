@@ -23,13 +23,6 @@ class SetupReferenceRouting(unittest.TestCase):
     def test_every_routed_reference_exists_one_level_below_skill(self) -> None:
         links = set(re.findall(r"\(references/([^)]+\.md)\)", self.text))
         expected = {
-            "model-pins.md",
-            "model-routing-question-bridge.md",
-            "model-routing-question-cursor.md",
-            "model-routing-question-grok.md",
-            "model-routing-bridge.md",
-            "model-routing-cursor.md",
-            "model-routing-grok.md",
             "ralph-question.md",
             "ralph-enable.md",
             "ralph-disable.md",
@@ -44,37 +37,14 @@ class SetupReferenceRouting(unittest.TestCase):
             self.assertNotIn("(references/", text, path)
             self.assertNotIn("bridge reference", text.lower(), path)
 
-    def test_model_pin_gate_is_resolved_before_forcing_read(self) -> None:
-        gate = self.text.index("MODELS_ASK=1")
-        skip = self.text.index("When `MODELS_ASK=0`", gate)
-        read = self.text.index("references/model-pins.md", skip)
-        self.assertLess(gate, skip)
-        self.assertLess(skip, read)
-        self.assertIn("only an explicit zero skips it", self.text[skip : read + 300])
-
-    def test_routing_question_selects_exactly_one_host_family(self) -> None:
-        block = self.text[
-            self.text.index("**Model Routing question**") :
-            self.text.index("**Docs question**")
-        ]
-        for name in (
-            "model-routing-question-bridge.md",
-            "model-routing-question-cursor.md",
-            "model-routing-question-grok.md",
-        ):
-            self.assertEqual(block.count(name), 2, name)  # label + link target
-        self.assertIn("MUST read exactly one applicable direct", block)
-        self.assertIn("Unknown `PLATFORM` fails open", block)
-
-    def test_skip_keeps_routing_implementation_cold(self) -> None:
-        block = self.text[
-            self.text.index("**Model Routing scaffold**") :
-            self.text.index("**Ralph** (only when")
-        ]
-        self.assertIn("`Skip`", block)
-        self.assertIn("read no implementation reference", block)
-        self.assertIn("MUST read and follow exactly one", block)
-        self.assertIn("Never read more than one", block)
+    def test_no_routing_or_pin_reference_is_routed(self) -> None:
+        # fn-195.2: the probe-and-pin ceremony and the routing menu are deleted,
+        # not skipped - so no setup reference exists to route to, and the
+        # workflow must not link one.
+        for gone in ("references/model-pins.md", "references/model-routing-"):
+            self.assertNotIn(gone, self.text, gone)
+        for stale in REFS.glob("model-*.md"):
+            self.fail(f"deleted routing/pin reference regrew: {stale.name}")
 
     def test_ralph_routes_only_selected_answer(self) -> None:
         block = self.text[

@@ -1,41 +1,32 @@
 <!-- flow-next:model-routing:start -->
-## Picking models for flow-next workflows and subagents
+## Model routing
 
-_Scaffolded by `/flow-next:setup` — edit freely; re-run setup to regenerate. These scores are starting opinions (as of Aug 2026): re-rank them to what you actually pay for and prefer. This section is yours now._
+<!-- Scaffolded by /flow-next:setup as an EXAMPLE to edit. Every routing line
+     below is commented out, so nothing is routed until you uncomment one.
+     These are your preferences to fill in - never detected facts. flow-next
+     does not know which models your account serves and never writes one here. -->
 
-Rankings, higher = better. **cost** = how lightly it rides your subscription quota (higher = run it freely; lower = it burns the plan's budget fast, so spend it sparingly), NOT list $/token, and each provider is a separate budget; **speed** = output speed at *default* reasoning effort (raising effort trades speed for intelligence); **intelligence** = how hard a problem you can hand it unsupervised; **taste** = UI/UX, code quality, API design, copy.
+<!-- Grammar: <tier>: <model>   or   <tier>: <model> at <effort>
+     Name the model ids YOUR harness and account actually serve - ask the
+     harness for its list, then invoke one; ids change and vary per account. -->
 
-| model         | cost | speed | intelligence | taste |
-|---------------|------|-------|--------------|-------|
-| opus-5 @ med  | 5    | 4     | 9            | 9     |
-| fable-5       | 2    | 2     | 10           | 9     |
-| opus-4.8      | 4    | 3     | 7            | 8     |
-| gpt-5.6-sol   | 8    | 5     | 9            | 6     |
-| gpt-5.6-terra | 9    | 7     | 7            | 5     |
-| grok-4.6      | 9    | 8     | 8            | 5     |
-| composer-2.5  | 9    | 10    | 6            | 6     |
-| sonnet-5      | 5    | 6     | 7            | 7     |
-| haiku-4.5     | 8    | 9     | 4            | 4     |
+<!-- reviewer: <model>                  - anything grading work someone else
+     produced. Prefer a different family than the writer: a same-family review
+     is not an independent verdict. Advice, not enforcement. -->
+<!-- implementer: <model> at <effort>   - work handed to another harness (plan
+     here, implement cheaper or faster there). Absent = the session model
+     implements. -->
+<!-- fast scout: <model>                - mechanical inventory scanning, where
+     the cheapest tier is the correct one. -->
+<!-- thinking scout: <model>            - analysis that degrades badly on a
+     fast tier. -->
 
-How to apply — defaults, not limits. Unless prompted otherwise, route work across these models as you judge best — no permission needed; an explicit user instruction always overrides this table. Standing permission to escalate: if a cheaper model misses the bar, rerun on a smarter one without asking. Judge the output, not the price tag.
-- For anything that ships, intelligence > taste > cost; cost is a tie-breaker only.
-- Orchestration, planning, review verdicts, anything ambiguous → the session model (whichever row you are running as the conductor). Never delegate judgment.
-- Anything user-facing (UI, copy, API design) needs taste ≥ 7 → keep on the session model even if it looks mechanical.
-- Reviews prefer a different family than the writer — uncorrelated blind spots.
-- Graceful degrade: a routed CLI that is missing, unauthenticated, or errors → report it unavailable and fall back to the session model. Never block.
+<!-- Unset is the default and the doctrine: planning, capture, interview,
+     requirement analysis, every verdict, and the worker run on the session
+     model. Effort strings pass through to the host untranslated. -->
 
-Recommended default pipeline (swap any row to taste): the SESSION model authors specs — capture, interview, plan; that is where plan quality is made (on Claude-family hosts, opus-5 at MEDIUM effort is the recommended session tier: near-Fable judgment at roughly half the burn, and medium is measured as its peak - the model card's FrontierCode curve tops out at medium and degrades through high/xhigh, so do not raise opus-5's effort; fable-5 is the escalation rung for frontier-hard plans, not the default) — then gpt-5.6-terra @ medium implements via the bridge routes below (a codex bridge from a Claude Code host; the same-family self-bridge on a Codex host until MAv2 role pins are reliable), then reviews go to the strongest reviewer from a DIFFERENT family than the writer (single-subscription fallback: the strongest same-family model that did not write the diff). On Claude Code this resolves to opus-5 → terra → sol; on a Codex host to sol → terra → opus-5 when a Claude CLI is installed, else sol.
-
-flow-next wiring — roles with a MENU, not fixed pairings: pick per task. Claude tiers run natively (spawn subagents with the model parameter); other families ride the headless bridges — recipes: run `flowctl usage` § Orchestration & model steering (copy-mode repos also have it on disk at `.flow/usage.md`). Probe-marked lines are live only if their CLI is installed:
-- Implementation, native: a worker/subagent on opus-5 (quality) or sonnet-5 (speed) via the model parameter.
-<!-- probe:codex --> Implementation via gpt-5.6-terra @ medium (the recommended value tier): a `codex exec` bridge — the child writes code, the host keeps git, judgment, and the verdict. Eval-matched gpt-5.6-sol correctness at ~2/3 wall-clock on strong specs; escalate to gpt-5.6-sol for gnarly tasks.
-<!-- probe:cursor --> Implementation via composer-2.5: the `cursor-agent` bridge (`--force` to apply); host reviews + commits. Ids vary per account/surface (`composer-2.5` vs `composer-2.5-fast`) — verify the exact id via `cursor-agent --list-models` before invoking; never reuse a slug from docs or another machine.
-<!-- probe:grok --> Implementation via grok-4.6: a fast, cheap editing bridge via the grok CLI (flags BEFORE -p: `grok --always-approve -m grok-4.6 --reasoning-effort high -p "<task>"` - blanket approval, trusted repos only; acceptEdits skips Bash and silently truncates shell-using tasks; recipe in `flowctl usage`); host reviews + commits on a taste-heavier tier. Route it to supervised bulk/implementation - editor-shaped tasks are its strong surface (4.6's measured gains are there), long unsupervised terminal loops are its weak one (Terminal-Bench v3 26% vs ~35% for peers) - and NOT UI or final taste-critical work (hallucination unresolved: AA-Omniscience measures it inventing ~1/3 of the time when it doesn't know). API long-session caveat: cache reads cost 67% more than 4.5. (Or reach grok-4.6 through the cursor bridge: `cursor-grok-4.6-high`, `-fast` variant for 2x price.)
-<!-- probe:codex --> Review, cross-family (recommended default when the writer is Claude-family; on a GPT-writer host pick a non-GPT reviewer instead): `review.backend codex`; per-task `review:` pins exceptions; escalate reviewer↔worker disagreements to the session model.
-<!-- probe:cursor --> Review, cross-family via cursor (multi-family reach): `review.backend cursor:claude-opus-5-thinking-high` (Claude-family default; `cursor:claude-fable-5-thinking-high` only when you explicitly want the Fable gate — NO ZDR) or `cursor:gpt-5.6-sol-high` (GPT-family) — pick the family that did NOT write the diff. Ids are volatile → `cursor-agent --list-models`. Composer/grok tiers are quick extra voices, never the gate.
-- Review, same-family heavy: a fresh-context reviewer subagent on opus-5 (or the session model) with the review criteria — no registry rung needed; describe the arrangement.
-<!-- probe:cursor --> Bulk, low-judgment reads (codebase sweeps): scouts may shell out to `cursor-agent`; only the digest returns.
-- Bulk reads, native: haiku-4.5 / sonnet-5 subagents for scans and digests.
-- Autonomous loops: never call a bridge CLI raw - wrap it in a thin fast-tier subagent that runs the bridge in the FOREGROUND and self-heals environment failures only (bridges fail silently outside trusted git dirs), never judgment; recipes via `flowctl usage` § Orchestration & model steering.
-<!-- probe:codex --> Reach gpt-5.6-terra inside a subagent (thin-wrapper) for cheap bulk reads/digests only — not implementation: a cheap wrapper writes a self-contained prompt, runs `codex exec` over Bash, returns the digest.
+<!-- Resolution at each dispatch site: an explicit instruction in the moment,
+     then this block, then the agent definition's own default, then the session
+     model. A model this harness cannot reach falls back to the session model
+     with one note - routing never fails closed, and nothing here is validated. -->
 <!-- flow-next:model-routing:end -->
