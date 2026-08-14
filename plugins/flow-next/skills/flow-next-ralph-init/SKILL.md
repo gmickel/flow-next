@@ -52,7 +52,7 @@ PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"
      ```
      Multiple review backends available. Which one?
      a) RepoPrompt (macOS, visual builder)
-     b) Codex CLI (cross-platform, GPT 5.5 High)
+     b) Codex CLI (cross-platform, reviewer models via a Codex subscription)
      c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
      d) Cursor CLI (cross-platform, runs cursor-agent; reviewer models via a Cursor subscription)
 

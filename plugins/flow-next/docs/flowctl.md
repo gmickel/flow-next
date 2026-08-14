@@ -2002,7 +2002,7 @@ npm install -g @openai/codex
 codex auth
 ```
 
-**Model:** Uses the ranking top, GPT 5.6 Sol at High effort, by default (no user config needed) — resolved strongest-available via the [model-resolution ladder](#model-resolution-strongest-available-never-fail--fn-76) (on an older codex CLI that rejects it, the ladder transparently downgrades to `gpt-5.5` and caches that). Override with `FLOW_CODEX_MODEL` env var.
+**Model:** Uses the registry's ranking top at high effort by default (no user config needed) — resolved strongest-available via the [model-resolution ladder](#model-resolution-strongest-available-never-fail--fn-76) (on an older codex CLI that rejects it, the ladder transparently downgrades to `gpt-5.5` and caches that). Override with `FLOW_CODEX_MODEL` env var.
 
 **Commands:**
 

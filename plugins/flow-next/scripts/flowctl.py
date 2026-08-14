@@ -50233,13 +50233,13 @@ def main() -> None:
             "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
         )
         p_set_backend.add_argument(
-            "--impl", help="Default impl backend spec (e.g., 'codex:gpt-5.4-high')"
+            "--impl", help="Default impl backend spec (e.g., 'codex:<model>')"
         )
         p_set_backend.add_argument(
-            "--review", help="Default review backend spec (e.g., 'claude:opus')"
+            "--review", help="Default review backend spec (e.g., 'claude:<model>')"
         )
         p_set_backend.add_argument(
-            "--sync", help="Default sync backend spec (e.g., 'claude:haiku')"
+            "--sync", help="Default sync backend spec (e.g., 'claude:<model>')"
         )
         p_set_backend.add_argument("--json", action="store_true", help="JSON output")
         p_set_backend.set_defaults(func=cmd_spec_set_backend)
@@ -50549,13 +50549,13 @@ def main() -> None:
     )
     p_task_set_backend.add_argument("id", help="Task ID (e.g., fn-1.2, fn-1-add-auth.2)")
     p_task_set_backend.add_argument(
-        "--impl", help="Impl backend spec (e.g., 'codex:gpt-5.4-high')"
+        "--impl", help="Impl backend spec (e.g., 'codex:<model>')"
     )
     p_task_set_backend.add_argument(
-        "--review", help="Review backend spec (e.g., 'claude:opus')"
+        "--review", help="Review backend spec (e.g., 'claude:<model>')"
     )
     p_task_set_backend.add_argument(
-        "--sync", help="Sync backend spec (e.g., 'claude:haiku')"
+        "--sync", help="Sync backend spec (e.g., 'claude:<model>')"
     )
     p_task_set_backend.add_argument("--json", action="store_true", help="JSON output")
     p_task_set_backend.set_defaults(func=cmd_task_set_backend)

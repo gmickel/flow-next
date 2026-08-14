@@ -720,7 +720,7 @@ Detailed logs → `scripts/ralph/runs/<run>/ralph.log`
 
 ### Debug Environment Variables
 
-Ralph inherits Claude Code's default model (Opus) for both the main session and worker subagents (`model: inherit`). Only set `FLOW_RALPH_CLAUDE_MODEL` if you want to override.
+Ralph inherits Claude Code's default model for both the main session and worker subagents (`model: inherit`). Only set `FLOW_RALPH_CLAUDE_MODEL` if you want to override.
 
 ```bash
 FLOW_RALPH_CLAUDE_MODEL=<model>  # only needed to override default
