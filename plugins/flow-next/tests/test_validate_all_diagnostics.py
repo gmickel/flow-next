@@ -276,6 +276,25 @@ class ValidateAllDiagnosticsTestCase(unittest.TestCase):
         self.assertEqual(text_result.returncode, 0)
         self.assertIn("Warnings:", text_result.stdout)
 
+    def test_corrupt_runtime_state_file_stays_error(self) -> None:
+        """An existing-but-unreadable state file is a real inconsistency,
+        never the fresh-clone case (PR #348 review)."""
+        spec_id, task_id = self._done_spec_with_open_task("Corrupt Runtime")
+        self._clear_runtime_state()
+        state_tasks = self.tmpdir / ".git" / "flow-state" / "tasks"
+        state_tasks.mkdir(parents=True, exist_ok=True)
+        (state_tasks / f"{task_id}.state.json").write_text(
+            "{corrupt", encoding="utf-8"
+        )
+
+        result = self._run("validate", "--all", "--json")
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        errors, warnings = self._spec_findings(payload, spec_id)
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("unreadable", errors[0])
+
     def test_runtime_sourced_status_mismatch_stays_error(self) -> None:
         """R5(ii): runtime store answered -> still an error, exit 1."""
         spec_id, task_id = self._done_spec_with_open_task("Runtime Sourced")

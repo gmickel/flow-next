@@ -35408,10 +35408,21 @@ def validate_epic(
                 ) == STATUS_SOURCE_COMMITTED and not committed_status_is_authoritative(
                     task
                 ):
-                    warnings.append(
-                        f"{finding} (committed snapshot; runtime state absent, "
-                        "status may be stale)"
-                    )
+                    # A state file that EXISTS but produced no runtime entry
+                    # was unreadable/corrupt (load_all_runtime skips it
+                    # silently) - that is a real inconsistency, not a fresh
+                    # clone; keep the error and name the cause.
+                    state_path = get_state_store()._state_path(task_id)
+                    if state_path.exists():
+                        errors.append(
+                            f"{finding} (runtime state file exists but is "
+                            f"unreadable: {state_path})"
+                        )
+                    else:
+                        warnings.append(
+                            f"{finding} (committed snapshot; runtime state "
+                            "absent, status may be stale)"
+                        )
                 else:
                     errors.append(finding)
 
