@@ -30,11 +30,15 @@ Carry forward the two things worth keeping when the machinery goes: the measured
 - [ ] TBD
 
 ## Done summary
-TBD
+Carried the two prose survivors of the removed packaged delegation into the usage guide's bridge-recipe section: an up-front safety rule (the bridged child writes code; the host keeps git, judgment, and the verdict; no recursive bridging) and tier guidance (value tier matches strong tier on correctness at ~2/3 the wall on well-specified work - escalate only for gnarly tasks), with no benchmark table and no model names. Removed the deleted `delegate:codex` / `work.delegate*` vocabulary from the shortcuts block and the prompted-orchestration examples, and kept the dogfood `.flow/usage.md` copy byte-identical.
+
+Gates: focused suites green (test_dogfood_template_parity, test_usage_stages); ruff green. Full suite is RED on the branch for inherited reasons only (codex mirror not regenerated after tasks .1/.2; test_ralph_guard_codex_delegation still present) - owned by tasks .4/.5, untouched by this diff.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1)stage: plan-sync - ran (drift: no; .4/.5 unchanged; cross-spec check deferred to conductor pre-.5)
 
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 99f65f38913af1af3233cc9f3072f77b79e29be5
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_dogfood_template_parity test_usage_stages -q (OK, 7 tests), uvx ruff@0.16.0 check . (All checks passed), python3 scripts/run_tests_parallel.py (RED - inherited: codex mirror not regenerated after tasks .1/.2, plus test_ralph_guard_codex_delegation still present; owned by tasks .4/.5), impl-review: host backend SHIP (reviewer claude-fable-5, fresh read-only subagent; receipt /tmp/impl-review-receipt-flow-98-remove-packaged-codex-delegation.3.json; triage said docs-only skip, full review run deliberately - R9 prose is the deliverable)
 - PRs:
-
-**Wave note:** this task touches the dogfood copy under `.flow/`, which is in the always-serial set, so it never waves - that is deliberate, because splitting the template from its parity-checked copy would leave the parity test red between tasks.
