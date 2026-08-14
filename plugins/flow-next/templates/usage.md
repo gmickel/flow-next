@@ -46,7 +46,7 @@ The typical flow. Everything else (deps, block/reset, memory, glossary, config, 
 
 flow-next skills are prompts the host agent executes — so you (the host) can route work across model families with zero code. **Defaults are pre-tuned; none of this is required** — reach for it only when your model mix, subscriptions, or taste differ. Full guide: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md) · https://flow-next.dev/orchestration/
 
-**Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). The delegate writes code and never touches git; no recursive delegation.
+**Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). **Safety rule for every recipe below: the bridged child writes code; the host keeps git, judgment, and the verdict.** The child never commits, never decides scope, never issues a review verdict, and never spawns a bridge of its own.
 
 ```bash
 # codex exec DEFAULTS to a read-only sandbox. Redirect stdin from /dev/null —
@@ -78,6 +78,8 @@ grok --always-approve --no-plan -m grok-4.6 --reasoning-effort high -p "<self-co
 
 The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
 
+**Which tier to bridge to:** on well-specified work a value-tier implementer matches a strong-tier one on correctness at roughly two-thirds the wall clock, so send clear, well-scoped tasks to the value tier and escalate to the strong tier only for the genuinely gnarly ones. Spec quality is what makes that trade safe — a vague brief burns the saving on rework.
+
 **Thin-wrapper recipe:** a quick interactive bridge call can stay raw. For a long-running, unattended, or parallel bridge, dispatch a thin fast-tier subagent that composes the self-contained prompt, runs the bridge **in the foreground**, verifies non-empty/parseable output, repairs environment or flag failures once, and returns only a digest. The wrapper never changes the task, model, or verdict and never delegates recursively; judgment stays with the host.
 
 Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
@@ -100,17 +102,9 @@ claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Ba
 codex exec -s read-only --skip-git-repo-check "<prompt>" </dev/null
 ```
 
-**flow-next shortcuts** — the same bridges, packaged as config:
+**flow-next config shortcuts** — the routing flow-next machinery reads for itself. Implementation offload has no packaged config: use the bridge recipes above, and make them standing policy by writing them into `CLAUDE.md`/`AGENTS.md`.
 
 ```bash
-# The raw codex exec bridge above is the interactive route. delegate:codex is the same
-# bridge with deterministic rails for unattended loops; its task and spec paths are the brief.
-# Delegate implementation to codex (host keeps gating/git/review; codex only writes code)
-.flow/bin/flowctl config set work.delegate codex     # value MUST be `codex` to activate (OFF by default, consent-gated)
-# …or per-run, no config:  /flow-next:work fn-1-add-oauth delegate:codex
-# Steer the delegate: work.delegateModel (default gpt-5.6-terra, passed as -m) +
-# work.delegateEffort (default medium, passed as -c model_reasoning_effort=)
-
 # Cross-family review — the model that writes is never the model that reviews
 .flow/bin/flowctl config set review.backend codex                                 # or host | cursor:composer-2.5
 .flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:composer-2.5   # per-task review: override
@@ -120,10 +114,10 @@ codex exec -s read-only --skip-git-repo-check "<prompt>" </dev/null
 
 ```text
 Work the ready specs — decide per spec by complexity: auth/migration tasks you
-implement yourself; plain CRUD is delegated (delegate:codex). Reviews from codex either way.
+implement yourself; plain CRUD goes out to a codex exec bridge. Reviews from codex either way.
 
-Run /flow-next:work fn-12 with delegate:codex. If a task's review comes back
-NEEDS_WORK twice, stop delegating it and implement it yourself on the session model.
+Run /flow-next:work fn-12, bridging implementation to codex exec. If a task's review
+comes back NEEDS_WORK twice, stop bridging it and implement it yourself on the session model.
 ```
 
 None of these pairings are fixed — any stage of any flow-next pipeline (research, implementation, review, QA) can route to whatever harness you can reach from Bash: describe the arrangement in the invocation or your instruction files and the host builds it.
