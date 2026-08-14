@@ -10,9 +10,8 @@ R1 in plugins/flow-next/skills/flow-next-land/workflow.md: the §3.5 merge call 
 R1 met; seam mirrors the #277 shape; contract block states stderr-proxy + no-auto + merge-call-only scope; docs rows added; tests green; sync-codex idempotent.
 
 ## Done summary
-TBD
-
+§3.5 merge call honors FLOW_PR_MERGE_CMD (default gh pr merge) with the #277-shape unquoted expansion and a STABLE inline contract: fixed argument order, exit-0-merged, stderr proxied VERBATIM (the RESOLVING/BLOCKED split reads gh's head-mismatch text), never --auto/merge-queue, merge-call-only scope, --delete-branch second-permission note, env-only-never-config rationale citing §2.9's trust guard. Docs + conduct rows; 7 static pins. 79 tests green.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3b782ff3
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_skill_prose_diet -q
 - PRs:
