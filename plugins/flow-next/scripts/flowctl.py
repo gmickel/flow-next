@@ -42533,6 +42533,11 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         injected_prompt=injected_prompt,
     )
 
+    # The effort the dispatch ACTUALLY sent: the bind below swaps in the
+    # prior receipt's values on codex resume (receipt semantics - the
+    # session's model persists), but the resume argv still pinned the
+    # CURRENT resolved effort via -c model_reasoning_effort (#349 round 6).
+    _dispatched_effort = resolved_spec.effort
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
         backend, resolved_spec, _resolution,
         prior_receipt_model=prior_receipt_model,
@@ -42606,7 +42611,7 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             None if _resolution.get("floor") else effective_model
         ),
         reviewed_effort=(
-            effective_effort
+            _dispatched_effort
             if not _resolution.get("floor")
             and _effort_reached_cli(backend, effective_model)
             else None
@@ -43012,6 +43017,11 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
         injected_prompt=injected_prompt,
     )
 
+    # The effort the dispatch ACTUALLY sent: the bind below swaps in the
+    # prior receipt's values on codex resume (receipt semantics - the
+    # session's model persists), but the resume argv still pinned the
+    # CURRENT resolved effort via -c model_reasoning_effort (#349 round 6).
+    _dispatched_effort = resolved_spec.effort
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
         backend, resolved_spec, _resolution,
         prior_receipt_model=prior_receipt_model,
@@ -43082,7 +43092,7 @@ def _backend_plan_review(args: argparse.Namespace, backend: str) -> None:
             None if _resolution.get("floor") else effective_model
         ),
         reviewed_effort=(
-            effective_effort
+            _dispatched_effort
             if not _resolution.get("floor")
             and _effort_reached_cli(backend, effective_model)
             else None
@@ -43328,6 +43338,11 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         injected_prompt=injected_prompt,
     )
 
+    # The effort the dispatch ACTUALLY sent: the bind below swaps in the
+    # prior receipt's values on codex resume (receipt semantics - the
+    # session's model persists), but the resume argv still pinned the
+    # CURRENT resolved effort via -c model_reasoning_effort (#349 round 6).
+    _dispatched_effort = resolved_spec.effort
     resolved_spec, effective_model, effective_effort = _bind_receipt_model_effort(
         backend, resolved_spec, _resolution,
         prior_receipt_model=prior_receipt_model,
@@ -43403,7 +43418,7 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
             None if _resolution.get("floor") else effective_model
         ),
         reviewed_effort=(
-            effective_effort
+            _dispatched_effort
             if not _resolution.get("floor")
             and _effort_reached_cli(backend, effective_model)
             else None

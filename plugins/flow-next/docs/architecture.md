@@ -148,9 +148,13 @@ Each row also answers "was this verdict measured, and against what?"
   judged diff can be located and re-rendered; absent, never guessed,
   elsewhere.
 
-- `model` / `effort` (fn-193, #338) - the model that ACTUALLY ran, taken from
-  the same resolution the receipt records, so a fallback-ladder downgrade
-  (`auto` / `default`) or a codex-resume carry lands on the row honestly.
+- `model` / `effort` (fn-193, #338) - the model that ACTUALLY ran and the
+  effort that was actually SENT, taken from the same resolution the receipt
+  records. A fallback-ladder downgrade lands on the row honestly; a ladder
+  FLOOR records neither key (the receipt's `auto` / `default` is a selector
+  placeholder, not a resolved model - absent beats a placeholder), while an
+  explicit `auto` pin records honestly. On a codex resume the model is the
+  session's original but the effort is the one the resume argv pinned.
   Written only on the in-process dispatch paths, which are the only place the
   fact exists: the rp/host `review-rounds record` CLI carries no `--model`
   flag, by design - a narrating agent must not be able to claim a model. Effort
