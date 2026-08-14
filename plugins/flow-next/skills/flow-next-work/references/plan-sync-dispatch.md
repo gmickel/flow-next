@@ -24,7 +24,7 @@ Read the cross-spec flag (single config-leaf read — plan-sync.md documents `CR
 CROSS_SPEC=$($FLOWCTL config get planSync.crossSpec --json | jq -r '.value')
 ```
 
-Use the Task tool to spawn the `plan-sync` subagent with this prompt:
+Use the Task tool to spawn the `plan-sync` subagent with this prompt. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
 
 ```
 Sync downstream tasks after implementation.

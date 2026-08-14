@@ -10,12 +10,48 @@
     "flow-98-remove-packaged-codex-delegation"
   ],
   "id": "fn-195-orchestration-by-intent-named-tiers-per",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-195-orchestration-by-intent-named-tiers-per.1": 1
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "ready": true,
+  "review_attempts": [
+    {
+      "artifact_sha256": "aad09a058c2f979a6a4b81a0bfb33a78e1506bba11aa6fc6b634351011c5cc3b",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3be3d785ecdb1fbda07efc27c716f019c3cd51a2",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1571,
+      "output_sha256": "1705ff6fa90eb5d40cedc6ecd4ee967786aa56b251f1e83a56b05b7ebb79e01b",
+      "reservation_id": "a6e7f8f652c24530bf9514f0aca5838e",
+      "round_consumed": true,
+      "scope": "impl:fn-195-orchestration-by-intent-named-tiers-per.1",
+      "superseded_by": null,
+      "task": "fn-195-orchestration-by-intent-named-tiers-per.1",
+      "timestamp": "2026-08-14T19:33:19.696772Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-195-orchestration-by-intent-named-tiers-per.1": 0
+  },
   "spec_path": ".flow/specs/fn-195-orchestration-by-intent-named-tiers-per.md",
   "status": "open",
   "title": "Orchestration by intent: named tiers, per-harness reach, zero shipped model slugs",
@@ -30,5 +66,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T12:14:31.573627Z"
+  "updated_at": "2026-08-14T19:33:20.149708Z"
 }

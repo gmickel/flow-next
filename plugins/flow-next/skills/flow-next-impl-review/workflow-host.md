@@ -43,6 +43,8 @@ subagent prompt — it has the same repository you do.
 
 ## Step 2: Dispatch read-only reviewer subagent
 
+The reviewer subagent is the **reviewer** tier — a verdict from the writer's own family is not an independent one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
+
 ### Convergence reservation and recovery fence
 
 After the exact reviewer input is composed and immediately before every host

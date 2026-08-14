@@ -52,6 +52,8 @@ Run all 9 scouts in parallel using the Task tool:
 
 ### Agent Readiness Scouts (Pillars 1-5)
 
+These scanner fan-outs are **fast scout** dispatches — mechanical inventory scanning where the cheapest tier is the correct one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
+
 ```
 Task flow-next:tooling-scout    # linters, formatters, pre-commit, type checking → SV1-6
 Task flow-next:claude-md-scout  # CLAUDE.md/AGENTS.md quality → DC2 (+ command-doc)

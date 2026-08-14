@@ -82,7 +82,7 @@ _Relates to_: Spec, Task
 
 The engine that performs a cross-model review: `rp` (RepoPrompt), `codex`, `copilot`, `cursor`, `host`, or `none`, resolved by the `review.backend` grammar (env > per-spec/task > config). The backend is the review *mechanism*, distinct from the model it happens to run and from the reviewing agent's findings.
 
-_Avoid_: reviewer, judge, provider, model
+_Avoid_: judge, provider, model
 
 _Relates to_: Receipt
 
@@ -104,7 +104,7 @@ _Avoid_: prompt, main file, header, preamble
 
 What kind of model a job wants: `reviewer`, `implementer`, `fast scout`, `thinking scout`, or unset (the session model). A tier binds a model to a stage's execution, never to which stages run — which stages run is decided by what you invoked. The four names are a user-facing interface defined in exactly one place, [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants); an unrecognized name is treated as unset with one advisory.
 
-_Avoid_: role, pin, model tier, capability level, role map
+_Avoid_: pin, model tier, capability level, role map
 
 _Relates to_: Reach, Review backend
 
@@ -112,7 +112,7 @@ _Relates to_: Reach, Review backend
 
 How the active harness obtains a model for a tier: the in-session model, an in-host subagent, shelling out to another CLI, or not available. Documented once per harness under [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md) and never inside a skill — a skill asks for a tier and names no spawn primitive, CLI flag, or vendor path. An undetectable harness resolves to the generic page and says so.
 
-_Avoid_: bridge, delegation, dispatch mechanism, availability, probe
+_Avoid_: dispatch mechanism, availability, probe
 
 _Relates to_: Tier
 
@@ -120,7 +120,7 @@ _Relates to_: Tier
 
 The tier for anything grading work someone else produced. The only tier carrying a family rule: a reviewer from the writer's own family is not an independent verdict. The rule is advice, not enforcement — the receipt records what ran, and nothing fails closed on it. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
 
-_Avoid_: judge, grader, review model, critic
+_Avoid_: grader, review model, critic
 
 _Relates to_: Tier, Review backend
 
@@ -128,7 +128,7 @@ _Relates to_: Tier, Review backend
 
 The tier for work handed to another harness — plan on the session model, implement somewhere cheaper or faster. Absent, the session model implements. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
 
-_Avoid_: delegate, delegation, offload, bridged worker, executor
+_Avoid_: bridged worker, executor
 
 _Relates to_: Tier, Task
 

@@ -10,6 +10,7 @@ The offline-resilient reference for flow-next — **repeatable agentic engineeri
 - *"How do we adopt this as a team?"* → [`teams.md`](teams.md) — handover objects, Spec-as-PR, adoption ladder.
 - *"How do I run it autonomously?"* → the pilot/land skill pages below (`ralph.md` documents the deprecated harness).
 - *"Which model does what, and how do I change that?"* → [`orchestration.md`](orchestration.md) - routing surfaces, steering, CLAUDE.md model tables, loop chaining (including unattended chart driving).
+- *"How does my harness reach another model for a tier?"* → [`reach/README.md`](reach/README.md) — one page per harness; undetectable harness → the generic page.
 - *"What's every flag on every command?"* → [`flowctl.md`](flowctl.md) (includes the full `flowctl chart` contract).
 - *"This idea is too big / still unclear before capture?"* → [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md) - optional `/flow-next:chart` decision-map discovery; never mandatory.
 - *"Not sure which pre-build path is smallest?"* → [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide` router.

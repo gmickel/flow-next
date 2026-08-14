@@ -181,11 +181,11 @@ Run ALL of these scouts in parallel:
 
 **Anti-pattern**: cherry-picking scouts *within a tier* "because they seem most relevant" — that judgment-skip causes incomplete plans. (This is distinct from the DEPTH tier above: dropping the web-research scouts on a user-chosen SHORT plan is a deterministic, user-signaled tradeoff, not a relevance guess.)
 
-**Scout tiers.** `repo-scout`, `spec-scout`, `docs-gap-scout`, `docs-scout`,
+**Scout model tiers.** `repo-scout`, `spec-scout`, `docs-gap-scout`, `docs-scout`,
 `practice-scout` and `github-scout` — and Step 3's `flow-gap-analyst` — are
 **thinking scout** dispatches: requirement analysis and pattern judgment
-degrade badly on a fast model. The scanner scouts are **fast scout**
-dispatches. **Routing precedence, highest first: an explicit argument in the
+degrade badly on a fast model. `memory-scout` — the mechanical inventory
+scan — is a **fast scout** dispatch. **Routing precedence, highest first: an explicit argument in the
 invocation, then the project routing block in the instruction file, then the
 agent definition's own default, then the session model.** Where a harness
 cannot honor an agent definition's default, a thinking scout runs on the
