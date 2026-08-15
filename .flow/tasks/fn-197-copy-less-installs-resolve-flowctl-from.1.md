@@ -53,7 +53,8 @@ stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 stage: delegation - skipped(config: delegation off)
 
 
-stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; 3 P3 FYIs carried to .2/.5)
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; 3 P3 FYIs carried to .2/.5)stage: plan-sync - ran (drift: minor; .2 gained the guard full-line-equality item; injector deletion + ralph-guard no-change verified against downstream text; cross-spec deferred to conductor)
+
 ## Evidence
 - Commits: 9fedadd96fca2592ddee40c49458f2acf2d70657
 - Tests: python3 scripts/run_tests_parallel.py (files=192 ran=4397 failures=0 errors=0 skipped=8, exit 0), uvx ruff@0.16.0 check . (exit 0), bash plugins/flow-next/scripts/map_smoke_test.sh (75/75, exit 0), ./scripts/sync-codex.sh x2 (exit 0, idempotent), live probe: cursor-agent -p --trust --force in bin-less /tmp repo executed /Users/gordon/.cursor/plugins/local/flow-next/scripts/flowctl, impl-review: host backend SHIP round 1 (reviewer claude-fable-5, fresh read-only subagent; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.1.json)
