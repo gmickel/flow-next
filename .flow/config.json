@@ -21,28 +21,6 @@
   "memory": {
     "enabled": true
   },
-  "models": {
-    "roles": {
-      "fastJudge": {
-        "codex": "gpt-5.6-luna",
-        "copilot": "claude-haiku-4.5",
-        "cursor": "composer-2.5"
-      },
-      "review": {
-        "codex": "gpt-5.6-sol:medium",
-        "copilot": "claude-opus-4.8",
-        "cursor": "gpt-5.6-sol-high"
-      },
-      "scoutFast": {
-        "codex": "gpt-5.6-luna"
-      },
-      "scoutIntelligent": {
-        "codex": "gpt-5.6-terra"
-      }
-    },
-    "verifiedAt": "2026-08-04",
-    "verifiedWith": "setup 3.15.0 re-run 2026-08-04: codex accept-probe clean on gpt-5.6-sol (bare CLI working again); cursor-agent --list-models roster-verified (sol-high/xhigh, composer-2.5, opus-4.8, opus-5, fable-5); copilot pins knowledge-based"
-  },
   "pilot": {
     "autonomy": "ready",
     "gateClasses": []

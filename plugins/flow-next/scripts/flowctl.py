@@ -19992,18 +19992,13 @@ def _usage_stage_summary(spec_id: str, use_json: bool) -> None:
             f"receipts={entry['receipts']}"
         )
         print(f"  {name}: {counts}")
-        if entry["models"]:
-            models = " ".join(
-                f"{model}={count}"
-                for model, count in sorted(entry["models"].items())
-            )
-            print(f"    models: {models}")
-        if entry["receipt_models"]:
-            receipt_models = " ".join(
-                f"{model}={count}"
-                for model, count in sorted(entry["receipt_models"].items())
-            )
-            print(f"    receipt models: {receipt_models}")
+        for key, label in (("models", "models"), ("receipt_models", "receipt models")):
+            if entry[key]:
+                tally = " ".join(
+                    f"{model}={count}"
+                    for model, count in sorted(entry[key].items())
+                )
+                print(f"    {label}: {tally}")
         for reason in entry["reasons"]:
             print(f"    - {reason}")
     if unknown_lines:

@@ -445,10 +445,11 @@ class TestResolve(unittest.TestCase):
                 "FLOW_RP_", "FLOW_NONE_",
             )):
                 os.environ.pop(key, None)
-        # Hermetic vs repo config: resolve() consults models.roles pins from
-        # the enclosing repo's .flow/config.json (fn-115). Any real repo with
-        # pins (this one, since fn-121's setup ceremony) would otherwise leak
-        # into the registry-default assertions - chdir to a bare temp dir.
+        # Hermetic vs repo config: resolve() reads the enclosing repo's
+        # .flow/config.json (review.backend and friends), so any real repo's
+        # config would leak into the registry-default assertions - chdir to a
+        # bare temp dir. (Originally guarded the fn-115 role map; the leak
+        # class outlives that machinery, so the isolation stays.)
         self._tmpdir = tempfile.TemporaryDirectory()
         flow = os.path.join(self._tmpdir.name, ".flow")
         os.makedirs(flow)
@@ -934,7 +935,7 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
         for key in list(os.environ.keys()):
             if key.startswith("FLOW_"):
                 os.environ.pop(key, None)
-        # Hermetic vs repo config (fn-115 models.roles pins) - see TestResolve.
+        # Hermetic vs repo config (repo .flow/config.json leaks) - see TestResolve.
         self._tmpdir = tempfile.TemporaryDirectory()
         flow = os.path.join(self._tmpdir.name, ".flow")
         os.makedirs(flow)

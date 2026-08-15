@@ -145,8 +145,6 @@ class StageLineModelTest(_RepoCase):
         self.assertIn("models: some-implementer-slug=1", result.stdout)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class CombinedSourceTallyTest(StageLineModelTest):
@@ -172,3 +170,7 @@ class CombinedSourceTallyTest(StageLineModelTest):
         self.assertEqual(entry["receipt_models"], {"some-reviewer-slug": 1})
         self.assertEqual(entry["ran"], 1)
         self.assertEqual(entry["receipts"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
