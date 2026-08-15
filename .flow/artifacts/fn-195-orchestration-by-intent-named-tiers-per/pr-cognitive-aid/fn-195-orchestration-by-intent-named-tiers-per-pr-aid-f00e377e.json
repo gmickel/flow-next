@@ -1,0 +1,1869 @@
+{
+  "artifactId": "fn-195-orchestration-by-intent-named-tiers-per-pr-aid-f00e377e",
+  "baseSha": "b68880fd61ce2857204b0aab4c85a03db73285a1",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [
+          {
+            "additions": 49,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "GLOSSARY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/glossary.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 103,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 87,
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/claude-code.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/droid.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/generic.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 23,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/grok-build.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/reach/opencode.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t1",
+          "rid-R1",
+          "rid-R3",
+          "rid-R4",
+          "c1",
+          "c2",
+          "c3"
+        ],
+        "summary": "Four named tiers plus the unset default defined once in orchestration.md; seven reach pages plus an index under docs/reach/; the precedence sentence stated verbatim at every dispatch site; six dictionary entries.",
+        "taskIds": [
+          "fn-195-orchestration-by-intent-named-tiers-per.1"
+        ],
+        "title": "The routing contract"
+      },
+      {
+        "files": [
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-setup/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 127,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-pins.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 72,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 61,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 61,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 15,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 13,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 13,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 34,
+            "path": "plugins/flow-next/skills/flow-next-setup/templates/model-routing-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 69,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 97,
+            "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/test_cursor_host_docs.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 175,
+            "path": "plugins/flow-next/tests/test_model_pin_ceremony_prose.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 277,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 251,
+            "path": "plugins/flow-next/tests/test_model_routing_scaffold.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 72,
+            "path": "plugins/flow-next/tests/test_setup_cursor_host.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 38,
+            "path": "plugins/flow-next/tests/test_setup_reference_routing.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R5"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t2",
+          "rid-R5",
+          "c4",
+          "c5"
+        ],
+        "summary": "The pin ceremony, live CLI probes, routing questions and six reference files are replaced by one commented routing-block proposal with hard outs for docs-decline and headless runs; an existing or user-authored block is always kept.",
+        "taskIds": [
+          "fn-195-orchestration-by-intent-named-tiers-per.2"
+        ],
+        "title": "Setup proposes, never probes"
+      },
+      {
+        "files": [
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/bin/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 131,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 518,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/agents/worker.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 60,
+            "path": "plugins/flow-next/schema/flow-config.schema.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/scripts/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 131,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 518,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "plugins/flow-next/scripts/smoke_test.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/backend-specs.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/references/triage-rules.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 21,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-interview/references/fact-scouts.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 18,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": "plugins/flow-next/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/skills/flow-next-prime/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-prime/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-ralph-init/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/references/backend-at-a-glance.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-work/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-work/references/plan-sync-dispatch.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/tests/test_backend_spec.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 24,
+            "path": "plugins/flow-next/tests/test_flow_config_schema_drift.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/tests/test_host_review_backend.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 82,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 509,
+            "path": "plugins/flow-next/tests/test_model_resolution.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 23,
+            "path": "plugins/flow-next/tests/test_removed_delegate_config_advisory.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 69,
+            "path": "scripts/gen_flow_config_schema.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R2",
+          "R6"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t3",
+          "rid-R2",
+          "rid-R6",
+          "c6",
+          "c7"
+        ],
+        "summary": "Shipped model identifiers drop from 179 mentions to the two declared exceptions; models.roles storage, validation, staleness math and the resolve verb are deleted; stale keys get one non-blocking advisory.",
+        "taskIds": [
+          "fn-195-orchestration-by-intent-named-tiers-per.3"
+        ],
+        "title": "The identifier sweep and the machinery it fed"
+      },
+      {
+        "files": [
+          {
+            "additions": 33,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/review-findings.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 176,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_stage_model_provenance.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R7"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t4",
+          "rid-R7",
+          "c8",
+          "c9"
+        ],
+        "summary": "Stage-outcome lines accept a trailing model annotation and usage --stages tallies stage-line and receipt observations in separate maps; placeholders normalize to unknown, never the configured value.",
+        "taskIds": [
+          "fn-195-orchestration-by-intent-named-tiers-per.4"
+        ],
+        "title": "Provenance: record what actually ran"
+      },
+      {
+        "files": [
+          {
+            "additions": 1,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 23,
+            "path": ".flow/config.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": ".flow/specs/fn-160-setup-speed-batched-plumbing-refresh.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 334,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/specs/fn-195-orchestration-by-intent-named-tiers-per.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-195-orchestration-by-intent-named-tiers-per.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-195-orchestration-by-intent-named-tiers-per.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 66,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": ".flow/tasks/fn-195-orchestration-by-intent-named-tiers-per.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-195-orchestration-by-intent-named-tiers-per.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 31,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/tasks/fn-195-orchestration-by-intent-named-tiers-per.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": ".flow/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 67,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 33,
+            "path": "CLAUDE.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/agents/worker.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/backend-specs.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/references/triage-rules.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 21,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-interview/references/fact-scouts.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 18,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/codex/skills/flow-next-prime/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-prime/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-ralph-init/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 129,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-pins.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 72,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 61,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 61,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 15,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-question-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 13,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-question-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 13,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-question-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 34,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/templates/model-routing-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 68,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 96,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/references/backend-at-a-glance.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-copilot.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 19,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-host.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/references/plan-sync-dispatch.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": "plugins/flow-next/codex/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/commands/uninstall.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 49,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "plugins/flow-next/docs/platforms.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/docs/ralph.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/spec-template.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/sync-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/teams.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 22,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/docs/troubleshooting.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": "plugins/flow-next/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 51,
+            "path": "scripts/sync-codex.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R8"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t5",
+          "rid-R8",
+          "c10",
+          "c11"
+        ],
+        "summary": "Docs sweep across orchestration, platforms, teams, troubleshooting and the indexes; the codex mirror regenerated reproducibly with its agent floors pinned; breaking-change CHANGELOG entry under Unreleased; full suite, lint and idempotent mirror green.",
+        "taskIds": [
+          "fn-195-orchestration-by-intent-named-tiers-per.5"
+        ],
+        "title": "Close-out: docs, mirror, CHANGELOG, gate"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Tasks",
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5"
+        ],
+        "value": "5/5 done"
+      },
+      {
+        "label": "Acceptance",
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "value": "8/8 R-IDs evidenced"
+      },
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "d"
+        ],
+        "value": "192 test files, 4397 tests, 0 failures; ruff clean; mirror idempotent"
+      },
+      {
+        "label": "Net",
+        "sourceRefs": [
+          "d"
+        ],
+        "value": "121 files; identifier mentions 179 -> 2 declared exceptions"
+      }
+    ],
+    "thesis": "Model routing becomes intent expressed to the orchestrator: four named tiers plus an unset default, one reach page per harness, a commented routing block the user edits in their own instruction file - and the role map, pin ceremony, staleness machinery and 179 shipped model-identifier mentions are deleted, with stage receipts recording what actually ran."
+  },
+  "generatedAt": "2026-08-15T00:20:08.774431+00:00",
+  "headSha": "f00e377ebf00ac45aed3e0e4f8c3478588653f27",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-195-orchestration-by-intent-named-tiers-per"
+    },
+    {
+      "id": "d",
+      "kind": "diff_metadata",
+      "ref": "b68880fd61ce2857204b0aab4c85a03db73285a1..f00e377ebf00ac45aed3e0e4f8c3478588653f27"
+    },
+    {
+      "id": "t1",
+      "kind": "task",
+      "ref": "fn-195-orchestration-by-intent-named-tiers-per.1"
+    },
+    {
+      "id": "t2",
+      "kind": "task",
+      "ref": "fn-195-orchestration-by-intent-named-tiers-per.2"
+    },
+    {
+      "id": "t3",
+      "kind": "task",
+      "ref": "fn-195-orchestration-by-intent-named-tiers-per.3"
+    },
+    {
+      "id": "t4",
+      "kind": "task",
+      "ref": "fn-195-orchestration-by-intent-named-tiers-per.4"
+    },
+    {
+      "id": "t5",
+      "kind": "task",
+      "ref": "fn-195-orchestration-by-intent-named-tiers-per.5"
+    },
+    {
+      "id": "rid-R1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "rid-R2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "rid-R3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "rid-R4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "rid-R5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "rid-R6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "rid-R7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "rid-R8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "3be3d785ecdb1fbda07efc27c716f019c3cd51a2"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "1f863fae65d4296ce853251e75538779f28502da"
+    },
+    {
+      "id": "c3",
+      "kind": "commit",
+      "ref": "4976cf11df7ccf2e293f0ffa134981fcfb973efe"
+    },
+    {
+      "id": "c4",
+      "kind": "commit",
+      "ref": "45379f2c5c32edd58ff2c06fcd542a726f0bf6bf"
+    },
+    {
+      "id": "c5",
+      "kind": "commit",
+      "ref": "a67390ceba07989b643b2acafbc9592bd73fd4ad"
+    },
+    {
+      "id": "c6",
+      "kind": "commit",
+      "ref": "cb0388f7d7789303d8af9bd3dcff5e3501be23bb"
+    },
+    {
+      "id": "c7",
+      "kind": "commit",
+      "ref": "cfdf0b2b587dfa428f586ab79596a781d53a2fb5"
+    },
+    {
+      "id": "c8",
+      "kind": "commit",
+      "ref": "38220479889cbafc1616e148b58cad112581c5ca"
+    },
+    {
+      "id": "c9",
+      "kind": "commit",
+      "ref": "965648022c2c6b9a210eea33c506d634cdc4fd19"
+    },
+    {
+      "id": "c10",
+      "kind": "commit",
+      "ref": "e2517bdc2ef8d1658302378b269d3ebdd96a545f"
+    },
+    {
+      "id": "c11",
+      "kind": "commit",
+      "ref": "c327e766885a62c8084e5a6f6163bcedddcdb5f9"
+    }
+  ],
+  "specId": "fn-195-orchestration-by-intent-named-tiers-per"
+}
