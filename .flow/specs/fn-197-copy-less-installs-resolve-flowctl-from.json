@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-197-copy-less-installs",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-15T11:00:18.508920Z",
   "created_at": "2026-08-14T17:07:09.765122Z",
   "default_impl": null,
   "default_review": null,
@@ -19,7 +19,7 @@
     "fn-197-copy-less-installs-resolve-flowctl-from.5": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "review_attempts": [
@@ -184,6 +184,32 @@
       "task": "fn-197-copy-less-installs-resolve-flowctl-from.5",
       "timestamp": "2026-08-15T10:19:27.051152Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "71b463c5a3dd1d04527d2579272be1b9919a36358899c6962bd33a09ee890d64",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "cb351ea204bbf9597c0897e60ab6539432ebd2ee",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 1220,
+      "output_sha256": "016a66730f41ac4f807e8521a2a01b0aa70616469c43ca4e4debafa4a3ba3132",
+      "reservation_id": "16530966f15241dfaa3cf7d881853aa8",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-15T11:00:18.043750Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
@@ -191,21 +217,13 @@
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 1,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 1,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.4": 1,
-    "impl:fn-197-copy-less-installs-resolve-flowctl-from.5": 1
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.5": 1,
+    "plan#completion": 1
   },
-  "review_pending_rounds": {
-    "plan": 1
-  },
-  "review_reservations": {
-    "16530966f15241dfaa3cf7d881853aa8": {
-      "artifact_sha256": "71b463c5a3dd1d04527d2579272be1b9919a36358899c6962bd33a09ee890d64",
-      "counter_scope": "plan",
-      "epoch": 0,
-      "forced": false,
-      "review_type": "completion"
-    }
-  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.1": 0,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 0,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 0,
@@ -226,5 +244,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-15T10:43:22.061700Z"
+  "updated_at": "2026-08-15T11:00:18.509429Z"
 }
