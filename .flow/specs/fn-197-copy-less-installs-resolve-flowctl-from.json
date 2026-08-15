@@ -11,11 +11,55 @@
     "fn-195-orchestration-by-intent-named-tiers-per"
   ],
   "id": "fn-197-copy-less-installs-resolve-flowctl-from",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-197-copy-less-installs-resolve-flowctl-from.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "4f1329b8c1f645d2c033204c64d5ae533b89b395fd3914c2bc0c548642844d9f",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "host",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "9fedadd96fca2592ddee40c49458f2acf2d70657",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1286,
+      "output_sha256": "6a9374feededead768a2f769d82e7d7eb9a9cdb3c44f4a08c81f3e8e3f25e290",
+      "reservation_id": "7f709633729a48b4b802e70ae87349c2",
+      "round_consumed": true,
+      "scope": "impl:fn-197-copy-less-installs-resolve-flowctl-from.1",
+      "superseded_by": null,
+      "task": "fn-197-copy-less-installs-resolve-flowctl-from.1",
+      "timestamp": "2026-08-15T07:08:34.899653Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.1": 0
+  },
   "spec_path": ".flow/specs/fn-197-copy-less-installs-resolve-flowctl-from.md",
   "status": "open",
   "title": "Copy-less installs: resolve flowctl from the plugin install on every host; retire copy mode",
@@ -30,5 +74,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-14T17:34:58.280987Z"
+  "updated_at": "2026-08-15T07:08:35.394544Z"
 }

@@ -45,9 +45,16 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 - [ ] test_guide_routing + map_smoke_test.sh pins retargeted; full suite green (exit codes captured directly).
 - [ ] Live probe: bin-less tmp repo, `cursor-agent -p "list my flow tasks"` resolves the installed plugin's flowctl.
 ## Done summary
-TBD
+Added the derived-plugin-root rung (rung 2) to every canonical FLOWCTL preamble (52 sites, byte-identical wording), fixed the three nonstandard/hardcoded sites (worker.md had no fallback at all, quality-auditor's one-line form, docs-gap-scout + tracker-sync status-sync hardcoding `.flow/bin`), rewrote the Cursor rail to teach the chain, deleted sync-codex's two fallback-injector awks (they would have duplicated the `.flow/bin` rung) in favor of a mirror chain-integrity validation guard, regenerated the Codex mirror, and retargeted the affected test pins + contributor docs.
 
+Live probe (acceptance): a bin-less tmp repo with `.flow/` data; `cursor-agent -p --trust --force` resolved and EXECUTED `/Users/gordon/.cursor/plugins/local/flow-next/scripts/flowctl` and returned the real task list. Note: the probe required refreshing the maintainer's local Cursor install from this working tree via `scripts/install-cursor.sh` — that install now points at unreleased working-tree prose until re-run after a pull.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; 3 P3 FYIs carried to .2/.5)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9fedadd96fca2592ddee40c49458f2acf2d70657
+- Tests: python3 scripts/run_tests_parallel.py (files=192 ran=4397 failures=0 errors=0 skipped=8, exit 0), uvx ruff@0.16.0 check . (exit 0), bash plugins/flow-next/scripts/map_smoke_test.sh (75/75, exit 0), ./scripts/sync-codex.sh x2 (exit 0, idempotent), live probe: cursor-agent -p --trust --force in bin-less /tmp repo executed /Users/gordon/.cursor/plugins/local/flow-next/scripts/flowctl, impl-review: host backend SHIP round 1 (reviewer claude-fable-5, fresh read-only subagent; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.1.json)
 - PRs:
