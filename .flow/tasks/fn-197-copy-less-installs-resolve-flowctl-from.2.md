@@ -39,9 +39,16 @@
 - [ ] Dogfood parity kept green in this commit (rewritten templates cp-ed over `.flow/usage.md` + `.flow/templates/spec.md`).
 - [ ] Named test pins retargeted (snippet lockstep, cursor/grok host, precheck template assertion generalized, tracker-distribution installer assertion); suite green.
 ## Done summary
-TBD
+Collapsed `/flow-next:setup` to a single copy-less mode: deleted the Step 2b mode ceremony, the Step 3 mkdir, the Step 4 copy block, the `.flow/usage.md` consent sub-flow, the Step 7c `setup-mode` stamp and the Step 8a plugin-mode summary variant; added the unconditional leftover-cleanup offer (Step 2b) plus the "when to re-run" guidance in the closing summary. Converged the doc snippets to two sentinel-versioned templates, rewrote `templates/usage.md`/`spec.md`/`uninstall.md`, deleted the fn-121 machinery from sync-codex (transform + its four guards, keeping the fn-126 Step-0 rewrite), and tightened the fn-197 rung-2 chain guard to full-line equality.
 
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+Post-review fixes 5e27fddd + mirror regen 4e40501a (residue-probe loop exit, abort text names completed cleanup).
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; 2 P3s fixed post-verdict, 2 deferred to .3 by design)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 728d4279dd76bda40391e767494a33fb4cec08ef, 5e27fddd, 4e40501a
+- Tests: GATE_SKIPPED:unittest:green-receipt 9fedadd9 - baseline reused from prior post-gate pass, python3 scripts/run_tests_parallel.py (files=192 ran=4397 failures=0 errors=0 skipped=8), uvx ruff@0.16.0 check . (All checks passed), ./scripts/sync-codex.sh (run 3x, idempotent, all validation guards green), impl-review: host backend SHIP round 1 (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.2.json); post-fix focused suites + ruff + mirror x2 green
 - PRs:
