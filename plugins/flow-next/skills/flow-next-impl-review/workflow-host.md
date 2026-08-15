@@ -140,7 +140,7 @@ agent definition or the host's read-only subagent mode
 (`disallowedTools: Edit, Write, Task` where the host consumes it) - never a
 mutation-capable subagent, because the reviewer reads untrusted diff content. Where the host cannot
 enforce it, say so in the receipt: pin and read-only enforcement are
-host-dependent.
+host-dependent. The dispatch prompt additionally states working-tree conduct: the reviewer never runs a mutating command (`git checkout`/`restore`/`clean`/`stash`, shell file writes) - tool fences do not cover the shell, and uncommitted state it finds is evidence to report, never something to repair.
 
 Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.

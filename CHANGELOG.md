@@ -4,6 +4,8 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+- **Reviewer and auditor subagents now carry an explicit working-tree conduct rule** - read-only means the shell too: no `git checkout`/`restore`/`clean`/`stash`, no shell file writes; surprising uncommitted state is reported as a finding, never "repaired". Added after a live incident where an auditor's `git restore` destroyed another agent's uncommitted review state.
+
 Choosing which model does what is now something you say, not something you
 configure. Routing is a short block of your own words in your own
 `CLAUDE.md` / `AGENTS.md` - four named tiers, filled with model names you can
