@@ -13,7 +13,8 @@
   "id": "fn-197-copy-less-installs-resolve-flowctl-from",
   "impl_review_rounds": {
     "fn-197-copy-less-installs-resolve-flowctl-from.1": 0,
-    "fn-197-copy-less-installs-resolve-flowctl-from.2": 0
+    "fn-197-copy-less-installs-resolve-flowctl-from.2": 0,
+    "fn-197-copy-less-installs-resolve-flowctl-from.3": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -77,6 +78,32 @@
       "task": "fn-197-copy-less-installs-resolve-flowctl-from.2",
       "timestamp": "2026-08-15T07:51:53.587967Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "8d2b0114c3e31a70fbbd2c711e6464d06aea5f4ea5187684f79e52ab34db6b45",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f2fc3cb1e262007fb293c012987b08241f39223d",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1448,
+      "output_sha256": "4cc457f4def2d9b803017977320f09edce7ae77080406c78f86cce480f028d0e",
+      "reservation_id": "d68b3c73a11e4890a8aec3df2e626043",
+      "round_consumed": true,
+      "scope": "impl:fn-197-copy-less-installs-resolve-flowctl-from.3",
+      "superseded_by": null,
+      "task": "fn-197-copy-less-installs-resolve-flowctl-from.3",
+      "timestamp": "2026-08-15T08:47:43.257476Z",
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -87,7 +114,8 @@
   "review_reservations": {},
   "review_transport_failures": {
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.1": 0,
-    "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 0
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 0,
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 0
   },
   "spec_path": ".flow/specs/fn-197-copy-less-installs-resolve-flowctl-from.md",
   "status": "open",
@@ -103,5 +131,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-15T07:51:54.058594Z"
+  "updated_at": "2026-08-15T08:47:43.673489Z"
 }

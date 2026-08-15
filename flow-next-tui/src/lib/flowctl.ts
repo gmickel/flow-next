@@ -1,18 +1,18 @@
-import { readdir, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname } from 'node:path';
+import { readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname } from "node:path";
 
-import type {
-  Epic,
-  EpicListItem,
-  EpicShowResponse,
-  EpicsResponse,
-  ReadyResponse,
-  Task,
-  TaskListItem,
-  TaskShowResponse,
-  TasksResponse,
-} from './types';
+import  {
+  type Epic,
+  type EpicListItem,
+  type EpicShowResponse,
+  type EpicsResponse,
+  type ReadyResponse,
+  type Task,
+  type TaskListItem,
+  type TaskShowResponse,
+  type TasksResponse,
+} from "./types";
 
 /**
  * Error thrown when flowctl command fails
@@ -26,18 +26,18 @@ export class FlowctlError extends Error {
   /** Error output/context (may be stderr, stdout, or descriptive message) */
   output: string;
   /** Error kind: "exec" for process failure, "parse" for JSON parse failure, "api" for success:false */
-  kind: 'exec' | 'parse' | 'api';
+  kind: "exec" | "parse" | "api";
 
   constructor(
     fullCommand: string[],
     args: string[],
     exitCode: number,
     output: string,
-    kind: 'exec' | 'parse' | 'api' = 'exec'
+    kind: "exec" | "parse" | "api" = "exec"
   ) {
-    const msg = `flowctl ${args.join(' ')} failed (exit ${exitCode}): ${output}`;
+    const msg = `flowctl ${args.join(" ")} failed (exit ${exitCode}): ${output}`;
     super(msg);
-    this.name = 'FlowctlError';
+    this.name = "FlowctlError";
     this.fullCommand = fullCommand;
     this.args = args;
     this.exitCode = exitCode;
@@ -66,12 +66,12 @@ let cache: FlowctlCache | null = null;
  */
 async function canExecute(path: string): Promise<boolean> {
   const file = Bun.file(path);
-  if (!(await file.exists())) return false;
+  if (!(await file.exists())) {return false;}
 
   try {
-    const proc = Bun.spawn([path, '--help'], {
-      stdout: 'pipe',
-      stderr: 'pipe',
+    const proc = Bun.spawn([path, "--help"], {
+      stderr: "pipe",
+      stdout: "pipe",
     });
     await proc.exited;
     // Any exit code is fine - spawn success means executable
@@ -87,12 +87,12 @@ async function canExecute(path: string): Promise<boolean> {
  */
 async function canExecuteViaPython(path: string): Promise<boolean> {
   const file = Bun.file(path);
-  if (!(await file.exists())) return false;
+  if (!(await file.exists())) {return false;}
 
   try {
-    const proc = Bun.spawn(['python3', path, '--help'], {
-      stdout: 'pipe',
-      stderr: 'pipe',
+    const proc = Bun.spawn(["python3", path, "--help"], {
+      stderr: "pipe",
+      stdout: "pipe",
     });
     await proc.exited;
     return true;
@@ -131,7 +131,7 @@ async function findRepoRoot(startDir: string): Promise<string | null> {
     const gitFile = Bun.file(gitFilePath);
     if (await gitFile.exists()) {
       const content = await gitFile.text();
-      if (content.startsWith('gitdir:')) {
+      if (content.startsWith("gitdir:")) {
         return dir;
       }
     }
@@ -150,10 +150,10 @@ export class FlowctlNotFoundError extends Error {
   startDir: string;
 
   constructor(startDir: string, searchedPaths: string[]) {
-    const pathList = searchedPaths.join(', ');
-    const msg = `flowctl not found. Run \`/flow-next:setup\` or ensure flow-next plugin is installed. Searched: ${pathList}`;
+    const pathList = searchedPaths.join(", ");
+    const msg = `flowctl not found. Install or update the flow-next plugin for your harness (the TUI resolves flowctl from the plugin install), or put flowctl on PATH. Searched: ${pathList}`;
     super(msg);
-    this.name = 'FlowctlNotFoundError';
+    this.name = "FlowctlNotFoundError";
     this.startDir = startDir;
     this.searchedPaths = searchedPaths;
   }
@@ -171,20 +171,45 @@ async function versionedCacheCandidates(root: string): Promise<string[]> {
   } catch {
     return [];
   }
-  const stamped: { mtime: number; path: string }[] = [];
+  const stamped: { entry: string; mtime: number; path: string }[] = [];
   for (const entry of entries) {
     const dir = `${root}/${entry}`;
     try {
       const info = await stat(dir);
       if (info.isDirectory()) {
-        stamped.push({ mtime: info.mtimeMs, path: `${dir}/scripts/flowctl` });
+        stamped.push({
+          entry,
+          mtime: info.mtimeMs,
+          path: `${dir}/scripts/flowctl`,
+        });
       }
     } catch {
       // unreadable entry — skip
     }
   }
+  // Claude keys cache entries by semver; a touched-but-stale version must not
+  // outrank the newest release, so semver-looking entries sort by version and
+  // everything else (Cursor's sha-named dirs) falls back to mtime.
+  const semverParts = (name: string): number[] | null => {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(name);
+    return match
+      ? [Number(match[1]), Number(match[2]), Number(match[3])]
+      : null;
+  };
   return stamped
-    .toSorted((a, b) => b.mtime - a.mtime)
+    .toSorted((a, b) => {
+      const av = semverParts(a.entry);
+      const bv = semverParts(b.entry);
+      if (av && bv) {
+        for (let i = 0; i < 3; i++) {
+          if (av[i] !== bv[i]) {return (bv[i] as number) - (av[i] as number);}
+        }
+        return 0;
+      }
+      if (av) {return -1;}
+      if (bv) {return 1;}
+      return b.mtime - a.mtime;
+    })
     .slice(0, MAX_CACHE_CANDIDATES)
     .map((item) => item.path);
 }
@@ -198,7 +223,10 @@ const MAX_CACHE_CANDIDATES = 3;
  * the TUI resolves the same install the agent hosts resolve.
  */
 async function installLocationCandidates(): Promise<string[]> {
-  const home = homedir();
+  // FLOW_NEXT_TUI_HOME is a test seam: the rungs below read the real home
+  // directory, so without it the not-found path is untestable on any machine
+  // that has flow-next installed.
+  const home = process.env.FLOW_NEXT_TUI_HOME ?? homedir();
   return [
     `${home}/.claude/plugins/marketplaces/flow-next/plugins/flow-next/scripts/flowctl`,
     ...(await versionedCacheCandidates(
@@ -226,7 +254,7 @@ async function installLocationCandidates(): Promise<string[]> {
  * @param startDir Optional starting directory (defaults to process.cwd(), for testing)
  */
 export async function getFlowctlPath(startDir?: string): Promise<string> {
-  if (cache) return cache.path;
+  if (cache) {return cache.path;}
 
   const cwd = startDir ?? process.cwd();
   const searchedPaths: string[] = [];
@@ -270,7 +298,9 @@ export async function getFlowctlPath(startDir?: string): Promise<string> {
   }
 
   // 4. flowctl on PATH (use Bun.which instead of shelling out)
-  const flowctlOnPath = Bun.which('flowctl');
+  // Pass PATH explicitly: Bun.which snapshots the env otherwise, which
+  // defeats runtime PATH changes (and the tests' PATH isolation).
+  const flowctlOnPath = Bun.which("flowctl", { PATH: process.env.PATH ?? "" });
   if (flowctlOnPath) {
     searchedPaths.push(flowctlOnPath);
     result = await tryFlowctl(flowctlOnPath);
@@ -281,7 +311,9 @@ export async function getFlowctlPath(startDir?: string): Promise<string> {
   }
 
   // 4b. flowctl.py on PATH
-  const flowctlPyOnPath = Bun.which('flowctl.py');
+  const flowctlPyOnPath = Bun.which("flowctl.py", {
+    PATH: process.env.PATH ?? "",
+  });
   if (flowctlPyOnPath) {
     searchedPaths.push(flowctlPyOnPath);
     result = await tryFlowctl(flowctlPyOnPath);
@@ -320,13 +352,13 @@ async function spawnFlowctl(args: string[]): Promise<{
   const usePython = cache?.usePython ?? false;
 
   const cmd = usePython
-    ? ['python3', flowctlPath, ...args]
+    ? ["python3", flowctlPath, ...args]
     : [flowctlPath, ...args];
 
   try {
     const proc = Bun.spawn(cmd, {
-      stdout: 'pipe',
-      stderr: 'pipe',
+      stderr: "pipe",
+      stdout: "pipe",
     });
 
     const [stdout, stderr] = await Promise.all([
@@ -336,10 +368,10 @@ async function spawnFlowctl(args: string[]): Promise<{
 
     await proc.exited;
 
-    return { cmd, stdout, stderr, exitCode: proc.exitCode ?? 1 };
-  } catch (err) {
+    return { cmd, exitCode: proc.exitCode ?? 1, stderr, stdout };
+  } catch (error) {
     // Wrap spawn failures (ENOENT, EACCES, etc) in FlowctlError
-    throw new FlowctlError(cmd, args, -1, String(err), 'exec');
+    throw new FlowctlError(cmd, args, -1, String(error), "exec");
   }
 }
 
@@ -363,23 +395,23 @@ async function flowctlWithCmd<T>(
     // Include stdout when stderr empty (some failures emit useful info on stdout)
     const errorContext = stderr.trim()
       ? stderr.trim()
-      : stdout.trim().slice(0, 200) || 'no output';
-    throw new FlowctlError(cmd, args, exitCode, errorContext, 'exec');
+      : stdout.trim().slice(0, 200) || "no output";
+    throw new FlowctlError(cmd, args, exitCode, errorContext, "exec");
   }
 
   try {
-    return { result: JSON.parse(stdout) as T, cmd };
+    return { cmd, result: JSON.parse(stdout) as T };
   } catch {
     // Include both streams labeled consistently for debugging
     const stdoutSnip = stdout.trim().slice(0, 150);
     const stderrSnip = stderr.trim().slice(0, 150);
-    const context = `stdout=${stdoutSnip || '(empty)'}, stderr=${stderrSnip || '(empty)'}`;
+    const context = `stdout=${stdoutSnip || "(empty)"}, stderr=${stderrSnip || "(empty)"}`;
     throw new FlowctlError(
       cmd,
       args,
       exitCode,
       `Failed to parse JSON: ${context}`,
-      'parse'
+      "parse"
     );
   }
 }
@@ -396,8 +428,8 @@ function assertSuccess<T extends { success: boolean; error?: string }>(
   if (response.success !== true) {
     const errorMsg = response.error
       ? `flowctl returned success:false: ${response.error}`
-      : 'flowctl returned success:false';
-    throw new FlowctlError(cmd, args, 0, errorMsg, 'api');
+      : "flowctl returned success:false";
+    throw new FlowctlError(cmd, args, 0, errorMsg, "api");
   }
 }
 
@@ -405,7 +437,7 @@ function assertSuccess<T extends { success: boolean; error?: string }>(
  * Get all epics (list items with counts)
  */
 export async function getEpics(): Promise<EpicListItem[]> {
-  const args = ['specs', '--json'];
+  const args = ["specs", "--json"];
   const { result, cmd } = await flowctlWithCmd<EpicsResponse>(args);
   assertSuccess(result, cmd, args);
   return result.specs;
@@ -415,25 +447,28 @@ export async function getEpics(): Promise<EpicListItem[]> {
  * Get tasks for an epic
  */
 export async function getTasks(epicId: string): Promise<TaskListItem[]> {
-  const args = ['tasks', '--spec', epicId, '--json'];
+  const args = ["tasks", "--spec", epicId, "--json"];
   const { result, cmd } = await flowctlWithCmd<TasksResponse>(args);
   assertSuccess(result, cmd, args);
   // fn-111: wire is canonical `spec`; TUI internals still use `epic` naming.
-  return result.tasks.map((t) => ({ ...t, epic: (t as { spec?: string }).spec ?? t.epic }));
+  return result.tasks.map((t) => ({
+    ...t,
+    epic: (t as { spec?: string }).spec ?? t.epic,
+  }));
 }
 
 /**
  * Get task spec (markdown content)
  */
 export async function getTaskSpec(taskId: string): Promise<string> {
-  const args = ['cat', taskId];
+  const args = ["cat", taskId];
   const { cmd, stdout, stderr, exitCode } = await spawnFlowctl(args);
 
   if (exitCode !== 0) {
     const errorContext = stderr.trim()
       ? stderr.trim()
-      : stdout.trim().slice(0, 200) || 'no output';
-    throw new FlowctlError(cmd, args, exitCode, errorContext, 'exec');
+      : stdout.trim().slice(0, 200) || "no output";
+    throw new FlowctlError(cmd, args, exitCode, errorContext, "exec");
   }
 
   return stdout;
@@ -443,11 +478,11 @@ export async function getTaskSpec(taskId: string): Promise<string> {
  * Get ready/in_progress/blocked tasks for an epic
  */
 export async function getReadyTasks(epicId: string): Promise<ReadyResponse> {
-  const args = ['ready', '--spec', epicId, '--json'];
+  const args = ["ready", "--spec", epicId, "--json"];
   const { result, cmd } = await flowctlWithCmd<ReadyResponse>(args);
   assertSuccess(result, cmd, args);
   // fn-111: wire is canonical `spec`; TUI internals still use `epic` naming.
-  const spec = (result as { spec?: string }).spec;
+  const {spec} = (result as { spec?: string });
   return { ...result, epic: spec ?? result.epic };
 }
 
@@ -455,7 +490,7 @@ export async function getReadyTasks(epicId: string): Promise<ReadyResponse> {
  * Get epic details
  */
 export async function getEpic(epicId: string): Promise<Epic> {
-  const args = ['show', epicId, '--json'];
+  const args = ["show", epicId, "--json"];
   const { result, cmd } = await flowctlWithCmd<EpicShowResponse>(args);
   assertSuccess(result, cmd, args);
   const { success: _, ...epic } = result;
@@ -466,12 +501,12 @@ export async function getEpic(epicId: string): Promise<Epic> {
  * Get task details
  */
 export async function getTask(taskId: string): Promise<Task> {
-  const args = ['show', taskId, '--json'];
+  const args = ["show", taskId, "--json"];
   const { result, cmd } = await flowctlWithCmd<TaskShowResponse>(args);
   assertSuccess(result, cmd, args);
   const { success: _, ...task } = result;
   // fn-111: wire is canonical `spec`; TUI internals still use `epic` naming.
-  const spec = (task as { spec?: string }).spec;
+  const {spec} = (task as { spec?: string });
   return { ...task, epic: spec ?? (task as { epic?: string }).epic } as Task;
 }
 

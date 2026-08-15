@@ -19846,9 +19846,11 @@ def cmd_usage(args: argparse.Namespace) -> None:
     )
 
 
-# fn-121: snippet plumbing. The snippet schema version and sentinel grammar
-# are shared with the skills' pre-check blocks; bump the version ONLY on a
-# genuine snippet-contract change.
+# fn-121/fn-197: the snippet sentinel version, as a documented anchor only.
+# No code reads these since fn-197 deleted the setup-mode pre-check blocks -
+# they exist so the template's `<!-- flow-next:snippet:v1 -->` sentinel has a
+# named source of truth. Bumping the version is a doc/template decision (the
+# setup Docs step re-proposes on CONTENT drift, not on this number).
 SNIPPET_SCHEMA_VERSION = 1
 SNIPPET_SENTINEL_RE = re.compile(r"<!-- flow-next:snippet:v(\d+) -->")
 # fn-197: the machine-readable manifest of legacy copy-mode artifacts — the
