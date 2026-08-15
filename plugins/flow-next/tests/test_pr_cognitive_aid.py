@@ -83,7 +83,7 @@ def artifact(*, canonical_files: int = 2, churn: int = 40) -> dict:
                 "taskIds": [],
             },
             {
-                "path": ".flow/bin/flowctl.py",
+                "path": "dist/bundled_tool.py",
                 "changeType": "modified",
                 "attentionClass": "mechanical",
                 "summary": "Byte-identical distribution copy.",

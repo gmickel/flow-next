@@ -1400,7 +1400,7 @@ def get_default_config() -> dict:
         # delegateEffort, delegateSandbox, delegateConsent,
         # delegateDecision); implementation offload is now the agentic
         # route (the /flow-next:setup model-routing scaffold in
-        # CLAUDE.md / AGENTS.md plus the .flow/usage.md bridge recipes),
+        # CLAUDE.md / AGENTS.md plus the `flowctl usage` bridge recipes),
         # so there is nothing left to configure here. A config still
         # carrying the keys gets ONE advisory line
         # (REMOVED_CONFIG_KEYS below) and runs unchanged. The
@@ -1777,7 +1777,7 @@ def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
 # .flow/config.json still carries any of them is NOT broken - flowctl ignores
 # them entirely - but silence would leave the user believing the machinery is
 # still wired. Routing now lives in the /flow-next:setup model-routing block
-# (CLAUDE.md / AGENTS.md) plus the .flow/usage.md recipes, and the advisory
+# (CLAUDE.md / AGENTS.md) plus the `flowctl usage` recipes, and the advisory
 # points there.
 #
 # ONE line per invocation, naming every removed key found - never one line
@@ -1830,7 +1830,7 @@ def removed_config_keys_note(keys: list[str]) -> str:
         f"key(s): {', '.join(keys)}; flowctl ignores them. Routing "
         f"is now the model-routing block /flow-next:setup writes "
         f"into CLAUDE.md / AGENTS.md plus the recipes in "
-        f".flow/usage.md - route work there and delete these keys."
+        f"`flowctl usage` - route work there and delete these keys."
     )
 
 
@@ -19592,185 +19592,6 @@ def _ensure_flow_gitignore(flow_dir: Path) -> bool:
     return True
 
 
-# fn-77.3: in-module launcher bodies for `flowctl init` self-heal. flowctl.py
-# runs from .flow/bin/flowctl.py at runtime with NO plugin-root / template on
-# disk, so `init` re-stamps the .flow/bin/ launchers from these constants (not
-# a cp). init runs INSIDE flowctl.py, so it never needs the (possibly broken)
-# bash launcher itself — a broken .flow/bin/flowctl is reached only via a
-# working entrypoint (plugin auto-update, the .cmd, or `py -3
-# .flow/bin/flowctl.py init`); this just refreshes the on-disk copies.
-#
-# DRIFT GUARD: LAUNCHER_SH / LAUNCHER_CMD MUST stay byte-identical to the
-# committed sources plugins/flow-next/scripts/flowctl and
-# plugins/flow-next/scripts/flowctl.cmd. tests/test_init_stamp_launchers.py
-# asserts that equality — edit both sides together. LAUNCHER_SH uses LF
-# endings; LAUNCHER_CMD is stored LF here but written to disk as CRLF (a
-# Windows batch file) by _stamp_flow_bin_launchers.
-LAUNCHER_SH = r'''#!/bin/bash
-# flowctl wrapper — invokes the source-first bootstrap beside flowctl.py via a
-# probed Python 3.11+ interpreter.
-#
-# SELF-CONTAINED: this launcher does NOT source scripts/lib/pick-python.sh —
-# installed copies (.flow/bin/flowctl, scripts/ralph/flowctl) can't assume that
-# path is reachable. Keep this inline probe in sync with the shared resolver at
-# plugins/flow-next/scripts/lib/pick-python.sh.
-#
-# Probe = functionality + minimum version: each candidate must actually run and
-# report Python 3.11+, so the Windows Store `python3` App Execution Alias stub
-# and working-but-too-old interpreters are skipped. Candidate order:
-#   $PYTHON_BIN (scalar override) -> py -3 -> python3 -> python
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FLOWCTL_SOURCE_DIR="$SCRIPT_DIR"
-
-FLOW_PY=()
-FLOW_PY_TOO_OLD=()
-for _cand in "${PYTHON_BIN:-}" "py -3" "python3" "python"; do
-  [ -n "$_cand" ] || continue
-  # Intentional word-split so the two-word `py -3` becomes two argv elements.
-  read -r -a _argv <<< "$_cand"
-  [ "${#_argv[@]}" -gt 0 ] || continue
-  if "${_argv[@]}" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >/dev/null 2>&1; then
-    FLOW_PY=("${_argv[@]}")
-    break
-  elif [ "$?" -eq 3 ]; then
-    FLOW_PY_TOO_OLD+=("$_cand")
-  fi
-done
-
-if [ "${#FLOW_PY[@]}" -eq 0 ]; then
-  if [ "${#FLOW_PY_TOO_OLD[@]}" -gt 0 ]; then
-    echo "flowctl: Python 3.11 or newer is required; working but too-old candidate(s): ${FLOW_PY_TOO_OLD[*]}." >&2
-    echo "  Install a supported Python, or set PYTHON_BIN to its command name." >&2
-  else
-    echo "flowctl: no working Python interpreter found (tried \$PYTHON_BIN, py -3, python3, python)." >&2
-    echo "  On Windows, 'python3' may be the disabled Microsoft Store alias stub;" >&2
-    echo "  install python.org Python (or the py launcher), or set PYTHON_BIN to a working interpreter." >&2
-  fi
-  exit 1
-fi
-
-FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl.py"
-if [ "$#" -eq 1 ] && { [ "$1" = "usage" ] || [ "$1" = "--help" ]; } \
-  && [ -f "$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py" ]; then
-  FLOWCTL_ENTRY="$FLOWCTL_SOURCE_DIR/flowctl_bootstrap.py"
-fi
-exec "${FLOW_PY[@]}" "$FLOWCTL_ENTRY" "$@"
-'''
-
-LAUNCHER_CMD = '''@ECHO OFF
-REM flowctl.cmd -- Windows batch launcher for cmd.exe / PowerShell (Claude
-REM Desktop, native Codex, native Cursor). Invokes the source-first bootstrap
-REM beside flowctl.py via a probed Python 3.11+ interpreter. Companion to the extensionless
-REM bash `flowctl` launcher (Git Bash / WSL / macOS / Linux); PATHEXT resolves
-REM `flowctl` to this file in cmd/PowerShell.
-REM
-REM Probe = functionality + minimum version: each candidate must actually run
-REM and report Python 3.11+, so the Microsoft Store `python3` App Execution
-REM Alias stub and working-but-too-old interpreters are skipped. Candidate order:
-REM   %PYTHON_BIN% (command name only) -> py -3 -> python3 -> python
-REM Keep this probe in sync with plugins/flow-next/scripts/lib/pick-python.sh.
-GOTO :start
-
-:find_dp0
-SET "dp0=%~dp0"
-EXIT /b
-
-:start
-SETLOCAL
-CALL :find_dp0
-
-SET "_prog="
-SET "_old="
-
-REM %PYTHON_BIN% is honored as a COMMAND NAME ONLY (e.g. python3.12, py) -- no
-REM quoted paths-with-spaces / embedded args, which keeps batch quoting trivial.
-REM CALL is required because a candidate may itself be a .cmd shim; without it,
-REM control transfers out of this launcher instead of resuming the probe ladder.
-IF DEFINED PYTHON_BIN (
-  CALL "%PYTHON_BIN%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
-  IF NOT ERRORLEVEL 1 SET "_prog=%PYTHON_BIN%"
-  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=%PYTHON_BIN%"
-)
-IF NOT DEFINED _prog (
-  CALL py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
-  IF NOT ERRORLEVEL 1 SET "_prog=py -3"
-  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=py -3"
-)
-IF NOT DEFINED _prog (
-  CALL python3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
-  IF NOT ERRORLEVEL 1 SET "_prog=python3"
-  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python3"
-)
-IF NOT DEFINED _prog (
-  CALL python -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 3)" >NUL 2>&1
-  IF NOT ERRORLEVEL 1 SET "_prog=python"
-  IF NOT DEFINED _prog IF ERRORLEVEL 3 IF NOT ERRORLEVEL 4 SET "_old=python"
-)
-
-IF NOT DEFINED _prog (
-  IF DEFINED _old (
-    ECHO flowctl: Python 3.11 or newer is required; working but too-old candidate: %_old%. 1>&2
-    ECHO   Install a supported Python, or set PYTHON_BIN to its command name. 1>&2
-  ) ELSE (
-    ECHO flowctl: no working Python interpreter found ^(tried PYTHON_BIN, py -3, python3, python^). 1>&2
-    ECHO   On Windows, 'python3' may be the disabled Microsoft Store alias stub; 1>&2
-    ECHO   install python.org Python ^(or the py launcher^), or set PYTHON_BIN to a working interpreter. 1>&2
-  )
-  EXIT /b 1
-)
-
-REM %_prog% is intentionally UNQUOTED so a two-word `py -3` expands to two argv
-REM words; this is why %PYTHON_BIN% must be a command name only. Args (%*) and
-REM the dp0 path are quoted so spaced/paren'd install paths survive.
-SET "_entry=%dp0%flowctl.py"
-IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="usage" SET "_entry=%dp0%flowctl_bootstrap.py"
-IF EXIST "%dp0%flowctl_bootstrap.py" IF "%~2"=="" IF "%~1"=="--help" SET "_entry=%dp0%flowctl_bootstrap.py"
-%_prog% "%_entry%" %*
-EXIT /b %errorlevel%
-'''
-
-
-def _stamp_flow_bin_launchers(flow_dir: Path) -> list:
-    """Re-stamp .flow/bin/flowctl (+ .cmd) from the in-module launcher constants
-    so existing installs self-heal a pre-fix (bare `exec python3`) launcher on
-    the next `init`. Idempotent: writes each file only when absent or when its
-    bytes differ (.flow/bin is tracked — avoid churn). Returns an action string
-    per real change only; a no-op run returns [].
-
-    fn-77 impl-review: guarded on the sibling target — only stamps when
-    .flow/bin/flowctl.py already exists. The self-heal use case is an existing
-    install that has flowctl.py but a stale/broken launcher; a bare/fresh `init`
-    (or a /flow-next:setup that aborts before copying flowctl.py) must NOT leave
-    launchers whose target is missing — that full install is setup's job."""
-    actions = []
-    bin_dir = flow_dir / "bin"
-    # No target to launch → don't stamp orphan launchers. (If flowctl.py is
-    # present, bin_dir necessarily exists, so no mkdir is needed here.)
-    if not (bin_dir / "flowctl.py").exists():
-        return actions
-
-    sh_bytes = LAUNCHER_SH.encode("utf-8")
-    # .cmd is a Windows batch file: store LF in-module, write CRLF to disk.
-    cmd_bytes = LAUNCHER_CMD.encode("utf-8").replace(b"\n", b"\r\n")
-
-    sh_path = bin_dir / "flowctl"
-    if not sh_path.exists() or sh_path.read_bytes() != sh_bytes:
-        sh_path.write_bytes(sh_bytes)
-        actions.append("stamped bin/flowctl")
-    # Preserve the exec bit best-effort; harmless no-op on NTFS / when already +x.
-    try:
-        sh_path.chmod(sh_path.stat().st_mode | 0o111)
-    except OSError:
-        pass
-
-    cmd_path = bin_dir / "flowctl.cmd"
-    if not cmd_path.exists() or cmd_path.read_bytes() != cmd_bytes:
-        cmd_path.write_bytes(cmd_bytes)
-        actions.append("stamped bin/flowctl.cmd")
-
-    return actions
-
-
 def cmd_init(args: argparse.Namespace) -> None:
     """Initialize or upgrade .flow/ directory structure (idempotent)."""
     flow_dir = get_flow_dir()
@@ -19785,14 +19606,6 @@ def cmd_init(args: argparse.Namespace) -> None:
         if not dir_path.exists():
             dir_path.mkdir(parents=True)
             actions.append(f"created {subdir}/")
-
-    # fn-77.3: (re-)stamp .flow/bin launchers so existing installs self-heal a
-    # pre-fix `exec python3` launcher without a full /flow-next:setup re-run.
-    # Emitted from in-module constants (not cp — no plugin-root on disk here);
-    # idempotent (writes only on content diff), so no tracked-file churn.
-    # No-op unless .flow/bin/flowctl.py is already present (fn-77 impl-review):
-    # a bare/fresh init must not leave launchers pointing at a missing target.
-    actions.extend(_stamp_flow_bin_launchers(flow_dir))
 
     # fn-43: write .flow/.gitignore so users don't accidentally commit
     # historical migration transients (.backup-pre-1.0/, .banner-acknowledged, etc.)
@@ -20028,138 +19841,30 @@ def cmd_usage(args: argparse.Namespace) -> None:
             return
     error_exit(
         "No usage guide found (searched the plugin's templates/usage.md, then .flow/usage.md). "
-        "Reinstall/update the flow-next plugin, or run /flow-next:setup.",
+        "Reinstall or update the flow-next plugin.",
         use_json=False,
     )
 
 
-# fn-121: plugin-mode commit-point plumbing. The snippet schema version and
-# sentinel grammar are shared with the skills' pre-check blocks; bump the
-# version ONLY on a genuine snippet-contract change.
+# fn-121: snippet plumbing. The snippet schema version and sentinel grammar
+# are shared with the skills' pre-check blocks; bump the version ONLY on a
+# genuine snippet-contract change.
 SNIPPET_SCHEMA_VERSION = 1
 SNIPPET_SENTINEL_RE = re.compile(r"<!-- flow-next:snippet:v(\d+) -->")
-PLUGIN_MODE_COPY_ARTIFACTS = [
+# fn-197: the machine-readable manifest of legacy copy-mode artifacts — the
+# single source of truth for /flow-next:setup's and /flow-next:plan's residue
+# probes. Copy-less installs write none of these; a repo that still carries
+# them is mid-migration and can delete them.
+LEGACY_COPY_ARTIFACTS = [
     ".flow/bin/flowctl",
     ".flow/bin/flowctl.cmd",
     ".flow/bin/flowctl.py",
     ".flow/bin/flowctl_bootstrap.py",
     ".flow/bin/flowctl-help.txt",
+    ".flow/bin/flowctl_tracker/",
     ".flow/templates/spec.md",
     ".flow/usage.md",
 ]
-
-
-def cmd_setup_mode_set(args: argparse.Namespace) -> None:
-    """Stamp setup_mode in .flow/meta.json (fn-121 R4/R13/R16).
-
-    The only write path for the setup_mode field. plugin mode enforces the
-    commit-point invariants (CLAUDE.md rail + no copy artifacts); copy mode
-    stamps unconditionally.
-    """
-    mode = args.mode
-    repo_root = get_repo_root()
-    flow_dir = get_flow_dir()
-    meta_path = flow_dir / META_FILE
-    if not flow_dir.is_dir() or not meta_path.is_file():
-        error_exit(
-            ".flow/ not initialized. Run flowctl init first.",
-            use_json=args.json,
-        )
-
-    if mode == "copy":
-        meta = load_json(meta_path)
-        meta["setup_mode"] = "copy"
-        atomic_write_json(meta_path, meta)
-        message = "setup_mode set to copy"
-        if args.json:
-            json_output({"success": True, "mode": "copy", "message": message})
-        else:
-            print("setup-mode: %s" % message)
-        return
-
-    # mode == "plugin" — collect all failures, then refuse or stamp.
-    failures = []  # type: list
-
-    claude_path = repo_root / "CLAUDE.md"
-    if not claude_path.is_file():
-        failures.append("CLAUDE.md missing")
-    else:
-        try:
-            with open(claude_path, encoding="utf-8") as f:
-                claude_text = f.read()
-        except Exception:
-            claude_text = ""
-        lines = claude_text.splitlines()
-        begin_idx = next(
-            (
-                i
-                for i, line in enumerate(lines)
-                if line.strip() == "<!-- BEGIN FLOW-NEXT -->"
-            ),
-            None,
-        )
-        end_idx = None
-        if begin_idx is not None:
-            end_idx = next(
-                (
-                    i
-                    for i in range(begin_idx + 1, len(lines))
-                    if lines[i].strip() == "<!-- END FLOW-NEXT -->"
-                ),
-                None,
-            )
-        if begin_idx is None or end_idx is None:
-            failures.append("CLAUDE.md has no FLOW-NEXT block")
-        else:
-            found_ver = None  # type: Optional[int]
-            for line in lines[begin_idx + 1 : end_idx]:
-                m = SNIPPET_SENTINEL_RE.search(line.strip())
-                if m:
-                    found_ver = int(m.group(1))
-                    break
-            if found_ver is None:
-                failures.append("FLOW-NEXT block has no snippet sentinel")
-            elif found_ver != SNIPPET_SCHEMA_VERSION:
-                failures.append(
-                    "snippet sentinel v%d != expected v%d"
-                    % (found_ver, SNIPPET_SCHEMA_VERSION)
-                )
-
-    for relpath in PLUGIN_MODE_COPY_ARTIFACTS:
-        if (repo_root / relpath).exists():
-            failures.append("copy artifact present: %s" % relpath)
-
-    if failures:
-        if args.json:
-            json_output(
-                {"success": False, "mode": "plugin", "failures": failures}
-            )
-        else:
-            for fail in failures:
-                print("setup-mode: %s" % fail, file=sys.stderr)
-            print(
-                "setup-mode: fix the failures above, then re-run: "
-                "flowctl setup-mode set plugin",
-                file=sys.stderr,
-            )
-        sys.exit(1)
-
-    meta = load_json(meta_path)
-    meta["setup_mode"] = "plugin"
-    atomic_write_json(meta_path, meta)
-    sentinel = "v%d" % SNIPPET_SCHEMA_VERSION
-    message = "setup_mode set to plugin"
-    if args.json:
-        json_output(
-            {
-                "success": True,
-                "mode": "plugin",
-                "sentinel": sentinel,
-                "message": message,
-            }
-        )
-    else:
-        print("setup-mode: %s (%s)" % (message, sentinel))
 
 
 def cmd_detect(args: argparse.Namespace) -> None:
@@ -32024,12 +31729,9 @@ def _export_changed_symbols(
 # the optional `makePr.derivedPaths` config leaf (never required); a configured
 # value fully replaces this default.
 _EXPORT_DEFAULT_DERIVED_PATHS: dict[str, list[dict[str, str]]] = {
-    "dualCopy": [
-        {
-            "path": ".flow/bin/flowctl.py",
-            "source": "plugins/flow-next/scripts/flowctl.py",
-        },
-    ],
+    # No default dualCopy rule (fn-197: copy-less installs have no dual-copied
+    # flowctl). The "dual-copy" kind stays supported for projects that
+    # configure `makePr.derivedPaths` with their own pairs.
     "mirror": [
         {
             "prefix": "plugins/flow-next/codex/",
@@ -39419,7 +39121,7 @@ def cmd_tracker_resolve(args: argparse.Namespace) -> None:
         except ImportError:
             error_exit(
                 "flowctl_tracker package is not installed alongside flowctl.py; "
-                "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+                "update/reinstall the flow-next plugin to get the tracker verbs",
                 use_json=getattr(args, "json", False))
     payload, code = resolve_verb.run(
         get_flow_dir(),
@@ -39452,7 +39154,7 @@ def cmd_tracker_wire(args: argparse.Namespace) -> None:
         except ImportError:
             error_exit(
                 "flowctl_tracker package is not installed alongside flowctl.py; "
-                "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+                "update/reinstall the flow-next plugin to get the tracker verbs",
                 use_json=getattr(args, "json", False))
     payload, code = tracker_wire.run(
         get_flow_dir(),
@@ -39505,7 +39207,7 @@ def cmd_tracker_lifecycle(args: argparse.Namespace) -> None:
     if tracker_lifecycle is None:
         error_exit(
             "flowctl_tracker package is not installed alongside flowctl.py; "
-            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            "update/reinstall the flow-next plugin to get the tracker verbs",
             use_json=getattr(args, "json", False))
     payload, code = tracker_lifecycle.run(
         get_flow_dir(),
@@ -39553,7 +39255,7 @@ def cmd_tracker_status(args: argparse.Namespace) -> None:
     if tracker_status is None:
         error_exit(
             "flowctl_tracker package is not installed alongside flowctl.py; "
-            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            "update/reinstall the flow-next plugin to get the tracker verbs",
             use_json=getattr(args, "json", False))
     payload, code = tracker_status.run(
         get_flow_dir(),
@@ -39595,7 +39297,7 @@ def cmd_tracker_relate(args: argparse.Namespace) -> None:
     if tracker_relate is None:
         error_exit(
             "flowctl_tracker package is not installed alongside flowctl.py; "
-            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            "update/reinstall the flow-next plugin to get the tracker verbs",
             use_json=getattr(args, "json", False))
     payload, code = tracker_relate.run(
         get_flow_dir(),
@@ -39636,7 +39338,7 @@ def cmd_tracker_syncbody(args: argparse.Namespace) -> None:
     if tracker_syncbody is None:
         error_exit(
             "flowctl_tracker package is not installed alongside flowctl.py; "
-            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            "update/reinstall the flow-next plugin to get the tracker verbs",
             use_json=getattr(args, "json", False))
     payload, code = tracker_syncbody.run(
         get_flow_dir(),
@@ -39679,7 +39381,7 @@ def cmd_tracker_facade(args: argparse.Namespace) -> None:
     if tracker_facade is None:
         error_exit(
             "flowctl_tracker package is not installed alongside flowctl.py; "
-            "re-run /flow-next:setup (or reinstall) to get the tracker verbs",
+            "update/reinstall the flow-next plugin to get the tracker verbs",
             use_json=getattr(args, "json", False))
     payload, code = tracker_facade.run(
         get_flow_dir(),
@@ -50667,26 +50369,6 @@ def main() -> None:
         "--json", action="store_true", help="JSON output (with --stages only)"
     )
     p_usage.set_defaults(func=cmd_usage)
-
-    # setup-mode (fn-121): sole write path for meta.json setup_mode stamp.
-    p_setup_mode = subparsers.add_parser(
-        "setup-mode", help="Stamp setup_mode in .flow/meta.json"
-    )
-    setup_mode_sub = p_setup_mode.add_subparsers(
-        dest="setup_mode_cmd", required=True
-    )
-    p_setup_mode_set = setup_mode_sub.add_parser(
-        "set", help="Set setup_mode to plugin or copy"
-    )
-    p_setup_mode_set.add_argument(
-        "mode",
-        choices=["plugin", "copy"],
-        help="Setup mode to stamp",
-    )
-    p_setup_mode_set.add_argument(
-        "--json", action="store_true", help="JSON output"
-    )
-    p_setup_mode_set.set_defaults(func=cmd_setup_mode_set)
 
     p_ready = subparsers.add_parser("ready", help="List ready tasks")
     p_ready.add_argument(

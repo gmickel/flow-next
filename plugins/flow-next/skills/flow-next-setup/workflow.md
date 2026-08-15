@@ -114,7 +114,7 @@ Old `setup_mode` / `setup_version` stamps from pre-copy-less installs are inert 
 
 **Setup never copies flowctl, the spec template, or the usage guide into a repo.** Every host resolves `flowctl` from the plugin install (Claude Code / Droid via their plugin-root env vars, Cursor and Grok by deriving the plugin root from the skill file's own absolute path, Codex from `$CODEX_HOME`). Repos set up before that carry leftover snapshots; this step offers to delete them.
 
-Enumerate the residue. The machine-readable list is flowctl's `PLUGIN_MODE_COPY_ARTIFACTS` — the single source of truth; keep this probe in step with it:
+Enumerate the residue. The machine-readable list is flowctl's `LEGACY_COPY_ARTIFACTS` — the single source of truth; keep this probe in step with it:
 
 ```bash
 LEFTOVERS=""
@@ -140,7 +140,7 @@ done   # || true: the loop's exit is the LAST iteration's test - an empty
 
 ### Done when
 
-- The residue probe ran on this pass, and its paths match flowctl's `PLUGIN_MODE_COPY_ARTIFACTS` list.
+- The residue probe ran on this pass, and its paths match flowctl's `LEGACY_COPY_ARTIFACTS` list.
 - Nothing under `.flow/bin/`, `.flow/templates/`, or `.flow/usage.md` was written by this run, and nothing was deleted without an explicit `Delete them` answer.
 
 ## Step 4: Seed user-owned files

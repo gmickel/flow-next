@@ -465,15 +465,13 @@ jobs:
           python -m py_compile \
             plugins/flow-next/scripts/flowctl.py \
             plugins/flow-next/scripts/flowctl_bootstrap.py
-      - name: Runtime, launcher, usage, and setup-mode contracts
+      - name: Runtime, launcher, and usage contracts
         run: |
           cd plugins/flow-next/tests
           python -m unittest \
             test_startup_bootstrap \
-            test_init_stamp_launchers \
             test_bin_launcher_parity \
             test_cmd_usage \
-            test_setup_mode_stamp \
             test_precheck_mode_contract \
             -q
 

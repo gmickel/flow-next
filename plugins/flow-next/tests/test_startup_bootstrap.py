@@ -218,15 +218,6 @@ class StartupBootstrapTest(unittest.TestCase):
             )
             self.assertEqual(help_result.returncode, 0, help_result.stderr)
             self.assertTrue(help_result.stdout.startswith("usage: flowctl.py"))
-            (bindir.parent / "meta.json").write_text("{}\n", encoding="utf-8")
-            setup_mode = subprocess.run(
-                [str(launcher), "setup-mode", "set", "copy", "--json"],
-                cwd=root / "repo",
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(setup_mode.returncode, 0, setup_mode.stderr)
-            self.assertIn('"mode": "copy"', setup_mode.stdout)
 
     def test_bootstrap_preserves_help_scope_rewrite_and_error_contracts(self) -> None:
         source = ROOT / "scripts" / "flowctl.py"

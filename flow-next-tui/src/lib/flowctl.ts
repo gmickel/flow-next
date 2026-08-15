@@ -1,3 +1,5 @@
+import { readdir, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { dirname } from 'node:path';
 
 import type {
@@ -158,13 +160,68 @@ export class FlowctlNotFoundError extends Error {
 }
 
 /**
+ * Newest-first `<root>/<entry>/scripts/flowctl` candidates under a versioned
+ * plugin cache directory (Claude keys the entries by version, Cursor by commit
+ * sha — mtime ordering covers both). Missing dir → no candidates.
+ */
+async function versionedCacheCandidates(root: string): Promise<string[]> {
+  let entries: string[];
+  try {
+    entries = await readdir(root);
+  } catch {
+    return [];
+  }
+  const stamped: { mtime: number; path: string }[] = [];
+  for (const entry of entries) {
+    const dir = `${root}/${entry}`;
+    try {
+      const info = await stat(dir);
+      if (info.isDirectory()) {
+        stamped.push({ mtime: info.mtimeMs, path: `${dir}/scripts/flowctl` });
+      }
+    } catch {
+      // unreadable entry — skip
+    }
+  }
+  return stamped
+    .toSorted((a, b) => b.mtime - a.mtime)
+    .slice(0, MAX_CACHE_CANDIDATES)
+    .map((item) => item.path);
+}
+
+/** How many versioned-cache entries to probe (newest first). */
+const MAX_CACHE_CANDIDATES = 3;
+
+/**
+ * flowctl paths inside a host's plugin install tree (fn-197). A copy-less repo
+ * has no `.flow/bin`, no `plugins/` checkout, and usually no PATH flowctl, so
+ * the TUI resolves the same install the agent hosts resolve.
+ */
+async function installLocationCandidates(): Promise<string[]> {
+  const home = homedir();
+  return [
+    `${home}/.claude/plugins/marketplaces/flow-next/plugins/flow-next/scripts/flowctl`,
+    ...(await versionedCacheCandidates(
+      `${home}/.claude/plugins/cache/flow-next/flow-next`
+    )),
+    `${home}/.codex/scripts/flowctl`,
+    `${home}/.cursor/plugins/local/flow-next/scripts/flowctl`,
+    ...(await versionedCacheCandidates(
+      `${home}/.cursor/plugins/cache/flow-next/flow-next`
+    )),
+  ];
+}
+
+/**
  * Find flowctl path
  * Search order:
- * 1. .flow/bin/flowctl (installed via /flow-next:setup)
+ * 1. .flow/bin/flowctl (legacy copy install)
  * 2. ./plugins/flow-next/scripts/flowctl (repo-local plugin checkout)
- * 3. Search up to repo root for plugins/flow-next/scripts/flowctl
+ * 3. Search up to repo root for .flow/bin/flowctl, then plugins/flow-next/scripts/flowctl
  * 4. flowctl or flowctl.py on PATH (via Bun.which)
- * 5. Error with helpful message
+ * 5. Host plugin installs: Claude marketplace clone + versioned cache,
+ *    `~/.codex/scripts`, Cursor local plugin + versioned cache
+ * 6. Error with helpful message
  *
  * @param startDir Optional starting directory (defaults to process.cwd(), for testing)
  */
@@ -234,7 +291,17 @@ export async function getFlowctlPath(startDir?: string): Promise<string> {
     }
   }
 
-  // 5. Error with context
+  // 5. Host plugin installs (copy-less repos have nothing local to find)
+  for (const installPath of await installLocationCandidates()) {
+    searchedPaths.push(installPath);
+    result = await tryFlowctl(installPath);
+    if (result) {
+      cache = result;
+      return result.path;
+    }
+  }
+
+  // 6. Error with context
   throw new FlowctlNotFoundError(cwd, searchedPaths);
 }
 

@@ -120,20 +120,9 @@ Print the bundled usage guide (CLI cheatsheet + `## Orchestration & model steeri
 flowctl usage
 ```
 
-Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is how plugin-mode repos read the guide), then the repo-local `.flow/usage.md` (copy-mode installs, where flowctl runs from `.flow/bin/` with no plugin tree around it). Exits 1 with a pointer to `/flow-next:setup` when neither exists.
+Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is how plugin-mode repos read the guide), then the repo-local `.flow/usage.md` (copy-mode installs, where flowctl runs from `.flow/bin/` with no plugin tree around it). Exits 1 with a pointer to reinstalling/updating the plugin when neither exists.
 
 The Unix and Windows launchers route this exact command through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Exact root `--help` similarly reads tracked `flowctl-help.txt`, with parity tests pinning it to argparse output. The bytecode-cache proof was rejected: a runtime-written ignored pyc can validate a source hash without proving its executable payload came from that source. Every non-static command therefore compiles tracked `flowctl.py` in memory, preserves it as the logical `__file__`, and never reads or writes executable cache state.
-
-### setup-mode
-
-Stamp the setup mode in `.flow/meta.json` — the ONLY write path for the `setup_mode` field (fn-121).
-
-```bash
-flowctl setup-mode set plugin [--json]
-flowctl setup-mode set copy [--json]
-```
-
-`copy` stamps unconditionally. `plugin` enforces the commit-point invariants in plumbing and refuses (exit 1, itemized failures) unless BOTH hold: CLAUDE.md contains the `<!-- BEGIN FLOW-NEXT -->` block with a current `<!-- flow-next:snippet:vN -->` sentinel, AND no copy artifacts remain (`.flow/bin/flowctl*`, `.flow/templates/spec.md`, `.flow/usage.md`). Driven by `/flow-next:setup` Step 7c; not normally run by hand. See [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121).
 
 ### detect
 

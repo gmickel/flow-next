@@ -283,20 +283,6 @@ ui_config() {
   ui ""
 }
 
-ui_version_check() {
-  local meta_file="$ROOT_DIR/.flow/meta.json"
-  local plugin_file="$SCRIPT_DIR/../.claude-plugin/plugin.json"
-  [[ -f "$meta_file" ]] || return 0
-  [[ -f "$plugin_file" ]] || return 0
-  local setup_ver plugin_ver
-  setup_ver="$(jq -r '.setup_version // empty' "$meta_file" 2>/dev/null)" || return 0
-  plugin_ver="$(jq -r '.version // empty' "$plugin_file" 2>/dev/null)" || return 0
-  [[ -z "$setup_ver" ]] && return 0
-  [[ "$setup_ver" == "$plugin_ver" ]] && return 0
-  ui "${C_YELLOW}   ⚠ Plugin updated to v${plugin_ver}. Run /flow-next:setup to refresh local scripts (current: v${setup_ver}).${C_RESET}"
-  ui ""
-}
-
 ui_iteration() {
   local iter="$1" status="$2" spec="${3:-}" task="${4:-}" title="" item_json=""
   local elapsed
@@ -996,7 +982,6 @@ EPICS_FILE="$SPECS_FILE"  # legacy alias kept through 1.x
 
 ui_header
 ui_config
-ui_version_check
 
 # Create run branch once at start (all specs work on same branch)
 ensure_run_branch

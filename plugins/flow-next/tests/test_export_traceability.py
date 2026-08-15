@@ -112,6 +112,13 @@ class TestChangedSymbols(unittest.TestCase):
 # --------------------------------------------------------------------------
 # R2 — derived classification
 # --------------------------------------------------------------------------
+# A project-configured `makePr.derivedPaths` value (fn-197: the dual-copy kind
+# is supported for projects that declare their own pairs; no default ships).
+CONFIGURED_DUAL_COPY_RULES = {
+    "dualCopy": [{"path": "dist/tool.py", "source": "src/tool.py"}],
+}
+
+
 class TestDerivedClassification(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -126,31 +133,37 @@ class TestDerivedClassification(unittest.TestCase):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(content)
 
+    # fn-197: no default dualCopy rule ships anymore (copy-less installs have
+    # nothing dual-copied). The KIND stays supported for projects that
+    # configure their own pairs via `makePr.derivedPaths`.
+    def test_default_rules_ship_no_dual_copy_pair(self) -> None:
+        self.assertEqual(flowctl._EXPORT_DEFAULT_DERIVED_PATHS.get("dualCopy"), None)
+
     def test_dual_copy_identical_is_derived(self) -> None:
         body = b"print('hi')\n"
-        self._write("plugins/flow-next/scripts/flowctl.py", body)
-        self._write(".flow/bin/flowctl.py", body)
+        self._write("src/tool.py", body)
+        self._write("dist/tool.py", body)
         got = flowctl._export_classify_derived(
-            ".flow/bin/flowctl.py", self.rules, self.root
+            "dist/tool.py", CONFIGURED_DUAL_COPY_RULES, self.root
         )
         self.assertEqual(
             got,
-            {"kind": "dual-copy", "source": "plugins/flow-next/scripts/flowctl.py"},
+            {"kind": "dual-copy", "source": "src/tool.py"},
         )
 
     def test_dual_copy_drifted_is_not_derived(self) -> None:
-        self._write("plugins/flow-next/scripts/flowctl.py", b"print('a')\n")
-        self._write(".flow/bin/flowctl.py", b"print('DRIFTED')\n")
+        self._write("src/tool.py", b"print('a')\n")
+        self._write("dist/tool.py", b"print('DRIFTED')\n")
         got = flowctl._export_classify_derived(
-            ".flow/bin/flowctl.py", self.rules, self.root
+            "dist/tool.py", CONFIGURED_DUAL_COPY_RULES, self.root
         )
         # Drift is a REAL review item, not safe-to-skim.
         self.assertEqual(got, {"kind": "none", "source": None})
 
     def test_dual_copy_missing_source_is_not_derived(self) -> None:
-        self._write(".flow/bin/flowctl.py", b"print('a')\n")
+        self._write("dist/tool.py", b"print('a')\n")
         got = flowctl._export_classify_derived(
-            ".flow/bin/flowctl.py", self.rules, self.root
+            "dist/tool.py", CONFIGURED_DUAL_COPY_RULES, self.root
         )
         self.assertEqual(got, {"kind": "none", "source": None})
 

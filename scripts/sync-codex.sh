@@ -254,10 +254,7 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # destinations (ralph-init templates, worktree-kit scripts) are rewritten
   # first and therefore win. $HOME (not ~) so the path expands inside quotes.
 
-  # The Codex installer flattens `.codex-plugin/plugin.json` to
-  # `${CODEX_HOME:-$HOME/.codex}/plugin.json`; mirror prose must target that installed path.
   sed -i.bak \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/\.claude-plugin/plugin\.json|${CODEX_HOME:-$HOME/.codex}/plugin.json|g' \
     -e 's|AGENTS_SRC="$HOME/.codex/agents"|AGENTS_SRC="${CODEX_HOME:-$HOME/.codex}/agents"|g' \
     -e 's|or ~/.codex/agents/|or ${CODEX_HOME:-$HOME/.codex}/agents/|g' \
     -e 's|\.factory-plugin/plugin\.json|.claude-plugin/plugin.json|g' \

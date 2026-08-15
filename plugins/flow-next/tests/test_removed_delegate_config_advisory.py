@@ -5,7 +5,7 @@ keys) and so is the model-pin role map with its staleness stamp (the
 `models.*` block). A repo whose `.flow/config.json` still carries them keeps
 working - flowctl ignores the keys - and gets ONE advisory line per
 invocation naming them and pointing at the agentic route (the
-/flow-next:setup model-routing block plus the .flow/usage.md recipes).
+/flow-next:setup model-routing block plus the `flowctl usage` recipes).
 
 Pinned here: presence detection is raw-file-only, the advisory is one line
 per invocation (never one per key), it goes to stderr so `--json` stays
@@ -114,7 +114,8 @@ class RemovedDelegateAdvisoryTestCase(unittest.TestCase):
         self.assertIn("work.delegate", note)
         self.assertIn("models.roles", note)
         # Actionable: names the replacement route, not just the removal.
-        self.assertIn("usage.md", note)
+        # fn-197: the guide is read via `flowctl usage`, not a repo copy.
+        self.assertIn("flowctl usage", note)
         self.assertIn("AGENTS.md", note)
 
     def test_config_get_emits_one_stderr_line_and_still_answers(self) -> None:
