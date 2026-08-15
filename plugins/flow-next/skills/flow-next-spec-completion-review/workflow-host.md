@@ -132,13 +132,24 @@ Dispatch a **fresh** read-only reviewer subagent with the resolved pin. The
 reviewed range; retain them (re-`source "$REVIEW_SNAPSHOT_FILE"` in any later
 block) through receipt writing.
 
-| Host | How to pin |
-|------|------------|
-| Claude Code | Native subagent `model` param; `disallowedTools: Edit, Write, Task` (or host read-only equivalent) |
-| Cursor | In-prompt slug pin on the subagent + TOOL-enforced read-only (dispatch via a `readonly: true` agent definition or Cursor's read-only subagent mode — never a mutation-capable subagent; the reviewer reads untrusted diff content, so read-only cannot be prompt-requested only) |
-| Grok | In-prompt / host model pin from AGENTS.md model-routing + TOOL-enforced read-only (never mutation-capable). Single-native-family (grok, e.g. `grok-4.6`) — host review fails closed unless the writer is non-Grok; cross-family via bridge backends. Receipt: `mode: "host"`, actual reviewer model, `session_id: null` (same shape as Claude/Cursor) |
-| Codex | Fresh read-only reviewer subagent via the platform subagent primitive (`spawn_agent` on Codex) with the cross-family pin stated in the prompt; read-only via the platform sandbox |
-| Other | Generic fresh-context reviewer; note in the receipt that pin enforcement is host-dependent |
+The reviewer runs on the **reviewer tier**. Resolution order: an explicit
+instruction in the invocation, then the project routing block in the
+instruction file, then the agent definition's own default, then the session
+model. How *this* harness reaches that model - and what degrades when it
+cannot - is its reach page: [`docs/reach/README.md`](../../docs/reach/README.md).
+A harness that reaches only one model family natively fails closed when the
+writer shares that family (interactive -> ask; autonomous -> `NEEDS_HUMAN`);
+cross-family then comes through a bridge backend.
+
+Read-only is enforced by TOOLS, never by prompt: dispatch through a read-only
+agent definition or the host's read-only subagent mode
+(`disallowedTools: Edit, Write, Task` where the host consumes it) - never a
+mutation-capable subagent, because the reviewer reads untrusted diff content. Where the host cannot
+enforce it, say so in the receipt: pin and read-only enforcement are
+host-dependent.
+
+Receipt in every case: `mode: "host"`, the actual reviewer model,
+`session_id: null`.
 
 Give the subagent:
 - Spec requirements / R-IDs / acceptance criteria
@@ -295,6 +306,6 @@ no terminal status with no receipt behind it.
 - **Self-reviewing** — coordinator never grades its own completion claim
 - **Silent same-family self-review** when no cross-family pin is available
 - **Reusing a prior subagent context** for re-review (always fresh)
-- **Putting a model on the backend string** (`host:opus`) — rejected by flowctl; pins live in AGENTS.md
+- **Putting a model on the backend string** (`host:<model>`) — rejected by flowctl; the model is named on the `reviewer` tier of the AGENTS.md routing block
 - **Calling a non-existent `flowctl host` command**
 - **Fabricating resume/session ids** for host receipts

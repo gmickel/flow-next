@@ -115,22 +115,40 @@ Clearing a strike **does not re-ready the spec** - the two signals are orthogona
 - The default is 8, resolved as env `MAX_REVIEW_ITERATIONS` > config `review.maxIterations` > 8. Tune it with `flowctl config set review.maxIterations <n>` for a persistent change; the cap remains enabled (minimum 1) and escalation remains preferable to a larger budget. Under Ralph both rungs are human-only.
 - Full semantics: [`flowctl.md` § Deterministic review cap](flowctl.md#codex-impl-review) and [`ralph.md` § Review Loops Until SHIP](ralph.md#3-review-loops-until-ship).
 
+## flowctl says my config carries removed keys, or my routing block is ignored (fn-195)
+
+**Symptom:** one non-blocking line like
+
+```
+note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block /flow-next:setup writes into CLAUDE.md / AGENTS.md plus the recipes in .flow/usage.md - route work there and delete these keys.
+```
+
+**This is expected, not an error.** The role map (`models.roles`) and its staleness stamps (`models.verifiedAt` / `models.verifiedWith`), like the `work.delegate*` keys, are removed - flowctl reads none of them. The advisory prints at most once per invocation, on the config and work entry points only, and never blocks. Delete the keys when convenient.
+
+**Routing not taking effect?** Routing is prose read by the agent, not config parsed by flowctl, so check in this order:
+
+- **The block is in the file the host actually reads** (`CLAUDE.md` on Claude Code / Droid / Grok, `AGENTS.md` on Codex / Cursor / Grok - see [`platforms.md`](platforms.md)), and its lines are **uncommented**. `/flow-next:setup` writes every line commented out on purpose; nothing routes until you uncomment one.
+- **The grammar is `<tier>: <model>`** (optionally `at <effort>`), with a tier name from the four: `reviewer`, `implementer`, `fast scout`, `thinking scout`. An unrecognized name is treated as unset with one advisory; an unparseable line is ignored.
+- **Something higher in the precedence chain won.** Highest first: an explicit instruction in the invocation, then the routing block, then the agent definition's own default, then the session model. A model this harness cannot reach falls back to the session model, says so once, and continues - routing never fails closed.
+- **The harness may not have that reach at all.** Check its page under [`reach/`](reach/README.md): a host with no subagent primitive and no second CLI runs the work in session, and that is the documented degradation, not a fault.
+- **Check what actually ran.** Stage records carry the model where the harness exposes it - an absent value means unknown, never the configured value.
+
 ## Review reports a model downgrade / floor (fn-76 resolution ladder)
 
 **Symptom:** a review prints one stderr line like
 
 ```
-warning: codex model 'gpt-5.6-sol' unavailable; downgraded to 'gpt-5.5'. Cached temporarily for this CLI version and routing intent.
+warning: codex model '<ranking top>' unavailable; downgraded to '<next in ranking>'. Cached temporarily for this CLI version and routing intent.
 ```
 
-(or `… fell back to the never-fail floor (the CLI default / 'auto')`), and the review's receipt records `gpt-5.5` / `auto` / `default` rather than the ranking top.
+(or `… fell back to the never-fail floor (the CLI default / 'auto')`), and the review's receipt records the model actually used / `auto` / `default` rather than the ranking top.
 
 **This is expected, not an error.** flow-next dispatches the *strongest* model by default and, when the local CLI can't run it, transparently resolves the best available one (the [model-resolution ladder](flowctl.md#model-resolution-strongest-available-never-fail--fn-76)). It fires ONLY on the distinctive model-unavailable signature (codex *"requires a newer version of Codex"*, copilot *`… from --model flag is not available`*, cursor *`Cannot use this model: …`*); auth / network / sandbox / timeout failures propagate unchanged.
 
 **What to do:**
-- **Want the top model?** Upgrade the backend CLI (e.g. `codex` ≥ 0.144 for `gpt-5.6-sol`). The cache key is `(backend, CLI version, effective routing intent)`, so a CLI or routing change re-resolves automatically on the next review.
+- **Want the top model?** Upgrade the backend CLI — a ranking top can require a newer CLI than the one installed. The cache key is `(backend, CLI version, effective routing intent)`, so a CLI or routing change re-resolves automatically on the next review.
 - **The downgrade repeats every review?** It normally should not — the result is memoized in `.flow/.cache/model-resolution.json`. A changed routing role, CLI version, or the 24-hour stronger-model re-probe intentionally causes one fresh resolution. Otherwise, the cache file may be unwritable; check permissions.
-- **Force a specific model** (skip the ladder + cache entirely): pin it explicitly — `--spec codex:gpt-5.5`, a per-task/per-spec `review:` value, `FLOW_CODEX_MODEL`, or `review.backend`. An explicit unavailable model errors clearly instead of downgrading.
+- **Force a specific model** (skip the ladder + cache entirely): pin it explicitly — `--spec codex:<model>`, a per-task/per-spec `review:` value, `FLOW_CODEX_MODEL`, or `review.backend`. An explicit unavailable model errors clearly instead of downgrading.
 - **Reset the cache:** `rm -rf .flow/.cache/` — it is regenerated (and gitignored) on the next review; a corrupt file is already treated as a cold start.
 
 ## Worker reports a merge conflict at wave join (fn-176 wave dispatch)

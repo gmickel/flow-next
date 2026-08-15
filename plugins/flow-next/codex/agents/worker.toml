@@ -236,6 +236,8 @@ cost: a green receipt or docs-only classification resolves it in seconds, and
 when neither applies the full run is genuinely needed — the reviewer read the
 diff, it never executed the suite.)
 
+The review is the **reviewer** tier — a verdict from the writer's own family is not an independent one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.** How this harness reaches another family is its reach page's business, not yours.
+
 Invoke impl-review through the Skill tool, never `flowctl` directly. If you're in a fresh shell, re-read the base first (`BASE_COMMIT=$(cat .flow/tmp/base_commit)`) so `--base` is populated:
 
 ```

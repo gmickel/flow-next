@@ -4,13 +4,16 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
-Choosing which model writes your code is now something you say, not something
-you configure. The packaged codex-delegation subsystem is removed: routing
-implementation to a second CLI is a bridge recipe you run, or standing prose in
-your `CLAUDE.md` / `AGENTS.md` that every session - including unattended pilot,
-land, and Ralph ticks - already reads and applies with judgment. One routing
-surface instead of two, and the two things worth keeping from the packaged path
-survive as rules rather than machinery.
+Choosing which model does what is now something you say, not something you
+configure. Routing is a short block of your own words in your own
+`CLAUDE.md` / `AGENTS.md` - four named tiers, filled with model names you can
+verify against your own account - and every session, including unattended
+pilot, land, and Ralph ticks, already reads it and applies it with judgment.
+Gone with the machinery: the probe-and-pin ceremony setup used to run, the
+per-backend role map, and the packaged codex-delegation subsystem. Configure
+routing once, in your file, in your words - and stop paying for our model lists
+going stale. If you never routed anything, nothing changes: every tier falls
+back to the session model, exactly as flow-next has always run out of the box.
 
 ### BREAKING
 
@@ -34,6 +37,63 @@ survive as rules rather than machinery.
   implementer matches a strong-tier one at roughly two-thirds the wall clock -
   send clear tasks to the value tier, escalate the gnarly ones. Details:
   [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#implementation-offload--the-bridge-route).
+
+- **The model-pin ceremony and the role map are gone.** Setup no longer asks
+  which model should play which role, no longer probes a CLI for the ids it
+  serves, and no longer records what it found: the `models.roles` role map and
+  its `models.verifiedAt` / `models.verifiedWith` staleness stamps are removed,
+  along with the role-map validation that ran on write. Config that claimed
+  what was installed became config that lied - a model id is a property of your
+  machine and your account, not of a project.
+
+  **Migration (one step):** run `/flow-next:setup`, which writes a routing block
+  into `CLAUDE.md` / `AGENTS.md` with every line commented out, then fill in the
+  tiers you care about. Leftover `models.*` keys in `.flow/config.json` are
+  inert - flowctl names them once in a non-blocking advisory and keeps running.
+  Nothing fails closed on routing, ever: a model this harness cannot reach falls
+  back to the session model, says so once, and continues.
+
+### Added
+
+- **Four tier names, so you can state intent instead of wiring mechanism.**
+  `reviewer` (anything grading someone else's work - prefer a different family
+  than the writer), `implementer` (work handed to another harness), `fast scout`
+  (mechanical inventory scanning), `thinking scout` (analysis that degrades on a
+  fast tier), and unset - the default and the majority: planning, capture,
+  interview, every verdict, and the worker stay on the session model. A tier
+  says which model executes a stage, never which stages run. Defined in exactly
+  one place, [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants),
+  and carried in the repo glossary with the synonyms to avoid. Enable: nothing -
+  write `<tier>: <model>` (optionally `at <effort>`) in your instruction file.
+
+- **A reach page per harness, so "can I even do that here?" has an answer.**
+  [`docs/reach/`](plugins/flow-next/docs/reach/README.md) states, for each
+  supported harness, which mechanisms exist (in-session model, in-host subagent,
+  another CLI over a bridge), which do not, and what the degradation is when one
+  is missing - and tells you to ask the harness for its model list rather than
+  trust a stored answer. Skills ask for a tier and name no spawn primitive, CLI
+  flag, or vendor path; an undetectable harness resolves to the generic page and
+  says so.
+
+- **Routing is checkable after the fact.** Where the harness exposes it, a stage
+  records the model that actually ran, so a routing preference expressed in prose
+  leaves evidence instead of a hope. Unavailable provenance is recorded as
+  unknown - never as the configured value.
+
+### Changed
+
+- **Resolution is one sentence at every dispatch site**, not a resolver:
+  an explicit instruction in the moment, then your routing block, then the agent
+  definition's own default, then the session model. Agent `model:` fields keep
+  working as that third rung - the floor - so a repo with no routing block
+  behaves exactly as it always has.
+
+- **Shipped prose no longer names models.** The identifiers scattered through
+  the docs, skills, and templates (179 of them across 64 files, doubled by the
+  generated Codex mirror) are gone, with two deliberate exceptions: the single
+  orchestration reference page that explains what each tier is for, and the
+  `review.backend` configuration grammar, which is untouched by this release and
+  keeps its own precedence, receipts, and round counting.
 
 ## [flow-next 3.34.0] - 2026-08-14
 

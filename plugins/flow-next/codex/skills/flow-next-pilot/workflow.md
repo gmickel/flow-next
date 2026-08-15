@@ -452,11 +452,15 @@ Re-read state after dispatch. Judge advancement only on observed state, never su
 
 **Stage-outcome line (fn-178).** Every evidence echo additionally carries one
 outcome line for the stage this tick dispatched:
-`stage: <plan|plan-review|work|qa|make-pr> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>)`.
+`stage: <plan|plan-review|work|qa|make-pr> - ran [<start>..<end>] | skipped(<policy|config|empty|error>: <detail>) | failed(<reason>: <detail>) (model: <what actually ran>)`.
 A skipped stage is an event with a reason, never an absence — a stage with no
-line is treated by review as failed. Timestamps only where this tick knows
-them; token/cost telemetry is out of scope (host-side data flowctl cannot
-observe).
+line is treated by review as failed. Append `(model: <what actually ran>)` only
+when this tick knows what executed the stage (a named subagent model, a bridged
+CLI invoked with an explicit model, a review backend that reported one) — record
+what ran, never what the routing block preferred, and omit the annotation when the
+harness did not expose it rather than writing `auto` / `default` / `unknown`.
+Timestamps only where this tick knows them; token/cost telemetry is out of scope
+(host-side data flowctl cannot observe).
 
 For `plan`, advancement means tasks now exist:
 

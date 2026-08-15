@@ -34,11 +34,22 @@ class TestCursorHostUsageTemplate(unittest.TestCase):
         text = _read(USAGE_TEMPLATE)
         self.assertIn("Cursor host", text)
 
-        # Cursor model-pin slug example
-        self.assertTrue(
-            re.search(r"claude-opus-4-8-thinking-high|gpt-5\.6-sol-high", text),
-            "usage.md must mention a Cursor model-pin slug example",
+        # No shipped model identifier: the Cursor section names a placeholder and
+        # tells the reader to ask the harness (fn-195 R2 - identifiers are the
+        # user's, verified against their own account, never ours to enumerate).
+        # Same slug detector as test_model_routing_scaffold.MODEL_SLUG_RE - a
+        # two-literal denylist would go green the moment a NEW slug shipped.
+        from test_model_routing_scaffold import MODEL_SLUG_RE
+
+        cursor_section = text[text.index("Cursor host"):]
+        cursor_section = cursor_section.split("\n## ", 1)[0]
+        hit = MODEL_SLUG_RE.search(cursor_section)
+        self.assertIsNone(
+            hit,
+            f"usage.md Cursor section must not ship a concrete model identifier "
+            f"(fn-195 R2); found {hit.group(0) if hit else None!r}",
         )
+        self.assertIn("<model>", text)
 
         # list-models discovery
         self.assertTrue(

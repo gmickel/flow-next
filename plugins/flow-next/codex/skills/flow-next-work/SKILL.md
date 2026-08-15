@@ -100,7 +100,7 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 - `--branch=worktree` or `--worktree` or "isolated worktree" or "worktree" → isolated worktree
 
 **Review mode**:
-- `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI (GPT 5.5 High)
+- `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI
 - `--review=copilot` or "review with copilot" or "copilot review" → GitHub Copilot CLI
 - `--review=cursor` or "review with cursor" or "cursor review" → Cursor CLI (`cursor-agent`)
 - `--review=host` or "host review" or "host-native review" → host-native fresh-context reviewer subagent (cross-family pin from the AGENTS.md model-routing section)

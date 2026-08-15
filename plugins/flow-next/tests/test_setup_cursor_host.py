@@ -8,9 +8,9 @@ rewrite and is not the Cursor host path) for:
       ``codex/`` and must still classify as cursor).
   (b) Host-leads review menu on PLATFORM=cursor; Cursor CLI labeled
       circular/secondary; other backends remain selectable.
-  (c) Host-native model-routing scaffold rules — cheap scout pin, cross-family
-      host-review pin, inherit otherwise; date-stamp + re-run-to-refresh;
-      offered without requiring a bridge CLI.
+  (c) [removed in fn-195.2] the host-native pin scaffold — setup now proposes
+      one commented routing block; its contract lives in
+      test_model_routing_scaffold.py.
   (d) No Ralph offer/registration on Cursor.
 
 Run:
@@ -28,8 +28,6 @@ HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent
 WORKFLOW = PLUGIN / "skills" / "flow-next-setup" / "workflow.md"
 CURSOR_REFS = (
-    PLUGIN / "skills" / "flow-next-setup" / "references" / "model-routing-question-cursor.md",
-    PLUGIN / "skills" / "flow-next-setup" / "references" / "model-routing-cursor.md",
     PLUGIN / "skills" / "flow-next-setup" / "references" / "ralph-question.md",
 )
 
@@ -134,73 +132,6 @@ class TestHostLeadsReviewMenu(unittest.TestCase):
         host_case = self.text.index('"Host"*) REVIEW_BACKEND="host"')
         cursor_case = self.text.index('"Cursor"*|"cursor"*) REVIEW_BACKEND="cursor"')
         self.assertLess(host_case, cursor_case)
-
-
-class TestCursorRoutingScaffold(unittest.TestCase):
-    """R6: host-native routing rules + no bridge required on Cursor."""
-
-    def setUp(self) -> None:
-        self.text = _read()
-
-    def test_offered_without_bridge_on_cursor(self) -> None:
-        # Gate: ROUTING_ASK=1 AND (BRIDGE_DETECTED=1 OR PLATFORM=cursor)
-        self.assertIn("PLATFORM=cursor", self.text)
-        self.assertRegex(
-            self.text,
-            re.compile(
-                r"BRIDGE_DETECTED=1`?\s*OR\s*`?PLATFORM=cursor"
-                r"|PLATFORM=cursor`?\s*OR\s*`?BRIDGE_DETECTED=1"
-                r"|`BRIDGE_DETECTED=1` OR `PLATFORM=cursor`"
-                r"|bridge CLI required",
-                re.IGNORECASE,
-            ),
-        )
-        # Explicit: host-native needs no external bridge.
-        self.assertRegex(
-            self.text,
-            re.compile(r"no external bridge|without requiring.*bridge|zero bridge", re.I),
-        )
-        # Non-Cursor still keeps the classic AND gate (lockstep with scaffold tests).
-        self.assertIn("`ROUTING_ASK=1` AND `BRIDGE_DETECTED=1`", self.text)
-
-    def test_host_agent_enumerates_and_picks_pins(self) -> None:
-        low = self.text.lower()
-        self.assertIn("host agent", low)
-        self.assertIn("never python", low)
-        self.assertIn("cursor-agent --list-models", self.text)
-        self.assertIn("SCOUT_PIN", self.text)
-        self.assertIn("REVIEW_PIN", self.text)
-
-    def test_routing_rules_cheap_cross_family_inherit(self) -> None:
-        # cheap scout / cross-family review / inherit otherwise
-        self.assertRegex(
-            self.text,
-            re.compile(r"read-only scouts.*cheap|cheap.*read-only scouts", re.I | re.S),
-        )
-        self.assertRegex(
-            self.text,
-            re.compile(r"cross-family", re.I),
-        )
-        self.assertRegex(
-            self.text,
-            re.compile(r"everything else.*inherit|inherit.*session model", re.I | re.S),
-        )
-
-    def test_date_stamp_and_refresh_note(self) -> None:
-        self.assertRegex(
-            self.text,
-            re.compile(r"YYYY-MM-DD|ISO date|date-stamp", re.I),
-        )
-        self.assertRegex(
-            self.text,
-            re.compile(r"re-run setup to refresh", re.I),
-        )
-        self.assertIn("volatile", self.text.lower())
-
-    def test_cursor_host_native_block_markers(self) -> None:
-        self.assertIn("<!-- flow-next:model-routing:start -->", self.text)
-        self.assertIn("<!-- flow-next:model-routing:end -->", self.text)
-        self.assertIn("Cursor host-native", self.text)
 
 
 class TestNoRalphOnCursor(unittest.TestCase):

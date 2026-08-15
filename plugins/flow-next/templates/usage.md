@@ -46,6 +46,8 @@ The typical flow. Everything else (deps, block/reset, memory, glossary, config, 
 
 flow-next skills are prompts the host agent executes — so you (the host) can route work across model families with zero code. **Defaults are pre-tuned; none of this is required** — reach for it only when your model mix, subscriptions, or taste differ. Full guide: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md) · https://flow-next.dev/orchestration/
 
+**Tiers and reach.** A **tier** is what kind of model a job wants — `reviewer`, `implementer`, `fast scout`, `thinking scout`, or unset (the session model, and the majority). **Reach** is how *this* harness gets one: the in-session model, an in-host subagent, another CLI over a bridge, or not available. Write your preferences once as `<tier>: <model>` (optionally `at <effort>`) in `CLAUDE.md` / `AGENTS.md` — `/flow-next:setup` scaffolds the block commented out, and the model names are yours, verified against your own account. Routing precedence, highest first: an explicit argument in the invocation, then that routing block, then the agent definition's own default, then the session model — a model this harness cannot reach falls back to the session model, says so once, and continues. Tier definitions: [`docs/orchestration.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants); per-harness reach: [`docs/reach/`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/reach/README.md).
+
 **Headless CLI bridges** — drive another harness from a Bash call with a *self-contained* prompt (full context in, digest back). **Safety rule for every recipe below: the bridged child writes code; the host keeps git, judgment, and the verdict.** The child never commits, never decides scope, never issues a review verdict, and never spawns a bridge of its own.
 
 ```bash
@@ -71,12 +73,12 @@ claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Ba
 # grok: xAI's Grok Build CLI (v0.2.x alpha) - a full headless EDITING agent, same class as codex
 # exec / cursor-agent, on its own quota. FLAGS BEFORE -p: `-p/--single` consumes the NEXT token as
 # the prompt, so `grok -p --always-approve "..."` misparses (live-verified failure mode).
-# Model + effort are separate flags: `-m grok-4.6 --reasoning-effort high` (NOT `-m grok-4.6-high`).
-grok -m grok-4.6 --reasoning-effort high -p "<self-contained prompt>" </dev/null             # read-only one-shot
-grok --always-approve --no-plan -m grok-4.6 --reasoning-effort high -p "<self-contained prompt>" </dev/null  # WRITE mode (blanket; trusted git dir ONLY - acceptEdits skips Bash and silently truncates shell-using tasks). Extras: --check, --best-of-n N, --json-schema. Grok 4.6 = fast cheap first-draft; supervised bulk/implementation (editor-shaped work, not long unsupervised terminal loops), never taste-critical work.
+# Model + effort are separate flags: `-m <model> --reasoning-effort high` (NOT a fused `-m <model>-high`).
+grok -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null             # read-only one-shot
+grok --always-approve --no-plan -m <model> --reasoning-effort high -p "<self-contained prompt>" </dev/null  # WRITE mode (blanket; trusted git dir ONLY - acceptEdits skips Bash and silently truncates shell-using tasks). Extras: --check, --best-of-n N, --json-schema. Ask the CLI what it offers (`grok --help`, host catalog) rather than copying an identifier from a doc.
 ```
 
-The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m gpt-5.6-terra -c model_reasoning_effort=medium "<prompt>"` steers a different GPT tier reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
+The codex bridge also works FROM a Codex host (same-family self-bridge): `codex exec -m <model> -c model_reasoning_effort=<effort> "<prompt>"` steers a different tier of the same family reliably even where `spawn_agent`/Multi-Agent-V2 per-spawn model steering is broken (openai/codex#33268 and friends, Jul 2026). Keep the child prompt flat - no nested subagents.
 
 **Which tier to bridge to:** on well-specified work a value-tier implementer matches a strong-tier one on correctness at roughly two-thirds the wall clock, so send clear, well-scoped tasks to the value tier and escalate to the strong tier only for the genuinely gnarly ones. Spec quality is what makes that trade safe — a vague brief burns the saving on rework.
 
@@ -84,18 +86,18 @@ The codex bridge also works FROM a Codex host (same-family self-bridge): `codex 
 
 Harness-relative: every direction works — from Claude Code the bridges are `codex exec` / `cursor-agent`; from Codex or Cursor they are `claude -p` / the other CLI. Any harness that can run Bash can conduct the others.
 
-**Cursor host** — agent-frontmatter tiering is ignored on Cursor; orchestration lives in AGENTS.md + caller-side pins (setup scaffolds both). Distinct from the headless `cursor` CLI backend below.
+**Cursor host** — agent-frontmatter tiering is ignored on Cursor; routing lives in the AGENTS.md routing block plus the model named in the dispatch itself (setup scaffolds the block). Distinct from the headless `cursor` CLI backend below. Full reach page: [`docs/reach/cursor.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/reach/cursor.md).
 
-- **Pin grammar:** Cursor slugs (e.g. `claude-opus-5-thinking-high`, `gpt-5.6-sol-high`); bracket params where the host accepts them. Slugs are volatile — enumerate via host catalog or `cursor-agent --list-models`; re-run `/flow-next:setup` to refresh.
-- **Tier degrade:** `agents/*.md` family aliases (`haiku`/`sonnet`/`opus`) resolve to **inherit** (session model) on Cursor; no alias-to-slug rewrite exists or is planned. Caller-side pins are the escape hatch.
-- **`review.backend host`:** bare only (`host:<model>` rejected). Pins live in the AGENTS.md model-routing section — **not** on the backend string. Host-native fresh-context subagent; preferred from inside Cursor.
+- **Naming a model:** Cursor takes its own identifiers, and they are volatile — ask the harness (`cursor-agent --list-models`, host catalog) instead of copying one from a document.
+- **Tier degrade:** `agents/*.md` family aliases resolve to **inherit** (the session model) on Cursor; no alias rewrite exists or is planned. Naming the model in the dispatch is the escape hatch.
+- **`review.backend host`:** bare only (`host:<model>` rejected). The model comes from the AGENTS.md routing block — **not** from the backend string. Host-native fresh-context subagent; preferred from inside Cursor.
 - **≠ `cursor` CLI backend:** `review.backend cursor:…` / `cursor-agent` is a separate headless subprocess path (multi-family reach from outside Cursor; circular from inside).
 - **Cross-family rule:** reviewer family ≠ writer family (measured from the writer).
 
 ```bash
-# In-session impl + host review (cross-family pin from AGENTS.md model-routing)
+# In-session impl + host review (reviewer tier comes from the AGENTS.md routing block)
 .flow/bin/flowctl config set review.backend host     # or per-run: --review=host
-# /flow-next:work fn-12  → session implements; host review pins e.g. gpt-5.6-sol-high when writer is Claude-family
+# /flow-next:work fn-12  → session implements; the host review runs the reviewer tier from your routing block
 
 # Bridges FROM a Cursor host (same recipes as above, reverse direction)
 claude -p "<self-contained prompt>" --output-format text --allowedTools "Read,Bash" </dev/null
@@ -106,8 +108,8 @@ codex exec -s read-only --skip-git-repo-check "<prompt>" </dev/null
 
 ```bash
 # Cross-family review — the model that writes is never the model that reviews
-.flow/bin/flowctl config set review.backend codex                                 # or host | cursor:composer-2.5
-.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:composer-2.5   # per-task review: override
+.flow/bin/flowctl config set review.backend codex                              # or host | cursor:<model>
+.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:<model>     # per-task review: override
 ```
 
 **Prompted orchestration** — describe the policy; the host judges per item, no parameter required:

@@ -31,9 +31,16 @@ Where the harness exposes it, record the model that executed a stage on the rece
 - [ ] TBD
 
 ## Done summary
-TBD
+R7 recording surface: the fn-178 stage-outcome grammar now accepts an optional trailing `(model: <what ran>)`, and `flowctl usage --stages` aggregates a per-stage `models` tally — observed values from the annotation and from the model review receipts already carry (fn-193), everything else `unknown`. Selector placeholders (`auto`/`default`/`unknown`/blank) normalize to `unknown` so a preference is never stored as an observation; `review-rounds record` deliberately keeps NO `--model` flag (fn-193 #338: a narrating agent's claim is not an observation, pinned by test_rp_recorded_row_claims_no_model). Recording only: additive optional keys, no new store, no new verb, no consumer branches on it. Documented under "Execution provenance" in docs/review-findings.md.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+
+
+Post-review conductor fixes (965648022c2c6b9a210eea33c506d634cdc4fd19): receipt_models split from stage-line models tally, accepted-on-read docs clause, combined-source regression test; emitter prose routed to .5 (Touches + acceptance extended).
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1 with 2 P2 + 1 P3 suggestions applied by conductor)stage: plan-sync - ran (drift: no; .5 already carries the emitter scope; review-findings.md fully documented by .4; cross-spec deferred to conductor)
 
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 38220479889cbafc1616e148b58cad112581c5ca, 965648022c2c6b9a210eea33c506d634cdc4fd19
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_stage_model_provenance test_usage_stages test_review_findings_docs test_review_convergence_cap test_tracker_distribution test_startup_bootstrap -q, python3 scripts/run_tests_parallel.py (files=192 ran=4386 failures=0 errors=0), uvx ruff@0.16.0 check ., post-fix focused: test_stage_model_provenance test_usage_stages test_review_convergence_cap test_startup_bootstrap (243 tests OK); ruff clean, impl-review: host backend SHIP round 1 (reviewer claude-fable-5, fresh subagent; receipt /tmp/impl-review-receipt-fn-195-orchestration-by-intent-named-tiers-per.4.json)
 - PRs:

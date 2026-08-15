@@ -159,15 +159,15 @@ for branches that will not execute.
 
 ## Scouts
 
-### Agent Readiness (haiku fast scanners; agents-md-scout + docs-gap-scout on sonnet)
+### Agent Readiness (fast-scout-tier scanners; agents-md-scout + docs-gap-scout on the thinking scout tier)
 - `tooling-scout` — linters, formatters, pre-commit, type checking
-- `agents-md-scout` — CLAUDE.md/AGENTS.md analysis (sonnet — judgment-heavy)
+- `agents-md-scout` — CLAUDE.md/AGENTS.md analysis (thinking scout tier — judgment-heavy)
 - `env-scout` — environment setup
 - `testing-scout` — test infrastructure
 - `build-scout` — build system
-- `docs-gap-scout` — README, ADRs, architecture (sonnet — judgment-heavy)
+- `docs-gap-scout` — README, ADRs, architecture (thinking scout tier — judgment-heavy)
 
-### Production Readiness (haiku, fast)
+### Production Readiness (fast scout tier)
 - `observability-scout` — logging, tracing, metrics, health
 - `security-scout` — GitHub settings, CODEOWNERS, secrets
 - `workflow-scout` — CI/CD, templates, automation

@@ -296,17 +296,11 @@ HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 
-# fn-97: at least one bridge CLI on PATH gates the Model Routing question in 6d
-# on non-host-native hosts (with zero bridges every wiring route in the scaffold
-# would be an inert install-note comment, so the question is not offered —
-# install a bridge CLI and re-run /flow-next:setup to get it).
-# fn-123 R6 / fn-126: PLATFORM=cursor or PLATFORM=grok is the exception —
-# host-native AGENTS.md pins need no external bridge CLI, so Model Routing is
-# still offered when ROUTING_ASK=1.
-BRIDGE_DETECTED=0
-if [[ "$HAVE_CODEX" == "1" || "$HAVE_CURSOR" == "1" || "$HAVE_GROK" == "1" ]]; then
-  BRIDGE_DETECTED=1
-fi
+# The HAVE_* values feed the Review question's "(detected)" annotations only.
+# Nothing here gates the routing block: setup never probes for routing, never
+# asks a routing question, and never writes a model id into the block it
+# proposes (fn-195 R5 — config that claims what is installed becomes config
+# that lies).
 
 # Read current config values if they exist.
 # NB: pass `--raw` to bypass merged defaults. Without it, `flowctl config get`
@@ -344,20 +338,6 @@ CRITERIA_EXISTS=$( { test -e .flow/criteria.md || test -L .flow/criteria.md; } &
 # specIds=tracker while every mint gate saw the bridge as inactive.
 TRACKER_CONFIGURED=$("${PLUGIN_ROOT}/scripts/flowctl" sync active --json 2>/dev/null | jq -r 'if .active == true then 1 else 0 end')
 [[ -n "$TRACKER_CONFIGURED" ]] || TRACKER_CONFIGURED=0
-
-# Optional model-routing scaffold ceremony (Step 6d question + Step 7 processing)
-# is offered ONLY in an interactive setup. On non-host-native hosts also require a
-# bridge CLI (BRIDGE_DETECTED=1, fn-97). On PLATFORM=cursor or PLATFORM=grok offer
-# when interactive regardless of bridges (fn-123 R6 / fn-126 host-native pins).
-# Under ANY non-interactive / autonomous marker, the question is skipped SILENTLY
-# — setup must never block a headless driver. Scan the WHOLE autonomy-marker
-# family (Ralph / receipt-path / autonomous / mode token), not a fixed pair —
-# the same family every lifecycle skill honors.
-ROUTING_ASK=1
-if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-      || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
-  ROUTING_ASK=0
-fi
 ```
 
 Store detection results for use in questions. When showing options, indicate current value if set (e.g., "(current)" after the matching option label).
@@ -399,7 +379,7 @@ Only include lines for config values that are set. If no config is set, skip thi
 
 Build the prompt content (question text + numbered option list) dynamically. **The questions array is built only from keys that read raw-null in `.flow/config.json`.** A re-run with everything set that asks a config question it already knows the answer to has broken this — existing config is preserved, never silently flipped. To change an already-set value, the user runs `flowctl config set <key> <value>` directly (the commands are surfaced in 6c's current-config notice).
 
-Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `plain-text numbered prompt` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only Docs + Star, plus Ralph when `RALPH_ASK=1`, Model Routing when its interactive platform/bridge gate passes, and Global criteria while `.flow/criteria.md` is still absent.
+Skipped questions = config values already persisted from a prior run. Asking again would either no-op (same answer) or silently flip a deliberate user choice — both are wrong. The grouped single-prompt design (a single `plain-text numbered prompt` call below, with one questions array containing only the unset entries) means a re-run with all config set produces zero config questions and asks only Docs + Star, plus Ralph when `RALPH_ASK=1` and Global criteria while `.flow/criteria.md` is still absent. **There is no routing question** — the routing block is proposed, not negotiated (Step 7).
 
 Available questions (include only if corresponding config is unset):
 
@@ -504,7 +484,7 @@ Available questions (include only if corresponding config is unset):
   "header": "Review",
   "question": "Which review backend? Plans and implementations get reviewed before they land. From inside Cursor, prefer a host-native fresh-context subagent pinned cross-family via AGENTS.md model-routing (no second CLI). External CLIs remain available. Guide: https://flow-next.dev/review/workflow/",
   "options": [
-    {"label": "Host (Recommended)", "description": "Fresh-context host-native subagent; pin a cross-family Cursor model slug in the AGENTS.md model-routing section (setup scaffolds the pins). No external CLI. Preferred from inside Cursor."},
+    {"label": "Host (Recommended)", "description": "Fresh-context host-native subagent; name a cross-family model on the `reviewer` tier of the AGENTS.md routing block (setup writes that block commented out; the slugs are yours to fill in). No external CLI. Preferred from inside Cursor."},
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI (secondary — circular from inside Cursor)", "description": "Runs the external cursor-agent CLI. Circular when already inside Cursor — prefer Host. Still selectable for multi-family reach via the cursor-agent model menu. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
@@ -515,13 +495,13 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**When `PLATFORM=grok`** (fn-126) — offer `host` with the fail-closed cross-family caveat (Grok is single-native-family `grok-4.5`) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
+**When `PLATFORM=grok`** (fn-126) — offer `host` with the fail-closed cross-family caveat (this host reaches only one model family natively) plus every external backend; when `HAVE_CODEX=1` mark Codex Recommended (true cross-family vs a Grok writer):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land. Grok's only native model family is grok-4.5 — host-native review fails closed unless the writer is non-Grok; cross-family review comes via bridge backends (codex/cursor/copilot). Guide: https://flow-next.dev/review/workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. This host reaches only one model family natively — host-native review fails closed unless the writer is from another family; cross-family review comes via bridge backends (codex/cursor/copilot). Guide: https://flow-next.dev/review/workflow/",
   "options": [
-    {"label": "Host", "description": "Fresh-context host-native subagent; pin from AGENTS.md model-routing (setup scaffolds). Fail-closed: Grok is single-native-family (grok-4.5) — native host review refuses same-family self-review (interactive → ask; autonomous → NEEDS_HUMAN) unless the writer is non-Grok. Cross-family via bridges."},
+    {"label": "Host", "description": "Fresh-context host-native subagent; name the model on the `reviewer` tier of the AGENTS.md routing block (setup writes it commented out; you fill in the slug). Fail-closed: this host is single-native-family — native host review refuses same-family self-review (interactive → ask; autonomous → NEEDS_HUMAN) unless the writer is non-Grok. Cross-family via bridges."},
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
@@ -548,27 +528,13 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex` AND `PLATFORM` is NOT `cursor`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Grok host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). On `PLATFORM=cursor` do NOT add the Codex Recommended label — `Host (Recommended)` already leads. On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or the optional terra worker pin), so codex review would be SAME-family - prefer a detected non-GPT backend there (copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the offer instead rides the Model Routing scaffold as an explicit opt-in switch, Step 7's step 8 below.
+When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex` AND `PLATFORM` is NOT `cursor`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Grok host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). On `PLATFORM=cursor` do NOT add the Codex Recommended label — `Host (Recommended)` already leads. On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or an `implementer` tier pointing at the same family), so codex review would be SAME-family - prefer a detected non-GPT backend there (copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the user changes it later with `flowctl config set review.backend <name>`, surfaced in 6c's current-config notice.
 
-Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `cursor` / `rp` / `none`). Power users can also write a full spec like `codex:gpt-5.4:high`, `copilot:claude-opus-4.5:xhigh`, or `cursor:gpt-5.5-high` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms. Backend `host` is bare only (no `host:<model>` — pins live in the AGENTS.md model-routing section).
+Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `cursor` / `rp` / `none`). Power users can also write a full spec like `codex:gpt-5.4:high`, `copilot:claude-opus-4.5:xhigh`, or `cursor:gpt-5.5-high` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms. Backend `host` is bare only (no `host:<model>` — the model is named on the `reviewer` tier of the AGENTS.md routing block).
 
-**Model Routing question** — include only when `ROUTING_ASK=1` AND
-(`BRIDGE_DETECTED=1` OR `PLATFORM=cursor` OR `PLATFORM=grok`). The frozen
-option set is `Scaffold` / `Skip`.
-
-Resolve `PLATFORM` first, then **MUST read exactly one applicable direct
-question reference** and add its question object to the grouped prompt:
-
-- Bridge-host offer gate: `ROUTING_ASK=1` AND `BRIDGE_DETECTED=1`. Cursor and
-  Grok are host-native exceptions.
-- `cursor` → [references/model-routing-question-cursor.md](references/model-routing-question-cursor.md)
-- `grok` → [references/model-routing-question-grok.md](references/model-routing-question-grok.md)
-- `claude-code`, `droid`, or `codex` →
-  [references/model-routing-question-bridge.md](references/model-routing-question-bridge.md)
-
-Unknown `PLATFORM` fails open to the bridge question reference. If the gate is
-false, do not read any model-routing question or implementation reference and
-record `not offered`.
+**No Model Routing question exists.** Setup never asks which models to route to,
+never probes a CLI for slugs, and never proposes a pin. Step 7 writes one
+commented example block and says so — that is the whole ceremony (fn-195 R5/R6).
 
 **Docs question** (always include — adjust default based on platform):
 
@@ -617,7 +583,7 @@ For **Cursor** (`PLATFORM=cursor`) — Cursor reads AGENTS.md, so recommend it (
 }
 ```
 
-For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; lifecycle snippet defaults to CLAUDE.md (canonical Claude-format target, `/flow-next:` slash syntax — NOT the Codex `$flow-next-` one). A pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form (marker-scoped; text outside markers untouched). Model-routing block still targets AGENTS.md (where host-review workflows read it):
+For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; lifecycle snippet defaults to CLAUDE.md (canonical Claude-format target, `/flow-next:` slash syntax — NOT the Codex `$flow-next-` one). A pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form (marker-scoped; text outside markers untouched). The routing block still targets AGENTS.md (where host-review workflows read it):
 ```json
 {
   "header": "Docs",
@@ -625,7 +591,7 @@ For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; life
   "options": [
     {"label": "CLAUDE.md only (Recommended)", "description": "Add flow-next section to CLAUDE.md (canonical Grok lifecycle target; /flow-next: slash syntax)"},
     {"label": "AGENTS.md only", "description": "Add flow-next section to AGENTS.md"},
-    {"label": "Both", "description": "Add flow-next section to both files (recommended when you also want the model-routing block's sibling lifecycle snippet nearby)"},
+    {"label": "Both", "description": "Add flow-next section to both files (recommended when you also want the routing block's sibling lifecycle snippet nearby)"},
     {"label": "Skip", "description": "Don't update documentation"}
   ],
   "multiSelect": false
@@ -672,31 +638,11 @@ Print the prompt content built above and stop for the user's reply.
 
 **Note:** If no supported RepoPrompt CLI, codex, copilot, or cursor-agent is detected, add this note to the Review question: "No review backend detected. Install RepoPrompt CE (`rpce-cli`), codex, copilot, or cursor-agent for review support."
 
-### 6e: Model-pin refresh ceremony (fn-115.2)
-
-Runs on **fresh setup AND re-runs**, **after** Step 6d questions. Resolve the
-gate before reading any ceremony instructions:
-
-```bash
-MODELS_ASK=1
-if [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
-      || "${FLOW_AUTONOMOUS:-}" == "1" || "${ARGUMENTS:-}" == *mode:autonomous* ]]; then
-  MODELS_ASK=0
-  MODELS_CEREMONY="skipped (autonomous)"
-fi
-```
-
-When `MODELS_ASK=0`, do nothing else: no reference read, CLI probe, receipt
-scan, question, config write, or summary noise. When `MODELS_ASK=1`, you
-**MUST read and follow exactly one direct reference now**:
-[references/model-pins.md](references/model-pins.md). Do not continue to Step 7
-until that reference reaches its terminal outcome. Unknown/malformed gate state
-fails open by reading the reference; only an explicit zero skips it.
-
 ### Done when
 
-- One grouped `plain-text numbered prompt` call carried the questions array, and that array holds only the still-unanswered keys plus Docs / Star (and Ralph, Model Routing, Global criteria when their own gates passed).
-- **Under any autonomy marker (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS`, `mode:autonomous`) the Ralph, model-routing, and model-pin ceremonies were skipped silently** — no reference read, no probe, no question, no summary noise. A run that blocked on one of those questions under an autonomy marker has broken this.
+- One grouped `plain-text numbered prompt` call carried the questions array, and that array holds only the still-unanswered keys plus Docs / Star (and Ralph, Global criteria when their own gates passed).
+- **No routing question was asked, no CLI was probed for model ids, and no pin was proposed or stamped.** Setup asking which model to route to, or writing a model id anywhere, has broken this (fn-195 R5/R6).
+- **Under any autonomy marker (`FLOW_RALPH`, `REVIEW_RECEIPT_PATH`, `FLOW_AUTONOMOUS`, `mode:autonomous`) the Ralph ceremony was skipped silently** — no reference read, no question, no summary noise. A run that blocked on it under an autonomy marker has broken this.
 
 ## Step 7: Process Answers
 
@@ -816,24 +762,53 @@ For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marke
      - **options**:
        - `Keep mine (Recommended)` - run `"${PLUGIN_ROOT}/scripts/flowctl" setup-block resolve --file <FILE> --template <same template> --choice keep --json`. This records the `"customized"` sentinel so future re-runs never re-ask and never overwrite. Print the canonical template path so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
        - `Overwrite with canonical` - run the same `setup-block resolve` command with `--choice overwrite`. This replaces the marker block with the canonical snippet and records the new pristine hash; customizations inside the markers are lost, content outside the markers is preserved.
-       - `abort` - exit cleanly, no further writes. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the Model Routing scaffold, and the Star step). Re-run `/flow-next:setup` later to complete setup.
+       - `abort` - exit cleanly, no further writes. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the routing block, and the Star step). Re-run `/flow-next:setup` later to complete setup.
 
 The marker-block boundaries are load-bearing: **docs snippets are written through `flowctl setup-block apply`, touching only the bytes inside the flow-next markers.** Prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` that changed, or a write made by anything other than the helper, has broken this. And **an `ask` result prompts Keep mine / Overwrite / abort** — a customized block replaced without that answer has broken this too.
 
-**Model Routing scaffold** (only if its question was asked). Run this
-after the Docs block above and before Ralph/Star. Always re-read target files from
-disk after Docs; never interleave the two writes.
+**Routing block** — one proposal, no question. Run this **after** the Docs block
+above and before Ralph/Star. Always re-read target files from disk after Docs;
+never interleave the two writes. Two hard outs before the ladder: a **Docs
+answer of `Skip`** is a decline of documentation edits and declines this write
+too — record `skipped (docs declined)` and move on; a **headless or autonomous
+run** (`FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, `FLOW_AUTONOMOUS=1`, or
+`mode:autonomous`) never writes the block — instruction-file edits are the
+user's, so record `skipped (headless)` and move on.
 
-- `Skip` → `ROUTING_OUTCOME="skipped"`; read no implementation reference.
-- `Scaffold` → resolve `PLATFORM`, then
-  **MUST read and follow exactly one direct implementation reference**:
-  - `cursor` → [references/model-routing-cursor.md](references/model-routing-cursor.md)
-  - `grok` → [references/model-routing-grok.md](references/model-routing-grok.md)
-  - `claude-code`, `droid`, or `codex` →
-    [references/model-routing-bridge.md](references/model-routing-bridge.md)
+Resolve the target with this ladder, first match wins:
 
-Unknown `PLATFORM` fails open to the bridge reference. Never read more than one
-implementation reference for one run.
+1. Docs answered this run: mirror `CLAUDE.md only`, `AGENTS.md only`, or `Both`.
+2. Otherwise the files already carrying `<!-- BEGIN FLOW-NEXT -->`.
+3. Otherwise Codex / Cursor / Grok → `AGENTS.md`; Claude Code / Droid →
+   `CLAUDE.md`.
+
+Per target, in order:
+
+- **Shim guard.** A file whose only non-empty line matches `@<path>.md` or
+  `See[:] <path>.md` (case-insensitive) is a pointer: retarget to that in-repo
+  file and re-apply the guard. A missing pointer target drops that target with
+  `Routing block: <file> is a shim pointing at a missing <path>.md — skipping`.
+  Never mix content into a shim.
+- **Existing block.** A file already carrying
+  `<!-- flow-next:model-routing:start -->` is left **completely untouched** — no
+  byte-compare, no refresh, no question, no mtime change. Record
+  `kept (yours)`. Setup is re-run after every release; a block the user edited
+  (or emptied) is theirs from the moment it exists. Rewriting one has broken
+  this (fn-195 R5).
+- **Unmarked routing prose.** A target already carrying a user-authored
+  routing-shaped heading (a heading line containing `model routing` or
+  `model-routing`, case-insensitive, without our markers) is theirs too: skip
+  the write, record `kept (yours)`. Never append a second routing section
+  beside one a human wrote.
+- **No block.** Write [templates/model-routing-snippet.md](templates/model-routing-snippet.md)
+  **verbatim** — markers included, every routing line still commented out. There
+  is no composition step: no probe sentinels, no detected models, no date stamp,
+  nothing substituted. Append it at the end of the file, leaving all other
+  content untouched. Record `written to <file>`.
+
+Then say what was written, once, in one sentence:
+`Wrote a commented model-routing example to <file> — every line is commented out; edit it to name the models you want for each tier, or delete the block.`
+(Nothing was written → say `kept (yours)` / `skipped (shim)` / `skipped (docs declined)` / `skipped (headless)` instead and move on.)
 
 **Ralph** (only when its question was asked; Cursor/Grok remain
 unsupported and read no Ralph reference):
@@ -884,7 +859,7 @@ Installed:
 ```
 Cursor host notes:
 - Copy mode only (.flow/bin/flowctl) — Cursor exposes no plugin-root env vars / bin PATH injection
-- Review default: host (host-native cross-family subagent pins in AGENTS.md model-routing)
+- Review default: host (host-native cross-family subagent; the model is named on the `reviewer` tier of the AGENTS.md routing block)
 - Ralph: unsupported on Cursor (not offered; not registered)
 ```
 
@@ -893,7 +868,7 @@ Cursor host notes:
 Grok host notes:
 - Copy mode only (.flow/bin/flowctl) — Grok exposes no plugin-root bin PATH injection
 - Docs: /flow-next: slash snippet (CLAUDE.md default lifecycle target; Grok also reads AGENTS.md)
-- Model-routing block: AGENTS.md (host-review pin target)
+- Routing block: AGENTS.md (where host review reads the `reviewer` tier)
 - Review: host offered (single-native-family fail-closed for Grok writers) + rp/codex/copilot/cursor/none
 - No .codex/agents copy; Ralph: unsupported on Grok (not offered; not registered)
 - Detection: GROK_AGENT=1 (not ~/.grok or PATH)
@@ -924,11 +899,8 @@ Configuration (use flowctl config set to change):
 Documentation updated:
 - <files updated or "none">
 
-Model routing scaffold: <ROUTING_OUTCOME — e.g. "written to CLAUDE.md" | "kept (customized)" | "unchanged (already current)" | "skipped" | "skipped (shim)" | "not offered">
-
-Model-pin ceremony (fn-115.2): <MODELS_CEREMONY — "written" | "stamped" | "skipped" | "skipped (autonomous)">
-- Role map keys: models.roles.<fastJudge|review|scoutFast|scoutIntelligent>.<codex|copilot|cursor>
-- Stamp key: models.verifiedAt (ISO date). Re-run setup to refresh; flowctl status nudges after ~90 days.
+Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "skipped (shim)" | "skipped (docs declined)" | "skipped (headless)">
+- The block is a commented example; edit it to name the models you want per tier.
 
 Notes:
 - Re-run /flow-next:setup after plugin updates to refresh scripts

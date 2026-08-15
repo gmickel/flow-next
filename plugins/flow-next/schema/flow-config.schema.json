@@ -715,66 +715,6 @@
           "default": []
         }
       }
-    },
-    "models": {
-      "description": "Model-pin role map (fn-115). flowctl stores + validates + does staleness math only; /flow-next:setup probes and refreshes pins.",
-      "type": [
-        "object",
-        "null"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "roles": {
-          "description": "Role-map pins: models.roles.<role>.<backend> = model or model:effort. Roles name semantic jobs (fastJudge, review, scoutFast, scoutIntelligent), not call sites; backends are codex, copilot, cursor. Schema-validated on config set. Empty = registry baselines.",
-          "type": [
-            "object",
-            "null"
-          ],
-          "patternProperties": {
-            "^(fastJudge|review|scoutFast|scoutIntelligent)$": {
-              "type": [
-                "object",
-                "null"
-              ],
-              "description": "Per-backend pins for one semantic role.",
-              "patternProperties": {
-                "^(codex|copilot|cursor)$": {
-                  "anyOf": [
-                    {
-                      "type": "null"
-                    },
-                    {
-                      "enum": [
-                        ""
-                      ]
-                    },
-                    {
-                      "type": "string",
-                      "pattern": "^[^:\\s]+(:[^:\\s]+)?$"
-                    }
-                  ],
-                  "description": "Pin value: model or model:effort."
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false,
-          "default": {}
-        },
-        "verifiedAt": {
-          "description": "ISO date stamped by /flow-next:setup after the model-pin refresh ceremony. Older than ~90 days prints one nudge line (never blocks); absent = no nudge.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "verifiedWith": {
-          "description": "Optional free-form record of CLI versions probed during the refresh ceremony.",
-          "default": null
-        }
-      }
     }
   }
 }

@@ -424,17 +424,6 @@ class FixtureValidation(unittest.TestCase):
             {"tracker": {"resolved": {"scopeResolvedAt": stamps}}}
         )
 
-    def test_valid_models_roles(self) -> None:
-        self._valid(
-            {
-                "models": {
-                    "roles": {
-                        "review": {"codex": "gpt-5.6-sol:high"},
-                    },
-                },
-            }
-        )
-
     def test_valid_make_pr_derived_paths(self) -> None:
         self._valid(
             {
@@ -447,13 +436,15 @@ class FixtureValidation(unittest.TestCase):
             }
         )
 
-    def test_removed_work_namespace_is_invalid(self) -> None:
-        # flow-98: the packaged-delegation keys are gone from the reader AND
-        # the schema, so an editor flags a config that still carries them.
-        # flowctl itself never fails on them - it prints one advisory line.
+    def test_removed_namespaces_are_invalid(self) -> None:
+        # flow-98 + fn-195: the packaged-delegation keys and the model-pin
+        # role map are gone from the reader AND the schema, so an editor flags
+        # a config that still carries them. flowctl itself never fails on them
+        # - it prints one advisory line.
         self._invalid({"work": {"delegate": "codex"}})
         self._invalid({"work": {"delegateModel": "gpt-5.6-terra"}})
-        self._invalid({"models": {"roles": {"delegate": {"codex": "m"}}}})
+        self._invalid({"models": {"roles": {"review": {"codex": "m"}}}})
+        self._invalid({"models": {"verifiedAt": "2026-07-19"}})
 
     def test_invalid_enums(self) -> None:
         self._invalid({"pipeline": {"qa": "yes"}})
@@ -471,14 +462,6 @@ class FixtureValidation(unittest.TestCase):
     def test_invalid_types(self) -> None:
         self._invalid({"memory": {"enabled": "yes"}})
         self._invalid({"land": {"patienceMinutes": True}})
-
-    def test_invalid_models_roles_closed(self) -> None:
-        self._invalid(
-            {"models": {"roles": {"bogusRole": {"codex": "m"}}}}
-        )
-        self._invalid(
-            {"models": {"roles": {"review": {"rp": "m"}}}}
-        )
 
     def test_invalid_scope_map(self) -> None:
         self._invalid(
