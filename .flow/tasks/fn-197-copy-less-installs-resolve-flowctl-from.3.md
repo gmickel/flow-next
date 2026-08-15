@@ -58,7 +58,8 @@ stage: delegation - skipped(config: delegation off)
 
 Review fixes 403027d7 + nits: FLOW_NEXT_TUI_HOME test seam, PATH-pinned Bun.which, semver-first cache ordering with mtime tie-break, plugin-install error message, two positive rung tests; SNIPPET constant comment honesty. tui lint red is pre-existing (publish-tui red since 2026-01) - not this task.
 
-stage: impl-review - ran (host backend, fresh fable-5 reviewers; r1 NEEDS_WORK (P2 tui rung regression) -> fixes -> r2 SHIP)
+stage: impl-review - ran (host backend, fresh fable-5 reviewers; r1 NEEDS_WORK (P2 tui rung regression) -> fixes -> r2 SHIP)stage: plan-sync - ran (drift: minor; .5 flowctl.md item corrected to verify-not-delete, .4 gains pre-existing tui-lint-red note; cross-spec deferred to conductor)
+
 ## Evidence
 - Commits: f2fc3cb1e262007fb293c012987b08241f39223d, 403027d7
 - Tests: python3 scripts/run_tests_parallel.py (190 suites PASS, rc=0), uvx ruff@0.16.0 check . (All checks passed), bash plugins/flow-next/scripts/smoke_test.sh (132 pass / 1 fail: pre-existing copilot re-review artifact-unchanged, unrelated), cd plugins/flow-next/tests && python3 -m unittest test_startup_bootstrap test_precheck_mode_contract test_flowctl_surface test_export_traceability test_pr_cognitive_aid test_tracker_distribution test_cmd_usage test_removed_delegate_config_advisory -q, post-fix: bun test 384/384 green (flow-next-tui); focused Python suites + ruff green; propagation byte-identical, impl-review: host backend r1 NEEDS_WORK (P2 tui homedir seam), r2 SHIP (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.3.json)
