@@ -100,8 +100,9 @@ LEFTOVERS=""
 for p in .flow/bin/flowctl .flow/bin/flowctl.cmd .flow/bin/flowctl.py \
          .flow/bin/flowctl_bootstrap.py .flow/bin/flowctl-help.txt \
          .flow/bin/flowctl_tracker .flow/templates/spec.md .flow/usage.md; do
-  [ -e "$p" ] && LEFTOVERS="${LEFTOVERS}${p}"$'\n'
-done
+  [ -e "$p" ] && LEFTOVERS="${LEFTOVERS}${p}"$'\n' || true
+done   # || true: the loop's exit is the LAST iteration's test - an empty
+       # LEFTOVERS (the normal copy-less case) must read as success, not failure
 ```
 
 **None present → say nothing and continue to Step 4a.** Silence is the normal case.
@@ -159,7 +160,7 @@ Then branch:
 - **options**:
   - `Copy template` — write `<repo_root>/SPEC.md` from the bundled template (carries the customization-location top-comment). Print the path so the user knows where to edit.
   - `Skip` — no write. Cascade falls through to the plugin's bundled template. Opt in any time by re-running `/flow-next:setup`.
-  - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`) may already have run; they are idempotent and safe to leave. No `<repo_root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+  - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, and Step 2b's leftover cleanup if you accepted it) may already have run; init is idempotent and safe to leave, and a completed cleanup means the instruction-file snippet has NOT yet been refreshed - finish setup (or re-run it) before relying on direct `flowctl` instructions in CLAUDE.md/AGENTS.md. No `<repo_root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 On `Copy template`: write the file via Bash `cp` with absolute paths.
 
@@ -210,7 +211,7 @@ Then:
   - **options**:
     - `Keep mine (Recommended)` — leave `<repo-root>/$EXISTING` unchanged. Print the path to the canonical template so the user can diff manually.
     - `Overwrite with canonical` — replace `<repo-root>/$EXISTING` (same filename — do NOT rename lowercase `spec.md` to uppercase `SPEC.md` here; preserve the user's casing) with the bundled template content. Repo customization is lost.
-    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`) may already have run; they are idempotent and safe to leave. No `<repo-root>/$EXISTING` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, and Step 2b's leftover cleanup if you accepted it) may already have run; init is idempotent and safe to leave, and a completed cleanup means the instruction-file snippet has NOT yet been refreshed - finish setup (or re-run it) before relying on direct `flowctl` instructions in CLAUDE.md/AGENTS.md. No `<repo-root>/$EXISTING` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 **Note:** Setup writes uppercase `SPEC.md` only on the **fresh-seed** path (`HITS=0` `Copy template`). Never seed lowercase `spec.md` from scratch. The lowercase entry in the cascade is read-only at discovery time — present only for users who deliberately created lowercase. On the **re-setup overwrite** path above, preserve the user's existing filename casing via `$EXISTING` (so a lowercase `spec.md` stays lowercase after `Overwrite with canonical`).
 
