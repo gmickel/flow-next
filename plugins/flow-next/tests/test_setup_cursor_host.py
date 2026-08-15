@@ -168,16 +168,16 @@ class TestNoRalphOnCursor(unittest.TestCase):
         self.assertIn("No (Recommended)", self.text)
 
 
-class TestCursorCopyModeUnchanged(unittest.TestCase):
-    """Cursor stays copy mode; non-Cursor routing behavior retained."""
+class TestCursorHostNotes(unittest.TestCase):
+    """Cursor resolves flowctl from the plugin (fn-197); non-Cursor routing retained."""
 
     def setUp(self) -> None:
         self.text = _read()
 
-    def test_cursor_copy_mode_stated(self) -> None:
+    def test_cursor_resolution_stated_without_copies(self) -> None:
         self.assertRegex(
             self.text,
-            re.compile(r"Copy mode only.*\.flow/bin/flowctl|Cursor exposes no plugin-root", re.I | re.S),
+            re.compile(r"Cursor exposes no plugin-root env vars.*nothing is copied", re.I | re.S),
         )
 
     def test_non_cursor_review_menu_retained(self) -> None:

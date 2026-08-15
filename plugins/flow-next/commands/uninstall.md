@@ -23,14 +23,14 @@ Based on answers, generate the appropriate commands and print them for the user 
 
 **If keeping tasks:**
 
-Copy-mode repos (`setup_mode` absent or `"copy"` in `.flow/meta.json`):
+Setup copies nothing into the repo, so uninstall is marker removal: strip the `<!-- BEGIN FLOW-NEXT -->`...`<!-- END FLOW-NEXT -->` block from CLAUDE.md / AGENTS.md (the "Clean up docs" section below does that) and remove the `setup_version` / `setup_mode` stamps from `.flow/meta.json`.
+
+**Legacy cleanup — only when those paths actually exist** (repos set up before copy-less installs). Print this for the user to run manually; omit it entirely when none exist:
 ```
 To complete uninstall, run these commands manually:
 
 rm -rf .flow/bin .flow/templates .flow/usage.md
 ```
-
-Plugin-mode repos (`setup_mode: "plugin"`): there are no `.flow/bin`, `.flow/templates`, or `.flow/usage.md` copies to remove. Instead, remove the `<!-- BEGIN FLOW-NEXT -->`...`<!-- END FLOW-NEXT -->` block from CLAUDE.md and strip the stamps from `.flow/meta.json` (`setup_mode`, `setup_version`, `version_ack`, `snippet_ack`).
 
 **If removing everything:**
 ```

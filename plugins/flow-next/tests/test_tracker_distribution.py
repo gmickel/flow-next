@@ -118,8 +118,9 @@ class InstallerVerifier(unittest.TestCase):
             with self.subTest(installer=rel):
                 self.assertIn("verify_tracker_manifest",
                               (REPO / rel).read_text(encoding="utf-8"))
-        for rel in ("plugins/flow-next/skills/flow-next-setup/workflow.md",
-                    "plugins/flow-next/skills/flow-next-ralph-init/SKILL.md"):
+        # fn-197: setup copies nothing into a repo, so it has no package to
+        # verify. ralph-init still stages its own copy and keeps the check.
+        for rel in ("plugins/flow-next/skills/flow-next-ralph-init/SKILL.md",):
             with self.subTest(skill=rel):
                 self.assertIn("verify_tracker_manifest",
                               (REPO / rel).read_text(encoding="utf-8"))

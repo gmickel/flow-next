@@ -48,8 +48,7 @@ To customize for your project, copy this file to `<repo-root>/SPEC.md` and edit 
 Discovery cascade (first match wins):
   1. <repo_root>/SPEC.md           (your customized scaffold — uppercase preferred)
   2. <repo_root>/spec.md           (lowercase honored when uppercase absent)
-  3. .flow/templates/spec.md       (project-local copy from /flow-next:setup)
-  4. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
+  3. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
 
 Customizing: adding sections and rewriting the guidance prose under any heading is
 free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,

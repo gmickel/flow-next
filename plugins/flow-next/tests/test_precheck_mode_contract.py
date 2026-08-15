@@ -10,9 +10,10 @@ REPO_ROOT = ROOT.parents[1]
 SKILLS = ROOT / "skills"
 CODEX_SKILLS = ROOT / "codex" / "skills"
 CODEX_INSTALLER = REPO_ROOT / "scripts" / "install-codex.sh"
-PLUGIN_TEMPLATE = (
-    SKILLS / "flow-next-setup" / "templates" / "claude-md-snippet-plugin.md"
-)
+SNIPPET_TEMPLATES = {
+    "claude-md-snippet.md": "/flow-next:setup",
+    "agents-md-snippet.md": "$flow-next-setup",
+}
 
 PLAN = "flow-next-plan"
 REMOVED_CARRIERS = [
@@ -111,14 +112,25 @@ class PrecheckModeContractTest(unittest.TestCase):
                     self.assertNotIn(marker, mirror)
 
     def test_setup_template_contract_remains_intact(self) -> None:
-        text = PLUGIN_TEMPLATE.read_text(encoding="utf-8")
-        lines = text.splitlines()
-        self.assertEqual(lines[0], "<!-- BEGIN FLOW-NEXT -->")
-        self.assertEqual(lines[-1], "<!-- END FLOW-NEXT -->")
-        self.assertIn("flow-next:snippet:v", lines[1])
-        self.assertNotIn(".flow/bin", text)
-        self.assertIn("flowctl usage", text)
-        self.assertIn("/flow-next:setup", text)
+        # fn-197: setup ships exactly these two snippet templates, both slim
+        # and copy-less. The contract is asserted on BOTH twins, not one.
+        templates_dir = SKILLS / "flow-next-setup" / "templates"
+        shipped = {
+            p.name for p in templates_dir.glob("*-md-snippet*.md")
+        }
+        self.assertEqual(shipped, set(SNIPPET_TEMPLATES))
+        for name, setup_cmd in SNIPPET_TEMPLATES.items():
+            with self.subTest(template=name):
+                text = (templates_dir / name).read_text(encoding="utf-8")
+                lines = [ln for ln in text.splitlines() if ln.strip()]
+                self.assertEqual(lines[0], "<!-- BEGIN FLOW-NEXT -->")
+                self.assertEqual(lines[-1], "<!-- END FLOW-NEXT -->")
+                self.assertIn("flow-next:snippet:v", lines[1])
+                self.assertNotIn(".flow/bin", text)
+                self.assertNotIn(".flow/templates/spec.md", text)
+                self.assertNotIn(".flow/usage.md", text)
+                self.assertIn("flowctl usage", text)
+                self.assertIn(setup_cmd, text)
 
 
 if __name__ == "__main__":

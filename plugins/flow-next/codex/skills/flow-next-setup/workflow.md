@@ -21,7 +21,7 @@ Detect which platform is running:
 PLATFORM="codex"
 ```
 
-**Cursor ordering matters.** Cursor exposes **no** plugin-root env var, so without the `CURSOR_AGENT` check it would fall through to the `codex` branch and get Codex-shaped project instructions (`$flow-next-plan` command names + `.codex/` setup) — wrong, because a Cursor install (local or team-marketplace) drives the workflow with `/flow-next:*` slash commands and resolves `flowctl` via `.flow/bin/flowctl`. `CURSOR_AGENT` is Cursor's own signal (set in its agent shell; it also sets `CI=1` / `CURSOR_TRACE_ID`, but `CURSOR_AGENT` is the canonical one). The `CURSOR_AGENT` branch MUST come before the `else → codex` fallback.
+**Cursor ordering matters.** Cursor exposes **no** plugin-root env var, so without the `CURSOR_AGENT` check it would fall through to the `codex` branch and get Codex-shaped project instructions (`$flow-next-plan` command names + `.codex/` setup) — wrong, because a Cursor install (local or team-marketplace) drives the workflow with `/flow-next:*` slash commands. `CURSOR_AGENT` is Cursor's own signal (set in its agent shell; it also sets `CI=1` / `CURSOR_TRACE_ID`, but `CURSOR_AGENT` is the canonical one). The `CURSOR_AGENT` branch MUST come before the `else → codex` fallback.
 
 **Why the `.cursor-plugin/plugin.json` guard (don't classify Codex-hosted-in-Cursor as Cursor).** `CURSOR_AGENT` is **inherited by child processes** — so when Codex is launched *from* a Cursor Agent shell, the Codex process also sees `CURSOR_AGENT`, and a bare env check would misclassify a genuine Codex setup as `cursor` (skipping the `.codex/` agent + hook copy and writing the `/flow-next:` snippet instead of the Codex `$flow-next-` one — leaving the Codex setup incomplete). The env var alone only proves "a Cursor agent is somewhere in the process ancestry," not "this plugin is a Cursor install." So the branch ALSO requires the `.cursor-plugin/plugin.json` manifest at the **resolved `PLUGIN_ROOT`**: present in real Cursor installs and in the dual-manifest source tree, but **absent** from a pure `~/.codex` install. A Codex process that merely inherited `CURSOR_AGENT` and resolves a Codex-home `PLUGIN_ROOT` (no Cursor manifest) correctly falls through to `codex`. (Same inherited-env-var class as the `CLAUDECODE` host guard below.)
 
@@ -64,7 +64,7 @@ This creates/upgrades:
 - `meta.json` with schema version
 - `config.json` with defaults (merges new keys on upgrade; stamps a `$schema` key pointing at the published flow-config JSON Schema so editors validate/autocomplete - inert string, never fetched)
 
-If the repo still has a pre-1.0 `.flow/epics/` layout, port it by hand before continuing (see `.flow/usage.md` "Pre-1.0 layout porting").
+If the repo still has a pre-1.0 `.flow/epics/` layout, port it by hand before continuing (run `flowctl usage` and read "Pre-1.0 layout porting").
 
 ## Step 2: Check existing setup
 
@@ -80,68 +80,56 @@ Also read plugin version from the platform-specific manifest:
 Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if the platform-specific file doesn't exist.
 
 **If `setup_version` exists (already set up):**
-- If **same version**: tell user "Already set up with v<VERSION>. Re-run to refresh files + docs? (y/n)"
-  - If yes: continue from the existing-mode guard (before Step 3) — it runs on EVERY pass, then copy-mode repos flow into Step 3's re-copy (idempotent; same-version refresh should NOT skip the file copy, otherwise a project running an unchanged version number but a moved template lands docs that point at a missing path)
+- If **same version**: tell user "Already set up with v<VERSION>. Re-run to refresh the docs snippet + config? (y/n)" — a same-version re-run refreshes the versioned doc snippet and re-offers any unanswered config question; nothing is ever copied into the repo, so there are no snapshots to refresh
+  - If yes: continue
   - If no: done
 - If **older version**: tell user "Updating from v<OLD> to v<NEW>" and continue
 
 **If no `setup_version`:** continue (first-time setup)
 
-## Existing-mode guard (before Step 3)
+Old `setup_mode` / `setup_version` stamps from pre-copy-less installs are inert metadata — read them if you like, never act on them.
 
-Read the stamped mode before writing anything:
+## Step 2b: Leftover copy artifacts (cleanup offer)
+
+**Setup never copies flowctl, the spec template, or the usage guide into a repo.** Every host resolves `flowctl` from the plugin install (Claude Code / Droid via their plugin-root env vars, Cursor and Grok by deriving the plugin root from the skill file's own absolute path, Codex from `$CODEX_HOME`). Repos set up before that carry leftover snapshots; this step offers to delete them.
+
+Enumerate the residue. The machine-readable list is flowctl's `PLUGIN_MODE_COPY_ARTIFACTS` — the single source of truth; keep this probe in step with it:
 
 ```bash
-CURRENT_MODE=$(jq -r '.setup_mode // empty' .flow/meta.json 2>/dev/null)
+LEFTOVERS=""
+for p in .flow/bin/flowctl .flow/bin/flowctl.cmd .flow/bin/flowctl.py \
+         .flow/bin/flowctl_bootstrap.py .flow/bin/flowctl-help.txt \
+         .flow/bin/flowctl_tracker .flow/templates/spec.md .flow/usage.md; do
+  [ -e "$p" ] && LEFTOVERS="${LEFTOVERS}${p}"$'\n'
+done
 ```
+
+**None present → say nothing and continue to Step 4a.** Silence is the normal case.
 
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-When `CURRENT_MODE` is `plugin`, this repo is a Claude-Code-managed install with NO local `.flow/bin`/`.flow/templates`/`.flow/usage.md` snapshots by design. Never convert it silently: ask (plain-text numbered prompt) `Keep as-is (Recommended)` - skip Step 3, Step 4 copies, and the Step 7c stamp (set `MODE=plugin-kept`; config steps still run, and the Docs step may target AGENTS.md only - the CLAUDE.md marker block is the Claude-Code-managed rail, never touched from this host) - or `Convert to copy` - proceed normally (writes the snapshots; Step 7c stamps copy). Any other `CURRENT_MODE` value: set `MODE=copy` and continue.
+**Any present →** list the exact paths, tell the user they are dead weight on every host (nothing reads them; deleting them changes nothing observable), and ask via `plain-text numbered prompt`:
 
-## Step 3: Create .flow/bin/ and .flow/templates/
+- **header**: `Delete leftover flowctl copies?`
+- **question**: `These files are snapshots from an older install layout. Every flow-next skill now resolves flowctl from the plugin install itself, so nothing reads them — deleting them changes nothing observable in any workflow, and keeping them means a stale flowctl can shadow the current one.`
+- **options**:
+  - `Delete them (Recommended)` — remove the listed paths: `git rm -rq` for tracked ones, plain `rm -rf` for untracked. FIRST surface any listed tracked file with uncommitted modifications and exclude it from removal (never force-remove modified files; the user resolves those by hand).
+  - `Keep them` — nothing is removed; setup continues normally. They stay inert.
 
-```bash
-mkdir -p .flow/bin .flow/templates
-```
+**Never delete silently.** A leftover that disappeared without the user answering `Delete them` has broken this. After a delete, re-enumerate and print anything still present (declines, modified-file exclusions) — then continue either way; leftovers never block setup.
 
-## Step 4: Copy files
+### Done when
 
-**flowctl.py is copied, never read** — it is far too large for context. A transcript with a Read of `flowctl.py` in it has broken this.
+- The residue probe ran on this pass, and its paths match flowctl's `PLUGIN_MODE_COPY_ARTIFACTS` list.
+- Nothing under `.flow/bin/`, `.flow/templates/`, or `.flow/usage.md` was written by this run, and nothing was deleted without an explicit `Delete them` answer.
 
-Copy using Bash `cp` with absolute paths:
+## Step 4: Seed user-owned files
 
-```bash
-cp "${PLUGIN_ROOT}/scripts/flowctl" .flow/bin/flowctl
-cp "${PLUGIN_ROOT}/scripts/flowctl.cmd" .flow/bin/flowctl.cmd
-cp "${PLUGIN_ROOT}/scripts/flowctl.py" .flow/bin/flowctl.py
-cp "${PLUGIN_ROOT}/scripts/flowctl_bootstrap.py" .flow/bin/flowctl_bootstrap.py
-cp "${PLUGIN_ROOT}/scripts/flowctl-help.txt" .flow/bin/flowctl-help.txt
-rm -rf .flow/bin/flowctl_tracker
-cp -R "${PLUGIN_ROOT}/scripts/flowctl_tracker" .flow/bin/flowctl_tracker
-cp "${PLUGIN_ROOT}/templates/spec.md" .flow/templates/spec.md
-chmod +x .flow/bin/flowctl
-```
-
-**Verify the tracker package post-copy (fn-139.5)** — integrity is checked here,
-where it can actually run, and fails loudly rather than surfacing later as an
-ImportError mid-command:
-
-```bash
-python3 "${PLUGIN_ROOT}/scripts/lib/verify_tracker_manifest.py" .flow/bin
-```
-
-If verification fails, STOP and tell the user the plugin install is corrupt
-(reinstall the plugin, then re-run `/flow-next:setup`) — do not continue with a
-half-copied package.
-
-`flowctl.cmd` is the Windows batch launcher (cmd.exe / PowerShell — Claude Desktop, native Codex, native Cursor); no `chmod +x` needed (PATHEXT resolves it, not the exec bit). The bash `flowctl` and the `.cmd` share the small `flowctl_bootstrap.py` front end, tracked `flowctl-help.txt`, and source-of-truth `flowctl.py`. Only exact static help/usage requests use fast paths; every other command compiles tracked source in memory and never reads executable cache state.
-
-`.flow/templates/spec.md` is the canonical 7-section spec scaffold that the AGENTS.md / CLAUDE.md snippet points downstream agents at. Copying it project-local means the path the snippet references resolves without depending on the plugin install location.
+Nothing is copied into `.flow/` — flowctl, the spec template, and the usage guide all resolve from the plugin install. This step seeds only **user-owned** files: an optional repo-root `SPEC.md`, and (on Codex) the project's `.codex/agents/*.toml`.
 
 ### Step 4a: Opt-in `<repo_root>/SPEC.md` customization (interactive)
 
-The spec-template discovery cascade prefers a customized scaffold at the repo root over `.flow/templates/spec.md` and the bundled plugin copy. This step lets the user opt into seeding `<repo_root>/SPEC.md` from the canonical template so they can edit it without diving into `.flow/templates/`.
+The spec-template discovery cascade prefers a customized scaffold at the repo root over the bundled plugin copy. This step lets the user opt into seeding `<repo_root>/SPEC.md` from the canonical template so they can edit it in place.
 
 **Detect what's already at the repo root** (case-insensitive FS handling — macOS APFS, Windows NTFS):
 
@@ -167,11 +155,11 @@ Then branch:
 **1. `HITS=0` (neither file exists)** — ask the user via `plain-text numbered prompt`:
 
 - **header**: `Copy canonical spec template to <repo-root>/SPEC.md?`
-- **body**: `Every new flow-next spec starts from a template. Lookup order: <repo-root>/SPEC.md first, then .flow/templates/spec.md, then the plugin's bundled copy — so a SPEC.md at the repo root is where you customize section wording for THIS project without touching .flow/ internals. Skipping is safe — the later fallbacks always resolve, and you can opt in any time by copying .flow/templates/spec.md to the repo root.`
+- **body**: `Every new flow-next spec starts from a template. Lookup order: <repo-root>/SPEC.md first, then <repo-root>/spec.md, then the plugin's bundled copy — so a SPEC.md at the repo root is where you customize section wording for THIS project. Skipping is safe — the bundled template always resolves, and you can opt in any time by re-running /flow-next:setup.`
 - **options**:
   - `Copy template` — write `<repo_root>/SPEC.md` from the bundled template (carries the customization-location top-comment). Print the path so the user knows where to edit.
-  - `Skip` — no write. Cascade falls through to `.flow/templates/spec.md`. Documentation cross-links (CLAUDE.md / AGENTS.md snippets) explain how to opt in later: just copy `.flow/templates/spec.md` to `<repo-root>/SPEC.md`.
-  - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo_root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+  - `Skip` — no write. Cascade falls through to the plugin's bundled template. Opt in any time by re-running `/flow-next:setup`.
+  - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`) may already have run; they are idempotent and safe to leave. No `<repo_root>/SPEC.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 On `Copy template`: write the file via Bash `cp` with absolute paths.
 
@@ -222,27 +210,13 @@ Then:
   - **options**:
     - `Keep mine (Recommended)` — leave `<repo-root>/$EXISTING` unchanged. Print the path to the canonical template so the user can diff manually.
     - `Overwrite with canonical` — replace `<repo-root>/$EXISTING` (same filename — do NOT rename lowercase `spec.md` to uppercase `SPEC.md` here; preserve the user's casing) with the bundled template content. Repo customization is lost.
-    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `<repo-root>/$EXISTING` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
+    - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`) may already have run; they are idempotent and safe to leave. No `<repo-root>/$EXISTING` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
 
 **Note:** Setup writes uppercase `SPEC.md` only on the **fresh-seed** path (`HITS=0` `Copy template`). Never seed lowercase `spec.md` from scratch. The lowercase entry in the cascade is read-only at discovery time — present only for users who deliberately created lowercase. On the **re-setup overwrite** path above, preserve the user's existing filename casing via `$EXISTING` (so a lowercase `spec.md` stays lowercase after `Overwrite with canonical`).
 
-Then handle `.flow/usage.md` — preserve any repo-customized variant:
-
-1. Read [../../templates/usage.md](../../templates/usage.md) (this is the canonical content, bundled at `${PLUGIN_ROOT}/templates/usage.md` since fn-121).
-2. If `.flow/usage.md` does not exist → write the canonical content.
-3. If `.flow/usage.md` exists → compare byte-for-byte with the canonical content:
-   - **Identical**: no-op (skip the write entirely — re-running setup must not bump mtime on unchanged files).
-   - **Customized** (any deviation): **the file is never overwritten without an explicit answer.** Ask the user via `plain-text numbered prompt`:
-     - **header**: `Overwrite customized .flow/usage.md?`
-     - **body**: `.flow/usage.md exists and differs from the canonical template shipped with this plugin version. Overwriting replaces your edits. Keeping skips this file (you can manually merge later via diff against \`${PLUGIN_ROOT}/templates/usage.md\`).`
-     - **options**:
-       - `Keep mine (Recommended)` — leave `.flow/usage.md` unchanged. Print the path to the canonical template so the user can diff manually.
-       - `Overwrite with canonical` — replace `.flow/usage.md` with the template content. Repo customization is lost.
-       - `abort` — exit cleanly. Earlier steps (Step 1 `flowctl init`, Step 3 mkdir, Step 4 bin/template copies above) may already have run; they are idempotent and safe to leave. No `.flow/usage.md` write; Step 4b onward skipped. Re-run `/flow-next:setup` later to complete setup.
-
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
-**This step runs only when `PLATFORM` is `codex`.** A `.codex/agents/` directory created on a Claude Code, Droid, Cursor, or Grok host has broken this. (Cursor and Grok drive the workflow with `/flow-next:*` slash commands and resolve `flowctl` via `.flow/bin/flowctl`, not project-scoped `.codex/` agents. Grok never copies `.codex/agents`.)
+**This step runs only when `PLATFORM` is `codex`.** A `.codex/agents/` directory created on a Claude Code, Droid, Cursor, or Grok host has broken this. (Cursor and Grok drive the workflow with `/flow-next:*` slash commands, not project-scoped `.codex/` agents. Grok never copies `.codex/agents`.)
 
 On Codex, agents live in project-scoped `.codex/` directories (not in the plugin cache). Copy them. **Do not copy or enable Ralph hooks here** — hooks are opt-in via the Ralph question (Step 6d, always asked) and `/flow-next:ralph-init` registration prose.
 
@@ -264,8 +238,7 @@ fi
 
 ### Done when
 
-- In copy mode, `.flow/bin/` and `.flow/templates/` carry the bundled copies; where the mode skips copying, Steps 3–4's copy block ran not at all and `.flow/bin/` stayed absent.
-- **User-owned files — repo-root `SPEC.md`, `.flow/usage.md`, `.flow/criteria.md` — were compared before writing, left untouched when identical, and never overwritten without an explicit answer.** A customized one silently replaced has broken this.
+- **User-owned files — repo-root `SPEC.md`, `.flow/criteria.md` — were compared before writing, left untouched when identical, and never overwritten without an explicit answer.** A customized one silently replaced has broken this.
 - `.codex/agents/*.toml` exists only when `PLATFORM=codex`, and no Ralph hook was copied or enabled here.
 
 ## Step 5: Update meta.json
@@ -346,7 +319,9 @@ Store detection results for use in questions. When showing options, indicate cur
 
 Choose the correct template based on platform:
 - **Codex** (`PLATFORM=codex`): read [templates/agents-md-snippet.md](templates/agents-md-snippet.md) — uses `$flow-next-plan` syntax
-- **Claude Code (copy mode) / Droid / Cursor / Grok**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` slash syntax (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md. Grok drives with `/flow-next-` slash commands and reads BOTH CLAUDE.md and AGENTS.md — lifecycle snippet targets CLAUDE.md by default; a pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form, marker-scoped)
+- **Claude Code / Droid / Cursor / Grok**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` slash syntax (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md. Grok drives with `/flow-next-` slash commands and reads BOTH CLAUDE.md and AGENTS.md — lifecycle snippet targets CLAUDE.md by default; a pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form, marker-scoped)
+
+Both templates are the same slim rail: bare `flowctl`, `flowctl usage` pull directives, and an internal `<!-- flow-next:snippet:vN -->` sentinel that versions the block.
 
 For each of CLAUDE.md and AGENTS.md:
 1. Check if file exists
@@ -463,7 +438,7 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**Global criteria question** (include if `CRITERIA_EXISTS=0` — an existing `.flow/criteria.md` is user content: never re-ask, never touch. Runs in BOTH setup modes — like the Step 4a SPEC.md offer, it seeds a user-owned file, not a setup-managed copy):
+**Global criteria question** (include if `CRITERIA_EXISTS=0` — an existing `.flow/criteria.md` is user content: never re-ask, never touch. Like the Step 4a SPEC.md offer, it seeds a user-owned file, not a setup-managed copy):
 ```json
 {
   "header": "Global criteria",
@@ -707,7 +682,7 @@ Only process answers for questions that were asked (config values that were unse
      ```
 
 **Global criteria** (if question was asked):
-- If "Scaffold": copy the bundled template (both modes resolve it from the plugin - the file is user content from this moment on, so no re-run ever refreshes or compares it):
+- If "Scaffold": copy the bundled template (resolved from the plugin install - the file is user content from this moment on, so no re-run ever refreshes or compares it):
 
   ```bash
   cp "${PLUGIN_ROOT}/templates/criteria.md" .flow/criteria.md
@@ -737,8 +712,8 @@ esac
 
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
-- AGENTS.md on **Claude Code (copy mode) / Droid / Cursor / Grok**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` slash syntax — Cursor and Grok run the slash commands, so their AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one; a wrong Codex `$` block is consent-refreshed marker-scoped)
-- CLAUDE.md (any platform, copy mode — including Grok's default lifecycle target): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
+- AGENTS.md on **Claude Code / Droid / Cursor / Grok**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` slash syntax — Cursor and Grok run the slash commands, so their AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one; a wrong Codex `$` block is consent-refreshed marker-scoped)
+- CLAUDE.md (any platform — including Grok's default lifecycle target): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
 
 **Resolve the target file set:** an explicit Docs-question answer is authoritative - if the user is asked and selects specific files (or declines one), honor exactly that; never touch a file the user just deselected. The one addition is a backfill for the SKIPPED case: when the Docs question is omitted entirely because the block is already current (per the Note above), still run `apply` on each already-marker-bearing file. Rationale (R8): a current-but-hashless block (written by a pre-hash plugin version) would otherwise never reach `apply`, so its pristine hash never gets backfilled and the NEXT template change wrongly prompts "Overwrite customized?". `apply` on a current block is cheap and idempotent - it returns `unchanged` and records the missing hash. So: resolve targets = files chosen by the Docs question when it was asked; OR, when the Docs question was skipped, the files already carrying the `<!-- BEGIN FLOW-NEXT -->` marker. Run the helper once per resolved file.
 
@@ -828,16 +803,6 @@ marker, do not read either Ralph reference, do not register hooks, and set
   2. If available, run: `gh api -X PUT /user/starred/gmickel/flow-next`
   3. If `gh` not available or command fails, show: `Star manually: https://github.com/gmickel/flow-next`
 
-### Step 7c: Stamp setup mode (fn-121)
-
-Runs after every Step 7 write, before Step 8. When the existing-mode guard chose `MODE=plugin-kept`, do NOT run the stamp - the existing `setup_mode` stays untouched (report `Setup mode: plugin (kept - managed from Claude Code)` in Step 8). Otherwise:
-
-```bash
-"${PLUGIN_ROOT}/scripts/flowctl" setup-mode set copy --json
-```
-
-Include `Setup mode: copy` in the Step 8 summary.
-
 ## Step 8: Print Summary
 
 ```
@@ -845,20 +810,20 @@ Flow-Next setup complete!
 
 Platform: <claude-code|codex|droid|cursor|grok>
 
-Installed:
-- .flow/bin/flowctl (v<VERSION>)
-- .flow/bin/flowctl.cmd (Windows PowerShell/cmd launcher)
-- .flow/bin/flowctl.py
-- .flow/templates/spec.md
-- .flow/usage.md
+Written:
+- <CLAUDE.md and/or AGENTS.md> flow-next snippet (marker-fenced, sentinel v<N>)
 - <repo-root>/SPEC.md (only if Step 4a "Copy template" was chosen — otherwise omit this line)
 - .flow/criteria.md (only if the Global criteria "Scaffold" option was chosen — otherwise omit this line)
+
+Nothing was copied into .flow/ — flowctl comes from the plugin install:
+  flowctl --help        # every command
+  flowctl usage         # CLI cheatsheet + orchestration recipes, always current
 ```
 
 **If PLATFORM=cursor, also show:**
 ```
 Cursor host notes:
-- Copy mode only (.flow/bin/flowctl) — Cursor exposes no plugin-root env vars / bin PATH injection
+- flowctl resolves from the plugin install via the skill's own absolute path (Cursor exposes no plugin-root env vars) — nothing is copied into the repo
 - Review default: host (host-native cross-family subagent; the model is named on the `reviewer` tier of the AGENTS.md routing block)
 - Ralph: unsupported on Cursor (not offered; not registered)
 ```
@@ -866,7 +831,7 @@ Cursor host notes:
 **If PLATFORM=grok, also show:**
 ```
 Grok host notes:
-- Copy mode only (.flow/bin/flowctl) — Grok exposes no plugin-root bin PATH injection
+- flowctl resolves from the plugin install via the skill's own absolute path (Grok exposes no plugin-root env vars) — nothing is copied into the repo
 - Docs: /flow-next: slash snippet (CLAUDE.md default lifecycle target; Grok also reads AGENTS.md)
 - Routing block: AGENTS.md (where host review reads the `reviewer` tier)
 - Review: host offered (single-native-family fail-closed for Grok writers) + rp/codex/copilot/cursor/none
@@ -883,10 +848,6 @@ Codex project setup:
 
 **Then always show:**
 ```
-To use from command line:
-  export PATH=".flow/bin:$PATH"
-  flowctl --help
-
 Configuration (use flowctl config set to change):
 - Memory: <enabled|disabled>
 - Plan-Sync: <enabled|disabled>
@@ -903,11 +864,11 @@ Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "s
 - The block is a commented example; edit it to name the models you want per tier.
 
 Notes:
-- Re-run /flow-next:setup after plugin updates to refresh scripts
+- Plugin updates need no per-repo action, on any host — nothing was copied, so nothing goes stale. Re-run /flow-next:setup only when setup says the snippet schema bumped, or to change configuration / seed files.
 - Ralph: answered in the setup ceremony (default off; skipped entirely on Cursor and Grok — unsupported). To enable later on supported hosts: /flow-next:ralph-init (merges project hooks; plugin ships none)
 - Live QA stage: off by default. `flowctl config set pipeline.qa on` makes /flow-next:pilot run one live /flow-next:qa pass over the finished build before make-pr (needs a running app plus a browser driver)
 - Use Linear / GitHub Issues / GitLab / Jira for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN / JIRA_BASE_URL + credential, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
-- Uninstall (run manually): rm -rf .flow/bin .flow/templates .flow/usage.md and remove the <!-- BEGIN/END FLOW-NEXT --> and <!-- flow-next:model-routing:start/end --> blocks from docs — or run /flow-next:uninstall for full cleanup (also strips Ralph guard hook entries from project settings)
+- Uninstall (run manually): remove the <!-- BEGIN/END FLOW-NEXT --> and <!-- flow-next:model-routing:start/end --> blocks from docs (plus any legacy .flow/bin, .flow/templates, .flow/usage.md leftovers, if you kept them) — or run /flow-next:uninstall for full cleanup (also strips Ralph guard hook entries from project settings)
 - This setup is optional - plugin works without it
 ```
 **Tracker-sync proposal (always show, after the Notes block).** Surface the tracker bridge as an explicit optional next step — the discovery ceremony is the bridge's own setup, separate from this skill (which never touches tracker config, keeping the zero-dep base clean):
