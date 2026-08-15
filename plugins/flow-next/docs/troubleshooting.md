@@ -8,7 +8,7 @@ Common recovery patterns for stuck tasks, broken state, Ralph debugging, and rev
 
 ## I have `.flow/bin/` from an old install
 
-Delete it. `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` are snapshots from the retired copy layout; nothing reads them, and removing them changes nothing observable in any workflow. Keeping them is a hazard, not a safety net — a stale copied `flowctl` can shadow the current one (a flag that "should exist" erroring is the classic symptom). `/flow-next:setup` and `/flow-next:plan` both detect the leftovers and offer to delete them; you can also just `rm -rf .flow/bin .flow/templates/spec.md .flow/usage.md` (use `git rm` for tracked copies).
+Delete it. `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` are snapshots from the retired copy layout; nothing reads them, and removing them changes nothing observable in any workflow. One exception before you bulk-delete: a `.flow/templates/spec.md` you EDITED is your content - copy it to a repo-root `SPEC.md` first (that is the customization point now); setup's cleanup offer detects a differing template and never deletes it for you. Keeping them is a hazard, not a safety net — a stale copied `flowctl` can shadow the current one (a flag that "should exist" erroring is the classic symptom). `/flow-next:setup` detects the leftovers and offers to delete them (`/flow-next:plan` prints a one-line nudge and moves on); you can also just `rm -rf .flow/bin .flow/templates/spec.md .flow/usage.md` (use `git rm` for tracked copies).
 
 ## Pre-1.0 layout porting
 
