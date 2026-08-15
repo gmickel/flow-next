@@ -47,7 +47,8 @@ stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 stage: delegation - skipped(config: delegation off)
 
 
-stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; one cosmetic fixed post-verdict)
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; one cosmetic fixed post-verdict)stage: plan-sync - ran (drift: no; .5/.6 pre-synced breadcrumbs verified accurate; cross-spec deferred to conductor)
+
 ## Evidence
 - Commits: b25e06039da34ef85efc1d4d9c9c3769050ff039
 - Tests: python3 scripts/run_tests_parallel.py (baseline pre-edit, rc=0, 190 files / 4375 tests), python3 scripts/run_tests_parallel.py (post-edit, rc=0, 189 files / 4368 tests), python3 scripts/run_tests_parallel.py (clean bin-less worktree at HEAD, rc=0, 189 files / 4368 tests), uvx ruff@0.16.0 check . (rc=0, main + clean worktree), ./scripts/sync-codex.sh x2 (rc=0, idempotent; clean worktree run produced no diff), cd flow-next-tui && bun test (rc=0, 384 pass), impl-review: host backend SHIP round 1 (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.4.json)
