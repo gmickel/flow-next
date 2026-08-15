@@ -48,7 +48,8 @@ stage: delegation - skipped(config: delegation off)
 
 Post-review fixes 311659fb: Windows launcher claim + best-effort hedge; pre-1.0 porting pointers -> flowctl usage (+ mirrors).
 
-stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; P2 + P3 fixed post-verdict)
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; P2 + P3 fixed post-verdict)stage: plan-sync - ran (drift: no; .6 already aligned on rename/CHANGELOG/conditional-bump; cross-spec deferred to conductor)
+
 ## Evidence
 - Commits: 840141cc8ae64acb8fd090e433b47dcc9dde9983, 311659fb
 - Tests: python3 scripts/run_tests_parallel.py (189 files / 4368 tests, failures=0 errors=0), uvx ruff@0.16.0 check . (All checks passed), ./scripts/sync-codex.sh x2 (idempotent, all guards green), impl-review: host backend SHIP round 1 (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.5.json); post-fix focused suites + mirror x2 + ruff green
