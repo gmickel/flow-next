@@ -757,7 +757,7 @@ For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marke
      - **options**:
        - `Keep mine (Recommended)` - run `"${PLUGIN_ROOT}/scripts/flowctl" setup-block resolve --file <FILE> --template <same template> --choice keep --json`. This records the `"customized"` sentinel so future re-runs never re-ask and never overwrite. Print the canonical template path so the user can diff manually (`${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md`).
        - `Overwrite with canonical` - run the same `setup-block resolve` command with `--choice overwrite`. This replaces the marker block with the canonical snippet and records the new pristine hash; customizations inside the markers are lost, content outside the markers is preserved.
-       - `abort` - exit cleanly, no further writes. Earlier steps (init, file copies, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the routing block, and the Star step). Re-run `/flow-next:setup` later to complete setup.
+       - `abort` - exit cleanly, no further writes. Earlier steps (init, Step 2b's leftover cleanup if accepted, config writes, prior docs-file decisions for any already-processed file) may already have run; they are idempotent and safe to leave. Everything from here onward is skipped (remaining docs files, the routing block, and the Star step). Re-run `/flow-next:setup` later to complete setup.
 
 The marker-block boundaries are load-bearing: **docs snippets are written through `flowctl setup-block apply`, touching only the bytes inside the flow-next markers.** Prose outside `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` that changed, or a write made by anything other than the helper, has broken this. And **an `ask` result prompts Keep mine / Overwrite / abort** — a customized block replaced without that answer has broken this too.
 
@@ -787,8 +787,9 @@ Per target, in order:
 - **Existing block.** A file already carrying
   `<!-- flow-next:model-routing:start -->` is left **completely untouched** — no
   byte-compare, no refresh, no question, no mtime change. Record
-  `kept (yours)`. Setup is re-run after every release; a block the user edited
-  (or emptied) is theirs from the moment it exists. Rewriting one has broken
+  `kept (yours)`. A block the user edited (or emptied) is theirs from the
+  moment it exists - and setup may be re-run at any time (snippet bump, config
+  change), so it must stay safe against every future run. Rewriting one has broken
   this (fn-195 R5).
 - **Unmarked routing prose.** A target already carrying a user-authored
   routing-shaped heading (a heading line containing `model routing` or
