@@ -231,7 +231,7 @@
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.5": 0
   },
   "spec_path": ".flow/specs/fn-197-copy-less-installs-resolve-flowctl-from.md",
-  "status": "open",
+  "status": "done",
   "title": "Copy-less installs: resolve flowctl from the plugin install on every host; retire copy mode",
   "tracker": {
     "baseHashFlow": null,
@@ -244,5 +244,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-15T11:00:18.509429Z"
+  "updated_at": "2026-08-15T11:30:07.024200Z"
 }
