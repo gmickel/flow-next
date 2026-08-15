@@ -14,7 +14,8 @@
   "impl_review_rounds": {
     "fn-197-copy-less-installs-resolve-flowctl-from.1": 0,
     "fn-197-copy-less-installs-resolve-flowctl-from.2": 0,
-    "fn-197-copy-less-installs-resolve-flowctl-from.3": 0
+    "fn-197-copy-less-installs-resolve-flowctl-from.3": 0,
+    "fn-197-copy-less-installs-resolve-flowctl-from.4": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -137,8 +138,18 @@
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 1,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 1
   },
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.4": 1
+  },
+  "review_reservations": {
+    "6b6836366fc34083b0f3df33243b1eaf": {
+      "artifact_sha256": "918116d0537736cd2da02b1bdccabcb6d163a7fadfb1bf046075dcaa498bb2ba",
+      "counter_scope": "impl:fn-197-copy-less-installs-resolve-flowctl-from.4",
+      "epoch": 0,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.1": 0,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 0,
@@ -158,5 +169,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-15T09:00:36.813657Z"
+  "updated_at": "2026-08-15T09:35:07.567256Z"
 }

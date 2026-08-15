@@ -5,7 +5,7 @@ Framework (fn-92.4): the command/schema skeleton, the per-collector
 completeness-diagnostics envelope (resolution 21b), axes 1-4 raw signals +
 Axis-5 shape markers + assessment_scope, blob-ID content-hash dedup (`git
 ls-files -s`, no content read), per-collector budget scaffolding, the
-the emitter contract, and a live-subcommand smoke.
+emitter contract, and a live-subcommand smoke.
 
 Substance (fn-92.13): the emitter-owned substance-grep collectors of the
 pillars.md criterion-to-score map (SV3/TS5/DE1/DE4/DE5/FH1-FH7/FH10-FH13/HP7 +
@@ -1271,7 +1271,7 @@ class EmitterContractTestCase(unittest.TestCase):
     @unittest.skipIf(
         sys.platform == "win32",
         "live subcommand-resolution subprocess is Windows-runner fragile; the "
-        "the emitter-present check covers the contract.",
+        "emitter-present check covers the contract.",
     )
     def test_live_cli_resolves_classify_subcommand(self) -> None:
         proc = subprocess.run(
