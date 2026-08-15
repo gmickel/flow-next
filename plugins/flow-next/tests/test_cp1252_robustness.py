@@ -118,29 +118,19 @@ class StdioReconfigureUtf8(unittest.TestCase):
         m.assert_called_once()
 
 
-class DualCopyInvariant(unittest.TestCase):
-    """The repo dogfoods a byte-identical ``.flow/bin/flowctl.py``; the #167
-    fixes must land in BOTH copies or the live dogfood CLI runs stale code."""
+class CanonicalSourceCarriesTheFixes(unittest.TestCase):
+    """`scripts/flowctl.py` is the single source; the #167 fixes live there."""
 
     CANONICAL = REPO_ROOT / "plugins" / "flow-next" / "scripts" / "flowctl.py"
-    DOGFOOD = REPO_ROOT / ".flow" / "bin" / "flowctl.py"
 
-    def test_two_copies_byte_identical(self):
-        self.assertEqual(
-            self.CANONICAL.read_bytes(),
-            self.DOGFOOD.read_bytes(),
-            "scripts/flowctl.py and .flow/bin/flowctl.py must be byte-identical",
+    def test_source_carries_the_167_fixes(self):
+        text = self.CANONICAL.read_text(encoding="utf-8")
+        self.assertIn("_reconfigure_stdio_utf8", text)
+        self.assertIn(
+            'result.stdout.decode("utf-8", errors="replace")',
+            text,
+            "find_references must decode git-grep bytes defensively",
         )
-
-    def test_both_copies_carry_the_167_fixes(self):
-        for p in (self.CANONICAL, self.DOGFOOD):
-            text = p.read_text(encoding="utf-8")
-            self.assertIn("_reconfigure_stdio_utf8", text)
-            self.assertIn(
-                'result.stdout.decode("utf-8", errors="replace")',
-                text,
-                "find_references must decode git-grep bytes defensively",
-            )
 
 
 class WorkerResultRecoveryProse(unittest.TestCase):

@@ -182,9 +182,16 @@ Run `/flow-next:ralph-init` to scaffold the Ralph harness.
 
 The TUI searches for flowctl in:
 
-1. `.flow/bin/flowctl`
-2. `plugins/flow-next/scripts/flowctl.py`
-3. System PATH
+1. `.flow/bin/flowctl` (legacy copy install)
+2. `plugins/flow-next/scripts/flowctl` (repo-local plugin checkout, cwd then repo root)
+3. System PATH (`flowctl`, then `flowctl.py`)
+4. The host's plugin install:
+   - `~/.claude/plugins/marketplaces/flow-next/plugins/flow-next/scripts/flowctl` and the versioned `~/.claude/plugins/cache/flow-next/...` entries (newest first)
+   - `~/.codex/scripts/flowctl`
+   - `~/.cursor/plugins/local/flow-next/scripts/flowctl` and the versioned `~/.cursor/plugins/cache/flow-next/...` entries (newest first)
+
+Rung 4 reads `$FLOW_NEXT_TUI_HOME` in place of the real home directory when that
+variable is set, so a non-standard home (or a fixture tree) resolves the same way.
 
 ### Unicode icons look wrong
 

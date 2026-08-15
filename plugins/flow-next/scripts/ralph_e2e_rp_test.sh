@@ -195,16 +195,12 @@ PY
 
 scripts/ralph/flowctl init --json >/dev/null
 
-# Mirror /flow-next:setup - add .flow/bin/ + usage.md + CLAUDE.md
-mkdir -p .flow/bin
-cp "$PLUGIN_ROOT/scripts/flowctl" .flow/bin/flowctl
-cp "$PLUGIN_ROOT/scripts/flowctl.py" .flow/bin/flowctl.py
-cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" .flow/bin/flowctl_bootstrap.py
-cp "$PLUGIN_ROOT/scripts/flowctl-help.txt" .flow/bin/flowctl-help.txt
-chmod +x .flow/bin/flowctl
-cp "$PLUGIN_ROOT/templates/usage.md" .flow/usage.md
+# Mirror /flow-next:setup - it copies NOTHING into the repo (fn-197): skills
+# resolve flowctl from the plugin install at "$PLUGIN_ROOT/scripts/flowctl",
+# and the usage guide + spec template come from the same tree. Only the
+# CLAUDE.md rail is written.
 cat "$PLUGIN_ROOT/skills/flow-next-setup/templates/claude-md-snippet.md" > CLAUDE.md
-echo -e "${GREEN}✓${NC} Setup mirrored (.flow/bin/, usage.md, CLAUDE.md)"
+echo -e "${GREEN}✓${NC} Setup mirrored (CLAUDE.md rail; flowctl resolves from $PLUGIN_ROOT/scripts/flowctl)"
 
 scripts/ralph/flowctl spec create --title "Tiny lib" --json >/dev/null
 scripts/ralph/flowctl spec create --title "Tiny follow-up" --json >/dev/null

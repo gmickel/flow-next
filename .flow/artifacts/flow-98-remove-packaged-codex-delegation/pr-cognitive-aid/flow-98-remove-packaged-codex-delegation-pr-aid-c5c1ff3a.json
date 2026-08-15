@@ -1,0 +1,1515 @@
+{
+  "artifactId": "flow-98-remove-packaged-codex-delegation-pr-aid-c5c1ff3a",
+  "baseSha": "26879693f4af867c99b18fb523f521eabb73383c",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 54,
+            "path": "plugins/flow-next/schema/flow-config.schema.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated schema artifact (generator, never hand-edited).",
+            "taskIds": []
+          },
+          {
+            "additions": 106,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 483,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/tests/test_artifacts_config.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/test_flow_config_schema_drift.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/tests/test_land_config.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 221,
+            "path": "plugins/flow-next/tests/test_model_resolution.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_pilot_backlog_substrate.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/test_pipeline_qa_config.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 161,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_removed_delegate_config_advisory.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 53,
+            "path": "scripts/gen_flow_config_schema.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [
+          "R1",
+          "R3"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t1",
+          "rid-R1",
+          "rid-R3",
+          "c1"
+        ],
+        "summary": "The six work.delegate* keys and the models.roles.delegate pin leave the CLI, the generator TABLE, and the regenerated schema artifact; a config still carrying them gets one non-blocking stderr advisory pointing at the scaffold + bridge recipes.",
+        "taskIds": [
+          "flow-98-remove-packaged-codex-delegation.1"
+        ],
+        "title": "Config keys, role pin, and schema"
+      },
+      {
+        "files": [
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 213,
+            "path": "plugins/flow-next/agents/worker.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 24,
+            "path": "plugins/flow-next/skills/flow-next-work/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 96,
+            "path": "plugins/flow-next/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 162,
+            "path": "plugins/flow-next/skills/flow-next-work/references/codex-delegation-selection.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Deleted with the delegation subsystem.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 912,
+            "path": "plugins/flow-next/skills/flow-next-work/references/codex-delegation.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Deleted with the delegation subsystem.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-work/references/spec-id-mint.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/tests/test_foreground_rule_fences.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_skill_prose_diet.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 123,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_work_argument_literal.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 60,
+            "path": "plugins/flow-next/tests/test_work_reached_path_routes.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 21,
+            "path": "plugins/flow-next/tests/test_worker_anchor_prose.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "scripts/sync-codex.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R2"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t2",
+          "rid-R2",
+          "c2"
+        ],
+        "summary": "Phase 0, Phase 1.5, the per-worker DELEGATE flags, the circuit breaker, the classify judge and both delegation reference files are removed; the in-session path is the only path, with the single-config-snapshot contract relocated into the Phase 1 mint gate.",
+        "taskIds": [
+          "flow-98-remove-packaged-codex-delegation.2"
+        ],
+        "title": "Work-skill and worker machinery"
+      },
+      {
+        "files": [
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 13,
+            "path": ".flow/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Parity-tested dogfood copy of the usage template.",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 13,
+            "path": "plugins/flow-next/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R5",
+          "R9"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t3",
+          "rid-R5",
+          "rid-R9",
+          "c3"
+        ],
+        "summary": "The bridge-recipe section now states the safety rule (the bridged child writes code; the host keeps git, judgment, and the verdict) and the measured tier advice, with no benchmark tables and no model names.",
+        "taskIds": [
+          "flow-98-remove-packaged-codex-delegation.3"
+        ],
+        "title": "Prose survivors in the usage guide"
+      },
+      {
+        "files": [
+          {
+            "additions": 54,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/memory/knowledge/decisions/ralph-guard-reverts-its-delegation-2026-08-14.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 229,
+            "path": "plugins/flow-next/scripts/hooks/ralph-guard.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 96,
+            "path": "plugins/flow-next/tests/fixtures/mock-codex/mock-codex.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Deleted with the delegation subsystem.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 810,
+            "path": "plugins/flow-next/tests/test_codex_delegation_classify.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Deleted with the delegation subsystem.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 679,
+            "path": "plugins/flow-next/tests/test_codex_delegation_gates.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Deleted with the delegation subsystem.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/test_drive_headless_determination.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_model_pin_ceremony_prose.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 73,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_ralph_guard.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 684,
+            "path": "plugins/flow-next/tests/test_ralph_guard_codex_delegation.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Deleted with the delegation subsystem.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 255,
+            "path": "plugins/flow-next/tests/test_work_delegate_config.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Deleted with the delegation subsystem.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R6",
+          "R8"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t4",
+          "rid-R6",
+          "rid-R8",
+          "c4",
+          "c5"
+        ],
+        "summary": "Four delegation test files and the mock-codex fixture are retired with their surviving invariants lifted; the guard sheds its delegation amendment and returns to the simple block rule, with regrowth guards and a recorded decision.",
+        "taskIds": [
+          "flow-98-remove-packaged-codex-delegation.4"
+        ],
+        "title": "Test retirement and the Ralph-guard revert"
+      },
+      {
+        "files": [
+          {
+            "additions": 106,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 483,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Propagated dogfood copy of the canonical module.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Propagated dogfood copy of the canonical module.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": ".flow/config.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Dogfooded migration: the six removed keys and the delegate role pin deleted.",
+            "taskIds": []
+          },
+          {
+            "additions": 245,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/specs/flow-98-remove-packaged-codex-delegation.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Flow tracking state (task receipts / spec sidecar).",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": ".flow/specs/flow-98-remove-packaged-codex-delegation.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Flow tracking state (task receipts / spec sidecar).",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/flow-98-remove-packaged-codex-delegation.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Flow tracking state (task receipts / spec sidecar).",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/flow-98-remove-packaged-codex-delegation.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Flow tracking state (task receipts / spec sidecar).",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": ".flow/tasks/flow-98-remove-packaged-codex-delegation.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Flow tracking state (task receipts / spec sidecar).",
+            "taskIds": []
+          },
+          {
+            "additions": 42,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/flow-98-remove-packaged-codex-delegation.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Flow tracking state (task receipts / spec sidecar).",
+            "taskIds": []
+          },
+          {
+            "additions": 42,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": ".flow/tasks/flow-98-remove-packaged-codex-delegation.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Flow tracking state (task receipts / spec sidecar).",
+            "taskIds": []
+          },
+          {
+            "additions": 33,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "CLAUDE.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "STRATEGY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 50,
+            "path": "agent_docs/local-dev.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 213,
+            "path": "plugins/flow-next/codex/agents/worker.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-qa/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-pins.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 17,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-question-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-question-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/references/model-routing-question-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/templates/claude-md-snippet-plugin.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/templates/model-routing-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 10,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 24,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 13,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 86,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 164,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/references/codex-delegation-selection.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 914,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/references/codex-delegation.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/references/spec-id-mint.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 13,
+            "path": "plugins/flow-next/codex/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Regenerated Codex-mirror copy (sync-codex.sh).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/commands/work.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 36,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 38,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 40,
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/docs/ralph.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/docs/running-lean.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/skills.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/teams.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/rules/flow-next.mdc",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/scripts/smoke_test.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-qa/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-pins.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 17,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-bridge.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-cursor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-setup/references/model-routing-question-grok.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet-plugin.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/skills/flow-next-setup/templates/model-routing-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 10,
+            "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_cursor_plugin_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": "plugins/flow-next/tests/test_model_routing_scaffold.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_usage_stages.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Delegation surface removed or repointed to the scaffold + bridge route.",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [
+          "R4",
+          "R7",
+          "R10"
+        ],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t5",
+          "rid-R4",
+          "rid-R7",
+          "rid-R10",
+          "c6"
+        ],
+        "summary": "Every doc repoints to the CLAUDE.md scaffold + bridge recipes as the canonical offload route; the orphaned flowctl codex verbs are removed; the CHANGELOG frames the removal as breaking with a one-step migration; dogfood copies, manifest and the codex mirror are regenerated.",
+        "taskIds": [
+          "flow-98-remove-packaged-codex-delegation.5"
+        ],
+        "title": "Docs sweep, CHANGELOG, propagation, close-out"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Tasks",
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5"
+        ],
+        "value": "5/5 done"
+      },
+      {
+        "label": "Acceptance",
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "value": "10/10 R-IDs evidenced"
+      },
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "d"
+        ],
+        "value": "192 test files, 4407 tests, 0 failures; ruff clean"
+      },
+      {
+        "label": "Net deletion",
+        "sourceRefs": [
+          "d"
+        ],
+        "value": "95 files, ~2,900 lines removed"
+      }
+    ],
+    "thesis": "The packaged codex-delegation subsystem (fn-55) is removed outright: agentic routing - the setup scaffold prose plus the usage-guide bridge recipes - is now the only implementation-offload route, and the two things worth keeping (the measured tier advice and the child-writes/host-judges safety rule) survive in prose."
+  },
+  "generatedAt": "2026-08-14T17:04:09.658750+00:00",
+  "headSha": "c5c1ff3a0d50c77023ad36893c97256f241d2c01",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "flow-98-remove-packaged-codex-delegation"
+    },
+    {
+      "id": "d",
+      "kind": "diff_metadata",
+      "ref": "26879693f4af867c99b18fb523f521eabb73383c..c5c1ff3a0d50c77023ad36893c97256f241d2c01"
+    },
+    {
+      "id": "t1",
+      "kind": "task",
+      "ref": "flow-98-remove-packaged-codex-delegation.1"
+    },
+    {
+      "id": "t2",
+      "kind": "task",
+      "ref": "flow-98-remove-packaged-codex-delegation.2"
+    },
+    {
+      "id": "t3",
+      "kind": "task",
+      "ref": "flow-98-remove-packaged-codex-delegation.3"
+    },
+    {
+      "id": "t4",
+      "kind": "task",
+      "ref": "flow-98-remove-packaged-codex-delegation.4"
+    },
+    {
+      "id": "t5",
+      "kind": "task",
+      "ref": "flow-98-remove-packaged-codex-delegation.5"
+    },
+    {
+      "id": "rid-R1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "rid-R2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "rid-R3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "rid-R4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "rid-R5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "rid-R6",
+      "kind": "rid",
+      "ref": "R6"
+    },
+    {
+      "id": "rid-R7",
+      "kind": "rid",
+      "ref": "R7"
+    },
+    {
+      "id": "rid-R8",
+      "kind": "rid",
+      "ref": "R8"
+    },
+    {
+      "id": "rid-R9",
+      "kind": "rid",
+      "ref": "R9"
+    },
+    {
+      "id": "rid-R10",
+      "kind": "rid",
+      "ref": "R10"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "88ca14e3ef868c8ea02b8338eed4b49a84804d1f"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "afbb2ed1202fc465e5b941ceec28fb840f7a26c2"
+    },
+    {
+      "id": "c3",
+      "kind": "commit",
+      "ref": "99f65f38913af1af3233cc9f3072f77b79e29be5"
+    },
+    {
+      "id": "c4",
+      "kind": "commit",
+      "ref": "72c4e093125635daf9fbfa4ab8384e9a2c9d63f2"
+    },
+    {
+      "id": "c5",
+      "kind": "commit",
+      "ref": "aae3920c140c12040cd13b083dded0510f5f1f27"
+    },
+    {
+      "id": "c6",
+      "kind": "commit",
+      "ref": "d960d6f51351197393ca18c6a3ded8d721cba87f"
+    }
+  ],
+  "specId": "flow-98-remove-packaged-codex-delegation"
+}

@@ -1,10 +1,10 @@
 usage: flowctl.py [-h]
-                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
+                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
 
 flowctl - CLI for .flow/ task tracking
 
 positional arguments:
-  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,setup-mode,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
+  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
     init                Initialize .flow/ directory
     setup-block         Apply or resolve the tracked Flow-Next docs block
     detect              Check if .flow/ exists
@@ -60,7 +60,6 @@ positional arguments:
     cat                 Print spec markdown
     usage               Print the bundled usage guide (CLI + orchestration
                         recipes)
-    setup-mode          Stamp setup_mode in .flow/meta.json
     ready               List ready tasks
     next                Select next plan/work unit
     start               Start task

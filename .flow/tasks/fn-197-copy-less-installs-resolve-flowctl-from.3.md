@@ -38,9 +38,29 @@
 - [ ] flow-next-tui resolves flowctl in a copy-less user repo via the new install-location rungs; README order updated.
 - [ ] test_setup_mode_stamp + test_init_stamp_launchers deleted; other named pins retargeted; CI test-list step updated; suite green.
 ## Done summary
-TBD
+Retired the copy plumbing inside flowctl (`setup-mode` subcommand, the `LAUNCHER_SH`/`LAUNCHER_CMD` constants + `_stamp_flow_bin_launchers` self-heal and its `cmd_init` call site, the default `dualCopy` derivedPaths entry), replaced `/flow-next:plan`'s copy-mode version-drift check with a one-line leftover-residue nudge, and gave flow-next-tui host-install resolution rungs — with `flowctl-help.txt`, `HELP_SHA256`, the dogfood `.flow/bin` copies, the tracker manifest, and the Codex mirror all regenerated in the same commit.
+
+Notable decisions and carve-outs:
+- `PLUGIN_MODE_COPY_ARTIFACTS` renamed to `LEGACY_COPY_ARTIFACTS`, reconciled with `.flow/bin/flowctl_tracker/`, kept exported as the single machine-readable residue manifest that setup's cleanup offer and plan's nudge both reference by name.
+- Kept verbatim per spec: `cmd_usage`'s `.flow/usage.md` fallback, `_memory_template_path` tier 2, `PROTECTED_ARTIFACTS_BLOCK`, all gate rules and their pins.
+- Deleted the orphaned sync-codex manifest-path transform (`${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json` → CODEX_HOME) — its guard died in .2 and its last canonical source died with plan's drift section. The plan-drift guard itself was already gone; verified.
+- Deleted the `### setup-mode` section from `docs/flowctl.md` and fixed the now-wrong `flowctl usage` error pointer there: `test_flowctl_surface` fails otherwise (a removed verb may not appear in an active shell snippet). The rest of the dual-mode doc story stays for task .5.
+- `test_removed_delegate_config_advisory` asserted `usage.md` in the advisory line; the route is now `flowctl usage`, so the assertion moved with the string.
+- flow-next-tui resolver: new rungs run AFTER every existing rung (legacy grace preserved) — Claude marketplace clone, Claude versioned cache (newest 3 by mtime), `~/.codex/scripts`, Cursor local plugin, Cursor versioned cache. Layouts confirmed live on this machine.
+
+Follow-ups (not built here, per scope): docs sweep of the remaining dual-mode prose (`architecture.md`, `troubleshooting.md`, `platforms.md`, `CLAUDE.md`, the `setup_mode: copy` CI-recipe aside in `flowctl.md`) is task .5; retiring the tracked `.flow/bin` dogfood is task .4.
+
+Baseline: green (full suite rc=0 at df83fc7b, pre-edit). Pre-existing red not caused by this task: `flow-next-tui/src/lib/flowctl.test.ts` beforeEach hook timeout (verified identical with the change stashed), and one smoke assertion `copilot plan-review re-review` (artifact-unchanged, environmental).
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+Review fixes 403027d7 + nits: FLOW_NEXT_TUI_HOME test seam, PATH-pinned Bun.which, semver-first cache ordering with mtime tie-break, plugin-install error message, two positive rung tests; SNIPPET constant comment honesty. tui lint red is pre-existing (publish-tui red since 2026-01) - not this task.
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewers; r1 NEEDS_WORK (P2 tui rung regression) -> fixes -> r2 SHIP)stage: plan-sync - ran (drift: minor; .5 flowctl.md item corrected to verify-not-delete, .4 gains pre-existing tui-lint-red note; cross-spec deferred to conductor)
 
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f2fc3cb1e262007fb293c012987b08241f39223d, 403027d7
+- Tests: python3 scripts/run_tests_parallel.py (190 suites PASS, rc=0), uvx ruff@0.16.0 check . (All checks passed), bash plugins/flow-next/scripts/smoke_test.sh (132 pass / 1 fail: pre-existing copilot re-review artifact-unchanged, unrelated), cd plugins/flow-next/tests && python3 -m unittest test_startup_bootstrap test_precheck_mode_contract test_flowctl_surface test_export_traceability test_pr_cognitive_aid test_tracker_distribution test_cmd_usage test_removed_delegate_config_advisory -q, post-fix: bun test 384/384 green (flow-next-tui); focused Python suites + ruff green; propagation byte-identical, impl-review: host backend r1 NEEDS_WORK (P2 tui homedir seam), r2 SHIP (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.3.json)
 - PRs:

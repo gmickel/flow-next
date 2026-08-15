@@ -22,9 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP = ROOT / "scripts" / "flowctl_bootstrap.py"
-DOGFOOD_BOOTSTRAP = ROOT.parents[1] / ".flow" / "bin" / "flowctl_bootstrap.py"
 HELP_TEXT = ROOT / "scripts" / "flowctl-help.txt"
-DOGFOOD_HELP_TEXT = ROOT.parents[1] / ".flow" / "bin" / "flowctl-help.txt"
 SCRIPT_LAUNCHER = ROOT / "scripts" / "flowctl"
 BIN_LAUNCHER = ROOT / "bin" / "flowctl"
 BUNDLED_USAGE = ROOT / "templates" / "usage.md"
@@ -36,18 +34,6 @@ spec.loader.exec_module(bootstrap)
 
 
 class StartupBootstrapTest(unittest.TestCase):
-    def test_dogfood_bootstrap_is_byte_identical(self) -> None:
-        self.assertEqual(
-            BOOTSTRAP.read_bytes(),
-            DOGFOOD_BOOTSTRAP.read_bytes(),
-            "canonical and dogfood bootstrap copies must stay byte-identical",
-        )
-        self.assertEqual(
-            HELP_TEXT.read_bytes(),
-            DOGFOOD_HELP_TEXT.read_bytes(),
-            "canonical and dogfood help fast-path copies must stay byte-identical",
-        )
-
     def _install(self, root: Path, source: str, *, nested: bool = False) -> tuple[Path, Path]:
         scripts = root / "plugin" / "scripts" if nested else root / "bin"
         scripts.mkdir(parents=True)
@@ -218,15 +204,6 @@ class StartupBootstrapTest(unittest.TestCase):
             )
             self.assertEqual(help_result.returncode, 0, help_result.stderr)
             self.assertTrue(help_result.stdout.startswith("usage: flowctl.py"))
-            (bindir.parent / "meta.json").write_text("{}\n", encoding="utf-8")
-            setup_mode = subprocess.run(
-                [str(launcher), "setup-mode", "set", "copy", "--json"],
-                cwd=root / "repo",
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(setup_mode.returncode, 0, setup_mode.stderr)
-            self.assertIn('"mode": "copy"', setup_mode.stdout)
 
     def test_bootstrap_preserves_help_scope_rewrite_and_error_contracts(self) -> None:
         source = ROOT / "scripts" / "flowctl.py"

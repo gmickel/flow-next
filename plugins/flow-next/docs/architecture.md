@@ -107,7 +107,7 @@ Consumers enumerate that documented home and use labeled fallback states on
 stale, unsupported, or invalid input; see
 [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
 
-Pre-1.0 repos that still have `.flow/epics/<id>.json` must port by hand: see `.flow/usage.md` "Pre-1.0 layout porting" (and `docs/troubleshooting.md`). The automated `migrate-rename` path was removed in fn-111.
+Pre-1.0 repos that still have `.flow/epics/<id>.json` must port by hand: see `flowctl usage` "Pre-1.0 layout porting" (and `docs/troubleshooting.md`). The automated `migrate-rename` path was removed in fn-111.
 
 The auto-managed `.flow/.gitignore` (written by `flowctl init`) excludes per-run state (`.checkpoint-*.json`, `receipts/`, `tmp/`, `sync-runs/`, `pilot-runs/`, `locks/`, `.cache/`) and historical migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`) so users don't accidentally commit runtime artifacts on `git add -A`. User patterns added below the auto-managed footer are preserved on subsequent runs. `.flow/.flow_version` is intentionally tracked (schema sentinel; semantics like `Cargo.lock`).
 
@@ -258,7 +258,7 @@ This creates a complete audit trail: what was planned, what was done, how it was
 
 The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The repo now ships flow-next only. The historical comparison table lives in CHANGELOG; the live shape is:
 
-- Task tracking lives in `.flow/` (no external tracker). flowctl reaches it either as a repo-local copy (`.flow/bin/`, copy mode) or straight off the plugin's PATH-injected `bin/` (plugin mode, Claude Code — see [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121)).
+- Task tracking lives in `.flow/` (no external tracker). flowctl itself is never copied there — every host resolves it from the plugin install (see [platforms.md → What setup does](platforms.md#what-setup-does)).
 - Install: plugin only - no external services, no config-file edits.
 - Artifacts: `.flow/specs/` (markdown + JSON sidecar), `.flow/tasks/` (markdown + JSON sidecar), and optionally `.flow/charts/` (decision maps + decision records + briefings).
 - Multi-user safe: scan-based IDs + soft claims (task assignee; chart decision claims).

@@ -190,7 +190,7 @@ fine WHERE THE READER ACTS ON THEM. Blank lines around this block so MDX renders
   Function names, LOC counts, fence/prose-contract mechanics, fn-task numbering,
   test counts, and compatibility contracts belong in the repo CHANGELOG or the
   technical tail - reference them earlier only when the reader must act on them.
-- **Upgrade actions come FIRST and are imperative.** If the reader must do something ("re-run ralph-init", "switch off the legacy JSON keys"), it opens the details block under a "do these first" framing - never buried mid-list.
+- **Upgrade actions come FIRST and are imperative.** If the reader must do something ("re-run ralph-init", "switch off the legacy JSON keys"), it opens the details block under a "do these first" framing - never buried mid-list. **If `SNIPPET_SCHEMA_VERSION` bumped in this release, say so there** - it is the only thing that makes a user re-run `/flow-next:setup` (plugin updates never do).
 - **Numbers are outcomes, not inventory.** "30 seconds to half a second" and "half the wall-clock" persuade; "-1,251 LOC" and "ran=1935" are inventory. Keep measured evidence (that is the register: proof-backed, never adjective-backed), drop bookkeeping.
 - **Honesty stays.** Bounds, deliberate misses, and what did NOT change are part of the story ("about 35% of runs still force a full suite as the safety floor"). The register is candid practitioner, zero hype - see the messaging architecture (claim hierarchy) in the maintainer's private config.
 - **Plain hyphens, never em dashes**, in all new prose.

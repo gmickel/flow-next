@@ -7,6 +7,7 @@ Execute these phases in order. Each gates on the prior. Stop on a user-blocking 
 ```bash
 set -e
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 TODAY="$(date -u +%Y-%m-%d)"

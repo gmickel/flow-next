@@ -3,8 +3,8 @@
 Fails when chart is absent from pipeline/when-to-use routes, presented as
 mandatory, skill/command counts drift from registries, canonical skills or
 Codex mirror copies are missing, flowctl chart --help diverges from
-docs/flowctl.md, grounding/prototype/projection/URL re-entry invariants
-disappear, or usage template/dogfood parity breaks.
+docs/flowctl.md, or grounding/prototype/projection/URL re-entry invariants
+disappear.
 
 Run:
     cd plugins/flow-next/tests && python3 -m unittest test_chart_docs_inventory -q
@@ -165,7 +165,6 @@ class ChartPipelineSurfaces(unittest.TestCase):
         REPO_ROOT / "GLOSSARY.md",
         REPO_ROOT / "CHANGELOG.md",
         PLUGIN / "templates" / "usage.md",
-        REPO_ROOT / ".flow" / "usage.md",
     )
 
     def test_chart_mentioned_on_every_named_surface(self) -> None:
@@ -225,7 +224,6 @@ class ChartPipelineSurfaces(unittest.TestCase):
             SKILLS / "flow-next-chart",
             SKILLS / "flow-next-guide",
             PLUGIN / "templates" / "usage.md",
-            REPO_ROOT / ".flow" / "usage.md",
         ]
         offenders: list[str] = []
         for root in roots:
@@ -609,15 +607,6 @@ class ChartInvariantPhrases(unittest.TestCase):
 
 
 class ChartUsageParity(unittest.TestCase):
-    def test_template_and_dogfood_byte_identical(self) -> None:
-        template = (PLUGIN / "templates" / "usage.md").read_bytes()
-        dogfood = (REPO_ROOT / ".flow" / "usage.md").read_bytes()
-        self.assertEqual(
-            template,
-            dogfood,
-            "plugins/flow-next/templates/usage.md and .flow/usage.md must be byte-identical",
-        )
-
     def test_usage_has_compact_chart_section(self) -> None:
         text = _read(PLUGIN / "templates" / "usage.md")
         self.assertIn("## Chart", text)

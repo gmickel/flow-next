@@ -6,7 +6,8 @@
 **Execution checklist — `plugins/flow-next/docs/`:**
 1. `platforms.md` (partial restructure, not whole-file): DELETE the `## Setup modes: plugin vs copy (fn-121)` section (L37-47 incl. the 5-row table) → replace with a 3-5 line "What setup does"; DELETE the "Why other hosts can't have plugin mode" paragraph (L67); rewrite L7 (intro copy-mode clause), L31 (Grok matrix cell), L56+L60-65 (flowctl_tracker verification story — installers only now), L193-218 Codex per-project fence (delete the optional `.flow/bin` copy block L212-216 + bullet L197), Grok claims (L232, 254, 263, 273), Cursor claims (L289, 298, 322, 332-333), Windows section (L352 "Both live under `.flow/bin/`…" → plugin `bin/`; L354 alias-stub recovery path). ANCHOR TRAP: `#setup-modes-plugin-vs-copy-fn-121` has 3 inbound links — fix `docs/architecture.md:261`, `docs/flowctl.md:136`, `docs/troubleshooting.md:14` in this task.
 2. `troubleshooting.md`: replace the whole "Just updated the plugin? Re-run setup" section (L5-14) with "Updated the plugin — do I re-run setup? **No**, unless the snippet schema bumped (setup tells you)"; L18 porting pointer → `flowctl usage`; L167 Windows re-run advice → "update the plugin"; L179-187 broken-launcher recovery → keep, explicitly labeled as legacy-copy recovery; ADD a short "I have `.flow/bin/` from an old install" → delete it, nothing depends on it.
-3. `flowctl.md`: L5 (`.flow/usage.md` → `flowctl usage`), L65 (init re-stamps launchers — dead after .3, delete), L67, L123 (usage resolution → bundled, one-line legacy note), DELETE L129-136 (`setup-mode` command reference + check TOC/anchors), L182-188 (setup-block CI recipe: drop the `setup_mode: copy` framing, recipe survives — `.flow/templates/claude-block.md` there is USER-owned, not a setup copy), L416 (derivedPaths default — dual-copy example gone), L1787 (prime emitter dual-copy prose), L1946+L1957 (gate cleanliness/FORCE-FULL: keep the rules — settled — but reword the rationale as legacy-path handling), L2174 (drop the setup half).
+3. `flowctl.md`: L5 (`.flow/usage.md` → `flowctl usage`), L65 (init re-stamps launchers — dead after .3, delete), L67, L123 (usage resolution → bundled, one-line legacy note); `setup-mode` command reference is ALREADY GONE (.3 deleted the whole `### setup-mode` section — verify no orphaned TOC/anchor still points at it, but there is no section body left to delete here), L182-188 (setup-block CI recipe: drop the `setup_mode: copy` framing, recipe survives — `.flow/templates/claude-block.md` there is USER-owned, not a setup copy), L416 (derivedPaths default — dual-copy example gone), L1787 (prime emitter dual-copy prose), L1946+L1957 (gate cleanliness/FORCE-FULL: keep the rules — settled — but reword the rationale as legacy-path handling), L2174 (drop the setup half).
+<!-- Updated by plan-sync: fn-197-copy-less-installs-resolve-flowctl-from.3 already deleted docs/flowctl.md's setup-mode section; .5 only needs to verify no orphaned TOC/anchor remains -->
 4. `architecture.md`: L110 pointer; L261 rewrite to the single resolution story (its cross-link target died in step 1).
 5. `spec-template.md`: L18-27 retitle `## 3-tier discovery cascade`, delete tier 3, renumber; L37 strip the copy-mode comment; L298 protected-artifacts bullet — keep the `.flow/bin/*` protection, strike only the mode clause.
 6. `orchestration.md` L149, L241, L323: strip the "`.flow/usage.md` in copy-mode repos" alternatives → `flowctl usage` only.
@@ -39,9 +40,17 @@
 - [ ] agent_docs: setup-modes rewritten to one mode with the new contributor rule stated explicitly; local-dev bare `flowctl`; conduct/setup has the "a run that writes `.flow/bin/` has broken this" line; releasing gains the snippet-bump checklist line.
 - [ ] Installer text (sh + ps1) matches the new setup behavior; CHANGELOG Unreleased entry present; register/format gates pass; no speed claims or attribution.
 ## Done summary
-TBD
+Swept the dual-mode (plugin vs copy) install story out of every in-repo doc: platforms.md's setup-modes section and table are replaced by a "What setup does" section (all three inbound anchors repointed), troubleshooting leads with "plugin updates need no setup re-run" and gains a delete-your-old-copies section, flowctl.md/architecture/orchestration/memory-schema/ralph/spec-template/sync-codex/ci-example/README/STRATEGY/SPEC.md/CLAUDE.md are reworded to the single plugin-resolution story, agent_docs/setup-modes.md is rewritten as agent_docs/setup.md (one mode, with the inverted three-rung contributor rule stated explicitly), and the Cursor installers + conduct/releasing checklists + CHANGELOG Unreleased entry match the new behavior. The spec-template cascade is now 3 tiers in the walker and in every doc/skill that describes it.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+Post-review fixes 311659fb: Windows launcher claim + best-effort hedge; pre-1.0 porting pointers -> flowctl usage (+ mirrors).
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; P2 + P3 fixed post-verdict)stage: plan-sync - ran (drift: no; .6 already aligned on rename/CHANGELOG/conditional-bump; cross-spec deferred to conductor)
 
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 840141cc8ae64acb8fd090e433b47dcc9dde9983, 311659fb
+- Tests: python3 scripts/run_tests_parallel.py (189 files / 4368 tests, failures=0 errors=0), uvx ruff@0.16.0 check . (All checks passed), ./scripts/sync-codex.sh x2 (idempotent, all guards green), impl-review: host backend SHIP round 1 (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.5.json); post-fix focused suites + mirror x2 + ruff green
 - PRs:

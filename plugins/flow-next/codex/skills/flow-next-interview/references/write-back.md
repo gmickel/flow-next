@@ -67,6 +67,7 @@ The canonical section layout for the spec body is in [`plugins/flow-next/templat
 
 ```bash
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 # ONE root snapshot for this mint (fn-110). Literal path.
 INTERVIEW_CFG="${TMPDIR:-/tmp}/flow-interview-config-<suffix>.json"
@@ -102,7 +103,7 @@ fi
 #      (Overview / Scope / Approach / Quick commands / Acceptance / References)
 #      don't match the scope-aware write-policy's canonical section names).
 #
-#      Resolve the template via the 4-tier discovery cascade. The full walker
+#      Resolve the template via the 3-tier discovery cascade. The full walker
 #      (cascade order, case-insensitive FS probe, both-exist warning, plugin-root
 #      fallback) is single-sourced in ../../references/spec-template-discovery.md —
 #      Read it and run its walker to set TEMPLATE_PATH + TEMPLATE.

@@ -22,14 +22,26 @@ A **ready** (or already-captured) spec whose work is understood stays in plan - 
 
 ```bash
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
 
-## Copy-mode version drift
+## Leftover copy artifacts (one-line nudge)
 
-**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
+Before Step 0, check once whether this repo still carries flowctl copies from an older install layout — the same residue list flowctl exports as `LEGACY_COPY_ARTIFACTS`:
 
-Before Step 0, read `.flow/meta.json` and `${CODEX_HOME:-$HOME/.codex}/plugin.json` once to perform this check. In copy mode only, when both `.flow/meta.json` `setup_version` and the installed plugin manifest version are available and differ, ask exactly `Local Flow-Next copy v<X> differs from plugin v<Y>. Refresh before planning?` via plain-text numbered prompt. Offer exactly **Refresh now (Recommended)** and **Continue this run**. Refresh stops cleanly, tells the user to run `/flow-next:setup`, then rerun Plan; never invoke Setup or resume this Plan invocation. Continue warns once and proceeds. Under autonomous, Ralph, or receipt-driven execution, warn once and proceed without asking. Version match, plugin mode, or unavailable comparison evidence is silent. Never read or write legacy `version_ack` / `snippet_ack`; Setup alone owns setup-mode and snippet integrity.
+```bash
+LEFTOVERS=""
+for p in .flow/bin/flowctl .flow/bin/flowctl.cmd .flow/bin/flowctl.py \
+         .flow/bin/flowctl_bootstrap.py .flow/bin/flowctl-help.txt \
+         .flow/bin/flowctl_tracker .flow/templates/spec.md .flow/usage.md; do
+  [ -e "$p" ] && LEFTOVERS="${LEFTOVERS}${p}"$'\n' || true
+done   # || true: an empty LEFTOVERS (the normal case) must read as success
+```
+
+**None present → say nothing.** Silence is the normal case.
+
+**Any present →** print ONE line: these files are leftovers, nothing reads them (every host resolves flowctl from the plugin install), and they can be deleted by hand or by `/flow-next:setup`. Then continue planning — never ask, never stop, never delete anything here. Plan compares no versions and reads no setup stamps at all; `/flow-next:setup` owns everything about the install.
 
 **Role**: product-minded planner with strong repo awareness.
 **Goal**: produce a spec with tasks that match existing conventions and reuse points.

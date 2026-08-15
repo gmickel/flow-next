@@ -4,8 +4,8 @@ The #244 rule ("a filter narrower than the lint scope lets a violation land
 without the gate ever running") applies to the unit suite exactly as it applies
 to ruff: this suite pins content in repo-root trees outside
 `plugins/flow-next/**` — prose contracts under `agent_docs/`, mirror-parity
-against `scripts/sync-codex.sh`, dogfood copies under `.flow/bin/`, eval
-harnesses under `optimization/` — and a `paths:` filter that omits one of them
+against `scripts/sync-codex.sh`, eval harnesses under `optimization/` — and a
+`paths:` filter that omits one of them
 means a PR touching only that tree never runs the tests that pin it.
 
 Measured 2026-08-13: `agent_docs/**.md` was omitted, so a conduct-checklist edit
@@ -28,7 +28,7 @@ TESTS_DIR = pathlib.Path(__file__).resolve().parent
 EXEMPT_TOP_LEVEL = frozenset(
     {
         ".git",  # probed for repository shape, never asserted on content
-        ".flow",  # partially covered: bin/ + assets/ + usage.md + templates/
+        ".flow",  # partially covered: assets/ (specs/tasks are bookkeeping)
         "plugins",  # plugins/flow-next/** is the primary trigger
         "ruff.toml",
     }

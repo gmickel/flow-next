@@ -1,7 +1,16 @@
-"""fn-130 R3 — Plan-only copy-mode version drift contract."""
+"""fn-197 — no runtime version-drift ceremony survives in any lifecycle skill.
+
+fn-130 made copy-mode drift detection Plan-only; fn-197 deletes copy mode
+itself, so Plan's version comparison is gone too and the whole fleet is
+uniform: nothing reads `setup_version` / `version_ack` / `snippet_ack`, and
+nothing asks the user to refresh a local copy. Plan's replacement — a one-line
+nudge when legacy copy artifacts are still on disk — is prose judged via
+`.flow/criteria.md` G1, not pinned here beyond its residue-probe anchor.
+"""
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -10,12 +19,13 @@ REPO_ROOT = ROOT.parents[1]
 SKILLS = ROOT / "skills"
 CODEX_SKILLS = ROOT / "codex" / "skills"
 CODEX_INSTALLER = REPO_ROOT / "scripts" / "install-codex.sh"
-PLUGIN_TEMPLATE = (
-    SKILLS / "flow-next-setup" / "templates" / "claude-md-snippet-plugin.md"
-)
+SNIPPET_TEMPLATES = {
+    "claude-md-snippet.md": "/flow-next:setup",
+    "agents-md-snippet.md": "$flow-next-setup",
+}
 
 PLAN = "flow-next-plan"
-REMOVED_CARRIERS = [
+LIFECYCLE_SKILLS = [
     "flow-next-audit",
     "flow-next-capture",
     "flow-next-interview",
@@ -24,6 +34,7 @@ REMOVED_CARRIERS = [
     "flow-next-map",
     "flow-next-memory-migrate",
     "flow-next-pilot",
+    PLAN,
     "flow-next-prime",
     "flow-next-prospect",
     "flow-next-qa",
@@ -35,18 +46,20 @@ REMOVED_CARRIERS = [
     "flow-next-work",
 ]
 
-# Smallest distinctive token of the drift question — also the marker forbidden
-# in every other lifecycle skill, so its exactly-one count pins the sole
-# carrier. (Full question/option copy pins removed 2026-08-07 - judged via
-# .flow/criteria.md G1, not grep.)
+# Smallest distinctive token of the retired drift question, plus the legacy
+# pre-check markers that preceded it. None may appear in any skill.
 DRIFT_TOKEN = "differs from plugin"
-LEGACY_MARKERS = (
+FORBIDDEN_MARKERS = (
     "FLOW_SETUP_ASK",
     "FLOW_SNIPPET_ASK",
     "SETUP_STALE",
     "setup_stale",
     "## Pre-check: Local setup version",
     "## Pre-check: local setup version",
+    "version_ack",
+    "snippet_ack",
+    "setup_version",
+    DRIFT_TOKEN,
 )
 
 
@@ -55,30 +68,22 @@ def _skill(root: Path, name: str) -> str:
 
 
 class PrecheckModeContractTest(unittest.TestCase):
-    def test_canonical_plan_owns_exact_copy_mode_contract(self) -> None:
-        text = _skill(SKILLS, PLAN)
-        self.assertEqual(text.count(DRIFT_TOKEN), 1)
-        self.assertIn("AskUserQuestion", text)
-        self.assertIn("`.flow/meta.json`", text)
-        self.assertIn(
-            "${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/.claude-plugin/plugin.json",
-            text,
-        )
-        for marker in LEGACY_MARKERS:
-            self.assertNotIn(marker, text)
+    def test_no_lifecycle_skill_carries_a_version_ceremony(self) -> None:
+        for root, label in ((SKILLS, "canonical"), (CODEX_SKILLS, "codex")):
+            for name in LIFECYCLE_SKILLS:
+                with self.subTest(skill=name, tree=label):
+                    text = _skill(root, name)
+                    for marker in FORBIDDEN_MARKERS:
+                        self.assertNotIn(marker, text)
 
-    def test_other_lifecycle_skills_have_no_runtime_version_ceremony(self) -> None:
-        forbidden = LEGACY_MARKERS + (
-            "version_ack",
-            "snippet_ack",
-            "setup_version",
-            DRIFT_TOKEN,
-        )
-        for name in REMOVED_CARRIERS:
-            with self.subTest(skill=name):
-                text = _skill(SKILLS, name)
-                for marker in forbidden:
-                    self.assertNotIn(marker, text)
+    def test_plan_nudges_on_legacy_copy_residue_only(self) -> None:
+        # The replacement touchpoint: Plan probes for residue and says one
+        # line about deleting it. No question, no version compare.
+        for root, label in ((SKILLS, "canonical"), (CODEX_SKILLS, "codex")):
+            with self.subTest(tree=label):
+                text = _skill(root, PLAN)
+                self.assertIn(".flow/bin/flowctl_bootstrap.py", text)
+                self.assertIn("LEGACY_COPY_ARTIFACTS", text)
 
     def test_pilot_and_land_no_longer_carry_verdict_stash(self) -> None:
         for name in ("flow-next-pilot", "flow-next-land"):
@@ -88,37 +93,70 @@ class PrecheckModeContractTest(unittest.TestCase):
                     self.assertNotIn("setup_stale", text)
                     self.assertNotIn("SETUP_STALE", text)
 
-    def test_codex_mirror_preserves_contract_without_legacy_fleet(self) -> None:
-        text = _skill(CODEX_SKILLS, PLAN)
-        self.assertEqual(text.count(DRIFT_TOKEN), 1)
-        self.assertIn("plain-text numbered prompt", text)
-        self.assertNotIn("AskUserQuestion", text)
-        self.assertIn("`${CODEX_HOME:-$HOME/.codex}/plugin.json`", text)
-        self.assertNotIn(".codex/.codex-plugin/plugin.json", text)
+    def test_codex_installer_ships_the_plugin_manifest(self) -> None:
         installer = CODEX_INSTALLER.read_text(encoding="utf-8")
         self.assertIn(
             'cp "$PLUGIN_DIR/.codex-plugin/plugin.json" "$CODEX_DIR/plugin.json"',
             installer,
         )
-        for name in REMOVED_CARRIERS:
-            with self.subTest(skill=name):
-                mirror = _skill(CODEX_SKILLS, name)
-                for marker in LEGACY_MARKERS + (
-                    "version_ack",
-                    "snippet_ack",
-                    "setup_version",
-                ):
-                    self.assertNotIn(marker, mirror)
 
     def test_setup_template_contract_remains_intact(self) -> None:
-        text = PLUGIN_TEMPLATE.read_text(encoding="utf-8")
-        lines = text.splitlines()
-        self.assertEqual(lines[0], "<!-- BEGIN FLOW-NEXT -->")
-        self.assertEqual(lines[-1], "<!-- END FLOW-NEXT -->")
-        self.assertIn("flow-next:snippet:v", lines[1])
-        self.assertNotIn(".flow/bin", text)
-        self.assertIn("flowctl usage", text)
-        self.assertIn("/flow-next:setup", text)
+        # fn-197: setup ships exactly these two snippet templates, both slim
+        # and copy-less. The contract is asserted on BOTH twins, not one.
+        templates_dir = SKILLS / "flow-next-setup" / "templates"
+        shipped = {p.name for p in templates_dir.glob("*-md-snippet*.md")}
+        self.assertEqual(shipped, set(SNIPPET_TEMPLATES))
+        for name, setup_cmd in SNIPPET_TEMPLATES.items():
+            with self.subTest(template=name):
+                text = (templates_dir / name).read_text(encoding="utf-8")
+                lines = [ln for ln in text.splitlines() if ln.strip()]
+                self.assertEqual(lines[0], "<!-- BEGIN FLOW-NEXT -->")
+                self.assertEqual(lines[-1], "<!-- END FLOW-NEXT -->")
+                self.assertIn("flow-next:snippet:v", lines[1])
+                self.assertNotIn(".flow/bin", text)
+                self.assertNotIn(".flow/templates/spec.md", text)
+                self.assertNotIn(".flow/usage.md", text)
+                self.assertIn("flowctl usage", text)
+                self.assertIn(setup_cmd, text)
+
+
+
+
+class ResidueProbeParity(unittest.TestCase):
+    """The two skill residue probes stay in byte-step with LEGACY_COPY_ARTIFACTS.
+
+    flowctl's constant is documented as the single source of truth, but the
+    setup and plan probes restate the paths in prose bash. This pin fails the
+    moment any of the three lists drifts (fn-197 audit finding).
+    """
+
+    PROBE_FILES = (
+        REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-setup" / "workflow.md",
+        REPO_ROOT / "plugins" / "flow-next" / "skills" / "flow-next-plan" / "SKILL.md",
+    )
+
+    def _constant(self) -> list[str]:
+        import ast
+
+        src = (REPO_ROOT / "plugins" / "flow-next" / "scripts" / "flowctl.py").read_text(
+            encoding="utf-8"
+        )
+        match = re.search(r"LEGACY_COPY_ARTIFACTS = (\[[^\]]+\])", src)
+        assert match, "LEGACY_COPY_ARTIFACTS not found"
+        return [entry.rstrip("/") for entry in ast.literal_eval(match.group(1))]
+
+    def _probe_paths(self, text: str) -> list[str]:
+        match = re.search(r"for p in ((?:[^;]|\n)*?);?\s*do", text)
+        assert match, "residue probe for-loop not found"
+        tokens = match.group(1).replace("\\\n", " ").split()
+        return [token.rstrip("/") for token in tokens if token.startswith(".flow/")]
+
+    def test_probe_lists_equal_the_constant(self) -> None:
+        expected = sorted(self._constant())
+        for probe in self.PROBE_FILES:
+            with self.subTest(file=probe.name):
+                got = sorted(self._probe_paths(probe.read_text(encoding="utf-8")))
+                self.assertEqual(got, expected, f"{probe} probe drifted from LEGACY_COPY_ARTIFACTS")
 
 
 if __name__ == "__main__":

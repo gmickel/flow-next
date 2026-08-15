@@ -58,12 +58,6 @@ def main() -> int:
         return 0
     MANIFEST.write_text(rendered, encoding="utf-8")
     print(f"wrote {MANIFEST.relative_to(REPO)} ({len(current['files'])} files)")
-    # Dual-copy invariant covers the manifest too: refreshing only the plugin
-    # copy would leave .flow/bin verifying against yesterday's hashes.
-    bin_manifest = REPO / ".flow" / "bin" / "flowctl_tracker" / "MANIFEST.json"
-    if bin_manifest.parent.is_dir():
-        bin_manifest.write_text(rendered, encoding="utf-8")
-        print(f"wrote {bin_manifest.relative_to(REPO)}")
     return 0
 
 

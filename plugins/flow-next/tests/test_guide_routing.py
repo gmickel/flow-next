@@ -126,13 +126,18 @@ class GuideSkillSurface(unittest.TestCase):
         self.assertNotIn("request_user_input", text)
 
     def test_probes_resolve_bundled_flowctl(self) -> None:
-        """Probe prose must resolve the bundled flowctl (plugin root with the
-        .flow/bin fallback) - bare `flowctl` breaks on Cursor/copy-mode hosts
-        with no bin-PATH injection."""
+        """Probe prose must resolve the bundled flowctl through all three rungs
+        (env var, derived plugin root, .flow/bin) - bare `flowctl` breaks on
+        Cursor/Grok hosts with no plugin-root env var and no bin-PATH
+        injection, and rung 2 is the one that carries them."""
         text = _read(GUIDE_SKILL)
         self.assertIn(
             'FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}'
             '/scripts/flowctl"',
+            text,
+        )
+        self.assertIn(
+            '[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"',
             text,
         )
         self.assertIn('[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"', text)

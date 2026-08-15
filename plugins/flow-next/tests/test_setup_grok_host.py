@@ -338,8 +338,16 @@ class TestGrokProfileContract(unittest.TestCase):
     def test_grok_skips_codex_agents_copy(self) -> None:
         self.assertIn("Grok never copies `.codex/agents`", self.wf)
 
-    def test_grok_no_ralph_convert_recommended(self) -> None:
-        self.assertIn("on Cursor **and Grok** recommend CONVERT", self.wf)
+    def test_grok_resolves_flowctl_without_copies(self) -> None:
+        # fn-197: the old copy-mode CONVERT recommendation is gone; Grok
+        # resolves flowctl from the plugin install, nothing is copied.
+        self.assertIn(
+            "flowctl resolves from the plugin install via the skill's own "
+            "absolute path (Grok exposes no plugin-root env vars) — nothing "
+            "is copied into the repo",
+            self.wf,
+        )
+        self.assertNotIn("recommend CONVERT", self.wf)
 
     def test_grok_snippet_target_claude_md(self) -> None:
         self.assertIn("lifecycle snippet targets CLAUDE.md", self.wf)

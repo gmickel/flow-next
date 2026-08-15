@@ -189,7 +189,7 @@ Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other*
 - **Reads pass through silently.** The old binary parses a `hardened` entry without complaint, and because its default status filter excludes only `stale`, it will **surface** that entry in default `memory list` / `memory search` / `memory-scout` results — the opposite of the intended exclusion. The failure mode is misclassification, not rejection.
 - **Writes are refused, loudly.** Any attempt by that older flowctl to rewrite the entry (`mark-stale`, `mark-fresh`, `memory add --update`) fails validation on the unknown `hardened` status value and the unknown `hardened_into` field. The write aborts with an error; nothing is silently corrupted on disk.
 
-**Mitigation is lockstep upgrade, not a shim.** The repo already requires the two flowctl copies — `plugins/flow-next/scripts/flowctl.py` and `.flow/bin/flowctl.py` — to move together; keep them in sync and no version straddles the enum. No compatibility shim exists or is planned: an enum extension cannot retroactively teach an old reader anything, and a second signalling mechanism would be cost without benefit in a repo that already mandates lockstep copies.
+**Mitigation is upgrade, not a shim.** There is one flowctl — `plugins/flow-next/scripts/flowctl.py`, shipped with the plugin and never copied into a repo — so a reader that predates an enum extension is simply an out-of-date plugin install, fixed by updating it. No compatibility shim exists or is planned: an enum extension cannot retroactively teach an old reader anything, and a second signalling mechanism would be cost without benefit.
 
 ## Audit lifecycle (v0.37.0+)
 

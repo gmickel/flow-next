@@ -230,38 +230,13 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
     -e 's|PLUGIN_ROOT="\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}"|PLUGIN_ROOT="${CODEX_HOME:-$HOME/.codex}"|g' \
     "$f"
 
-  # After every FLOWCTL= line, insert local fallback — IDEMPOTENT.
-  # Canonical skill preambles may ALREADY carry the
-  # `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"` fallback on the line
-  # directly after the FLOWCTL= assignment (added for the Cursor / env-var-less
-  # path, where neither DROID_PLUGIN_ROOT nor CLAUDE_PLUGIN_ROOT resolves). Only
-  # inject when the next line is NOT already that fallback — otherwise the mirror
-  # gets a duplicate. Mirrors the agents-block guard below. (awk for multi-line
-  # insert: sed portability issues on macOS.)
-  awk '
-    function flush_pending(   stripped) {
-      if (pending) {
-        stripped = nextline
-        sub(/^[[:space:]]+/, "", stripped)
-        if (stripped != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"") {
-          print fallback
-        }
-        pending = 0
-      }
-    }
-    /^FLOWCTL=.*scripts\/flowctl/ && !seen[$0]++ {
-      print
-      fallback = "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\""
-      pending = 1
-      next
-    }
-    {
-      nextline = $0
-      flush_pending()
-      print
-    }
-    END { if (pending) print fallback }
-  ' "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
+  # fn-197: no fallback injection here. Every canonical FLOWCTL preamble now
+  # carries all three rungs itself (env var → derived plugin root → .flow/bin),
+  # and only rung 1 is rewritten above — rungs 2 and 3 flow into the mirror
+  # untouched. The old injector keyed on exact next-line equality with the
+  # rung-3 string and would inject a DUPLICATE `.flow/bin` rung now that rung 2
+  # sits between them. The paired validation guard below asserts the mirrored
+  # chain instead.
 
   # Template/script path patches — both legacy inline form and the new
   # fn-48.6 `$PLUGIN_ROOT/...` consolidated form.
@@ -279,10 +254,7 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   # destinations (ralph-init templates, worktree-kit scripts) are rewritten
   # first and therefore win. $HOME (not ~) so the path expands inside quotes.
 
-  # The Codex installer flattens `.codex-plugin/plugin.json` to
-  # `${CODEX_HOME:-$HOME/.codex}/plugin.json`; mirror prose must target that installed path.
   sed -i.bak \
-    -e 's|\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}/\.claude-plugin/plugin\.json|${CODEX_HOME:-$HOME/.codex}/plugin.json|g' \
     -e 's|AGENTS_SRC="$HOME/.codex/agents"|AGENTS_SRC="${CODEX_HOME:-$HOME/.codex}/agents"|g' \
     -e 's|or ~/.codex/agents/|or ${CODEX_HOME:-$HOME/.codex}/agents/|g' \
     -e 's|\.factory-plugin/plugin\.json|.claude-plugin/plugin.json|g' \
@@ -418,9 +390,8 @@ if [ -f "$work_skill" ]; then
 fi
 
 # canonical templates/usage.md (mirrored to codex/templates/) — Codex command-name syntax
-# This template is copied into projects as `.flow/usage.md` by setup Step 4
-# (which byte-compares `.flow/usage.md` against it on re-runs). On Codex the
-# skill reads THIS mirror copy, and Codex project docs use `$flow-next-<cmd>`
+# This template is what `flowctl usage` prints; nothing copies it into a repo.
+# On Codex the CLI reads THIS mirror copy, and Codex project docs use `$flow-next-<cmd>`
 # names, not `/flow-next:<cmd>` (same per-platform split the agents-md-snippet
 # vs claude-md-snippet templates and workflow.md's model-routing substitution
 # encode). Rewrite command tokens in the mirror template only — skill prose
@@ -433,17 +404,6 @@ if [ -f "$setup_usage" ]; then
   rm -f "${setup_usage}.bak"
 fi
 
-# fn-121: plugin mode is Claude-Code-only (bin PATH injection). The Codex mirror
-# must never OFFER it: strip the plugin-mode sections from the setup workflow,
-# leaving copy mode as the only documented setup path. The per-skill pre-check
-# plugin BRANCH stays in the mirror - a repo set up in plugin mode by a Claude
-# Code user is still workable from Codex (its FLOWCTL preamble self-resolves),
-# and the branch is inert unless .flow/meta.json says setup_mode=plugin. For the
-# same reason the slim snippet TEMPLATE ships in the mirror (PR #227 review):
-# the mirrored pre-check's "Refresh now" path reads it, and excluding it would
-# strand a plugin-mode repo's snippet refresh when visited from Codex. Data, not
-# doctrine: the file alone offers nothing. Validation below guards regression.
-#
 # fn-126 R4: the Codex mirror is consumed ONLY by Codex. Replace the multi-host
 # Step-0 detection cascade with unconditional PLATFORM="codex" (canonical hosts
 # never read this mirror; a GROK_AGENT / CURSOR_AGENT inheritance must not
@@ -471,52 +431,8 @@ if [ -f "$setup_wf" ]; then
       next
     }
     skip_det {next}
-
-    /^## Step 2b: Setup mode/ {
-      print "## Existing-mode guard (before Step 3)";
-      print "";
-      print "Read the stamped mode before writing anything:";
-      print "";
-      print "```bash";
-      print "CURRENT_MODE=$(jq -r '"'"'.setup_mode // empty'"'"' .flow/meta.json 2>/dev/null)";
-      print "```";
-      print "";
-      print "When `CURRENT_MODE` is `plugin`, this repo is a Claude-Code-managed install with NO local `.flow/bin`/`.flow/templates`/`.flow/usage.md` snapshots by design. Never convert it silently: ask (plain-text numbered prompt) `Keep as-is (Recommended)` - skip Step 3, Step 4 copies, and the Step 7c stamp (set `MODE=plugin-kept`; config steps still run, and the Docs step may target AGENTS.md only - the CLAUDE.md marker block is the Claude-Code-managed rail, never touched from this host) - or `Convert to copy` - proceed normally (writes the snapshots; Step 7c stamps copy). Any other `CURRENT_MODE` value: set `MODE=copy` and continue.";
-      print "";
-      skip=1
-    }
-    /^## Step 3: Create \.flow\/bin\// {skip=0}
-    /^For \*\*Claude Code in plugin mode\*\*/ {skip2=1}
-    skip2 && /fall back to copy mode`/ && /^On / {skip2=0; next}
-    /^### Step 7c: Stamp setup mode/ {
-      print "### Step 7c: Stamp setup mode (fn-121)";
-      print "";
-      print "Runs after every Step 7 write, before Step 8. When the existing-mode guard chose `MODE=plugin-kept`, do NOT run the stamp - the existing `setup_mode` stays untouched (report `Setup mode: plugin (kept - managed from Claude Code)` in Step 8). Otherwise:";
-      print "";
-      print "```bash";
-      print "\"${PLUGIN_ROOT}/scripts/flowctl\" setup-mode set copy --json";
-      print "```";
-      print "";
-      print "Include `Setup mode: copy` in the Step 8 summary.";
-      print "";
-      skip3=1; next
-    }
-    skip3 && /^## Step 8: Print Summary/ {skip3=0}
-    /^### Step 8a: Plugin-mode summary variant/ {skip4=1}
-    skip || skip2 || skip3 || skip4 {next}
-    /^\*\*Copy mode only .* skip to Step 4a\.\*\*$/ {next}
     {print}
-  ' "$setup_wf" > "${setup_wf}.fn121tmp" && mv "${setup_wf}.fn121tmp" "$setup_wf"
-  sed -i.bak \
-    -e 's/continue from Step 2b — the mode gate runs on EVERY pass (PR #227 review: a same-version re-run in a plugin-mode repo must not fall straight into Step 3.s copies); copy-mode repos then flow into Step 3.s re-copy/continue from the existing-mode guard (before Step 3) — it runs on EVERY pass, then copy-mode repos flow into Step 3'"'"'s re-copy/' \
-    -e '/^- \*\*Claude Code in plugin mode\*\*/d' \
-    -e '/^- CLAUDE.md on \*\*Claude Code in plugin mode\*\*/d' \
-    -e 's/^Choose the correct template based on platform AND mode:/Choose the correct template based on platform:/' \
-    -e 's|^- \*\*Claude Code (copy mode) / Droid / Cursor\*\*|- **Claude Code / Droid / Cursor**|' \
-    -e 's|^- AGENTS.md on \*\*Claude Code (copy mode) / Droid / Cursor\*\*|- AGENTS.md on **Claude Code / Droid / Cursor**|' \
-    -e 's|^- CLAUDE.md (any platform, copy mode):|- CLAUDE.md (any platform):|' \
-    "$setup_wf"
-  rm -f "${setup_wf}.bak"
+  ' "$setup_wf" > "${setup_wf}.step0tmp" && mv "${setup_wf}.step0tmp" "$setup_wf"
 fi
 
 # flow-next-plan: steps.md
@@ -1738,47 +1654,11 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # Rewrite skill-file paths in agent bodies: neither plugin-root variable
   # resolves inside Codex; the installed mirror lives at CODEX_HOME/skills/.
   body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/skills/|${CODEX_HOME:-$HOME/.codex}/skills/|g')"
-  # Insert the local fallback line after every FLOWCTL= assignment that points
-  # at the Codex path. Matches the runtime CODEX_HOME form with
-  # any leading whitespace; the inserted fallback line preserves that
-  # indentation so embedded bash blocks stay aligned. Uses POSIX awk
-  # (no gawk-only 3-arg match) so macOS / Linux behave identically.
-  #
-  # IDEMPOTENT: canonical agent bodies may ALREADY carry the
-  # `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"` fallback on the line
-  # directly after the FLOWCTL= assignment (fn-50.3 hardening added it to
-  # repo-scout for the Claude/Droid path). Only inject when
-  # the next line is NOT already that fallback — otherwise we emit a duplicate.
-  body="$(echo "$body" | awk '
-    function flush_pending(   stripped) {
-      if (pending) {
-        stripped = nextline
-        sub(/^[[:space:]]+/, "", stripped)
-        if (stripped != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"") {
-          print fallback
-        }
-        pending = 0
-      }
-    }
-    /^[[:space:]]*FLOWCTL="\$\{CODEX_HOME:-\$HOME\/\.codex\}\/scripts\/flowctl"[[:space:]]*$/ {
-      print
-      indent = ""
-      i = 1
-      while (i <= length($0) && substr($0, i, 1) ~ /[[:space:]]/) {
-        indent = indent substr($0, i, 1)
-        i++
-      }
-      fallback = indent "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\""
-      pending = 1
-      next
-    }
-    {
-      nextline = $0
-      flush_pending()
-      print
-    }
-    END { if (pending) print fallback }
-  ')"
+  # fn-197: no fallback injection here either. Canonical agent bodies carry the
+  # full three-rung chain (env var → derived plugin root → .flow/bin); only rung 1
+  # is rewritten above, and rungs 2/3 mirror through untouched. Injecting after
+  # the CODEX_HOME rung would now emit a duplicate `.flow/bin` line between
+  # rungs 1 and 2.
 
   # Escape backslashes for TOML triple-quoted strings
   body="$(echo "$body" | sed 's/\\/\\\\/g')"
@@ -1892,16 +1772,6 @@ else
   echo -e "  ${GREEN}✓${NC} No unrewritten plugin-root /skills/ path refs"
 fi
 
-# Plan's copy-mode version check must read the flattened installer target.
-plan_skill="$CODEX_DIR/skills/flow-next-plan/SKILL.md"
-if grep -Fq '${CODEX_HOME:-$HOME/.codex}/plugin.json' "$plan_skill" 2>/dev/null \
-  && ! grep -Fq '.codex/.codex-plugin/plugin.json' "$plan_skill" 2>/dev/null; then
-  echo -e "  ${GREEN}✓${NC} Codex Plan manifest path matches install-codex.sh"
-else
-  echo -e "  ${RED}✗${NC} Codex Plan manifest path must be \${CODEX_HOME:-\$HOME/.codex}/plugin.json"
-  errors=$((errors + 1))
-fi
-
 # Check no "Task flow-next:" in codex skills
 task_refs=$( { grep -r 'Task flow-next:' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
 if [ "$task_refs" != "0" ]; then
@@ -1911,8 +1781,8 @@ else
   echo -e "  ${GREEN}✓${NC} No 'Task flow-next:' refs"
 fi
 
-# Check no "/flow-next:" slash-command tokens in the setup usage.md template —
-# it is copied into projects as `.flow/usage.md`, and Codex resolves
+# Check no "/flow-next:" slash-command tokens in the mirrored usage.md template —
+# it is what `flowctl usage` prints on Codex, where commands resolve as
 # `$flow-next-<cmd>`, not `/flow-next:<cmd>`. The targeted rewrite above must
 # have converted every token.
 usage_slash_refs=$( { grep -c '/flow-next:' "$CODEX_DIR/templates/usage.md" 2>/dev/null || true; } | tr -d ' ')
@@ -1924,33 +1794,22 @@ else
   echo -e "  ${GREEN}✓${NC} No '/flow-next:' refs in codex templates/usage.md"
 fi
 
-# fn-121: the Codex mirror must not describe plugin mode (Claude-Code-only) —
-# negative half: no plugin-mode prose in the setup workflow, no slim template.
-pm_refs=$( { grep -cE 'Step 2b|claude-md-snippet-plugin|setup-mode set plugin|plugin mode' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null || true; } | tr -d ' ')
-[ -n "$pm_refs" ] || pm_refs=0
-if [ "$pm_refs" != "0" ]; then
-  echo -e "  ${RED}✗${NC} plugin-mode prose leaked into the codex mirror setup workflow (refs=$pm_refs)"
-  errors=$((errors + 1))
+# fn-197: setup is copy-less on every host — the mirror must ship the converged
+# snippet template and must not resurrect a copy step or a mode ceremony.
+if [ -f "$CODEX_DIR/skills/flow-next-setup/templates/agents-md-snippet.md" ]; then
+  echo -e "  ${GREEN}✓${NC} Converged AGENTS.md snippet template present in mirror"
 else
-  echo -e "  ${GREEN}✓${NC} No plugin-mode prose in codex setup workflow"
-fi
-
-# fn-121 (PR #227 review): the slim template MUST ship in the mirror - the
-# retained per-skill pre-check's "Refresh now" path reads it cross-host.
-if [ -f "$CODEX_DIR/skills/flow-next-setup/templates/claude-md-snippet-plugin.md" ]; then
-  echo -e "  ${GREEN}✓${NC} Slim plugin snippet template present in mirror (pre-check refresh path)"
-else
-  echo -e "  ${RED}✗${NC} Slim plugin snippet template missing from mirror - the mirrored pre-check's Refresh now path would 404"
+  echo -e "  ${RED}✗${NC} Converged AGENTS.md snippet template missing from mirror"
   errors=$((errors + 1))
 fi
 
-# fn-121 positive half: copy-mode behavior retained in the mirror.
-if grep -q '^## Step 3: Create .flow/bin/' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null \
-   && grep -q 'setup-mode set copy' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null; then
-  echo -e "  ${GREEN}✓${NC} Copy-mode setup path retained in codex mirror (Step 3 + copy stamp)"
-else
-  echo -e "  ${RED}✗${NC} Copy-mode setup path missing from codex mirror (Step 3 heading or copy stamp gone)"
+copy_refs=$( { grep -cE '^## Step 3: Create \.flow/bin/|setup-mode set|Copy mode only' "$CODEX_DIR/skills/flow-next-setup/workflow.md" 2>/dev/null || true; } | tr -d ' ')
+[ -n "$copy_refs" ] || copy_refs=0
+if [ "$copy_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} copy-mode setup machinery leaked into the codex mirror setup workflow (refs=$copy_refs)"
   errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} No copy-mode setup machinery in codex setup workflow"
 fi
 
 # fn-126 R4: mirror Step-0 detection bash must be unconditional PLATFORM=codex
@@ -2000,6 +1859,46 @@ if [ "$askq_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native tool refs in Codex skill prose"
+fi
+
+# fn-197: the three-rung FLOWCTL chain must reach the mirror intact — rung 1
+# rewritten to the CODEX_HOME form, then the derived-plugin-root rung, then the
+# `.flow/bin` rung exactly once. This guard is the pair of the deleted fallback
+# injectors: with the canonical text carrying all three rungs, the failure mode
+# flipped from "missing rung" to "duplicated rung".
+# Scope: skill/agent PROSE only. `templates/` holds self-contained user scripts
+# (ralph's harness resolves its own sibling launcher, never the plugin root).
+chain_problems=$( { grep -rlE '^[[:space:]]*FLOWCTL=' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | while read -r cf; do
+  [ -f "$cf" ] || continue
+  awk -v file="$cf" '
+    function strip(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    /^[[:space:]]*FLOWCTL=/ { want = 2; next }
+    want == 2 {
+      # Full-line equality (same style as the rung-3 check below): the probe-proven
+      # rung-2 wording is byte-identical everywhere, trailing comment included. A
+      # prefix match would accept a truncated or reworded tail.
+      if (strip($0) != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\"<plugin-root>/scripts/flowctl\"   # <plugin-root> = the directory two levels above this skill'"'"'s SKILL.md file (the harness gave you that file'"'"'s absolute path when the skill loaded); substitute it literally")
+        print file ":" NR ": rung 2 (derived plugin root) missing or reworded after FLOWCTL="
+      want = 1; next
+    }
+    want == 1 {
+      if (strip($0) != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"")
+        print file ":" NR ": rung 3 (.flow/bin) missing after rung 2"
+      want = 0; prev_rung3 = 1; next
+    }
+    {
+      if (prev_rung3 && strip($0) == "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"")
+        print file ":" NR ": duplicate .flow/bin fallback rung"
+      prev_rung3 = 0
+    }
+  ' "$cf"
+done )
+if [ -n "$chain_problems" ]; then
+  echo -e "  ${RED}✗${NC} FLOWCTL resolution chain broken in the codex mirror:"
+  printf '%s\n' "$chain_problems" | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} Three-rung FLOWCTL chain intact in codex mirror (no duplicate fallback rungs)"
 fi
 
 # fn-100 R12: the Claude-native fact-scout dispatch phrase must not survive in

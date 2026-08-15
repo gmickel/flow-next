@@ -22,12 +22,11 @@ HELP_NAME = "flowctl-help.txt"
 # (flowctl_tracker/MANIFEST.json) - one integrity mechanism, verified by
 # installers post-copy, consulted here only to authenticate the static-help
 # fast path. A missing/stale manifest declines the fast path safely.
-HELP_SHA256 = "a5d04d68611781ba280ca7d1a913d9aa58fb0fd6ae0b6553a47d39a3921e5c4d"
+HELP_SHA256 = "107af532cbdc82007784438f7c227d8d08c57b7d3418f1c2a1cb129d33273b24"
 HELP_PYTHON = (3, 14)
 USAGE_ERROR = (
     "No usage guide found (searched the plugin's templates/usage.md, then "
-    ".flow/usage.md). Reinstall/update the flow-next plugin, or run "
-    "/flow-next:setup."
+    ".flow/usage.md). Reinstall or update the flow-next plugin."
 )
 
 

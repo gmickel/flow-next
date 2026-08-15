@@ -2,13 +2,11 @@
 
 Task tracking for AI agents. All state lives in `.flow/`.
 
-**Plugin-mode repos (Claude Code, `setup_mode: "plugin"`):** `flowctl` is already on the agent's PATH - read every `.flow/bin/flowctl` below as bare `flowctl` (plugin mode has no `.flow/bin/`).
-
 ## CLI
 
 ```bash
-.flow/bin/flowctl --help              # All commands
-.flow/bin/flowctl <cmd> --help        # Command help
+flowctl --help              # All commands
+flowctl <cmd> --help        # Command help
 ```
 
 ## IDs
@@ -26,20 +24,20 @@ One oversized/unclear idea whose **destination is nameable but route is not** (a
 
 ## Common Commands
 
-The typical flow. Everything else (deps, block/reset, memory, glossary, config, tracker sync, checkpoints, Ralph): `.flow/bin/flowctl --help` and `.flow/bin/flowctl <cmd> --help`.
+The typical flow. Everything else (deps, block/reset, memory, glossary, config, tracker sync, checkpoints, Ralph): `flowctl --help` and `flowctl <cmd> --help`.
 
 ```bash
-.flow/bin/flowctl list                          # all specs + tasks grouped
-.flow/bin/flowctl show fn-1-add-oauth.2         # spec or task detail (cat for raw markdown)
-.flow/bin/flowctl ready --spec fn-1-add-oauth   # tasks ready to work on
-.flow/bin/flowctl spec create --title "..." --plan-file plan.md --json
-.flow/bin/flowctl task create --spec fn-1-add-oauth --from-json tasks.json
+flowctl list                          # all specs + tasks grouped
+flowctl show fn-1-add-oauth.2         # spec or task detail (cat for raw markdown)
+flowctl ready --spec fn-1-add-oauth   # tasks ready to work on
+flowctl spec create --title "..." --plan-file plan.md --json
+flowctl task create --spec fn-1-add-oauth --from-json tasks.json
 # tasks.json: [{"title":"...","satisfies":["R1"]},{"title":"...","deps":[1]}]
 # edit: set-description/set-acceptance/set-spec, set-plan
-.flow/bin/flowctl start fn-1-add-oauth.2        # claim task
-.flow/bin/flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
-.flow/bin/flowctl task reset fn-1-add-oauth.2   # back to todo
-.flow/bin/flowctl validate --all                # check structure
+flowctl start fn-1-add-oauth.2        # claim task
+flowctl done fn-1-add-oauth.2 --summary-file s.md --evidence-json e.json
+flowctl task reset fn-1-add-oauth.2   # back to todo
+flowctl validate --all                # check structure
 ```
 
 ## Orchestration & model steering
@@ -96,7 +94,7 @@ Harness-relative: every direction works — from Claude Code the bridges are `co
 
 ```bash
 # In-session impl + host review (reviewer tier comes from the AGENTS.md routing block)
-.flow/bin/flowctl config set review.backend host     # or per-run: --review=host
+flowctl config set review.backend host     # or per-run: --review=host
 # $flow-next-work fn-12  → session implements; the host review runs the reviewer tier from your routing block
 
 # Bridges FROM a Cursor host (same recipes as above, reverse direction)
@@ -108,8 +106,8 @@ codex exec -s read-only --skip-git-repo-check "<prompt>" </dev/null
 
 ```bash
 # Cross-family review — the model that writes is never the model that reviews
-.flow/bin/flowctl config set review.backend codex                              # or host | cursor:<model>
-.flow/bin/flowctl task set-backend fn-1-add-oauth.3 --review cursor:<model>     # per-task review: override
+flowctl config set review.backend codex                              # or host | cursor:<model>
+flowctl task set-backend fn-1-add-oauth.3 --review cursor:<model>     # per-task review: override
 ```
 
 **Prompted orchestration** — describe the policy; the host judges per item, no parameter required:
@@ -128,11 +126,11 @@ Make any of this durable by writing it into `CLAUDE.md`/`AGENTS.md` — the host
 
 ## Workflow
 
-1. `.flow/bin/flowctl specs` - list all specs
-2. `.flow/bin/flowctl ready --spec fn-N-slug` - find available tasks
-3. `.flow/bin/flowctl start fn-N-slug.M` - claim task
+1. `flowctl specs` - list all specs
+2. `flowctl ready --spec fn-N-slug` - find available tasks
+3. `flowctl start fn-N-slug.M` - claim task
 4. Implement the task, then `git commit` the work (the evidence JSON cites this commit)
-5. `.flow/bin/flowctl done fn-N-slug.M --summary-file ... --evidence-json ...` - complete
+5. `flowctl done fn-N-slug.M --summary-file ... --evidence-json ...` - complete
 6. Stage the receipt: `done` writes the summary into the tracked task file AFTER your commit - include it in your next commit (it lists the path under `modified_paths` and prints a note when the file is left dirty)
 
 If a sandbox denies `git commit`, still complete `done` with the evidence you have and record the restriction in the summary - never block the task on a commit you cannot make; the receipt then needs a later commit by whoever can make one.
@@ -153,9 +151,9 @@ Runtime state (status, assignee, etc.) is stored in `.git/flow-state/` (or `$FLO
 
 ## Pre-1.0 layout porting
 
-Rename `.flow/epics/` to `.flow/specs/` (merge JSON into an existing `specs/` if present). Rewrite keys: `meta.json` `next_epic` -> `next_spec` and `schema_version` -> 3; each task JSON `epic`/`epic_id` -> `spec`/`spec_id`; write `.flow/.flow_version` with payload `1.0.0`. Run `.flow/bin/flowctl validate --all`.
+Rename `.flow/epics/` to `.flow/specs/` (merge JSON into an existing `specs/` if present). Rewrite keys: `meta.json` `next_epic` -> `next_spec` and `schema_version` -> 3; each task JSON `epic`/`epic_id` -> `spec`/`spec_id`; write `.flow/.flow_version` with payload `1.0.0`. Run `flowctl validate --all`.
 
 ## More Info
 
 - Human docs: https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/docs/flowctl.md
-- CLI reference: `.flow/bin/flowctl --help`
+- CLI reference: `flowctl --help`

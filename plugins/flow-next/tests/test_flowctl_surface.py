@@ -162,7 +162,6 @@ scope write-policy
 setup-block apply
 setup-block check
 setup-block resolve
-setup-mode set
 show
 spec add-dep
 spec close
@@ -474,6 +473,7 @@ class ActiveReferenceContractTest(unittest.TestCase):
             r'(?:flowctl|"?\$FLOWCTL"?|\.flow/bin/flowctl|scripts/flowctl)\s+'
             r"(?:epics?(?:\s|$)|migrate-(?:rename|rollback|state)\b|"
             r"config\s+toggle\b|unblock\b|update\s+[^\n]+--status\b|"
+            r"setup-mode\b|"
             r"--version\b|setup(?:\s|$)|rp\s+(?:pick-window|builder)\b|"
             r"(?:impl|plan|completion)-review\b|"
             r"spec\s+export-cognitive-aid[^\n]*--section\b)"

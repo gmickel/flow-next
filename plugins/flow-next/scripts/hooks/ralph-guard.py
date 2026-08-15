@@ -796,7 +796,12 @@ def _composed_variables(command: str) -> frozenset:
     every value-matching screen: no guarded verb — and no launcher path — ever
     appears as a literal. Assignments that merely interpolate OTHER variables
     (`FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"`)
-    are the standard preamble and are NOT composition.
+    are the standard preamble and are NOT composition. Neither are its other
+    two rungs (fn-197), both plain literal launcher paths that
+    `_launcher_variables` registers rather than composes:
+    `[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"` (the
+    derived plugin root, with the real absolute path substituted) and
+    `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"`.
 
     Neither is a pure DEFAULT expansion of the name being assigned (fn-159
     review F5): `FLOWCTL="${FLOWCTL:-.flow/bin/flowctl}"` builds nothing — it

@@ -26,7 +26,7 @@
     - Agents:    agents\*.md                  (via the manifest override)
     - Rules:     rules\*.mdc                  (flow-next.mdc guidance rail)
     - Hooks:     none shipped at plugin level (Ralph is opt-in via ralph-init project settings)
-    - flowctl:   scripts\flowctl[.py]          (resolved at runtime via .flow\bin after setup)
+    - flowctl:   scripts\flowctl[.py]          (skills derive the plugin root from their own SKILL.md path)
 
   Excludes the Codex mirror (codex\), tests\, and Python/OS cruft.
 
@@ -143,8 +143,10 @@ Write-Host "  rules:    $rules"
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Fully restart Cursor (Quit, reopen) - a new local plugin needs a full restart."
-Write-Host "  2. In your project, run /flow-next:setup (writes .flow\bin\flowctl + AGENTS.md;"
-Write-Host "     skills resolve flowctl via .flow\bin since Cursor exposes no plugin-root env var)."
+Write-Host "  2. In your project, run /flow-next:setup (writes the docs snippet + AGENTS.md"
+Write-Host "     routing block and configures .flow\ - it copies nothing into the repo;"
+Write-Host "     Cursor exposes no plugin-root env var, so skills derive the plugin root"
+Write-Host "     from the absolute SKILL.md path Cursor injects and run this install directly)."
 Write-Host "  3. Drive the workflow: type or pick from slash autocomplete - hyphenated form"
 Write-Host "     shown (/flow-next-plan); colon form also works when typed (/flow-next:plan)."
 Write-Host ""

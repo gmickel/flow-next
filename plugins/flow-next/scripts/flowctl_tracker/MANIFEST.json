@@ -2,11 +2,11 @@
   "files": [
     {
       "path": "flowctl.py",
-      "sha256": "34c9299dc1b4af1a78cb751e172010abc41c00d7fa1c4acdfff52ac424403d9c"
+      "sha256": "a293bbdcea2e6c2ea907070b04c8404d7150e7b6ac655c6437fc0f6a74e7f1e1"
     },
     {
       "path": "flowctl_tracker/__init__.py",
-      "sha256": "21ac29eb50e4222bc741261a5a24e412eaf61de2a268eb29e9231119f3ded691"
+      "sha256": "af5dd04012db0c40dba1f00a178e86f661f59a19edbaa30500cf44ddca50d978"
     },
     {
       "path": "flowctl_tracker/attach/__init__.py",

@@ -22,6 +22,9 @@
 12. Delete the plugin/copy strip transform (~L477-561: CURRENT_MODE synthesis, mode-prompt injection, `setup-mode set copy` synthesis, the 8 mode sed rewrites) — KEEP the fn-126 `PLATFORM="codex"` Step-0 rewrite (~L496-514). CRITICAL trap: the transform's awk `skip` region ends on the literal heading `## Step 3: Create .flow/bin/` (L529) — deleting that heading canonically without deleting this transform silently truncates the mirrored workflow.
 13. Delete/retarget the four validation guards: ~L1936-1944 (plan copy-mode check), ~L1968-1977 (no-plugin-mode-prose negative guard), ~L1979-1986 (slim-template-must-ship — retarget to the converged template), ~L1988-1995 (copy-mode-path-retained positive guard — this one hard-fails the sync the moment Step 3 is deleted).
 14. Delete the stale comments at L462-463, L1936, L1956. Run sync-codex TWICE; commit the regenerated mirror.
+15. **NEW — tighten the fn-197 rung-2 chain-integrity guard** (`scripts/sync-codex.sh` ~L1944-1979, "Three-rung FLOWCTL chain intact in codex mirror," added in .1 to replace the two deleted fallback-injector awks): its rung-2 check (`strip($0) !~ /^\[ -x "\$FLOWCTL"\] \|\| FLOWCTL="<plugin-root>\/scripts\/flowctl"/`) is a prefix match, not full-line equality — unlike the rung-3 check right below it, which uses `!=` against the exact string. Add a trailing anchor (or switch to exact-string compare, matching the rung-3 style) so the guard enforces the byte-identical probe-proven rung-2 wording end-to-end, not just its prefix. Verify by regenerating the mirror twice after the change.
+<!-- Updated by plan-sync: fn-197-copy-less-installs-resolve-flowctl-from.1 added a rung-2 guard with prefix-match semantics; scope carried into .2 per its own reviewer FYI -->
+
 
 **Test pins to retarget (named; grep for more):** `test_setup_snippet_lockstep.py` (twin templates change in lockstep), `test_setup_cursor_host.py:241-249` (`Copy mode only.*\.flow/bin/flowctl` regex — dies/retargets), `test_precheck_mode_contract.py:119` `test_setup_template_contract_remains_intact` (`assertNotIn(".flow/bin", …)` — KEEP and generalize to all snippet templates), `test_setup_grok_host.py`, `test_cursor_docs_contract.py`, `test_cursor_host_docs.py`, `test_setup_reference_routing.py`, `test_setup_spec_discovery_hits.py`, `test_tracker_distribution.py:115` `test_every_installer_invokes_the_shared_verifier` (asserts `verify_tracker_manifest` appears in setup workflow — the only occurrence is in the Step-4 block being deleted; drop the setup half of the assertion), `test_dogfood_template_parity.py` + `test_chart_docs_inventory.py:612-620` + `test_cursor_host_docs.py:112-121` (usage/spec dogfood byte-parity — the template rewrite here would break parity, and the dogfood copies don't die until .4: keep every boundary green by cp-ing the rewritten `templates/usage.md` → `.flow/usage.md` and `templates/spec.md` → `.flow/templates/spec.md` in THIS commit; .4 deletes the copies and the parity tests together).
 
@@ -32,12 +35,21 @@
 - [ ] Closing summary states the only re-run triggers (snippet schema bump, config/seed changes) and that plugin updates need no per-repo action on any host.
 - [ ] Two snippet templates max, both sentinel-versioned, bare `flowctl`, 3-tier cascade; `templates/usage.md` has no `.flow/bin` spellings; uninstall.md single-branch with legacy-cleanup framing.
 - [ ] sync-codex: fn-121 strip transform (incl. the `## Step 3` skip-region trap) and all four guards removed/retargeted WITH their transforms; sync runs clean twice; mirror regenerated.
+- [ ] fn-197's rung-2 chain-integrity guard tightened from prefix match to full-line equality (matching the rung-3 check's `!=` style); sync still runs clean twice.
 - [ ] Dogfood parity kept green in this commit (rewritten templates cp-ed over `.flow/usage.md` + `.flow/templates/spec.md`).
 - [ ] Named test pins retargeted (snippet lockstep, cursor/grok host, precheck template assertion generalized, tracker-distribution installer assertion); suite green.
 ## Done summary
-TBD
+Collapsed `/flow-next:setup` to a single copy-less mode: deleted the Step 2b mode ceremony, the Step 3 mkdir, the Step 4 copy block, the `.flow/usage.md` consent sub-flow, the Step 7c `setup-mode` stamp and the Step 8a plugin-mode summary variant; added the unconditional leftover-cleanup offer (Step 2b) plus the "when to re-run" guidance in the closing summary. Converged the doc snippets to two sentinel-versioned templates, rewrote `templates/usage.md`/`spec.md`/`uninstall.md`, deleted the fn-121 machinery from sync-codex (transform + its four guards, keeping the fn-126 Step-0 rewrite), and tightened the fn-197 rung-2 chain guard to full-line equality.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+Post-review fixes 5e27fddd + mirror regen 4e40501a (residue-probe loop exit, abort text names completed cleanup).
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; 2 P3s fixed post-verdict, 2 deferred to .3 by design)stage: plan-sync - ran (drift: no; .3 already owns both deferred P3s, .5/.6 conditional-bump language matches; cross-spec deferred to conductor)
 
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 728d4279dd76bda40391e767494a33fb4cec08ef, 5e27fddd, 4e40501a
+- Tests: GATE_SKIPPED:unittest:green-receipt 9fedadd9 - baseline reused from prior post-gate pass, python3 scripts/run_tests_parallel.py (files=192 ran=4397 failures=0 errors=0 skipped=8), uvx ruff@0.16.0 check . (All checks passed), ./scripts/sync-codex.sh (run 3x, idempotent, all validation guards green), impl-review: host backend SHIP round 1 (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.2.json); post-fix focused suites + ruff + mirror x2 green
 - PRs:

@@ -6,9 +6,6 @@ on:
     paths:
       - "plugins/flow-next/**"
       - ".github/workflows/test-flow-next.yml"
-      # Dogfood copies guarded against template drift (test_dogfood_template_parity).
-      - ".flow/usage.md"
-      - ".flow/templates/spec.md"
       # Cursor + Codex local-installers live at repo-root scripts/ — outside
       # plugins/flow-next/**, so trigger explicitly to run the install smokes.
       - "scripts/install-cursor.sh"
@@ -26,8 +23,8 @@ on:
       - "scripts/**.py"
       - "agent_docs/**.py"
       # Same #244 rule applied to the UNIT SUITE's read surface: the suite
-      # pins content in these trees (prose contracts, mirror parity, dogfood
-      # copies, eval harnesses), so a filter narrower than what the tests read
+      # pins content in these trees (prose contracts, mirror parity, eval
+      # harnesses), so a filter narrower than what the tests read
       # lets a pin break with the gate never running. Verified by
       # test_ci_trigger_coverage.py. Deliberately excluded: .flow/specs/** and
       # .flow/tasks/** (bookkeeping churn on every chore(flow) commit, no test
@@ -41,15 +38,12 @@ on:
       - "CHANGELOG.md"
       - ".claude-plugin/**"
       - ".agents/plugins/**"
-      - ".flow/bin/**"
       - ".flow/assets/**"
   pull_request:
     branches: [main]
     paths:
       - "plugins/flow-next/**"
       - ".github/workflows/test-flow-next.yml"
-      - ".flow/usage.md"
-      - ".flow/templates/spec.md"
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/install-codex.sh"
@@ -72,7 +66,6 @@ on:
       - "CHANGELOG.md"
       - ".claude-plugin/**"
       - ".agents/plugins/**"
-      - ".flow/bin/**"
       - ".flow/assets/**"
   # Weekly drift backstop: full ubuntu / python 3.x run (units + smokes).
   # The 3.x row was demoted from the per-PR matrix (it duplicated ubuntu-3.11
@@ -465,15 +458,13 @@ jobs:
           python -m py_compile \
             plugins/flow-next/scripts/flowctl.py \
             plugins/flow-next/scripts/flowctl_bootstrap.py
-      - name: Runtime, launcher, usage, and setup-mode contracts
+      - name: Runtime, launcher, and usage contracts
         run: |
           cd plugins/flow-next/tests
           python -m unittest \
             test_startup_bootstrap \
-            test_init_stamp_launchers \
             test_bin_launcher_parity \
             test_cmd_usage \
-            test_setup_mode_stamp \
             test_precheck_mode_contract \
             -q
 

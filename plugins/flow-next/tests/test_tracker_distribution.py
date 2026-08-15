@@ -59,19 +59,10 @@ class ManifestIsCurrent(unittest.TestCase):
                              capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stderr)
 
-    def test_flow_bin_copy_matches_the_manifest_too(self) -> None:
-        """The dual-copy invariant extends to the package AND its manifest."""
-        bin_pkg = REPO / ".flow" / "bin" / "flowctl_tracker"
-        self.assertTrue(bin_pkg.is_dir(), ".flow/bin ships the package")
-        self.assertEqual(_hashes(bin_pkg), _hashes(PKG))
-        self.assertEqual((bin_pkg / "MANIFEST.json").read_bytes(),
-                         MANIFEST.read_bytes(),
-                         "a stale .flow/bin manifest verifies yesterday's hashes")
-        # And the verifier actually passes against BOTH shipped trees.
-        for root in (PKG.parent, bin_pkg.parent):
-            out = subprocess.run([sys.executable, str(VERIFIER), str(root)],
-                                 capture_output=True, text=True, timeout=120)
-            self.assertEqual(out.returncode, 0, (root, out.stderr))
+    def test_verifier_passes_against_the_shipped_tree(self) -> None:
+        out = subprocess.run([sys.executable, str(VERIFIER), str(PKG.parent)],
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stderr)
 
 
 class InstallerVerifier(unittest.TestCase):
@@ -118,8 +109,9 @@ class InstallerVerifier(unittest.TestCase):
             with self.subTest(installer=rel):
                 self.assertIn("verify_tracker_manifest",
                               (REPO / rel).read_text(encoding="utf-8"))
-        for rel in ("plugins/flow-next/skills/flow-next-setup/workflow.md",
-                    "plugins/flow-next/skills/flow-next-ralph-init/SKILL.md"):
+        # fn-197: setup copies nothing into a repo, so it has no package to
+        # verify. ralph-init still stages its own copy and keeps the check.
+        for rel in ("plugins/flow-next/skills/flow-next-ralph-init/SKILL.md",):
             with self.subTest(skill=rel):
                 self.assertIn("verify_tracker_manifest",
                               (REPO / rel).read_text(encoding="utf-8"))
@@ -160,7 +152,7 @@ class RuntimeSmoke(unittest.TestCase):
 
     def test_staged_layouts_import_the_package(self) -> None:
         """Every named-files runtime layout: flowctl.py + bootstrap + package
-        copied flat (the shape Codex installs, copy-mode setup, and ralph all
+        copied flat (the shape Codex installs, the Cursor installers, and ralph all
         produce), with and without the package - absence must FAIL loudly."""
         for with_package in (True, False):
             with self.subTest(with_package=with_package), \

@@ -131,7 +131,7 @@ Research-anchored starting opinions. Tune here with portfolio data, never in flo
 
 ## Emitter contract: `flowctl prime classify --json`
 
-The deterministic layer of Phase 0.5 ships as a pure-stdlib flowctl emitter (bounded, no LLM, no judgment). This file PINS the contract; the implementation lands in the flowctl task (dual-copy `plugins/flow-next/scripts/flowctl.py` and `.flow/bin/flowctl.py`, byte-identical, parity-tested). The skill invokes the emitter and layers judgment (Axis-5 shape values, final per-axis confidence, the Phase 0.6 asks, playbook selection) on the result.
+The deterministic layer of Phase 0.5 ships as a pure-stdlib flowctl emitter (bounded, no LLM, no judgment). This file PINS the contract; the implementation lands in the flowctl task (`plugins/flow-next/scripts/flowctl.py`, the single shipped source). The skill invokes the emitter and layers judgment (Axis-5 shape values, final per-axis confidence, the Phase 0.6 asks, playbook selection) on the result.
 
 **Transport:** JSON on **stdout**; progress + diagnostics on **stderr**. **Redaction (hard contract):** emitted evidence NEVER contains secret values or complete sensitive config lines - **key names only** (a fixture asserts this).
 

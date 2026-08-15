@@ -50,9 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent                 # plugins/flow-next
-REPO_ROOT = PLUGIN_DIR.parent.parent            # repo root
 FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
-DOGFOOD_FLOWCTL_PY = REPO_ROOT / ".flow" / "bin" / "flowctl.py"
 
 
 def _load_flowctl() -> Any:
@@ -416,12 +414,12 @@ class PilotLogTestCase(_FlowctlTmpRepo):
         # per-id flock around count+write serializes them (review finding #1
         # follow-up). Use subprocess so the OS-level flock is actually
         # exercised (in-process threads share the same fd semantics on some
-        # platforms). Shell the dogfood flowctl.py in this repo's throwaway
+        # platforms). Shell the canonical flowctl.py in this repo's throwaway
         # .flow/ (cwd is already chdir'd there by setUp).
         import concurrent.futures
         import subprocess
 
-        flowctl_py = str(DOGFOOD_FLOWCTL_PY)
+        flowctl_py = str(FLOWCTL_PY)
 
         def _append_once(_n: int) -> int:
             return subprocess.run(
@@ -521,18 +519,6 @@ class PilotRunsGitignoreTestCase(unittest.TestCase):
             self.assertIn("user-pattern-Z", content)  # user content preserved
             # Idempotent after the upgrade.
             self.assertFalse(self.flowctl._ensure_flow_gitignore(flow_dir))
-
-
-# ── 5. byte-identical dual-copy invariant ──────────────────────────────────
-
-
-class DualCopyInvariantTestCase(unittest.TestCase):
-    def test_two_copies_byte_identical(self) -> None:
-        self.assertEqual(
-            FLOWCTL_PY.read_bytes(),
-            DOGFOOD_FLOWCTL_PY.read_bytes(),
-            "scripts/flowctl.py and .flow/bin/flowctl.py must be byte-identical",
-        )
 
 
 if __name__ == "__main__":
