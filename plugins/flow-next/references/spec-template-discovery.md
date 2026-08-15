@@ -1,15 +1,20 @@
-# Spec-template discovery — 4-tier cascade + walker
+# Spec-template discovery — 3-tier cascade + walker
 
 Single source of truth for HOW a skill resolves the spec-template file at runtime. The canonical scaffold itself lives at [`../templates/spec.md`](../templates/spec.md) (section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional) — this reference owns only the resolution mechanics. Consumers: `flow-next-interview` (spec seeding), `flow-next-plan` (spec authoring), `docs/spec-template.md`.
 
-Resolve the template via the 4-tier discovery cascade — first match wins;
+Resolve the template via the 3-tier discovery cascade — first match wins;
 do not read later tiers once a hit is found:
 
 1. `<repo_root>/SPEC.md`           (user-customized, uppercase preferred)
 2. `<repo_root>/spec.md`           (user-customized, lowercase honored)
-3. `.flow/templates/spec.md`       (project-local copy from /flow-next:setup)
-4. `${CLAUDE_PLUGIN_ROOT:-${DROID_PLUGIN_ROOT:-${CODEX_HOME:-$HOME/.codex}}}/templates/spec.md`
+3. `<plugin-root>/templates/spec.md`
                                    (bundled — canonical source of truth)
+
+Tier 3 resolves the plugin root the same way every flowctl preamble does:
+`${CLAUDE_PLUGIN_ROOT:-${DROID_PLUGIN_ROOT:-${CODEX_HOME:-$HOME/.codex}}}`
+first, then — when that path has no `templates/spec.md` — the directory two
+levels above this skill's own SKILL.md file (the harness gave you that file's
+absolute path when the skill loaded); substitute it literally.
 
 Case-insensitive FS handling (macOS APFS, Windows NTFS): SPEC.md and
 spec.md may resolve to the same inode. Probe via:
@@ -18,7 +23,7 @@ spec.md may resolve to the same inode. Probe via:
 HITS=$(ls -1 SPEC.md spec.md 2>/dev/null | sort -u | wc -l | tr -d ' ')
 ```
 
-where 0 → tier 1+2 miss, fall to tier 3; 1 → single hit (or case-insensitive
+where 0 → tier 1+2 miss, fall to the bundled tier; 1 → single hit (or case-insensitive
 collapse) — use it; 2 → case-sensitive FS with both distinct, prefer
 SPEC.md and print a stderr warning.
 
@@ -35,10 +40,9 @@ elif [ -f "$REPO_ROOT/SPEC.md" ]; then
   TEMPLATE_PATH="$REPO_ROOT/SPEC.md"
 elif [ -f "$REPO_ROOT/spec.md" ]; then
   TEMPLATE_PATH="$REPO_ROOT/spec.md"
-elif [ -f ".flow/templates/spec.md" ]; then
-  TEMPLATE_PATH=".flow/templates/spec.md"
 else
   TEMPLATE_PATH="${CLAUDE_PLUGIN_ROOT:-${DROID_PLUGIN_ROOT:-${CODEX_HOME:-$HOME/.codex}}}/templates/spec.md"
+  [ -f "$TEMPLATE_PATH" ] || TEMPLATE_PATH="<plugin-root>/templates/spec.md"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 fi
 TEMPLATE=$(cat "$TEMPLATE_PATH")
 ```

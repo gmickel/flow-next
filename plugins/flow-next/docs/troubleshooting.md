@@ -2,20 +2,17 @@
 
 Common recovery patterns for stuck tasks, broken state, Ralph debugging, and review-backend conflicts. For deeper subsystem guides see [`flowctl.md`](flowctl.md) (CLI reference), [`ralph.md`](ralph.md) (Ralph internals), and the parent [`../README.md`](../README.md).
 
-## Just updated the plugin and something is off? Re-run `/flow-next:setup`
+## Updated the plugin — do I re-run setup?
 
-The **single most common post-update issue.** `flowctl` (in `.flow/bin/`) and `.flow/usage.md` are **snapshot copies inside your repo**, written by setup - a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) refreshes the *plugin* but NOT those in-repo copies. A `flowctl` flag that "should exist" erroring or an outdated `.flow/usage.md` means the project copy needs refreshing. Plan also detects a known copy/plugin version mismatch before planning; direct invocation of other skills does not run a version preflight.
+**No.** Setup copies nothing into your repo, so a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) is the whole update: every skill resolves `flowctl` from the plugin install itself, and the agent guide comes from `flowctl usage`. Re-run `/flow-next:setup` only when setup tells you the docs-snippet schema bumped, or when you want to change configuration or re-seed the user-owned files. It stays idempotent and non-destructive (your specs/tasks/memory/config are untouched). See [platforms.md → What setup does](platforms.md#what-setup-does).
 
-```bash
-/flow-next:setup      # re-copies launchers + flowctl.py + tracked fast-path files, rewrites usage.md,
-                      # refreshes the model-routing scaffold + spec template, re-stamps setup_version
-```
+## I have `.flow/bin/` from an old install
 
-It is idempotent and non-destructive (your specs/tasks/memory/config are untouched). **Copy-mode repos only:** re-run it in **each project** after every flow-next update - not just once globally, because the copies live per-repo under `.flow/`. **Plugin-mode repos** (Claude Code, `setup_mode: "plugin"` in `.flow/meta.json`) have no local copies to refresh - plugin updates land silently and this section does not apply. See [platforms.md → Setup modes](platforms.md#setup-modes-plugin-vs-copy-fn-121).
+Delete it. `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` are snapshots from the retired copy layout; nothing reads them, and removing them changes nothing observable in any workflow. Keeping them is a hazard, not a safety net — a stale copied `flowctl` can shadow the current one (a flag that "should exist" erroring is the classic symptom). `/flow-next:setup` and `/flow-next:plan` both detect the leftovers and offer to delete them; you can also just `rm -rf .flow/bin .flow/templates/spec.md .flow/usage.md` (use `git rm` for tracked copies).
 
 ## Pre-1.0 layout porting
 
-`flowctl migrate-rename` / `migrate-rollback` are gone. Port by hand: rename `.flow/epics/` -> `.flow/specs/`, rewrite `next_epic`/`epic`/`epic_id` keys per `.flow/usage.md` "Pre-1.0 layout porting", then `flowctl validate --all`.
+`flowctl migrate-rename` / `migrate-rollback` are gone. Port by hand: rename `.flow/epics/` -> `.flow/specs/`, rewrite `next_epic`/`epic`/`epic_id` keys per `flowctl usage` "Pre-1.0 layout porting", then `flowctl validate --all`.
 
 ## Reset a stuck task
 
@@ -120,7 +117,7 @@ Clearing a strike **does not re-ready the spec** - the two signals are orthogona
 **Symptom:** one non-blocking line like
 
 ```
-note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block /flow-next:setup writes into CLAUDE.md / AGENTS.md plus the recipes in .flow/usage.md - route work there and delete these keys.
+note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block /flow-next:setup writes into CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage` - route work there and delete these keys.
 ```
 
 **This is expected, not an error.** The role map (`models.roles`) and its staleness stamps (`models.verifiedAt` / `models.verifiedWith`), like the `work.delegate*` keys, are removed - flowctl reads none of them. The advisory prints at most once per invocation, on the config and work entry points only, and never blocks. Delete the keys when convenient.
@@ -182,7 +179,7 @@ Spec-driven `flowctl copilot {impl,plan,completion}-review` calls work on native
 
 POSIX (macOS / Linux / WSL) behavior is unchanged.
 
-**If you still see Windows argv errors:** inspect the installed plugin version in your host's plugin manager. Update Flow-Next, then re-run `/flow-next:setup` only for copy-mode repositories so their checked-in launchers refresh; plugin-mode repositories consume the updated launcher directly.
+**If you still see Windows argv errors:** inspect the installed plugin version in your host's plugin manager and update Flow-Next — every repo consumes the updated launcher directly, so no per-repo re-run is needed. If the repo still carries a legacy `.flow/bin/` copy, delete it (see [I have `.flow/bin/` from an old install](#i-have-flowbin-from-an-old-install)); a stale copy shadows the fixed launcher.
 
 **Upstream:** [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) tracks a first-class `--prompt-file` flag. Once that lands, both POSIX and Windows paths will move to the cleaner file-based delivery.
 
@@ -194,15 +191,15 @@ POSIX (macOS / Linux / WSL) behavior is unchanged.
 
 **The shipped fix (no action needed on a fresh install):** the `flowctl` launchers now probe interpreter functionality **and require Python 3.11+** in order `$PYTHON_BIN` → `py -3` → `python3` → `python`, so the 9009 stub and working-but-too-old interpreters are skipped before `flowctl.py` loads. If no candidate works, the error says so; if candidates work but are below 3.11, a distinct error tells you to install or select a supported Python. A `flowctl.cmd` batch shim ships alongside the extensionless bash `flowctl`, so PowerShell / cmd.exe (Claude Desktop, native Codex, native Cursor) resolve a supported interpreter too. See [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
 
-**Recovering an already-broken install** (a pre-fix `.flow/bin/flowctl` hardcodes `exec python3` and cannot fix itself). Pick either:
+**Recovering a legacy copied install** (a pre-fix `.flow/bin/flowctl` hardcodes `exec python3` and cannot fix itself). This only applies to repos still carrying the retired copy layout. Pick either:
 
-1. **Re-stamp the launchers (recommended, durable).** `flowctl init` re-writes `.flow/bin/flowctl` **and** `.flow/bin/flowctl.cmd` from the fixed source. Because the broken bash launcher can't run, drive `init` through a working interpreter directly — `init` lives inside `flowctl.py`, so it never needs the launcher:
+1. **Delete the copy (recommended, durable).** The plugin's own launchers already carry the fix, and nothing reads `.flow/bin/` any more:
 
    ```powershell
-   py -3.11 .flow/bin/flowctl.py init   # or use an explicit Python 3.11+ command
+   Remove-Item -Recurse -Force .flow\bin        # git rm -rq .flow/bin if it is tracked
    ```
 
-   or just re-run `/flow-next:setup` (its upgrade branch re-stamps both). After this, `flowctl` and `flowctl.cmd` work in every shell.
+   After this, `flowctl` and `flowctl.cmd` resolve from the plugin install and work in every shell. `/flow-next:setup` offers the same deletion interactively.
 
 2. **Disable the Store alias (per-machine OS workaround).** Settings → Apps → Advanced app settings → **App execution aliases** → toggle **OFF** for `python.exe` **and** `python3.exe`. `python3` then resolves to your real install. Note the `py` launcher is [not included with Store Python](https://learn.microsoft.com/windows/python/faqs), so if you were relying on Store Python, install python.org Python (which ships `py`) to get `py -3`.
 

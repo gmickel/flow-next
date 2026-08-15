@@ -4,7 +4,7 @@ First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Bu
 
 **That sentence is canonical, and this file is its only home.** Every other surface (the README prose, the README platforms table, and flow-next.dev) restates it verbatim or links here, so promoting or demoting a harness stays a one-place edit. First-class means the canonical plugin files are consumed (as-is or through the generated mirror), skills and slash commands run, multi-agent flows are verified, and setup detects the host. Ralph is intentionally not built for Cursor or Grok Build; that is a deliberate posture, not a tiering gap.
 
-Claude Code is the canonical surface, OpenAI Codex consumes the pre-built mirror, and Factory Droid runs on the native cross-platform patterns. xAI **Grok Build** reads the canonical Claude plugin format AS-IS (skills, agents, commands, MCP, instruction files). Skills load, `/flow-next:*` slash commands run when typed, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Setup detects Grok via **`GROK_AGENT=1`** (not Codex fallback / `$flow-next-` syntax). Copy mode + `.flow/bin/flowctl`; Ralph intentionally not built for Grok. See [Grok Build](#grok-build-claude-code-compatibility) below. **Cursor** is first-class too: **recommended install is team-marketplace repo import** (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push); local `install-cursor.sh` / `.ps1` remain the individual/fallback path. Skills, commands, multi-agent flows, native asks, and slash autocomplete verified; Ralph intentionally not built for Cursor. See [Cursor](#cursor) below.
+Claude Code is the canonical surface, OpenAI Codex consumes the pre-built mirror, and Factory Droid runs on the native cross-platform patterns. xAI **Grok Build** reads the canonical Claude plugin format AS-IS (skills, agents, commands, MCP, instruction files). Skills load, `/flow-next:*` slash commands run when typed, and **multi-agent flows work** (a full `/flow-next:plan` fanned out all seven scouts, verified). Setup detects Grok via **`GROK_AGENT=1`** (not Codex fallback / `$flow-next-` syntax). flowctl resolves from the plugin install (the skill derives the plugin root from its own file path); Ralph intentionally not built for Grok. See [Grok Build](#grok-build-claude-code-compatibility) below. **Cursor** is first-class too: **recommended install is team-marketplace repo import** (admin imports the GitHub repo via the Cursor GitHub App; Default Off / On / Required modes; auto-refresh on push); local `install-cursor.sh` / `.ps1` remain the individual/fallback path. Skills, commands, multi-agent flows, native asks, and slash autocomplete verified; Ralph intentionally not built for Cursor. See [Cursor](#cursor) below.
 
 ### Ralph hooks: per-host registration (no plugin-default)
 
@@ -28,43 +28,37 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 | Claude Code | `/plugin marketplace add https://github.com/gmickel/flow-next && /plugin install flow-next` | `.claude-plugin/plugin.json` | Canonical environment |
 | Factory Droid | `droid plugin marketplace add https://github.com/gmickel/flow-next && droid plugin install flow-next` (in Droid CLI) | `.claude-plugin/plugin.json` (Droid auto-translates Claude Code plugin format) | Native cross-platform patterns |
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
-| Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (canonical Claude files AS-IS; no Codex mirror) | **Detected via `GROK_AGENT=1`.** Namespaced slash commands (`/flow-next:*`), copy mode, multi-agent verified. Ralph intentionally not built. See [Grok Build](#grok-build-claude-code-compatibility) |
+| Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (canonical Claude files AS-IS; no Codex mirror) | **Detected via `GROK_AGENT=1`.** Namespaced slash commands (`/flow-next:*`), plugin-resolved flowctl, multi-agent verified. Ralph intentionally not built. See [Grok Build](#grok-build-claude-code-compatibility) |
 | Cursor | **Recommended:** team-marketplace repo import (admin imports `gmickel/flow-next` via Cursor GitHub App). **Fallback:** `./scripts/install-cursor.sh` / `install-cursor.ps1` → `~/.cursor/plugins/local/` | `.cursor-plugin/plugin.json` (Cursor's own namespace — does NOT read `.claude-plugin/`) | **First-class** (multi-agent, native asks, autocomplete verified). Ralph intentionally not built for Cursor — see [Cursor](#cursor) |
 | OpenCode | See [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | n/a | Community port |
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
 
-## Setup modes: plugin vs copy (fn-121)
+## What setup does
 
-`/flow-next:setup` on **Claude Code** asks one mode question per repo; every other host is always copy mode.
+`/flow-next:setup` **copies nothing into your repo.** It runs `flowctl init`, writes a slim versioned docs snippet (CLAUDE.md / AGENTS.md), walks the config ceremony, and optionally seeds user-owned files (`SPEC.md`, `.flow/criteria.md`, `.codex/agents/*.toml` on Codex, Ralph if you opt in).
 
-| | **Plugin mode** (Claude Code only) | **Copy mode** (all hosts) |
-|---|---|---|
-| What lands in the repo | A slim versioned CLAUDE.md snippet — nothing else | `.flow/bin/flowctl*`, `.flow/templates/spec.md`, `.flow/usage.md` snapshots + full snippet |
-| How agents reach flowctl | Bare `flowctl` — Claude Code injects the plugin's `bin/` onto the Bash PATH | `.flow/bin/flowctl` (works with no plugin installed at all) |
-| The agent guide | Pulled live via `flowctl usage` (always current) | `.flow/usage.md` on disk |
-| Plugin updates | Land silently — **no setup re-run, ever** | Re-run `/flow-next:setup` per repo to refresh the snapshots |
-| Who should pick it | Claude-Code-only repos | Repos with Codex/Cursor/Droid teammates, CI, or plain-terminal flowctl use |
+Every host resolves `flowctl` from the plugin install itself: Claude Code and Droid via their plugin-root env vars, Cursor and Grok by deriving the plugin root from the skill file's own absolute path, Codex from `${CODEX_HOME:-$HOME/.codex}/scripts/`. The agent guide is pulled live via `flowctl usage`; the spec template resolves through the bundled cascade.
+
+**Plugin updates land silently — no setup re-run.** Re-run it only when setup says the docs-snippet schema bumped, or to change configuration. Repos set up before this layout carry leftover `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` snapshots; setup offers to delete them, and deleting them changes nothing observable. Contributor-facing internals: [`agent_docs/setup.md`](../../../agent_docs/setup.md).
 
 ### flowctl_tracker distribution integrity (fn-139)
 
 flowctl ships with a sibling `flowctl_tracker/` package (deterministic tracker
 transport). Its integrity contract is `flowctl_tracker/MANIFEST.json`
 (`{path, sha256}` per file, regenerated by `scripts/gen_tracker_manifest.py`
-during sync): **every installer verifies the manifest after copying and fails
-loudly on mismatch** (`install-codex.sh`, `install-cursor.sh` / `.ps1`,
-copy-mode setup, ralph-init - all via
+during sync): **every installer that copies the package verifies the manifest
+afterwards and fails loudly on mismatch** (`install-codex.sh`,
+`install-cursor.sh` / `.ps1`, ralph-init - all via
 `scripts/lib/verify_tracker_manifest.py`). Per-command hashing is deliberately
 rejected: it would tax every invocation to catch what installers already cover.
 
-**Residual gap, accepted:** marketplace/plugin-mode installs (Claude Code
-plugin manager, Droid auto-translate, Grok) have no plan-controlled
-post-install hook, so they are NOT covered by manifest verification. A corrupt
-marketplace install surfaces as an ordinary Python `ImportError` on first
-tracker-verb use - reinstall the plugin to fix. Detecting arbitrary corruption
-at runtime would require the per-command hashing this design rejects.
-
-Why other hosts can't have plugin mode: Cursor exposes no plugin-root env vars and no bin PATH injection; Codex resolves flowctl from `${CODEX_HOME:-$HOME/.codex}/scripts/`; Droid's bin injection is unverified. A plugin-mode repo remains **workable from Codex and Droid** (Codex skills self-resolve flowctl from `${CODEX_HOME:-$HOME/.codex}/scripts/`; Droid reads the plugin-root envs) — but **NOT from Cursor**, whose skill preambles need `.flow/bin`; a Cursor visitor is offered a consented convert-to-copy. If teammates on other hosts are the norm, choose copy mode. Switching modes later is a consented `/flow-next:setup` re-run; the mode stamp (`setup_mode` in `.flow/meta.json`) is written only by `flowctl setup-mode set`, which refuses a plugin stamp unless the CLAUDE.md rail is present and no copy snapshots remain. Contributor-facing internals: [`agent_docs/setup-modes.md`](../../../agent_docs/setup-modes.md).
+**Residual gap, accepted:** marketplace installs (Claude Code plugin manager,
+Droid auto-translate, Grok) have no plan-controlled post-install hook, so they
+are NOT covered by manifest verification. A corrupt marketplace install
+surfaces as an ordinary Python `ImportError` on first tracker-verb use -
+reinstall the plugin to fix. Detecting arbitrary corruption at runtime would
+require the per-command hashing this design rejects.
 
 **Team / org-wide deployment (Claude Code).** To install flow-next across a whole team without each developer running the commands, deploy it through Claude Code settings rather than per-user: a `managed-settings.json` for org-wide rollout (admin/IT, via MDM/GPO — `extraKnownMarketplaces` registers the marketplace, `enabledPlugins` force-enables `flow-next@flow-next`, not user-overridable), or a committed `.claude/settings.json` for a prompt-on-trust install scoped to one repo. A one-time trust prompt still appears by design, and each repo still needs `/flow-next:setup` to wire the local `.flow/` state. Full JSON + OS paths: [flow-next.dev/install → Team / org-wide deployment](https://flow-next.dev/install/#team--org-wide-deployment-claude-code-managed-settings).
 
@@ -194,7 +188,6 @@ Codex supports hooks, but flow-next installs **none** by default: the Codex mirr
 
 Run `$flow-next-setup` (or select **Flow Setup** from the `$` dropdown) in your project. It detects the Codex platform and:
 - Initializes `.flow/` directory
-- Copies flowctl to `.flow/bin/`
 - Copies 21 agent `.toml` configs to `.codex/agents/` (project-scoped)
 - Asks whether to enable Ralph (default **No**). Yes → ralph-init (scaffold + `.codex/hooks.json`). No → strips any fingerprinted Ralph guard entries if present
 - Adds Flow-Next instructions to AGENTS.md
@@ -208,12 +201,6 @@ CODEX_BIN="${CODEX_HOME:-$HOME/.codex}/scripts"
 
 # Initialize .flow/ directory
 "$CODEX_BIN/flowctl" init
-
-# Optional: copy flowctl locally
-mkdir -p .flow/bin
-cp "$CODEX_BIN/flowctl" .flow/bin/
-cp "$CODEX_BIN/flowctl.py" .flow/bin/
-chmod +x .flow/bin/flowctl
 
 # Configure review backend
 "$CODEX_BIN/flowctl" config set review.backend codex
@@ -229,7 +216,7 @@ chmod +x .flow/bin/flowctl
 
 [xAI Grok Build](https://x.ai/cli) (the `grok` CLI) reads the **canonical Claude plugin format AS-IS** - skills, agents, commands, MCP, and instruction files. Per [xAI docs](https://docs.x.ai/build/features/skills-plugins-marketplaces) it *"automatically reads Claude Code marketplaces, plugins, skills, MCPs, agents, hooks, and instruction files."* If flow-next is already installed in Claude Code, Grok picks it up with no extra setup.
 
-**Grok is not a Codex host.** It does **not** consume the Codex mirror, does **not** use `$flow-next-*` command syntax, and must not fall through setup's `else → codex` path. Drive with `/flow-next:*` slash commands; after `/flow-next:setup` resolve flowctl via `.flow/bin/flowctl` (copy mode only).
+**Grok is not a Codex host.** It does **not** consume the Codex mirror, does **not** use `$flow-next-*` command syntax, and must not fall through setup's `else → codex` path. Drive with `/flow-next:*` slash commands; flowctl resolves from the plugin install, which the skill locates from its own absolute file path.
 
 ### Setup detection (fn-126)
 
@@ -251,7 +238,7 @@ chmod +x .flow/bin/flowctl
 - **Add as a marketplace source:** flow-next's repo root is a Claude Code **marketplace** (`.claude-plugin/marketplace.json`), so register `gmickel/flow-next` via `[[marketplace.sources]]` in `~/.grok/config.toml` (or the TUI **Marketplace** tab, opened with `/plugins`), then enable the `flow-next` plugin.
 - **Local / dev:** `grok --plugin-dir /path/to/flow-next/plugins/flow-next`.
 
-Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-next-setup`). Grok is always **copy mode** (no plugin-root bin PATH injection): setup stamps `.flow/bin/flowctl`, writes the slash-syntax docs snippet, offers the Grok review menu, writes the routing block with every line commented out (no routing question, no model id), and does **not** copy `.codex/agents` or offer Ralph.
+Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-next-setup`). Grok exposes no plugin-root env var, so skills derive the plugin root from their own absolute path and run the installed flowctl directly - setup copies nothing. It writes the slash-syntax docs snippet, offers the Grok review menu, writes the routing block with every line commented out (no routing question, no model id), and does **not** copy `.codex/agents` or offer Ralph.
 
 > **Do NOT run `grok plugin install https://github.com/gmickel/flow-next`.** That is the **single-plugin** git installer; the repo root is a **marketplace** (the plugin is nested at `plugins/flow-next/`), so it errors `no plugins found in the source (no plugin.json or convention components)` - there is no single plugin at the repo root. This is the same reason you don't `claude plugin install` a marketplace repo. Use the marketplace / auto-read path above.
 
@@ -260,7 +247,7 @@ Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-ne
 - All 28 flow-next **skills** load (`grok inspect`: `plugin: flow-next`); discovery used the **Claude Code plugin install** directly (`Marketplaces (0)`, no Grok-side config).
 - **Slash commands.** Drive with `/flow-next:<name>` - **not** Codex `$flow-next-` syntax. Type `/flow-next:` to discover the namespaced command surface. The separately indexed `/flow-next-…` skill names are an implementation surface, not the documented invocation contract.
 - **Multi-agent flows work - verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate. Grok **dispatches flow-next's custom `subagent_type`s** even when `grok inspect` does not list them in its agent UI.
-- **MCP servers** resolve (e.g. RepoPrompt, linear-server); after setup, `flowctl` resolves via **`.flow/bin/flowctl`** (copy mode).
+- **MCP servers** resolve (e.g. RepoPrompt, linear-server); `flowctl` resolves from the **plugin install** - the skill derives the plugin root from its own SKILL.md path (probe-verified in a repo with no `.flow/bin`).
 - **Review menu includes `host`.** Setup offers `host` alongside `rp` / `codex` / `copilot` / `cursor` / `none`. **Single-family fail-closed:** this host reaches only one model family natively, so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot`), not a native multi-family subagent. The host-native routing block lands in AGENTS.md and documents the same honesty.
 
 ### Caveats / intentional limits
@@ -270,7 +257,7 @@ Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-ne
 - **Detection signal (live-verified 2026-07-22).** `GROK_AGENT=1` confirmed present in a STANDALONE grok session (`env \| grep GROK_AGENT` → `GROK_AGENT=1`, no other vars) - not an artifact of a launched-from-another-agent probe.
 - **Ralph is intentionally not built for Grok.** Same posture as Cursor - not a hook-schema gap and not "TBD validation." Setup never offers Ralph on `PLATFORM=grok`, never registers guard hooks, and never runs ralph-init from the ceremony. Interactive plan / work / review is the supported surface.
 
-> **Status:** verified-compat host. Detection: `GROK_AGENT=1` only. Canonical Claude files AS-IS; both CLAUDE.md and AGENTS.md loaded; `/flow-next:` slash syntax and command autocomplete; copy mode + `.flow/bin/flowctl`; review includes `host` with single-family fail-closed; no Ralph (intentional). Multi-agent scout fan-out verified. `GROK_AGENT=1` + no-nesting slash menu live-verified; command-prefix behavior re-verified on Grok 0.2.111 (2026-07-23). Nested Droid→Grok unsupported pending propagation smoke.
+> **Status:** verified-compat host. Detection: `GROK_AGENT=1` only. Canonical Claude files AS-IS; both CLAUDE.md and AGENTS.md loaded; `/flow-next:` slash syntax and command autocomplete; flowctl resolved from the plugin install via skill-path derivation; review includes `host` with single-family fail-closed; no Ralph (intentional). Multi-agent scout fan-out verified. `GROK_AGENT=1` + no-nesting slash menu live-verified; command-prefix behavior re-verified on Grok 0.2.111 (2026-07-23). Nested Droid→Grok unsupported pending propagation smoke.
 
 ## Cursor
 
@@ -286,7 +273,7 @@ For teams (and anyone on Cursor Teams / Enterprise), **import the GitHub repo as
 | **Default On** | Installed for the team; engineers can disable |
 | **Required** | Forced on for every team member |
 
-Cursor **auto-refreshes** the marketplace on push (GitHub App webhooks, ~10-minute batching). Engineers then run `/flow-next:setup` once per repo (writes `.flow/bin/flowctl`, `AGENTS.md` model-routing scaffold, etc.). No per-developer `git clone` + re-run-after-pull cycle.
+Cursor **auto-refreshes** the marketplace on push (GitHub App webhooks, ~10-minute batching). Engineers then run `/flow-next:setup` once per repo (initializes `.flow/`, writes the docs snippet and the `AGENTS.md` model-routing scaffold — nothing is copied into the repo). No per-developer `git clone` + re-run-after-pull cycle.
 
 Public Cursor Marketplace submission is **not** the path here (publisher-terms decision); team-marketplace repo import delivers the same one-click / auto-update / org-enforceable value without those terms.
 
@@ -295,7 +282,7 @@ Public Cursor Marketplace submission is **not** the path here (publisher-terms d
 1. **Import the repo.** In Cursor team settings → Marketplaces / Plugins, import `https://github.com/gmickel/flow-next` via the Cursor GitHub App (requires admin on the Cursor team + GitHub App install on the org/repo).
 2. **Choose install mode.** Prefer **Default On** for voluntary adoption, **Required** when every engineer must run flow-next on day one.
 3. **Verify auto-refresh.** After a push that changes plugin files, wait for Cursor's refresh window (~10 min batching) and confirm team clients pick up the new surface (skills/commands/rules count or a known skill description change).
-4. **Per-repo setup.** Each engineer (or the first clone of each project) runs `/flow-next:setup` — copy mode only on Cursor (no plugin-root env vars / bin PATH injection). Setup leads the review-backend menu with `host` (recommended), writes the AGENTS.md routing block with every line commented out (it never probes for or asserts which models your account serves), and stamps `.flow/bin/flowctl`.
+4. **Per-repo setup.** Each engineer (or the first clone of each project) runs `/flow-next:setup`. Cursor exposes no plugin-root env var, so skills derive the plugin root from their own absolute path and run the installed flowctl directly — nothing is copied into the repo. Setup leads the review-backend menu with `host` (recommended) and writes the AGENTS.md routing block with every line commented out (it never probes for or asserts which models your account serves).
 
 ### Fallback: local install scripts (individuals)
 
@@ -330,7 +317,7 @@ Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.c
 - **`review.backend host`:** fresh-context subagent review on the `reviewer` tier from the AGENTS.md routing block (or a model named in the dispatch itself), from a family that did not write the diff (preferred from inside Cursor; existing `codex` / `copilot` / `cursor` CLI / `rp` backends remain selectable).
 - **`rules/flow-next.mdc`:** Cursor-native guidance rail (flowctl lifecycle + `flowctl usage` pull directives).
 - **AGENTS.md routing block** from setup: the four tier lines, commented out, for you to fill with the model ids this host actually serves — ask the harness for its list rather than copying one (see [`reach/cursor.md`](reach/cursor.md)).
-- **`flowctl`** resolves via `.flow/bin/flowctl` after setup (Cursor exposes no plugin-root env var).
+- **`flowctl`** resolves from the plugin install: Cursor exposes no plugin-root env var, but it injects the loading skill's absolute `SKILL.md` path, and the preamble derives the plugin root two levels above it (probe-verified in a repo with no `.flow/bin`, CLI and desktop app).
 
 The interview skill's optional async fact-scout dispatch names Claude Code's `Explore` builtin; Cursor has no such builtin, so the skill's portable-host clause applies — generic read-only dispatch, falling back to inline investigation if none is available.
 
@@ -349,9 +336,9 @@ The interview skill's optional async fact-scout dispatch names Claude Code's `Ex
 
 flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows it resolves the Python interpreter by **probing functionality and the Python 3.11 minimum, not presence**: each candidate must run a version probe successfully. Probe order is `$PYTHON_BIN` → `py -3` → `python3` → `python`. Broken Store aliases are skipped; if only working interpreters below 3.11 exist, the launcher reports that distinct condition before loading flowctl.
 
-- **Dual launcher.** The extensionless bash `flowctl` runs under Git Bash / WSL (and macOS / Linux); a **`flowctl.cmd`** batch shim runs the same probe under **cmd.exe / PowerShell** — i.e. Claude Desktop, native Codex, and native Cursor, where the bash launcher's shebang is never honored. Both live under `.flow/bin/` and are (re-)written by `flowctl init` / `/flow-next:setup`.
+- **Dual launcher.** The extensionless bash `flowctl` runs under Git Bash / WSL (and macOS / Linux); a **`flowctl.cmd`** batch shim runs the same probe under **cmd.exe / PowerShell** — i.e. Claude Desktop, native Codex, and native Cursor, where the bash launcher's shebang is never honored. Both ship side by side in the plugin's `scripts/` (and `bin/`) directory, so whichever rung of the resolution chain finds the plugin root finds the right launcher for the shell you are in.
 - **`py -3` preferred.** The [py launcher](https://docs.python.org/3/using/windows.html) (`C:\Windows\py.exe`, installed by python.org / [PEP 397](https://peps.python.org/pep-0397/)) is never a Store alias stub, so it's the most reliable Windows candidate.
-- **Alias-stub pitfall.** On Windows `python3` is, by default, the Microsoft Store **App Execution Alias** stub — on `PATH` but non-functional (prints *"Python was not found"*, exits **9009**). The probe skips it; a bare presence check does not. If a *pre-fix* install still hits it, see [`troubleshooting.md` → Windows `python3` / Store alias stub](troubleshooting.md#windows-python3-not-found--microsoft-store-alias-stub-fixed-in-fn-77) for the two recovery paths (re-stamp launchers via `py -3 .flow/bin/flowctl.py init`, or disable the alias).
+- **Alias-stub pitfall.** On Windows `python3` is, by default, the Microsoft Store **App Execution Alias** stub — on `PATH` but non-functional (prints *"Python was not found"*, exits **9009**). The probe skips it; a bare presence check does not. If a *pre-fix* install still hits it, see [`troubleshooting.md` → Windows `python3` / Store alias stub](troubleshooting.md#windows-python3-not-found--microsoft-store-alias-stub-fixed-in-fn-77) for the two recovery paths (delete the legacy `.flow/bin/` copy so the plugin's own launcher is used, or disable the alias).
 - **Ralph mode requires Git Bash on Windows.** The Ralph harness (`ralph.sh`) and its hook wrapper are bash, and the `ralph-guard.py` hook is invoked via a bash wrapper that sources the shared resolver — there is **no** native `ralph-guard.cmd`, because the harness that would call it is itself bash. So run Ralph under Git Bash / WSL on Windows. The interactive `flowctl` / plan / work / review workflow needs no such constraint (the `.cmd` shim covers cmd/PowerShell).
 
 ## RepoPrompt review backend (macOS-only)

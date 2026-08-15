@@ -55,6 +55,12 @@ back to the session model, exactly as flow-next has always run out of the box.
   Nothing fails closed on routing, ever: a model this harness cannot reach falls
   back to the session model, says so once, and continues.
 
+- **`flowctl setup-mode` is gone**, along with the plugin/copy mode question.
+  There is one setup mode now, so there is nothing to stamp or switch. Existing
+  `setup_mode` / `setup_version` values in `.flow/meta.json` are tolerated as
+  inert metadata and never read; a script that called `flowctl setup-mode set`
+  can simply drop the call.
+
 ### Added
 
 - **Four tier names, so you can state intent instead of wiring mechanism.**
@@ -83,6 +89,27 @@ back to the session model, exactly as flow-next has always run out of the box.
   unknown - never as the configured value.
 
 ### Changed
+
+- **Setup no longer copies anything into your repo, so plugin updates need no
+  per-repo action.** Previously most repos ran in "copy mode": `flowctl`, the
+  agent guide, and the spec template landed as snapshots under `.flow/`, and
+  every plugin update meant re-running `/flow-next:setup` in each project or
+  silently running an old CLI. Now every host resolves `flowctl` from the plugin
+  install itself - Claude Code and Droid through their plugin-root env vars,
+  Codex through `$CODEX_HOME`, and Cursor and Grok by deriving the plugin root
+  from the absolute skill path those hosts already hand the agent. Update the
+  plugin and you are done. `/flow-next:setup` is now only for the first run, a
+  configuration change, or the rare release that says the docs-snippet schema
+  bumped.
+
+  **Migration: delete your copies.** `.flow/bin/`, `.flow/templates/spec.md`,
+  and `.flow/usage.md` are dead weight on every host - nothing reads them, and
+  removing them changes nothing observable in any workflow. `/flow-next:setup`
+  offers to delete them for you (never silently), and `/flow-next:plan` prints a
+  one-line nudge when it sees them. Keeping them is the riskier choice: a stale
+  copied `flowctl` can shadow the current one. If you have not migrated yet,
+  nothing breaks - skills still fall back to `.flow/bin/flowctl` as a silent
+  backstop.
 
 - **Resolution is one sentence at every dispatch site**, not a resolver:
   an explicit instruction in the moment, then your routing block, then the agent

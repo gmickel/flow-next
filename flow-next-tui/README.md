@@ -190,6 +190,9 @@ The TUI searches for flowctl in:
    - `~/.codex/scripts/flowctl`
    - `~/.cursor/plugins/local/flow-next/scripts/flowctl` and the versioned `~/.cursor/plugins/cache/flow-next/...` entries (newest first)
 
+Rung 4 reads `$FLOW_NEXT_TUI_HOME` in place of the real home directory when that
+variable is set, so a non-standard home (or a fixture tree) resolves the same way.
+
 ### Unicode icons look wrong
 
 Try `--no-emoji` for ASCII fallback, or use a font with good Unicode support (e.g., JetBrains Mono, Fira Code).

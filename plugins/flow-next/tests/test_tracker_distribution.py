@@ -152,7 +152,7 @@ class RuntimeSmoke(unittest.TestCase):
 
     def test_staged_layouts_import_the_package(self) -> None:
         """Every named-files runtime layout: flowctl.py + bootstrap + package
-        copied flat (the shape Codex installs, copy-mode setup, and ralph all
+        copied flat (the shape Codex installs, the Cursor installers, and ralph all
         produce), with and without the package - absence must FAIL loudly."""
         for with_package in (True, False):
             with self.subTest(with_package=with_package), \

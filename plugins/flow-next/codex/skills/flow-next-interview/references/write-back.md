@@ -103,7 +103,7 @@ fi
 #      (Overview / Scope / Approach / Quick commands / Acceptance / References)
 #      don't match the scope-aware write-policy's canonical section names).
 #
-#      Resolve the template via the 4-tier discovery cascade. The full walker
+#      Resolve the template via the 3-tier discovery cascade. The full walker
 #      (cascade order, case-insensitive FS probe, both-exist warning, plugin-root
 #      fallback) is single-sourced in ../../references/spec-template-discovery.md —
 #      Read it and run its walker to set TEMPLATE_PATH + TEMPLATE.

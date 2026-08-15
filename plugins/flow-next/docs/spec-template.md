@@ -1,6 +1,6 @@
 # Spec Template & Acceptance-Criteria Discipline
 
-The canonical spec scaffold lives at [`../templates/spec.md`](../templates/spec.md). This doc covers the **rules** that surround it — R-ID semantics, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, and the 4-tier template discovery cascade — not the section list itself (R17: cross-link, never re-embed).
+The canonical spec scaffold lives at [`../templates/spec.md`](../templates/spec.md). This doc covers the **rules** that surround it — R-ID semantics, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, and the 3-tier template discovery cascade — not the section list itself (R17: cross-link, never re-embed).
 
 ## Canonical scaffold
 
@@ -15,14 +15,13 @@ The template is consumed by:
 | `flow-next-plan` | breaks a spec into tasks |
 | `CLAUDE.md` | "Creating a spec" guide cross-links the template rather than embedding |
 
-## 4-tier discovery cascade
+## 3-tier discovery cascade
 
-When a skill needs the spec template, it walks four locations in order (first match wins):
+When a skill needs the spec template, it walks three locations in order (first match wins):
 
 1. `<repo_root>/SPEC.md` — your customized scaffold (uppercase preferred)
 2. `<repo_root>/spec.md` — lowercase honored when uppercase absent
-3. `.flow/templates/spec.md` — project-local copy from `/flow-next:setup`
-4. `${PLUGIN_ROOT}/templates/spec.md` — bundled (canonical source of truth)
+3. `${PLUGIN_ROOT}/templates/spec.md` — bundled (canonical source of truth)
 
 Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md).
 
@@ -34,7 +33,7 @@ Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that
 
 ```bash
 # from your repo root
-cp "$CLAUDE_PLUGIN_ROOT/templates/spec.md" SPEC.md   # or copy .flow/templates/spec.md in copy-mode repos
+cp "$CLAUDE_PLUGIN_ROOT/templates/spec.md" SPEC.md   # bundled scaffold — the plugin install is the only source
 $EDITOR SPEC.md                                       # add / reorder / reword
 git add SPEC.md && git commit -m "docs: project spec scaffold"
 ```
@@ -295,7 +294,7 @@ Verdict gate considers only `introduced` findings. Pre-existing issues surface i
 Review prompts carry a hardcoded never-flag list — findings recommending deletion or gitignore of these paths are discarded during synthesis:
 
 - `.flow/*` (specs, tasks, memory, state)
-- `.flow/bin/*` (bundled flowctl — copy-mode repos; plugin-mode repos have no `.flow/bin/`)
+- `.flow/bin/*` (legacy flowctl copies — reviewers never advise deleting a user's committed files; removal is the user's own call at the setup / plan touchpoints)
 - `.flow/memory/*` (learnings store)
 - `docs/plans/*`, `docs/solutions/*` (when the project uses them)
 - `scripts/ralph/*` (Ralph harness)
@@ -334,5 +333,5 @@ All review receipts may carry these optional fields; existing consumers that rea
 
 - [`../templates/spec.md`](../templates/spec.md) — the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
 - [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
-- [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md) — 4-tier discovery cascade walker.
+- [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md) — 3-tier discovery cascade walker.
 - [`flowctl.md`](flowctl.md) — `flowctl spec create / set-plan / export-cognitive-aid` reference.

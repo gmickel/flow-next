@@ -116,18 +116,19 @@ Run after any change touching `flowctl config get / set`, `cmd_init`'s config up
 
 ```bash
 mkdir -p /tmp/fn-crossspec-smoke && cd /tmp/fn-crossspec-smoke
-.flow/bin/flowctl init   # or run /flow-next:setup once
-# (Claude Code sessions with the plugin enabled can use bare `flowctl` instead —
-#  plugin bin/ PATH injection, fn-121. The .flow/bin path works everywhere.)
+flowctl init   # or run /flow-next:setup once
+# (`flowctl` is the plugin's own launcher — bare on Claude Code via plugin bin/
+#  PATH injection, otherwise call <plugin-root>/scripts/flowctl by path.
+#  Nothing is copied into the repo.)
 ```
 
 **Canonical write + read:**
 
 ```bash
-.flow/bin/flowctl config set planSync.crossSpec true
+flowctl config set planSync.crossSpec true
 # Expected: writes canonical key only; .flow/config.json contains "crossSpec": true, no "crossEpic" key.
 
-.flow/bin/flowctl config get planSync.crossSpec
+flowctl config get planSync.crossSpec
 # Expected stdout: true   (nothing on stderr)
 ```
 
@@ -143,13 +144,13 @@ cfg['planSync'] = {'crossEpic': True}
 p.write_text(json.dumps(cfg, indent=2))
 "
 
-.flow/bin/flowctl config get planSync.crossSpec --raw --json
+flowctl config get planSync.crossSpec --raw --json
 # Expected: "value": null — the canonical read must NOT fall back to the legacy value.
 
-.flow/bin/flowctl config get planSync.crossSpec
+flowctl config get planSync.crossSpec
 # Expected stdout: false (the default) — not the legacy true. Nothing on stderr.
 
-.flow/bin/flowctl init
+flowctl init
 # Expected: NO "mirrored legacy planSync.crossEpic" action; crossSpec lands at the
 # default false; the leftover crossEpic key is preserved but never read.
 ```
@@ -158,7 +159,7 @@ Any deviation (canonical `get` surfaces the legacy value, `init` mirrors `crossE
 
 ## Repo-root SPEC.md smoke (template discovery cascade)
 
-Manual verification that the fn-46.2 cascade walker resolves `<repo_root>/SPEC.md` before `.flow/templates/spec.md`, and that `/flow-next:setup` emits the opt-in copy step (`Copy template / Skip / abort`) on fresh repos + the byte-compare gate (`Keep mine / Overwrite with canonical / abort`) on re-setup with customized content.
+Manual verification that the fn-46.2 cascade walker resolves `<repo_root>/SPEC.md` before the bundled `${PLUGIN_ROOT}/templates/spec.md`, and that `/flow-next:setup` emits the opt-in copy step (`Copy template / Skip / abort`) on fresh repos + the byte-compare gate (`Keep mine / Overwrite with canonical / abort`) on re-setup with customized content.
 
 Operator-level smoke: requires a real interactive run of `/flow-next:setup`, `/flow-next:capture`, or `/flow-next:interview` in a scratch repo — automation-only verification is insufficient because the consent prompts surface in the agent UI.
 
@@ -185,7 +186,7 @@ git init -q
 
 ```bash
 # With <repo_root>/SPEC.md present (any of the previous steps), run /flow-next:capture or /flow-next:interview on a NEW IDEA.
-# Expected: the cascade walker resolves the repo-root file (tier-1 hit) before falling back to .flow/templates/spec.md.
+# Expected: the cascade walker resolves the repo-root file (tier-1 hit) before falling back to the bundled template.
 # Add a unique marker comment to SPEC.md (e.g. `<!-- smoke-marker -->`) and verify the spec emitted by capture / interview references the customized scaffold.
 ```
 
@@ -225,7 +226,7 @@ When planning an epic or opening a PR, include doc updates as acceptance criteri
   - `CHANGELOG.md` — new entry under the relevant version block
   - root `README.md` § Commands table + `plugins/flow-next/docs/skills.md` — the command/skill surfaces (`plugins/flow-next/README.md` is a thin pointer stub, no tables)
   - `CLAUDE.md` — feature description in the relevant subsection
-  - `plugins/flow-next/templates/usage.md` — when listed commands change (canonical since fn-121; `.flow/usage.md` is a copy-mode snapshot of it)
+  - `plugins/flow-next/templates/usage.md` — when listed commands change (the single source `flowctl usage` prints)
 
 - **Maintainer-only (Gordon handles post-merge):**
   - `~/work/mickel.tech/app/apps/flow-next/page.tsx` — feature card on the public marketing site. External contributors **do not** need to update this; lives in a separate private repo. PRs from non-maintainers should skip the website task entirely; Gordon adds the corresponding feature card during release.

@@ -2,7 +2,7 @@
 
 CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 
-> **Note:** This is the full human reference. Agents should read `.flow/usage.md` (created by `/flow-next:setup`).
+> **Note:** This is the full human reference. Agents should read the agent guide: `flowctl usage`.
 
 ## Available Commands
 
@@ -33,14 +33,6 @@ Works out of the box for parallel branches. No setup required.
 ├── config.json                # Project settings
 ├── .flow_version              # Schema sentinel (tracked)
 ├── .gitignore                 # Auto-managed by flowctl
-├── usage.md                   # Agent CLI reference (via /flow-next:setup)
-├── bin/                       # Local flowctl install (via /flow-next:setup)
-│   ├── flowctl                # bash launcher (Git Bash / WSL / macOS / Linux)
-│   ├── flowctl.cmd            # batch launcher (cmd.exe / PowerShell)
-│   ├── flowctl_bootstrap.py   # source-authoritative startup front end
-│   ├── flowctl-help.txt       # tracked root-help fast-path output
-│   └── flowctl.py             # source of truth (all CLI logic)
-├── templates/spec.md          # Setup-managed copy of the canonical scaffold
 ├── criteria.md                # Optional user-owned global acceptance criteria (G-IDs)
 ├── specs/fn-N-slug.json       # Spec state - colocated with .md
 ├── specs/fn-N-slug.md         # Spec markdown
@@ -62,9 +54,9 @@ Works out of the box for parallel branches. No setup required.
 └── .cache/                    # (gitignored) CLI model-resolution cache
 ```
 
-Both launchers resolve Python by **probing functionality and the 3.11 minimum** (order `$PYTHON_BIN` → `py -3` → `python3` → `python`), so the Windows Microsoft Store `python3` alias stub and working-but-too-old interpreters are skipped before source loading. `flowctl init` re-stamps **both** `bin/flowctl` and `bin/flowctl.cmd` from in-module launcher constants, so an existing install self-heals a pre-fix launcher without a full `/flow-next:setup` re-run - see [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
+Nothing under `.flow/` is a copy of the CLI: flowctl runs from the plugin install (`scripts/flowctl` on Unix-like shells, `scripts/flowctl.cmd` under cmd.exe / PowerShell), and the agent guide plus the spec-template scaffold resolve through the bundled cascade. Both launchers resolve Python by **probing functionality and the 3.11 minimum** (order `$PYTHON_BIN` → `py -3` → `python3` → `python`), so the Windows Microsoft Store `python3` alias stub and working-but-too-old interpreters are skipped before source loading. They ship with the plugin, so a plugin update is the whole fix - see [`platforms.md` → Windows: Python discovery](platforms.md#windows-python-discovery).
 
-Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markdown was already at `.flow/specs/fn-N-slug.md`). Port by hand via `.flow/usage.md` "Pre-1.0 layout porting" (and `docs/troubleshooting.md`); the automated migrate-rename path was removed in fn-111.
+Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markdown was already at `.flow/specs/fn-N-slug.md`). Port by hand via `flowctl usage` "Pre-1.0 layout porting" (and `docs/troubleshooting.md`); the automated migrate-rename path was removed in fn-111.
 
 Flowctl accepts schema v1 and v2 (and v3 post-migration); new fields are optional and defaulted.
 
@@ -120,7 +112,7 @@ Print the bundled usage guide (CLI cheatsheet + `## Orchestration & model steeri
 flowctl usage
 ```
 
-Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is how plugin-mode repos read the guide), then the repo-local `.flow/usage.md` (copy-mode installs, where flowctl runs from `.flow/bin/` with no plugin tree around it). Exits 1 with a pointer to reinstalling/updating the plugin when neither exists.
+Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is where the guide comes from), then, as inert legacy grace, a repo-local `.flow/usage.md` left over from the retired copy layout. Exits 1 with a pointer to reinstalling/updating the plugin when neither exists.
 
 The Unix and Windows launchers route this exact command through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Exact root `--help` similarly reads tracked `flowctl-help.txt`, with parity tests pinning it to argparse output. The bytecode-cache proof was rejected: a runtime-written ignored pyc can validate a source hash without proving its executable payload came from that source. Every non-static command therefore compiles tracked `flowctl.py` in memory, preserves it as the logical `__file__`, and never reads or writes executable cache state.
 
@@ -168,7 +160,7 @@ Pristine state is keyed per `(path, id)` in `meta.json` (`setup.block_hashes`), 
 
 Byte-equality is checked first, matching `apply`'s order: a block that's byte-identical to the template reads `unchanged`/exit 0 even if `meta.json` still carries a `"customized"` sentinel from an earlier hand-edit that has since been reverted. CRLF-only differences are never drift (same normalization as `apply`). **Argparse usage errors (bad flags, missing required args) also exit 2** - the same code as the `drift` tier - so a CI recipe that must tell "someone hand-edited the block" apart from "the command was invoked wrong" should key off the JSON `action` field, not the bare exit code, whenever that distinction matters.
 
-CI recipe (works in a `setup_mode: copy` repo, where the block is an ordinary tracked file and a hand-edit is a normal reviewable diff; no `jq` required to gate). Prerequisite: `check` compares against a template file, so commit the snippet you applied somewhere tracked first - e.g. `cp <the-template-you-passed-to-apply> .flow/templates/claude-block.md` - no setup mode ships that file for you:
+CI recipe (the snippet block is an ordinary tracked file, so a hand-edit is a normal reviewable diff; no `jq` required to gate). Prerequisite: `check` compares against a template file, so commit the snippet you applied somewhere tracked first - e.g. `cp <the-template-you-passed-to-apply> .flow/templates/claude-block.md`. That committed copy is yours - setup never writes it for you:
 
 ```bash
 # .flow/templates/claude-block.md = YOUR committed copy of the applied template (see prerequisite above)
@@ -402,7 +394,7 @@ flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 **Deterministic traceability slice.** Four additive fields back the make-pr "Review plan" render with data — all reproducible from repo state at export time, no LLM judgment (the render layer judges, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
 
 - `diff_summary.files[].changed_symbols` — the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`"). May be empty per file where git can't detect a function — the render falls back to file-level anchoring, never fabricates.
-- `diff_summary.files[].derived` — `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Classifies generated / copied / bookkeeping files so the render can bucket them as safe-to-skim. Precedence is dual-copy → mirror → state → none; a **dual-copy verified byte-identical to its named source at export time** is `dual-copy`, but a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror, the `.flow/bin/flowctl.py` ↔ `plugins/flow-next/scripts/flowctl.py` dual copy, `.flow/` state); a configured value fully replaces the default.
+- `diff_summary.files[].derived` — `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Classifies generated / copied / bookkeeping files so the render can bucket them as safe-to-skim. Precedence is dual-copy → mirror → state → none; a **dual-copy verified byte-identical to its named source at export time** is `dual-copy`, but a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror and `.flow/` state — there is no default dual-copy pair, since nothing is copied into a repo any more; the `dual-copy` kind stays supported for projects that configure their own pairs); a configured value fully replaces the default.
 - `removed_export_refs` — top-level list of symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: removed top-level definitions are word-boundary `git grep`-ed against the working tree (the removals are already gone from HEAD, so they never self-match), bounded to the source extensions the diff touched. Each entry is `{symbol, defined_in, refs: [{path, line, text}]}`. Empty list ⇒ the render states "no removed symbols still referenced (checked at export time)". False positives are acceptable (they steer a human look); completeness is never claimed.
 - `tasks[].evidence.files` — each task's claimed files (recorded at `flowctl done` time) surfaced verbatim, so the render maps task → files → commits without re-deriving. Sits alongside the existing `commits` / `tests` / `files_touched` evidence keys.
 
@@ -1739,7 +1731,7 @@ flowctl repo-map list [--count] [--json]
 
 ### prime classify
 
-The **only** flowctl surface `/flow-next:prime` adds: a pure-stdlib, bounded, **no-LLM** emitter for the deterministic layer of the skill's Phase 0.5 project classification. It emits the raw signals (axes 1-4 values + a mechanical confidence, plus raw Axis-5 `shape_markers`); the **skill** layers all judgment on top - Axis-5 shape reasoning, final per-axis confidence, the bounded clarification asks, and playbook selection. No judgment ever lands in flowctl (the CLAUDE.md agentic-vs-deterministic carve-out). The pinned schema lives in [`classification.md`](../skills/flow-next-prime/classification.md); the emitter is dual-copy byte-identical across `plugins/flow-next/scripts/flowctl.py` and `.flow/bin/flowctl.py` (parity-tested).
+The **only** flowctl surface `/flow-next:prime` adds: a pure-stdlib, bounded, **no-LLM** emitter for the deterministic layer of the skill's Phase 0.5 project classification. It emits the raw signals (axes 1-4 values + a mechanical confidence, plus raw Axis-5 `shape_markers`); the **skill** layers all judgment on top - Axis-5 shape reasoning, final per-axis confidence, the bounded clarification asks, and playbook selection. No judgment ever lands in flowctl (the CLAUDE.md agentic-vs-deterministic carve-out). The pinned schema lives in [`classification.md`](../skills/flow-next-prime/classification.md); the emitter ships in the single bundled `plugins/flow-next/scripts/flowctl.py`.
 
 ```bash
 flowctl prime classify [root] --json   # root defaults to "."
@@ -1898,7 +1890,7 @@ The contract is `command_sha256`: a receipt certifies exactly one command string
 
 `gate_id` is a bounded slug validated at both boundaries: `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. Literal `.` and `..` are explicitly rejected. The ID is interpolated into the receipt filename, so traversal characters are impossible; invalid IDs exit `2`.
 
-`gate check` exits `0` (honored: skip the re-run) only when all of these hold: an exact-HEAD receipt satisfies `schema == 1`, matching `head_sha`, matching `command_sha256`, and `0 <= age <= 24h`; or, when that exact filename is absent, one of the eight newest parseable candidates (timestamp descending, filename tie-break) satisfies those shared checks plus a full canonical commit SHA, filename-SHA consistency, no symlink, ancestry to HEAD, and a two-dot diff to HEAD containing only the receipt ignore set. Malformed, stale, non-ancestor, and otherwise ineligible candidates are skipped rather than aborting the bounded walk. Cleanliness uses `git status --porcelain=v1 -z --no-renames --untracked-files=all` once per probe and permits no entries outside `.flow/**` minus `.flow/bin/**` minus `.flow/config.json`. A dirty `.flow/bin/**` or `.flow/config.json` is execution-affecting and returns `1`; receipts under `.flow/tmp/` do not self-dirty a check.
+`gate check` exits `0` (honored: skip the re-run) only when all of these hold: an exact-HEAD receipt satisfies `schema == 1`, matching `head_sha`, matching `command_sha256`, and `0 <= age <= 24h`; or, when that exact filename is absent, one of the eight newest parseable candidates (timestamp descending, filename tie-break) satisfies those shared checks plus a full canonical commit SHA, filename-SHA consistency, no symlink, ancestry to HEAD, and a two-dot diff to HEAD containing only the receipt ignore set. Malformed, stale, non-ancestor, and otherwise ineligible candidates are skipped rather than aborting the bounded walk. Cleanliness uses `git status --porcelain=v1 -z --no-renames --untracked-files=all` once per probe and permits no entries outside `.flow/**` minus `.flow/bin/**` minus `.flow/config.json`. A dirty `.flow/config.json` is execution-affecting and returns `1`, and so is a dirty `.flow/bin/**` — inert in a copy-less repo, still correct in one that has not deleted its legacy copies yet. Receipts under `.flow/tmp/` do not self-dirty a check.
 
 | Condition | Exit |
 | --- | --- |
@@ -1909,7 +1901,7 @@ Callers fail closed on both outcomes.
 
 `gate classify` collects the union of `git diff --name-only -z --no-renames <base>...HEAD` and `git status --porcelain=v1 -z --no-renames --untracked-files=all` paths. Paths are NUL-delimited, renames are uncollapsed, and untracked files are enumerated individually. Ordered precedence applies to each path, first match wins:
 
-1. **FORCE-FULL:** any code/config extension anywhere (`TRIAGE_CODE_EXTS` plus `.py`, `.sh`, `.cmd`, `.ps1`, `.toml`, `.json`, `.yaml`, `.yml`), or `scripts/`, `plugins/flow-next/scripts/`, `plugins/flow-next/tests/`, `.flow/bin/`, `plugins/flow-next/skills/`, `plugins/flow-next/agents/`, `plugins/flow-next/commands/`, `plugins/flow-next/references/`, `plugins/flow-next/templates/`, `plugins/flow-next/hooks/`, `plugins/flow-next/codex/`, or exact `.flow/config.json`. Extension wins over prefix, so a `.py` file under `docs/` is FULL.
+1. **FORCE-FULL:** any code/config extension anywhere (`TRIAGE_CODE_EXTS` plus `.py`, `.sh`, `.cmd`, `.ps1`, `.toml`, `.json`, `.yaml`, `.yml`), or `scripts/`, `plugins/flow-next/scripts/`, `plugins/flow-next/tests/`, `.flow/bin/`, `plugins/flow-next/skills/`, `plugins/flow-next/agents/`, `plugins/flow-next/commands/`, `plugins/flow-next/references/`, `plugins/flow-next/templates/`, `plugins/flow-next/hooks/`, `plugins/flow-next/codex/`, or exact `.flow/config.json`. The `.flow/bin/` prefix is legacy-path handling: nothing writes there any more, but a repo that still carries copies gets the right verdict. Extension wins over prefix, so a `.py` file under `docs/` is FULL.
 2. **SAFE:** `docs/`, `agent_docs/`, `optimization/`; root `CHANGELOG.md`, `GLOSSARY.md`, `STRATEGY.md`, or `README*`; `plugins/flow-next/docs/**` only with `.md`, `.mdx`, or `.txt`; and remaining `.flow/**`.
 3. **FULL:** anything unmatched.
 
@@ -2126,7 +2118,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 
 **Windows users:** Codex CLI's `read-only` sandbox blocks ALL shell commands on Windows (including reads). Use `--sandbox auto` or `--sandbox danger-full-access` for Windows compatibility.
 
-**Note:** After plugin update, re-run `/flow-next:setup` or `/flow-next:ralph-init` to get sandbox fixes.
+**Note:** Ralph's harness under `scripts/ralph/` is scaffolded into the repo, so re-run `/flow-next:ralph-init` after a plugin update to pick up sandbox fixes there.
 
 #### codex validate
 

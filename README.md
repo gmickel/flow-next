@@ -174,11 +174,7 @@ That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `
 
 ### After every update
 
-**Plugin mode (Claude Code, the setup default for Claude-Code-only repos): nothing to do.** Nothing is copied into your repo: `flowctl` rides the plugin's `bin/` PATH injection, the agent guide is pulled live via `flowctl usage`, and the spec template resolves from the bundled copy. Plugin updates land silently; you never re-run setup for an update.
-
-**Copy mode (mixed-host repos with Codex/Cursor/Droid teammates, CI, or plain terminals): update the plugin, then re-run `/flow-next:setup` in each project.** In copy mode two things live as **snapshot copies inside your repo's `.flow/`**, not live links to the plugin: the bundled **`flowctl` CLI** (`.flow/bin/`) and **`.flow/usage.md`** (the in-repo agent guide). A plugin update does **not** touch them - re-running setup refreshes the CLI, `usage.md`, the model-routing scaffold, and the spec template. It is idempotent; nothing is lost. Plan detects a known copy/plugin version mismatch before planning; direct invocation of other skills does not run a version preflight. See [Troubleshooting](plugins/flow-next/docs/troubleshooting.md).
-
-Setup asks the mode question once per repo (Claude Code only; other hosts are always copy mode) and stamps the choice; switching later is a consented setup re-run. Details: [platforms.md](plugins/flow-next/docs/platforms.md).
+**Nothing to do.** Nothing is copied into your repo: `flowctl` resolves from the plugin install on every host, the agent guide is pulled live via `flowctl usage`, and the spec template resolves from the bundled copy. Plugin updates land silently. Re-run `/flow-next:setup` only when setup tells you the docs-snippet schema bumped, or to change configuration. If a repo still carries `.flow/bin/` from an older install, delete it — setup offers to, and nothing reads it. Details: [platforms.md](plugins/flow-next/docs/platforms.md).
 
 ---
 
@@ -476,7 +472,7 @@ First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Bu
 
 Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md), the canonical home for the tiering sentence above.
 
-> **Upgrading from 0.x?** The 1.0 release renamed the `epic` surface to `spec`; the legacy aliases and automated migration commands were removed in 3.0. Re-run `/flow-next:setup` for current scaffolding, then follow the manual three-step pre-1.0 layout port in [troubleshooting](plugins/flow-next/docs/troubleshooting.md#pre-10-layout-porting).
+> **Upgrading from 0.x?** The 1.0 release renamed the `epic` surface to `spec`; the legacy aliases and automated migration commands were removed in 3.0. Update the plugin, then follow the manual three-step pre-1.0 layout port in [troubleshooting](plugins/flow-next/docs/troubleshooting.md#pre-10-layout-porting).
 
 ## Ecosystem
 

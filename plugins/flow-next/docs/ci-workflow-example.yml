@@ -25,11 +25,7 @@ jobs:
         # windows-latest too), so the interpreter probe below is portable.
         shell: bash
         run: |
-          # Download flowctl (adjust path/method for your setup)
-          # Option 1: flowctl already in the repo (installed by /flow-next:setup)
-          # ./.flow/bin/flowctl validate --all --json   # dual launcher probes for a working Python
-
-          # Option 2: Download just flowctl.py from the plugin
+          # Nothing is installed into the repo, so CI fetches flowctl.py from the plugin.
           curl -sL https://raw.githubusercontent.com/gmickel/gmickel-claude-marketplace/main/plugins/flow-next/scripts/flowctl.py -o flowctl.py
           # Resolve a REAL interpreter first: on Windows `python3` is often the
           # Microsoft Store alias stub (prints "Python was not found", exits 9009)

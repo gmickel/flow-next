@@ -140,6 +140,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Codebase feature map (optional) | [`plugins/flow-next/skills/flow-next-map/`](plugins/flow-next/skills/flow-next-map/) — `/flow-next:map` wraps `clawpatch map` |
 | Troubleshooting + uninstall | [`plugins/flow-next/docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) |
 | Canonical spec-template scaffold (single source of truth — section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional; a repo-root `SPEC.md` overrides it per project) | [`plugins/flow-next/templates/spec.md`](plugins/flow-next/templates/spec.md) |
+| Setup internals (copy-less install, per-artifact resolution chains, snippet/marker invariants) | [`agent_docs/setup.md`](agent_docs/setup.md) |
 | Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) |
 | Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
 | Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) |
