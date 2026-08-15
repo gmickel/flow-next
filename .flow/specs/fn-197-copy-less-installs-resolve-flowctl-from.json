@@ -15,7 +15,7 @@
     "fn-197-copy-less-installs-resolve-flowctl-from.1": 0,
     "fn-197-copy-less-installs-resolve-flowctl-from.2": 0,
     "fn-197-copy-less-installs-resolve-flowctl-from.3": 0,
-    "fn-197-copy-less-installs-resolve-flowctl-from.4": 1
+    "fn-197-copy-less-installs-resolve-flowctl-from.4": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -131,29 +131,47 @@
       "task": "fn-197-copy-less-installs-resolve-flowctl-from.3",
       "timestamp": "2026-08-15T09:00:36.370249Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "918116d0537736cd2da02b1bdccabcb6d163a7fadfb1bf046075dcaa498bb2ba",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "62ac67e6c10de0a7af24530403ead27501cccd43",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 782,
+      "output_sha256": "6fdbd4518dd6de6b414d111225bd9996b071cf7f8bb4e1a5e93b3f811d4c5315",
+      "reservation_id": "6b6836366fc34083b0f3df33243b1eaf",
+      "round_consumed": true,
+      "scope": "impl:fn-197-copy-less-installs-resolve-flowctl-from.4",
+      "superseded_by": null,
+      "task": "fn-197-copy-less-installs-resolve-flowctl-from.4",
+      "timestamp": "2026-08-15T09:46:54.527052Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.1": 1,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 1,
-    "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 1
-  },
-  "review_pending_rounds": {
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 1,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.4": 1
   },
-  "review_reservations": {
-    "6b6836366fc34083b0f3df33243b1eaf": {
-      "artifact_sha256": "918116d0537736cd2da02b1bdccabcb6d163a7fadfb1bf046075dcaa498bb2ba",
-      "counter_scope": "impl:fn-197-copy-less-installs-resolve-flowctl-from.4",
-      "epoch": 0,
-      "forced": false,
-      "review_type": "impl"
-    }
-  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
   "review_transport_failures": {
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.1": 0,
     "impl:fn-197-copy-less-installs-resolve-flowctl-from.2": 0,
-    "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 0
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.3": 0,
+    "impl:fn-197-copy-less-installs-resolve-flowctl-from.4": 0
   },
   "spec_path": ".flow/specs/fn-197-copy-less-installs-resolve-flowctl-from.md",
   "status": "open",
@@ -169,5 +187,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-15T09:35:07.567256Z"
+  "updated_at": "2026-08-15T09:46:55.000056Z"
 }
