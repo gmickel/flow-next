@@ -19852,7 +19852,6 @@ def cmd_usage(args: argparse.Namespace) -> None:
 # named source of truth. Bumping the version is a doc/template decision (the
 # setup Docs step re-proposes on CONTENT drift, not on this number).
 SNIPPET_SCHEMA_VERSION = 1
-SNIPPET_SENTINEL_RE = re.compile(r"<!-- flow-next:snippet:v(\d+) -->")
 # fn-197: the machine-readable manifest of legacy copy-mode artifacts — the
 # single source of truth for /flow-next:setup's and /flow-next:plan's residue
 # probes. Copy-less installs write none of these; a repo that still carries

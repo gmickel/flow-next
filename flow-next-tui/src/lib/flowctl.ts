@@ -164,6 +164,9 @@ export class FlowctlNotFoundError extends Error {
  * plugin cache directory (Claude keys the entries by version, Cursor by commit
  * sha — mtime ordering covers both). Missing dir → no candidates.
  */
+/** How many versioned-cache entries to probe (newest first). */
+const MAX_CACHE_CANDIDATES = 3;
+
 async function versionedCacheCandidates(root: string): Promise<string[]> {
   let entries: string[];
   try {
@@ -216,8 +219,7 @@ async function versionedCacheCandidates(root: string): Promise<string[]> {
     .map((item) => item.path);
 }
 
-/** How many versioned-cache entries to probe (newest first). */
-const MAX_CACHE_CANDIDATES = 3;
+
 
 /**
  * flowctl paths inside a host's plugin install tree (fn-197). A copy-less repo

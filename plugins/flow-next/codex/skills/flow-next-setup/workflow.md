@@ -107,6 +107,8 @@ done   # || true: the loop's exit is the LAST iteration's test - an empty
 
 **None present → say nothing and continue to Step 4a.** Silence is the normal case.
 
+**Customized-template guard (before the ask).** `.flow/templates/spec.md` is the one leftover a user may have EDITED — it used to sit in the spec-scaffold cascade, so a customized copy there is user-authored content, not a snapshot. Compare it against the bundled `${PLUGIN_ROOT}/templates/spec.md`: identical → a plain snapshot, list it with the rest; different → EXCLUDE it from the delete list and say so: `.flow/templates/spec.md differs from the bundled template - it looks customized. The cascade no longer reads it; copy it to a repo-root SPEC.md to keep using it (that is the customization point now), then delete it yourself.` Never delete a differing template under this offer.
+
 **Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
 **Any present →** list the exact paths, tell the user they are dead weight on every host (nothing reads them; deleting them changes nothing observable), and ask via `plain-text numbered prompt`:
@@ -114,7 +116,7 @@ done   # || true: the loop's exit is the LAST iteration's test - an empty
 - **header**: `Delete leftover flowctl copies?`
 - **question**: `These files are snapshots from an older install layout. Every flow-next skill now resolves flowctl from the plugin install itself, so nothing reads them — deleting them changes nothing observable in any workflow, and keeping them means a stale flowctl can shadow the current one.`
 - **options**:
-  - `Delete them (Recommended)` — remove the listed paths: `git rm -rq` for tracked ones, plain `rm -rf` for untracked. FIRST surface any listed tracked file with uncommitted modifications and exclude it from removal (never force-remove modified files; the user resolves those by hand).
+  - `Delete them (Recommended)` — remove the listed paths: `git rm -rq` for tracked ones (this stages the deletions in the user's index — say so; setup never commits), plain `rm -rf` for untracked. FIRST surface any listed tracked file with uncommitted modifications and exclude it from removal (never force-remove modified files; the user resolves those by hand).
   - `Keep them` — nothing is removed; setup continues normally. They stay inert.
 
 **Never delete silently.** A leftover that disappeared without the user answering `Delete them` has broken this. After a delete, re-enumerate and print anything still present (declines, modified-file exclusions) — then continue either way; leftovers never block setup.
