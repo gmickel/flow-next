@@ -48,7 +48,7 @@ Cap the candidate keyword list at the top **10** by frequency. These feed both 0
 
 ### 0.2 — Duplicate detection: spec title overlap
 
-Scan `.flow/specs/*.json` for title overlap. (Pre-1.0 `.flow/epics/` repos: port first per `.flow/usage.md` "Pre-1.0 layout porting".)
+Scan `.flow/specs/*.json` for title overlap. (Pre-1.0 `.flow/epics/` repos: port first per `flowctl usage` "Pre-1.0 layout porting".)
 
 ```bash
 shopt -s nullglob

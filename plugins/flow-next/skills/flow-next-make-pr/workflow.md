@@ -88,7 +88,7 @@ fi
 Resolution order:
 
 1. **Explicit `$SPEC_ID` argument** — if non-empty after flag parsing, use it directly.
-2. **Branch-match** — derive current branch and match against `.flow/specs/*.json` `branch_name` field. Markdown sidecars live at `.flow/specs/<id>.md`. (Pre-1.0 `.flow/epics/` repos: port first per `.flow/usage.md` "Pre-1.0 layout porting".)
+2. **Branch-match** — derive current branch and match against `.flow/specs/*.json` `branch_name` field. Markdown sidecars live at `.flow/specs/<id>.md`. (Pre-1.0 `.flow/epics/` repos: port first per `flowctl usage` "Pre-1.0 layout porting".)
 3. **Ask** — interactive only. Ralph hard-errors.
 
 ### 0.3 — Base-branch detection cascade
