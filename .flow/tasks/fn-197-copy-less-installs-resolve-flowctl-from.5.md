@@ -40,9 +40,16 @@
 - [ ] agent_docs: setup-modes rewritten to one mode with the new contributor rule stated explicitly; local-dev bare `flowctl`; conduct/setup has the "a run that writes `.flow/bin/` has broken this" line; releasing gains the snippet-bump checklist line.
 - [ ] Installer text (sh + ps1) matches the new setup behavior; CHANGELOG Unreleased entry present; register/format gates pass; no speed claims or attribution.
 ## Done summary
-TBD
+Swept the dual-mode (plugin vs copy) install story out of every in-repo doc: platforms.md's setup-modes section and table are replaced by a "What setup does" section (all three inbound anchors repointed), troubleshooting leads with "plugin updates need no setup re-run" and gains a delete-your-old-copies section, flowctl.md/architecture/orchestration/memory-schema/ralph/spec-template/sync-codex/ci-example/README/STRATEGY/SPEC.md/CLAUDE.md are reworded to the single plugin-resolution story, agent_docs/setup-modes.md is rewritten as agent_docs/setup.md (one mode, with the inverted three-rung contributor rule stated explicitly), and the Cursor installers + conduct/releasing checklists + CHANGELOG Unreleased entry match the new behavior. The spec-template cascade is now 3 tiers in the walker and in every doc/skill that describes it.
 
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: delegation - skipped(config: delegation off)
+
+
+Post-review fixes 311659fb: Windows launcher claim + best-effort hedge; pre-1.0 porting pointers -> flowctl usage (+ mirrors).
+
+stage: impl-review - ran (host backend, fresh fable-5 reviewer, SHIP round 1; P2 + P3 fixed post-verdict)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 840141cc8ae64acb8fd090e433b47dcc9dde9983, 311659fb
+- Tests: python3 scripts/run_tests_parallel.py (189 files / 4368 tests, failures=0 errors=0), uvx ruff@0.16.0 check . (All checks passed), ./scripts/sync-codex.sh x2 (idempotent, all guards green), impl-review: host backend SHIP round 1 (reviewer claude-fable-5; receipt /tmp/impl-review-receipt-fn-197-copy-less-installs-resolve-flowctl-from.5.json); post-fix focused suites + mirror x2 + ruff green
 - PRs:
