@@ -2,16 +2,16 @@ import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 
-import  {
-  type Epic,
-  type EpicListItem,
-  type EpicShowResponse,
-  type EpicsResponse,
-  type ReadyResponse,
-  type Task,
-  type TaskListItem,
-  type TaskShowResponse,
-  type TasksResponse,
+import type {
+  Epic,
+  EpicListItem,
+  EpicShowResponse,
+  EpicsResponse,
+  ReadyResponse,
+  Task,
+  TaskListItem,
+  TaskShowResponse,
+  TasksResponse,
 } from "./types";
 
 /**
@@ -204,7 +204,9 @@ async function versionedCacheCandidates(root: string): Promise<string[]> {
         for (let i = 0; i < 3; i++) {
           if (av[i] !== bv[i]) {return (bv[i] as number) - (av[i] as number);}
         }
-        return 0;
+        // Same numeric version (prerelease/build suffix ties): newest mtime wins
+        // rather than readdir order.
+        return b.mtime - a.mtime;
       }
       if (av) {return -1;}
       if (bv) {return 1;}
@@ -226,7 +228,7 @@ async function installLocationCandidates(): Promise<string[]> {
   // FLOW_NEXT_TUI_HOME is a test seam: the rungs below read the real home
   // directory, so without it the not-found path is untestable on any machine
   // that has flow-next installed.
-  const home = process.env.FLOW_NEXT_TUI_HOME ?? homedir();
+  const home = process.env.FLOW_NEXT_TUI_HOME || homedir();
   return [
     `${home}/.claude/plugins/marketplaces/flow-next/plugins/flow-next/scripts/flowctl`,
     ...(await versionedCacheCandidates(
