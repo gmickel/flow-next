@@ -346,7 +346,7 @@
     "impl:fn-195-orchestration-by-intent-named-tiers-per.5": 0
   },
   "spec_path": ".flow/specs/fn-195-orchestration-by-intent-named-tiers-per.md",
-  "status": "open",
+  "status": "done",
   "title": "Orchestration by intent: named tiers, per-harness reach, zero shipped model slugs",
   "tracker": {
     "baseHashFlow": null,
@@ -359,5 +359,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-15T00:08:27.785472Z"
+  "updated_at": "2026-08-15T00:36:24.181801Z"
 }
