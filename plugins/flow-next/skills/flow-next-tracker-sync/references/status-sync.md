@@ -54,7 +54,7 @@ merge-confirmed work.
 (reuse verbatim from land `workflow.md:99-104` / pilot `:126-132`):
 
 ```bash
-BRANCH_NAME=$(.flow/bin/flowctl show "$SPEC_ID" --json | jq -r .branch_name)
+BRANCH_NAME=$($FLOWCTL show "$SPEC_ID" --json | jq -r .branch_name)
 # Bare `gh pr view` returns rc 0 even for CLOSED/MERGED — ALWAYS filter .state via jq.
 PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all \
   --json url,state,number,isDraft 2>/dev/null)

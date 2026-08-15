@@ -15,6 +15,7 @@ Classification is **deterministic and host-inline**: the raw signals come from t
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ROOT="${ROOT:-.}"
 "$FLOWCTL" prime classify --json "$ROOT"   # JSON on stdout; progress/diagnostics on stderr
@@ -447,6 +448,7 @@ One bash call decides DC8 — run it during synthesis (no scout covers it):
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_terms // 0')
 ```
@@ -589,6 +591,7 @@ Detection - `flowctl` is **bundled, not on `PATH`** after install, so use the sa
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 # Suggestion fires only when NO map exists AND the detected stack's stacks.md Map cell is `yes`.
 [ -d .clawpatch ] && [ "$("$FLOWCTL" repo-map list --count 2>/dev/null)" -gt 0 ] && MAP_EXISTS=1 || MAP_EXISTS=0

@@ -5,10 +5,18 @@ alwaysApply: false
 
 # Flow-Next
 
-This project uses Flow-Next for ALL task tracking. Resolve flowctl via `.flow/bin/flowctl` (Cursor has no plugin-root env vars or bin PATH injection; `/flow-next:setup` writes the shim). Do NOT create markdown TODOs or use TodoWrite. Re-anchor (re-read spec + task status) before every task.
+This project uses Flow-Next for ALL task tracking. Do NOT create markdown TODOs or use TodoWrite. Re-anchor (re-read spec + task status) before every task.
 
-- Lifecycle: `.flow/bin/flowctl list` / `show fn-N.M` / `start fn-N.M` / `done fn-N.M --summary-file s.md --evidence-json e.json` (e.json: `{"commits": ["<sha>"], "tests": ["<cmd>"], "prs": []}`)
-- BEFORE any other flowctl operation, or when unsure of a flag: run `.flow/bin/flowctl usage` (CLI cheatsheet + orchestration recipes).
-- BEFORE bridging work to another model/CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) or picking an implementation/review model: run `.flow/bin/flowctl usage` and follow "Orchestration & model steering" exactly.
-- Creating a spec: `.flow/bin/flowctl spec create --title "Short title" --json`, then `.flow/bin/flowctl spec set-plan <id> --file plan.md`, then `/flow-next:plan <id>` (Cursor autocomplete may show the hyphenated form `/flow-next-plan`).
-- If `.flow/bin/flowctl` is not found: run `/flow-next:setup`.
+Resolve flowctl once per shell block, then use `$FLOWCTL` (Cursor sets no plugin-root env var, so the derivation rung is the one that carries here):
+
+```bash
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+```
+
+- Lifecycle: `$FLOWCTL list` / `show fn-N.M` / `start fn-N.M` / `done fn-N.M --summary-file s.md --evidence-json e.json` (e.json: `{"commits": ["<sha>"], "tests": ["<cmd>"], "prs": []}`)
+- BEFORE any other flowctl operation, or when unsure of a flag: run `$FLOWCTL usage` (CLI cheatsheet + orchestration recipes).
+- BEFORE bridging work to another model/CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) or picking an implementation/review model: run `$FLOWCTL usage` and follow "Orchestration & model steering" exactly.
+- Creating a spec: `$FLOWCTL spec create --title "Short title" --json`, then `$FLOWCTL spec set-plan <id> --file plan.md`, then `/flow-next:plan <id>` (Cursor autocomplete may show the hyphenated form `/flow-next-plan`).
+- If `flowctl` is not found: run `/flow-next:setup`.

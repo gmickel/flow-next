@@ -108,11 +108,15 @@ When a skill invokes `flowctl` from bash, define the variable **once per canonic
 ```markdown
 ## Preamble
 
-**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail in copy-mode repos and on every non-Claude host (expected). Caveat since fn-121: on Claude Code with the plugin enabled, bare `flowctl` DOES resolve (plugin `bin/` PATH injection) — but skill preambles must NEVER rely on that; the `$FLOWCTL` resolution below is the cross-host contract and stays mandatory in every skill. Define once; subsequent blocks (here and in `<workflow.md>` / `<phases.md>`) use `$FLOWCTL`:
+**CRITICAL: flowctl is BUNDLED — NOT installed globally.** `which flowctl` will fail on every host except Claude Code with the plugin enabled (which injects the plugin's `bin/` onto PATH) — skill preambles must NEVER rely on that; the three-rung `$FLOWCTL` resolution below is the cross-host contract and stays mandatory in every skill. Define once; subsequent blocks (here and in `<workflow.md>` / `<phases.md>`) use `$FLOWCTL`:
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 ```
+
+**The three rungs, and why each is there (fn-197).** Rung 1 is mechanical and always right on Claude Code and Droid. Rung 2 carries Cursor and Grok: neither sets a plugin-root env var, but both inject the loaded skill file's absolute on-disk path, and the plugin root is two levels above it — the wording above is probe-proven, so copy it **byte-identically** into every new preamble rather than paraphrasing. Rung 3 is a silent backstop for a repo that still has a `/flow-next:setup` copy at `.flow/bin/flowctl`; copies are dead weight and nothing is designed around them, so never document, test, or reason from that rung.
 ```
 
 **Heuristic — one preamble per top-level skill file.** SKILL.md, workflow.md / workflow-common.md / phases.md / steps.md each get their own preamble at the top. Internal bash blocks within the file use `$FLOWCTL` without redefining it. Worker / scout / dispatched-subagent prompts that run in fresh context (e.g. `agents/worker.md`, plan-sync invocation template in `flow-next-sync/SKILL.md`) need their own prelude — they're separate execution contexts.
@@ -128,7 +132,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 - `flow-next-deps` (fn-48.6) — collapsed 5 inline `FLOWCTL=...` blocks to one preamble.
 - `flow-next-ralph-init` (fn-48.6) — uses `PLUGIN_ROOT="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}"` to collapse 10+ inline expansions in the cp commands.
 
-**sync-codex.sh impact:** the existing FLOWCTL rewrite rule (grep `\.codex/scripts/flowctl` in sync-codex.sh) and the local-fallback awk (grep the fallback string `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"`) continue to work with the once-per-file pattern. No sync edits needed for consolidation — the rewrite acts on the single FLOWCTL definition wherever it appears.
+**sync-codex.sh impact:** only rung 1 is rewritten for the mirror (grep `\.codex/scripts/flowctl` in sync-codex.sh) — it becomes `${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`, and rungs 2 and 3 flow through untouched. fn-197 deleted the two fallback-injector awks that used to append the `.flow/bin` rung: the canonical text now carries every rung itself, and the injectors keyed on exact next-line equality with that rung, so they would duplicate it. A validation guard in the same script (grep `Three-rung FLOWCTL chain`) asserts the mirrored chain instead — so a new preamble that omits a rung fails the sync, not a user's host.
 
 ## Remedy sentences name the verb that performs them (heuristic)
 

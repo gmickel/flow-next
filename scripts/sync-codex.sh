@@ -230,38 +230,13 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
     -e 's|PLUGIN_ROOT="\${DROID_PLUGIN_ROOT:-\${CLAUDE_PLUGIN_ROOT}}"|PLUGIN_ROOT="${CODEX_HOME:-$HOME/.codex}"|g' \
     "$f"
 
-  # After every FLOWCTL= line, insert local fallback — IDEMPOTENT.
-  # Canonical skill preambles may ALREADY carry the
-  # `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"` fallback on the line
-  # directly after the FLOWCTL= assignment (added for the Cursor / env-var-less
-  # path, where neither DROID_PLUGIN_ROOT nor CLAUDE_PLUGIN_ROOT resolves). Only
-  # inject when the next line is NOT already that fallback — otherwise the mirror
-  # gets a duplicate. Mirrors the agents-block guard below. (awk for multi-line
-  # insert: sed portability issues on macOS.)
-  awk '
-    function flush_pending(   stripped) {
-      if (pending) {
-        stripped = nextline
-        sub(/^[[:space:]]+/, "", stripped)
-        if (stripped != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"") {
-          print fallback
-        }
-        pending = 0
-      }
-    }
-    /^FLOWCTL=.*scripts\/flowctl/ && !seen[$0]++ {
-      print
-      fallback = "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\""
-      pending = 1
-      next
-    }
-    {
-      nextline = $0
-      flush_pending()
-      print
-    }
-    END { if (pending) print fallback }
-  ' "$f" > "${f}.tmp" && mv "${f}.tmp" "$f"
+  # fn-197: no fallback injection here. Every canonical FLOWCTL preamble now
+  # carries all three rungs itself (env var → derived plugin root → .flow/bin),
+  # and only rung 1 is rewritten above — rungs 2 and 3 flow into the mirror
+  # untouched. The old injector keyed on exact next-line equality with the
+  # rung-3 string and would inject a DUPLICATE `.flow/bin` rung now that rung 2
+  # sits between them. The paired validation guard below asserts the mirrored
+  # chain instead.
 
   # Template/script path patches — both legacy inline form and the new
   # fn-48.6 `$PLUGIN_ROOT/...` consolidated form.
@@ -1738,47 +1713,11 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # Rewrite skill-file paths in agent bodies: neither plugin-root variable
   # resolves inside Codex; the installed mirror lives at CODEX_HOME/skills/.
   body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/skills/|${CODEX_HOME:-$HOME/.codex}/skills/|g')"
-  # Insert the local fallback line after every FLOWCTL= assignment that points
-  # at the Codex path. Matches the runtime CODEX_HOME form with
-  # any leading whitespace; the inserted fallback line preserves that
-  # indentation so embedded bash blocks stay aligned. Uses POSIX awk
-  # (no gawk-only 3-arg match) so macOS / Linux behave identically.
-  #
-  # IDEMPOTENT: canonical agent bodies may ALREADY carry the
-  # `[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"` fallback on the line
-  # directly after the FLOWCTL= assignment (fn-50.3 hardening added it to
-  # repo-scout for the Claude/Droid path). Only inject when
-  # the next line is NOT already that fallback — otherwise we emit a duplicate.
-  body="$(echo "$body" | awk '
-    function flush_pending(   stripped) {
-      if (pending) {
-        stripped = nextline
-        sub(/^[[:space:]]+/, "", stripped)
-        if (stripped != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"") {
-          print fallback
-        }
-        pending = 0
-      }
-    }
-    /^[[:space:]]*FLOWCTL="\$\{CODEX_HOME:-\$HOME\/\.codex\}\/scripts\/flowctl"[[:space:]]*$/ {
-      print
-      indent = ""
-      i = 1
-      while (i <= length($0) && substr($0, i, 1) ~ /[[:space:]]/) {
-        indent = indent substr($0, i, 1)
-        i++
-      }
-      fallback = indent "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\""
-      pending = 1
-      next
-    }
-    {
-      nextline = $0
-      flush_pending()
-      print
-    }
-    END { if (pending) print fallback }
-  ')"
+  # fn-197: no fallback injection here either. Canonical agent bodies carry the
+  # full three-rung chain (env var → derived plugin root → .flow/bin); only rung 1
+  # is rewritten above, and rungs 2/3 mirror through untouched. Injecting after
+  # the CODEX_HOME rung would now emit a duplicate `.flow/bin` line between
+  # rungs 1 and 2.
 
   # Escape backslashes for TOML triple-quoted strings
   body="$(echo "$body" | sed 's/\\/\\\\/g')"
@@ -2000,6 +1939,43 @@ if [ "$askq_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native tool refs in Codex skill prose"
+fi
+
+# fn-197: the three-rung FLOWCTL chain must reach the mirror intact — rung 1
+# rewritten to the CODEX_HOME form, then the derived-plugin-root rung, then the
+# `.flow/bin` rung exactly once. This guard is the pair of the deleted fallback
+# injectors: with the canonical text carrying all three rungs, the failure mode
+# flipped from "missing rung" to "duplicated rung".
+# Scope: skill/agent PROSE only. `templates/` holds self-contained user scripts
+# (ralph's harness resolves its own sibling launcher, never the plugin root).
+chain_problems=$( { grep -rlE '^[[:space:]]*FLOWCTL=' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | { grep -v '/templates/' || true; } | while read -r cf; do
+  [ -f "$cf" ] || continue
+  awk -v file="$cf" '
+    function strip(s) { sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+    /^[[:space:]]*FLOWCTL=/ { want = 2; next }
+    want == 2 {
+      if (strip($0) !~ /^\[ -x "\$FLOWCTL" \] \|\| FLOWCTL="<plugin-root>\/scripts\/flowctl"/)
+        print file ":" NR ": rung 2 (derived plugin root) missing after FLOWCTL="
+      want = 1; next
+    }
+    want == 1 {
+      if (strip($0) != "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"")
+        print file ":" NR ": rung 3 (.flow/bin) missing after rung 2"
+      want = 0; prev_rung3 = 1; next
+    }
+    {
+      if (prev_rung3 && strip($0) == "[ -x \"$FLOWCTL\" ] || FLOWCTL=\".flow/bin/flowctl\"")
+        print file ":" NR ": duplicate .flow/bin fallback rung"
+      prev_rung3 = 0
+    }
+  ' "$cf"
+done )
+if [ -n "$chain_problems" ]; then
+  echo -e "  ${RED}✗${NC} FLOWCTL resolution chain broken in the codex mirror:"
+  printf '%s\n' "$chain_problems" | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} Three-rung FLOWCTL chain intact in codex mirror (no duplicate fallback rungs)"
 fi
 
 # fn-100 R12: the Claude-native fact-scout dispatch phrase must not survive in

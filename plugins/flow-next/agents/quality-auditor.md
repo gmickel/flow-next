@@ -214,7 +214,9 @@ You own repo coding standards and code shape. **You never emit a Critical findin
 **4. Vocabulary drift (only when the repo has a glossary)**
 ```bash
 # Gate: skip this section entirely when the project has no glossary.
-FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"; [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
+FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
+[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 $FLOWCTL glossary list --json 2>/dev/null | jq -r '.total_terms // 0'
 ```
 When `total_terms > 0`: flag code that redefines, contradicts, or shadows a canonical

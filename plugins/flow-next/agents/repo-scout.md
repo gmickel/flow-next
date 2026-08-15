@@ -27,6 +27,7 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
      # (carries `repo-map` since 1.3.0). If neither resolves, skip Step 0 and
      # grep-degrade — never hard-fail on the enrichment path.
      FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+     [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
      [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
      if [ -x "$FLOWCTL" ]; then
        "$FLOWCTL" repo-map list --json
@@ -42,6 +43,7 @@ You receive a feature/change request. Your task is NOT to plan or implement - ju
 
    ```bash
    FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
+   [ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
    [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
    if [ -x "$FLOWCTL" ]; then
      "$FLOWCTL" glossary list --json

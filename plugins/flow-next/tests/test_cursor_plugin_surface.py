@@ -246,11 +246,24 @@ class TestFlowNextRule(unittest.TestCase):
         self.assertEqual(self.fm.get("alwaysApply"), "false")
         self.assertIn(".flow/", str(self.fm.get("description")))
 
-    def test_flowctl_resolved_via_flow_bin(self) -> None:
-        self.assertIn(".flow/bin/flowctl", self.text)
-        # Must NOT assume plugin-root env vars or bare PATH flowctl as the primary.
-        self.assertNotIn("CLAUDE_PLUGIN_ROOT", self.text)
-        self.assertNotIn("DROID_PLUGIN_ROOT", self.text)
+    def test_flowctl_resolved_via_three_rung_chain(self) -> None:
+        # fn-197: the rail teaches the same chain every skill preamble carries.
+        # Rung 2 (derive the plugin root from the loaded skill file's path) is
+        # what actually resolves on Cursor - it sets no plugin-root env var and
+        # does no bin-PATH injection - and `.flow/bin` is only the backstop for
+        # a repo that has not deleted its copies yet.
+        self.assertIn(
+            'FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"',
+            self.text,
+        )
+        self.assertIn(
+            '[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"',
+            self.text,
+        )
+        self.assertIn('[ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"', self.text)
+        # Commands run through the resolved variable, never a hardcoded path.
+        self.assertNotIn("`.flow/bin/flowctl ", self.text)
+        self.assertIn("$FLOWCTL list", self.text)
 
     def test_lifecycle_commands(self) -> None:
         for token in ("list", "show", "start", "done"):

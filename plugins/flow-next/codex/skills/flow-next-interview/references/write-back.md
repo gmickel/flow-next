@@ -67,6 +67,7 @@ The canonical section layout for the spec body is in [`plugins/flow-next/templat
 
 ```bash
 FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
+[ -x "$FLOWCTL" ] || FLOWCTL="<plugin-root>/scripts/flowctl"   # <plugin-root> = the directory two levels above this skill's SKILL.md file (the harness gave you that file's absolute path when the skill loaded); substitute it literally
 [ -x "$FLOWCTL" ] || FLOWCTL=".flow/bin/flowctl"
 # ONE root snapshot for this mint (fn-110). Literal path.
 INTERVIEW_CFG="${TMPDIR:-/tmp}/flow-interview-config-<suffix>.json"
