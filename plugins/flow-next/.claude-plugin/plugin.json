@@ -1,6 +1,6 @@
 {
   "name": "flow-next",
-  "version": "3.34.0",
+  "version": "4.0.0",
   "description": "Zero-dependency, spec-driven agentic SDLC: durable specs, context-fit plans, re-anchored workers, adversarial cross-model review, and receipts. Includes 20 subagents, 26 commands, 30 skills.",
   "author": {
     "name": "Gordon Mickel",

@@ -2,11 +2,17 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.0.0] - 2026-08-15
 
-- **Reviewer and auditor subagents now carry an explicit working-tree conduct rule** - read-only means the shell too: no `git checkout`/`restore`/`clean`/`stash`, no shell file writes; surprising uncommitted state is reported as a finding, never "repaired". Added after a live incident where an auditor's `git restore` destroyed another agent's uncommitted review state.
+Install the plugin once - your repos need nothing else, ever again. 4.0.0
+retires the copied-files install layout: `flowctl`, the agent guide, and the
+spec template no longer land as snapshots in your repo, every host resolves the
+CLI from the plugin install itself, and a plugin update never requires
+re-running setup in any project again. Repos with old copies keep working
+untouched - and can simply delete them.
 
-Choosing which model does what is now something you say, not something you
+In the same release, choosing which model does what becomes something you say,
+not something you
 configure. Routing is a short block of your own words in your own
 `CLAUDE.md` / `AGENTS.md` - four named tiers, filled with model names you can
 verify against your own account - and every session, including unattended
@@ -110,6 +116,8 @@ back to the session model, exactly as flow-next has always run out of the box.
   copied `flowctl` can shadow the current one. If you have not migrated yet,
   nothing breaks - skills still fall back to `.flow/bin/flowctl` as a silent
   backstop.
+
+- **Reviewer and auditor subagents carry an explicit working-tree conduct rule** - read-only means the shell too: no `git checkout`/`restore`/`clean`/`stash`, no shell file writes; surprising uncommitted state is reported as a finding, never "repaired". Added after a live incident where an auditor's `git restore` destroyed another agent's uncommitted review state.
 
 - **Resolution is one sentence at every dispatch site**, not a resolver:
   an explicit instruction in the moment, then your routing block, then the agent
