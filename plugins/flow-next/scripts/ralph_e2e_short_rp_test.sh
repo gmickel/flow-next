@@ -94,16 +94,10 @@ PY
 
 scripts/ralph/flowctl init --json >/dev/null
 
-# Setup .flow/bin + docs (mirror /flow-next:setup)
-mkdir -p .flow/bin
-cp "$PLUGIN_ROOT/scripts/flowctl" .flow/bin/flowctl
-cp "$PLUGIN_ROOT/scripts/flowctl.py" .flow/bin/flowctl.py
-cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" .flow/bin/flowctl_bootstrap.py
-cp "$PLUGIN_ROOT/scripts/flowctl-help.txt" .flow/bin/flowctl-help.txt
-chmod +x .flow/bin/flowctl
-cp "$PLUGIN_ROOT/templates/usage.md" .flow/usage.md
+# Mirror /flow-next:setup - it copies NOTHING into the repo (fn-197): skills
+# resolve flowctl from "$PLUGIN_ROOT/scripts/flowctl". Only the rail is written.
 cat "$PLUGIN_ROOT/skills/flow-next-setup/templates/claude-md-snippet.md" > CLAUDE.md
-echo -e "${GREEN}✓${NC} Setup mirrored"
+echo -e "${GREEN}✓${NC} Setup mirrored (CLAUDE.md rail)"
 
 scripts/ralph/flowctl spec create --title "Add function" --json >/dev/null
 scripts/ralph/flowctl spec create --title "Add docs" --json >/dev/null

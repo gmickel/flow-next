@@ -59,19 +59,10 @@ class ManifestIsCurrent(unittest.TestCase):
                              capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stderr)
 
-    def test_flow_bin_copy_matches_the_manifest_too(self) -> None:
-        """The dual-copy invariant extends to the package AND its manifest."""
-        bin_pkg = REPO / ".flow" / "bin" / "flowctl_tracker"
-        self.assertTrue(bin_pkg.is_dir(), ".flow/bin ships the package")
-        self.assertEqual(_hashes(bin_pkg), _hashes(PKG))
-        self.assertEqual((bin_pkg / "MANIFEST.json").read_bytes(),
-                         MANIFEST.read_bytes(),
-                         "a stale .flow/bin manifest verifies yesterday's hashes")
-        # And the verifier actually passes against BOTH shipped trees.
-        for root in (PKG.parent, bin_pkg.parent):
-            out = subprocess.run([sys.executable, str(VERIFIER), str(root)],
-                                 capture_output=True, text=True, timeout=120)
-            self.assertEqual(out.returncode, 0, (root, out.stderr))
+    def test_verifier_passes_against_the_shipped_tree(self) -> None:
+        out = subprocess.run([sys.executable, str(VERIFIER), str(PKG.parent)],
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stderr)
 
 
 class InstallerVerifier(unittest.TestCase):

@@ -5,7 +5,7 @@ Framework (fn-92.4): the command/schema skeleton, the per-collector
 completeness-diagnostics envelope (resolution 21b), axes 1-4 raw signals +
 Axis-5 shape markers + assessment_scope, blob-ID content-hash dedup (`git
 ls-files -s`, no content read), per-collector budget scaffolding, the
-byte-identical dual-copy invariant, and a live-subcommand smoke.
+the emitter contract, and a live-subcommand smoke.
 
 Substance (fn-92.13): the emitter-owned substance-grep collectors of the
 pillars.md criterion-to-score map (SV3/TS5/DE1/DE4/DE5/FH1-FH7/FH10-FH13/HP7 +
@@ -18,7 +18,7 @@ oracle over raw signals / markers / exclusions / diagnostics only (never final
 shapes or judgment).
 
 Local wall-time benchmark (resolution 21b): on the flow-next repo itself
-(~1.2 MB dual-copy flowctl.py + full tree) `prime classify --json` completes in
+(~1.2 MB flowctl.py + full tree) `prime classify --json` completes in
 ~1.0s wall-time on the maintainer's host (2026-07, macOS/M-series), well under
 the <10s `--classify-only` triage target. CI asserts OPERATION counts, never
 wall-time (op counts are host-independent; wall-time is not).
@@ -51,7 +51,6 @@ TESTS_DIR = HERE.parent
 PLUGIN_DIR = TESTS_DIR.parent
 REPO_ROOT = PLUGIN_DIR.parent.parent
 FLOWCTL_PY = PLUGIN_DIR / "scripts" / "flowctl.py"
-DOGFOOD_FLOWCTL_PY = REPO_ROOT / ".flow" / "bin" / "flowctl.py"
 CLASSIFICATION_MD = PLUGIN_DIR / "skills" / "flow-next-prime" / "classification.md"
 PRIME_SKILL_DIR = PLUGIN_DIR / "skills" / "flow-next-prime"
 PRIME_MIRROR_DIR = PLUGIN_DIR / "codex" / "skills" / "flow-next-prime"
@@ -1249,26 +1248,17 @@ class AssessmentScopeTestCase(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-# ── Dual-copy invariant + live subcommand smoke ────────────────────────────────
+# ── Emitter contract + live subcommand smoke ────────────────────────────────
 
 
-class DualCopyInvariantTestCase(unittest.TestCase):
-    """The repo dogfoods a BYTE-IDENTICAL `.flow/bin/flowctl.py`; the emitter
-    MUST land in BOTH copies or the live `.flow/bin/flowctl` runs stale code."""
+class EmitterContractTestCase(unittest.TestCase):
+    """`scripts/flowctl.py` is the single source the live CLI resolves."""
 
-    def test_two_copies_are_byte_identical(self) -> None:
-        self.assertEqual(
-            FLOWCTL_PY.read_bytes(),
-            DOGFOOD_FLOWCTL_PY.read_bytes(),
-            "scripts/flowctl.py and .flow/bin/flowctl.py must be byte-identical",
-        )
-
-    def test_both_copies_carry_emitter(self) -> None:
-        for path in (FLOWCTL_PY, DOGFOOD_FLOWCTL_PY):
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("def cmd_prime_classify", text, str(path))
-            self.assertIn("def _prime_classify", text, str(path))
-            self.assertIn("def _prime_parse_ls_files_staged", text, str(path))
+    def test_source_carries_emitter(self) -> None:
+        text = FLOWCTL_PY.read_text(encoding="utf-8")
+        self.assertIn("def cmd_prime_classify", text)
+        self.assertIn("def _prime_classify", text)
+        self.assertIn("def _prime_parse_ls_files_staged", text)
 
     def test_schema_contract_is_pinned_in_classification_md(self) -> None:
         # Guard the source-of-truth link: the emitter implements the pinned
@@ -1281,11 +1271,11 @@ class DualCopyInvariantTestCase(unittest.TestCase):
     @unittest.skipIf(
         sys.platform == "win32",
         "live subcommand-resolution subprocess is Windows-runner fragile; the "
-        "byte-identical + emitter-present checks cover the dual-copy invariant.",
+        "the emitter-present check covers the contract.",
     )
-    def test_live_bin_resolves_classify_subcommand(self) -> None:
+    def test_live_cli_resolves_classify_subcommand(self) -> None:
         proc = subprocess.run(
-            [sys.executable, str(DOGFOOD_FLOWCTL_PY), "prime", "classify", "--help"],
+            [sys.executable, str(FLOWCTL_PY), "prime", "classify", "--help"],
             capture_output=True,
             text=True,
         )
@@ -1305,7 +1295,7 @@ class DualCopyInvariantTestCase(unittest.TestCase):
             _write(repo, "main.py", "x = 1\n")
             _commit_all(repo, "seed")
             proc = subprocess.run(
-                [sys.executable, str(DOGFOOD_FLOWCTL_PY), "prime", "classify", str(repo), "--json"],
+                [sys.executable, str(FLOWCTL_PY), "prime", "classify", str(repo), "--json"],
                 capture_output=True,
                 text=True,
             )

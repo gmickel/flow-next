@@ -17,10 +17,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent  # plugins/flow-next
-REPO_ROOT = PLUGIN_DIR.parent.parent  # repo root
 
 USAGE_TEMPLATE = PLUGIN_DIR / "templates" / "usage.md"
-USAGE_DOGFOOD = REPO_ROOT / ".flow" / "usage.md"
 ORCHESTRATION_DOC = PLUGIN_DIR / "docs" / "orchestration.md"
 FLOWCTL_DOC = PLUGIN_DIR / "docs" / "flowctl.md"
 
@@ -117,18 +115,6 @@ class TestCursorHostFlowctlDoc(unittest.TestCase):
                 re.IGNORECASE | re.DOTALL,
             ),
             "flowctl.md must document rejecting host:<model>",
-        )
-
-
-class TestUsageTemplateDogfoodParity(unittest.TestCase):
-    def test_usage_template_and_dogfood_byte_identical(self) -> None:
-        self.assertTrue(USAGE_TEMPLATE.is_file(), f"missing {USAGE_TEMPLATE}")
-        self.assertTrue(USAGE_DOGFOOD.is_file(), f"missing {USAGE_DOGFOOD}")
-        self.assertEqual(
-            USAGE_TEMPLATE.read_bytes(),
-            USAGE_DOGFOOD.read_bytes(),
-            "plugins/flow-next/templates/usage.md and .flow/usage.md must be "
-            "byte-identical; fix: cp plugins/flow-next/templates/usage.md .flow/usage.md",
         )
 
 

@@ -120,8 +120,8 @@ or overlapping `**Touches:**` declaration has broken this.
 4. every dispatched task carries a `**Touches:**` declaration, and the declared
    sets are pairwise **disjoint** (`touches(A) ∩ touches(B) = ∅`, glob-aware);
 5. no task touches the always-serial set: `.flow/`, lockfiles, migration
-   dirs, codegen/generated outputs (in this repo: `plugins/flow-next/codex/**`,
-   `.flow/bin` dual copies), or spec/task files.
+   dirs, codegen/generated outputs (in this repo: `plugins/flow-next/codex/**`),
+   or spec/task files.
 
 The error paths are the rule: a task with no `**Touches:**` declaration →
 serial; any intersection → serial; any doubt about a glob, a hidden coupling

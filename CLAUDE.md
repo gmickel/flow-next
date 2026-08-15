@@ -84,7 +84,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 
 1. Run `./scripts/sync-codex.sh` TWICE (idempotency) and commit the mirror diff with the canonical change. Its validation guards must stay green; new Claude-only phrases (tool dispatches, model-name examples) may need a new transform + hard-fail guard (pattern: the fn-100 Explore-dispatch and scout-tier rules).
 2. Claude BUILTIN references (`Explore`, `general-purpose`, `AskUserQuestion`, model names) are invisible to the Cursor/Droid consumers - every such reference needs a portable-host fallback clause in the canonical prose (generic read-only dispatch with Edit/Write disallowed; plain-text numbered-prompt fallback for asks) or graceful degradation stated inline.
-3. Plugin-root env vars: Cursor exposes NONE - every bash preamble must keep the `.flow/bin/flowctl` fallback after the `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}` probe. Plugin-mode repos (fn-121) resolve bare `flowctl` via Claude Code bin-PATH injection in plain Bash ONLY - never in skill prose; dual-mode rules live in `agent_docs/setup-modes.md`.
+3. Plugin-root env vars: Cursor and Grok expose NONE - every bash preamble carries the three rungs in order: `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl`, then the plugin root derived from the skill's own SKILL.md absolute path (two levels up), then the legacy `.flow/bin/flowctl` backstop. Setup copies nothing into a repo; on Claude Code bare `flowctl` also resolves via bin-PATH injection in plain Bash ONLY - never in skill prose.
 4. No plugin-level hooks (`plugins/flow-next/hooks/` is gone): Ralph registration is agent-driven via `/flow-next:ralph-init` (merge fingerprinted entries into project settings per host). Guard matchers stay Claude-schema (`PreToolUse`/`Stop`, `Bash|Execute` shell + file-tool set); works on Claude Code + Droid, NOT Cursor (different hook events) - never assume the guard fires there.
 5. Installers need no enumeration updates (Cursor installers blanket-copy; the codex mirror is a full regen) - but `plugins/flow-next/docs/platforms.md` DOES need a note when host behavior differs.
 6. `agents/*.md` model fields are family aliases resolved by the host; on non-Claude hosts they map to host defaults - never version-pin, and never assume a specific tier is honored off Claude Code.
@@ -139,8 +139,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Cross-platform install matrix (Claude / Codex / Droid / OpenCode) | [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) |
 | Codebase feature map (optional) | [`plugins/flow-next/skills/flow-next-map/`](plugins/flow-next/skills/flow-next-map/) — `/flow-next:map` wraps `clawpatch map` |
 | Troubleshooting + uninstall | [`plugins/flow-next/docs/troubleshooting.md`](plugins/flow-next/docs/troubleshooting.md) |
-| Canonical spec-template scaffold (single source of truth — section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional; `.flow/templates/spec.md` is a setup-managed copy) | [`plugins/flow-next/templates/spec.md`](plugins/flow-next/templates/spec.md) |
-| Setup modes (plugin vs copy), per-artifact resolution chains, pre-check contract, `setup-mode set` invariants | [`agent_docs/setup-modes.md`](agent_docs/setup-modes.md) |
+| Canonical spec-template scaffold (single source of truth — section list, scope-owner annotations, `## Decision Context` flat-vs-H3 conditional; a repo-root `SPEC.md` overrides it per project) | [`plugins/flow-next/templates/spec.md`](plugins/flow-next/templates/spec.md) |
 | Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) |
 | Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
 | Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) |
@@ -161,41 +160,26 @@ Optional: `/flow-next:map` wraps [openclaw/clawpatch](https://github.com/opencla
 - Marketplace: https://github.com/gmickel/flow-next
 
 <!-- BEGIN FLOW-NEXT -->
+<!-- flow-next:snippet:v1 -->
 ## Flow-Next
 
-This project uses Flow-Next. Use `.flow/bin/flowctl` for ALL task tracking. Do NOT create markdown TODOs or use TodoWrite. Cold session: run `.flow/bin/flowctl brief` FIRST (one bounded call — specs, actionable tasks, recent completions, memory index). Re-anchor (re-read spec + task status) before every task.
+This project uses Flow-Next for ALL task tracking. `flowctl` comes from the flow-next plugin install — every flow-next skill resolves it itself, and on Claude Code it is also on PATH. Do NOT create markdown TODOs or use TodoWrite. Cold session: `flowctl brief` first — one bounded call (specs, ready tasks, memory); go deeper with `show`/`cat`/`anchor <task-id>`.
 
-```bash
-.flow/bin/flowctl brief               # cold-session orientation (--full lifts the cap)
-.flow/bin/flowctl list                # specs + tasks
-.flow/bin/flowctl show fn-N.M         # view task
-.flow/bin/flowctl start fn-N.M        # claim -> implement -> commit
-.flow/bin/flowctl done fn-N.M --summary-file s.md --evidence-json e.json
-# e.json: {"commits": ["<sha>"], "tests": ["<command>"], "prs": []}
-# done writes the receipt into the TRACKED task file AFTER your commit -
-# stage/commit the path it reports under modified_paths (fn-192 / #346)
-```
+- Lifecycle: `flowctl list` / `show fn-N.M` / `start fn-N.M` / `done fn-N.M --summary-file s.md --evidence-json e.json` (e.json: `{"commits": ["<sha>"], "tests": ["<cmd>"], "prs": []}`)
+- BEFORE any other flowctl operation, or when unsure of a flag: run `flowctl usage` (CLI cheatsheet + orchestration recipes) or `flowctl --help`.
+- BEFORE bridging work to another model/CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) or picking an implementation/review model: run `flowctl usage` and follow "Orchestration & model steering" exactly.
+- Creating a spec: write it directly — `/flow-next:plan` is task breakdown only. `flowctl spec create --title "Short title" --plan-file plan.md --json`, then `/flow-next:plan <spec-id>`. Scaffold cascade (first match wins): `SPEC.md` -> `spec.md` -> bundled template.
+- If `flowctl` is not found: run `/flow-next:setup`.
 
-**Creating a spec:** write it directly - do NOT use `/flow-next:plan` (task breakdown only). Scaffold cascade (first match wins): `SPEC.md` -> `spec.md` -> `.flow/templates/spec.md` -> bundled template. To change the spec shape for a project, copy the bundled template to a repo-root `SPEC.md` and edit it - adding sections and rewriting the guidance prose is free; renaming `## Acceptance Criteria` / `## Boundaries` / `## Goal & Context` / `## Decision Context` silently degrades the features that parse them. Full guide: [`plugins/flow-next/docs/spec-template.md`](plugins/flow-next/docs/spec-template.md#customizing-the-scaffold-for-your-project). If the repo has a `.flow/criteria.md` (standing G-ID criteria), reference relevant G-IDs in spec prose - NEVER restate a standing criterion as an R-ID (a copy freezes while criteria.md evolves and gets judged twice).
+**This repo's own additions (maintainer notes, not part of the shipped snippet):**
 
-```bash
-.flow/bin/flowctl spec create --title "Short title" --plan-file plan.md --json   # one-shot create+plan
-.flow/bin/flowctl task create --spec <spec-id> --from-json tasks.json --json     # bulk tasks, one call
-# tasks.json: [{"title": "...", "description": "...", "acceptance": "...", "deps": [1], "satisfies": ["R1"]}]
-# granular verbs (spec set-plan, per-task create) remain for edits
-```
-
-Then `/flow-next:plan <spec-id>`.
-
-**Spec Quick commands (this repo):** list FOCUSED suites for the feature's files (e.g. `cd plugins/flow-next/tests && python3 -m unittest test_config_snapshot test_task_create_files -q`). That is what workers baseline and verify per task. The FULL suite runs ONCE at the final gate (work Phase 4 / completion review): `python3 scripts/run_tests_parallel.py` (serial fallback `--serial`) **plus `uvx ruff@0.16.0 check .`** — both must be green before a PR. Do not put the full discover/parallel command on every task's Quick commands.
-
-**When a change touches `flowctl.py` or `flowctl_tracker/`**, the final gate also needs the propagation the tests check for you only after the fact: `cp plugins/flow-next/scripts/flowctl.py .flow/bin/flowctl.py` (the `.py` target - `.flow/bin/flowctl` is the 49-line bash launcher since fn-77; never overwrite it with the Python source) plus `rsync -a --delete --exclude __pycache__ plugins/flow-next/scripts/flowctl_tracker/ .flow/bin/flowctl_tracker/`, then `python3 scripts/gen_tracker_manifest.py`, then `./scripts/sync-codex.sh` twice (idempotency). Skipping any of these fails `test_tracker_distribution` rather than producing a useful error.
-
-**When a change adds, renames, or retypes a `.flow/config.json` key**, the published schema must learn it in the same change: extend the TABLE in `scripts/gen_flow_config_schema.py` (or the drift-test allowlist for machine-written keys), regenerate the committed artifact by running that script, and keep `test_flow_config_schema_drift` green — a reader-accepted key with no schema entry fails the suite (fn-138).
-
-`.flow/memory/` - categorized learnings from past work (`bug/<category>/`, `knowledge/<category>/`; YAML frontmatter: track, category, module, tags, status). Search via `.flow/bin/flowctl memory search <q>` - relevant when implementing or debugging in modules with documented prior art.
-
-**More:** `.flow/bin/flowctl --help` or `.flow/usage.md`
+- **`done` writes the receipt into the TRACKED task file AFTER your commit** — stage/commit the path it reports under `modified_paths` (fn-192 / #346).
+- **Bulk task creation:** `flowctl task create --spec <spec-id> --from-json tasks.json --json` (`[{"title": ..., "description": ..., "acceptance": ..., "deps": [1], "satisfies": ["R1"]}]`); the granular verbs remain for edits.
+- **Standing criteria:** if the repo has a `.flow/criteria.md` (G-IDs), reference relevant G-IDs in spec prose — NEVER restate a standing criterion as an R-ID (a copy freezes while criteria.md evolves and gets judged twice).
+- **Spec Quick commands:** list FOCUSED suites for the feature's files (e.g. `cd plugins/flow-next/tests && python3 -m unittest test_config_snapshot test_task_create_files -q`). That is what workers baseline and verify per task. The FULL suite runs ONCE at the final gate (work Phase 4 / completion review): `python3 scripts/run_tests_parallel.py` (serial fallback `--serial`) **plus `uvx ruff@0.16.0 check .`** — both must be green before a PR. Do not put the full discover/parallel command on every task's Quick commands.
+- **When a change touches `flowctl.py` or `flowctl_tracker/`**, the final gate also needs `python3 scripts/gen_tracker_manifest.py` (the manifest pins every shipped member) and `./scripts/sync-codex.sh` twice (idempotency). Skipping either fails `test_tracker_distribution` rather than producing a useful error. There is no repo-local copy to propagate to: `plugins/flow-next/scripts/` is the single source.
+- **When a change adds, renames, or retypes a `.flow/config.json` key**, the published schema must learn it in the same change: extend the TABLE in `scripts/gen_flow_config_schema.py` (or the drift-test allowlist for machine-written keys), regenerate the committed artifact by running that script, and keep `test_flow_config_schema_drift` green (fn-138).
+- `.flow/memory/` — categorized learnings from past work (`bug/<category>/`, `knowledge/<category>/`; YAML frontmatter: track, category, module, tags, status). Search via `flowctl memory search <q>` — relevant when implementing or debugging in modules with documented prior art.
 <!-- END FLOW-NEXT -->
 
 <!-- flow-next:model-routing:start -->
@@ -220,5 +204,5 @@ How to apply — defaults, not limits. Unless prompted otherwise, route work as 
 - The session model here is opus-5 at MEDIUM effort for conducting and implementing; escalate to fable-5 when a problem is genuinely frontier-hard rather than raising opus-5's effort.
 - Anything user-facing (UI, copy, API design) stays on the session model even when it looks mechanical.
 - Reviews prefer a different family than the writer — uncorrelated blind spots. Advice, not enforcement: the receipt records what actually ran.
-- Autonomous loops never call a bridge CLI raw — wrap it in a thin fast-tier subagent that runs the bridge in the FOREGROUND and self-heals environment failures only, never judgment. Recipes: `.flow/usage.md` § Orchestration & model steering.
+- Autonomous loops never call a bridge CLI raw — wrap it in a thin fast-tier subagent that runs the bridge in the FOREGROUND and self-heals environment failures only, never judgment. Recipes: `flowctl usage` § Orchestration & model steering.
 <!-- flow-next:model-routing:end -->
