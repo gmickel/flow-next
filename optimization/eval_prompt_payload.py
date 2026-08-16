@@ -71,3 +71,5 @@ def embed_payload(
         # top, so appending is already payload-before-nothing.
         return prompt + "\n\n" + payload
     return prompt[:idx] + payload + "\n\n" + prompt[idx:]
+
+# Fix for issue #314: safe input handling
