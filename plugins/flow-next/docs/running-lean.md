@@ -4,7 +4,7 @@ flow-next runs fully as **spec -> plan -> work**. Everything else is a layer you
 
 This page names the two **operating profiles** those layers serve, prices each layer in structural terms, and gives the manual invocation for people who want the capability without the standing cost. It is the source of the optionality caveat that appears at the top of each optional subsystem's page.
 
-> Adjacent, not the same: [`../../../README.md`](../../../README.md) is the happy path, and the docs-site page *Menu, Not a Rail* argues that the **stages** are skippable and reorderable. This page is about which **layers** you switch on at all, and what each one costs you to keep on.
+> Adjacent, not the same: [`../../../README.md`](../../../README.md) is the happy path, and [`pipeline-variations.md`](pipeline-variations.md) owns the **stage** axis - which stages one piece of work runs, chosen by risk and unknowns (the docs-site page *Menu, Not a Rail* is its doctrine). This page is about which **layers** you switch on at all, and what each one costs you to keep on.
 
 ## Two profiles
 
@@ -161,6 +161,7 @@ That is what makes a deliberate layer set auditable later: the difference betwee
 ## See also
 
 - [`../../../README.md`](../../../README.md) - the happy path and the 5-command quick start.
+- [`pipeline-variations.md`](pipeline-variations.md) - the stage axis: five worked routes through the menu, selected by risk and unknowns.
 - [`orchestration.md`](orchestration.md) - which model does what, and how to change it. The routing counterpart to this page: same doctrine, applied to models rather than layers.
 - [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the router that recommends the smallest sufficient workflow for one specific situation.
 - [`teams.md`](teams.md) - what changes when several humans and several agents share one repo.

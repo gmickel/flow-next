@@ -198,7 +198,7 @@ Parallelize       /flow-next:plan reports execution waves. /flow-next:work inspe
 Route models      flowctl config set review.backend codex · per-task review: pins · a codex exec bridge for implementation.
 ```
 
-Skills are prompts executed by the host agent. If the variation you want is not already a parameter, describe it and the host builds the arrangement on the spot ([orchestration guide](plugins/flow-next/docs/orchestration.md)). Use the smallest sufficient workflow. Full recipe catalog: [flow-next.dev/cookbook](https://flow-next.dev/cookbook).
+Skills are prompts executed by the host agent. If the variation you want is not already a parameter, describe it and the host builds the arrangement on the spot ([orchestration guide](plugins/flow-next/docs/orchestration.md)). Use the smallest sufficient workflow — pick stages by risk and unknowns, never by size; [pipeline variations](plugins/flow-next/docs/pipeline-variations.md) walks five worked routes from full epic down to docs chore. Full recipe catalog: [flow-next.dev/cookbook](https://flow-next.dev/cookbook).
 
 ---
 

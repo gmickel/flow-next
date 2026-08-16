@@ -2,6 +2,22 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Docs
+
+- **Pipeline variations — pick stages by risk and unknowns, never by size.** A new
+  [`docs/pipeline-variations.md`](plugins/flow-next/docs/pipeline-variations.md)
+  walks five worked routes through the menu — full epic (capture the whole epic,
+  interview to sharpen the inferred lines), feature-with-known-requirements,
+  small task, bug fix (reproduction, not conversation, is the sharpening tool),
+  and docs/chore via the triage-skip receipt. It names the real selector — what's
+  unknown, what breaks if we're wrong, who needs the record — frames
+  prospect/chart as upstream discovery your organization has often already done
+  under another name, and states what holds on every route: evidence JSON on
+  `done`, gates and receipts, recorded `skipped(reason)` entries, and a review
+  artifact scaled to the risk. The variants are worked examples, not tiers.
+
 ## [flow-next 4.0.0] - 2026-08-15
 
 Install the plugin once - your repos need nothing else, ever again. 4.0.0
