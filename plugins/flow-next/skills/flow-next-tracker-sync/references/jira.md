@@ -33,6 +33,7 @@ re-races credentials to change deployment shape.
 | assignees | account/user identifiers appropriate to deployment |
 | status | transition id resolved for normalized slot |
 | list-open | injection-safe JQL scoped to project and exact ready status |
+| list-states | v2 project statuses endpoint, scoped to the resolved issue type, deduped by id; read-only |
 | relation | native issue link using configured blocking type |
 | attachment | multipart attachment endpoint |
 

@@ -504,6 +504,25 @@ class MalformedGraphQL(unittest.TestCase):
         self.assertIsInstance(r, TrackerError)
         self.assertEqual(r.subtype, "malformed_body")
 
+    def test_partial_response_with_data_and_errors_is_not_success(self) -> None:
+        """GraphQL may return valid-looking data ALONGSIDE errors over HTTP 200.
+
+        Our queries are single-purpose, so any provider-reported error makes the
+        whole payload untrustworthy - it must classify as a failure, never reach
+        wire._gql as a Response (which would let list-states report complete:true
+        on a provider failure).
+        """
+        body = json.dumps({
+            "data": {"workflowStates": {"nodes": [{"id": "s1"}],
+                                        "pageInfo": {"hasNextPage": False}}},
+            "errors": [{"message": "field team resolution failed"}],
+        }).encode()
+        with mock.patch.object(X, "_http", return_value=resp(200, body)):
+            r = X.execute(Request(provider="linear", op="wire-list-states", method="POST",
+                                  url_or_argv="https://api.linear.app/graphql"))
+        self.assertIsInstance(r, TrackerError)
+        self.assertIn("field team resolution failed", r.message)
+
 
 class UntrustedRetryAfter(unittest.TestCase):
     def test_hostile_retry_after_hints_yield_bounded_delays(self) -> None:

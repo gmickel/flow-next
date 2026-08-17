@@ -1446,6 +1446,10 @@ flowctl tracker wire list-open      [--json]
 # naming the key (exit 4), never a silent empty (fn-182, #311); a refusal means
 # "no ready lane configured", not "board empty". GitHub/GitLab/Jira: transport-free
 # empty as before. Leaving readyState unset stays a valid configuration.
+flowctl tracker wire list-states    [--json]
+# Read-only workflow-state enumeration (linear/jira; no locator). Returns the
+# exhaustive shape {"states":[{"id","name","type"}], "complete": bool}; never
+# writes .flow/config.json. resolve repairs and writes; list-states detects.
 flowctl tracker wire relation-list  --locator "$LOCATOR" [--json]
 flowctl tracker wire question       --locator "$LOCATOR" \
   --subject-id ID --blocked-stage STAGE --reason-code CODE \
@@ -1468,6 +1472,25 @@ Normalized comments include immutable `created_at`. A latest question marker
 dedups; a latest matching answer reopens the same stable id as a new question
 round. Missing, tied, or truncated chronology fails closed. The free-prose body
 is not part of the hash. `attach` and `attach-get` are capability-gated.
+
+`list-states` enumerates the destination's workflow states read-only for Linear
+and Jira; GitHub/GitLab have no workflow-state pool and return a typed
+`capability` error (subtype `workflow_states`) naming Linear and Jira; an
+unresolved destination (`teamId` / `projectKey`) returns `unresolved` with no
+partial output. Jira scopes the answer to the resolved `issueTypeId` (the same
+scoping as `statusIds`); a missing or unmatched issue type returns
+`unresolved`, never another type's workflow. `complete` distinguishes a provably full listing from a
+truncated one: Linear returns the first page (100 states) and reports `complete: false`
+when `hasNextPage` is set (partial `states`, exit 0 - the caller decides to
+refuse); Jira's `/rest/api/2/project/<key>/statuses` endpoint is unpaginated,
+so a well-formed response is `complete: true`. The Jira endpoint is hardcoded
+to v2 (stable on Cloud and Data Center; only `list-open` forks to a v3
+search), and an invalid-format `projectKey` returns `INVALID_INPUT`, matching
+`list-open`'s taxonomy. A malformed or id-less state node is a typed
+`transport`/`malformed_body` error on both providers - never a silently
+shrunken list flagged `complete: true`. No code path writes `.flow/config.json`
+or any `.flow/` file: `resolve` repairs and writes `tracker.resolved`;
+`list-states` detects and never writes.
 
 ### Lifecycle and projection verbs
 

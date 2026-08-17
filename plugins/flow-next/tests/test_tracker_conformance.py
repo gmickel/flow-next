@@ -240,7 +240,7 @@ PROVIDERS = [
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
     "comment-delete", "label", "assign", "list-open", "relation-list",
-    "question", "attach", "attach-get",
+    "question", "attach", "attach-get", "list-states",
 )
 
 
@@ -502,6 +502,28 @@ class ConformanceMatrix(unittest.TestCase):
                 self._matrix_case(provider, cfg, None, responses,
                                   verb="list-open", kwargs={},
                                   expect_durable=durable)
+
+    def test_list_states_all_four(self) -> None:
+        cases = [
+            ("github", gh_cfg(), {}, True),
+            ("gitlab", gl_cfg(), {}, True),
+            ("linear", ln_cfg(), {"wire-list-states": ok({"data": {
+                "workflowStates": {
+                    "nodes": [{"id": "s1", "name": "Todo",
+                               "type": "unstarted"}],
+                    "pageInfo": {"hasNextPage": False}}}})}, False),
+            ("jira", jr_cfg(), {"wire-list-states": ok([{
+                "id": "10001", "name": "Task",
+                "statuses": [{"id": "1", "name": "To Do",
+                              "statusCategory": {"key": "new"}}],
+            }])}, False),
+        ]
+        for provider, cfg, responses, expect_capability in cases:
+            with self.subTest(provider=provider):
+                self._matrix_case(
+                    provider, cfg, None, responses,
+                    verb="list-states", kwargs={},
+                    expect_capability=expect_capability)
 
     def test_list_open_exact_ready_lane_all_four(self) -> None:
         cases = [
@@ -1061,7 +1083,7 @@ class SpecVerbSyncBodyAllFour(unittest.TestCase):
 
 class FullVerbSurfaceGuard(unittest.TestCase):
     """R18 completeness: the matrix names EVERY granular verb the spec
-    defines - the 11 wire verbs AND the 6 spec-aware verbs."""
+    defines - the 14 wire verbs AND the 6 spec-aware verbs."""
 
     def test_wire_surface_matches_package(self) -> None:
         self.assertEqual(tuple(WIRE_VERBS), W.WIRE_VERBS)

@@ -501,3 +501,77 @@ def list_open(config: dict, execute: Execute) -> Result:
     return {"issues": [_issue_out(i, parent_identity="not_available")
                        for i in collected],
             "truncated": truncated}
+
+
+def list_states(config: dict, execute: Execute) -> Result:
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    base = _jira_base(config, dest)
+    if isinstance(base, TrackerError):
+        return base
+    raw_key = dest.get("projectKey") or _dict(_dict(config.get("tracker")).get("perTracker")).get("projectKey")
+    if not raw_key:
+        return TrackerError(ErrorClass.UNRESOLVED, "jira projectKey is not resolved",
+                            subtype="destination")
+    key = _jira_project_key(str(raw_key))
+    if isinstance(key, TrackerError):
+        return key
+    # Scoped to the resolved issue type, mirroring providers/jira.py
+    # fetch_statuses: destination.statusIds is pinned to issueTypeId, so an
+    # all-types flatten would let the documented liveness check validate a
+    # status that never applied to the pinned type. NEVER "first entry":
+    # without the resolved issue type a Task project would happily report
+    # the first (e.g. Story) workflow's status ids.
+    issue_type_id = dest.get("issueTypeId")
+    if not issue_type_id:
+        return TrackerError(ErrorClass.UNRESOLVED,
+                            "no resolved issueTypeId; resolve destination first "
+                            "(statusIds is scoped to the pinned issue type)",
+                            subtype="statusIds")
+    # /rest/api/2 hardcoded: the statuses endpoint is stable on v2 for both
+    # Cloud and DC; only list_open needs the v3 search fork.
+    out = _jira(execute, "wire-list-states", "GET",
+                f"{base}/rest/api/2/project/{quote(key, safe='')}/statuses",
+                idempotent=True)
+    if isinstance(out, TrackerError):
+        return out
+    if not isinstance(out, list):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "jira project statuses response is malformed",
+                            subtype="malformed_body")
+    malformed = TrackerError(ErrorClass.TRANSPORT,
+                             "jira project statuses response is malformed",
+                             subtype="malformed_body")
+    entry = None
+    for issue_type in out:
+        # A shape-broken entry fails loudly - a quietly shrunken list
+        # flagged complete:true is the exact failure `complete` guards.
+        if not isinstance(issue_type, dict):
+            return malformed
+        if str(issue_type.get("id")) == str(issue_type_id):
+            entry = issue_type
+            break
+    if entry is None:
+        return TrackerError(ErrorClass.UNRESOLVED,
+                            f"no status set for issue type {issue_type_id!r}; "
+                            "resolve destination first", subtype="statusIds")
+    statuses = entry.get("statuses")
+    if not isinstance(statuses, list):
+        return malformed
+    states = []
+    seen = set()
+    for status in statuses:
+        if not isinstance(status, dict) or not status.get("id"):
+            return malformed
+        sid = str(status["id"])
+        if sid in seen:
+            continue
+        seen.add(sid)
+        cat = status.get("statusCategory")
+        states.append({
+            "id": sid,
+            "name": status.get("name"),
+            "type": cat.get("key") if isinstance(cat, dict) else None,
+        })
+    return {"states": states, "complete": True}

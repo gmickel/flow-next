@@ -658,3 +658,46 @@ def list_open(config: dict, execute: Execute) -> Result:
     return {"issues": [_issue_out(i, parent_identity="not_available")
                        for i in nodes],
             "truncated": truncated}
+
+
+def list_states(config: dict, execute: Execute) -> Result:
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    team_id = dest.get("teamId")
+    if not isinstance(team_id, str) or not team_id:
+        return TrackerError(ErrorClass.UNRESOLVED,
+                            "linear destination missing teamId",
+                            subtype="destination")
+    data = _gql(
+        execute, "wire-list-states",
+        "query($team: ID!) { "
+        f"workflowStates(first: {_PAGE_SIZE}, "
+        "filter: { team: { id: { eq: $team } } }) { "
+        "nodes { id name type } pageInfo { hasNextPage } } }",
+        {"team": team_id}, idempotent=True)
+    if isinstance(data, TrackerError):
+        return data
+    conn = data.get("workflowStates") if isinstance(data, dict) else None
+    if not isinstance(conn, dict) or not isinstance(conn.get("nodes"), list):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear workflow states response is malformed",
+                            subtype="malformed_body")
+    nodes = conn["nodes"]
+    # A shape-broken node must fail loudly, never shrink a list that then
+    # claims completeness - `complete` is the load-bearing signal.
+    if any(not isinstance(n, dict) or not n.get("id") for n in nodes):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear workflow states response is malformed",
+                            subtype="malformed_body")
+    states = [{"id": n.get("id"), "name": n.get("name"), "type": n.get("type")}
+              for n in nodes]
+    # `complete` may only be asserted when exhaustion is proven - a response
+    # missing pageInfo/hasNextPage must fail loudly, never coerce to complete.
+    page_info = conn.get("pageInfo")
+    if (not isinstance(page_info, dict)
+            or not isinstance(page_info.get("hasNextPage"), bool)):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear workflow states response is malformed",
+                            subtype="malformed_body")
+    return {"states": states, "complete": not page_info["hasNextPage"]}

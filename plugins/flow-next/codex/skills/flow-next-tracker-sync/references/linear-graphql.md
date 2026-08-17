@@ -25,6 +25,7 @@ key and applies timeout, retry, classification, and redaction policy.
 | `label` | issue label id set |
 | `assign` | issue assignee id set |
 | `list-open` | cursor-paginated issues in resolved team/ready state |
+| `list-states` | single `workflowStates` page (100) + `complete` flag; read-only |
 | `attach` | upload negotiation plus presigned anonymous byte upload |
 | `attach-get` | authenticated metadata lookup, then safe download policy |
 

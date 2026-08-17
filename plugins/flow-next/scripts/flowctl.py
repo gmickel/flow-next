@@ -10293,6 +10293,17 @@ def _complete_review_journal(
     progress = _journal_progress(journal)
     receipt_superseded = False
     digest_backfill: Optional[tuple[dict, Optional[dict]]] = None
+    if journal.get("verdict") is None and journal.get("outcome") != "verdict":
+        # Self-heal for pre-fix journals from refunded (no-verdict) rows: they
+        # were written with pending receipt/digest legs, but a refund publishes
+        # nothing - the digest backfill fail-closes on transport rows by design
+        # and the receipt would assert a verdict flowctl never parsed. Left
+        # pending, the journal can never complete and every later increment
+        # dies REPLAY_REQUIRED. Retire the legs; the attempt row already holds
+        # the full refund record.
+        for leg in ("receipt", "digest"):
+            if progress.get(leg) == "pending":
+                progress[leg] = "not_applicable"
     if progress["digest"] == "pending":
         # Validate now, before receipt publication.  The caller has the
         # sidecar lock, so this also makes attach's fail-closed matrix a zero-
@@ -10788,14 +10799,21 @@ def _record_review_attempt_locked(
     if reservation_id:
         journal_path = _review_journal_path(flow_dir, reservation_id)
         journal_receipt = receipt_target and isinstance(receipt_payload, dict)
+        # Refunded rows publish NOTHING: a receipt is delivered-verdict
+        # evidence, and the digest backfill fail-closes on transport rows by
+        # design (`_journal_digest_backfill_row`). A pending receipt/digest leg
+        # on a no-verdict journal therefore can never complete and wedges every
+        # later increment on REPLAY_REQUIRED - the attempt row alone is the
+        # durable record of a refund.
+        journal_publishes = journal_receipt and outcome == "verdict"
         progress = {
-            "receipt": "pending" if journal_receipt else "not_applicable",
+            "receipt": "pending" if journal_publishes else "not_applicable",
             # In-process callers hand their already-built container/digest in
             # before finalization. RP builds the same container here and the
             # attach/replay fence backfills its digest under the sidecar lock.
             "digest": (
                 "complete" if findings_built
-                else "pending" if journal_receipt
+                else "pending" if journal_publishes
                 else "not_applicable"
             ),
             "status": (
@@ -11723,9 +11741,14 @@ def _enforce_and_increment_review_cap_locked(
             spec_data = normalize_epic(
                 load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
             )
-            (cross_type_replays if is_cross_type else replays).append(
-                _replay_entry(spec_data, reservation_id, journal)
-            )
+            # Same rule as the completion-path sink below: a resumed REFUND
+            # (no-verdict journal) has nothing to replay - appending it would
+            # surface a phantom VERDICT=UNKNOWN and suppress the reservation
+            # this same call should grant. Delivered verdicts replay as before.
+            if isinstance(journal.get("verdict"), str):
+                (cross_type_replays if is_cross_type else replays).append(
+                    _replay_entry(spec_data, reservation_id, journal)
+                )
             # The resumed record may still leave a receipt leg pending
             # (attach never ran and never will — its input is gone).
             # Fall through to journal completion below on the next scan…
@@ -11750,9 +11773,15 @@ def _enforce_and_increment_review_cap_locked(
             # Retained until the batched sidecar write below is durable
             # (PR #290 bot r6).
             completed_journals.append((journal_path, journal))
-            sink = cross_type_replays if is_cross_type else replays
-            if not any(r["reservation_id"] == reservation_id for r in sink):
-                sink.append(_replay_entry(spec_data, reservation_id, journal))
+            # A healed refunded journal carries no verdict to replay - adding
+            # it to the sink would end this increment `replayed` with a
+            # phantom VERDICT=UNKNOWN and cost the caller a second invocation
+            # to actually dispatch. The refund is already on the attempt row;
+            # fall through and reserve normally.
+            if isinstance(journal.get("verdict"), str):
+                sink = cross_type_replays if is_cross_type else replays
+                if not any(r["reservation_id"] == reservation_id for r in sink):
+                    sink.append(_replay_entry(spec_data, reservation_id, journal))
         elif is_cross_type:
             # Its own type owns the repair; say which one, so a wedged counter
             # is actionable instead of a bare REPLAY_REQUIRED loop.
@@ -48149,6 +48178,12 @@ def main() -> None:
                                      help="List open issues (no locator)")
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
+
+    p_wire_states = wire_sub.add_parser(
+        "list-states",
+        help="List tracker workflow states (no locator; linear/jira; read-only)")
+    _wire_json(p_wire_states)
+    p_wire_states.set_defaults(func=cmd_tracker_wire)
 
     p_wire_relations = wire_sub.add_parser(
         "relation-list", help="List normalized dependency relations")
