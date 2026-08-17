@@ -517,9 +517,10 @@ def list_states(config: dict, execute: Execute) -> Result:
     key = _jira_project_key(str(raw_key))
     if isinstance(key, TrackerError):
         return key
-    api_version = dest.get("apiVersion") or 2
+    # /rest/api/2 hardcoded for wire-layer parity (every sibling wire
+    # endpoint pins v2); the facade's apiVersion knob is a facade concern.
     out = _jira(execute, "wire-list-states", "GET",
-                f"{base}/rest/api/{api_version}/project/{quote(key, safe='')}/statuses",
+                f"{base}/rest/api/2/project/{quote(key, safe='')}/statuses",
                 idempotent=True)
     if isinstance(out, TrackerError):
         return out
@@ -527,24 +528,29 @@ def list_states(config: dict, execute: Execute) -> Result:
         return TrackerError(ErrorClass.TRANSPORT,
                             "jira project statuses response is malformed",
                             subtype="malformed_body")
+    malformed = TrackerError(ErrorClass.TRANSPORT,
+                             "jira project statuses response is malformed",
+                             subtype="malformed_body")
     states = []
     seen = set()
     for issue_type in out:
+        # A shape-broken entry fails loudly - a quietly shrunken list
+        # flagged complete:true is the exact failure `complete` guards.
         if not isinstance(issue_type, dict):
-            continue
+            return malformed
         statuses = issue_type.get("statuses")
         if not isinstance(statuses, list):
-            continue
+            return malformed
         for status in statuses:
-            if not isinstance(status, dict):
+            if not isinstance(status, dict) or not status.get("id"):
+                return malformed
+            sid = str(status["id"])
+            if sid in seen:
                 continue
-            sid = status.get("id")
-            if not sid or str(sid) in seen:
-                continue
-            seen.add(str(sid))
+            seen.add(sid)
             cat = status.get("statusCategory")
             states.append({
-                "id": str(sid),
+                "id": sid,
                 "name": status.get("name"),
                 "type": cat.get("key") if isinstance(cat, dict) else None,
             })

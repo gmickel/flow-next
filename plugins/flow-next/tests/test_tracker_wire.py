@@ -700,6 +700,21 @@ class ListStates(unittest.TestCase):
         self.assertTrue(str(ex.calls[0].url_or_argv).endswith(
             "/rest/api/2/project/SCRUM/statuses"))
 
+    def test_jira_malformed_status_entry_is_transport_never_a_short_list(
+            self) -> None:
+        # Same guarantee as the Linear twin: broken entries fail loudly.
+        ex = fake_execute({"wire-list-states": ok([
+            {"name": "Task", "statuses": [
+                {"id": "1", "name": "To Do",
+                 "statusCategory": {"key": "new"}},
+                {"name": "orphan without id"},
+            ]},
+        ])})
+        out = W.dispatch("list-states", jr_cfg(), execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "malformed_body")
+
     def test_github_and_gitlab_refuse_before_transport(self) -> None:
         for name, cfg in (("github", gh_cfg()), ("gitlab", gl_cfg())):
             with self.subTest(provider=name):
