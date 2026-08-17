@@ -1,0 +1,673 @@
+{
+  "artifactId": "fn-199-issue-sweep-pilot-worktreereused-branch-pr-aid-5e2a986f",
+  "baseSha": "2862da898b48f40e8770b7ae3e9718fff40670fa",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [],
+        "kind": "problem",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "Pilot hard-required a default-branch checkout git cannot satisfy in a secondary worktree (#354) and declared merged-PR-plus-open-spec inconsistent while make-pr documents the same state as normal (#355); no read-only verb could enumerate a tracker's workflow states, forcing consumers toward a second client or the config-writing resolve (#356).",
+        "taskIds": [],
+        "title": "Two pilot rules contradicted shipped practice; one tracker capability missing"
+      },
+      {
+        "files": [
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": "plugins/flow-next/skills/flow-next-pilot/workflow.md",
+            "rIds": [
+              "R1",
+              "R2"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R1",
+              "r-R2",
+              "t1"
+            ],
+            "summary": "Branch matrix row, all-done classification, Phase 6 terminals",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.1"
+            ]
+          },
+          {
+            "additions": 12,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "sync-codex regenerated mirror",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [
+          "R1",
+          "R2"
+        ],
+        "sourceRefs": [
+          "r-R1",
+          "r-R2",
+          "t1",
+          "c1"
+        ],
+        "summary": "The plan/plan-review branch-matrix row probes the current branch for an open PR and stays put when none exists; the all-done classification compares the branch head against the newest merged PR's headRefOid (head identity, squash-merge-safe; a review round proved the drafted rev-list ancestry count wrong under land's squash-merge).",
+        "taskIds": [
+          "fn-199-issue-sweep-pilot-worktreereused-branch.1"
+        ],
+        "title": "Pilot rules replaced with property-based contracts"
+      },
+      {
+        "files": [
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R3",
+              "t2"
+            ],
+            "summary": "list-states subparser",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+            ]
+          },
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/wire/__init__.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R3",
+              "t2"
+            ],
+            "summary": "Verb registration + hasattr capability gate",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+            ]
+          },
+          {
+            "additions": 36,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/wire/linear.py",
+            "rIds": [
+              "R3",
+              "R4"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R3",
+              "r-R4",
+              "t2"
+            ],
+            "summary": "workflowStates page, completeness, loud malformed_body",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+            ]
+          },
+          {
+            "additions": 54,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/wire/jira.py",
+            "rIds": [
+              "R3",
+              "R4"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R3",
+              "r-R4",
+              "t2"
+            ],
+            "summary": "v2 statuses endpoint, dedup, loud malformed_body",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+            ]
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "gen_tracker_manifest regen",
+            "taskIds": []
+          },
+          {
+            "additions": 186,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_tracker_wire.py",
+            "rIds": [
+              "R4"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R4",
+              "t2"
+            ],
+            "summary": "ListStates behavior suite incl. no-write invariant",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+            ]
+          },
+          {
+            "additions": 24,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_tracker_conformance.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R3",
+              "t2"
+            ],
+            "summary": "Four-provider conformance + verb surface",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [
+              "R3"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R3",
+              "t2"
+            ],
+            "summary": "CLI leaf whitelist gains list-states",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+            ]
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [
+          "R3",
+          "R4"
+        ],
+        "sourceRefs": [
+          "r-R3",
+          "r-R4",
+          "t2",
+          "c2"
+        ],
+        "summary": "Context-free wire verb returning states plus a complete flag; Linear single workflowStates page with hasNextPage driving complete, Jira v2 project statuses deduped by id; malformed nodes fail loudly as transport errors on both providers; GitHub/GitLab refuse with a typed capability error before any transport; no code path writes .flow state.",
+        "taskIds": [
+          "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+        ],
+        "title": "flowctl tracker wire list-states (Linear + Jira, read-only)"
+      },
+      {
+        "files": [
+          {
+            "additions": 47,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R5",
+              "t3"
+            ],
+            "summary": "Unreleased entries (#354/#355/#356), @sn-furali credited",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+            ]
+          },
+          {
+            "additions": 21,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R5",
+              "t3"
+            ],
+            "summary": "Wire verb reference + behavior paragraph",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/docs/tracker-sync.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R5",
+              "t3"
+            ],
+            "summary": "Wire section entry",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+            ]
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/adapter-interface.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R5",
+              "t3"
+            ],
+            "summary": "list-states row + pagination exception",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/linear-graphql.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R5",
+              "t3"
+            ],
+            "summary": "Verb table row",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+            ]
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/jira.md",
+            "rIds": [
+              "R5"
+            ],
+            "sourceRefs": [
+              "d",
+              "r-R5",
+              "t3"
+            ],
+            "summary": "Verb table row",
+            "taskIds": [
+              "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+            ]
+          },
+          {
+            "additions": 6,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/references/adapter-interface.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "mirror",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/references/linear-graphql.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "mirror",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/references/jira.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "mirror",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [
+          "R5"
+        ],
+        "sourceRefs": [
+          "r-R5",
+          "t3",
+          "c3"
+        ],
+        "summary": "flowctl.md and tracker-sync.md document the verb and the resolve-writes/list-states-detects distinction; adapter-interface.md gains the list-states row and the sanctioned single-page pagination exception; provider references updated; CHANGELOG Unreleased credits @sn-furali for all three issues. No version bump (batched releases).",
+        "taskIds": [
+          "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+        ],
+        "title": "Docs + changelog"
+      },
+      {
+        "files": [],
+        "kind": "kept",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "summary": "No GitHub/GitLab list-states beyond the typed refusal, no stateIds liveness checker, no cursor-drain machinery, tracker resolve semantics untouched, no version bump.",
+        "taskIds": [],
+        "title": "Deliberately unbuilt"
+      },
+      {
+        "files": [
+          {
+            "additions": 88,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-199-issue-sweep-pilot-worktreereused-branch.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Spec (reconciled to the shipped head-identity rule)",
+            "taskIds": []
+          },
+          {
+            "additions": 286,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/specs/fn-199-issue-sweep-pilot-worktreereused-branch.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Spec state incl. review attempt ledger",
+            "taskIds": []
+          },
+          {
+            "additions": 28,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-199-issue-sweep-pilot-worktreereused-branch.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Task receipt",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-199-issue-sweep-pilot-worktreereused-branch.1.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-199-issue-sweep-pilot-worktreereused-branch.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Task receipt",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-199-issue-sweep-pilot-worktreereused-branch.2.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-199-issue-sweep-pilot-worktreereused-branch.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Task receipt",
+            "taskIds": []
+          },
+          {
+            "additions": 17,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/tasks/fn-199-issue-sweep-pilot-worktreereused-branch.3.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Task state",
+            "taskIds": []
+          },
+          {
+            "additions": 3520,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-197-copy-less-installs-resolve-flowctl-from/pr-cognitive-aid/fn-197-copy-less-installs-resolve-flowctl-from-pr-aid-6419480c.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Pre-existing fn-197 artifact swept in by the plan commit's git add -A",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "copied",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-197-copy-less-installs-resolve-flowctl-from/pr-cognitive-aid/.write.lock",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Stale lock swept in alongside; cleanup candidate",
+            "taskIds": []
+          }
+        ],
+        "kind": "verify",
+        "ordinal": 6,
+        "rIds": [],
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "summary": "Per-task focused suites green at each step; full parallel suite (4379 tests) plus pinned ruff at the final gate; sync-codex idempotency and tracker-manifest regen verified; host impl-reviews (2, 3, and 1 rounds) plus spec completion review all ended SHIP.",
+        "taskIds": [],
+        "title": "Verification"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Tasks",
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3"
+        ],
+        "value": "3/3 done, each behind a host impl-review SHIP"
+      },
+      {
+        "label": "Completion review",
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "value": "SHIP, R1-R5 met"
+      },
+      {
+        "label": "Final gate",
+        "sourceRefs": [
+          "t3",
+          "c3"
+        ],
+        "value": "4379 tests green + ruff 0.16.0 clean"
+      }
+    ],
+    "thesis": "Three verified field reports (#354, #355, #356) fixed in one sweep: pilot's plan stages now run from git worktrees, merged gate PRs on a reused branch classify as make-pr instead of NEEDS_HUMAN, and a new read-only flowctl tracker wire list-states verb enumerates Linear/Jira workflow states with a trustworthy completeness flag."
+  },
+  "generatedAt": "2026-08-17T14:10:39Z",
+  "headSha": "5e2a986f0f3c7e274972d2a602c8203763e60a42",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-199-issue-sweep-pilot-worktreereused-branch"
+    },
+    {
+      "id": "d",
+      "kind": "diff_metadata",
+      "ref": "2862da898b48f40e8770b7ae3e9718fff40670fa..5e2a986f0f3c7e274972d2a602c8203763e60a42"
+    },
+    {
+      "id": "t1",
+      "kind": "task",
+      "ref": "fn-199-issue-sweep-pilot-worktreereused-branch.1"
+    },
+    {
+      "id": "t2",
+      "kind": "task",
+      "ref": "fn-199-issue-sweep-pilot-worktreereused-branch.2"
+    },
+    {
+      "id": "t3",
+      "kind": "task",
+      "ref": "fn-199-issue-sweep-pilot-worktreereused-branch.3"
+    },
+    {
+      "id": "r-R1",
+      "kind": "rid",
+      "ref": "R1"
+    },
+    {
+      "id": "r-R2",
+      "kind": "rid",
+      "ref": "R2"
+    },
+    {
+      "id": "r-R3",
+      "kind": "rid",
+      "ref": "R3"
+    },
+    {
+      "id": "r-R4",
+      "kind": "rid",
+      "ref": "R4"
+    },
+    {
+      "id": "r-R5",
+      "kind": "rid",
+      "ref": "R5"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "6e239b39b1702b71cc67bf46918224a499b1cfbc"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "a8186e4641ce0530bf5110305e620ef2081822c5"
+    },
+    {
+      "id": "c3",
+      "kind": "commit",
+      "ref": "51e2c77ff761f02e871280c746cd559ecf68da24"
+    }
+  ],
+  "specId": "fn-199-issue-sweep-pilot-worktreereused-branch"
+}
