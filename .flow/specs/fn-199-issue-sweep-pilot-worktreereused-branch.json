@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-199-issue-sweep-pilot-worktreereused-branch",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-17T14:00:10.123437Z",
   "created_at": "2026-08-17T12:30:39.500425Z",
   "default_impl": null,
   "default_review": null,
@@ -225,6 +225,32 @@
       "task": "fn-199-issue-sweep-pilot-worktreereused-branch.3",
       "timestamp": "2026-08-17T13:55:56.365788Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "3aafb7ccba8f43c34d9d5aaff17346e7317661c9f2bce9c2a162318eca4cb375",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "f9db5db27c5a38140caccaaabcaa28f4166d3c88",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 690,
+      "output_sha256": "51a8729586e74e2d3bc24c7a02cff0fe52f07b28f52800025038e267edd825f5",
+      "reservation_id": "27fe61cee71a4dc5a0e41a432e2fcdd4",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-17T14:00:09.857237Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
@@ -232,11 +258,12 @@
     "impl:fn-199-issue-sweep-pilot-worktreereused-branch.2": 1,
     "impl:fn-199-issue-sweep-pilot-worktreereused-branch.3": 1,
     "plan": 1,
-    "plan#completion": 1
+    "plan#completion": 2
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-199-issue-sweep-pilot-worktreereused-branch.1": 0,
     "impl:fn-199-issue-sweep-pilot-worktreereused-branch.2": 0,
     "impl:fn-199-issue-sweep-pilot-worktreereused-branch.3": 0
@@ -255,5 +282,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-17T13:55:56.637272Z"
+  "updated_at": "2026-08-17T14:00:10.124055Z"
 }
