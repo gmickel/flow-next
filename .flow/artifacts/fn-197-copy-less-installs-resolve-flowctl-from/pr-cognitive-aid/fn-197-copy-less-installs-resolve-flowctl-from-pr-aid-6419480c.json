@@ -1,0 +1,3520 @@
+{
+  "artifactId": "fn-197-copy-less-installs-resolve-flowctl-from-pr-aid-6419480c",
+  "baseSha": "c11bd4a9bf47bb47db3d9a81ad30dcf18c7bdfe3",
+  "changeWalkthrough": {
+    "groups": [
+      {
+        "files": [
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "copied",
+            "deletions": 0,
+            "path": ".flow/artifacts/flow-98-remove-packaged-codex-delegation/pr-cognitive-aid/.write.lock",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1515,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/flow-98-remove-packaged-codex-delegation/pr-cognitive-aid/flow-98-remove-packaged-codex-delegation-pr-aid-c5c1ff3a.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "mechanical",
+            "changeType": "copied",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-195-orchestration-by-intent-named-tiers-per/pr-cognitive-aid/.write.lock",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1869,
+            "attentionClass": "mechanical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": ".flow/artifacts/fn-195-orchestration-by-intent-named-tiers-per/pr-cognitive-aid/fn-195-orchestration-by-intent-named-tiers-per-pr-aid-f00e377e.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 218,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/specs/fn-197-copy-less-installs-resolve-flowctl-from.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.1.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.2.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 24,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.3.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 29,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.4.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.5.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 34,
+            "attentionClass": "mechanical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": ".flow/tasks/fn-197-copy-less-installs-resolve-flowctl-from.6.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "SPEC.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "STRATEGY.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/agents/docs-gap-scout.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/agents/quality-auditor.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/agents/repo-scout.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/agents/worker.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "plugins/flow-next/rules/flow-next.mdc",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/scripts/hooks/ralph-guard.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/lib/verify_tracker_manifest.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 43,
+            "path": "plugins/flow-next/scripts/smoke_test.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-audit/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-audit/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-capture/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-capture/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-capture/references/tracker-integration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-capture/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/references/briefing-and-reopen.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/references/chart-mode.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/references/re-entry.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/references/work-mode.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-chart/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-deps/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-export-context/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-guide/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-impl-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-interview/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-interview/references/post-write-back.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-interview/references/write-back.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-land/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-land/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-make-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-make-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-map/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-map/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-memory-migrate/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-memory-migrate/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-pilot/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-plan-review/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-prime/classification.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-prime/stacks.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-prime/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-prospect/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-prospect/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-qa/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-qa/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 15,
+            "path": "plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-resolve-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-resolve-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-spec-completion-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-strategy/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-sync/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-visual/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-work/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next-work/references/spec-id-mint.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/skills/flow-next/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/templates/spec.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 21,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 23,
+            "path": "plugins/flow-next/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 13,
+            "path": "plugins/flow-next/tests/test_chart_docs_inventory.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/tests/test_ci_trigger_coverage.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 9,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 19,
+            "path": "plugins/flow-next/tests/test_cp1252_robustness.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 14,
+            "path": "plugins/flow-next/tests/test_cursor_host_docs.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 18,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/tests/test_cursor_plugin_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 77,
+            "path": "plugins/flow-next/tests/test_dogfood_template_parity.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 22,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/tests/test_export_traceability.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/tests/test_guide_routing.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 181,
+            "path": "plugins/flow-next/tests/test_init_stamp_launchers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "plugins/flow-next/tests/test_pilot_backlog_substrate.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_pr_cognitive_aid.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 14,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 24,
+            "path": "plugins/flow-next/tests/test_prime_eval.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_removed_delegate_config_advisory.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 8,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 16,
+            "path": "plugins/flow-next/tests/test_tracker_distribution.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "scripts/install-cursor.ps1",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "scripts/install-cursor.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 68,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 169,
+            "path": "scripts/sync-codex.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 1,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t1",
+          "c1"
+        ],
+        "summary": "Every canonical preamble becomes env probe, then plugin root derived from the loading SKILL.md's own path, then the .flow/bin backstop - one byte-identical probe-proven wording at 53 sites, with the sync guard enforcing it and the injector awks retired.",
+        "taskIds": [
+          "fn-197-copy-less-installs-resolve-flowctl-from.1"
+        ],
+        "title": "The three-rung resolution chain"
+      },
+      {
+        "files": [
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/skills/flow-next-setup/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 18,
+            "path": "plugins/flow-next/skills/flow-next-setup/templates/agents-md-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 12,
+            "path": "plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet-plugin.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 18,
+            "path": "plugins/flow-next/skills/flow-next-setup/templates/claude-md-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 59,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 171,
+            "path": "plugins/flow-next/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 95,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 57,
+            "path": "plugins/flow-next/tests/test_precheck_mode_contract.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 4,
+            "path": "plugins/flow-next/tests/test_setup_cursor_host.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/tests/test_setup_grok_host.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 230,
+            "path": "plugins/flow-next/tests/test_setup_mode_stamp.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 2,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t2",
+          "c2"
+        ],
+        "summary": "The mode ceremony, consent table, plugin-refusal invariant and stamps go; setup writes zero copies, offers leftover cleanup unconditionally (with a customized-template guard), and states the only re-run triggers.",
+        "taskIds": [
+          "fn-197-copy-less-installs-resolve-flowctl-from.2"
+        ],
+        "title": "Setup collapses to one mode"
+      },
+      {
+        "files": [
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "flow-next-tui/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 168,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 108,
+            "path": "flow-next-tui/src/lib/flowctl.test.ts",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 155,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 49,
+            "path": "flow-next-tui/src/lib/flowctl.ts",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/scripts/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 342,
+            "path": "plugins/flow-next/scripts/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/scripts/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 16,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/skills/flow-next-plan/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/tests/test_flowctl_surface.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 23,
+            "path": "plugins/flow-next/tests/test_startup_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 3,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t3",
+          "c3"
+        ],
+        "summary": "flowctl setup-mode and the launcher-stamp constants are deleted (stamps tolerated-inert); plan's version-drift check becomes a silent-unless-leftovers nudge; the TUI resolver gains install-location rungs with semver-first cache ordering and a test seam.",
+        "taskIds": [
+          "fn-197-copy-less-installs-resolve-flowctl-from.3"
+        ],
+        "title": "CLI + TUI machinery"
+      },
+      {
+        "files": [
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 49,
+            "path": ".flow/bin/flowctl",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 90,
+            "path": ".flow/bin/flowctl-help.txt",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 70,
+            "path": ".flow/bin/flowctl.cmd",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 51179,
+            "path": ".flow/bin/flowctl.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 181,
+            "path": ".flow/bin/flowctl_bootstrap.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 186,
+            "path": ".flow/bin/flowctl_tracker/MANIFEST.json",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 25,
+            "path": ".flow/bin/flowctl_tracker/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 127,
+            "path": ".flow/bin/flowctl_tracker/attach/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 425,
+            "path": ".flow/bin/flowctl_tracker/attach/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 249,
+            "path": ".flow/bin/flowctl_tracker/classify.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 420,
+            "path": ".flow/bin/flowctl_tracker/config_lock.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 155,
+            "path": ".flow/bin/flowctl_tracker/credentials.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 101,
+            "path": ".flow/bin/flowctl_tracker/envelope.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 372,
+            "path": ".flow/bin/flowctl_tracker/executor.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 140,
+            "path": ".flow/bin/flowctl_tracker/facade/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 2053,
+            "path": ".flow/bin/flowctl_tracker/facade/chart_projection.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 468,
+            "path": ".flow/bin/flowctl_tracker/facade/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 1348,
+            "path": ".flow/bin/flowctl_tracker/facade/ops.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 279,
+            "path": ".flow/bin/flowctl_tracker/facade/projections.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 136,
+            "path": ".flow/bin/flowctl_tracker/facade/steps.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 106,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 347,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/helpers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 149,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/linkstate.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 235,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 828,
+            "path": ".flow/bin/flowctl_tracker/lifecycle/verbs.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 25,
+            "path": ".flow/bin/flowctl_tracker/providers/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 64,
+            "path": ".flow/bin/flowctl_tracker/providers/github.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 195,
+            "path": ".flow/bin/flowctl_tracker/providers/gitlab.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 269,
+            "path": ".flow/bin/flowctl_tracker/providers/jira.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 188,
+            "path": ".flow/bin/flowctl_tracker/providers/linear.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 90,
+            "path": ".flow/bin/flowctl_tracker/question_claim.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 995,
+            "path": ".flow/bin/flowctl_tracker/relate/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 207,
+            "path": ".flow/bin/flowctl_tracker/relate/ledger.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 322,
+            "path": ".flow/bin/flowctl_tracker/relate/listing.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 942,
+            "path": ".flow/bin/flowctl_tracker/relate/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 381,
+            "path": ".flow/bin/flowctl_tracker/resolve_verb.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 459,
+            "path": ".flow/bin/flowctl_tracker/resolved_cache.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 169,
+            "path": ".flow/bin/flowctl_tracker/states.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 65,
+            "path": ".flow/bin/flowctl_tracker/status/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 463,
+            "path": ".flow/bin/flowctl_tracker/status/policy.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 679,
+            "path": ".flow/bin/flowctl_tracker/status/providers.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 587,
+            "path": ".flow/bin/flowctl_tracker/status/verb.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 478,
+            "path": ".flow/bin/flowctl_tracker/subjects.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 767,
+            "path": ".flow/bin/flowctl_tracker/syncbody/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 140,
+            "path": ".flow/bin/flowctl_tracker/types.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 837,
+            "path": ".flow/bin/flowctl_tracker/wire/__init__.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 349,
+            "path": ".flow/bin/flowctl_tracker/wire/github.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 384,
+            "path": ".flow/bin/flowctl_tracker/wire/gitlab.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 503,
+            "path": ".flow/bin/flowctl_tracker/wire/jira.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 660,
+            "path": ".flow/bin/flowctl_tracker/wire/linear.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 226,
+            "path": ".flow/templates/spec.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 161,
+            "path": ".flow/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": ".gitattributes",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 12,
+            "path": ".github/workflows/test-flow-next.yml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 22,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 37,
+            "path": "CLAUDE.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/scripts/ralph_e2e_rp_test.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 9,
+            "path": "plugins/flow-next/scripts/ralph_e2e_short_rp_test.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "ruff.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 6,
+            "path": "scripts/gen_tracker_manifest.py",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 4,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t4",
+          "c4"
+        ],
+        "summary": "flow-next's own tracked .flow/bin, spec-template and usage copies are deleted; every dual-copy ritual, parity test and CI trigger retargets; scripts/ is the single source.",
+        "taskIds": [
+          "fn-197-copy-less-installs-resolve-flowctl-from.4"
+        ],
+        "title": "The repo eats its own dog food"
+      },
+      {
+        "files": [
+          {
+            "additions": 27,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "CHANGELOG.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 6,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "agent_docs/adding-skills.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "agent_docs/conduct/setup.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 12,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 11,
+            "path": "agent_docs/local-dev.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "agent_docs/releasing.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "canonical",
+            "changeType": "deleted",
+            "deletions": 47,
+            "path": "agent_docs/setup-modes.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 38,
+            "attentionClass": "canonical",
+            "changeType": "added",
+            "deletions": 0,
+            "path": "agent_docs/setup.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 4,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/agents/docs-gap-scout.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/agents/quality-auditor.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 5,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/agents/repo-scout.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/agents/worker.toml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/codex/references/spec-template-discovery.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-audit/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-audit/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-capture/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-capture/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-capture/references/tracker-integration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-capture/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/references/briefing-and-reopen.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/references/chart-mode.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/references/re-entry.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/references/work-mode.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-chart/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-deps/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-export-context/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-guide/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-impl-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-interview/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-interview/references/post-write-back.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-interview/references/write-back.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-land/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-land/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-make-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-map/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-map/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-memory-migrate/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-memory-migrate/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-pilot/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan-review/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 15,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-plan/steps.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-prime/classification.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-prime/stacks.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-prime/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-prospect/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-prospect/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-qa/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-qa/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 15,
+            "path": "plugins/flow-next/codex/skills/flow-next-ralph-init/templates/ralph.sh",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-resolve-pr/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-resolve-pr/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 18,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/templates/agents-md-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 0,
+            "attentionClass": "generated",
+            "changeType": "deleted",
+            "deletions": 12,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/templates/claude-md-snippet-plugin.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 18,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/templates/claude-md-snippet.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 61,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 96,
+            "path": "plugins/flow-next/codex/skills/flow-next-setup/workflow.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-spec-completion-review/workflow-common.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-strategy/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-sync/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/codex/skills/flow-next-tracker-sync/references/status-sync.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-visual/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/phases.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next-work/references/spec-id-mint.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 0,
+            "path": "plugins/flow-next/codex/skills/flow-next/SKILL.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/codex/templates/spec.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 21,
+            "attentionClass": "generated",
+            "changeType": "modified",
+            "deletions": 23,
+            "path": "plugins/flow-next/codex/templates/usage.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/commands/uninstall.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/README.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 2,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 2,
+            "path": "plugins/flow-next/docs/architecture.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 5,
+            "path": "plugins/flow-next/docs/ci-workflow-example.yml",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 10,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 29,
+            "path": "plugins/flow-next/docs/flowctl.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/memory-schema.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 3,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 3,
+            "path": "plugins/flow-next/docs/orchestration.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 25,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 38,
+            "path": "plugins/flow-next/docs/platforms.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/ralph.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 7,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 8,
+            "path": "plugins/flow-next/docs/spec-template.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 1,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 1,
+            "path": "plugins/flow-next/docs/sync-codex.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 14,
+            "path": "plugins/flow-next/docs/troubleshooting.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          },
+          {
+            "additions": 11,
+            "attentionClass": "canonical",
+            "changeType": "modified",
+            "deletions": 7,
+            "path": "plugins/flow-next/references/spec-template-discovery.md",
+            "rIds": [],
+            "sourceRefs": [
+              "d"
+            ],
+            "summary": "Part of this step's surface (see group summary).",
+            "taskIds": []
+          }
+        ],
+        "kind": "step",
+        "ordinal": 5,
+        "rIds": [],
+        "sourceRefs": [
+          "s-spec",
+          "d",
+          "t5",
+          "c5"
+        ],
+        "summary": "Platforms, troubleshooting, setup contributor doc (renamed), README surfaces and CHANGELOG tell the one-mode story; the spec-template cascade converges to three tiers; the codex mirror regenerates with the CODEX_HOME-first ladder.",
+        "taskIds": [
+          "fn-197-copy-less-installs-resolve-flowctl-from.5"
+        ],
+        "title": "Docs sweep and the mirror"
+      }
+    ],
+    "proof": [
+      {
+        "label": "Tasks",
+        "sourceRefs": [
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5",
+          "t6"
+        ],
+        "value": "6/6 done"
+      },
+      {
+        "label": "Acceptance",
+        "sourceRefs": [
+          "s-spec"
+        ],
+        "value": "7/7 spec-level items met (completion review)"
+      },
+      {
+        "label": "Full gate",
+        "sourceRefs": [
+          "d"
+        ],
+        "value": "189 test files, 4369 tests, 0 failures; ruff clean; bun test 384/384; mirror idempotent"
+      },
+      {
+        "label": "Net",
+        "sourceRefs": [
+          "d"
+        ],
+        "value": "255 files, ~70k lines deleted (copies + retired machinery)"
+      }
+    ],
+    "thesis": "Installs go copy-less: every host resolves flowctl from the plugin install via a three-rung chain (env probe, plugin root derived from the loading skill's own path, .flow/bin backstop), setup collapses to one mode that writes zero copies and offers to delete leftovers, and this repo retires its own tracked dogfood copies - plugin updates never require re-running setup again."
+  },
+  "generatedAt": "2026-08-15T11:14:31.620831+00:00",
+  "headSha": "6419480c21ebc6d0128804af4c80e2811a0c8f5a",
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "s-spec",
+      "kind": "spec",
+      "ref": "fn-197-copy-less-installs-resolve-flowctl-from"
+    },
+    {
+      "id": "d",
+      "kind": "diff_metadata",
+      "ref": "c11bd4a9bf47bb47db3d9a81ad30dcf18c7bdfe3..6419480c21ebc6d0128804af4c80e2811a0c8f5a"
+    },
+    {
+      "id": "t1",
+      "kind": "task",
+      "ref": "fn-197-copy-less-installs-resolve-flowctl-from.1"
+    },
+    {
+      "id": "t2",
+      "kind": "task",
+      "ref": "fn-197-copy-less-installs-resolve-flowctl-from.2"
+    },
+    {
+      "id": "t3",
+      "kind": "task",
+      "ref": "fn-197-copy-less-installs-resolve-flowctl-from.3"
+    },
+    {
+      "id": "t4",
+      "kind": "task",
+      "ref": "fn-197-copy-less-installs-resolve-flowctl-from.4"
+    },
+    {
+      "id": "t5",
+      "kind": "task",
+      "ref": "fn-197-copy-less-installs-resolve-flowctl-from.5"
+    },
+    {
+      "id": "t6",
+      "kind": "task",
+      "ref": "fn-197-copy-less-installs-resolve-flowctl-from.6"
+    },
+    {
+      "id": "c1",
+      "kind": "commit",
+      "ref": "9fedadd96fca2592ddee40c49458f2acf2d70657"
+    },
+    {
+      "id": "c2",
+      "kind": "commit",
+      "ref": "728d4279dd76bda40391e767494a33fb4cec08ef"
+    },
+    {
+      "id": "c3",
+      "kind": "commit",
+      "ref": "f2fc3cb1e262007fb293c012987b08241f39223d"
+    },
+    {
+      "id": "c4",
+      "kind": "commit",
+      "ref": "b25e06039da34ef85efc1d4d9c9c3769050ff039"
+    },
+    {
+      "id": "c5",
+      "kind": "commit",
+      "ref": "840141cc8ae64acb8fd090e433b47dcc9dde9983"
+    }
+  ],
+  "specId": "fn-197-copy-less-installs-resolve-flowctl-from"
+}
