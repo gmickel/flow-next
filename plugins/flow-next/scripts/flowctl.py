@@ -48150,6 +48150,12 @@ def main() -> None:
     _wire_json(p_wire_list)
     p_wire_list.set_defaults(func=cmd_tracker_wire)
 
+    p_wire_states = wire_sub.add_parser(
+        "list-states",
+        help="List tracker workflow states (no locator; linear/jira; read-only)")
+    _wire_json(p_wire_states)
+    p_wire_states.set_defaults(func=cmd_tracker_wire)
+
     p_wire_relations = wire_sub.add_parser(
         "relation-list", help="List normalized dependency relations")
     _wire_locator(p_wire_relations)

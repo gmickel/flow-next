@@ -658,3 +658,32 @@ def list_open(config: dict, execute: Execute) -> Result:
     return {"issues": [_issue_out(i, parent_identity="not_available")
                        for i in nodes],
             "truncated": truncated}
+
+
+def list_states(config: dict, execute: Execute) -> Result:
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    team_id = dest.get("teamId")
+    if not isinstance(team_id, str) or not team_id:
+        return TrackerError(ErrorClass.UNRESOLVED,
+                            "linear destination missing teamId",
+                            subtype="destination")
+    data = _gql(
+        execute, "wire-list-states",
+        "query($team: ID!) { workflowStates(first: 100, "
+        "filter: { team: { id: { eq: $team } } }) { "
+        "nodes { id name type } pageInfo { hasNextPage } } }",
+        {"team": team_id}, idempotent=True)
+    if isinstance(data, TrackerError):
+        return data
+    conn = data.get("workflowStates") if isinstance(data, dict) else None
+    if not isinstance(conn, dict) or not isinstance(conn.get("nodes"), list):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear workflow states response is malformed",
+                            subtype="malformed_body")
+    nodes = conn["nodes"]
+    states = [{"id": n.get("id"), "name": n.get("name"), "type": n.get("type")}
+              for n in nodes if isinstance(n, dict) and n.get("id")]
+    has_next = bool((conn.get("pageInfo") or {}).get("hasNextPage"))
+    return {"states": states, "complete": not has_next}

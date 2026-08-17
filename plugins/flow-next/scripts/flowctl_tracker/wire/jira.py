@@ -501,3 +501,51 @@ def list_open(config: dict, execute: Execute) -> Result:
     return {"issues": [_issue_out(i, parent_identity="not_available")
                        for i in collected],
             "truncated": truncated}
+
+
+def list_states(config: dict, execute: Execute) -> Result:
+    dest = _destination(config)
+    if isinstance(dest, TrackerError):
+        return dest
+    base = _jira_base(config, dest)
+    if isinstance(base, TrackerError):
+        return base
+    raw_key = dest.get("projectKey") or _dict(_dict(config.get("tracker")).get("perTracker")).get("projectKey")
+    if not raw_key:
+        return TrackerError(ErrorClass.UNRESOLVED, "jira projectKey is not resolved",
+                            subtype="destination")
+    key = _jira_project_key(str(raw_key))
+    if isinstance(key, TrackerError):
+        return key
+    api_version = dest.get("apiVersion") or 2
+    out = _jira(execute, "wire-list-states", "GET",
+                f"{base}/rest/api/{api_version}/project/{quote(key, safe='')}/statuses",
+                idempotent=True)
+    if isinstance(out, TrackerError):
+        return out
+    if not isinstance(out, list):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "jira project statuses response is malformed",
+                            subtype="malformed_body")
+    states = []
+    seen = set()
+    for issue_type in out:
+        if not isinstance(issue_type, dict):
+            continue
+        statuses = issue_type.get("statuses")
+        if not isinstance(statuses, list):
+            continue
+        for status in statuses:
+            if not isinstance(status, dict):
+                continue
+            sid = status.get("id")
+            if not sid or str(sid) in seen:
+                continue
+            seen.add(str(sid))
+            cat = status.get("statusCategory")
+            states.append({
+                "id": str(sid),
+                "name": status.get("name"),
+                "type": cat.get("key") if isinstance(cat, dict) else None,
+            })
+    return {"states": states, "complete": True}

@@ -66,14 +66,14 @@ _JIRA_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-[1-9][0-9]*$")
 WIRE_VERBS = (
     "read", "update", "comment-add", "comment-list", "comment-update",
     "comment-delete", "label", "assign", "list-open", "relation-list",
-    "question", "attach", "attach-get",
+    "question", "attach", "attach-get", "list-states",
 )
 WRITE_VERBS = frozenset({
     "update", "comment-add", "comment-update", "comment-delete", "label", "assign",
     "question", "attach",
 })
-#: Verbs that require a parent locator. attach-get and list-open are context-free.
-LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v not in ("list-open", "attach-get"))
+#: Verbs that require a parent locator. attach-get, list-open, and list-states are context-free.
+LOCATOR_VERBS = frozenset(v for v in WIRE_VERBS if v not in ("list-open", "attach-get", "list-states"))
 
 _ACTIVE = frozenset({"github", "gitlab", "linear", "jira"})
 LINEAR_GQL = "https://api.linear.app/graphql"
@@ -701,6 +701,14 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
         return mod.assign(config, parsed, execute, add=add, remove=remove)  # type: ignore[arg-type]
     if verb == "list-open":
         return mod.list_open(config, execute)
+    if verb == "list-states":
+        if provider in ("github", "gitlab"):
+            return TrackerError(
+                ErrorClass.CAPABILITY,
+                f"{provider} has no workflow-state pool; list-states supports "
+                "linear and jira only",
+                subtype="workflow_states")
+        return mod.list_states(config, execute)
     if verb == "relation-list":
         from ..relate import listing as relation_listing  # noqa: PLC0415
         return relation_listing.list_relations(

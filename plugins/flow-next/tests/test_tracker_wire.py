@@ -607,6 +607,162 @@ class ListOpen(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# list-states: context-free workflow-state enumeration (linear/jira; read-only)
+# ---------------------------------------------------------------------------
+
+class ListStates(unittest.TestCase):
+    def test_linear_success_shape(self) -> None:
+        ex = fake_execute({"wire-list-states": ok({"data": {"workflowStates": {
+            "nodes": [
+                {"id": "s1", "name": "Todo", "type": "unstarted"},
+                {"id": "s2", "name": "Done", "type": "completed"},
+            ],
+            "pageInfo": {"hasNextPage": False}}}})})
+        out = W.dispatch("list-states", ln_cfg(), execute=ex)
+        self.assertEqual(out, {
+            "states": [
+                {"id": "s1", "name": "Todo", "type": "unstarted"},
+                {"id": "s2", "name": "Done", "type": "completed"},
+            ],
+            "complete": True,
+        })
+        self.assertEqual(set(out), {"states", "complete"})
+        for state in out["states"]:
+            self.assertEqual(set(state), {"id", "name", "type"})
+
+    def test_linear_truncated_is_success_with_complete_false(self) -> None:
+        page = {
+            "nodes": [{"id": "s1", "name": "Todo", "type": "unstarted"}],
+            "pageInfo": {"hasNextPage": True},
+        }
+        responses = {"wire-list-states": ok({"data": {"workflowStates": page}})}
+        out = W.dispatch("list-states", ln_cfg(), execute=fake_execute(responses))
+        self.assertEqual(out["states"], [
+            {"id": "s1", "name": "Todo", "type": "unstarted"},
+        ])
+        self.assertIs(out["complete"], False)
+        self.assertEqual(set(out), {"states", "complete"})
+
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp)
+            (flow / "config.json").write_text(
+                json.dumps(ln_cfg()), encoding="utf-8")
+            payload, code = W.run(
+                flow, "list-states",
+                execute=fake_execute(responses))
+            self.assertEqual(code, 0)
+            data = json.loads(payload)
+            self.assertIs(data["success"], True)
+            self.assertIs(data["data"]["complete"], False)
+            self.assertEqual(data["data"]["states"], [
+                {"id": "s1", "name": "Todo", "type": "unstarted"},
+            ])
+
+    def test_jira_success_dedups_by_id_and_is_complete(self) -> None:
+        ex = fake_execute({"wire-list-states": ok([
+            {"name": "Task", "statuses": [
+                {"id": "1", "name": "To Do",
+                 "statusCategory": {"key": "new"}},
+                {"id": "3", "name": "Done",
+                 "statusCategory": {"key": "done"}},
+            ]},
+            {"name": "Bug", "statuses": [
+                {"id": "1", "name": "To Do",
+                 "statusCategory": {"key": "new"}},
+            ]},
+        ])})
+        out = W.dispatch("list-states", jr_cfg(), execute=ex)
+        self.assertEqual(out, {
+            "states": [
+                {"id": "1", "name": "To Do", "type": "new"},
+                {"id": "3", "name": "Done", "type": "done"},
+            ],
+            "complete": True,
+        })
+        self.assertEqual(set(out), {"states", "complete"})
+        for state in out["states"]:
+            self.assertEqual(set(state), {"id", "name", "type"})
+        self.assertTrue(str(ex.calls[0].url_or_argv).endswith(
+            "/rest/api/2/project/SCRUM/statuses"))
+
+    def test_github_and_gitlab_refuse_before_transport(self) -> None:
+        for name, cfg in (("github", gh_cfg()), ("gitlab", gl_cfg())):
+            with self.subTest(provider=name):
+                ex = fake_execute({})
+                out = W.dispatch("list-states", cfg, execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.CAPABILITY)
+                self.assertEqual(out.subtype, "workflow_states")
+                self.assertEqual(ex.calls, [])
+
+    def test_unresolved_destination_makes_no_transport_call(self) -> None:
+        ln_missing = ln_cfg()
+        ln_missing["tracker"].pop("resolved")
+        ln_no_team = ln_cfg()
+        ln_no_team["tracker"]["resolved"]["destination"].pop("teamId")
+        jr_no_key = jr_cfg()
+        jr_no_key["tracker"]["resolved"]["destination"].pop("projectKey")
+        jr_no_key["tracker"]["perTracker"].pop("projectKey")
+        cases = (
+            ("linear-missing-destination", ln_missing),
+            ("linear-missing-teamId", ln_no_team),
+            ("jira-missing-projectKey", jr_no_key),
+        )
+        for label, cfg in cases:
+            with self.subTest(case=label):
+                ex = fake_execute({})
+                out = W.dispatch("list-states", cfg, execute=ex)
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+                self.assertEqual(ex.calls, [])
+
+    def test_malformed_body_is_transport(self) -> None:
+        cases = (
+            ("linear", ln_cfg(), {"wire-list-states": ok(
+                {"data": {"workflowStates": "nope"}})}),
+            ("jira", jr_cfg(), {"wire-list-states": ok({"not": "a list"})}),
+        )
+        for name, cfg, responses in cases:
+            with self.subTest(provider=name):
+                out = W.dispatch("list-states", cfg,
+                                 execute=fake_execute(responses))
+                self.assertIsInstance(out, TrackerError)
+                self.assertIs(out.cls, ErrorClass.TRANSPORT)
+                self.assertEqual(out.subtype, "malformed_body")
+
+    def test_run_writes_no_flow_files_on_success_truncated_or_error(self) -> None:
+        ln_ok = {"wire-list-states": ok({"data": {"workflowStates": {
+            "nodes": [{"id": "s1", "name": "Todo", "type": "unstarted"}],
+            "pageInfo": {"hasNextPage": False}}}})}
+        ln_trunc = {"wire-list-states": ok({"data": {"workflowStates": {
+            "nodes": [{"id": "s1", "name": "Todo", "type": "unstarted"}],
+            "pageInfo": {"hasNextPage": True}}}})}
+        ln_bad = {"wire-list-states": ok({"data": {"workflowStates": "nope"}})}
+        cases = (
+            ("success", ln_cfg(), ln_ok),
+            ("truncated", ln_cfg(), ln_trunc),
+            ("capability", gh_cfg(), {}),
+            ("malformed", ln_cfg(), ln_bad),
+        )
+        for label, cfg, responses in cases:
+            with self.subTest(outcome=label):
+                with tempfile.TemporaryDirectory() as tmp:
+                    flow = Path(tmp)
+                    (flow / "config.json").write_text(
+                        json.dumps(cfg), encoding="utf-8")
+                    before_cfg = (flow / "config.json").read_bytes()
+                    before_tree = sorted(
+                        p.relative_to(flow) for p in flow.rglob("*"))
+                    W.run(flow, "list-states",
+                          execute=fake_execute(responses))
+                    self.assertEqual(
+                        (flow / "config.json").read_bytes(), before_cfg)
+                    after_tree = sorted(
+                        p.relative_to(flow) for p in flow.rglob("*"))
+                    self.assertEqual(after_tree, before_tree)
+
+
+# ---------------------------------------------------------------------------
 # All verbs × 4 providers (happy path via fake transport)
 # ---------------------------------------------------------------------------
 
