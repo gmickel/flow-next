@@ -3518,3 +3518,94 @@ class TestEveryCanonicalTaskMustBeVisible(unittest.TestCase):
                 )
 
 
+
+
+class TestRefundedJournalNeverWedges(_JournalReplayBase):
+    """fn-199.4: a refunded (no-verdict) record must never leave a journal
+    that cannot complete. Pre-fix, transport-failure journals carried pending
+    receipt/digest legs, but receipt publication and the digest backfill are
+    verdict-only by design, so the journal wedged every later increment on
+    REPLAY_REQUIRED - unrecoverable even via spec reset-review-rounds."""
+
+    def _record_transport_failure(self, reservation_id: str, target: Path) -> dict:
+        return flowctl.record_review_attempt(
+            self.spec_id,
+            "plan",
+            backend="host",
+            output="reviewer prose that never emits the verdict tag",
+            verdict=None,
+            review_type="plan",
+            reservation_id=reservation_id,
+            receipt_target=str(target),
+            receipt_payload=self._payload(),
+        )
+
+    def test_transport_failure_record_completes_its_own_journal(self):
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        self._record_transport_failure(reservation_id, target)
+
+        # The refund is fully recorded on the attempt row; nothing publishable
+        # remains, so the journal is completed and cleaned by record itself.
+        self.assertFalse(self._journal_path(reservation_id).exists())
+        row = self._data()["review_attempts"][-1]
+        self.assertEqual(row["outcome"], "transport_failure")
+        self.assertIsNone(row["verdict"])
+        self.assertFalse(row["round_consumed"])
+        for leg in ("receipt", "digest"):
+            self.assertEqual(row["finalized"][leg], "not_applicable")
+        # No receipt is published for a refunded round - a receipt asserts a
+        # delivered verdict, and none was parsed.
+        self.assertFalse(target.exists())
+
+        # The scope is not wedged: the next dispatch reserves cleanly.
+        next_reservation = self._reserve()
+        self.assertTrue(next_reservation)
+
+    def test_prefix_wedged_refund_journal_self_heals_on_increment(self):
+        """A journal written by the pre-fix code (pending legs, no verdict)
+        self-heals on the next increment instead of REPLAY_REQUIRED forever."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        with mock.patch.object(flowctl, "_cleanup_review_journal"):
+            self._record_transport_failure(reservation_id, target)
+
+        journal_path = self._journal_path(reservation_id)
+        self.assertTrue(journal_path.exists())
+        journal = json.loads(journal_path.read_text())
+        # Reconstruct the exact pre-fix wedge: pending receipt/digest legs on a
+        # refunded journal, no cleanup marker, and the sidecar row matching.
+        journal["finalized"] = {
+            "receipt": "pending", "digest": "pending",
+            "status": "not_applicable",
+        }
+        journal.pop("cleanup", None)
+        journal_path.write_text(json.dumps(journal))
+        spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        spec_data = json.loads(spec_path.read_text())
+        for row in spec_data["review_attempts"]:
+            if row.get("reservation_id") == reservation_id:
+                row["finalized"] = {
+                    "receipt": "pending", "digest": "pending",
+                    "status": "not_applicable",
+                }
+        spec_path.write_text(json.dumps(spec_data))
+
+        # Pre-fix this raised SystemExit(2) REPLAY_REQUIRED forever. Now the
+        # no-verdict journal's pending legs retire, the journal completes and
+        # is cleaned, and a reservation is eventually granted.
+        first = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan",
+            artifact_sha256="b" * 64, return_reservation=True,
+        )
+        self.assertFalse(journal_path.exists())
+        reservation = first[1] if isinstance(first, tuple) else None
+        if not reservation:
+            _, reservation = flowctl.enforce_and_increment_review_cap(
+                self.spec_id, "plan", review_type="plan",
+                artifact_sha256="c" * 64, return_reservation=True,
+            )
+        self.assertTrue(reservation)
+        row = json.loads(spec_path.read_text())["review_attempts"][0]
+        for leg in ("receipt", "digest"):
+            self.assertEqual(row["finalized"][leg], "not_applicable")

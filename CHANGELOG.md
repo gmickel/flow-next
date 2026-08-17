@@ -50,6 +50,19 @@ All notable changes to the flow-next.
   purpose: land squash-merges, so an ancestry count would read fully-shipped
   work as unshipped. A missing `headRefOid` or rev-parse failure keeps today's
   `NEEDS_HUMAN`. Thanks @sn-furali for the report (#355).
+- **A failed review round can no longer wedge every future review of that
+  spec.** When a review backend returned no parseable verdict, flowctl
+  correctly refunded the round - but left behind a finalization journal whose
+  bookkeeping could never complete (receipt publication and findings attach
+  are reserved for delivered verdicts, by design). Every later dispatch on
+  that scope then refused with `REPLAY_REQUIRED`, and even
+  `flowctl spec reset-review-rounds` could not clear it - the only way out was
+  hand-editing `.flow` state. A refunded round now finishes its own
+  bookkeeping on the spot (the attempt ledger remains the full record of the
+  refund; no receipt is fabricated for a verdict that never arrived), and
+  repos already carrying a wedged journal from an earlier version self-heal on
+  their next review dispatch. Found dogfooding this release's own review
+  pipeline.
 
 ### Docs
 

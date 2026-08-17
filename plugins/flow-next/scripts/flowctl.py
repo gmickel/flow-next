@@ -10293,6 +10293,17 @@ def _complete_review_journal(
     progress = _journal_progress(journal)
     receipt_superseded = False
     digest_backfill: Optional[tuple[dict, Optional[dict]]] = None
+    if journal.get("verdict") is None and journal.get("outcome") != "verdict":
+        # Self-heal for pre-fix journals from refunded (no-verdict) rows: they
+        # were written with pending receipt/digest legs, but a refund publishes
+        # nothing - the digest backfill fail-closes on transport rows by design
+        # and the receipt would assert a verdict flowctl never parsed. Left
+        # pending, the journal can never complete and every later increment
+        # dies REPLAY_REQUIRED. Retire the legs; the attempt row already holds
+        # the full refund record.
+        for leg in ("receipt", "digest"):
+            if progress.get(leg) == "pending":
+                progress[leg] = "not_applicable"
     if progress["digest"] == "pending":
         # Validate now, before receipt publication.  The caller has the
         # sidecar lock, so this also makes attach's fail-closed matrix a zero-
@@ -10788,14 +10799,21 @@ def _record_review_attempt_locked(
     if reservation_id:
         journal_path = _review_journal_path(flow_dir, reservation_id)
         journal_receipt = receipt_target and isinstance(receipt_payload, dict)
+        # Refunded rows publish NOTHING: a receipt is delivered-verdict
+        # evidence, and the digest backfill fail-closes on transport rows by
+        # design (`_journal_digest_backfill_row`). A pending receipt/digest leg
+        # on a no-verdict journal therefore can never complete and wedges every
+        # later increment on REPLAY_REQUIRED - the attempt row alone is the
+        # durable record of a refund.
+        journal_publishes = journal_receipt and outcome == "verdict"
         progress = {
-            "receipt": "pending" if journal_receipt else "not_applicable",
+            "receipt": "pending" if journal_publishes else "not_applicable",
             # In-process callers hand their already-built container/digest in
             # before finalization. RP builds the same container here and the
             # attach/replay fence backfills its digest under the sidecar lock.
             "digest": (
                 "complete" if findings_built
-                else "pending" if journal_receipt
+                else "pending" if journal_publishes
                 else "not_applicable"
             ),
             "status": (
