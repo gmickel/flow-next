@@ -687,16 +687,23 @@ class ListStates(unittest.TestCase):
         self.assertIs(out.cls, ErrorClass.TRANSPORT)
         self.assertEqual(out.subtype, "malformed_body")
 
-    def test_jira_success_dedups_by_id_and_is_complete(self) -> None:
+    def test_jira_success_scopes_to_resolved_issue_type_and_is_complete(
+            self) -> None:
+        # destination.statusIds is pinned to issueTypeId (10001 in jr_cfg) -
+        # the Bug type's extra status must NOT leak into the answer, or the
+        # documented liveness check would validate a status that never
+        # applied to the pinned type.
         ex = fake_execute({"wire-list-states": ok([
-            {"name": "Task", "statuses": [
+            {"id": "10001", "name": "Task", "statuses": [
                 {"id": "1", "name": "To Do",
                  "statusCategory": {"key": "new"}},
                 {"id": "3", "name": "Done",
                  "statusCategory": {"key": "done"}},
             ]},
-            {"name": "Bug", "statuses": [
+            {"id": "10002", "name": "Bug", "statuses": [
                 {"id": "1", "name": "To Do",
+                 "statusCategory": {"key": "new"}},
+                {"id": "7", "name": "Triage",
                  "statusCategory": {"key": "new"}},
             ]},
         ])})
@@ -714,11 +721,38 @@ class ListStates(unittest.TestCase):
         self.assertTrue(str(ex.calls[0].url_or_argv).endswith(
             "/rest/api/2/project/SCRUM/statuses"))
 
+    def test_jira_missing_issue_type_id_is_unresolved_no_transport_call(
+            self) -> None:
+        # NEVER "first entry": without the pinned issue type the answer
+        # would be some other type's workflow.
+        cfg = jr_cfg()
+        cfg["tracker"]["resolved"]["destination"].pop("issueTypeId")
+        ex = fake_execute({})
+        out = W.dispatch("list-states", cfg, execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+        self.assertEqual(out.subtype, "statusIds")
+        self.assertEqual(ex.calls, [])
+
+    def test_jira_no_entry_for_issue_type_is_unresolved(self) -> None:
+        # The pinned type vanished from the project (type retired /
+        # destination stale) - refuse rather than answer from another type.
+        ex = fake_execute({"wire-list-states": ok([
+            {"id": "10002", "name": "Bug", "statuses": [
+                {"id": "1", "name": "To Do",
+                 "statusCategory": {"key": "new"}},
+            ]},
+        ])})
+        out = W.dispatch("list-states", jr_cfg(), execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.UNRESOLVED)
+        self.assertEqual(out.subtype, "statusIds")
+
     def test_jira_malformed_status_entry_is_transport_never_a_short_list(
             self) -> None:
         # Same guarantee as the Linear twin: broken entries fail loudly.
         ex = fake_execute({"wire-list-states": ok([
-            {"name": "Task", "statuses": [
+            {"id": "10001", "name": "Task", "statuses": [
                 {"id": "1", "name": "To Do",
                  "statusCategory": {"key": "new"}},
                 {"name": "orphan without id"},

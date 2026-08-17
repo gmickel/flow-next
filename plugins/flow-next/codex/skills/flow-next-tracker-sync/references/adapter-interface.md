@@ -72,7 +72,7 @@ normalization, and deduplication.
 | `label` | locator, add/remove names | normalized labels | none |
 | `assign` | locator, add/remove ids | normalized assignees | none |
 | `list-open` | resolved ready lane | normalized issue list | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board; fn-182 #311) |
-| `list-states` | resolved destination (no locator) | exhaustive `{"states": [...], "complete": bool}` | none (read-only; linear/jira; never local state) |
+| `list-states` | resolved destination (no locator) | exhaustive `{"states": [...], "complete": bool}` (Jira: scoped to the resolved `issueTypeId`, matching `statusIds`) | none (read-only; linear/jira; never local state) |
 | `attach` | locator, file | attachment metadata | none |
 | `attach-get` | attachment id, output path | retrieved metadata | output file only |
 

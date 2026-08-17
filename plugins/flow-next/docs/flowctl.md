@@ -1477,7 +1477,9 @@ is not part of the hash. `attach` and `attach-get` are capability-gated.
 and Jira; GitHub/GitLab have no workflow-state pool and return a typed
 `capability` error (subtype `workflow_states`) naming Linear and Jira; an
 unresolved destination (`teamId` / `projectKey`) returns `unresolved` with no
-partial output. `complete` distinguishes a provably full listing from a
+partial output. Jira scopes the answer to the resolved `issueTypeId` (the same
+scoping as `statusIds`); a missing or unmatched issue type returns
+`unresolved`, never another type's workflow. `complete` distinguishes a provably full listing from a
 truncated one: Linear returns the first page (100 states) and reports `complete: false`
 when `hasNextPage` is set (partial `states`, exit 0 - the caller decides to
 refuse); Jira's `/rest/api/2/project/<key>/statuses` endpoint is unpaginated,

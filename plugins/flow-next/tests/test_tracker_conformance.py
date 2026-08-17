@@ -513,7 +513,7 @@ class ConformanceMatrix(unittest.TestCase):
                                "type": "unstarted"}],
                     "pageInfo": {"hasNextPage": False}}}})}, False),
             ("jira", jr_cfg(), {"wire-list-states": ok([{
-                "name": "Task",
+                "id": "10001", "name": "Task",
                 "statuses": [{"id": "1", "name": "To Do",
                               "statusCategory": {"key": "new"}}],
             }])}, False),
