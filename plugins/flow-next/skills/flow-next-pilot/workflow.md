@@ -351,7 +351,7 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
-| all tasks done and completion is ship-or-ungated | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **closed/merged/probe-failed/missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
+| all tasks done and completion is ship-or-ungated | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **merged only + unshipped commits** → `make-pr`; **merged with none / closed / probe-failed / missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
 
 A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
 
@@ -371,10 +371,10 @@ MERGED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "MERG
 Classification outcomes for the all-done branch (the all-done invariant: an all-done / completion-`ship` spec lacking a **merged** PR is *unfinished from the board's perspective* — pilot keeps driving it (`make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`):
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
-- OPEN PR exists (and no MERGED PR): this spec is **deferred to land** — land owns the open PR, not pilot — so record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the tick terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
+- OPEN PR exists: this spec is **deferred to land** — land owns the open PR, not pilot — so record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the tick terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
 - No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` (the optional QA stage runs before make-pr); otherwise `make-pr`. This is the FLOW-15 case (all-done, no PR — make-pr never ran or its PR was lost); **it always classifies `qa` or `make-pr`**, and a fall-through to `NO_WORK` here has broken this.
 - CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
-- MERGED PR exists while the spec is still open: `NEEDS_HUMAN`, because the state is inconsistent and pilot must not create a second PR.
+- MERGED PR(s) exist, spec still open, and no OPEN PR: check for unshipped work with `git rev-list --count <default-branch>..<branch_name>` (default branch: local `main`, else `master`). Non-zero: not an inconsistency - merged gate PRs on a reused branch; classify `make-pr` and proceed (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). Zero: `NEEDS_HUMAN` (a merged PR with nothing new and an open spec is the genuinely inconsistent state). rev-list failure (unknown base): `NEEDS_HUMAN`, unchanged.
 
 Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
 
@@ -407,11 +407,11 @@ Matrix:
 | stage is `qa` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` (all-done with no branch is the same inconsistency as the make-pr row; QA never silently skips) |
 | stage is `make-pr` and branch exists | `git checkout <branch_name>`; make-pr auto-detects the spec from the branch |
 | stage is `make-pr` and branch absent | `NEEDS_HUMAN`, reason `all tasks done but spec branch missing — inconsistent state` |
-| stage is `plan` or `plan-review` | `git checkout` the default branch (local `main`, else `master`) |
+| stage is `plan` or `plan-review` | Probe the current branch for an OPEN PR: `gh pr list --head "$(git branch --show-current)" --state open`. No open PR (including a fresh worktree branch or the default branch itself): stay on the current branch and dispatch. An open PR exists: `git checkout` the default branch (local `main`, else `master`); if that checkout fails (e.g. another worktree holds it), `NEEDS_HUMAN` naming the branch and the reason. Probe failure (gh unavailable or errors): attempt the default-branch checkout; if it fails, `NEEDS_HUMAN` (fail-safe: never plan onto a branch whose PR status is unknown). |
 
-The plan/plan-review checkout matters in multi-spec loops: a prior tick's make-pr leaves the worktree on that spec's PR branch, and planning state written there would mutate the already-open PR.
+The invariant is that planning state is never written onto a branch with an open PR; the open-PR probe enforces it, wherever the tick runs (shared checkout or secondary worktree).
 
-If branch checkout fails (any matrix row, including the default-branch checkout), stop with `NEEDS_HUMAN`; do not dispatch and do not strike.
+If an attempted checkout fails (any attempted checkout in the matrix, including the open-PR fallback to the default branch), stop with `NEEDS_HUMAN`; do not dispatch and do not strike.
 
 Done when: the worktree is on the branch this stage's matrix row names, or the tick has already terminated `NEEDS_HUMAN` without dispatching.
 
@@ -666,13 +666,13 @@ PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="dep wait — blocked by <d
 
 (A circular/unsatisfiable dep does NOT reach here — Phase 1e routes it to `ASKED` instead. This terminal is for the plain acyclic dep wait only.)
 
-Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR, merged-PR-but-open-spec, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
+Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR, merged-PR-with-no-unshipped-commits, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
 
 ```text
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
 ```
 
-An all-done spec with an **open** PR is *not* crash-class — it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged, missing-branch, and merged-but-open-spec all-done states are `NEEDS_HUMAN`. An all-done spec with **no** PR is never terminal at all — it classifies `make-pr` and dispatches.
+An all-done spec with an **open** PR is *not* crash-class — it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged, missing-branch, and merged-with-zero-unshipped-commits all-done states are `NEEDS_HUMAN`; merged + unshipped commits classifies `make-pr`. An all-done spec with **no** PR is never terminal at all — it classifies `make-pr` and dispatches.
 
 Terminal verdict when no spec was dispatched, split by why. **The two cases stay distinct** — a tick that reported an all-done-with-open-PR spec as `NO_WORK` has broken this:
 
