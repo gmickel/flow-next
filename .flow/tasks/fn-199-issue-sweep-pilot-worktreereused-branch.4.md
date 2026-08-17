@@ -17,6 +17,6 @@ Fixed the review-round wedge found while dogfooding this spec's own pipeline: a 
 
 stage: impl-review - ran (model: claude-fable-5, host backend, round 1 SHIP; considers 1-3 applied, 4 declined - a payload cross-check would recreate an unrecoverable wedge for corrupted journals)
 ## Evidence
-- Commits: c208a1db, 1921f086, consider-polish commit (see git log)
+- Commits: c208a1db, 1921f086, 99aeb472
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_journal test_review_convergence_cap test_tracker_distribution test_startup_bootstrap -q (353 tests OK), regression tests verified to FAIL against pre-fix flowctl (scratch layout, 1 failure + 1 error), python3 scripts/run_tests_parallel.py (4381 tests OK) + uvx ruff@0.16.0 check . (clean), ./scripts/sync-codex.sh x2 (idempotent) + gen_tracker_manifest.py
 - PRs: https://github.com/gmickel/flow-next/pull/358
