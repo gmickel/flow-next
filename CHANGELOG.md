@@ -4,6 +4,53 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+
+- **Ask a tracker which workflow states exist - without risking your config.**
+  `flowctl tracker wire list-states [--json]` (Linear + Jira) enumerates the
+  destination's workflow states read-only, so consumers can answer "does every
+  configured state id still name a live state?" without building a second
+  tracker client - and without `tracker resolve`, whose job is to repair and
+  *write* `tracker.resolved` (in one reported case moving a hand-picked
+  `stateIds.done` off the team's chosen state). Output is the exhaustive
+  `{"states": [{"id","name","type"}], "complete": bool}` shape: `complete`
+  provably distinguishes a full listing from a truncated one (a truncated
+  listing returns the partial states with `complete: false` and exit 0 - the
+  caller decides to refuse), a malformed or id-less state node is a typed
+  transport error on both providers rather than a silently shrunken list, and
+  GitHub/GitLab - which have no workflow-state pool - return a typed
+  capability error instead of an invented projection. No code path writes
+  `.flow/config.json` or any `.flow/` file. Thanks @sn-furali for the report
+  (#356).
+
+### Fixed
+
+- **Pilot now composes with git worktrees.** Pilot's `plan` / `plan-review`
+  stages hard-required checking out the default branch - but git allows a
+  branch in exactly one worktree, so following the Worktree Kit's own
+  one-worktree-per-spec guidance killed every tick with `NEEDS_HUMAN` before
+  dispatch. The branch matrix now enforces the property the old rule was
+  standing in for: never write planning state onto a branch with an open PR.
+  No open PR on the current branch (a fresh worktree branch, or the default
+  branch itself): stay and dispatch. Open PR: fall back to the default-branch
+  checkout, and report `NEEDS_HUMAN` (naming the branch and reason) only when
+  that fallback fails. A failed PR probe degrades to the checkout attempt -
+  fail-safe, never planning onto an unknown-status branch. Thanks @sn-furali
+  for the report (#354).
+- **Reused branches with merged gate PRs no longer dead-end pilot.** The
+  all-done classification treated any MERGED PR on a still-open spec as
+  `NEEDS_HUMAN` - contradicting make-pr's own rule that closed/merged PRs on a
+  reused branch must not trigger refusal, and stranding teams that open one PR
+  per gate (capture, plan, plan-review, then work). Pilot now uses head
+  identity: merged PRs with unshipped commits on the branch (branch head
+  differs from the newest merged PR's `headRefOid`) classify as
+  make-pr-eligible; `NEEDS_HUMAN` is kept exactly when the branch head equals
+  the newest merged PR head - a merged PR with nothing new and an open spec is
+  the genuinely inconsistent state. Head identity, not ancestry counting, on
+  purpose: land squash-merges, so an ancestry count would read fully-shipped
+  work as unshipped. A missing `headRefOid` or rev-parse failure keeps today's
+  `NEEDS_HUMAN`. Thanks @sn-furali for the report (#355).
+
 ### Docs
 
 - **Pipeline variations — pick stages by risk and unknowns, never by size.** A new

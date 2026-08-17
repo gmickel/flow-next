@@ -72,11 +72,15 @@ normalization, and deduplication.
 | `label` | locator, add/remove names | normalized labels | none |
 | `assign` | locator, add/remove ids | normalized assignees | none |
 | `list-open` | resolved ready lane | normalized issue list | Linear, unset `tracker.readyState`: `unresolved`/`ready_state` refusal (treat as no-ready-lane, not empty board; fn-182 #311) |
+| `list-states` | resolved destination (no locator) | exhaustive `{"states": [...], "complete": bool}` | none (read-only; linear/jira; never local state) |
 | `attach` | locator, file | attachment metadata | none |
 | `attach-get` | attachment id, output path | retrieved metadata | output file only |
 
-Pagination is exhausted inside the adapter. Consumers never receive a provider
-cursor or page token.
+Pagination is exhausted inside the adapter, with one sanctioned exception -
+`list-states` returns a single page plus an explicit `complete` completeness
+signal instead of draining pagination internally, on both providers
+(`complete: false` marks a truncated listing; the caller decides to refuse).
+Consumers still never receive a provider cursor or page token.
 
 ## Lifecycle verbs
 
