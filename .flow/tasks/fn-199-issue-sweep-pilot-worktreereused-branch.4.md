@@ -13,9 +13,10 @@ Tests (G2): transport-failure record leaves no journal and a follow-up increment
 A no-verdict record completes its own journal (no .flow/review-runs residue) and never blocks later increments; an existing wedged journal self-heals on the next increment; both behaviors test-pinned. fn-197 artifact + lock removed from the branch. CHANGELOG Unreleased updated. Manifest regen + sync-codex idempotent + full suite + ruff green.
 
 ## Done summary
-TBD
+Fixed the review-round wedge found while dogfooding this spec's own pipeline: a transport-refunded record (no parseable verdict) wrote a finalization journal with pending receipt/digest legs that could never complete (publication and digest attach are verdict-only by design), so every later increment on the scope died REPLAY_REQUIRED, unrecoverable even via spec reset-review-rounds. Refunded journals now retire those legs at creation and record cleans up after itself; _complete_review_journal self-heals pre-fix wedged journals invisibly (same call reserves - no phantom VERDICT=UNKNOWN replay). Host review workflows (impl/plan/completion) now attach findings only on a delivered verdict, mirroring RP. Also dropped the fn-197 pr-aid artifact + stale .write.lock stowaways and gitignored .flow/artifacts/*/pr-cognitive-aid/ (local-only by make-pr design; pre-rule files grandfathered). Regression tests verified to fail against the pre-fix flowctl.
 
+stage: impl-review - ran (model: claude-fable-5, host backend, round 1 SHIP; considers 1-3 applied, 4 declined - a payload cross-check would recreate an unrecoverable wedge for corrupted journals)
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: c208a1db, 1921f086, consider-polish commit (see git log)
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_convergence_journal test_review_convergence_cap test_tracker_distribution test_startup_bootstrap -q (353 tests OK), regression tests verified to FAIL against pre-fix flowctl (scratch layout, 1 failure + 1 error), python3 scripts/run_tests_parallel.py (4381 tests OK) + uvx ruff@0.16.0 check . (clean), ./scripts/sync-codex.sh x2 (idempotent) + gen_tracker_manifest.py
+- PRs: https://github.com/gmickel/flow-next/pull/358
