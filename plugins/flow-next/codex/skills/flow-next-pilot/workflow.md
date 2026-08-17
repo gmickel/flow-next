@@ -350,7 +350,7 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
 | all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
-| all tasks done and completion is ship-or-ungated | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **merged only + branch head differing from the newest merged PR head** → `make-pr`; **merged with nothing new / closed / probe-failed / missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
+| all tasks done and completion is ship-or-ungated | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **any merged PR + branch head differing from the newest merged head** → `make-pr` (merged-presence wins — historical closed PRs on the branch are irrelevant); **merged with nothing new / closed-without-merge and no merged PR / probe-failed / missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
 
 A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
 
@@ -361,11 +361,11 @@ The all-done PR probe is the only gh touch in classification. Resolve the spec's
 ```bash
 BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
 PR_PROBE_FAILED=0
-PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,headRefOid --limit 10 2>/dev/null) || PR_PROBE_FAILED=1
+PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,headRefOid,mergedAt --limit 100 2>/dev/null) || PR_PROBE_FAILED=1
 OPEN_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "OPEN") | .url' | head -1)
 CLOSED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "CLOSED") | .url' | head -1)
 MERGED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "MERGED") | .url' | head -1)
-MERGED_HEAD=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '[.[] | select(.state == "MERGED")] | sort_by(.number) | last | .headRefOid // empty')
+MERGED_HEAD=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '[.[] | select(.state == "MERGED")] | sort_by(.mergedAt) | last | .headRefOid // empty')
 ```
 
 Classification outcomes for the all-done branch (evaluate in order, first match wins — the all-done invariant: an all-done / completion-`ship` spec with no **merged** PR, or with merged gate PRs plus commits beyond them, is *unfinished from the board's perspective* — pilot keeps driving it (`make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`):
@@ -373,8 +373,8 @@ Classification outcomes for the all-done branch (evaluate in order, first match 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists: this spec is **deferred to land** — land owns the open PR, not pilot — so record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the tick terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
 - No PR exists: classify `qa` when `QA_STAGE_ENABLED=1` **and** `QA_FRESH=0` (the optional QA stage runs before make-pr); otherwise `make-pr`. This is the FLOW-15 case (all-done, no PR — make-pr never ran or its PR was lost); **it always classifies `qa` or `make-pr`**, and a fall-through to `NO_WORK` here has broken this.
-- CLOSED PR exists and no OPEN PR exists: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
-- MERGED PR(s) exist, spec still open, and no OPEN PR: compare heads — `git rev-parse <branch_name>` against `MERGED_HEAD` (the newest merged PR's `headRefOid`, captured by the probe above). Heads differ: not an inconsistency - merged gate PRs on a reused branch with commits beyond them; classify `make-pr`, subject to the same `qa`-before-`make-pr` gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). Heads equal: `NEEDS_HUMAN` (a merged PR with nothing new and an open spec is the genuinely inconsistent state). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
+- MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here — merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare heads — `git rev-parse <branch_name>` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency - merged gate PRs on a reused branch with commits beyond them; classify `make-pr`, subject to the same `qa`-before-`make-pr` gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). Heads equal: `NEEDS_HUMAN` (a merged PR with nothing new and an open spec is the genuinely inconsistent state). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
+- CLOSED PR exists, no OPEN PR, and no MERGED PR anywhere on the branch: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 
 Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
 
@@ -664,13 +664,13 @@ PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="dep wait — blocked by <d
 
 (A circular/unsatisfiable dep does NOT reach here — Phase 1e routes it to `ASKED` instead. This terminal is for the plain acyclic dep wait only.)
 
-Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR, merged-PR-with-nothing-new-beyond-its-head, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
+Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR (with no merged PR on the branch), merged-PR-with-nothing-new-beyond-its-head, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
 
 ```text
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
 ```
 
-An all-done spec with an **open** PR is *not* crash-class — it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged, missing-branch, and merged-with-nothing-new (branch head equals the newest merged PR head) all-done states are `NEEDS_HUMAN`; merged + commits beyond that head classifies `make-pr`. An all-done spec with **no** PR is never terminal at all — it classifies `make-pr` and dispatches.
+An all-done spec with an **open** PR is *not* crash-class — it is the benign `DEFERRED_TO_LAND` terminal below (land owns the merge). Only the closed-unmerged-with-no-merged-PR, missing-branch, and merged-with-nothing-new (branch head equals the newest merged PR head) all-done states are `NEEDS_HUMAN`; merged + commits beyond that head classifies `make-pr` even when older closed PRs share the branch. An all-done spec with **no** PR is never terminal at all — it classifies `make-pr` and dispatches.
 
 Terminal verdict when no spec was dispatched, split by why. **The two cases stay distinct** — a tick that reported an all-done-with-open-PR spec as `NO_WORK` has broken this:
 

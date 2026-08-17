@@ -673,6 +673,20 @@ class ListStates(unittest.TestCase):
         self.assertIs(out.cls, ErrorClass.TRANSPORT)
         self.assertEqual(out.subtype, "malformed_body")
 
+    def test_linear_missing_page_info_is_transport_never_complete(
+            self) -> None:
+        # Valid nodes with absent pagination metadata must fail loudly -
+        # coercing missing hasNextPage to complete:true asserts exhaustion
+        # that was never proven.
+        ex = fake_execute({"wire-list-states": ok({"data": {"workflowStates": {
+            "nodes": [
+                {"id": "s1", "name": "Todo", "type": "unstarted"},
+            ]}}})})
+        out = W.dispatch("list-states", ln_cfg(), execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "malformed_body")
+
     def test_jira_success_dedups_by_id_and_is_complete(self) -> None:
         ex = fake_execute({"wire-list-states": ok([
             {"name": "Task", "statuses": [

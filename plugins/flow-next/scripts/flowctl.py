@@ -11741,9 +11741,14 @@ def _enforce_and_increment_review_cap_locked(
             spec_data = normalize_epic(
                 load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
             )
-            (cross_type_replays if is_cross_type else replays).append(
-                _replay_entry(spec_data, reservation_id, journal)
-            )
+            # Same rule as the completion-path sink below: a resumed REFUND
+            # (no-verdict journal) has nothing to replay - appending it would
+            # surface a phantom VERDICT=UNKNOWN and suppress the reservation
+            # this same call should grant. Delivered verdicts replay as before.
+            if isinstance(journal.get("verdict"), str):
+                (cross_type_replays if is_cross_type else replays).append(
+                    _replay_entry(spec_data, reservation_id, journal)
+                )
             # The resumed record may still leave a receipt leg pending
             # (attach never ran and never will — its input is gone).
             # Fall through to journal completion below on the next scan…

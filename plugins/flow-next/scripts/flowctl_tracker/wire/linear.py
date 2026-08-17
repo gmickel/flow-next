@@ -692,5 +692,12 @@ def list_states(config: dict, execute: Execute) -> Result:
                             subtype="malformed_body")
     states = [{"id": n.get("id"), "name": n.get("name"), "type": n.get("type")}
               for n in nodes]
-    has_next = bool((conn.get("pageInfo") or {}).get("hasNextPage"))
-    return {"states": states, "complete": not has_next}
+    # `complete` may only be asserted when exhaustion is proven - a response
+    # missing pageInfo/hasNextPage must fail loudly, never coerce to complete.
+    page_info = conn.get("pageInfo")
+    if (not isinstance(page_info, dict)
+            or not isinstance(page_info.get("hasNextPage"), bool)):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear workflow states response is malformed",
+                            subtype="malformed_body")
+    return {"states": states, "complete": not page_info["hasNextPage"]}

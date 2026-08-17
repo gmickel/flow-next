@@ -3604,3 +3604,45 @@ class TestRefundedJournalNeverWedges(_JournalReplayBase):
         row = json.loads(spec_path.read_text())["review_attempts"][0]
         for leg in ("receipt", "digest"):
             self.assertEqual(row["finalized"][leg], "not_applicable")
+
+    def test_crash_resume_of_refund_journal_reports_no_phantom_replay(self):
+        """PR #358 bot: crash AFTER the refund journal write but BEFORE the
+        reservation is consumed. The crash-resume branch (journal present +
+        reservation pending + no attempt row) must apply the same no-verdict
+        rule as the completion path: record the refund, but never append it to
+        the replay sink - pre-fix the resume returned a phantom
+        ``verdict: None`` replay and suppressed the reservation."""
+        reservation_id = self._reserve()
+        target = self.root / "receipt.json"
+        spec_path = self.root / ".flow" / "specs" / f"{self.spec_id}.json"
+        # Snapshot the sidecar at the crash boundary: reservation reserved,
+        # nothing consumed, no attempt row.
+        crash_state = spec_path.read_text()
+        with mock.patch.object(flowctl, "_cleanup_review_journal"):
+            self._record_transport_failure(reservation_id, target)
+        journal_path = self._journal_path(reservation_id)
+        self.assertTrue(journal_path.exists())
+        # Strip the completion marker so the journal reads exactly as the
+        # write-ahead copy did at crash time, and roll the sidecar back to the
+        # pre-consumption snapshot.
+        journal = json.loads(journal_path.read_text())
+        journal.pop("cleanup", None)
+        journal_path.write_text(json.dumps(journal))
+        spec_path.write_text(crash_state)
+
+        result = flowctl.enforce_and_increment_review_cap(
+            self.spec_id, "plan", review_type="plan",
+            artifact_sha256="c" * 64, return_reservation=True,
+        )
+        # No phantom replay: a resumed refund is invisible, and this same
+        # call resolves the crash AND grants the next reservation.
+        self.assertIsInstance(result, tuple)
+        _, reservation = result
+        self.assertTrue(reservation)
+        self.assertFalse(journal_path.exists())
+        data = self._data()
+        row = data["review_attempts"][0]
+        self.assertEqual(row["reservation_id"], reservation_id)
+        self.assertEqual(row["outcome"], "transport_failure")
+        self.assertIsNone(row["verdict"])
+        self.assertNotIn(reservation_id, data.get("review_reservations", {}))
