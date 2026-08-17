@@ -17,9 +17,18 @@ No version bump anywhere (batched releases).
 R5: flowctl.md + tracker-sync.md + skills/flow-next-tracker-sync/references/adapter-interface.md document list-states, including the Jira hardcoded-v2-endpoint/INVALID_INPUT-parity note, the both-providers malformed-node TRANSPORT behavior, and the adapter-interface.md wire-verb-table + pagination-exhausted-exception fix; any doc restating the old pilot rules is updated; repo CHANGELOG Unreleased credits @sn-furali for all three issues; docs-site Unreleased entry staged in the customer register; no version manifests touched. Full docs-tree gate green (run_tests_parallel).
 
 ## Done summary
-TBD
+Documented `flowctl tracker wire list-states` across flowctl.md (CLI listing + behavior paragraph: read-only, `complete` signal, hardcoded Jira `/rest/api/2/project/<key>/statuses`, INVALID_INPUT projectKey parity with list-open, both-provider malformed-node transport/malformed_body error, resolve-repairs-vs-list-states-detects), tracker-sync.md (wire enumeration bullet), and the canonical adapter-interface.md (list-states wire-verb table row + pagination-exhausted sanctioned-exception fix), with the codex mirror regenerated. Repo CHANGELOG.md ## Unreleased gained three user-outcome-first entries crediting @sn-furali (#354, #355, #356) describing the shipped head-identity all-done rule (not rev-list) and the open-PR-probe branch matrix; no version manifests touched. Pilot-rule restatement sweep of plugins/flow-next/docs/ found no doc restating the old default-branch or MERGED->NEEDS_HUMAN rules (no edits needed). Docs-site (flow-next.dev) entry deliberately not staged: conductor owns it per dispatch instructions.
 
+Provenance: reference-doc edits (flowctl.md, tracker-sync.md, adapter-interface.md) produced by bridge `cursor-agent -p --force --model cursor-grok-4.6-high` from a self-contained prompt, diff verified by the worker against acceptance + plan-sync breadcrumbs (no corrections needed); CHANGELOG entries written by the worker (session model, opus-5).
+
+baseline: green (python3 scripts/run_tests_parallel.py suite_rc=0; ruff clean; receipt 84e97167-unittest)
+verify: green (suite_rc=0, 4379 tests; ruff clean; receipt 51e2c77f-unittest)
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+
+stage: impl-review - ran (model: claude-fable-5, host backend, round 1 SHIP; two doc nits applied post-SHIP)
+Docs-site: Unreleased customer-register entry staged in ~/work/flow-next.dev (commit 6f7985e, local)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 51e2c77ff761f02e871280c746cd559ecf68da24, post-SHIP nit commit: provider table rows + page bound
+- Tests: python3 scripts/run_tests_parallel.py (baseline green + verify green, suite_rc=0, 4379 tests), uvx ruff@0.16.0 check . (baseline + verify: All checks passed), ./scripts/sync-codex.sh x2 (idempotent, rc=0 both)
 - PRs:
