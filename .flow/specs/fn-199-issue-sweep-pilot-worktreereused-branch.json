@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-199-issue-sweep-pilot-worktreereused-branch",
   "impl_review_rounds": {
-    "fn-199-issue-sweep-pilot-worktreereused-branch.1": 1
+    "fn-199-issue-sweep-pilot-worktreereused-branch.1": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -93,10 +93,36 @@
       "task": "fn-199-issue-sweep-pilot-worktreereused-branch.1",
       "timestamp": "2026-08-17T12:48:33.616858Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "932c0f4eaf3c7f37194e776b402c8a605bdb4c061afbb6aa0dc15e97528f615d",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 1,
+      "head_sha": "280976818864588caebdd1fc3f76c7b5a09d8f41",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 761,
+      "output_sha256": "ecec611b6b6f4b0fa747fd21fac6ab1dd022e0cd14f20dcface84039c41a2ab4",
+      "reservation_id": "460b99de0dde45a7883efa0002789e7f",
+      "round_consumed": true,
+      "scope": "impl:fn-199-issue-sweep-pilot-worktreereused-branch.1",
+      "superseded_by": null,
+      "task": "fn-199-issue-sweep-pilot-worktreereused-branch.1",
+      "timestamp": "2026-08-17T12:53:37.309441Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
-    "impl:fn-199-issue-sweep-pilot-worktreereused-branch.1": 1,
+    "impl:fn-199-issue-sweep-pilot-worktreereused-branch.1": 2,
     "plan": 1,
     "plan#completion": 1
   },
@@ -119,5 +145,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-17T12:48:33.915952Z"
+  "updated_at": "2026-08-17T12:53:37.598753Z"
 }
