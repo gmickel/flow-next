@@ -25,4 +25,4 @@ stage: impl-review - ran (model: claude-fable-5, host backend, round1 NEEDS_WORK
 ## Evidence
 - Commits: 6e239b39b1702b71cc67bf46918224a499b1cfbc, 28097681, 8212ce6f
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_pilot_strikes_prose -q (baseline: green; post-edit: green, 14 tests OK), cd plugins/flow-next/tests && python3 -m unittest test_host_review_backend test_skill_prose_diet test_pilot_strikes test_pilot_strikes_prose test_pilot_backlog_mirror_safety test_pilot_backlog_substrate -q (121 tests OK), ./scripts/sync-codex.sh x2 (idempotent, second run no new diff), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_pilot_strikes_prose test_skill_prose_diet -q (37 tests OK, post-fix)
-- PRs:
+- PRs:stage: plan-sync - ran (task .3 docs step updated to shipped head-identity rule; spec prose reconciled; model: claude-fable-5 subagent)

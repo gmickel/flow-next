@@ -6,7 +6,8 @@ satisfies: [R5]
 ## Description
 1. plugins/flow-next/docs/flowctl.md: add list-states to the wire verb CLI listing (~line 1444 block) and its behavior (read-only, completeness signal, provider scope) near the wire verb reference; note the resolve-vs-list-states distinction (resolve repairs and writes; list-states detects and never writes).
 2. plugins/flow-next/docs/tracker-sync.md: wire section entry for list-states alongside list-open/relation-list.
-3. Pilot docs: if any doc restates the old default-branch or MERGED->NEEDS_HUMAN rules (check plugins/flow-next/docs/ for restatements), update to the property-based rules.
+3. Pilot docs: if any doc restates the old default-branch or MERGED->NEEDS_HUMAN rules (check plugins/flow-next/docs/ for restatements), update to the property-based rules. Note: task .1 shipped the all-done discriminator as **head identity** (`git rev-parse <branch>` vs the newest merged PR's `headRefOid`) rather than the spec's `git rev-list --count` option, because land squash-merges (a rev-list ancestry count against the default branch would read fully-shipped work as unshipped). Describe the shipped head-identity rule in any doc text you write or touch — do not restate `git rev-list --count` from the spec's API Contracts/Decision Context sections. <!-- Updated by plan-sync: fn-199.1 used head-identity (headRefOid vs branch head) not rev-list -->
+
 4. Repo CHANGELOG.md ## Unreleased: three user-outcome-first entries crediting @sn-furali (#354, #355, #356), per agent_docs/releasing.md ordering rules.
 5. Docs-site changelog (~/work/flow-next.dev): stage an Unreleased entry in the customer register (problem-first, per the register rules; see last 20 entries as exemplars). Commit in that repo but do not publish/release.
 No version bump anywhere (batched releases).
