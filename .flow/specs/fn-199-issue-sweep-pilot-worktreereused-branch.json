@@ -298,7 +298,7 @@
     "impl:fn-199-issue-sweep-pilot-worktreereused-branch.4": 0
   },
   "spec_path": ".flow/specs/fn-199-issue-sweep-pilot-worktreereused-branch.md",
-  "status": "open",
+  "status": "done",
   "title": "Issue sweep: pilot worktree/reused-branch rules + tracker wire list-states",
   "tracker": {
     "baseHashFlow": null,
@@ -311,5 +311,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-17T14:36:46.060849Z"
+  "updated_at": "2026-08-17T16:53:59.124080Z"
 }
