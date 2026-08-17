@@ -38,4 +38,6 @@ scripts/ralph/
 
 # PR cognitive-aid artifacts are local-only by design (make-pr keeps HEAD equal
 # to the artifact headSha; a committed generation goes stale on its own commit).
+# Aid files committed before this rule stay tracked (ignore rules do not apply
+# to tracked paths) - deliberately grandfathered, untrack opportunistically.
 .flow/artifacts/*/pr-cognitive-aid/

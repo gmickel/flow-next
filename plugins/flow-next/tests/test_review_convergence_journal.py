@@ -3591,20 +3591,15 @@ class TestRefundedJournalNeverWedges(_JournalReplayBase):
                 }
         spec_path.write_text(json.dumps(spec_data))
 
-        # Pre-fix this raised SystemExit(2) REPLAY_REQUIRED forever. Now the
-        # no-verdict journal's pending legs retire, the journal completes and
-        # is cleaned, and a reservation is eventually granted.
-        first = flowctl.enforce_and_increment_review_cap(
+        # Pre-fix this raised SystemExit(2) REPLAY_REQUIRED forever. The heal
+        # is invisible: the no-verdict journal's pending legs retire, it is
+        # completed and cleaned, no phantom replay is reported (a refund has
+        # no verdict to replay), and THIS SAME call grants a reservation.
+        _, reservation = flowctl.enforce_and_increment_review_cap(
             self.spec_id, "plan", review_type="plan",
             artifact_sha256="b" * 64, return_reservation=True,
         )
         self.assertFalse(journal_path.exists())
-        reservation = first[1] if isinstance(first, tuple) else None
-        if not reservation:
-            _, reservation = flowctl.enforce_and_increment_review_cap(
-                self.spec_id, "plan", review_type="plan",
-                artifact_sha256="c" * 64, return_reservation=True,
-            )
         self.assertTrue(reservation)
         row = json.loads(spec_path.read_text())["review_attempts"][0]
         for leg in ("receipt", "digest"):

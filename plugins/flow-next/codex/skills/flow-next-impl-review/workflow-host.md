@@ -212,9 +212,13 @@ RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
 [[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
-"$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
-  --receipt "$RECEIPT_PATH" \
-  --json
+# A refunded (no-verdict) record journals nothing attachable — record already
+# completed its own bookkeeping; attach only a delivered verdict.
+if [[ -n "$VERDICT" ]]; then
+  "$FLOWCTL" review-findings attach --reservation-id "$RESERVATION_ID" \
+    --receipt "$RECEIPT_PATH" \
+    --json
+fi
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
   echo "ESCALATE: reviewer requested human review" >&2

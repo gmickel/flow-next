@@ -11768,9 +11768,15 @@ def _enforce_and_increment_review_cap_locked(
             # Retained until the batched sidecar write below is durable
             # (PR #290 bot r6).
             completed_journals.append((journal_path, journal))
-            sink = cross_type_replays if is_cross_type else replays
-            if not any(r["reservation_id"] == reservation_id for r in sink):
-                sink.append(_replay_entry(spec_data, reservation_id, journal))
+            # A healed refunded journal carries no verdict to replay - adding
+            # it to the sink would end this increment `replayed` with a
+            # phantom VERDICT=UNKNOWN and cost the caller a second invocation
+            # to actually dispatch. The refund is already on the attempt row;
+            # fall through and reserve normally.
+            if isinstance(journal.get("verdict"), str):
+                sink = cross_type_replays if is_cross_type else replays
+                if not any(r["reservation_id"] == reservation_id for r in sink):
+                    sink.append(_replay_entry(spec_data, reservation_id, journal))
         elif is_cross_type:
             # Its own type owns the repair; say which one, so a wedged counter
             # is actionable instead of a bare REPLAY_REQUIRED loop.
