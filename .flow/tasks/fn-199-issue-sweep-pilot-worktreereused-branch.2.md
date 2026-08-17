@@ -22,4 +22,4 @@ stage: impl-review - ran (model: claude-fable-5, host backend, rounds NEEDS_WORK
 ## Evidence
 - Commits: a8186e4641ce0530bf5110305e620ef2081822c5, 6fc6dfbf, 540d381e
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_wire test_tracker_conformance test_tracker_distribution -q (176 tests OK), python3 scripts/gen_tracker_manifest.py (45 files), ./scripts/sync-codex.sh x2 (idempotent, rc=0 both), uvx ruff@0.16.0 check plugins/flow-next/scripts (clean), implementer: cursor-agent -p --force --model cursor-grok-4.6-high (bridged; host kept git/tests/judgment), cd plugins/flow-next/tests && python3 -m unittest test_tracker_wire test_tracker_conformance test_tracker_distribution test_startup_bootstrap test_flowctl_surface -q (205 tests OK, post-fix rounds)
-- PRs:
+- PRs:stage: plan-sync - ran (task .3 docs scope updated: api-v2 pin, INVALID_INPUT taxonomy, malformed-body behavior, adapter-interface.md targets; model: claude-fable-5 subagent)
