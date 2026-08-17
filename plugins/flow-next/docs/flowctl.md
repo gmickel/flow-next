@@ -1478,7 +1478,7 @@ and Jira; GitHub/GitLab have no workflow-state pool and return a typed
 `capability` error (subtype `workflow_states`) naming Linear and Jira; an
 unresolved destination (`teamId` / `projectKey`) returns `unresolved` with no
 partial output. `complete` distinguishes a provably full listing from a
-truncated one: Linear returns the first page and reports `complete: false`
+truncated one: Linear returns the first page (100 states) and reports `complete: false`
 when `hasNextPage` is set (partial `states`, exit 0 - the caller decides to
 refuse); Jira's `/rest/api/2/project/<key>/statuses` endpoint is unpaginated,
 so a well-formed response is `complete: true`. The Jira endpoint is hardcoded
