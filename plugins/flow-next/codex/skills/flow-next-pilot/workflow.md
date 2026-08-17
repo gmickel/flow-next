@@ -362,6 +362,10 @@ The all-done PR probe is the only gh touch in classification. Resolve the spec's
 BRANCH_NAME="$(printf '%s\n' "$SPEC_JSON" | jq -r '.branch_name // empty')"
 PR_PROBE_FAILED=0
 PR_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number,headRefOid,mergedAt --limit 100 2>/dev/null) || PR_PROBE_FAILED=1
+# `--limit` is a fetch cap, not an exhaustion guarantee: a probe that returns
+# exactly 100 rows may be truncated, and a truncated history can select the
+# wrong merged head. Treat it as probe failure - same NEEDS_HUMAN as a gh error.
+[ "$(printf '%s\n' "${PR_JSON:-[]}" | jq 'length')" -ge 100 ] && PR_PROBE_FAILED=1
 OPEN_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "OPEN") | .url' | head -1)
 CLOSED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "CLOSED") | .url' | head -1)
 MERGED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "MERGED") | .url' | head -1)
