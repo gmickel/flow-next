@@ -517,8 +517,8 @@ def list_states(config: dict, execute: Execute) -> Result:
     key = _jira_project_key(str(raw_key))
     if isinstance(key, TrackerError):
         return key
-    # /rest/api/2 hardcoded for wire-layer parity (every sibling wire
-    # endpoint pins v2); the facade's apiVersion knob is a facade concern.
+    # /rest/api/2 hardcoded: the statuses endpoint is stable on v2 for both
+    # Cloud and DC; only list_open needs the v3 search fork.
     out = _jira(execute, "wire-list-states", "GET",
                 f"{base}/rest/api/2/project/{quote(key, safe='')}/statuses",
                 idempotent=True)
