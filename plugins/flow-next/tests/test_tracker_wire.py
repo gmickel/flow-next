@@ -658,6 +658,21 @@ class ListStates(unittest.TestCase):
                 {"id": "s1", "name": "Todo", "type": "unstarted"},
             ])
 
+    def test_linear_malformed_node_is_transport_never_a_short_complete_list(
+            self) -> None:
+        # A shape-broken node must fail loudly - a quietly shrunken list
+        # flagged complete:true is the exact failure `complete` guards.
+        ex = fake_execute({"wire-list-states": ok({"data": {"workflowStates": {
+            "nodes": [
+                {"id": "s1", "name": "Todo", "type": "unstarted"},
+                {"name": "orphan without id"},
+            ],
+            "pageInfo": {"hasNextPage": False}}}})})
+        out = W.dispatch("list-states", ln_cfg(), execute=ex)
+        self.assertIsInstance(out, TrackerError)
+        self.assertIs(out.cls, ErrorClass.TRANSPORT)
+        self.assertEqual(out.subtype, "malformed_body")
+
     def test_jira_success_dedups_by_id_and_is_complete(self) -> None:
         ex = fake_execute({"wire-list-states": ok([
             {"name": "Task", "statuses": [

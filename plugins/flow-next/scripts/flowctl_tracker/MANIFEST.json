@@ -162,7 +162,7 @@
     },
     {
       "path": "flowctl_tracker/wire/__init__.py",
-      "sha256": "b89ee1e850242e82738a52b5c3d009f063c1ea0a339406924f9e76ab4eb30da0"
+      "sha256": "a803d0ae9a8fd5494b321b3281c9747297aed157f4d59b0a991986404313c2d3"
     },
     {
       "path": "flowctl_tracker/wire/github.py",
@@ -178,7 +178,7 @@
     },
     {
       "path": "flowctl_tracker/wire/linear.py",
-      "sha256": "5ca32cfdffda6e029fe645e2a0d3152e586b48e7f245806ee82007c114f8b5fa"
+      "sha256": "7e6a8872bb0edba1da40b1427c77835fca6e1f0c5d91be833610468f6870c0ba"
     }
   ],
   "generated_by": "scripts/gen_tracker_manifest.py",

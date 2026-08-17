@@ -702,7 +702,7 @@ def dispatch(verb: str, config: dict, *, locator: Any = None,
     if verb == "list-open":
         return mod.list_open(config, execute)
     if verb == "list-states":
-        if provider in ("github", "gitlab"):
+        if not hasattr(mod, "list_states"):
             return TrackerError(
                 ErrorClass.CAPABILITY,
                 f"{provider} has no workflow-state pool; list-states supports "

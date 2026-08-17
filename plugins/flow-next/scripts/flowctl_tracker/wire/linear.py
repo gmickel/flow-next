@@ -671,7 +671,8 @@ def list_states(config: dict, execute: Execute) -> Result:
                             subtype="destination")
     data = _gql(
         execute, "wire-list-states",
-        "query($team: ID!) { workflowStates(first: 100, "
+        "query($team: ID!) { "
+        f"workflowStates(first: {_PAGE_SIZE}, "
         "filter: { team: { id: { eq: $team } } }) { "
         "nodes { id name type } pageInfo { hasNextPage } } }",
         {"team": team_id}, idempotent=True)
@@ -683,7 +684,13 @@ def list_states(config: dict, execute: Execute) -> Result:
                             "linear workflow states response is malformed",
                             subtype="malformed_body")
     nodes = conn["nodes"]
+    # A shape-broken node must fail loudly, never shrink a list that then
+    # claims completeness - `complete` is the load-bearing signal.
+    if any(not isinstance(n, dict) or not n.get("id") for n in nodes):
+        return TrackerError(ErrorClass.TRANSPORT,
+                            "linear workflow states response is malformed",
+                            subtype="malformed_body")
     states = [{"id": n.get("id"), "name": n.get("name"), "type": n.get("type")}
-              for n in nodes if isinstance(n, dict) and n.get("id")]
+              for n in nodes]
     has_next = bool((conn.get("pageInfo") or {}).get("hasNextPage"))
     return {"states": states, "complete": not has_next}

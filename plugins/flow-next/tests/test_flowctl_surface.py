@@ -226,6 +226,7 @@ tracker wire comment-list
 tracker wire comment-update
 tracker wire label
 tracker wire list-open
+tracker wire list-states
 tracker wire question
 tracker wire read
 tracker wire relation-list
