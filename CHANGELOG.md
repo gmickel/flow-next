@@ -2,7 +2,15 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.1.0] - 2026-08-17
+
+Teams running pilot from git worktrees, or opening one PR per gate on a reused
+branch, stop hitting `NEEDS_HUMAN` walls that were built for a different repo
+shape; tracker consumers get a read-only answer to "which workflow states
+exist" that cannot touch their config; and a review round that fails to
+deliver a verdict can no longer wedge a spec's reviews. Three of the four
+changes are verified field reports from @sn-furali (#354, #355, #356); the
+fourth was found dogfooding this release's own review pipeline.
 
 ### Added
 
