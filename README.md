@@ -70,7 +70,7 @@ The same specs, gates, receipts, and task state across harnesses. Everything sit
 
 | Tenet | What it means |
 |---|---|
-| **Spec-driven** | Intent survives the chat. The unit of work is the spec, never the ticket, the transcript, or the PR title. One durable document at `.flow/specs/<id>.md`, evolving through layers. |
+| **Spec-driven** | Intent survives the chat. The unit of work is the spec, never the ticket, the transcript, or the PR title. One durable document at `.flow/specs/<id>.md`, evolving through layers. Acceptance criteria are prose judged against evidence (unlike ATDD, where a criterion only counts once it exists as an executable test). |
 | **Context-fit planning** | Right-sized task slices. Specs decompose into dependency-ordered tasks, each sized to one fresh ~100k-token context window. |
 | **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code: no token bleed, no stale assumptions. |
 | **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor) reviews every plan and every implementation. Different models make different mistakes, and the disagreement surface is where the gaps live. |
