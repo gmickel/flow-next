@@ -36,9 +36,10 @@ User-facing docs for the new key, the `## Unreleased` CHANGELOG entry crediting 
 - [ ] TBD
 
 ## Done summary
-TBD
+R7 docs for `land.requestReviewers`: `docs/flowctl.md` land.* table row (grammar, sole-missing-input predicate, one-shot per head, ready flip, never gates a merge, dry-run, `reviewers=` vocabulary), `docs/README.md` what's-new bullet + land index blurb, `## Unreleased` CHANGELOG entry written user-outcome-first (thanks @sn-furali, #359; part 2 `draftOnChangesRequested` deferred), codex mirror regenerated twice (second run no-op). Review fix: `reviewers=off` is now reserved for an unset key — a configured-but-not-due PR reports `skipped:not-due` (workflow initializer + SKILL/docs/CHANGELOG + test pin). Baseline green; full suite 4400 tests green, ruff clean.
 
+stage: impl-review - ran (codex gpt-5.6-sol high: NEEDS_WORK x1 -> SHIP; finding fixed in fe624d8a)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6c14d152a7bbd3e91d365e39447cce2a4b258b8f, fe624d8ad5e84f9793c4c83d87df122db42b80d7
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q; uvx ruff@0.16.0 check .), cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh x2 (second run no-op)
 - PRs:
