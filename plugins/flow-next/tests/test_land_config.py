@@ -701,6 +701,12 @@ class RequestReviewersWorkflowStaticTestCase(unittest.TestCase):
         # claim dirs leave with the PR's ledger entry
         self.assertIn("review-request-claims/${PR_NUMBER}-", self.act[self.act.find("### 3.5"):])
 
+    def test_stale_approval_detector_yields_to_pending_request(self) -> None:
+        # §2.7's durable-label detector must not overwrite a due request-reviewers plan (completion-review finding, fn-200)
+        s27 = self.text[self.text.find("### 2.7 — CI-fix budget"):self.text.find("### 2.8 — Merge-state gates")]
+        self.assertIn("stale-approval dismissal loop detected", s27)
+        self.assertIn("HUMAN_REVIEW_PENDING", s27)
+
     def test_report_vocabulary(self) -> None:
         self.assertIn(
             "reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>",

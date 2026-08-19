@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-200-land-request-human-reviewers-at",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "needs_work",
+  "completion_reviewed_at": "2026-08-19T20:26:41.723096Z",
   "created_at": "2026-08-19T19:16:22.345884Z",
   "default_impl": null,
   "default_review": null,
@@ -14,7 +14,7 @@
     "fn-200-land-request-human-reviewers-at.3": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 0,
+  "plan_review_rounds": 1,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-08-19T19:27:22.257360Z",
   "review_attempts": [
@@ -577,6 +577,51 @@
       "task": "fn-200-land-request-human-reviewers-at.3",
       "timestamp": "2026-08-19T20:18:34.527629Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "ff6773b071f8e9f69ce276d174e4a6574091d3fbc5039dcac3ed908ad46a0f98",
+      "backend": "codex",
+      "base_sha": "f3f989e93fce4b7e2d5849a2d7cb916b96f8995f",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-3e27bcb9501aded3369daacf7fc3d8e7",
+            "classification": "introduced",
+            "findingId": "finding-3e27bcb9501aded3369daacf7fc3d8e7",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "5a4f2251b07d0575742364f2af41cdfef95add0f",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 725753,
+      "output_sha256": "f590901006596dc6d65a0d26b7ef52235f29794105f1beccbe8781acce06fb1b",
+      "reservation_id": "bd3ed07fc51e417dad7cace1382abcdb",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-19T20:26:41.710212Z",
+      "tool_calls": 41,
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -589,6 +634,7 @@
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-200-land-request-human-reviewers-at.1": 0,
     "impl:fn-200-land-request-human-reviewers-at.2": 0,
     "impl:fn-200-land-request-human-reviewers-at.3": 0,
@@ -608,5 +654,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-19T20:18:34.529730Z"
+  "updated_at": "2026-08-19T20:26:41.730633Z"
 }

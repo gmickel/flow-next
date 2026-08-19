@@ -400,7 +400,7 @@ if [[ -n "$REQUEST_REVIEWERS" && "$UNRESOLVED" -eq 0 ]]; then
 fi
 ```
 
-Predicate false (CI not green, threads open, signal satisfied with no required review, `CHANGES_REQUESTED`, `reviewDecision` empty under `silence`) → no-op, nothing downstream changes. `HUMAN_REVIEW_PENDING == 1` suppresses §2.8 (a merge GitHub would refuse anyway); §2.7 still runs. A land-authored push moves `HEAD_OID`, so the one-shot re-arms only when the human's review is again missing for the new head — a genuine re-ask, not spam.
+Predicate false (CI not green, threads open, signal satisfied with no required review, `CHANGES_REQUESTED`, `reviewDecision` empty under `silence`) → no-op, nothing downstream changes. `HUMAN_REVIEW_PENDING == 1` suppresses §2.8 (a merge GitHub would refuse anyway); §2.7 still runs for the CI-fix budget, but its stale-approval detector yields to this plan (see §2.7). A land-authored push moves `HEAD_OID`, so the one-shot re-arms only when the human's review is again missing for the new head — a genuine re-ask, not spam.
 
 ### 2.7 — CI-fix budget + stale-approval detection (ledger reads)
 
@@ -412,7 +412,7 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 ```
 
 - Planned `ci-fix` with `CI_FIX_COUNT >= CI_FIX_BUDGET` → plan `label` instead: durable `flow-next:needs-human` label + verdict `NEEDS_HUMAN`, reason `CI-fix budget exhausted (<count>/<budget>)`.
-- **Stale-approval loop**: if `DECISION_AT_PUSH == "APPROVED"` AND `LAND_PUSHED_SHA == HEAD_OID` (the head is still our push) AND `REVIEW_DECISION == "REVIEW_REQUIRED"` AND `UNRESOLVED == 0`, the repo dismisses stale approvals on push — re-looping would ping-pong forever. Plan `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`.
+- **Stale-approval loop**: if `DECISION_AT_PUSH == "APPROVED"` AND `LAND_PUSHED_SHA == HEAD_OID` (the head is still our push) AND `REVIEW_DECISION == "REVIEW_REQUIRED"` AND `UNRESOLVED == 0`, the repo dismisses stale approvals on push — re-looping would ping-pong forever. Plan `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`. **Yields when §2.6b set `HUMAN_REVIEW_PENDING == 1`**: with `land.requestReviewers` configured, a dismissed approval is exactly the re-ask case — the §2.6b plan stands (`request-reviewers` for a new head, `none` + `already:` once asked), the window bounds the wait, and the one-shot-per-head already prevents the ping-pong the label exists to stop; a label here would bury the re-request and block every later tick at §2.1.
 
 ### 2.8 — Merge-state gates (only when the review signal is satisfied)
 
