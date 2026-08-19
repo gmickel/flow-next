@@ -13,6 +13,7 @@
     "automatedReviewers": "chatgpt-codex-connector",
     "ciFixBudget": 3,
     "cleanReviewCommentPattern": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit",
+    "mergeVerdictCommand": "",
     "patienceMinutes": 30,
     "release": true,
     "reviewSignal": "silence",
@@ -33,7 +34,7 @@
     "enabled": true
   },
   "review": {
-    "backend": "rp",
+    "backend": "codex",
     "maxIterations": 8
   },
   "scouts": {

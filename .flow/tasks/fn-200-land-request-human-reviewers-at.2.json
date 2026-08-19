@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-19T19:17:25.683737Z",
+  "depends_on": [
+    "fn-200-land-request-human-reviewers-at.1"
+  ],
+  "id": "fn-200-land-request-human-reviewers-at.2",
+  "priority": null,
+  "spec": "fn-200-land-request-human-reviewers-at",
+  "spec_path": ".flow/tasks/fn-200-land-request-human-reviewers-at.2.md",
+  "status": "todo",
+  "title": "land workflow: \u00a72.6b human reviewer request (predicate, one-shot ledger, ready flip, dry-run, report)",
+  "updated_at": "2026-08-19T19:26:54.042249Z"
+}

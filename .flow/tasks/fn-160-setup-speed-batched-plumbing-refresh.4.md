@@ -43,9 +43,8 @@ Staleness-gate the model-pins ceremony, regroup the UNCONDITIONAL Codex-mirror p
 - [ ] R7 (final): inventory diff shows only approved grouping moves; all consent gates fire under same conditions
 - [ ] R8: full gate, sync-codex idempotency, symlink fixtures (from .2) green, schema drift test untouched
 ## Done summary
-TBD
-
+Not built — superseded. fn-160 planned a copy-mode refresh fast path + setup_version stamp; the copy-less install model (#352/#353, 4.0.0) removed copy mode, setup-mode, and the setup_version field entirely, so there is nothing to refresh or stamp. Closed 2026-08-19 alongside issue #314.
 ## Evidence
 - Commits:
 - Tests:
-- PRs:
+- PRs: https://github.com/gmickel/flow-next/pull/352, https://github.com/gmickel/flow-next/pull/353

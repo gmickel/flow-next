@@ -107,3 +107,7 @@ Task fn-160-setup-speed-batched-plumbing-refresh.1 validates the core approach (
 ## Cross-spec drift note (plan-sync, 2026-08-14)
 
 fn-195.2 deleted the model-pins ceremony this spec optimizes: `references/model-pins.md`, the live CLI probes, `models.verifiedAt`, and the routing questions no longer exist — setup now writes one commented routing block with no probes and no asks. R5 and every model-pins/probe line above are moot as written; the remaining value here (regrouped asks, batched plumbing) needs re-scoping against post-fn-195 setup before this spec is workable. Re-plan before starting.
+
+## Closed 2026-08-19 (superseded, not built)
+
+Superseded by the copy-less install model (#352/#353, 4.0.0): nothing is copied into repos anymore, so there is no refresh fast path to build and no setup_version to stamp. Issue #314 closed for the same reason.

@@ -45,9 +45,8 @@ Split the 1000-line setup `workflow.md` into a slim core + per-platform conditio
 - [ ] R1/R2 consumed by skill prose (detect + batched set wired in)
 - [ ] R7 (this task's share): empty inventory diff + fn-130 matrix walk as attached evidence
 ## Done summary
-TBD
-
+Not built — superseded. fn-160 planned a copy-mode refresh fast path + setup_version stamp; the copy-less install model (#352/#353, 4.0.0) removed copy mode, setup-mode, and the setup_version field entirely, so there is nothing to refresh or stamp. Closed 2026-08-19 alongside issue #314.
 ## Evidence
 - Commits:
 - Tests:
-- PRs:
+- PRs: https://github.com/gmickel/flow-next/pull/352, https://github.com/gmickel/flow-next/pull/353
