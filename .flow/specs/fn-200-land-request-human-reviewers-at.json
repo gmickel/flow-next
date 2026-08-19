@@ -9,7 +9,8 @@
   "depends_on_epics": [],
   "id": "fn-200-land-request-human-reviewers-at",
   "impl_review_rounds": {
-    "fn-200-land-request-human-reviewers-at.1": 0
+    "fn-200-land-request-human-reviewers-at.1": 0,
+    "fn-200-land-request-human-reviewers-at.2": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -344,6 +345,59 @@
       "timestamp": "2026-08-19T19:45:45.562878Z",
       "tool_calls": 10,
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "967141feb45126f3810113755f496a4babf6c54700f40c2691c5e8aa43e8c321",
+      "backend": "codex",
+      "base_sha": "becf73362bcea05a54f0c9fa73ebf31e36f2e2ce",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-0181f71bc890fc69bc499cfca3df54a4",
+            "classification": "introduced",
+            "findingId": "finding-0181f71bc890fc69bc499cfca3df54a4",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-dfc0c3ed90914b7eb1cda2c071929ded",
+            "classification": "introduced",
+            "findingId": "finding-dfc0c3ed90914b7eb1cda2c071929ded",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "bc1a7cee1715d03ba1bbeeb95b52fb90388bfef0",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 785818,
+      "output_sha256": "b590b5150f73395eeecd00e88105071b6d8ddca2764d2f65bf46c615aa26f8b0",
+      "reservation_id": "d1fcc7f90bfc46cc8526c0f705464517",
+      "round_consumed": true,
+      "scope": "impl:fn-200-land-request-human-reviewers-at.2",
+      "superseded_by": null,
+      "task": "fn-200-land-request-human-reviewers-at.2",
+      "timestamp": "2026-08-19T20:01:11.458499Z",
+      "tool_calls": 13,
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -355,6 +409,7 @@
   "review_reservations": {},
   "review_transport_failures": {
     "impl:fn-200-land-request-human-reviewers-at.1": 0,
+    "impl:fn-200-land-request-human-reviewers-at.2": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-200-land-request-human-reviewers-at.md",
@@ -371,5 +426,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-19T19:45:45.582212Z"
+  "updated_at": "2026-08-19T20:01:11.474168Z"
 }

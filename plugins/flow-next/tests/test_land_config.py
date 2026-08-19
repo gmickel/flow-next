@@ -682,7 +682,10 @@ class RequestReviewersWorkflowStaticTestCase(unittest.TestCase):
     def test_action_claims_atomically_before_ready_flip(self) -> None:
         self.assertIn("review-request-claims", self.action)
         claim = self.action.index('mkdir "$LEDGER_DIR/review-request-claims/')
+        head_recheck = self.action.index("--json headRefOid")   # head re-read AFTER the claim, BEFORE any mutation
         ready = self.action.index("gh pr ready")
+        self.assertLess(claim, head_recheck)
+        self.assertLess(head_recheck, ready)
         request = self.action.index("--add-reviewer")
         ledger = self.action.index(".[$pr].reviewRequestSha = $sha")
         self.assertLess(claim, ready)
@@ -699,7 +702,9 @@ class RequestReviewersWorkflowStaticTestCase(unittest.TestCase):
             "reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>",
             self.text,
         )
-        self.assertIn("REVIEWERS_STATE=off", self.gate)
+        # initialized per PR with the PR_STATE capture, so early-exit gates still report `off`
+        phase2_top = self.text[self.text.find("## Phase 2 — GATE"):self.text.find("### 2.1 — Durable-label skip")]
+        self.assertIn("REVIEWERS_STATE=off", phase2_top)
         self.assertIn("skipped:already-ready, no explicit logins", self.action)
         self.assertIn("failed:", self.action)
         self.assertIn("would-request", self.text[self.text.find("### Dry-run stops here"):])

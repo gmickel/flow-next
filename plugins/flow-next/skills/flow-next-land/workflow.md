@@ -202,6 +202,7 @@ IS_DRAFT="$(printf '%s\n' "$PR_STATE" | jq -r '.isDraft')"
 MERGE_STATE="$(printf '%s\n' "$PR_STATE" | jq -r '.mergeStateStatus')"
 REVIEW_DECISION="$(printf '%s\n' "$PR_STATE" | jq -r '.reviewDecision // ""')"
 PR_AUTHOR="$(printf '%s\n' "$PR_STATE" | jq -r '.author.login // ""')"   # §3.4b self-request filter; empty = R4 failure path, never a self-request
+REVIEWERS_STATE=off   # per-PR Phase 4 `reviewers=` field — initialized HERE so every early-exit gate (2.1/2.2/CI/QA) still reports `off`; §2.6b/§3.4b overwrite it
 OWNER_REPO="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')"
 ```
 
@@ -381,7 +382,7 @@ Signal evaluation (only reached with green CI and `UNRESOLVED == 0`; record the 
 Land can summon a bot (§2.6) but never asks a human, so on a repo whose ruleset requires a human/code-owner review a converged PR idles until someone notices (#359). With `REQUEST_REVIEWERS` non-empty this gate plans the `request-reviewers` action (§3.4b) exactly when a human review is the ONLY missing merge input, one-shot per PR per head SHA. **READ-ONLY**: it evaluates state §2.4-§2.6 already captured — no new `gh` read, no `gh` write, no ledger write; every mutation lives in §3.4b, so `--dry-run`'s stop before Phase 3 covers it by construction. Same precondition as the signal evaluation (green CI, `UNRESOLVED == 0`):
 
 ```bash
-REVIEWERS_STATE=off   # Phase 4 `reviewers=` field; stays `off` when the key is unset/null/""
+# REVIEWERS_STATE was initialized to `off` with the PR_STATE capture; it stays `off` when the key is unset/null/""
 HUMAN_REVIEW_PENDING=0
 if [[ -n "$REQUEST_REVIEWERS" && "$UNRESOLVED" -eq 0 ]]; then
   case "$REVIEW_SIGNAL" in
@@ -580,13 +581,18 @@ Verdict `NEEDS_HUMAN` with the planned reason. Later ticks skip the PR at gate 2
 
 ### 3.4b — `request-reviewers` (human reviewer request, one-shot per head)
 
-Planned by §2.6b. Order is binding: the atomic claim FIRST (before any remote call), then the ready flip, then the author-filtered request, then the ledger write regardless of outcome. Exact-once under overlapping ticks comes from the `mkdir` claim (atomic on every POSIX filesystem), not from the ledger jq+mv (last-writer-wins); the ledger sha is the human-readable record:
+Planned by §2.6b. Order is binding: the atomic claim FIRST (before any remote call), then a head re-read (a head that moved since the gate gets no mutation — the claim must cover the head the gate judged), then the ready flip, then the author-filtered request, then the ledger write regardless of outcome. Exact-once under overlapping ticks comes from the `mkdir` claim (atomic on every POSIX filesystem), not from the ledger jq+mv (last-writer-wins); the ledger sha is the human-readable record:
 
 ```bash
 REVIEWERS_STATE="failed:unknown"
 mkdir -p "$LEDGER_DIR/review-request-claims"
 if ! mkdir "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-${HEAD_OID}" 2>/dev/null; then
   REVIEWERS_STATE="already:${HEAD_OID:0:8}"    # (0) another tick holds this head — no remote call, no ledger write, stop
+elif RR_HEAD_NOW="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null)"; [[ -z "$RR_HEAD_NOW" || "$RR_HEAD_NOW" != "$HEAD_OID" ]]; then
+  # (0b) head moved between gate and claim (or is unreadable): the claim covers the judged head, the mutations would
+  # hit an un-gated one → NO ready flip, NO request, NO ledger write. Verdict RESOLVING; the next tick re-gates the
+  # new head (the stale claim dir is inert and leaves with the PR's ledger entry).
+  REVIEWERS_STATE="skipped:head moved since gate (${HEAD_OID:0:8} -> ${RR_HEAD_NOW:0:8})"
 else
   RR_ERR=""; READY_FLIPPED=0; RR_ERR_FILE="$(mktemp)"
   # (1) a draft flips to ready NOW — "ready" keeps meaning "a human may review this"; GitHub auto-requests code owners on the flip
@@ -617,7 +623,7 @@ else
 fi
 ```
 
-(4) Verdict per window — `AWAITING_REVIEW` inside, `NEEDS_HUMAN` beyond — whatever `REVIEWERS_STATE` says; `failed:` is surfaced in Phase 4, never retried for the same head, and never `BLOCKED` (reserved for server-side merge refusals). No checkout happens here; nothing to restore. Re-requesting an already-requested login is GitHub's no-op; re-requesting one who already reviewed is a re-request — intended for a new head. `ready_for_review` is not a push: nothing is dismissed and §2.7's detector is unaffected.
+(4) Verdict per window — `AWAITING_REVIEW` inside, `NEEDS_HUMAN` beyond — whatever `REVIEWERS_STATE` says (the head-moved `skipped:` case above is the one exception: `RESOLVING`, re-tick); `failed:` is surfaced in Phase 4, never retried for the same head, and never `BLOCKED` (reserved for server-side merge refusals). No checkout happens here; nothing to restore. Re-requesting an already-requested login is GitHub's no-op; re-requesting one who already reviewed is a re-request — intended for a new head. `ready_for_review` is not a push: nothing is dismissed and §2.7's detector is unaffected.
 
 ### 3.5 — `merge` + post-merge tail
 
