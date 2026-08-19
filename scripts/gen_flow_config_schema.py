@@ -344,6 +344,16 @@ DESCRIPTIONS: dict[str, str] = {
         "Never executed under --dry-run. Unset, null, and an empty string "
         "all mean OFF."
     ),
+    "land.requestReviewers": (
+        "Opt-in human reviewer request: csv of GitHub logins and/or "
+        "org/team slugs, and/or the literal token `codeowners` (GitHub "
+        "auto-requests code owners on the ready-for-review flip). When set, "
+        "land requests them (minus the PR author) exactly when a human "
+        "review is the only missing merge input, flips a draft PR to ready "
+        "at that moment, and records the request one-shot per PR per head "
+        "SHA in the land ledger. Never gates a merge (reviewSignal does). "
+        "Unset, null, and an empty string all mean OFF."
+    ),
     "makePr": "/flow-next:make-pr export settings.",
     "makePr.derivedPaths": (
         "Optional derived-file classification rules for the make-pr export: "
@@ -634,6 +644,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("land.ciFixBudget", {"type": "integer"}),
         ("land.cleanReviewCommentPattern", {"type": ["string", "null"]}),
         ("land.mergeVerdictCommand", {"type": ["string", "null"]}),
+        ("land.requestReviewers", {"type": ["string", "null"]}),
         ("makePr", {"kind": "object", "open": False}),
         (
             "makePr.derivedPaths",

@@ -612,6 +612,14 @@
             "null"
           ],
           "default": ""
+        },
+        "requestReviewers": {
+          "description": "Opt-in human reviewer request: csv of GitHub logins and/or org/team slugs, and/or the literal token `codeowners` (GitHub auto-requests code owners on the ready-for-review flip). When set, land requests them (minus the PR author) exactly when a human review is the only missing merge input, flips a draft PR to ready at that moment, and records the request one-shot per PR per head SHA in the land ledger. Never gates a merge (reviewSignal does). Unset, null, and an empty string all mean OFF.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": ""
         }
       }
     },

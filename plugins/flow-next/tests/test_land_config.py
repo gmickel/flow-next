@@ -21,6 +21,10 @@ fresh repo, WITHOUT any prior `config set`:
         (byte-for-byte today's behavior); any other value is a shell
         command run as the fail-closed merge gate of record. Deliberately
         NOT the null-vs-"" asymmetry of cleanReviewCommentPattern.
+  * land.requestReviewers → ""  (fn-200, #359) — opt-in human reviewer
+        request: csv of GitHub logins / `org/team` slugs and/or the
+        literal `codeowners`. CONTRACT: unset, null, AND "" all mean OFF;
+        one-shot per PR per head SHA; never gates a merge.
 
 Plus: `config set` round-trips for the string enum and the integer knob
 (set_config auto-coerces digits), the explicit-empty-disables case, the
@@ -111,6 +115,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                     r"|No( major)? issues found).*Reviewed commit"
                 ),
                 "mergeVerdictCommand": "",
+                "requestReviewers": "",
             },
         )
 
@@ -362,6 +367,61 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
         module_doc = _sys.modules[__name__].__doc__ or ""
         self.assertIn("mergeVerdictCommand", module_doc)
         self.assertIn("all mean OFF", module_doc)
+
+    # ── fn-200: land.requestReviewers (R1, R3) ───────────────────────────
+
+    def test_request_reviewers_seeded_default_is_empty(self) -> None:
+        # Seeded "" (OFF) so the default tick is byte-for-byte unchanged
+        # (R3) and the key surfaces via the defaults merge, not as missing.
+        defaults = self.flowctl.get_default_config()
+        self.assertEqual(defaults["land"]["requestReviewers"], "")
+
+    def test_fresh_get_request_reviewers_is_empty_not_null(self) -> None:
+        out = self._run_config_get_cli("land.requestReviewers")
+        self.assertEqual(out["value"], "")
+        self.assertIsNotNone(out["value"])
+
+    def test_set_request_reviewers_round_trips_csv(self) -> None:
+        csv = "alice,acme/platform,codeowners"
+        set_out = self._run_config_set_cli("land.requestReviewers", csv)
+        self.assertEqual(set_out["value"], csv)
+        get_out = self._run_config_get_cli("land.requestReviewers")
+        self.assertEqual(get_out["value"], csv)
+
+    def test_set_request_reviewers_empty_reads_back_empty(self) -> None:
+        # unset / null / "" all mean OFF — an explicit "" resets, never
+        # coerced into anything else.
+        self._run_config_set_cli("land.requestReviewers", "alice")
+        set_out = self._run_config_set_cli("land.requestReviewers", "")
+        self.assertEqual(set_out["value"], "")
+        self.assertEqual(
+            self._run_config_get_cli("land.requestReviewers")["value"], ""
+        )
+
+    def test_set_request_reviewers_keeps_sibling_land_defaults(self) -> None:
+        self._run_config_set_cli("land.requestReviewers", "alice")
+        self.assertEqual(
+            self._run_config_get_cli("land.ciFixBudget")["value"], 3
+        )
+        self.assertEqual(
+            self._run_config_get_cli("land.reviewSignal")["value"], "silence"
+        )
+        self.assertEqual(
+            self._run_config_get_cli("land.mergeVerdictCommand")["value"], ""
+        )
+
+    def test_set_sibling_keeps_request_reviewers_default(self) -> None:
+        self._run_config_set_cli("land.reviewSignal", "approve")
+        self.assertEqual(
+            self._run_config_get_cli("land.requestReviewers")["value"], ""
+        )
+
+    def test_docstring_lists_request_reviewers_key(self) -> None:
+        import sys as _sys
+
+        module_doc = _sys.modules[__name__].__doc__ or ""
+        self.assertIn("requestReviewers", module_doc)
+        self.assertIn("codeowners", module_doc)
 
     def test_docstring_lists_clean_review_pattern_key(self) -> None:
         # The module docstring is the human-facing key inventory; keep the

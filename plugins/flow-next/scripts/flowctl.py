@@ -1470,6 +1470,15 @@ def get_default_config() -> dict:
             # where null and "" mean DIFFERENT things: here all three
             # off-states collapse to OFF. Do not copy that pattern here.
             "mergeVerdictCommand": "",
+            # fn-200 — OPT-IN human reviewer request (#359): csv of GitHub
+            # logins and/or org/team slugs, and/or the literal token
+            # `codeowners`. When set, land requests them (minus the PR
+            # author) exactly when a human review is the only missing
+            # merge input, flipping a draft PR to ready at the same moment;
+            # one-shot per PR per head SHA via the land ledger. Never gates
+            # a merge (reviewSignal does). Seeded "" so `config get`
+            # returns a value, not null; unset / null / "" all mean OFF.
+            "requestReviewers": "",
         },
         # fn-62.1 — optional HTML artifact mode (render lenses), seeded so
         # `config get artifacts.html.enabled` returns False (NOT null) on a
