@@ -46,3 +46,4 @@ stage: impl-review - ran (codex gpt-5.6-sol high, SHIP first pass)
 - Commits: 688650a0bc129b0b1029ee311137c6499f81c0b3
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q, uvx ruff@0.16.0 check ., python3 scripts/gen_flow_config_schema.py
 - PRs:
+stage: plan-sync - ran (drift: no; cross-spec grep not run by agent, conductor checked: no other open spec references land.requestReviewers)
