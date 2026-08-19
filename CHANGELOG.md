@@ -32,8 +32,10 @@ now tells the right person it is their turn, at the one moment that is true.
   team that wants a human look on every PR sets `reviewSignal: approve`.
   `--dry-run` reports `action=request-reviewers reviewers=would-request` (plus
   `would-ready` for a draft) and mutates nothing. Default `""` (unset / `null`
-  / `""` all mean off): every existing gate, action, and ledger write is
-  unchanged, and the evidence line gains one additive field,
+  / `""` all mean off; a configured key whose moment has not come reports
+  `skipped:not-due`, so `off` always means "not configured"): every existing
+  gate, action, and ledger write is unchanged, and the evidence line gains one
+  additive field,
   `reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>`,
   alongside the new `action=request-reviewers` value. Under the hood: a
   read-only `§2.6b` predicate in the gate tree, the Phase 3 action class

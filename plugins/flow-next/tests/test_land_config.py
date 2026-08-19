@@ -709,6 +709,8 @@ class RequestReviewersWorkflowStaticTestCase(unittest.TestCase):
         # initialized per PR with the PR_STATE capture, so early-exit gates still report `off`
         phase2_top = self.text[self.text.find("## Phase 2 — GATE"):self.text.find("### 2.1 — Durable-label skip")]
         self.assertIn("REVIEWERS_STATE=off", phase2_top)
+        # `off` is reserved for unset/null/""; configured-but-not-due reports skipped:not-due (never a false `off`)
+        self.assertIn('[[ -n "$REQUEST_REVIEWERS" ]] && REVIEWERS_STATE="skipped:not-due"', phase2_top)
         self.assertIn("skipped:already-ready, no explicit logins", self.action)
         self.assertIn("failed:", self.action)
         self.assertIn("would-request", self.text[self.text.find("### Dry-run stops here"):])

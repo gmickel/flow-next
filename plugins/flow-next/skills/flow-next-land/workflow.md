@@ -202,7 +202,7 @@ IS_DRAFT="$(printf '%s\n' "$PR_STATE" | jq -r '.isDraft')"
 MERGE_STATE="$(printf '%s\n' "$PR_STATE" | jq -r '.mergeStateStatus')"
 REVIEW_DECISION="$(printf '%s\n' "$PR_STATE" | jq -r '.reviewDecision // ""')"
 PR_AUTHOR="$(printf '%s\n' "$PR_STATE" | jq -r '.author.login // ""')"   # §3.4b self-request filter; empty = R4 failure path, never a self-request
-REVIEWERS_STATE=off   # per-PR Phase 4 `reviewers=` field — initialized HERE so every early-exit gate (2.1/2.2/CI/QA) still reports `off`; §2.6b/§3.4b overwrite it
+REVIEWERS_STATE=off; [[ -n "$REQUEST_REVIEWERS" ]] && REVIEWERS_STATE="skipped:not-due"   # per-PR Phase 4 `reviewers=` field — initialized HERE so every early-exit gate (2.1/2.2/CI/QA) still reports it: `off` ONLY when the key is unset/null/""; configured-but-not-due (red CI, open threads, signal already satisfied, CHANGES_REQUESTED) is `skipped:not-due`; §2.6b/§3.4b overwrite it
 OWNER_REPO="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')"
 ```
 
@@ -382,7 +382,7 @@ Signal evaluation (only reached with green CI and `UNRESOLVED == 0`; record the 
 Land can summon a bot (§2.6) but never asks a human, so on a repo whose ruleset requires a human/code-owner review a converged PR idles until someone notices (#359). With `REQUEST_REVIEWERS` non-empty this gate plans the `request-reviewers` action (§3.4b) exactly when a human review is the ONLY missing merge input, one-shot per PR per head SHA. **READ-ONLY**: it evaluates state §2.4-§2.6 already captured — no new `gh` read, no `gh` write, no ledger write; every mutation lives in §3.4b, so `--dry-run`'s stop before Phase 3 covers it by construction. Same precondition as the signal evaluation (green CI, `UNRESOLVED == 0`):
 
 ```bash
-# REVIEWERS_STATE was initialized to `off` with the PR_STATE capture; it stays `off` when the key is unset/null/""
+# REVIEWERS_STATE was initialized with the PR_STATE capture: `off` when the key is unset/null/"" (never overwritten), `skipped:not-due` when configured — stays so whenever the predicate below is false
 HUMAN_REVIEW_PENDING=0
 if [[ -n "$REQUEST_REVIEWERS" && "$UNRESOLVED" -eq 0 ]]; then
   case "$REVIEW_SIGNAL" in
@@ -836,7 +836,7 @@ PR <url> [<spec-id>]
   mergeVerdict=<green|refused|skipped|would-run>
 ```
 
-`reviewers` reports §2.6b/§3.4b (`REVIEWERS_STATE`): `off` when `land.requestReviewers` is unset/null/`""`, `would-request` under `--dry-run` (plus `would-ready` for a draft), `requested`/`skipped:<reason>`/`failed:<one-line>` from §3.4b, `already:<sha8>` when this head was recorded or claimed earlier. `mergeVerdict` reports §2.9: `skipped` when `land.mergeVerdictCommand` is off or the planned action was not `merge`, `would-run` under `--dry-run`, `green`/`refused` from the command's exit code.
+`reviewers` reports §2.6b/§3.4b (`REVIEWERS_STATE`): `off` ONLY when `land.requestReviewers` is unset/null/`""`, `skipped:not-due` when it is configured but a human review is not the sole missing merge input (red CI, open threads, signal satisfied, `CHANGES_REQUESTED`, or an early-exit gate), `would-request` under `--dry-run` (plus `would-ready` for a draft), `requested`/`skipped:<reason>`/`failed:<one-line>` from §3.4b, `already:<sha8>` when this head was recorded or claimed earlier. `mergeVerdict` reports §2.9: `skipped` when `land.mergeVerdictCommand` is off or the planned action was not `merge`, `would-run` under `--dry-run`, `green`/`refused` from the command's exit code.
 
 When the `silence` signal was satisfied via the clean-review comment path (`AUTO_REVIEW_SOURCE == comment`, fn-65.1), append the comment evidence to the `signal=` line so the report shows the gate passed on a comment, not a formal review — e.g. `signal=silence:satisfied via=comment evidence="<AUTO_REVIEW_EVIDENCE>"`.
 
