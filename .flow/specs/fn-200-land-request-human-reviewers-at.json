@@ -10,7 +10,7 @@
   "id": "fn-200-land-request-human-reviewers-at",
   "impl_review_rounds": {
     "fn-200-land-request-human-reviewers-at.1": 0,
-    "fn-200-land-request-human-reviewers-at.2": 2
+    "fn-200-land-request-human-reviewers-at.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -458,10 +458,40 @@
       "task": "fn-200-land-request-human-reviewers-at.2",
       "timestamp": "2026-08-19T20:03:25.684518Z",
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "fe3e4aa20b241b13d2286a846286c92ee0f48bf6b0ee6447ff571b2f491a7bec",
+      "backend": "codex",
+      "base_sha": "becf73362bcea05a54f0c9fa73ebf31e36f2e2ce",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "a4b2e6790d0dc3b61393c4e1ca06d876a4ccf37b",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 983,
+      "output_sha256": "69166d3b1babcb58b4b7613be8de382881817f6bb7351c4d3ae2804da3c7a5d8",
+      "reservation_id": "92ce5c15bfdf41098e14b047efef298b",
+      "round_consumed": true,
+      "scope": "impl:fn-200-land-request-human-reviewers-at.2",
+      "superseded_by": null,
+      "task": "fn-200-land-request-human-reviewers-at.2",
+      "timestamp": "2026-08-19T20:04:38.535156Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-200-land-request-human-reviewers-at.1": 1,
+    "impl:fn-200-land-request-human-reviewers-at.2": 1,
     "plan": 1,
     "plan#completion": 0
   },
@@ -486,5 +516,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-19T20:03:25.686664Z"
+  "updated_at": "2026-08-19T20:04:38.537030Z"
 }

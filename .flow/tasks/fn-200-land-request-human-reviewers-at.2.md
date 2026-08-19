@@ -54,9 +54,10 @@ Add the §2.6b gate (read-only predicate + planned action) and the Phase 3 `requ
 - [ ] TBD
 
 ## Done summary
-TBD
+Added the `land.requestReviewers` gate to the land workflow: §2.6b (read-only human-review-pending predicate from already-captured state, one-shot per head via ledger `reviewRequestSha` + claim dir, window-bound verdict, suppresses §2.8's merge under `silence`+`REVIEW_REQUIRED`) and the Phase 3 `§3.4b request-reviewers` action class (atomic `mkdir` claim -> head re-read (unreadable releases the claim; moved = no mutation) -> draft ready flip -> author-filtered `--add-reviewer` with `codeowners` riding the flip -> ledger write regardless, `failed:` never `BLOCKED`), plus Phase 0 `lcfg requestReviewers`, `author` on the PR_STATE capture, ledger schema note, dry-run would-request/would-ready, Phase 4 `reviewers=` field + `action=request-reviewers`, SKILL.md bullet, conduct row, fn-149 cross-ref, and `RequestReviewersWorkflowStaticTestCase` (R2-R6). Also regenerated `flowctl_tracker/MANIFEST.json` (stale since fn-200.1's flowctl.py change - inherited full-suite red, now green). Dogfood `--dry-run` ticks not reachable: no open PR in this repo (would be NO_WORK); substituted `bash -n` + a stubbed-`gh` simulation of every §3.4b branch. Codex mirror regen is task .3's (R7).
 
+stage: impl-review - ran (codex gpt-5.6-sol high: NEEDS_WORK x2 -> SHIP; findings fixed in 3cf542be, a4b2e679)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bc1a7cee1715d03ba1bbeeb95b52fb90388bfef0, 3cf542be8f174a10eb2610d45a95e51d1915033b, a4b2e6790d0dc3b61393c4e1ca06d876a4ccf37b
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q; uvx ruff@0.16.0 check .), cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., python3 scripts/gen_tracker_manifest.py --check, bash -n on extracted §2.6b/§3.4b snippets + stubbed-gh simulation of §3.4b branches (.flow/tmp/sim_34b.sh, uncommitted)
 - PRs:
