@@ -2,6 +2,48 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Teams whose merge gate is a human - a code-owner review required by a ruleset,
+sharpest when the PR author is a GitHub App that cannot be a code owner - no
+longer watch a converged PR sit idle until someone happens to notice it. Land
+now tells the right person it is their turn, at the one moment that is true.
+
+### Added
+
+- **The human reviewer is asked when - and only when - their review is the last
+  thing between the PR and a merge.** Before, `/flow-next:land` could summon a
+  bot, bound its wait, and decide what counts as a clean review, but it never
+  populated the PR's requested-reviewers field: a converged PR reported
+  `AWAITING_REVIEW` / `NEEDS_HUMAN` and the one person who could satisfy the
+  gate was never told. With the new opt-in `land.requestReviewers` (a csv of
+  GitHub logins and/or `org/team` slugs and/or the literal `codeowners`), the
+  tick that finds CI green, zero unresolved threads, and a human review as the
+  sole missing merge input flips a draft PR to ready - so "ready" keeps meaning
+  "a human may review this now" - and requests the listed reviewers minus the
+  PR author (`codeowners` rides the ready flip; GitHub resolves the owners
+  itself, no local CODEOWNERS parsing). The ask happens once per PR per head
+  SHA, recorded in the land ledger and claimed atomically so overlapping ticks
+  cannot double-request; a land-authored CI-fix push moves the head and re-asks
+  only if the human's review is again missing - a genuine re-request, not spam.
+  A failed request records the head anyway (one attempt, no retry loop) and
+  surfaces `reviewers=failed:<reason>` with the window-bounded verdict, never
+  `BLOCKED`. The key never gates a merge - `land.reviewSignal` still does; a
+  team that wants a human look on every PR sets `reviewSignal: approve`.
+  `--dry-run` reports `action=request-reviewers reviewers=would-request` (plus
+  `would-ready` for a draft) and mutates nothing. Default `""` (unset / `null`
+  / `""` all mean off): every existing gate, action, and ledger write is
+  unchanged, and the evidence line gains one additive field,
+  `reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>`,
+  alongside the new `action=request-reviewers` value. Under the hood: a
+  read-only `§2.6b` predicate in the gate tree, the Phase 3 action class
+  `§3.4b — request-reviewers` (atomic `mkdir` claim → head re-read → ready
+  flip → author-filtered `gh pr edit --add-reviewer` → ledger
+  `reviewRequestSha`), the `author` field on the PR state capture, and the key
+  published in `flow-config.schema.json`. Part 2 of the report
+  (`land.draftOnChangesRequested`) is deferred until part 1 has shipped. Thanks
+  @sn-furali for the report (#359).
+
 ## [flow-next 4.1.0] - 2026-08-17
 
 Teams running pilot from git worktrees, or opening one PR per gate on a reused
