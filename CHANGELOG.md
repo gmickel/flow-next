@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.2.0] - 2026-08-19
 
 Teams whose merge gate is a human - a code-owner review required by a ruleset,
 sharpest when the PR author is a GitHub App that cannot be a code owner - no
