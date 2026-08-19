@@ -626,6 +626,90 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn("mergeVerdict=<green|refused|skipped|would-run>", self.text)
 
 
+class RequestReviewersWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over flow-next-land/workflow.md §2.6b + §3.4b (fn-200).
+
+    Same honest harness limitation as MergeVerdictGateWorkflowStaticTestCase:
+    the human reviewer request is host-agent BASH inside the skill workflow,
+    not flowctl Python (no stubbed `gh`). Pin the smallest distinctive tokens:
+    the gate sits between §2.6 and §2.7 and is read-only, the action class
+    lives in Phase 3 with the atomic claim before the ready flip, the config
+    rides the single Phase 0 `lcfg` capture, and the report vocabulary exists.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        base = HERE.parent.parent
+        cls.text = (base / "skills" / "flow-next-land" / "workflow.md").read_text(encoding="utf-8")
+        cls.skill = (base / "skills" / "flow-next-land" / "SKILL.md").read_text(encoding="utf-8")
+        cls.conduct = (base.parent.parent / "agent_docs" / "conduct" / "land.md").read_text(encoding="utf-8")
+        g0 = cls.text.find("### 2.6b — Human reviewer request")
+        g1 = cls.text.find("### 2.7 — CI-fix budget", g0)
+        assert g0 != -1 and g1 != -1, "§2.6b not found"
+        cls.gate = cls.text[g0:g1]
+        p3 = cls.text.find("## Phase 3 — ACT")
+        p4 = cls.text.find("## Phase 4 — REPORT", p3)
+        assert p3 != -1 and p4 != -1
+        cls.act = cls.text[p3:p4]
+        a0 = cls.act.find("### 3.4b — `request-reviewers`")
+        a1 = cls.act.find("### 3.5 — `merge`", a0)
+        assert a0 != -1 and a1 != -1, "§3.4b not found inside Phase 3"
+        cls.action = cls.act[a0:a1]
+
+    def test_config_rides_the_single_lcfg_capture(self) -> None:
+        self.assertIn('REQUEST_REVIEWERS="$(lcfg requestReviewers)"', self.text)
+        self.assertNotIn("config get land.requestReviewers", self.text)
+
+    def test_pr_state_capture_includes_author(self) -> None:
+        self.assertIn("labels,commits,createdAt,author)", self.text)
+        self.assertIn("PR_AUTHOR=", self.text)
+
+    def test_ledger_schema_names_review_request_sha(self) -> None:
+        self.assertIn("reviewRequestSha", self.text)
+        self.assertIn('.[$pr].reviewRequestSha = $sha', self.action)
+
+    def test_gate_is_between_2_6_and_2_7_and_read_only(self) -> None:
+        pos_26 = self.text.find("### 2.6 — Review signal")
+        pos_26b = self.text.find("### 2.6b — Human reviewer request")
+        pos_27 = self.text.find("### 2.7 — CI-fix budget")
+        self.assertLess(pos_26, pos_26b)
+        self.assertLess(pos_26b, pos_27)
+        for write in ("gh pr ready", "--add-reviewer", "mv \"$tmp\""):
+            self.assertNotIn(write, self.gate)
+        self.assertIn("PLANNED_ACTION=request-reviewers", self.gate)
+        self.assertIn("review-request-claims", self.gate)
+
+    def test_action_claims_atomically_before_ready_flip(self) -> None:
+        self.assertIn("review-request-claims", self.action)
+        claim = self.action.index('mkdir "$LEDGER_DIR/review-request-claims/')
+        ready = self.action.index("gh pr ready")
+        request = self.action.index("--add-reviewer")
+        ledger = self.action.index(".[$pr].reviewRequestSha = $sha")
+        self.assertLess(claim, ready)
+        self.assertLess(ready, request)
+        self.assertLess(request, ledger)
+        # the PR author is filtered out before the call; codeowners never sent explicitly
+        self.assertIn('"$t" == "$PR_AUTHOR"', self.action)
+        self.assertIn('"$t" == "codeowners"', self.action)
+        # claim dirs leave with the PR's ledger entry
+        self.assertIn("review-request-claims/${PR_NUMBER}-", self.act[self.act.find("### 3.5"):])
+
+    def test_report_vocabulary(self) -> None:
+        self.assertIn(
+            "reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>",
+            self.text,
+        )
+        self.assertIn("REVIEWERS_STATE=off", self.gate)
+        self.assertIn("skipped:already-ready, no explicit logins", self.action)
+        self.assertIn("failed:", self.action)
+        self.assertIn("would-request", self.text[self.text.find("### Dry-run stops here"):])
+
+    def test_skill_and_conduct_carry_the_key(self) -> None:
+        self.assertIn("land.requestReviewers", self.skill)
+        self.assertIn("request-reviewers", self.skill)
+        self.assertIn("land.requestReviewers", self.conduct)
+
+
 class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
     """Static assertions over §3.5's `FLOW_PR_MERGE_CMD` seam (fn-194 R1, #337).
 
@@ -757,11 +841,11 @@ class CatchUpWorkflowStaticTestCase(unittest.TestCase):
 
     def test_action_class_is_renamed_in_every_enumeration(self) -> None:
         self.assertIn(
-            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`)",
+            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `none`)",
             self.text,
         )
         self.assertIn(
-            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|none>", self.text
+            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|none>", self.text
         )
         self.assertNotIn("mechanical rebase", self.skill)
         self.assertIn("server-side catch-up", self.skill)

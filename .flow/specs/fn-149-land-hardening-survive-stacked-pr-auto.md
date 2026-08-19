@@ -40,6 +40,7 @@ This spec makes land correct on stacked PRs: recognize retargets and re-gate, me
 - No stack authoring anywhere in this spec - creating/linking stacks is the make-pr v0 slice; pilot orchestration is fn-150. [user]
 - No dependency on the gh-stack CLI extension; everything is plain gh/REST. [paraphrase]
 - No merge-queue integration (`merge_action` stays direct merge; queue enrollment remains forbidden). [paraphrase]
+- Coordinate with fn-200 (`land.requestReviewers`): it added §2.6b (above §2.7), a §2.8 `HUMAN_REVIEW_PENDING` guard, a §3.4b action class, and claim-dir cleanup beside §3.5's `del(.[$pr])` - re-read those spots before editing the §2.8/§3.3/§3.5 region. [inferred]
 - Docs: the land skill reference gains a stacked-PRs section (collapse hazard, merge-async contract, retarget re-gate); no public vocabulary changes. [inferred]
 
 ## Decision Context
