@@ -588,10 +588,15 @@ REVIEWERS_STATE="failed:unknown"
 mkdir -p "$LEDGER_DIR/review-request-claims"
 if ! mkdir "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-${HEAD_OID}" 2>/dev/null; then
   REVIEWERS_STATE="already:${HEAD_OID:0:8}"    # (0) another tick holds this head — no remote call, no ledger write, stop
-elif RR_HEAD_NOW="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null)"; [[ -z "$RR_HEAD_NOW" || "$RR_HEAD_NOW" != "$HEAD_OID" ]]; then
-  # (0b) head moved between gate and claim (or is unreadable): the claim covers the judged head, the mutations would
-  # hit an un-gated one → NO ready flip, NO request, NO ledger write. Verdict RESOLVING; the next tick re-gates the
-  # new head (the stale claim dir is inert and leaves with the PR's ledger entry).
+elif RR_HEAD_NOW="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null)"; [[ -z "$RR_HEAD_NOW" ]]; then
+  # (0a) head UNREADABLE (transient gh failure): nothing is known, so nothing is mutated — and THIS tick's claim is
+  # released, otherwise a transient read failure would consume the head's one shot forever (every later tick → already:).
+  rmdir "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-${HEAD_OID}" 2>/dev/null
+  REVIEWERS_STATE="failed:head unreadable before request (transient) - claim released, re-tick"   # verdict RESOLVING
+elif [[ "$RR_HEAD_NOW" != "$HEAD_OID" ]]; then
+  # (0b) head MOVED between gate and claim: the claim covers the judged head, the mutations would hit an un-gated one
+  # → NO ready flip, NO request, NO ledger write. Verdict RESOLVING; the next tick re-gates the new head (this claim
+  # stays — it names a head that no longer exists, so it is inert and leaves with the PR's ledger entry).
   REVIEWERS_STATE="skipped:head moved since gate (${HEAD_OID:0:8} -> ${RR_HEAD_NOW:0:8})"
 else
   RR_ERR=""; READY_FLIPPED=0; RR_ERR_FILE="$(mktemp)"
@@ -623,7 +628,7 @@ else
 fi
 ```
 
-(4) Verdict per window — `AWAITING_REVIEW` inside, `NEEDS_HUMAN` beyond — whatever `REVIEWERS_STATE` says (the head-moved `skipped:` case above is the one exception: `RESOLVING`, re-tick); `failed:` is surfaced in Phase 4, never retried for the same head, and never `BLOCKED` (reserved for server-side merge refusals). No checkout happens here; nothing to restore. Re-requesting an already-requested login is GitHub's no-op; re-requesting one who already reviewed is a re-request — intended for a new head. `ready_for_review` is not a push: nothing is dismissed and §2.7's detector is unaffected.
+(4) Verdict per window — `AWAITING_REVIEW` inside, `NEEDS_HUMAN` beyond — whatever `REVIEWERS_STATE` says (the head-unreadable and head-moved cases above are the exceptions: `RESOLVING`, re-tick — only the unreadable case releases the claim, a moved head keeps its inert one); `failed:` is surfaced in Phase 4, never retried for the same head, and never `BLOCKED` (reserved for server-side merge refusals). No checkout happens here; nothing to restore. Re-requesting an already-requested login is GitHub's no-op; re-requesting one who already reviewed is a re-request — intended for a new head. `ready_for_review` is not a push: nothing is dismissed and §2.7's detector is unaffected.
 
 ### 3.5 — `merge` + post-merge tail
 

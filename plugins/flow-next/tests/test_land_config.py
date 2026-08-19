@@ -686,6 +686,10 @@ class RequestReviewersWorkflowStaticTestCase(unittest.TestCase):
         ready = self.action.index("gh pr ready")
         self.assertLess(claim, head_recheck)
         self.assertLess(head_recheck, ready)
+        # a transient unreadable head releases THIS tick's claim (rmdir) instead of consuming the one shot
+        release = self.action.index('rmdir "$LEDGER_DIR/review-request-claims/')
+        self.assertLess(head_recheck, release)
+        self.assertLess(release, ready)
         request = self.action.index("--add-reviewer")
         ledger = self.action.index(".[$pr].reviewRequestSha = $sha")
         self.assertLess(claim, ready)
