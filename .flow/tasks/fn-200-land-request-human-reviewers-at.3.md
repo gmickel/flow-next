@@ -43,3 +43,4 @@ stage: impl-review - ran (codex gpt-5.6-sol high: NEEDS_WORK x1 -> SHIP; finding
 - Commits: 6c14d152a7bbd3e91d365e39447cce2a4b258b8f, fe624d8ad5e84f9793c4c83d87df122db42b80d7
 - Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q; uvx ruff@0.16.0 check .), cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh x2 (second run no-op)
 - PRs:
+stage: plan-sync - skipped(empty: no downstream todo tasks)
