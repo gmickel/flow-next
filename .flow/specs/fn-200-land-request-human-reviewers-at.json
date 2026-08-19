@@ -685,7 +685,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-200-land-request-human-reviewers-at.md",
-  "status": "open",
+  "status": "done",
   "title": "land: request human reviewers at convergence (land.requestReviewers)",
   "tracker": {
     "baseHashFlow": null,
@@ -698,5 +698,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-19T20:30:23.848200Z"
+  "updated_at": "2026-08-19T21:06:28.405100Z"
 }
