@@ -21,6 +21,10 @@ fresh repo, WITHOUT any prior `config set`:
         (byte-for-byte today's behavior); any other value is a shell
         command run as the fail-closed merge gate of record. Deliberately
         NOT the null-vs-"" asymmetry of cleanReviewCommentPattern.
+  * land.requestReviewers → ""  (fn-200, #359) — opt-in human reviewer
+        request: csv of GitHub logins / `org/team` slugs and/or the
+        literal `codeowners`. CONTRACT: unset, null, AND "" all mean OFF;
+        one-shot per PR per head SHA; never gates a merge.
 
 Plus: `config set` round-trips for the string enum and the integer knob
 (set_config auto-coerces digits), the explicit-empty-disables case, the
@@ -111,6 +115,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                     r"|No( major)? issues found).*Reviewed commit"
                 ),
                 "mergeVerdictCommand": "",
+                "requestReviewers": "",
             },
         )
 
@@ -363,6 +368,61 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
         self.assertIn("mergeVerdictCommand", module_doc)
         self.assertIn("all mean OFF", module_doc)
 
+    # ── fn-200: land.requestReviewers (R1, R3) ───────────────────────────
+
+    def test_request_reviewers_seeded_default_is_empty(self) -> None:
+        # Seeded "" (OFF) so the default tick is byte-for-byte unchanged
+        # (R3) and the key surfaces via the defaults merge, not as missing.
+        defaults = self.flowctl.get_default_config()
+        self.assertEqual(defaults["land"]["requestReviewers"], "")
+
+    def test_fresh_get_request_reviewers_is_empty_not_null(self) -> None:
+        out = self._run_config_get_cli("land.requestReviewers")
+        self.assertEqual(out["value"], "")
+        self.assertIsNotNone(out["value"])
+
+    def test_set_request_reviewers_round_trips_csv(self) -> None:
+        csv = "alice,acme/platform,codeowners"
+        set_out = self._run_config_set_cli("land.requestReviewers", csv)
+        self.assertEqual(set_out["value"], csv)
+        get_out = self._run_config_get_cli("land.requestReviewers")
+        self.assertEqual(get_out["value"], csv)
+
+    def test_set_request_reviewers_empty_reads_back_empty(self) -> None:
+        # unset / null / "" all mean OFF — an explicit "" resets, never
+        # coerced into anything else.
+        self._run_config_set_cli("land.requestReviewers", "alice")
+        set_out = self._run_config_set_cli("land.requestReviewers", "")
+        self.assertEqual(set_out["value"], "")
+        self.assertEqual(
+            self._run_config_get_cli("land.requestReviewers")["value"], ""
+        )
+
+    def test_set_request_reviewers_keeps_sibling_land_defaults(self) -> None:
+        self._run_config_set_cli("land.requestReviewers", "alice")
+        self.assertEqual(
+            self._run_config_get_cli("land.ciFixBudget")["value"], 3
+        )
+        self.assertEqual(
+            self._run_config_get_cli("land.reviewSignal")["value"], "silence"
+        )
+        self.assertEqual(
+            self._run_config_get_cli("land.mergeVerdictCommand")["value"], ""
+        )
+
+    def test_set_sibling_keeps_request_reviewers_default(self) -> None:
+        self._run_config_set_cli("land.reviewSignal", "approve")
+        self.assertEqual(
+            self._run_config_get_cli("land.requestReviewers")["value"], ""
+        )
+
+    def test_docstring_lists_request_reviewers_key(self) -> None:
+        import sys as _sys
+
+        module_doc = _sys.modules[__name__].__doc__ or ""
+        self.assertIn("requestReviewers", module_doc)
+        self.assertIn("codeowners", module_doc)
+
     def test_docstring_lists_clean_review_pattern_key(self) -> None:
         # The module docstring is the human-facing key inventory; keep the
         # new key (and its contract verb) discoverable there.
@@ -566,6 +626,107 @@ class MergeVerdictGateWorkflowStaticTestCase(unittest.TestCase):
         self.assertIn("mergeVerdict=<green|refused|skipped|would-run>", self.text)
 
 
+class RequestReviewersWorkflowStaticTestCase(unittest.TestCase):
+    """Static assertions over flow-next-land/workflow.md §2.6b + §3.4b (fn-200).
+
+    Same honest harness limitation as MergeVerdictGateWorkflowStaticTestCase:
+    the human reviewer request is host-agent BASH inside the skill workflow,
+    not flowctl Python (no stubbed `gh`). Pin the smallest distinctive tokens:
+    the gate sits between §2.6 and §2.7 and is read-only, the action class
+    lives in Phase 3 with the atomic claim before the ready flip, the config
+    rides the single Phase 0 `lcfg` capture, and the report vocabulary exists.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        base = HERE.parent.parent
+        cls.text = (base / "skills" / "flow-next-land" / "workflow.md").read_text(encoding="utf-8")
+        cls.skill = (base / "skills" / "flow-next-land" / "SKILL.md").read_text(encoding="utf-8")
+        cls.conduct = (base.parent.parent / "agent_docs" / "conduct" / "land.md").read_text(encoding="utf-8")
+        g0 = cls.text.find("### 2.6b — Human reviewer request")
+        g1 = cls.text.find("### 2.7 — CI-fix budget", g0)
+        assert g0 != -1 and g1 != -1, "§2.6b not found"
+        cls.gate = cls.text[g0:g1]
+        p3 = cls.text.find("## Phase 3 — ACT")
+        p4 = cls.text.find("## Phase 4 — REPORT", p3)
+        assert p3 != -1 and p4 != -1
+        cls.act = cls.text[p3:p4]
+        a0 = cls.act.find("### 3.4b — `request-reviewers`")
+        a1 = cls.act.find("### 3.5 — `merge`", a0)
+        assert a0 != -1 and a1 != -1, "§3.4b not found inside Phase 3"
+        cls.action = cls.act[a0:a1]
+
+    def test_config_rides_the_single_lcfg_capture(self) -> None:
+        self.assertIn('REQUEST_REVIEWERS="$(lcfg requestReviewers)"', self.text)
+        self.assertNotIn("config get land.requestReviewers", self.text)
+
+    def test_pr_state_capture_includes_author(self) -> None:
+        self.assertIn("labels,commits,createdAt,author)", self.text)
+        self.assertIn("PR_AUTHOR=", self.text)
+
+    def test_ledger_schema_names_review_request_sha(self) -> None:
+        self.assertIn("reviewRequestSha", self.text)
+        self.assertIn('.[$pr].reviewRequestSha = $sha', self.action)
+
+    def test_gate_is_between_2_6_and_2_7_and_read_only(self) -> None:
+        pos_26 = self.text.find("### 2.6 — Review signal")
+        pos_26b = self.text.find("### 2.6b — Human reviewer request")
+        pos_27 = self.text.find("### 2.7 — CI-fix budget")
+        self.assertLess(pos_26, pos_26b)
+        self.assertLess(pos_26b, pos_27)
+        for write in ("gh pr ready", "--add-reviewer", "mv \"$tmp\""):
+            self.assertNotIn(write, self.gate)
+        self.assertIn("PLANNED_ACTION=request-reviewers", self.gate)
+        self.assertIn("review-request-claims", self.gate)
+
+    def test_action_claims_atomically_before_ready_flip(self) -> None:
+        self.assertIn("review-request-claims", self.action)
+        claim = self.action.index('mkdir "$LEDGER_DIR/review-request-claims/')
+        head_recheck = self.action.index("--json headRefOid")   # head re-read AFTER the claim, BEFORE any mutation
+        ready = self.action.index("gh pr ready")
+        self.assertLess(claim, head_recheck)
+        self.assertLess(head_recheck, ready)
+        # a transient unreadable head releases THIS tick's claim (rmdir) instead of consuming the one shot
+        release = self.action.index('rmdir "$LEDGER_DIR/review-request-claims/')
+        self.assertLess(head_recheck, release)
+        self.assertLess(release, ready)
+        request = self.action.index("--add-reviewer")
+        ledger = self.action.index(".[$pr].reviewRequestSha = $sha")
+        self.assertLess(claim, ready)
+        self.assertLess(ready, request)
+        self.assertLess(request, ledger)
+        # the PR author is filtered out before the call; codeowners never sent explicitly
+        self.assertIn('"$t" == "$PR_AUTHOR"', self.action)
+        self.assertIn('"$t" == "codeowners"', self.action)
+        # claim dirs leave with the PR's ledger entry
+        self.assertIn("review-request-claims/${PR_NUMBER}-", self.act[self.act.find("### 3.5"):])
+
+    def test_stale_approval_detector_yields_to_pending_request(self) -> None:
+        # §2.7's durable-label detector must not overwrite a due request-reviewers plan (completion-review finding, fn-200)
+        s27 = self.text[self.text.find("### 2.7 — CI-fix budget"):self.text.find("### 2.8 — Merge-state gates")]
+        self.assertIn("stale-approval dismissal loop detected", s27)
+        self.assertIn("HUMAN_REVIEW_PENDING", s27)
+
+    def test_report_vocabulary(self) -> None:
+        self.assertIn(
+            "reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>",
+            self.text,
+        )
+        # initialized per PR with the PR_STATE capture, so early-exit gates still report `off`
+        phase2_top = self.text[self.text.find("## Phase 2 — GATE"):self.text.find("### 2.1 — Durable-label skip")]
+        self.assertIn("REVIEWERS_STATE=off", phase2_top)
+        # `off` is reserved for unset/null/""; configured-but-not-due reports skipped:not-due (never a false `off`)
+        self.assertIn('[[ -n "$REQUEST_REVIEWERS" ]] && REVIEWERS_STATE="skipped:not-due"', phase2_top)
+        self.assertIn("skipped:already-ready, no explicit logins", self.action)
+        self.assertIn("failed:", self.action)
+        self.assertIn("would-request", self.text[self.text.find("### Dry-run stops here"):])
+
+    def test_skill_and_conduct_carry_the_key(self) -> None:
+        self.assertIn("land.requestReviewers", self.skill)
+        self.assertIn("request-reviewers", self.skill)
+        self.assertIn("land.requestReviewers", self.conduct)
+
+
 class MergeSeamWorkflowStaticTestCase(unittest.TestCase):
     """Static assertions over §3.5's `FLOW_PR_MERGE_CMD` seam (fn-194 R1, #337).
 
@@ -697,11 +858,11 @@ class CatchUpWorkflowStaticTestCase(unittest.TestCase):
 
     def test_action_class_is_renamed_in_every_enumeration(self) -> None:
         self.assertIn(
-            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`)",
+            "(`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `none`)",
             self.text,
         )
         self.assertIn(
-            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|none>", self.text
+            "action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|none>", self.text
         )
         self.assertNotIn("mechanical rebase", self.skill)
         self.assertIn("server-side catch-up", self.skill)

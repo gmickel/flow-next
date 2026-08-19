@@ -84,6 +84,8 @@ if [[ "$CLEAN_REVIEW_PATTERN" == "null" ]]; then
 fi   # explicit "" stays "" → §2.6 treats empty as DISABLED (no default fallback)
 # fn-188 — opt-in repo merge-verdict gate (§2.9). unset / null / "" ALL mean OFF.
 MERGE_VERDICT_CMD="$(lcfg mergeVerdictCommand)"; [[ "$MERGE_VERDICT_CMD" == "null" ]] && MERGE_VERDICT_CMD=""
+# fn-200 — opt-in human reviewer request (§2.6b / §3.4b). unset / null / "" ALL mean OFF.
+REQUEST_REVIEWERS="$(lcfg requestReviewers)"; [[ "$REQUEST_REVIEWERS" == "null" ]] && REQUEST_REVIEWERS=""
 ```
 
 Resolve the land ledger — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until an ACT/REPORT write site, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`:
@@ -94,7 +96,7 @@ LEDGER="$LEDGER_DIR/land-strikes.json"
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>"}}`. It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b). It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 ## Phase 1 — DISCOVER
 
@@ -190,13 +192,15 @@ Classify every discovered PR before acting on any. **This phase performs reads o
 Fetch the gate state in one call per PR:
 
 ```bash
-PR_STATE="$(gh pr view "$PR_NUMBER" --json url,number,state,isDraft,mergeStateStatus,reviewDecision,headRefOid,baseRefName,labels,commits,createdAt)"
+PR_STATE="$(gh pr view "$PR_NUMBER" --json url,number,state,isDraft,mergeStateStatus,reviewDecision,headRefOid,baseRefName,labels,commits,createdAt,author)"
 PR_URL="$(printf '%s\n' "$PR_STATE" | jq -r '.url')"
 HEAD_OID="$(printf '%s\n' "$PR_STATE" | jq -r '.headRefOid')"
 BASE_REF="$(printf '%s\n' "$PR_STATE" | jq -r '.baseRefName')"
 IS_DRAFT="$(printf '%s\n' "$PR_STATE" | jq -r '.isDraft')"
 MERGE_STATE="$(printf '%s\n' "$PR_STATE" | jq -r '.mergeStateStatus')"
 REVIEW_DECISION="$(printf '%s\n' "$PR_STATE" | jq -r '.reviewDecision // ""')"
+PR_AUTHOR="$(printf '%s\n' "$PR_STATE" | jq -r '.author.login // ""')"   # §3.4b self-request filter; empty = R4 failure path, never a self-request
+REVIEWERS_STATE=off; [[ -n "$REQUEST_REVIEWERS" ]] && REVIEWERS_STATE="skipped:not-due"   # per-PR Phase 4 `reviewers=` field — initialized HERE so every early-exit gate (2.1/2.2/CI/QA) still reports it: `off` ONLY when the key is unset/null/""; configured-but-not-due (red CI, open threads, signal already satisfied, CHANGES_REQUESTED) is `skipped:not-due`; §2.6b/§3.4b overwrite it
 OWNER_REPO="$(gh repo view --json owner,name --jq '.owner.login + "/" + .name')"
 ```
 
@@ -363,13 +367,40 @@ welcome as FYI, not merge-gating.` Bot comments are outside the review detector
 and Ralph-guard blast radius; resolve-pr applies the prose-vs-code triage rule
 when handling them.
 
-Signal evaluation (only reached with green CI and `UNRESOLVED == 0`):
+Signal evaluation (only reached with green CI and `UNRESOLVED == 0`; record the outcome as `SIGNAL_SATISFIED=1|0` — §2.6b and §2.8 read it):
 
 - **`silence`** (default): satisfied iff `AUTO_REVIEW_CURRENT == 1` (an automated review of the CURRENT head — see above) AND `UNRESOLVED == 0` AND `WINDOW_ELAPSED == 1` (the window elapsing since the last push with zero unresolved threads IS the no-new-threads convergence — any new thread starts unresolved). Window not elapsed → `AWAITING_REVIEW`, reason `patience window open (<AGE_MIN>/<PATIENCE_MIN>m)`. Window elapsed with NO automated review ever → never merge unreviewed → `NEEDS_HUMAN`, reason `no automated review arrived within the patience window`.
 - **`approve`**: satisfied iff `REVIEW_DECISION == "APPROVED"` (the formal decision). Not approved within the window → `AWAITING_REVIEW`; not approved once the window has elapsed (`WINDOW_ELAPSED == 1`) → `NEEDS_HUMAN`, reason `no formal approval within the patience window` (the wait is bounded, same as the other signals); `CHANGES_REQUESTED` → threads should exist → the resolve path; an empty `reviewDecision` (repo has no review policy) is not a block for the OTHER signals, but `approve` explicitly requires the formal decision.
 - **`<github-login>`** (any other value): satisfied iff that reviewer's latest review is clean — fetch `gh pr view "$PR_NUMBER" --json latestReviews`, find the entry whose `author.login` matches the configured login (compare with any trailing `[bot]` stripped from both sides — GraphQL bot logins lack the suffix), and require its `state` to be `APPROVED`, or `COMMENTED` with `UNRESOLVED == 0`. `CHANGES_REQUESTED` or no review yet → `AWAITING_REVIEW` within the window, `NEEDS_HUMAN` beyond it.
 
 **§2.6 does not exit the gate tree — §2.7 still runs (the `approve` ordering).** Only §2.1's durable-label skip and §2.5b's terminal QA outcome (its own "No further gates" stop) end the gate tree early; every other gate assigns a PROVISIONAL verdict and falls through, so a later section's assignment wins. Under `reviewSignal: approve` that matters exactly once: when the head is land's own catch-up push, the ledger recorded `decision_at_push == APPROVED`, and the repo has since dismissed that approval, §2.6 assigns `AWAITING_REVIEW` (or `NEEDS_HUMAN` past the window) — and then §2.7's stale-approval detector, whose four conditions describe that same state, overwrites it with `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`. The detector is REACHABLE under `approve`, never shadowed; its durable label is the point, because it is what stops the next tick from re-entering the same loop. (§2.8 is the one gate that is genuinely conditional — it runs only when the signal is satisfied.) Server-side catch-up (§3.3) does not retire this path: it still advances the head, so a dismiss-on-push repo still dismisses.
+
+### 2.6b — Human reviewer request (`land.requestReviewers`, opt-in)
+
+Land can summon a bot (§2.6) but never asks a human, so on a repo whose ruleset requires a human/code-owner review a converged PR idles until someone notices (#359). With `REQUEST_REVIEWERS` non-empty this gate plans the `request-reviewers` action (§3.4b) exactly when a human review is the ONLY missing merge input, one-shot per PR per head SHA. **READ-ONLY**: it evaluates state §2.4-§2.6 already captured — no new `gh` read, no `gh` write, no ledger write; every mutation lives in §3.4b, so `--dry-run`'s stop before Phase 3 covers it by construction. Same precondition as the signal evaluation (green CI, `UNRESOLVED == 0`):
+
+```bash
+# REVIEWERS_STATE was initialized with the PR_STATE capture: `off` when the key is unset/null/"" (never overwritten), `skipped:not-due` when configured — stays so whenever the predicate below is false
+HUMAN_REVIEW_PENDING=0
+if [[ -n "$REQUEST_REVIEWERS" && "$UNRESOLVED" -eq 0 ]]; then
+  case "$REVIEW_SIGNAL" in
+    silence) [[ "$SIGNAL_SATISFIED" == 1 && "$REVIEW_DECISION" == "REVIEW_REQUIRED" ]] && HUMAN_REVIEW_PENDING=1 ;;   # repo requires a human review that is missing — a merge GitHub would refuse
+    *)       [[ "$SIGNAL_SATISFIED" == 0 && "$REVIEW_DECISION" != "CHANGES_REQUESTED" ]] && HUMAN_REVIEW_PENDING=1 ;;  # approve | <login>: no review yet, or a stale/dismissed one
+  esac
+  if [[ "$HUMAN_REVIEW_PENDING" == 1 ]]; then
+    REVIEW_REQUEST_SHA="$(printf '%s\n' "$LEDGER_JSON" | jq -r --arg pr "$PR_URL" '.[$pr].reviewRequestSha // ""')"
+    if [[ "$REVIEW_REQUEST_SHA" == "$HEAD_OID" || -d "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-${HEAD_OID}" ]]; then
+      PLANNED_ACTION=none; REVIEWERS_STATE="already:${HEAD_OID:0:8}"      # recorded or claimed for this head — never a second request
+    else
+      PLANNED_ACTION=request-reviewers; REVIEWERS_STATE=would-request      # §3.4b replaces would-request with the real outcome
+    fi
+    # provisional verdict per window — never BLOCKED; under `silence` this REPLACES the merge §2.8 would otherwise plan
+    [[ "$WINDOW_ELAPSED" == 1 ]] && PROVISIONAL_VERDICT=NEEDS_HUMAN || PROVISIONAL_VERDICT=AWAITING_REVIEW
+  fi
+fi
+```
+
+Predicate false (CI not green, threads open, signal satisfied with no required review, `CHANGES_REQUESTED`, `reviewDecision` empty under `silence`) → no-op, nothing downstream changes. `HUMAN_REVIEW_PENDING == 1` suppresses §2.8 (a merge GitHub would refuse anyway); §2.7 still runs for the CI-fix budget, but its stale-approval detector yields to this plan (see §2.7). A land-authored push moves `HEAD_OID`, so the one-shot re-arms only when the human's review is again missing for the new head — a genuine re-ask, not spam.
 
 ### 2.7 — CI-fix budget + stale-approval detection (ledger reads)
 
@@ -381,9 +412,11 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 ```
 
 - Planned `ci-fix` with `CI_FIX_COUNT >= CI_FIX_BUDGET` → plan `label` instead: durable `flow-next:needs-human` label + verdict `NEEDS_HUMAN`, reason `CI-fix budget exhausted (<count>/<budget>)`.
-- **Stale-approval loop**: if `DECISION_AT_PUSH == "APPROVED"` AND `LAND_PUSHED_SHA == HEAD_OID` (the head is still our push) AND `REVIEW_DECISION == "REVIEW_REQUIRED"` AND `UNRESOLVED == 0`, the repo dismisses stale approvals on push — re-looping would ping-pong forever. Plan `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`.
+- **Stale-approval loop**: if `DECISION_AT_PUSH == "APPROVED"` AND `LAND_PUSHED_SHA == HEAD_OID` (the head is still our push) AND `REVIEW_DECISION == "REVIEW_REQUIRED"` AND `UNRESOLVED == 0`, the repo dismisses stale approvals on push — re-looping would ping-pong forever. Plan `label` → `NEEDS_HUMAN`, reason `stale-approval dismissal loop detected`. **Yields when §2.6b set `HUMAN_REVIEW_PENDING == 1`**: with `land.requestReviewers` configured, a dismissed approval is exactly the re-ask case — the §2.6b plan stands (`request-reviewers` for a new head, `none` + `already:` once asked), the window bounds the wait, and the one-shot-per-head already prevents the ping-pong the label exists to stop; a label here would bury the re-request and block every later tick at §2.1.
 
 ### 2.8 — Merge-state gates (only when the review signal is satisfied)
+
+Skipped as well when §2.6b set `HUMAN_REVIEW_PENDING=1` (the repo requires a human review that is missing — its planned `request-reviewers`/`none` stands; a merge here would be one GitHub refuses).
 
 - `MERGE_STATE == "UNKNOWN"`: GitHub recomputes asynchronously — re-poll `gh pr view "$PR_NUMBER" --json mergeStateStatus` up to 3 times with `sleep 3` between; still UNKNOWN → verdict `RESOLVING`, action `none` (re-tick).
 - `MERGE_STATE == "DIRTY"`: conflict path → plan `catch-up` (server-side; GitHub itself decides whether the base merges, and refuses when it would conflict; ACT 3.3).
@@ -392,7 +425,7 @@ LAND_PUSHED_SHA="$(printf '%s\n' "$PR_LEDGER" | jq -r '.land_pushed_sha // "-"')
 Both merge states route to the SAME action deliberately: the catch-up is one `gh pr update-branch` call, and GitHub either performs the base merge or refuses it. That removes the old local-rebase-disagrees-with-`mergeStateStatus` surprise — there is no second opinion left to disagree.
 - Otherwise (`CLEAN`, `BLOCKED`, `HAS_HOOKS`, `UNSTABLE`): plan `merge`. (`BLOCKED`/`UNSTABLE` reflect server-side rules land already gates harder than — the merge attempt is authoritative; a refusal surfaces in ACT.)
 
-**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
+**Record the plan before leaving the gate tree**: `PLANNED_ACTION=<the action class planned above>` (`merge`, `catch-up`, `ci-fix`, `resolve`, `label`, `resume-tail`, `request-reviewers`, `none`) - every "plan X" decision in 2.1-2.8 assigns it. §2.9 and the ACT phase key on this variable; a §2.9 that never ran because nothing assigned `PLANNED_ACTION` has broken this.
 
 ### 2.9 — Repo merge-verdict gate (`land.mergeVerdictCommand`, opt-in, fail-closed)
 
@@ -455,13 +488,13 @@ fi
 
 ### Dry-run stops here (R17)
 
-`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. **When `land.mergeVerdictCommand` is set and the would-be action is `merge`, the report states `mergeVerdict=would-run: <command>`** (§2.9) - the command is NOT executed, because the zero-mutation promise covers it exactly as it covers the review trigger's would-trigger. Nothing was checked out, pushed, labeled, merged, dispatched, executed, or written (ledger untouched).
+`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. **When `land.mergeVerdictCommand` is set and the would-be action is `merge`, the report states `mergeVerdict=would-run: <command>`** (§2.9) - the command is NOT executed, because the zero-mutation promise covers it exactly as it covers the review trigger's would-trigger. **When §2.6b planned `request-reviewers`, the report states `action=request-reviewers reviewers=would-request` (plus `would-ready` when the PR is a draft)** — no `gh pr ready`, no `--add-reviewer`, no ledger write: the action class lives in Phase 3, which `--dry-run` never enters. Nothing was checked out, pushed, labeled, merged, dispatched, executed, or written (ledger untouched).
 
 Done when: every discovered PR has one planned action class and a provisional verdict, and the tree, ledger, and remote are untouched.
 
 ## Phase 3 — ACT (at most ONE action class per PR per tick)
 
-Execute each PR's planned action serially. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
+Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
 
 ### 3.1 — `ci-fix`
 
@@ -543,6 +576,57 @@ gh pr edit "$PR_NUMBER" --add-label "flow-next:needs-human"
 ```
 
 Verdict `NEEDS_HUMAN` with the planned reason. Later ticks skip the PR at gate 2.1 while the label is present.
+
+### 3.4b — `request-reviewers` (human reviewer request, one-shot per head)
+
+Planned by §2.6b. Order is binding: the atomic claim FIRST (before any remote call), then a head re-read (a head that moved since the gate gets no mutation — the claim must cover the head the gate judged), then the ready flip, then the author-filtered request, then the ledger write regardless of outcome. Exact-once under overlapping ticks comes from the `mkdir` claim (atomic on every POSIX filesystem), not from the ledger jq+mv (last-writer-wins); the ledger sha is the human-readable record:
+
+```bash
+REVIEWERS_STATE="failed:unknown"
+mkdir -p "$LEDGER_DIR/review-request-claims"
+if ! mkdir "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-${HEAD_OID}" 2>/dev/null; then
+  REVIEWERS_STATE="already:${HEAD_OID:0:8}"    # (0) another tick holds this head — no remote call, no ledger write, stop
+elif RR_HEAD_NOW="$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid 2>/dev/null)"; [[ -z "$RR_HEAD_NOW" ]]; then
+  # (0a) head UNREADABLE (transient gh failure): nothing is known, so nothing is mutated — and THIS tick's claim is
+  # released, otherwise a transient read failure would consume the head's one shot forever (every later tick → already:).
+  rmdir "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-${HEAD_OID}" 2>/dev/null
+  REVIEWERS_STATE="failed:head unreadable before request (transient) - claim released, re-tick"   # verdict RESOLVING
+elif [[ "$RR_HEAD_NOW" != "$HEAD_OID" ]]; then
+  # (0b) head MOVED between gate and claim: the claim covers the judged head, the mutations would hit an un-gated one
+  # → NO ready flip, NO request, NO ledger write. Verdict RESOLVING; the next tick re-gates the new head (this claim
+  # stays — it names a head that no longer exists, so it is inert and leaves with the PR's ledger entry).
+  REVIEWERS_STATE="skipped:head moved since gate (${HEAD_OID:0:8} -> ${RR_HEAD_NOW:0:8})"
+else
+  RR_ERR=""; READY_FLIPPED=0; RR_ERR_FILE="$(mktemp)"
+  # (1) a draft flips to ready NOW — "ready" keeps meaning "a human may review this"; GitHub auto-requests code owners on the flip
+  if [[ "$IS_DRAFT" == "true" ]]; then
+    if gh pr ready "$PR_NUMBER" 2>"$RR_ERR_FILE"; then READY_FLIPPED=1; else RR_ERR="gh pr ready: $(tail -n 1 "$RR_ERR_FILE" | cut -c1-160)"; fi
+  fi
+  # (2) csv = configured tokens minus `codeowners` minus the PR author — WHOLE-token compare (org/team slugs kept, never substring-matched)
+  RR_CSV=""
+  IFS=',' read -ra RR_TOKENS <<< "$REQUEST_REVIEWERS"
+  for t in "${RR_TOKENS[@]}"; do
+    t="${t// /}"; [[ -z "$t" || "$t" == "codeowners" || "$t" == "$PR_AUTHOR" ]] && continue
+    RR_CSV="${RR_CSV:+$RR_CSV,}$t"
+  done
+  if [[ -z "$PR_AUTHOR" ]]; then
+    RR_ERR="${RR_ERR:+$RR_ERR; }empty PR author login - cannot filter a self-request"   # R4: failed, never a self-request
+  elif [[ -n "$RR_CSV" ]]; then
+    gh pr edit "$PR_NUMBER" --add-reviewer "$RR_CSV" 2>"$RR_ERR_FILE" \
+      || RR_ERR="${RR_ERR:+$RR_ERR; }gh pr edit --add-reviewer: $(tail -n 1 "$RR_ERR_FILE" | cut -c1-160)"   # GitHub rejects the whole batch on one bad login
+  fi
+  rm -f "$RR_ERR_FILE"
+  if   [[ -n "$RR_ERR" ]]; then REVIEWERS_STATE="failed:$RR_ERR"
+  elif [[ -n "$RR_CSV" || "$READY_FLIPPED" == 1 ]]; then REVIEWERS_STATE=requested   # a request-producing action ran (explicit logins, or the flip that lets GitHub resolve owners)
+  else REVIEWERS_STATE="skipped:already-ready, no explicit logins"; fi             # nothing could produce a request — never reported `requested`
+  # (3) record the head REGARDLESS of 1-2's outcome — one attempt per head, never a retry loop (mirrors the bot trigger)
+  mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
+  tmp="$LEDGER.tmp.$$"
+  jq --arg pr "$PR_URL" --arg sha "$HEAD_OID" --arg ts "$TODAY" '.[$pr].reviewRequestSha = $sha | .[$pr].ts = $ts' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
+fi
+```
+
+(4) Verdict per window — `AWAITING_REVIEW` inside, `NEEDS_HUMAN` beyond — whatever `REVIEWERS_STATE` says (the head-unreadable and head-moved cases above are the exceptions: `RESOLVING`, re-tick — only the unreadable case releases the claim, a moved head keeps its inert one); `failed:` is surfaced in Phase 4, never retried for the same head, and never `BLOCKED` (reserved for server-side merge refusals). No checkout happens here; nothing to restore. Re-requesting an already-requested login is GitHub's no-op; re-requesting one who already reviewed is a re-request — intended for a new head. `ready_for_review` is not a push: nothing is dismissed and §2.7's detector is unaffected.
 
 ### 3.5 — `merge` + post-merge tail
 
@@ -729,7 +813,7 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
 
    Then verdict `NEEDS_HUMAN`, reason `spec close not pushed`. **The rollback is scoped to THIS step and skips NOTHING else** — the merge, release-follow, and the tracker touchpoint already ran and stand; on a pull-request-only base the residue is a cosmetic bookkeeping note, not a stalled lifecycle. Re-ticking after a refused persist is safe by construction: `spec close` succeeds idempotently, release-follow's idempotency probe (step 2) resumes past completed steps and never re-tags, and every verdict comment starts with the stable merge identity `evidence=<merge-commit-sha>` (step 3), so a repeat touchpoint for the same merge deduplicates.
 
-Verdict `MERGED` (or `RELEASED`). On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
+Verdict `MERGED` (or `RELEASED`). On success, drop the PR's ledger entry (atomic `jq 'del(.[$pr])'` + `mv`) and its §3.4b claim dirs (`rm -rf "$LEDGER_DIR/review-request-claims/${PR_NUMBER}-"*`). End on the base branch with a clean tree (the original branch may have been the now-deleted PR branch — the base IS the restore target after a merge).
 
 ### 3.6 — `resume-tail` (re-entry idempotency)
 
@@ -744,12 +828,12 @@ Echo one evidence block per PR processed:
 ```text
 PR <url> [<spec-id>]
   ci=<green|red|pending|none> checks=<pass>/<total> unresolved=<n> window=<AGE_MIN>/<PATIENCE_MIN>m
-  signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|->
-  action=<ci-fix|resolve|catch-up|merge|resume-tail|label|none> verdict=<VERDICT> reason="<one line>"
+  signal=<silence|approve|login>:<satisfied|waiting|never> decision=<reviewDecision|-> reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>
+  action=<ci-fix|resolve|catch-up|merge|resume-tail|label|request-reviewers|none> verdict=<VERDICT> reason="<one line>"
   mergeVerdict=<green|refused|skipped|would-run>
 ```
 
-`mergeVerdict` reports §2.9: `skipped` when `land.mergeVerdictCommand` is off or the planned action was not `merge`, `would-run` under `--dry-run`, `green`/`refused` from the command's exit code.
+`reviewers` reports §2.6b/§3.4b (`REVIEWERS_STATE`): `off` ONLY when `land.requestReviewers` is unset/null/`""`, `skipped:not-due` when it is configured but a human review is not the sole missing merge input (red CI, open threads, signal satisfied, `CHANGES_REQUESTED`, or an early-exit gate), `would-request` under `--dry-run` (plus `would-ready` for a draft), `requested`/`skipped:<reason>`/`failed:<one-line>` from §3.4b, `already:<sha8>` when this head was recorded or claimed earlier. `mergeVerdict` reports §2.9: `skipped` when `land.mergeVerdictCommand` is off or the planned action was not `merge`, `would-run` under `--dry-run`, `green`/`refused` from the command's exit code.
 
 When the `silence` signal was satisfied via the clean-review comment path (`AUTO_REVIEW_SOURCE == comment`, fn-65.1), append the comment evidence to the `signal=` line so the report shows the gate passed on a comment, not a formal review — e.g. `signal=silence:satisfied via=comment evidence="<AUTO_REVIEW_EVIDENCE>"`.
 
