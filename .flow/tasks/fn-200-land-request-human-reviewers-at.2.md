@@ -61,3 +61,4 @@ stage: impl-review - ran (codex gpt-5.6-sol high: NEEDS_WORK x2 -> SHIP; finding
 - Commits: bc1a7cee1715d03ba1bbeeb95b52fb90388bfef0, 3cf542be8f174a10eb2610d45a95e51d1915033b, a4b2e6790d0dc3b61393c4e1ca06d876a4ccf37b
 - Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q; uvx ruff@0.16.0 check .), cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., python3 scripts/gen_tracker_manifest.py --check, bash -n on extracted §2.6b/§3.4b snippets + stubbed-gh simulation of §3.4b branches (.flow/tmp/sim_34b.sh, uncommitted)
 - PRs:
+stage: plan-sync - ran (drift: no; spec §3.x placeholder -> §3.4b fixed by conductor; fn-149 cross-ref verified)
