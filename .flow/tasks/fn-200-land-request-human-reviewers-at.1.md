@@ -39,9 +39,10 @@ Add the `land.requestReviewers` config key to flowctl's seeded defaults and the 
 - [ ] TBD
 
 ## Done summary
-TBD
+Seeded `land.requestReviewers` (default `""`; unset/null/"" = OFF) in flowctl's land defaults, published it in the config schema (`["string","null"]`, description names the csv logins / org/team / `codeowners` grammar, one-shot per head, never gates a merge) and regenerated `flow-config.schema.json`; `test_land_config.py` gained the fn-200 block (default, fresh CLI get, csv round-trip, reset-to-empty, sibling preservation both ways, docstring inventory) covering R1 + R3's default-unchanged half. Baseline green; verify green (132 tests, ruff clean, schema-drift green).
 
+stage: impl-review - ran (codex gpt-5.6-sol high, SHIP first pass)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 688650a0bc129b0b1029ee311137c6499f81c0b3
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_config_schema_drift test_skill_prose_diet -q, uvx ruff@0.16.0 check ., python3 scripts/gen_flow_config_schema.py
 - PRs:
