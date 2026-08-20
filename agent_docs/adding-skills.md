@@ -27,6 +27,8 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 
 11. **Guide's routing surface** (`plugins/flow-next/skills/flow-next-guide/SKILL.md`) updated in the **same change** whenever a skill is added or removed, so the router never names a skill that is gone and never omits a starting state a shipped skill now owns. Removal is this checklist run backwards - delete the skill dir (canonical + `codex/` mirror), the command shim, the `sync-codex.sh` entry and `REQUIRED_OPENAI_YAML_SKILLS` row, the conduct checklist and its index row, the listing/count surfaces from step 7, and the guide row - in one commit.
 
+12. **OpenCode: usually nothing — but know the two seams.** `scripts/install-opencode.sh` blanket-scatters canonical skills (setup included) and copies `scripts/` (flowctl + lib) to the config root, so a new SKILL adds itself on the next install and the flowctl preamble's derived-root rung resolves unchanged. The generated glue is the seam: `plugins/flow-next/scripts/lib/opencode_generate.py` builds OpenCode agents/commands from frontmatter through a **closed allowlist** — a new AGENT, or a new frontmatter key on any agent, raises `GenerateError` at install (fail-closed, loud). When adding an agent or agent frontmatter, extend the generator's mapping in the same change and run the installer once against a scratch `--dest` to prove it generates.
+
 ## Experimental skills (tier)
 
 A skill may ship **before** it has earned the full checklist above. An experimental skill lives in the plugin and is invocable, but it is deliberately absent from every surface that promises stability:
