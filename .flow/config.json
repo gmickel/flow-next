@@ -16,6 +16,7 @@
     "mergeVerdictCommand": "",
     "patienceMinutes": 30,
     "release": true,
+    "requestReviewers": "",
     "reviewSignal": "silence",
     "reviewTrigger": "@codex review"
   },
