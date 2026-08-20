@@ -32,3 +32,5 @@ Safety notes:
 - `create` initializes `.worktrees/.gitignore` (`*` plus `!.gitignore`) when
   absent, so `git add -A` cannot stage nested worktrees as gitlinks; existing
   custom ignore files are preserved
+
+**Shared claim state.** Parallel agents in sibling worktrees driving `flowctl` on the same repo share claim state via `.git/flow-state`. Set `FLOW_STATE_DIR` per agent (outside the tree) when running flow pipelines concurrently.

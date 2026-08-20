@@ -93,7 +93,7 @@ PROMPT_HASHES = {
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
-        "5121e7c72a76733c1449cb5a25036972fa2646c53d46261339dd235ce34d6e76",
+        "5b0c3d14835ed8ab25bd497ba0cbc94c3fa5c00815573e8519eef9ad517682c8",
     "PROTECTED_ARTIFACTS_BLOCK":
         "e9b68af0cf36f6b2cb1b70c9bcc5ff67ccb86295f369d02ffcec4f25fd6f2d5e",
     "REVIEW_JSON_TALLY_BLOCK":
@@ -175,7 +175,7 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
         "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
-        "5121e7c72a76733c1449cb5a25036972fa2646c53d46261339dd235ce34d6e76",
+        "5b0c3d14835ed8ab25bd497ba0cbc94c3fa5c00815573e8519eef9ad517682c8",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
         "e952d93e24e0d780ea17f0b3ee5785a12526961c66cae3d2599bb52bd8aa39be",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the

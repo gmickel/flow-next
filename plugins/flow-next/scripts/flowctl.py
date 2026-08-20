@@ -9251,7 +9251,7 @@ You are reviewing:
 5. **Risks** - Blockers identified? Security gaps? Mitigation?
 6. **Scope** - Right-sized? Over/under-engineering? Overengineering is a FINDING, not a taste note: flag (a) any task or surface not traceable to a stated requirement (extra commands, export/import paths, detection hooks, config knobs "for later"); (b) risk-management machinery (trust/consent layers, caps, scanners, secondary state stores) where the risk could be eliminated structurally (closed schema, inert format, capability not exposed); (c) N-way generality where the request names one concrete case. Scope-minimality never trims rigor: error/negative-case enumeration per AC must stay complete — flag the plan if minimality was achieved by dropping error handling or by dropping filesystem-identity, permission, or concurrency guards (realpath/symlink containment, lock-guarded writes, forced excludes of runtime state).
 7. **Testability** - How will we verify this works?
-8. **Consistency** - Do task specs align with epic spec? Are `**Touches:**` declarations plausible against each task's Files/Approach, and do any two dep-independent tasks' Touches sets overlap (overlaps force serial dispatch - flag the pair)?
+8. **Consistency** - Do task specs align with epic spec? Are `**Touches:**` declarations plausible against each task's Files/Approach, and do any two dep-independent tasks' Touches sets overlap (overlaps force serial dispatch - flag the pair)? On a multi-task spec, a dep-independent task missing its `**Touches:**` line is a finding to flag (omission silently forces serial dispatch; the plan skill mandates the line on every task — uncertain → declare WIDER, never omit).
 
 ## Verdict Scope
 

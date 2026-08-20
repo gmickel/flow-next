@@ -503,6 +503,8 @@ completion_review_status.after=<value>
 advanced=<true|false>
 ```
 
+When the work stage's output contains a `Sequential fallback:` line, repeat that line verbatim in the evidence echo.
+
 For `qa`, advancement is judged from the **post-dispatch `qa_verdict` receipt** — observed state, never the QA skill's narration. The QA stage **advances on every terminal outcome**, and **the gate routes on `qa_outcome` (the four-outcome field), never on the Ralph-guard `verdict` projection** — the QA skill projects `BLOCKED→verdict=NEEDS_WORK`, so a tick that read `verdict` conflated "couldn't verify" with "found problems" and has broken this. QA is advisory — it never hard-blocks the build loop; the human reviewer + the land gate act on its findings.
 
 Read the receipt fresh after dispatch. The QA skill commits its own handoff in autonomous mode (qa §6.3b), so `HEAD` is now the `chore(flow): qa verdict` commit — peel it to the **code head** and match the receipt's `head_sha` against that (the pr-artifact commit can't exist yet — that's the next tick's make-pr):

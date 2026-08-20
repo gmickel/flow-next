@@ -321,9 +321,12 @@ When the sentinel prints, read [references/tracker-touchpoints.md](references/tr
 **Runs in SINGLE_TASK_MODE and SPEC_MODE.** Only the loop-back in 3f differs by mode.
 
 Do not run plan-sync while any peer worker is active or the wave is unresolved.
-After the join, integration, review, and completion steps finish, run this
-section once for each task that reached `done` in the resolved wave. If a task
-is not `done`, skip plan-sync for it and investigate/retry.
+After the join, integration, review, and completion steps finish, collect every
+task that reached `done` in the resolved wave and run this section **once for
+that set** — one `plan-sync` dispatch carrying the full completed-task list.
+If a task is not `done`, omit it from the set and investigate/retry. An empty
+set (nothing reached `done`) or no remaining `todo` downstream tasks means no
+dispatch.
 
 Check if plan-sync should run:
 
@@ -331,18 +334,20 @@ Check if plan-sync should run:
 $FLOWCTL config get planSync.enabled --json
 ```
 
-Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip) — but a skip still records its outcome line (`stage: plan-sync - skipped(config: planSync.enabled != true)`, see the stage-outcome block below) before advancing to 3f.
+Skip unless planSync.enabled is explicitly `true` (null/false/missing = skip) — but a skip still records its outcome line on each completed task (`stage: plan-sync - skipped(config: planSync.enabled != true)`, see the stage-outcome block below) before advancing to 3f.
 
 Downstream target extraction, the `planSync.crossSpec` read, and the `plan-sync`
 subagent dispatch live in [references/plan-sync-dispatch.md](references/plan-sync-dispatch.md)
-— read it and execute it now, then record the stage-outcome line below. Its skip
-and failure branches (`skipped(empty: ...)`, `failed(EXTRACT_FAILED: ...)`) feed
-that same line.
+— read it and execute it now, then record the per-task stage-outcome lines below.
+Its skip and failure branches (`skipped(empty: ...)`, `failed(EXTRACT_FAILED: ...)`)
+feed those same lines. The conductor derives one line per completed task from
+the batched report's per-task sections.
 
 **Stage-outcome line (mandatory — fn-178).** Whatever happened above, record ONE
-outcome line for the plan-sync stage in the completed task's done evidence (the
-task .md `## Done summary` the run already writes, via a small append or the
-next `flowctl done` summary when the wave is still resolving):
+outcome line for the plan-sync stage in **each** completed task's done evidence
+(the task .md `## Done summary` the run already writes, via a small append or
+the next `flowctl done` summary when the wave is still resolving). A single
+batched dispatch still yields one line per completed task:
 
 ```
 stage: plan-sync - ran [<start>..<end>] | skipped(config: planSync.enabled != true) | skipped(empty: no downstream todo tasks) | failed(EXTRACT_FAILED: <detail>) | failed(error: <detail>)
@@ -370,7 +375,27 @@ select it before the current wave is joined and resolved.
 
 ### 3g. Completion Review Gate (SPEC_MODE only)
 
-When 3a finds no ready tasks, check if completion review is required.
+When 3a finds no ready tasks, this gate is default-on — its unique value is
+cross-task integration + R-ID coverage.
+
+**Policy skip — ahead of dispatch.** Judge these facts yourself (no classifier,
+no config key). Skip the review when ALL of the following hold:
+
+- (a) the spec has exactly one task
+- (b) that task's per-task impl-review reached SHIP (its receipt/evidence records it; `REVIEW_MODE` was not `none`)
+- (c) every spec R-ID is covered by that task's declared `satisfies`
+
+On skip: record this run-scoped stage-outcome line for the Phase 5 final
+summary (same machinery as other stages this run reached):
+
+```
+stage: completion-review - skipped(policy: single-task, per-task SHIP covers spec surface)
+```
+
+Do **not** write `completion_review_status` — leave it `unknown`; the skip is a
+policy outcome, not a SHIP. Go to Phase 4.
+
+Otherwise check whether review is still required.
 
 **Check spec's completion review status directly:**
 
@@ -381,7 +406,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 - If `ship` → review already passed, go to Phase 4
 - If `unknown` or `needs_work` → needs review
 
-**If review needed:**
+**If review needed** (policy skip did not fire):
 
 1. Invoke `/flow-next:spec-completion-review <spec-id>` skill
    - Pass `--review=<backend>` matching the work review backend
@@ -425,7 +450,7 @@ solely by `land.merged`).
 
 Only after SHIP does control return here. If skill outputs `<promise>RETRY</promise>`, there was a backend error - retry the skill invocation.
 
-Done when: `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
+Done when: the policy skip recorded its stage line and left `completion_review_status` `unknown`, or `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
 
 ---
 
@@ -601,7 +626,8 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
   ├─ 3d: join → integrate → review/complete each task
   ├─ 3e: plan-sync after the wave resolves (if enabled + downstream tasks exist)
   ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
-  ├─ no more tasks → 3g: check completion_review_status
+  ├─ no more tasks → 3g
+  │   ├─ policy skip (single-task + per-task SHIP covers spec surface) → record stage line, leave status unknown → Phase 4
   │   ├─ status != ship → invoke /flow-next:spec-completion-review → skill fixes, writes SHIP once, returns
   │   └─ status = ship → Phase 4
   └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)

@@ -138,7 +138,7 @@ After setup questions answered, read [phases.md](phases.md) and execute each pha
 
 If user chose review, pass the review mode to the worker. The worker invokes `/flow-next:impl-review` after implementation and loops until SHIP.
 
-**Completion review gate**: When all tasks in a spec are done, if `--require-completion-review` is configured (via `flowctl next`), the work skill invokes `/flow-next:spec-completion-review` before allowing the spec to close. This verifies the combined implementation satisfies the spec. The spec-completion-review skill handles the fix loop internally until SHIP.
+**Completion review gate**: Default-on in SPEC_MODE when a review backend is configured. After all tasks are done, phases.md 3g invokes `/flow-next:spec-completion-review` — except it skips when the spec has exactly one task, that task's per-task impl-review reached SHIP (`REVIEW_MODE` was not `none`), and every spec R-ID is covered by that task's declared `satisfies`. On skip, record the Phase 5 stage line and leave `completion_review_status` `unknown` (policy outcome, not a SHIP). `flowctl next --require-completion-review` is a flowctl-level gate for driver loops; this skill does not read it. The spec-completion-review skill handles the fix loop internally until SHIP.
 
 ## Tracker sync (opt-in, off by default)
 
