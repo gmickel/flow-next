@@ -2,6 +2,31 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Single-task specs stop paying a second review of the same diff.** The completion
+  review gate now skips when a spec has exactly one task whose per-task impl-review
+  already reached SHIP and every spec requirement is covered by that task — recorded
+  as an explicit skip line, never a silent absence. Multi-task specs keep the full
+  completion review (its cross-task integration value is the point). Typical saving:
+  one full backend review round per small spec. Also aligns the work skill's
+  documented gate contract with what actually runs.
+- **Plan-sync runs once per wave instead of once per task.** After a resolved wave,
+  one plan-sync agent now reconciles every completed task against the downstream
+  set in a single pass — same scope, same per-task drift verdicts and stage lines,
+  k× fewer dispatches on multi-task waves.
+- **Plan review now flags a missing `Touches:` line, not just implausible ones.**
+  Omitting the line silently forces serial dispatch (waves are fail-closed on it);
+  on a multi-task spec a dep-independent task without it is now a review finding.
+  Pilot's evidence echo also repeats the work stage's `Sequential fallback:` reason,
+  so a driver loop can see when a spec ran serial and why.
+- **Parallel agents in sibling worktrees: shared claim state documented.** flowctl's
+  runtime state store lives in the git common dir and is shared by every worktree —
+  docs and the worktree-kit skill now say so and point at the `FLOW_STATE_DIR`
+  override (set it outside the repo tree).
+
 ## [flow-next 4.2.1] - 2026-08-20
 
 ### Changed

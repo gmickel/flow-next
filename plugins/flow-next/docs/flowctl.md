@@ -23,6 +23,8 @@ Works out of the box for parallel branches. No setup required.
 - **Actor resolution**: `FLOW_ACTOR` env → git email → git name → `$USER` → "unknown"
 - **Local validation**: `flowctl validate --all` catches issues before commit
 
+**Worktree sharing.** Runtime claim state lives in the git common dir (`.git/flow-state`), which every worktree of a repo shares. Two agents driving `flowctl` in sibling worktrees therefore read and write each other's task claims unless each sets `FLOW_STATE_DIR` (rung 1, the documented per-process override). An orchestrator-set state dir must live **outside** the repo tree — in-tree dirs can be destroyed by test-hygiene cleanup.
+
 **Optional**: Add CI gate with `docs/ci-workflow-example.yml` to block bad PRs.
 
 ## File Structure
