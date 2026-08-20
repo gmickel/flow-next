@@ -22,9 +22,8 @@ Files:
 R5: --uninstall deletes only manifest-listed paths plus the manifest and leaves sibling user files; installing into a clean dest vs uninstall-then-reinstall produces byte-identical trees. R6: cd plugins/flow-next/tests && python3 -m unittest test_install_opencode test_opencode_agent_frontmatter test_tracker_distribution -q is green without OpenCode installed; fixtures cover the pinned-schema frontmatter and all three fail-closed cases; the unmapped-token invariant test exists and fails on an unmapped canonical token; the read-surface pin test implements derived - exclusions == installed and fails on a new unhandled segment; command-stub tests cover description + $ARGUMENTS + installed path + uninstall-verbatim + setup-excluded; path-ownership tests fail if the installer writes outside manifest paths or deletes an unclaimed pre-existing dir; test_every_installer_invokes_the_shared_verifier includes install-opencode.sh.
 
 ## Done summary
-TBD
-
+--uninstall (grok-4.6 bridge draft, host-verified + tidied): removes exactly manifest-listed paths + manifest, reads manifest never source tree, unsafe-relpath abort before any removal, empty parent shells rmdir'd only when empty (user content in shared parents survives - live-verified). 42 deterministic tests green without an OpenCode binary: generator fixtures incl. Bash-carrying agent + all three fail-closed cases, unmapped-token invariant over live agents/, read-surface pin (derived - exclusions == installed), path-ownership + pre-flight collision + --force, R2 layout invariant, uninstall scope, reinstall byte-identity; test_every_installer_invokes_the_shared_verifier includes install-opencode.sh. Ruff clean.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d4b2f892e00264517355f933a4d32384868f68f5
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_install_opencode test_opencode_agent_frontmatter test_tracker_distribution -q (42 green), uvx ruff@0.16.0 check
 - PRs:
