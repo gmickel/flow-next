@@ -104,6 +104,15 @@ Parse the spec carefully. Identify:
 # counts as `baseline: green` via receipt. On exit 1 or 2+, run the full command exactly as
 # today: fail closed, and never treat a check error as a skip. Lint/format commands are unchanged:
 # always run, never receipted, never skipped.
+# When BASELINE_HANDOFF is present, record `baseline: green via handoff (<content>)`
+# and SKIP running the focused Quick commands as baseline (lint/format stay exactly
+# as stated above: always run, never skipped). The red-baseline
+# rules above are unchanged and the handoff never applies to them (a handoff asserts
+# green, so the red branch is unreachable via handoff). Full-suite gate commands keep
+# their existing receipt-check path unchanged. The FIRST task of a run never receives
+# a handoff (nothing verified yet) — its baseline runs exactly as today; that
+# first-task baseline is deliberately kept (it detects local-env inherited reds
+# that CI cannot).
 ```
 
 **Suite-output capture rule (Baseline and Verify):** green observation is the command exit code, not a scraped output line; re-running a suite merely to observe its result is forbidden. Run each suite once with output captured to a log (for example, `<cmd> > "$SUITE_LOG" 2>&1; suite_rc=$?; echo "suite_rc=$suite_rc"`), then read any summary from that log. Gate suites run as ONE blocking FOREGROUND Bash call with an explicit generous timeout (600s) - never `run_in_background` + a monitor: a background completion does not reliably resume a subagent context (the same Foreground rule review calls carry, applied to gate runs). In this Baseline block, apply that capture when an exit-1/2+ gate check requires the full command.

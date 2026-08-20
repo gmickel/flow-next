@@ -2,6 +2,23 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Review-fix test runs stop being paid for twice.** When a fix loop's post-fix
+  test run passes the repo's full-gate command at the committed fix HEAD, it now
+  writes the same green receipt the work pipeline already honors — so the later
+  Verify skips the identical re-run instead of repeating 2–10 minutes of tests it
+  can prove already passed. Fail-closed: focused suites never mint a full-gate
+  receipt, and any doubt means the gate re-runs as today.
+- **Subsequent tasks inherit a proven-green baseline.** On a multi-task run the
+  conductor may hand worker N+1 a `BASELINE_HANDOFF` when task N's Verify just
+  proved the same Quick commands green and nothing relevant moved — the worker
+  records the provenance and skips re-proving it. The first task's baseline always
+  runs (it catches local-environment failures CI can't see), lint always runs, and
+  red-baseline detection is unchanged.
+
 ## [flow-next 4.3.0] - 2026-08-21
 
 OpenCode joins the first-class harness roster. If OpenCode is your daily driver,
