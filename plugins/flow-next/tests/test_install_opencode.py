@@ -44,7 +44,11 @@ READ_SURFACE_EXCLUSIONS = {
     ".cursor-plugin": "host manifest",
     ".codex-plugin": "host manifest",
     "codex": "committed Codex rewrite mirror (must not land at dest)",
-    "skills": "installed separately (and minus flow-next-setup/)",
+    "skills": "installed separately",
+    ".flow-next-opencode-manifest": (
+        "dest-root ownership/detection file written by the installer, "
+        "not a support dir to copy"
+    ),
     "commit": "non-filesystem noise (URL fragment)",
     "..": "non-filesystem noise (../../../ matching ../../ then ..)",
 }
@@ -157,22 +161,29 @@ class TestOpencodeCommandStubs(unittest.TestCase):
             expected = (FIXTURES / "commands" / "uninstall.md").read_bytes()
             self.assertEqual(got, expected)
 
-    def test_setup_is_excluded_by_name(self) -> None:
+    def test_setup_is_included_as_ordinary_roster_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "dest"
             paths = Path(tmp) / "paths"
-            buf = StringIO()
-            with redirect_stdout(buf):
+            with redirect_stdout(StringIO()):
                 rels = self.gen.generate_commands(
                     FIXTURES / "commands",
                     FIXTURES / "skills",
                     dest,
                     paths,
                 )
-            self.assertIn(self.gen.SETUP_EXCLUSION_NOTE, buf.getvalue())
-            self.assertFalse((dest / "commands" / "flow-next-setup.md").exists())
+            stub = dest / "commands" / "flow-next-setup.md"
+            self.assertTrue(stub.is_file())
             self.assertFalse((dest / "commands" / "setup.md").exists())
-            self.assertNotIn("commands/flow-next-setup.md", rels)
+            self.assertIn("commands/flow-next-setup.md", rels)
+            text = stub.read_text(encoding="utf-8")
+            self.assertIn(
+                "description: Fixture setup skill for OpenCode command stubs.",
+                text,
+            )
+            installed = dest.resolve() / "skills" / "flow-next-setup" / "SKILL.md"
+            self.assertIn(str(installed), text)
+            self.assertIn("$ARGUMENTS", text)
 
     def test_command_without_skill_dir_is_not_in_roster(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -369,7 +380,14 @@ class TestOpencodeInstaller(unittest.TestCase):
             owned = set(_manifest_paths(dest))
             self.assertNotIn("my-other-tool", owned)
             self.assertNotIn("skills/user-skill", owned)
-            self.assertFalse((dest / "skills" / "flow-next-setup").exists())
+            self.assertTrue((dest / "skills" / "flow-next-setup").is_dir())
+            self.assertTrue(
+                (dest / "skills" / "flow-next-setup" / "SKILL.md").is_file()
+            )
+            self.assertTrue((dest / "commands" / "flow-next-setup.md").is_file())
+            owned_text = "\n".join(_manifest_paths(dest))
+            self.assertIn("skills/flow-next-setup", owned_text)
+            self.assertIn("commands/flow-next-setup.md", owned_text)
 
     def test_r2_layout_two_levels_up_flowctl_and_templates(self) -> None:
         # Self-referential on the pinned directory names (skills/, scripts/,

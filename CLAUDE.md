@@ -76,7 +76,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Factory Droid | auto-translates the Claude plugin format on install | canonical files as-is (`DROID_PLUGIN_ROOT` alias) |
 | Cursor | RECOMMENDED: team-marketplace repo import (root `.cursor-plugin/marketplace.json`); fallback: `scripts/install-cursor.sh` / `.ps1` (blanket rsync to `~/.cursor/plugins/local/`, excludes codex/ + tests/); manifest at `plugins/flow-next/.cursor-plugin/plugin.json` | canonical files AS-IS - no rewrite pass exists |
 | Grok Build | reads the Claude plugin format directly (compat, verified) | canonical files as-is |
-| OpenCode | installer scatter (`scripts/install-opencode.sh` -> `~/.config/opencode/`; skills as-is minus setup, generated agents/commands) | canonical files + generated glue |
+| OpenCode | installer scatter (`scripts/install-opencode.sh` -> `~/.config/opencode/`; skills as-is, generated agents/commands; setup detects via the ownership manifest) | canonical files + generated glue |
 
 **Architectural rule:** canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites them in the Codex mirror. Skill prose stays concrete; cross-platform maintenance lives in one place — the sync script. Cursor/Droid/Grok get NO rewrite pass, so anything Claude-specific in canonical prose must either work there or carry an explicit portable-host clause.
 

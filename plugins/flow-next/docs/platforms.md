@@ -39,7 +39,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 
 `/flow-next:setup` **copies nothing into your repo.** It runs `flowctl init`, writes a slim versioned docs snippet (CLAUDE.md / AGENTS.md), walks the config ceremony, and optionally seeds user-owned files (`SPEC.md`, `.flow/criteria.md`, `.codex/agents/*.toml` on Codex, Ralph if you opt in).
 
-Every host resolves `flowctl` from the plugin install itself: Claude Code and Droid via their plugin-root env vars, Cursor and Grok by deriving the plugin root from the skill file's own absolute path, Codex from `${CODEX_HOME:-$HOME/.codex}/scripts/`. The agent guide is pulled live via `flowctl usage`; the spec template resolves through the bundled cascade.
+Every host resolves `flowctl` from the plugin install itself: Claude Code and Droid via their plugin-root env vars, Cursor, Grok, and OpenCode by deriving the plugin root from the skill file's own absolute path, Codex from `${CODEX_HOME:-$HOME/.codex}/scripts/`. The agent guide is pulled live via `flowctl usage`; the spec template resolves through the bundled cascade.
 
 **Plugin updates land silently — no setup re-run.** Re-run it only when setup says the docs-snippet schema bumped, or to change configuration. Repos set up before this layout carry leftover `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` snapshots; setup offers to delete them, and deleting them changes nothing observable. Contributor-facing internals: [`agent_docs/setup.md`](../../../agent_docs/setup.md).
 
@@ -347,20 +347,22 @@ git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-inst
 
 Re-run after `git pull` to update. `--dest <path>` overrides the target (default `${XDG_CONFIG_HOME:-$HOME/.config}/opencode`); `--uninstall` removes exactly what the ownership manifest lists; `--force` claims a colliding unowned directory.
 
+Then restart OpenCode (or start a new session) and run **`/flow-next-setup`**. Setup detects OpenCode via the ownership manifest at the plugin root (`.flow-next-opencode-manifest` — the config root two levels above SKILL.md).
+
 ### Installed layout
 
 | Path (under the config root) | What |
 |---|---|
-| `skills/<name>/` | canonical skills as-is — **except `flow-next-setup/`** (see limitations) |
+| `skills/<name>/` | canonical skills as-is, including `flow-next-setup/` |
 | `scripts/`, `templates/`, `references/`, `docs/` | plugin-root support dirs — two levels above any `skills/<name>/SKILL.md`, so the existing plugin-root resolution rung finds `flowctl`, the spec-template cascade, and references with zero prose changes |
 | `agents/flow-next-<name>.md` | generated from canonical agents: body byte-identical, `mode: subagent`, `disallowedTools` translated to a `permission:` deny map (pinned against `https://opencode.ai/config.json`, 2026-08-20, opencode 1.18.19) |
-| `commands/flow-next-<name>.md` | generated slash stubs that load the installed SKILL.md and forward `$ARGUMENTS`; `uninstall` copied verbatim; no `setup` stub |
-| `.flow-next-opencode-manifest` | deterministic ownership manifest — installs, re-runs, and `--uninstall` operate only on paths it lists |
+| `commands/flow-next-<name>.md` | generated slash stubs that load the installed SKILL.md and forward `$ARGUMENTS`; `uninstall` copied verbatim; `setup` is an ordinary roster stub (`/flow-next-setup`) |
+| `.flow-next-opencode-manifest` | deterministic ownership manifest — installs, re-runs, and `--uninstall` operate only on paths it lists. Also the setup-skill platform-detection signal (the config root IS the plugin root two levels above SKILL.md) |
 
 ### Caveats / intentional limits
 
-- **Slash form is flat:** `/flow-next-plan`, not `/flow-next:plan` — OpenCode command names come from flat filenames, so every `/flow-next:<name>` in other docs maps to `/flow-next-<name>` here.
-- **Setup is not supported.** The `flow-next-setup` skill is not installed and no command stub exists: setup's platform cascade has no OpenCode rung and would fall through to its Codex branch, writing wrong-shaped project instructions. Manual alternative: `flowctl init`, then `flowctl config set <key> <value>` for the ceremony keys (review backend, memory, plan-sync).
+- **Slash form is flat:** `/flow-next-plan`, `/flow-next-setup`, not `/flow-next:plan` — OpenCode command names come from flat filenames, so every `/flow-next:<name>` in other docs maps to `/flow-next-<name>` here.
+- **Setup is supported** — same ceremony as every other host. After install, restart OpenCode (or start a new session) and run `/flow-next-setup`. Detection is the ownership manifest at the plugin root (`.flow-next-opencode-manifest`); never an env var, never an absence signal. Setup writes the Claude-flavor docs snippet to AGENTS.md with `/flow-next:` rewritten to the flat `/flow-next-` form, proposes the routing block on AGENTS.md, and does not offer Ralph.
 - **A co-existing Codex install wins flowctl resolution.** The canonical cascade's first env rung falls back to `~/.codex/scripts/flowctl`; on a machine that also has the Codex install, that copy resolves first and the OpenCode-installed `scripts/` tree is only the backstop. Keep both current by re-running each installer after updates.
 - **No native blocking-ask primitive** — interactive skills degrade to the numbered-prompt fallback already present in canonical prose.
 - **Ralph is not supported** (hook system incompatible), and agent `model:` tiers inherit the session model.

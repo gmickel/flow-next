@@ -92,12 +92,7 @@ HANDLED_KEYS: frozenset[str] = frozenset(
     {"description", "disallowedTools", "readonly"}
 )
 
-EXCLUDED_COMMANDS: frozenset[str] = frozenset({"setup"})
 VERBATIM_COMMANDS: frozenset[str] = frozenset({"uninstall"})
-
-SETUP_EXCLUSION_NOTE = (
-    "excluding commands/setup.md (setup is not supported on OpenCode)"
-)
 
 
 class GenerateError(Exception):
@@ -393,8 +388,9 @@ def generate_commands(
 ) -> list[str]:
     """Roster: commands/<name>.md whose skills/flow-next-<name>/SKILL.md exists.
 
-    uninstall.md is copied verbatim (whole file). setup.md is excluded by name.
-    Writes nothing on failure (the setup note may already have been printed).
+    uninstall.md is copied verbatim (whole file). setup.md is an ordinary
+    roster command (stub generated when skills/flow-next-setup/SKILL.md exists).
+    Writes nothing on failure.
     """
     commands_dir = _require_dir(commands_dir, "canonical commands dir")
     skills_dir = _require_dir(skills_dir, "canonical skills dir")
@@ -407,9 +403,6 @@ def generate_commands(
     planned: list[tuple[Path, bytes, str]] = []
     for src in sources:
         stem = src.stem
-        if stem in EXCLUDED_COMMANDS:
-            print(SETUP_EXCLUSION_NOTE)
-            continue
         dest_name = f"{flow_next_prefix(stem)}.md"
         rel = f"commands/{dest_name}"
         dest_path = dest / rel
@@ -459,7 +452,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
             "DEST",
             "PATHS_FILE",
         ),
-        help="generate DEST/commands/flow-next-<name>.md stubs (uninstall verbatim; setup excluded)",
+        help="generate DEST/commands/flow-next-<name>.md stubs (uninstall verbatim; setup included)",
     )
     return parser.parse_args(argv)
 

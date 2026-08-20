@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Fixture setup command that must not be stubbed.
+description: Fixture setup command that is an ordinary roster stub.
 ---
 
-Should never appear at dest.
+Stubbed via skills/flow-next-setup/SKILL.md.

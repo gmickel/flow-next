@@ -34,6 +34,8 @@ elif [ -n "${CURSOR_AGENT:-}" ] \
   PLATFORM="cursor"
 elif [ -n "${GROK_AGENT:-}" ]; then
   PLATFORM="grok"
+elif [ -f "${PLUGIN_ROOT}/.flow-next-opencode-manifest" ]; then
+  PLATFORM="opencode"
 elif [ -n "${CLAUDECODE:-}" ] \
   && [ -f "${PLUGIN_ROOT}/.claude-plugin/plugin.json" ]; then
   PLATFORM="claude-code"
@@ -53,24 +55,26 @@ fi
 `CLAUDECODE` is **inherited by child processes** - same class as the `CURSOR_AGENT` misfire above - so it is paired with a positive discriminator and a lowered position, never used bare:
 
 - **Positive discriminator:** the Claude plugin manifest `.claude-plugin/plugin.json` must exist at the resolved `PLUGIN_ROOT`. That is present in every Claude-format install and **absent** from a Codex install root (`$CODEX_HOME`, whose manifest is a top-level `plugin.json`), so a `codex exec` child that inherited `CLAUDECODE` from its Claude parent still classifies `codex`.
-- **Position: after Droid / Cursor / Grok, before the `codex` fallback.** Each of those hosts proves itself with a signal set by its OWN process (`DROID_PLUGIN_ROOT`, `CURSOR_AGENT` + a `~/.cursor/` install, `GROK_AGENT`), and all of them read the canonical Claude plugin format - so a Cursor or Grok agent launched **from** a Claude Code shell inherits `CLAUDECODE` and would be misclassified `claude-code` by a higher rung. Ordering is what keeps an inherited marker from outranking a host's own signal. This is a deliberate precedence change from the pre-#306 cascade, where the Claude rung sat second: that position only ever protected the `CLAUDE_PLUGIN_ROOT` reading, which on Claude Code is never there.
+- **Position: after Droid / Cursor / Grok / OpenCode, before the `codex` fallback.** Each of those hosts proves itself with a signal set by its OWN process or install (`DROID_PLUGIN_ROOT`, `CURSOR_AGENT` + a `~/.cursor/` install, `GROK_AGENT`, the OpenCode ownership manifest), and all of them read the canonical Claude plugin format - so a Cursor or Grok agent launched **from** a Claude Code shell inherits `CLAUDECODE` and would be misclassified `claude-code` by a higher rung. Ordering is what keeps an inherited marker from outranking a host's own signal. This is a deliberate precedence change from the pre-#306 cascade, where the Claude rung sat second: that position only ever protected the `CLAUDE_PLUGIN_ROOT` reading, which on Claude Code is never there.
 
 **Grok ordering matters (fn-126).** Grok Build (xAI's `grok` CLI) reads the canonical Claude plugin format AS-IS and drives with `/flow-next-*` / `/flow-next:` slash commands — not the Codex `$flow-next-` mirror. Without a positive signal it fell through to `else → codex` and setup wrote Codex-shaped `$flow-next-` snippets into AGENTS.md (dogfood 2026-07-22). **Probe-verified signal:** `GROK_AGENT=1` is set BY grok in its agent shell (absent from a plain-shell control on the same machine). **Rejected non-signals:** `~/.grok/` exists on the machine regardless (install dir), and `~/.grok/bin` on `PATH` is profile-level — neither distinguishes a grok session. The `GROK_AGENT` branch MUST come after Droid / Cursor (so a real Cursor/Droid host that merely inherited `GROK_AGENT` from a parent grok shell still classifies by its own higher-precedence signal), BEFORE the inherited-marker `CLAUDECODE` rung, and BEFORE the `else → codex` fallback.
 
+**OpenCode ordering matters.** OpenCode has no plugin-root env var and no host-process marker. Without a positive signal it fell through to `else → codex` and setup would write Codex-shaped `$flow-next-` snippets — wrong, because OpenCode command stubs are the flat `/flow-next-<name>` form (filenames, not `/flow-next:<name>`). **We-control signal:** `scripts/install-opencode.sh` writes `.flow-next-opencode-manifest` at the config root, which IS the plugin root two levels above SKILL.md. After `PLUGIN_ROOT` is derived, `[ -f "${PLUGIN_ROOT}/.flow-next-opencode-manifest" ]` → `PLATFORM=opencode`. Never an env var, never an absence signal. The OpenCode rung MUST come after Grok, BEFORE the inherited-marker `CLAUDECODE` rung, and BEFORE the `else → codex` fallback.
+
 **Known nesting edge (Droid → Grok) — NEEDS-HUMAN.** A grok child inherits `CLAUDECODE` from a Claude parent, and the Claude rung now sits BELOW grok, so Claude-from-parent does not misfire. It did **not** disprove `DROID_PLUGIN_ROOT` propagation: if a grok child inherits `DROID_PLUGIN_ROOT` from a Droid parent shell, the cascade classifies as `droid` (higher precedence). Treat nested Droid→Grok as **unsupported pending a this-process-is-grok discriminator** unless a NEEDS-HUMAN smoke confirms `DROID_PLUGIN_ROOT` does not propagate. Cursor-from-grok remains correct via its higher-precedence signal. The mirror-image nesting edge is Claude-from-Grok / Claude-from-Cursor: a Claude Code session launched inside a grok or Cursor agent shell inherits that host's marker and classifies as the parent host. That trade is deliberate - both markers are set by the parent's own process, and the reverse (Claude outranking them on an inherited `CLAUDECODE`) is the far more common nesting, since Claude sessions routinely spawn grok / cursor-agent bridges.
 
-**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Droid (`DROID_PLUGIN_ROOT`) still wins first — Droid/Cursor precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`; (8) Claude Code plugin skill — `CLAUDECODE=1`, `CLAUDE_PLUGIN_ROOT` **unset** (it never reaches a skill's Bash env), `PLUGIN_ROOT` carrying `.claude-plugin/plugin.json` → `claude-code`; (9) `CLAUDECODE=1` inherited by a Cursor / Grok / Droid child → that host's own signal wins (Claude rung is last before the fallback); (10) `CLAUDECODE=1` with a Codex-home `PLUGIN_ROOT` (no `.claude-plugin/plugin.json`) → `codex`.
+**Matrix (detection fixtures):** (1) marketplace whole-repo import under `~/.cursor/` + may have `codex/` → `cursor`; (2) local `install-cursor` under `~/.cursor/plugins/local/` (no `codex/`) → `cursor`; (3) Codex under `$CODEX_HOME` / `~/.codex` with inherited `CURSOR_AGENT` → `codex`; (4) Droid (`DROID_PLUGIN_ROOT`) still wins first — Droid/Cursor precedence unchanged; (5) standalone `GROK_AGENT=1` (no higher signal) → `grok`; (6) `GROK_AGENT=1` + `CURSOR_AGENT`(+cursor install) / `DROID_PLUGIN_ROOT` → higher host wins; (7) plain shell (no host signal) → `codex`; (8) Claude Code plugin skill — `CLAUDECODE=1`, `CLAUDE_PLUGIN_ROOT` **unset** (it never reaches a skill's Bash env), `PLUGIN_ROOT` carrying `.claude-plugin/plugin.json` → `claude-code`; (9) `CLAUDECODE=1` inherited by a Cursor / Grok / Droid child → that host's own signal wins (Claude rung is last before the fallback); (10) `CLAUDECODE=1` with a Codex-home `PLUGIN_ROOT` (no `.claude-plugin/plugin.json`) → `codex`; (11) `PLUGIN_ROOT` carrying `.flow-next-opencode-manifest` (no higher signal) → `opencode`; (12) same + `GROK_AGENT=1` → `grok`; (13) same + inherited `CLAUDECODE=1` without `.claude-plugin/plugin.json` → `opencode`.
 
 Store `PLATFORM` for use in later steps. This determines:
 - Which manifest to read for version (`plugin.json`)
 - Which docs file to prefer (CLAUDE.md vs AGENTS.md)
 - Whether to copy Codex agents to project (hooks are **not** copied here — Ralph is opt-in via the Ralph question + `/flow-next:ralph-init`)
-- Which command-name syntax the docs snippet uses (`/flow-next:plan` for Claude Code / Droid / **Cursor** / **Grok**; `$flow-next-plan` for Codex)
+- Which command-name syntax the docs snippet uses (`/flow-next:plan` for Claude Code / Droid / **Cursor** / **Grok**; `/flow-next-plan` flat form for **OpenCode**; `$flow-next-plan` for Codex)
 
 ### Done when
 
-- `PLUGIN_ROOT` resolves to a directory containing `scripts/` and a plugin manifest, and `PLATFORM` holds exactly one of `claude-code` / `codex` / `droid` / `cursor` / `grok`.
-- **`PLATFORM` came from the host's own signals in the documented precedence, and every downstream choice matches it.** A Cursor or Grok repo that received the Codex `$flow-next-` snippet, a Codex install misclassified as Cursor through an inherited `CURSOR_AGENT`, or a Claude Code run classified `codex` because the cascade looked for `CLAUDE_PLUGIN_ROOT` instead of `CLAUDECODE` (#306), has broken this.
+- `PLUGIN_ROOT` resolves to a directory containing `scripts/` and a plugin manifest, and `PLATFORM` holds exactly one of `claude-code` / `codex` / `droid` / `cursor` / `grok` / `opencode`.
+- **`PLATFORM` came from the host's own signals in the documented precedence, and every downstream choice matches it.** A Cursor or Grok repo that received the Codex `$flow-next-` snippet, a Codex install misclassified as Cursor through an inherited `CURSOR_AGENT`, a Claude Code run classified `codex` because the cascade looked for `CLAUDE_PLUGIN_ROOT` instead of `CLAUDECODE` (#306), or an OpenCode install classified `codex` because the cascade missed `.flow-next-opencode-manifest`, has broken this.
 
 ## Step 1: Initialize .flow/
 
@@ -97,6 +101,7 @@ Also read plugin version from the platform-specific manifest:
 - Factory Droid: `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Droid's interop layer reads the Claude Code manifest directly for Claude-first plugins like flow-next)
 - Cursor: `${PLUGIN_ROOT}/.cursor-plugin/plugin.json`
 - Grok: `${PLUGIN_ROOT}/.claude-plugin/plugin.json` (Grok reads the canonical Claude plugin format AS-IS — no separate Grok manifest)
+- OpenCode: `${PLUGIN_ROOT}/.flow-next-opencode-manifest` (ownership file at the config root; no separate plugin.json — version falls through to `.claude-plugin/plugin.json` if present, else skip)
 
 Check whichever matches `PLATFORM`. Fall back to `.claude-plugin/plugin.json` if the platform-specific file doesn't exist.
 
@@ -112,7 +117,7 @@ Old `setup_mode` / `setup_version` stamps from pre-copy-less installs are inert 
 
 ## Step 2b: Leftover copy artifacts (cleanup offer)
 
-**Setup never copies flowctl, the spec template, or the usage guide into a repo.** Every host resolves `flowctl` from the plugin install (Claude Code / Droid via their plugin-root env vars, Cursor and Grok by deriving the plugin root from the skill file's own absolute path, Codex from `$CODEX_HOME`). Repos set up before that carry leftover snapshots; this step offers to delete them.
+**Setup never copies flowctl, the spec template, or the usage guide into a repo.** Every host resolves `flowctl` from the plugin install (Claude Code / Droid via their plugin-root env vars, Cursor / Grok / OpenCode by deriving the plugin root from the skill file's own absolute path, Codex from `$CODEX_HOME`). Repos set up before that carry leftover snapshots; this step offers to delete them.
 
 Enumerate the residue. The machine-readable list is flowctl's `LEGACY_COPY_ARTIFACTS` — the single source of truth; keep this probe in step with it:
 
@@ -238,7 +243,7 @@ Then:
 
 ## Step 4b: Codex-specific project setup (PLATFORM=codex only)
 
-**This step runs only when `PLATFORM` is `codex`.** A `.codex/agents/` directory created on a Claude Code, Droid, Cursor, or Grok host has broken this. (Cursor and Grok drive the workflow with `/flow-next:*` slash commands, not project-scoped `.codex/` agents. Grok never copies `.codex/agents`.)
+**This step runs only when `PLATFORM` is `codex`.** A `.codex/agents/` directory created on a Claude Code, Droid, Cursor, Grok, or OpenCode host has broken this. (Cursor, Grok, and OpenCode drive the workflow with slash commands, not project-scoped `.codex/` agents. Grok never copies `.codex/agents`. OpenCode never copies `.codex/agents`.)
 
 On Codex, agents live in project-scoped `.codex/` directories (not in the plugin cache). Copy them. **Do not copy or enable Ralph hooks here** — hooks are opt-in via the Ralph question (Step 6d, always asked) and `/flow-next:ralph-init` registration prose.
 
@@ -342,6 +347,17 @@ Store detection results for use in questions. When showing options, indicate cur
 Choose the correct template based on platform:
 - **Codex** (`PLATFORM=codex`): read [templates/agents-md-snippet.md](templates/agents-md-snippet.md) — uses `$flow-next-plan` syntax
 - **Claude Code / Droid / Cursor / Grok**: read [templates/claude-md-snippet.md](templates/claude-md-snippet.md) — uses `/flow-next:plan` slash syntax (Cursor runs the same slash commands; on Cursor the snippet lands in AGENTS.md. Grok drives with `/flow-next-` slash commands and reads BOTH CLAUDE.md and AGENTS.md — lifecycle snippet targets CLAUDE.md by default; a pre-existing wrong Codex `$flow-next-` marker block is consent-refreshed to the slash form, marker-scoped)
+- **OpenCode** (`PLATFORM=opencode`): same Claude-flavor template as above, rewritten `/flow-next:` → `/flow-next-` (flat command names; never `$flow-next-`). Lifecycle snippet lands in AGENTS.md. Rewrite the template into a temp file *before* any `setup-block` call so the helper hashes the bytes actually applied:
+
+  ```bash
+  SNIPPET_TEMPLATE="${PLUGIN_ROOT}/skills/flow-next-setup/templates/claude-md-snippet.md"
+  if [[ "$PLATFORM" == "opencode" ]]; then
+    SNIPPET_TEMPLATE="${TMPDIR:-/tmp}/flow-next-opencode-snippet.md"
+    sed 's|/flow-next:|/flow-next-|g' \
+      "${PLUGIN_ROOT}/skills/flow-next-setup/templates/claude-md-snippet.md" \
+      > "$SNIPPET_TEMPLATE"
+  fi
+  ```
 
 Both templates are the same slim rail: bare `flowctl`, `flowctl usage` pull directives, and an internal `<!-- flow-next:snippet:vN -->` sentinel that versions the block.
 
@@ -509,7 +525,7 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-**When `PLATFORM` is neither `cursor` nor `grok`** (Claude Code / Droid / Codex — unchanged; Cursor and Grok each use their dedicated menu above):
+**When `PLATFORM` is neither `cursor` nor `grok`** (Claude Code / Droid / Codex / OpenCode — unchanged; Cursor and Grok each use their dedicated menu above; OpenCode uses this default Host + None menu):
 ```json
 {
   "header": "Review",
@@ -596,11 +612,26 @@ For **Grok** (`PLATFORM=grok`) — Grok reads BOTH CLAUDE.md and AGENTS.md; life
 }
 ```
 
+For **OpenCode** (`PLATFORM=opencode`) — OpenCode reads AGENTS.md. Command stubs are the flat `/flow-next-<name>` form (not `/flow-next:<name>`, not `$flow-next-`). The Claude-flavor snippet is rewritten `/flow-next:` → `/flow-next-` before apply (6b temp-template block); the routing block also targets AGENTS.md:
+```json
+{
+  "header": "Docs",
+  "question": "Update project documentation with Flow-Next instructions? Adds a marker-bounded section teaching any agent that opens this repo how to track work via flowctl; your text outside the markers is never touched.",
+  "options": [
+    {"label": "AGENTS.md only (Recommended)", "description": "Add flow-next section to AGENTS.md (OpenCode reads this; slash form is /flow-next-<name>)"},
+    {"label": "CLAUDE.md only", "description": "Add flow-next section to CLAUDE.md"},
+    {"label": "Both", "description": "Add flow-next section to both files"},
+    {"label": "Skip", "description": "Don't update documentation"}
+  ],
+  "multiSelect": false
+}
+```
+
 **Ralph question.** Resolve its gate before reading question prose:
 
 ```bash
 RALPH_ASK=1
-if [[ "$PLATFORM" == "cursor" || "$PLATFORM" == "grok" ]]; then
+if [[ "$PLATFORM" == "cursor" || "$PLATFORM" == "grok" || "$PLATFORM" == "opencode" ]]; then
   RALPH_ASK=0
   RALPH_OUTCOME="off (unsupported on $PLATFORM)"
 elif [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
@@ -610,7 +641,7 @@ elif [[ "${FLOW_RALPH:-}" == "1" || -n "${REVIEW_RECEIPT_PATH:-}" \
 fi
 ```
 
-On Cursor/Grok: never offer, never register, never run `/flow-next:ralph-init`.
+On Cursor/Grok/OpenCode: never offer, never register, never run `/flow-next:ralph-init`.
 When `RALPH_ASK=1`, **MUST read and follow exactly**
 [references/ralph-question.md](references/ralph-question.md) and add its object
 to the grouped prompt. When zero, read no Ralph reference and ask no Ralph
@@ -736,7 +767,8 @@ esac
 Use the correct template based on **target file** and **platform**:
 - AGENTS.md on **Codex**: use [templates/agents-md-snippet.md](templates/agents-md-snippet.md) (uses `$flow-next-plan` syntax)
 - AGENTS.md on **Claude Code / Droid / Cursor / Grok**: use [templates/claude-md-snippet.md](templates/claude-md-snippet.md) (uses `/flow-next:plan` slash syntax — Cursor and Grok run the slash commands, so their AGENTS.md must carry the `/flow-next:` snippet, NOT the Codex `$flow-next-` one; a wrong Codex `$` block is consent-refreshed marker-scoped)
-- CLAUDE.md (any platform — including Grok's default lifecycle target): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md)
+- AGENTS.md on **OpenCode**: use the Claude-flavor snippet rewritten `/flow-next:` → `/flow-next-` via the 6b temp-template block (`$SNIPPET_TEMPLATE`). Never the Codex `$flow-next-` form. Pass that rewritten file as `--template` to every `setup-block apply` / `resolve` for this platform so hashes match the bytes written.
+- CLAUDE.md (any platform — including Grok's default lifecycle target): use [templates/claude-md-snippet.md](templates/claude-md-snippet.md). On OpenCode, if CLAUDE.md is also a resolved target, apply the same `/flow-next:` → `/flow-next-` rewrite (same `$SNIPPET_TEMPLATE`) so both files carry the flat form.
 
 **Resolve the target file set:** an explicit Docs-question answer is authoritative - if the user is asked and selects specific files (or declines one), honor exactly that; never touch a file the user just deselected. The one addition is a backfill for the SKIPPED case: when the Docs question is omitted entirely because the block is already current (per the Note above), still run `apply` on each already-marker-bearing file. Rationale (R8): a current-but-hashless block (written by a pre-hash plugin version) would otherwise never reach `apply`, so its pristine hash never gets backfilled and the NEXT template change wrongly prompts "Overwrite customized?". `apply` on a current block is cheap and idempotent - it returns `unchanged` and records the missing hash. So: resolve targets = files chosen by the Docs question when it was asked; OR, when the Docs question was skipped, the files already carrying the `<!-- BEGIN FLOW-NEXT -->` marker. Run the helper once per resolved file.
 
@@ -746,7 +778,7 @@ For each resolved file (CLAUDE.md and/or AGENTS.md) - the block mechanics (marke
 
    ```bash
    "${PLUGIN_ROOT}/scripts/flowctl" setup-block apply --file <FILE> \
-     --template "${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md" --json
+     --template "${SNIPPET_TEMPLATE:-${PLUGIN_ROOT}/skills/flow-next-setup/templates/<snippet>.md}" --json
    ```
 
 2. Route on the returned `action` - the first four need no prompt:
@@ -777,7 +809,7 @@ Resolve the target with this ladder, first match wins:
 
 1. Docs answered this run: mirror `CLAUDE.md only`, `AGENTS.md only`, or `Both`.
 2. Otherwise the files already carrying `<!-- BEGIN FLOW-NEXT -->`.
-3. Otherwise Codex / Cursor / Grok → `AGENTS.md`; Claude Code / Droid →
+3. Otherwise Codex / Cursor / Grok / OpenCode → `AGENTS.md`; Claude Code / Droid →
    `CLAUDE.md`.
 
 Per target, in order:
@@ -809,7 +841,7 @@ Then say what was written, once, in one sentence:
 `Wrote a commented model-routing example to <file> — every line is commented out; edit it to name the models you want for each tier, or delete the block.`
 (Nothing was written → say `kept (yours)` / `skipped (shim)` / `skipped (docs declined)` / `skipped (headless)` instead and move on.)
 
-**Ralph** (only when its question was asked; Cursor/Grok remain
+**Ralph** (only when its question was asked; Cursor/Grok/OpenCode remain
 unsupported and read no Ralph reference):
 
 - `Yes, enable or keep` → **MUST read and follow exactly**
@@ -832,7 +864,7 @@ marker, do not read either Ralph reference, do not register hooks, and set
 ```
 Flow-Next setup complete!
 
-Platform: <claude-code|codex|droid|cursor|grok>
+Platform: <claude-code|codex|droid|cursor|grok|opencode>
 
 Written:
 - <CLAUDE.md and/or AGENTS.md> flow-next snippet (marker-fenced, sentinel v<N>)
@@ -863,6 +895,17 @@ Grok host notes:
 - Detection: GROK_AGENT=1 (not ~/.grok or PATH)
 ```
 
+**If PLATFORM=opencode, also show:**
+```
+OpenCode host notes:
+- flowctl resolves from the plugin install via the skill's own absolute path (OpenCode exposes no plugin-root env vars) — nothing is copied into the repo
+- Docs: AGENTS.md with the Claude snippet rewritten /flow-next: → /flow-next- (flat command names; never $flow-next-)
+- Routing block: AGENTS.md
+- Review: default menu (Host + None). Ralph: unsupported on OpenCode (not offered; not registered)
+- Detection: ${PLUGIN_ROOT}/.flow-next-opencode-manifest (installer ownership file; never an env var)
+- Invoke setup later as /flow-next-setup (flat), not /flow-next:setup
+```
+
 **If PLATFORM=codex, also show:**
 ```
 Codex project setup:
@@ -889,7 +932,7 @@ Model routing: <ROUTING_OUTCOME — "written to CLAUDE.md" | "kept (yours)" | "s
 
 Notes:
 - Plugin updates need no per-repo action, on any host — nothing was copied, so nothing goes stale. Re-run /flow-next:setup only when setup says the snippet schema bumped, or to change configuration / seed files.
-- Ralph: answered in the setup ceremony (default off; skipped entirely on Cursor and Grok — unsupported). To enable later on supported hosts: /flow-next:ralph-init (merges project hooks; plugin ships none)
+- Ralph: answered in the setup ceremony (default off; skipped entirely on Cursor, Grok, and OpenCode — unsupported). To enable later on supported hosts: /flow-next:ralph-init (merges project hooks; plugin ships none)
 - Live QA stage: off by default. `flowctl config set pipeline.qa on` makes /flow-next:pilot run one live /flow-next:qa pass over the finished build before make-pr (needs a running app plus a browser driver)
 - Use Linear / GitHub Issues / GitLab / Jira for project management? Run /flow-next:tracker-sync to configure the (opt-in) two-way tracker bridge — it runs a discovery ceremony (detects Linear MCP / LINEAR_API_KEY / gh auth / glab auth or GITLAB_TOKEN / JIRA_BASE_URL + credential, asks, writes config), then syncs specs ⇄ issues; on Linear it additionally makes your PRs reviewable as Linear Diffs. Skips cleanly if you don't use a tracker; adds nothing to the base install until enabled.
 - Uninstall (run manually): remove the <!-- BEGIN/END FLOW-NEXT --> and <!-- flow-next:model-routing:start/end --> blocks from docs (plus any legacy .flow/bin, .flow/templates, .flow/usage.md leftovers, if you kept them) — or run /flow-next:uninstall for full cleanup (also strips Ralph guard hook entries from project settings)

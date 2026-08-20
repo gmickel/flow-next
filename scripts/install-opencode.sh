@@ -22,15 +22,17 @@
 # (never a committed OpenCode tree; canonical prose is not rewritten).
 #
 # What gets installed:
-#   - Skills:     skills/<name>/            (canonical, as-is, minus flow-next-setup/)
+#   - Skills:     skills/<name>/            (canonical, as-is, including
+#                 flow-next-setup/)
 #   - Support:    scripts/, templates/, references/, docs/  at the config root
 #                 (two levels above any skills/<name>/SKILL.md — the existing
 #                 plugin-root resolution rung, zero prose changes)
 #   - Agents:     agents/flow-next-<name>.md    (generated; body byte-identical)
 #   - Commands:   commands/flow-next-<name>.md  (generated stubs; uninstall
-#                 verbatim; setup excluded by name)
+#                 verbatim; setup is an ordinary roster command)
 #   - Manifest:   .flow-next-opencode-manifest  (sorted relative paths; no
-#                 timestamps; no absolute paths)
+#                 timestamps; no absolute paths). Also the setup-skill
+#                 platform-detection signal (PLUGIN_ROOT = this config root).
 #   - Hooks:      none. Never register Ralph / OpenCode JS hooks.
 #   - ~/.claude/: never written.
 #
@@ -40,14 +42,10 @@
 #   .cursor-plugin/  — host manifest
 #   .codex-plugin/   — host manifest
 #   codex/           — committed Codex rewrite mirror (must not land at dest)
-#   skills/          — installed separately (and minus flow-next-setup/)
+#   skills/          — installed separately
 #   non-filesystem   — URL fragments and similar grep noise
 # Result installed here: scripts, templates, references, docs.
 # (Task 3 pins derived − exclusions == this list.)
-#
-# flow-next-setup/ is excluded: OpenCode dispatches skills by description match,
-# so an installed setup SKILL is phrase-reachable and would land in setup's
-# else→codex platform fallback. Setup is unsupported on OpenCode in this spec.
 
 set -euo pipefail
 
@@ -58,7 +56,6 @@ PLUGIN_DIR="$REPO_ROOT/plugins/flow-next"
 MANIFEST_NAME=".flow-next-opencode-manifest"
 # Owned support-dir names at the config root (see derivation comment above).
 SUPPORT_DIRS=(scripts templates references docs)
-SKIP_SKILL="flow-next-setup"
 
 usage() {
     cat <<'EOF'
@@ -73,21 +70,21 @@ Options:
   --help         Show this help
 
 What gets installed:
-  skills/<name>/     canonical skills except flow-next-setup/
+  skills/<name>/     canonical skills (including flow-next-setup/)
   scripts/           flowctl + tracker package + lib/ (and the rest of scripts/)
   templates/         spec.md, criteria.md, ...
   references/        shared disclosure files
   docs/              plugin docs
   agents/            generated OpenCode agents (flow-next-<name>.md)
-  commands/          generated slash-command stubs (uninstall verbatim; no setup)
+  commands/          generated slash-command stubs (uninstall verbatim; setup included)
   .flow-next-opencode-manifest
                      sorted relative paths of every installed file and directory
+                     (also the setup-skill platform-detection signal)
 
 Pinned OpenCode directory names (2026-08-20, opencode 1.18.19,
 https://opencode.ai/config.json): skills/, agents/, commands/ (all plural).
 
 Not installed:
-  flow-next-setup    unsupported on OpenCode (no command stub either)
   Ralph / hooks      OpenCode hook system is incompatible; never registered
 
 Re-run to update the snapshot. Deletions apply only to paths listed in the
@@ -209,7 +206,8 @@ generate_agents() {
 }
 
 # Generate <dest>/commands/flow-next-<name>.md stubs (uninstall verbatim;
-# setup excluded by name). Roster and mapping live in opencode_generate.py.
+# setup is an ordinary roster command). Roster and mapping live in
+# opencode_generate.py.
 generate_commands() {
     local dest="$1"
     local paths_file="$2"
@@ -343,24 +341,17 @@ fi
 for skill_dir in "$PLUGIN_DIR/skills"/*/; do
     [ -d "$skill_dir" ] || continue
     name="$(basename "$skill_dir")"
-    if [ "$name" = "$SKIP_SKILL" ]; then
-        continue
-    fi
     preflight_target "$DEST/skills/$name" "skills/$name" "$OLD_MANIFEST"
 done
 
 mkdir -p "$DEST"
 
-# Skills (canonical as-is), excluding flow-next-setup/.
+# Skills (canonical as-is), including flow-next-setup/.
 mkdir -p "$DEST/skills"
 SKILL_COUNT=0
 for skill_dir in "$PLUGIN_DIR/skills"/*/; do
     [ -d "$skill_dir" ] || continue
     name="$(basename "$skill_dir")"
-    if [ "$name" = "$SKIP_SKILL" ]; then
-        echo "skipping $PLUGIN_DIR/skills/$SKIP_SKILL (setup is not supported on OpenCode)"
-        continue
-    fi
     copy_tree "$skill_dir" "$DEST/skills/$name"
     SKILL_COUNT=$((SKILL_COUNT + 1))
 done
@@ -381,11 +372,7 @@ NEW_MANIFEST="$(mktemp "${TMPDIR:-/tmp}/flow-next-opencode-mf.XXXXXX")"
     for skill_dir in "$DEST/skills"/*/; do
         [ -d "$skill_dir" ] || continue
         name="$(basename "$skill_dir")"
-        # Only list skill dirs that came from this snapshot (skip user skills
-        # and the excluded setup skill, even if a previous copy left it).
-        if [ "$name" = "$SKIP_SKILL" ]; then
-            continue
-        fi
+        # Only list skill dirs that came from this snapshot (skip user skills).
         if [ ! -d "$PLUGIN_DIR/skills/$name" ]; then
             continue
         fi
@@ -445,7 +432,7 @@ if ! python3 "$DEST/scripts/lib/verify_tracker_manifest.py" "$DEST/scripts"; the
 fi
 echo ""
 echo "Installed. OpenCode discovers components from $DEST:"
-echo "  skills:    $SKILL_COUNT (flow-next-setup excluded)"
+echo "  skills:    $SKILL_COUNT"
 echo "  scripts:   $DEST/scripts"
 echo "  templates: $DEST/templates"
 echo "  references: $DEST/references"
@@ -454,13 +441,11 @@ echo "  agents:    $DEST/agents"
 echo "  commands:  $DEST/commands"
 echo "  manifest:  $MANIFEST_PATH"
 echo ""
-echo "Not installed: setup (unsupported), Ralph/hooks."
+echo "Not installed: Ralph/hooks."
 echo ""
 echo "Next steps:"
 echo "  1. Restart OpenCode (or start a new session) so it rescans $DEST."
-echo "  2. /flow-next:setup is NOT supported on OpenCode — run flowctl init"
-echo "     and set config keys by hand (see plugins/flow-next/docs/platforms.md"
-echo "     once that section ships)."
+echo "  2. Run /flow-next-setup in the project (flat slash form)."
 echo "  3. Drive the workflow with the flat slash form: /flow-next-<name>"
 echo "     (not /flow-next:<name>)."
 echo ""
