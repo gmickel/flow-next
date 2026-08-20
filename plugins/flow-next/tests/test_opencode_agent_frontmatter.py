@@ -122,6 +122,19 @@ class TestOpencodeAgentFixtures(unittest.TestCase):
             )
             self.assertEqual(_agent_mds(dest), [])
 
+    def test_fail_closed_unknown_frontmatter_key_writes_nothing(self) -> None:
+        """Closed allowlist: a permission-shaped key the generator does not
+        understand (an allowedTools allowlist is an implicit denial) must fail
+        generation, never be dropped silently."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "dest"
+            paths = Path(tmp) / "paths"
+            with self.assertRaises(self.gen.GenerateError) as cm:
+                self._generate_one("fail-unknown-key.md", dest, paths)
+            self.assertEqual(cm.exception.name, "UNKNOWN_FRONTMATTER_KEY")
+            self.assertIn("allowedTools", cm.exception.detail)
+            self.assertEqual(_agent_mds(dest), [])
+
     def test_fail_closed_mixed_dir_emits_no_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "dest"

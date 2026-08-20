@@ -470,6 +470,42 @@ class TestOpencodeInstaller(unittest.TestCase):
             self.assertIn("no ownership manifest", result.stderr)
             self.assertEqual((keep / "mine.sh").read_text(encoding="utf-8"), "stay\n")
 
+    def test_rerun_drops_stale_manifest_paths_only(self) -> None:
+        """The OLD_MANIFEST comm -23 branch: a path the previous manifest owned
+        but this snapshot no longer ships is removed on re-run; an unclaimed
+        sibling in the same tree survives."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "opencode"
+            result = self._run(dest)
+            self.assertEqual(
+                result.returncode, 0, f"{result.stdout}\n{result.stderr}"
+            )
+            stale = dest / "skills" / "flow-next-retired" / "SKILL.md"
+            stale.parent.mkdir(parents=True)
+            stale.write_text("# retired upstream\n", encoding="utf-8")
+            unclaimed = dest / "skills" / "user-own" / "SKILL.md"
+            unclaimed.parent.mkdir(parents=True)
+            unclaimed.write_text("# mine\n", encoding="utf-8")
+            manifest = dest / MANIFEST_NAME
+            lines = manifest.read_text(encoding="utf-8").splitlines()
+            lines += [
+                "skills/flow-next-retired",
+                "skills/flow-next-retired/SKILL.md",
+            ]
+            manifest.write_text(
+                "\n".join(sorted(set(lines))) + "\n", encoding="utf-8"
+            )
+            result = self._run(dest)
+            self.assertEqual(
+                result.returncode, 0, f"{result.stdout}\n{result.stderr}"
+            )
+            self.assertFalse(stale.parent.exists(), "stale owned path survived")
+            self.assertTrue(unclaimed.exists(), "unclaimed sibling was deleted")
+            self.assertNotIn(
+                "skills/flow-next-retired",
+                (dest / MANIFEST_NAME).read_text(encoding="utf-8"),
+            )
+
     def test_reinstall_after_uninstall_is_byte_identical(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "opencode"

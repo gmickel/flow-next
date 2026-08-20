@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-201-opencode-install-path-from-canonical",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-20T20:55:04.122208Z",
   "created_at": "2026-08-20T16:01:33.429007Z",
   "default_impl": null,
   "default_review": null,
@@ -97,15 +97,42 @@
       "task": null,
       "timestamp": "2026-08-20T16:28:53.998468Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": null,
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f2777dea99a522ab757e25dae61998e4e6aa40f4",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 1053,
+      "output_sha256": "6693e04b3779bf361b92f098e037dcfda43099fb31c350297a4525c5696a2353",
+      "reservation_id": "f5aa0df182e84e40821fc8d10016006e",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-20T20:55:03.850693Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "plan": 1,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-201-opencode-install-path-from-canonical.md",
@@ -122,5 +149,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-20T20:36:44.880700Z"
+  "updated_at": "2026-08-20T20:55:13.551656Z"
 }

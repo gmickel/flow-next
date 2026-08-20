@@ -80,8 +80,16 @@ PINNED_PERMISSION_KEYS: frozenset[str] = frozenset(
 
 PERMISSION_ACTIONS: frozenset[str] = frozenset({"allow", "ask", "deny"})
 
+# Canonical frontmatter keys that carry no permission meaning and are dropped.
+# Together with the handled keys below this is a closed allowlist: an unknown
+# canonical key fails generation, because a silently dropped permission-shaped
+# key (an `allowedTools:` allowlist is an implicit denial) is the failure mode
+# the spec calls unacceptable.
 DROPPED_KEYS: frozenset[str] = frozenset(
     {"name", "model", "color", "user-invocable"}
+)
+HANDLED_KEYS: frozenset[str] = frozenset(
+    {"description", "disallowedTools", "readonly"}
 )
 
 EXCLUDED_COMMANDS: frozenset[str] = frozenset({"setup"})
@@ -257,6 +265,13 @@ def flow_next_prefix(stem: str) -> str:
 
 
 def render_agent(fields: dict[str, str], body: str, source: Path) -> str:
+    unknown = sorted(set(fields) - DROPPED_KEYS - HANDLED_KEYS)
+    if unknown:
+        raise GenerateError(
+            "UNKNOWN_FRONTMATTER_KEY",
+            f"{source} carries frontmatter key(s) {unknown} outside the closed "
+            "allowlist; refusing to guess whether they carry permission meaning",
+        )
     description = fields.get("description", "").strip()
     if not description:
         raise GenerateError(
