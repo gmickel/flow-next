@@ -17,14 +17,18 @@
 #   skills/    <root>/skills/<name>/SKILL.md
 #   agents/    <root>/agents/<name>.md     (filename becomes agent name)
 #   commands/  <root>/commands/<name>.md   (filename becomes /name command)
-# ALL PLURAL. Task 1 copies skills/ + support dirs; agents/ and commands/ are
-# generated later (see generate_agents / generate_commands stubs below).
+# ALL PLURAL. Skills + support dirs are copied; agents/ and commands/ are
+# generated at install time by plugins/flow-next/scripts/lib/opencode_generate.py
+# (never a committed OpenCode tree; canonical prose is not rewritten).
 #
 # What gets installed:
 #   - Skills:     skills/<name>/            (canonical, as-is, minus flow-next-setup/)
 #   - Support:    scripts/, templates/, references/, docs/  at the config root
 #                 (two levels above any skills/<name>/SKILL.md — the existing
 #                 plugin-root resolution rung, zero prose changes)
+#   - Agents:     agents/flow-next-<name>.md    (generated; body byte-identical)
+#   - Commands:   commands/flow-next-<name>.md  (generated stubs; uninstall
+#                 verbatim; setup excluded by name)
 #   - Manifest:   .flow-next-opencode-manifest  (sorted relative paths; no
 #                 timestamps; no absolute paths)
 #   - Hooks:      none. Never register Ralph / OpenCode JS hooks.
@@ -74,6 +78,8 @@ What gets installed:
   templates/         spec.md, criteria.md, ...
   references/        shared disclosure files
   docs/              plugin docs
+  agents/            generated OpenCode agents (flow-next-<name>.md)
+  commands/          generated slash-command stubs (uninstall verbatim; no setup)
   .flow-next-opencode-manifest
                      sorted relative paths of every installed file and directory
 
@@ -83,7 +89,6 @@ https://opencode.ai/config.json): skills/, agents/, commands/ (all plural).
 Not installed:
   flow-next-setup    unsupported on OpenCode (no command stub either)
   Ralph / hooks      OpenCode hook system is incompatible; never registered
-  agents/, commands/ generated in a later installer step (fn-201.2)
 
 Re-run to update the snapshot. Deletions apply only to paths listed in the
 ownership manifest; user files outside those paths stay untouched.
@@ -193,39 +198,24 @@ preflight_target() {
     die "$target exists and is not claimed by $MANIFEST_PATH; refusing to overwrite. Re-run with --force to replace it."
 }
 
-# TODO(fn-201.2): generate <dest>/agents/flow-next-<name>.md from canonical
-# plugins/flow-next/agents/*.md. Body after the closing --- fence is
-# byte-identical. Frontmatter: keep description; mode: subagent; map every
-# canonical disallowedTools token via the pinned OpenCode AgentConfig
-# (https://opencode.ai/config.json $defs.AgentConfig / PermissionConfig,
-# /tmp/opencode-pins.md, 2026-08-20, opencode 1.18.19):
-#   Edit  -> edit: deny
-#   Write -> write: deny   (additionalProperties; schema-valid, not enum)
-#   Task  -> task: deny
-#   Bash  -> bash: deny
-# Prefer permission: (allow|ask|deny); do NOT emit the deprecated tools:
-# boolean map. Fail closed (named error, non-zero, no file written) on
-# unmapped token / unrepresentable denial / readonly: vs disallowedTools
-# disagreement. Drop model:/name:/color:/user-invocable. Append each
-# generated relative path to $2. Do not copy canonical agents as-is.
+# Generate <dest>/agents/flow-next-<name>.md from canonical agents/*.md.
+# Mapping, fail-closed cases, and schema pin live in opencode_generate.py.
 generate_agents() {
     local dest="$1"
     local paths_file="$2"
-    : "$dest" "$paths_file"
+    python3 -B "$PLUGIN_DIR/scripts/lib/opencode_generate.py" \
+        --agents "$PLUGIN_DIR/agents" "$dest" "$paths_file" \
+        || die "OpenCode agent generation failed"
 }
 
-# TODO(fn-201.2): generate <dest>/commands/flow-next-<name>.md stubs.
-# Roster: canonical commands/<name>.md whose skill dir
-# skills/flow-next-<name>/SKILL.md exists (prefix added once, never doubled).
-# commands/uninstall.md is command-only — copy body verbatim as
-# commands/flow-next-uninstall.md. commands/setup.md is EXCLUDED by name
-# (setup's platform cascade has no OpenCode rung → PLATFORM=codex).
-# Other stubs: description from the skill; body loads the installed SKILL.md
-# (absolute dest path) and forwards $ARGUMENTS. Append relative paths to $2.
+# Generate <dest>/commands/flow-next-<name>.md stubs (uninstall verbatim;
+# setup excluded by name). Roster and mapping live in opencode_generate.py.
 generate_commands() {
     local dest="$1"
     local paths_file="$2"
-    : "$dest" "$paths_file"
+    python3 -B "$PLUGIN_DIR/scripts/lib/opencode_generate.py" \
+        --commands "$PLUGIN_DIR/commands" "$PLUGIN_DIR/skills" "$dest" "$paths_file" \
+        || die "OpenCode command generation failed"
 }
 
 # TODO(fn-201.3): --uninstall removes exactly the manifest-listed paths plus
@@ -339,7 +329,7 @@ for _dir in "${SUPPORT_DIRS[@]}"; do
     copy_tree "$PLUGIN_DIR/$_dir" "$DEST/$_dir"
 done
 
-# Generated agents/commands — no-op until fn-201.2 lands.
+# Generated agents/commands (fail closed: a generation error aborts install).
 GEN_PATHS="$(mktemp "${TMPDIR:-/tmp}/flow-next-opencode-gen.XXXXXX")"
 generate_agents "$DEST" "$GEN_PATHS"
 generate_commands "$DEST" "$GEN_PATHS"
@@ -419,10 +409,11 @@ echo "  scripts:   $DEST/scripts"
 echo "  templates: $DEST/templates"
 echo "  references: $DEST/references"
 echo "  docs:      $DEST/docs"
+echo "  agents:    $DEST/agents"
+echo "  commands:  $DEST/commands"
 echo "  manifest:  $MANIFEST_PATH"
 echo ""
-echo "Not installed: setup (unsupported), Ralph/hooks, agents/, commands/"
-echo "  (agents/commands generate in a later installer step)."
+echo "Not installed: setup (unsupported), Ralph/hooks."
 echo ""
 echo "Next steps:"
 echo "  1. Restart OpenCode (or start a new session) so it rescans $DEST."
