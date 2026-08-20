@@ -31,9 +31,8 @@ Files:
 R7: platforms.md has an OpenCode section with install command, full layout (incl. support dirs + manifest), and the limitations incl. the explicit setup-unsupported statement with the manual alternative; README install-matrix/status row points at scripts/install-opencode.sh not the port repo; community-ports / Ecosystem tables mark flow-next-opencode superseded; ## Unreleased CHANGELOG exists in the repo, and the docs-site entry follows the releasing.md format with its pnpm build gate green; no version manifests / FLOW_NEXT_VERSION / bump.sh. R8: spec Decision Context records the sentence decision; the updated sentence appears verbatim at all six in-repo occurrences (platforms.md, README x2, CLAUDE.md, STRATEGY.md x2) AND on the flow-next.dev restatement surface; the three adjacent claims (CLAUDE.md roster row, STRATEGY.md port mention, STRATEGY.md community-port metric) are updated consistently, the metric restated in installer terms; the sentence does not call OpenCode first-class or a community port; no setup detection rung and no first-class promotion in this change.
 
 ## Done summary
-TBD
-
+Docs shipped on session model: canonical sentence now "Supported on OpenCode via the in-repo installer." on all six in-repo occurrences (platforms.md, README x2, CLAUDE.md, STRATEGY.md x2) plus flow-next.dev introduction; "experimental" label dropped per maintainer instruction mid-flight (bugs will surface via issues). platforms.md gained the full OpenCode section (install, layout incl. support dirs + manifest, limitations: flat slash form, setup unsupported + manual alternative, ~/.codex cascade precedence, no ask primitive, Ralph none, tiers inherit); install matrix + Ralph hooks table rows added; community-ports table marks flow-next-opencode superseded. CLAUDE.md roster row, STRATEGY.md port mention + adoption metric restated in installer terms. reach/opencode.md rewritten installer-based; releasing.md re-sync list gains the OpenCode installer. Repo CHANGELOG Unreleased staged; docs-site: install.mdx OpenCode section, introduction sentence, changelog Unreleased entry, pnpm build green (82 pages). R2 manual verification PASSED live (opencode 1.18.19): 29/29 skills, 20/20 subagents with correct permission maps, flat command dispatched end-to-end with flowctl reading real .flow state — recorded in spec Decision Context.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 1800d61f
+- Tests: pnpm build (flow-next.dev, 82 pages green), live R2 verification: opencode debug skill / agent list / run --command flow-next-deps
 - PRs:
