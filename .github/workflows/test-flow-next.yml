@@ -6,11 +6,12 @@ on:
     paths:
       - "plugins/flow-next/**"
       - ".github/workflows/test-flow-next.yml"
-      # Cursor + Codex local-installers live at repo-root scripts/ — outside
+      # Cursor + Codex + OpenCode local-installers live at repo-root scripts/ — outside
       # plugins/flow-next/**, so trigger explicitly to run the install smokes.
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/install-codex.sh"
+      - "scripts/install-opencode.sh"
       - "scripts/ci/verify_cursor_install.py"
       # Root Cursor team-marketplace manifest (fn-123) — outside plugins/**
       - ".cursor-plugin/**"
@@ -47,6 +48,7 @@ on:
       - "scripts/install-cursor.sh"
       - "scripts/install-cursor.ps1"
       - "scripts/install-codex.sh"
+      - "scripts/install-opencode.sh"
       - "scripts/ci/verify_cursor_install.py"
       - ".cursor-plugin/**"
       - "scripts/run_tests_parallel.py"
