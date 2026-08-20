@@ -131,7 +131,7 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 1. **Parse issues** from reviewer feedback (missing requirements, incomplete implementations)
 2. **Fix code** and run tests/lints
-3. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`)
+3. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in workflow-rp.md — never blanket-stage with `git add --all`). Then, when step 2's green run included one of the repo's full-gate commands (the same `(gate_id, exact command string)` identity the worker's Phase 5 maps — e.g. the repo's parallel full-suite entrypoint), nothing changed between that run and this commit, and the tree is clean at the committed fix HEAD: write the receipt — `<FLOWCTL> gate receipt --gate <gate_id> --command "<cmd>"` — so later gates honor it instead of re-running the identical command. Focused/partial test commands NEVER mint a full-gate receipt (identity is the exact full command string). A dirty tree, edits after the run, or any doubt about identity → mint nothing (fail closed; the later gate simply re-runs).
 4. **Re-review**:
    - **Codex**: Re-run `flowctl codex completion-review` (receipt enables context)
    - **Copilot**: Re-run `flowctl copilot completion-review` (receipt enables context; must be `mode == "copilot"` to resume)

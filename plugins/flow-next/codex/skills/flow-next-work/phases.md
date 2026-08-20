@@ -230,8 +230,11 @@ PARALLEL_WAVE: true|false
 WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
+BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
 
 Follow your phases exactly."
+
+`BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 
 Set `PARALLEL_WAVE: true` only for a concurrently dispatched multi-task wave.
 Those workers implement, test, commit, and return their workspace, commits, and
