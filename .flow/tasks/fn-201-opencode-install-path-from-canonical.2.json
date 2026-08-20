@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-20T16:06:42.256453Z",
+  "depends_on": [
+    "fn-201-opencode-install-path-from-canonical.1"
+  ],
+  "id": "fn-201-opencode-install-path-from-canonical.2",
+  "priority": null,
+  "spec": "fn-201-opencode-install-path-from-canonical",
+  "spec_path": ".flow/tasks/fn-201-opencode-install-path-from-canonical.2.md",
+  "status": "todo",
+  "title": "Generate OpenCode agents and slash-command stubs at install time",
+  "updated_at": "2026-08-20T16:17:35.516545Z"
+}

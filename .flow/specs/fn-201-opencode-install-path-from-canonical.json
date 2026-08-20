@@ -1,0 +1,126 @@
+{
+  "branch_name": "fn-201-opencode-install-path-from-canonical",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-08-20T16:01:33.429007Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-201-opencode-install-path-from-canonical",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-20T16:28:54.274485Z",
+  "review_attempts": [
+    {
+      "artifact_sha256": "fd8b614d00373c40eb6c22531eb599cd3bcaff11403020331c3e802e74d8cba5",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "111de14807d66fd316c61026c3c79dd0f081fb71",
+      "head_sha_observed": false,
+      "kind": "plan",
+      "outcome": "transport_failure",
+      "output_bytes": 2910,
+      "output_sha256": "27c7d8c8679bd39a743a100d5188b8d27db861ee07af7a1c0c05c0049a357f20",
+      "reservation_id": "4f3f2a3254ea4e29abafad7a79a24470",
+      "round_consumed": false,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-20T16:14:00.524587Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "6c39422d5f4746bf8d63b152f9bc1ac79f35ce196e1373396ddf0aa1095bed53",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "111de14807d66fd316c61026c3c79dd0f081fb71",
+      "head_sha_observed": false,
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_bytes": 4365,
+      "output_sha256": "f69acf064f566aec06afd6572a1a9121427b3fa210053022c67f28a333d154e1",
+      "reservation_id": "502600b84f4e4f16bfbc90de6ec1c04c",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-20T16:24:26.208815Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "f447554be8849054012c902565c6f3408c5e4a72f3867851f3041c438f7a5cfd",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "host",
+        "digest_truncated": false,
+        "items": [],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "111de14807d66fd316c61026c3c79dd0f081fb71",
+      "head_sha_observed": false,
+      "kind": "plan",
+      "outcome": "verdict",
+      "output_bytes": 1021,
+      "output_sha256": "d1014902c43db2251a2185734025e6e9016930b0db668eb04c596a58deecfd7b",
+      "reservation_id": "df5eec5afc0b4d699b1a4c1d05e80e31",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-20T16:28:53.998468Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "plan": 1,
+    "plan#completion": 0
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
+  "spec_path": ".flow/specs/fn-201-opencode-install-path-from-canonical.md",
+  "status": "open",
+  "title": "OpenCode install path from canonical repo",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-20T16:28:54.274847Z"
+}
