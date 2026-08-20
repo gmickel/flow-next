@@ -136,7 +136,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-201-opencode-install-path-from-canonical.md",
-  "status": "open",
+  "status": "done",
   "title": "OpenCode install path from canonical repo",
   "tracker": {
     "baseHashFlow": null,
@@ -149,5 +149,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-20T20:55:13.551656Z"
+  "updated_at": "2026-08-20T20:58:42.244850Z"
 }
