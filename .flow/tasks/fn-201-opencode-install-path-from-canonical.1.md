@@ -26,9 +26,8 @@ Files:
 R1: running the installer with --dest at a temp dir plants every canonical plugins/flow-next/skills/*/ tree EXCEPT flow-next-setup/ as-is under <dest>/skills/ plus scripts/, templates/, references/, docs/ at the config root; a second run after editing a SKILL.md updates it in place; a path removed upstream disappears from manifest-owned paths and nowhere else; a pre-existing unclaimed <dest>/scripts/ aborts with a named error and survives untouched (--force overrides). R2 (CI-provable half): from any installed skills/<name>/SKILL.md, ../../scripts/flowctl is executable and verify_tracker_manifest.py passes on the installed scripts/; ../../templates/spec.md exists. The manifest is byte-deterministic across two fresh installs of the same tree. No writes under ~/.claude/. No hooks/ralph registration. The explicit CI paths: parity entry exists in both lists (coverage pre-exists via scripts/**).
 
 ## Done summary
-TBD
-
+scripts/install-opencode.sh created (grok-4.6 bridge draft, host-verified): XDG-only dest + --dest, skills minus flow-next-setup, support dirs scripts/templates/references/docs at config root, deterministic ownership manifest, pre-flight collision abort with --force, manifest-driven stale cleanup, tracker verifier fail-closed. CI paths parity entries added. Verified live: idempotent trees identical, manifest byte-deterministic across dests, unclaimed-dir abort leaves user file intact, two-levels-up rung resolves flowctl+templates, tracker manifest verifies (45 files).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5d24a384003067b5de4f18c1070808337e1c24e5
+- Tests: bash -n scripts/install-opencode.sh, ./scripts/install-opencode.sh --dest /tmp/oc-dest1 (idempotency+determinism+preflight+rung smoke)
 - PRs:
