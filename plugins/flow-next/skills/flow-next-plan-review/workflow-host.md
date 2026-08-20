@@ -15,6 +15,13 @@ subcommand and accepts no model/effort suffix.
 4. Receipt mode is `host`, actual reviewer model is recorded, and
    `session_id` is literal `null`.
 5. Missing cross-family pin fails closed.
+6. **`host` never shells out to another CLI.** A `codex exec` / `cursor-agent` /
+   `claude -p` / `grok` subprocess inside a host review is a broken run — the
+   CLI backends exist for exactly that; the user chose `host` to avoid them.
+   The subagent is dispatched through the harness's own primitive with the
+   model named in the dispatch; a harness that does not honor the model
+   request degrades to the session model, and then rule 2's fail-closed
+   cross-family check decides — never a CLI fallback.
 
 
 **fn-169 — host is the documented always-inject exception.** The `codex` backend

@@ -11,6 +11,7 @@ Use when `BACKEND="host"`. Prerequisite: Phase 0 backend detection in [workflow-
 3. Every re-review is a **fresh subagent** — no context reuse, no fabricated resume ids
 4. Receipt records actual reviewer model + `"mode": "host"`
 5. Fail closed when no cross-family pin is available (never silent same-family self-review)
+6. **`host` never shells out to another CLI** — a `codex exec` / `cursor-agent` / `claude -p` / `grok` subprocess inside a host review is a broken run; the CLI backends exist for exactly that, and the user chose `host` to avoid them. Dispatch through the harness's own subagent primitive with the model named in the dispatch; an unhonored model request degrades to the session model, and then rule 5 decides — never a CLI fallback
 
 
 **fn-169 — host is the documented always-inject exception.** The `codex` backend
