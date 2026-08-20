@@ -143,6 +143,7 @@ want to dogfood locally (and after every release), re-run the installer for the 
   mirrors `plugins/flow-next/` into `~/.cursor/plugins/local/flow-next`. **Fully restart Cursor** after (a
   reloaded local plugin needs a full Cmd-Q/reopen).
 - **Codex:** `./scripts/install-codex.sh` — installs the Codex mirror (`plugins/flow-next/codex/`).
+- **OpenCode:** `./scripts/install-opencode.sh` — scatters canonical skills + generated agents/commands into `~/.config/opencode/`. Restart OpenCode (new session) after.
 - **Claude Code:** a local source checkout runs the repo directly (no re-sync); marketplace users pick the
   change up on `/plugin` update **after the release tag**.
 

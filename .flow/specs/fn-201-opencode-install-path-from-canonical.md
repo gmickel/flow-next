@@ -1,4 +1,3 @@
-## Goal & Context
 <!-- scope: business -->
 
 OpenCode (anomalyco/opencode) now implements the Agent Skills standard natively: it discovers `SKILL.md` skills from its own dirs and Claude-compatible dirs, has markdown-defined subagents dispatched via a Task tool, and markdown slash commands. It still has NO Claude-plugin format support (no marketplace, no `.claude-plugin/plugin.json`, no plugin `skills/`/`agents/`/`commands/` trees) — its own "plugin" system is JS event hooks, unrelated.
@@ -75,6 +74,8 @@ Target layout:
 - **Pinned directory layout (round-2 review):** the target dir names for skills/agents/commands are pinned from OpenCode docs/source at build time with the source recorded in the installer — a wrong name passes every self-referential CI test while OpenCode discovers nothing, so the R2 manual discovery check is the only honest gate.
 - **Old port repo:** superseded, to be archived with a pointer in separate housekeeping once this ships (Gordon, 2026-08-20). The STRATEGY.md community-port metric is restated in installer terms in R8.
 - **SKILL.md path-injection contingency (round-1 review):** if a live OpenCode session shows no absolute-path injection, the named fallback is a small `flowctl` PATH shim written by the installer; the docs claims stay gated on the manual verification either way.
+- **R8 sentence decision (2026-08-20):** the canonical sentence's OpenCode clause is "Experimental install path for OpenCode." — restated on all six in-repo occurrences plus flow-next.dev; the STRATEGY metric is restated as installer adoption.
+- **R2 manual verification PASSED (2026-08-20, opencode 1.18.19):** 29/29 skills discovered at installed absolute paths (setup absent); 20/20 agents discovered as subagents with correct permission maps (plan-sync: bash/write/task deny — `write` works via PermissionConfig additionalProperties); flat `/flow-next-deps` command discovered and executed end-to-end with flowctl resolving and reading real `.flow` state; OpenCode's built-in config reference documents `agent(s)`/`command(s)`/`skill(s)` — singular AND plural both accepted, plural pin holds.
 - **Planning route (2026-08-20):** task breakdown drafted via a grok-4.6 read-only bridge on explicit user instruction; host validated, created, and owns the verdict. Plan review runs on the `host` backend (cross-family vs the grok writer).
 
 ## Quick commands

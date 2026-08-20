@@ -2,6 +2,25 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **OpenCode users install flow-next from this repo and ride every release** - the
+  separate community port (seven releases stale) is superseded. OpenCode has no
+  plugin format, so `./scripts/install-opencode.sh` scatters the canonical files
+  into `~/.config/opencode/`: skills as-is (minus setup - its platform cascade has
+  no OpenCode rung), the plugin-root support dirs at the config root so the
+  existing flowctl/template resolution works with zero prose changes, agents
+  generated with byte-identical bodies and `disallowedTools` translated to
+  OpenCode's `permission:` deny map (pinned against opencode.ai/config.json), and
+  flat `/flow-next-<name>` command stubs. A deterministic ownership manifest
+  scopes every re-run, deletion, and `--uninstall` to installed paths only - a
+  colliding user directory aborts the install rather than being deleted.
+  Generation fails closed on any denial it cannot represent. Layout and
+  generation are test-pinned; live discovery verified against opencode 1.18.19.
+  Details: `docs/platforms.md` § OpenCode.
+
 ## [flow-next 4.2.2] - 2026-08-20
 
 Runs finish sooner without touching what reviews check: small specs stop paying a

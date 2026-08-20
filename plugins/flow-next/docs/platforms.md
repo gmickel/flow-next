@@ -1,6 +1,6 @@
 # Other Platforms
 
-First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for OpenCode.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Supported on OpenCode via the in-repo installer.
 
 **That sentence is canonical, and this file is its only home.** Every other surface (the README prose, the README platforms table, and flow-next.dev) restates it verbatim or links here, so promoting or demoting a harness stays a one-place edit. First-class means the canonical plugin files are consumed (as-is or through the generated mirror), skills and slash commands run, multi-agent flows are verified, and setup detects the host. Ralph is intentionally not built for Cursor or Grok Build; that is a deliberate posture, not a tiering gap.
 
@@ -17,6 +17,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 | Codex | `.codex/hooks.json` (project) | Shell + Stop only; no plugin auto-hooks |
 | Cursor | *(none)* | Cursor has a full agent-hook set; flow-next intentionally does not build/register Ralph on Cursor |
 | Grok Build | *(none)* | flow-next intentionally does not build/register Ralph on Grok (same posture as Cursor; not a schema gap) |
+| OpenCode | *(none)* | OpenCode's hook system is JS/TS plugin modules — incompatible with the guard matchers; Ralph not supported |
 
 ## Install matrix
 
@@ -30,7 +31,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 | OpenAI Codex | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-codex.sh` | `.codex-plugin/plugin.json` | Pre-built mirror under `plugins/flow-next/codex/` |
 | Grok Build (xAI) | Auto-discovered if installed in Claude Code (run `grok inspect`); or add `gmickel/flow-next` as a `[[marketplace.sources]]` entry. **Not** `grok plugin install <repo>`. | `.claude-plugin/plugin.json` (canonical Claude files AS-IS; no Codex mirror) | **Detected via `GROK_AGENT=1`.** Namespaced slash commands (`/flow-next:*`), plugin-resolved flowctl, multi-agent verified. Ralph intentionally not built. See [Grok Build](#grok-build-claude-code-compatibility) |
 | Cursor | **Recommended:** team-marketplace repo import (admin imports `gmickel/flow-next` via Cursor GitHub App). **Fallback:** `./scripts/install-cursor.sh` / `install-cursor.ps1` → `~/.cursor/plugins/local/` | `.cursor-plugin/plugin.json` (Cursor's own namespace — does NOT read `.claude-plugin/`) | **First-class** (multi-agent, native asks, autocomplete verified). Ralph intentionally not built for Cursor — see [Cursor](#cursor) |
-| OpenCode | See [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | n/a | Community port |
+| OpenCode | `git clone https://github.com/gmickel/flow-next.git && cd flow-next && ./scripts/install-opencode.sh` | n/a (OpenCode has no plugin format — the installer scatters canonical files into `~/.config/opencode/`) | Installer-based — see [OpenCode](#opencode) |
 
 > The canonical install path on Claude Code is the marketplace. Direct `--plugin-dir` (`claude --plugin-dir ./plugins/flow-next`) is the development path.
 
@@ -332,6 +333,39 @@ The interview skill's optional async fact-scout dispatch names Claude Code's `Ex
 
 > **Status:** first-class on Cursor. Recommended path = team-marketplace repo import; local scripts = individual/fallback. Multi-agent, native asks, slash autocomplete, `review.backend host`, rules rail, and the setup routing block verified. Ralph intentionally not built for Cursor.
 
+## OpenCode
+
+OpenCode implements the Agent Skills standard natively (skills, markdown subagents dispatched via its Task tool, markdown slash commands) but has NO Claude-plugin format support — its own "plugin" system is JS/TS event hooks, unrelated. So there is no mirror and no marketplace: `./scripts/install-opencode.sh` scatters the canonical files into OpenCode's fixed directories (the Cursor pattern — canonical as-is plus generated glue, never a rewritten tree committed to the repo).
+
+### Install
+
+```bash
+git clone --depth 1 https://github.com/gmickel/flow-next.git /tmp/flow-next-install \
+  && /tmp/flow-next-install/scripts/install-opencode.sh \
+  && rm -rf /tmp/flow-next-install
+```
+
+Re-run after `git pull` to update. `--dest <path>` overrides the target (default `${XDG_CONFIG_HOME:-$HOME/.config}/opencode`); `--uninstall` removes exactly what the ownership manifest lists; `--force` claims a colliding unowned directory.
+
+### Installed layout
+
+| Path (under the config root) | What |
+|---|---|
+| `skills/<name>/` | canonical skills as-is — **except `flow-next-setup/`** (see limitations) |
+| `scripts/`, `templates/`, `references/`, `docs/` | plugin-root support dirs — two levels above any `skills/<name>/SKILL.md`, so the existing plugin-root resolution rung finds `flowctl`, the spec-template cascade, and references with zero prose changes |
+| `agents/flow-next-<name>.md` | generated from canonical agents: body byte-identical, `mode: subagent`, `disallowedTools` translated to a `permission:` deny map (pinned against `https://opencode.ai/config.json`, 2026-08-20, opencode 1.18.19) |
+| `commands/flow-next-<name>.md` | generated slash stubs that load the installed SKILL.md and forward `$ARGUMENTS`; `uninstall` copied verbatim; no `setup` stub |
+| `.flow-next-opencode-manifest` | deterministic ownership manifest — installs, re-runs, and `--uninstall` operate only on paths it lists |
+
+### Caveats / intentional limits
+
+- **Slash form is flat:** `/flow-next-plan`, not `/flow-next:plan` — OpenCode command names come from flat filenames, so every `/flow-next:<name>` in other docs maps to `/flow-next-<name>` here.
+- **Setup is not supported.** The `flow-next-setup` skill is not installed and no command stub exists: setup's platform cascade has no OpenCode rung and would fall through to its Codex branch, writing wrong-shaped project instructions. Manual alternative: `flowctl init`, then `flowctl config set <key> <value>` for the ceremony keys (review backend, memory, plan-sync).
+- **A co-existing Codex install wins flowctl resolution.** The canonical cascade's first env rung falls back to `~/.codex/scripts/flowctl`; on a machine that also has the Codex install, that copy resolves first and the OpenCode-installed `scripts/` tree is only the backstop. Keep both current by re-running each installer after updates.
+- **No native blocking-ask primitive** — interactive skills degrade to the numbered-prompt fallback already present in canonical prose.
+- **Ralph is not supported** (hook system incompatible), and agent `model:` tiers inherit the session model.
+- **Verification status:** installed layout, generated agents/commands, manifest determinism, and fail-closed generation are covered by deterministic tests; live host behavior (skill path injection for the resolution rung, agent/command discovery) was verified manually against opencode 1.18.19 — re-verify on major OpenCode releases. Something broken? File an issue.
+
 ## Windows: Python discovery
 
 flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows it resolves the Python interpreter by **probing functionality and the Python 3.11 minimum, not presence**: each candidate must run a version probe successfully. Probe order is `$PYTHON_BIN` → `py -3` → `python3` → `python`. Broken Store aliases are skipped; if only working interpreters below 3.11 exist, the launcher reports that distinct condition before loading flowctl.
@@ -373,7 +407,7 @@ Removing the skill is trivial: `rm -rf .clawpatch/` removes both the index and t
 
 | Project | Platform | Notes |
 |---------|----------|-------|
-| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode | Flow-Next port |
+| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode | **Superseded** by the in-repo [`install-opencode.sh`](#opencode) — archived pointer only |
 | [FlowFactory](https://github.com/Gitmaxd/flowfactory) | Factory.ai Droid | Flow port (note: flow-next now has native Droid support) |
 
 ## See also

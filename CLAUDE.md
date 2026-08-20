@@ -1,6 +1,6 @@
 # Claude Code Project Guide
 
-This repo ships the **flow-next** Claude Code plugin — a spec-driven, zero-dependency workflow for AI-assisted SDLC, with a bundled `flowctl` Python CLI and autonomous Ralph mode. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build; community port for OpenCode (canonical sentence lives in [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) — edit there, restate verbatim). The repo IS flow-next.
+This repo ships the **flow-next** Claude Code plugin — a spec-driven, zero-dependency workflow for AI-assisted SDLC, with a bundled `flowctl` Python CLI and autonomous Ralph mode. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build; supported on OpenCode via the in-repo installer (canonical sentence lives in [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) — edit there, restate verbatim). The repo IS flow-next.
 
 The repo's strategic intent and canonical vocabulary live at the repo root:
 
@@ -76,7 +76,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Factory Droid | auto-translates the Claude plugin format on install | canonical files as-is (`DROID_PLUGIN_ROOT` alias) |
 | Cursor | RECOMMENDED: team-marketplace repo import (root `.cursor-plugin/marketplace.json`); fallback: `scripts/install-cursor.sh` / `.ps1` (blanket rsync to `~/.cursor/plugins/local/`, excludes codex/ + tests/); manifest at `plugins/flow-next/.cursor-plugin/plugin.json` | canonical files AS-IS - no rewrite pass exists |
 | Grok Build | reads the Claude plugin format directly (compat, verified) | canonical files as-is |
-| OpenCode | community port | out-of-repo |
+| OpenCode | installer scatter (`scripts/install-opencode.sh` -> `~/.config/opencode/`; skills as-is minus setup, generated agents/commands) | canonical files + generated glue |
 
 **Architectural rule:** canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites them in the Codex mirror. Skill prose stays concrete; cross-platform maintenance lives in one place — the sync script. Cursor/Droid/Grok get NO rewrite pass, so anything Claude-specific in canonical prose must either work there or carry an explicit portable-host clause.
 

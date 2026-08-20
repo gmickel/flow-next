@@ -75,7 +75,7 @@ The same specs, gates, receipts, and task state across harnesses. Everything sit
 | **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code: no token bleed, no stale assumptions. |
 | **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor) reviews every plan and every implementation. Different models make different mistakes, and the disagreement surface is where the gaps live. |
 | **Receipts** | "Done" means there is proof. Commits, tests, review verdicts, and evidence recorded per task, never narration. |
-| **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for OpenCode. |
+| **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Supported on OpenCode via the in-repo installer. |
 | **Self-improving** | Compounds as you work. Memory, glossary, decision records, and strategy grow as side-effects of the workflow you already run, with no manual "refresh" ceremony, ever. |
 
 </details>
@@ -459,7 +459,7 @@ Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugi
 
 ## Platforms
 
-First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Community port for OpenCode.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Supported on OpenCode via the in-repo installer.
 
 | Platform | Status |
 |---|---|
@@ -468,7 +468,7 @@ First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Bu
 | Factory Droid | First-class (regex-OR matchers handle `Execute` ↔ `Bash`) |
 | Cursor | First-class. **Recommended:** team-marketplace repo import (admin imports this GitHub repo via the Cursor GitHub App; Default Off/On/Required; auto-refresh on push). **Fallback:** local plugin (`./scripts/install-cursor.sh` / `install-cursor.ps1`). Skills, commands, multi-agent, native asks, slash autocomplete verified; Ralph intentionally not built for Cursor ([details](plugins/flow-next/docs/platforms.md#cursor)) |
 | Grok Build (xAI) | First-class via Claude Code compatibility: skills, `/flow-next:*` commands, hooks, and **multi-agent flows** (verified). Type **`/flow-next:`** to open the command autocomplete; `/flow-next-` filters the separate hyphen-named skill surface. Ralph intentionally not built ([details](plugins/flow-next/docs/platforms.md#grok-build-claude-code-compatibility)) |
-| OpenCode | Community port: [`flow-next-opencode`](https://github.com/gmickel/flow-next-opencode) |
+| OpenCode | `./scripts/install-opencode.sh` (see [`docs/platforms.md`](plugins/flow-next/docs/platforms.md#opencode)) |
 
 Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow-next/docs/platforms.md), the canonical home for the tiering sentence above.
 
@@ -478,7 +478,7 @@ Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow
 
 | Project | Platform |
 |---|---|
-| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode |
+| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode — superseded by the in-repo installer |
 | [FlowFactory](https://github.com/Gitmaxd/flowfactory) | Factory.ai Droid |
 | [Ralph TUI](flow-next-tui/) | Cross-platform TUI for Ralph runs |
 

@@ -11,7 +11,7 @@ Skills never name a spawn primitive, a CLI flag, or a vendor path — they ask f
 | Factory Droid | [`droid.md`](droid.md) |
 | Cursor | [`cursor.md`](cursor.md) |
 | Grok Build | [`grok-build.md`](grok-build.md) |
-| OpenCode (community port) | [`opencode.md`](opencode.md) |
+| OpenCode | [`opencode.md`](opencode.md) |
 | Anything else / undetectable | [`generic.md`](generic.md) |
 
 **An undetectable harness resolves to [`generic.md`](generic.md) and says so once.** Guessing a harness is worse than naming the fallback: the generic page assumes the least reach and degrades cleanly.
