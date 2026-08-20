@@ -22,6 +22,7 @@ from typing import Any
 from unittest import mock
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))  # flowctl_tracker reachability (test_tracker_package_import guard)
 HERE = Path(__file__).resolve()
 PLUGIN = HERE.parent.parent
 AGENTS_DIR = PLUGIN / "agents"
