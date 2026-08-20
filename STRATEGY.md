@@ -12,7 +12,7 @@ AI agent workflows drift, lose context, and produce uneven quality at scale. Exi
 
 ## Our approach
 
-Spec-driven development with re-anchoring, cross-model review, and zero external dependencies. Six named handover objects between idea and merge — each reviewable on its own, cross-model-verified, and frozen at handover. **Specs are single durable documents that evolve through layers** — `.flow/specs/<id>.md` is the source of truth for goal, architecture, R-IDs, and acceptance, vs alternative split-file approaches (e.g., Kiro's `requirements.md` / `design.md` / `tasks.md`). Skill-driven plugin layered on `flowctl` Python plumbing; the host agent IS the intelligence (first-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build; supported on OpenCode via the in-repo installer - canonical sentence in `plugins/flow-next/docs/platforms.md`), and flowctl provides only thin atomic helpers. Everything lives in the repo under `.flow/` — no external services, no global config, no SaaS. Uninstall: delete the directory.
+Spec-driven development with re-anchoring, cross-model review, and zero external dependencies. Six named handover objects between idea and merge — each reviewable on its own, cross-model-verified, and frozen at handover. **Specs are single durable documents that evolve through layers** — `.flow/specs/<id>.md` is the source of truth for goal, architecture, R-IDs, and acceptance, vs alternative split-file approaches (e.g., Kiro's `requirements.md` / `design.md` / `tasks.md`). Skill-driven plugin layered on `flowctl` Python plumbing; the host agent IS the intelligence (first-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode - canonical sentence in `plugins/flow-next/docs/platforms.md`), and flowctl provides only thin atomic helpers. Everything lives in the repo under `.flow/` — no external services, no global config, no SaaS. Uninstall: delete the directory.
 
 Opt-in convenience skills (e.g. `/flow-next:map` wrapping `clawpatch`) may carry their own runtime prerequisites, but `flowctl` core never imports or requires them — the zero-dep contract holds for the base install; opt-in skills add nothing to the uninstall path beyond a single self-contained directory.
 
@@ -66,7 +66,7 @@ The fn-139-141 batch (3.5.2-3.6.1): the four-provider tracker bridge's repeatabl
 
 ### Cross-platform parity
 
-First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor (3.3.0), and xAI Grok Build (3.4.0); supported on OpenCode via the in-repo installer (canonical roster sentence: `plugins/flow-next/docs/platforms.md`). Canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites for the Codex mirror; Cursor/Droid/Grok consume canonical files as-is, so Claude-only references need portable fallbacks. What parity means mechanically: the fn-121 plugin-vs-copy setup modes and the fn-139 tracker-manifest install-integrity contract. Single source of truth.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor (3.3.0), xAI Grok Build (3.4.0), and OpenCode (4.3.0, installer-delivered); (canonical roster sentence: `plugins/flow-next/docs/platforms.md`). Canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites for the Codex mirror; Cursor/Droid/Grok consume canonical files as-is, so Claude-only references need portable fallbacks. What parity means mechanically: the fn-121 plugin-vs-copy setup modes and the fn-139 tracker-manifest install-integrity contract. Single source of truth.
 
 ### Self-improving through normal work
 

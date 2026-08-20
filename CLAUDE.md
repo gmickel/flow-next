@@ -1,6 +1,6 @@
 # Claude Code Project Guide
 
-This repo ships the **flow-next** Claude Code plugin — a spec-driven, zero-dependency workflow for AI-assisted SDLC, with a bundled `flowctl` Python CLI and autonomous Ralph mode. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build; supported on OpenCode via the in-repo installer (canonical sentence lives in [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) — edit there, restate verbatim). The repo IS flow-next.
+This repo ships the **flow-next** Claude Code plugin — a spec-driven, zero-dependency workflow for AI-assisted SDLC, with a bundled `flowctl` Python CLI and autonomous Ralph mode. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode (canonical sentence lives in [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) — edit there, restate verbatim). The repo IS flow-next.
 
 The repo's strategic intent and canonical vocabulary live at the repo root:
 

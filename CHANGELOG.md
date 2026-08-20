@@ -2,25 +2,44 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.3.0] - 2026-08-21
+
+OpenCode joins the first-class harness roster. If OpenCode is your daily driver,
+you install flow-next once from the canonical repo, run setup like everyone else,
+and get the full pipeline - planning fan-outs, cross-model reviews, receipts -
+riding every release from day one. The separate community port (seven releases
+stale) is superseded and archived.
 
 ### Added
 
-- **OpenCode users install flow-next from this repo and ride every release** - the
-  separate community port (seven releases stale) is superseded. OpenCode has no
-  plugin format, so `./scripts/install-opencode.sh` scatters the canonical files
-  into `~/.config/opencode/`: skills as-is (setup runs like every other host via
-  the `.flow-next-opencode-manifest` detection rung), the plugin-root support
-  dirs at the config root so the existing flowctl/template resolution works with
-  zero prose changes, agents generated with byte-identical bodies and
-  `disallowedTools` translated to
+- **OpenCode is a first-class harness.** OpenCode has no plugin format, so
+  `./scripts/install-opencode.sh` scatters the canonical files into
+  `~/.config/opencode/`: skills as-is, the plugin-root support dirs at the config
+  root (the existing flowctl/template resolution works with zero prose changes),
+  agents generated with byte-identical bodies and `disallowedTools` translated to
   OpenCode's `permission:` deny map (pinned against opencode.ai/config.json), and
   flat `/flow-next-<name>` command stubs. A deterministic ownership manifest
   scopes every re-run, deletion, and `--uninstall` to installed paths only - a
-  colliding user directory aborts the install rather than being deleted.
-  Generation fails closed on any denial it cannot represent. Layout and
-  generation are test-pinned; live discovery verified against opencode 1.18.19.
-  Details: `docs/platforms.md` § OpenCode.
+  colliding user directory aborts the install rather than being deleted, and
+  generation fails closed on any denial it cannot represent. Verified live on
+  opencode 1.18.19: 29/29 skills and 20/20 subagents discovered with correct
+  permission maps, a full `/flow-next-plan` scout fan-out, and a codex-backend
+  plan review driven end-to-end from an OpenCode session.
+- **Setup runs on OpenCode like every other host.** The installer's ownership
+  manifest doubles as setup's platform-detection signal (a positive rung ordered
+  before the codex fallback), so `/flow-next-setup` writes AGENTS.md instructions
+  in the flat slash form instead of falling through to Codex-shaped snippets.
+- **Host-backend review works on OpenCode - and the host backend got a hard
+  rule everywhere.** OpenCode subagents take their model from their own agent
+  definition or inherit the session model; there is no dispatch-time override.
+  Pinning a tier's model is one 5-line user agent file (recipe in
+  `docs/reach/opencode.md`) - verified live: the conductor matched the routing
+  block's reviewer model to the pinned roster agent unhinted, the harness honored
+  it, and the receipt recorded the real reviewer. Without a pin, the degraded
+  reviewer self-reports and the review fail-closes instead of letting the session
+  model grade its own work. New critical rule in all three host workflows,
+  every harness: `host` never shells out to another CLI - a `codex exec` inside
+  a host review is a broken run; the CLI backends exist for that.
 
 ## [flow-next 4.2.2] - 2026-08-20
 

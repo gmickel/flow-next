@@ -75,7 +75,7 @@ The same specs, gates, receipts, and task state across harnesses. Everything sit
 | **Re-anchored work** | Fresh context per task. Every worker subagent re-reads the spec, the task, and git state before touching code: no token bleed, no stale assumptions. |
 | **Adversarial gates** | Fix until SHIP. A *different* model (RepoPrompt / Codex / Copilot / Cursor) reviews every plan and every implementation. Different models make different mistakes, and the disagreement surface is where the gaps live. |
 | **Receipts** | "Done" means there is proof. Commits, tests, review verdicts, and evidence recorded per task, never narration. |
-| **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Supported on OpenCode via the in-repo installer. |
+| **Multi-harness** | One workflow everywhere. First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode. |
 | **Self-improving** | Compounds as you work. Memory, glossary, decision records, and strategy grow as side-effects of the workflow you already run, with no manual "refresh" ceremony, ever. |
 
 </details>
@@ -459,7 +459,7 @@ Doc index with one-line descriptions: [`plugins/flow-next/docs/README.md`](plugi
 
 ## Platforms
 
-First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, and xAI Grok Build. Supported on OpenCode via the in-repo installer.
+First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode.
 
 | Platform | Status |
 |---|---|
