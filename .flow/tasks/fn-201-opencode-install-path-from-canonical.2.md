@@ -24,9 +24,8 @@ Files:
 R3: every canonical agents/*.md yields <dest>/agents/flow-next-<name>.md with byte-identical body, mode: subagent, and denials matching that file's disallowedTools via pinned-schema keys — including plan-sync's Bash; fixtures prove all three fail-closed cases (unmapped token, unrepresentable denial, readonly/disallowedTools disagreement) abort with a named error and emit nothing; model: dropped; generated frontmatter uses ONLY keys from the pinned schema. R4: every skill-backed command in the roster has a generated commands/flow-next-<name>.md whose description matches the skill and whose body forwards $ARGUMENTS to the installed SKILL.md absolute path; flow-next-uninstall.md is the verbatim command body; no setup stub exists and the generator names the exclusion; phrase-triggered skills get no stub. Re-run refreshes generated files in place; manifest lists them.
 
 ## Done summary
-TBD
-
+opencode_generate.py (stdlib, deterministic) + installer wiring (grok-4.6 bridge draft, host-verified): 20/20 agents generated with byte-identical bodies and pinned-schema permission maps (plan-sync carries bash+task+write deny); 25 command stubs (roster = commands with skill dirs; uninstall verbatim; setup excluded by name, note printed); generated paths join the ownership manifest (45 entries). Fail-closed verified live: unmapped token and readonly/disallowedTools disagreement both abort with named errors and write nothing. Same-dest re-run idempotent; cross-dest trees differ only in the embedded dest-absolute skill path (by design).
 ## Evidence
-- Commits:
-- Tests:
+- Commits: bc6c2e253fa5be9e07d198f2ed68e39cf68cfc2e
+- Tests: ./scripts/install-opencode.sh --dest /tmp/oc-dest1 (agents/commands/manifest/fail-closed/idempotency smoke), uvx ruff@0.16.0 check plugins/flow-next/scripts/lib/opencode_generate.py
 - PRs:
