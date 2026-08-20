@@ -2,7 +2,12 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.2.2] - 2026-08-20
+
+Runs finish sooner without touching what reviews check: small specs stop paying a
+duplicate review, multi-task waves stop paying repeated plan-sync passes, and plans
+that could run their tasks in parallel stop silently running them one by one. First
+batch of fixes from a measured wall-clock pass over the whole pipeline.
 
 ### Changed
 
