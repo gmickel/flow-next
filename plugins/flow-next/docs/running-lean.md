@@ -85,6 +85,22 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 - **Earns its keep when:** the diff was written by an agent and will be merged without a human reading it line by line. That is the autonomous profile by definition; in the human-driven profile you are the cross-model reviewer.
 - **Lean invocation:** `/flow-next:impl-review` or `/flow-next:plan-review` on the changes that warrant it, or a per-task `review:` pin, leaving the standing backend unset.
 
+#### Turning the dial: `none` and `host`
+
+The costs above are wall-clock costs in disguise. Each review round is a serial pass the whole pipeline waits on, and the fix-and-re-review loop repeats that wait per round. If you read every diff yourself anyway, the wait buys you little, and the backend has two cheaper settings for exactly that case.
+
+**`none`** switches the review gates off instead of routing them anywhere. Every backend-driven review exits cleanly: the per-task worker review, impl-review, plan-review, and spec-completion-review all skip, and pilot skips its plan-review and completion-review gates rather than deadlocking on them. What still runs is the deterministic spine (Quick commands, full gates, plan-sync) and the in-host quality audit that work dispatches when a change is large or risky. Notice what that leaves out: nothing verifies R-ID coverage at the end of a spec, and a small spec ships on gates alone. Sensible when you are the reviewer; the wrong setting for an unattended loop.
+
+**`host`** keeps every gate alive and runs the reviewer as a host-native fresh-context subagent instead of a second CLI: nothing to install or authenticate, no subprocess. Configuring it takes two lines:
+
+```bash
+flowctl config set review.backend host
+```
+
+plus a `reviewer:` pin in your `CLAUDE.md` / `AGENTS.md` [routing block](orchestration.md#the-routing-block) naming a model from a family that did not write the diff (ask your harness for current ids rather than copying one from a document). The pin is required because a session model grading its own diff is the blind spot the reviewer exists to remove: without it, interactive runs ask, and autonomous runs stop with `NEEDS_HUMAN` rather than silently self-reviewing.
+
+Between the two: `host` trades the second CLI for zero setup while keeping the gate structure intact; `none` removes the gates themselves. Pick per profile. `none` belongs to the human-driven profile, and an autonomous run should keep at least `host`.
+
 ### HTML render lenses
 
 `artifacts.html.enabled` - **off by default**. Details: [`html-artifacts.md`](html-artifacts.md).

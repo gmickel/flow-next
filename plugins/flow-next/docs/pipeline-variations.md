@@ -103,7 +103,7 @@ Skipping a stage never skips the **evidence, consent, or review contract** that 
 - **Evidence:** `flowctl done` requires evidence JSON (commits, test commands) on every variant. There is no route where a task closes on narration.
 - **Gates and receipts:** green receipts, review receipts, and QA verdict receipts gate the same transitions regardless of how much ceremony preceded them.
 - **Recorded skips:** every orchestrated stage records `ran`, `skipped(reason)`, or `failed(reason)` in the receipts it already writes - read back with `flowctl usage --stages <spec-id>`. A stage you deliberately left off is an explicit entry with your reason attached, not a silent absence ([`running-lean.md`](running-lean.md#a-lean-run-still-leaves-a-record)).
-- **Review:** the review path scales with the risk (a cross-model backend, an in-host pass, or a triage-skip receipt) but some review artifact exists on every route.
+- **Review:** the review path scales with the risk (a cross-model backend, an in-host pass, or a triage-skip receipt) but some review artifact exists on every route. The dial from a cross-model backend down to `host` or `none`, and what each setting keeps running, is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
 
 That set - gates, receipts, evidence, review - is the verification spine (the docs-site page *Verification Spine* is its long-form treatment). The variants differ in which unknowns they pay to convert; none of them touches the spine.
 
