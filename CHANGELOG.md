@@ -2,6 +2,20 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Setup now tells you what each opt-in costs before you answer.** The review-backend
+  question says where the time goes (each review round is a serial pass the pipeline
+  waits on - usually the largest wall-clock item in a run), the `None` option spells
+  out what still gates a run without reviews and what stops being checked, and every
+  Claude Code / Droid / Codex install can now pick `Host` from the menu - the
+  host-native reviewer that keeps every review gate with no second CLI, configured by
+  one `reviewer:` line in the routing block. The memory, plan-sync, GitHub-scout, and
+  HTML-artifact questions carry the same one-line cost shape. The full dial from a
+  cross-model backend down to `host` or `none` is priced in the Running Lean doc.
+
 ## [flow-next 4.2.0] - 2026-08-19
 
 Teams whose merge gate is a human - a code-owner review required by a ruleset,

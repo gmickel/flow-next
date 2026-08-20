@@ -364,7 +364,7 @@ Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
 - Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossSpec <true|false>)
-- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|none OR spec form like codex:gpt-5.4:xhigh or cursor:gpt-5.5-high>)
+- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|host|none OR spec form like codex:gpt-5.4:xhigh or cursor:gpt-5.5-high>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 - HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
 - Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
@@ -386,7 +386,7 @@ Available questions (include only if corresponding config is unset):
   "header": "Memory",
   "question": "Enable the memory system? When a review sends a task back for rework, the lesson learned is saved under .flow/memory/ and read by future planning and implementation - so the same mistake is not repeated across specs.",
   "options": [
-    {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback into .flow/memory/"},
+    {"label": "Yes (Recommended)", "description": "Auto-capture pitfalls and conventions from review feedback into .flow/memory/. Near-zero overhead: entries are a side effect of work already happening, read by search."},
     {"label": "No", "description": "No learnings captured. Enable later with: flowctl config set memory.enabled true"}
   ],
   "multiSelect": false
@@ -399,7 +399,7 @@ Available questions (include only if corresponding config is unset):
   "header": "Plan-Sync",
   "question": "Enable plan-sync? After each task is implemented, a quick sync pass updates the not-yet-started tasks in the same spec to match what was ACTUALLY built - so later tasks never work from a stale plan.",
   "options": [
-    {"label": "Yes (Recommended)", "description": "Sync remaining task specs whenever implementation deviates from the original plan"},
+    {"label": "Yes (Recommended)", "description": "Sync remaining task specs whenever implementation deviates from the original plan. Costs one reconciliation pass per completed task."},
     {"label": "No", "description": "Later tasks keep their original wording. Enable later with: flowctl config set planSync.enabled true"}
   ],
   "multiSelect": false
@@ -428,7 +428,7 @@ Available questions (include only if corresponding config is unset):
   "question": "Enable GitHub scout? (Searches public/private repos for patterns during planning, requires gh CLI)",
   "options": [
     {"label": "No (Recommended)", "description": "Skip cross-repo search. Faster plans, no gh CLI needed."},
-    {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan"}
+    {"label": "Yes", "description": "Search GitHub repos for patterns/examples during /flow-next:plan (adds a web-research pass per plan)"}
   ],
   "multiSelect": false
 }
@@ -453,7 +453,7 @@ Available questions (include only if corresponding config is unset):
   "header": "HTML Artifacts",
   "question": "Enable HTML artifact mode? Capture/plan/make-pr additionally render each spec and PR body as a self-contained HTML page under .flow/artifacts/ - nicer for humans to review in a browser. The markdown stays the source of truth; pages are regenerable any time.",
   "options": [
-    {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown"},
+    {"label": "Yes (Recommended)", "description": "Also emit shareable HTML review pages alongside the markdown (one extra render step per capture, plan, and make-pr)"},
     {"label": "No", "description": "Markdown-only. Zero extra steps, zero token overhead. Enable later: flowctl config set artifacts.html.enabled true"}
   ],
   "multiSelect": false
@@ -479,14 +479,14 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land. From inside Cursor, prefer a host-native fresh-context subagent pinned cross-family via AGENTS.md model-routing (no second CLI). External CLIs remain available. Guide: https://flow-next.dev/review/workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. From inside Cursor, prefer a host-native fresh-context subagent pinned cross-family via AGENTS.md model-routing (no second CLI). External CLIs remain available. Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/review/workflow/",
   "options": [
     {"label": "Host (Recommended)", "description": "Fresh-context host-native subagent; name a cross-family model on the `reviewer` tier of the AGENTS.md routing block (setup writes that block commented out; the slugs are yours to fill in). No external CLI. Preferred from inside Cursor."},
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI (secondary — circular from inside Cursor)", "description": "Runs the external cursor-agent CLI. Circular when already inside Cursor — prefer Host. Still selectable for multi-family reach via the cursor-agent model menu. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
     {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
-    {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
+    {"label": "None", "description": "No review gates. Fastest runs; tests/lint still gate and work still audits large or risky diffs in-host, but nothing checks R-ID coverage at spec completion - fits diffs you read yourself. Set later: flowctl config set review.backend <name>, or per-run via --review"}
   ],
   "multiSelect": false
 }
@@ -496,14 +496,14 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land. This host reaches only one model family natively — host-native review fails closed unless the writer is from another family; cross-family review comes via bridge backends (codex/cursor/copilot). Guide: https://flow-next.dev/review/workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. This host reaches only one model family natively — host-native review fails closed unless the writer is from another family; cross-family review comes via bridge backends (codex/cursor/copilot). Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/review/workflow/",
   "options": [
     {"label": "Host", "description": "Fresh-context host-native subagent; name the model on the `reviewer` tier of the AGENTS.md routing block (setup writes it commented out; you fill in the slug). Fail-closed: this host is single-native-family — native host review refuses same-family self-review (interactive → ask; autonomous → NEEDS_HUMAN) unless the writer is non-Grok. Cross-family via bridges."},
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
     {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
-    {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
+    {"label": "None", "description": "No review gates. Fastest runs; tests/lint still gate and work still audits large or risky diffs in-host, but nothing checks R-ID coverage at spec completion - fits diffs you read yourself. Set later: flowctl config set review.backend <name>, or per-run via --review"}
   ],
   "multiSelect": false
 }
@@ -513,13 +513,14 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land; a review backend is a second AI CLI - ideally a DIFFERENT model family than the one writing the code, for uncorrelated blind spots. Each needs its own install/subscription. Guide: https://flow-next.dev/review/workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land; a review backend is a second AI CLI - ideally a DIFFERENT model family than the one writing the code, for uncorrelated blind spots. Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run - so pick the gate you will actually keep. Each CLI needs its own install/subscription. Guide: https://flow-next.dev/review/workflow/",
   "options": [
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
     {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
-    {"label": "None", "description": "Skip AI reviews for now. Set later with flowctl config set review.backend <name>, or per-run via --review"}
+    {"label": "Host", "description": "Host-native fresh-context subagent - no second CLI to install. Name a cross-family model on the `reviewer` tier of the routing block (setup writes it commented out; you fill in the slug). Keeps every review gate at the lowest setup cost."},
+    {"label": "None", "description": "No review gates. Fastest runs; tests/lint still gate and work still audits large or risky diffs in-host, but nothing checks R-ID coverage at spec completion - fits diffs you read yourself. Set later: flowctl config set review.backend <name>, or per-run via --review"}
   ],
   "multiSelect": false
 }
