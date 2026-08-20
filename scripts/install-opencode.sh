@@ -218,10 +218,45 @@ generate_commands() {
         || die "OpenCode command generation failed"
 }
 
-# TODO(fn-201.3): --uninstall removes exactly the manifest-listed paths plus
-# the manifest itself, reading the manifest (never the current source tree).
+# --uninstall: remove exactly the manifest-listed paths plus the manifest.
+# Reads the MANIFEST, never the current source tree — a skill renamed
+# upstream between install and uninstall still gets cleaned. Unsafe
+# relpaths abort before any removal.
+uninstall_owned_paths() {
+    local mf="$DEST/$MANIFEST_NAME"
+    if [ ! -f "$mf" ]; then
+        die "no ownership manifest at $mf; nothing to uninstall (refusing to guess paths from the source tree)"
+    fi
+    local sorted
+    sorted="$(mktemp "${TMPDIR:-/tmp}/flow-next-opencode-un.XXXXXX")"
+    LC_ALL=C sort -u "$mf" | LC_ALL=C sort -r > "$sorted"
+    while IFS= read -r rel || [ -n "$rel" ]; do
+        [ -n "$rel" ] || continue
+        if unsafe_relpath "$rel"; then
+            rm -f "$sorted"
+            die "ownership manifest $mf contains an unsafe path: $rel; no paths were removed"
+        fi
+    done < "$sorted"
+    while IFS= read -r rel || [ -n "$rel" ]; do
+        [ -n "$rel" ] || continue
+        local target="$DEST/$rel"
+        if exists "$target"; then
+            rm -rf "$target"
+        fi
+    done < "$sorted"
+    rm -f "$sorted"
+    rm -f "$mf"
+    # Parent dirs (skills/, agents/, commands/) are not manifest-listed because
+    # they can be shared with user content; drop them only when empty.
+    for _parent in skills agents commands; do
+        rmdir "$DEST/$_parent" 2>/dev/null || true
+    done
+    echo "Uninstalled flow-next from OpenCode ($DEST)."
+    echo "Removed paths listed in the ownership manifest; other files in $DEST were left untouched."
+}
 
 FORCE=0
+UNINSTALL=0
 DEST=""
 DEST_SET=0
 
@@ -244,7 +279,8 @@ while [ $# -gt 0 ]; do
             exit 0
             ;;
         --uninstall)
-            die "--uninstall is not implemented yet (fn-201.3); no paths were removed"
+            UNINSTALL=1
+            shift
             ;;
         --)
             shift
@@ -270,6 +306,11 @@ if [ "$DEST_SET" -eq 1 ]; then
     esac
 else
     DEST="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+fi
+
+if [ "$UNINSTALL" -eq 1 ]; then
+    uninstall_owned_paths
+    exit 0
 fi
 
 if [ ! -d "$PLUGIN_DIR/skills" ]; then

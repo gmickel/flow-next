@@ -105,7 +105,7 @@ class InstallerVerifier(unittest.TestCase):
 
     def test_every_installer_invokes_the_shared_verifier(self) -> None:
         for rel in ("scripts/install-codex.sh", "scripts/install-cursor.sh",
-                    "scripts/install-cursor.ps1"):
+                    "scripts/install-cursor.ps1", "scripts/install-opencode.sh"):
             with self.subTest(installer=rel):
                 self.assertIn("verify_tracker_manifest",
                               (REPO / rel).read_text(encoding="utf-8"))
