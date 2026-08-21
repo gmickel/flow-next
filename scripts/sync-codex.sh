@@ -186,16 +186,22 @@ if [ -d "$PLUGIN_DIR/references" ]; then
   cp -R "$PLUGIN_DIR/references" "$CODEX_DIR/"
 fi
 
-# Mirror canonical docs dir (fn-202 / #363 codex P2: skill prose cross-links
-# `../../docs/<name>.md` — pipeline-variations.md, ralph.md, flowctl.md, the
-# reach/ pages...). Same shape as the templates/references copies above: with
-# `codex/docs/` present, the CANONICAL link depth resolves in BOTH layouts —
-# in-repo (`codex/skills/<skill>/` → `codex/docs/`) and installed
-# (`$CODEX_HOME/skills/<skill>/` → `$CODEX_HOME/docs/`; install-codex.sh copies
-# this dir). Markdown only, subdirs included (reach/ pages are link targets):
-# docs are host-agnostic prose, so NO rewrite pass below touches them.
+# Mirror canonical docs dir (fn-202 / #363 codex P2 + P1: skill prose
+# cross-links `../../docs/<name>.md` — pipeline-variations.md, ralph.md,
+# flowctl.md, the reach/ pages...). The mirror carries them under the
+# flow-next-OWNED namespace `codex/docs/flow-next/` (never loose under
+# `codex/docs/`): install-codex.sh replaces ONLY `$CODEX_HOME/docs/flow-next/`
+# wholesale, so an install can never delete or overwrite a user- or
+# other-package-owned `$CODEX_HOME/docs/` file such as `docs/README.md` or
+# `docs/reach/` (#363 codex P1, round 4). The docs-link transform below adds
+# the matching `flow-next/` segment to mirror skill prose, so links resolve in
+# BOTH layouts — in-repo (`codex/skills/<skill>/` → `codex/docs/flow-next/`)
+# and installed (`$CODEX_HOME/skills/<skill>/` → `$CODEX_HOME/docs/flow-next/`).
+# Markdown only, subdirs included (reach/ pages are link targets): docs are
+# host-agnostic prose, so no OTHER rewrite pass touches them.
 if [ -d "$PLUGIN_DIR/docs" ]; then
-  cp -R "$PLUGIN_DIR/docs" "$CODEX_DIR/"
+  mkdir -p "$CODEX_DIR/docs"
+  cp -R "$PLUGIN_DIR/docs" "$CODEX_DIR/docs/flow-next"
   find "$CODEX_DIR/docs" -type f ! -name '*.md' -delete
 fi
 
@@ -276,17 +282,28 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
-# --- Relative docs links (all skill .md files): NO rewrite, by design ---
-# Canonical `](../../docs/...)` / subdir `](../../../docs/...)` links keep
-# their canonical depth in the mirror: the docs/ mirror copy above gives the
-# mirror a `codex/docs/` dir at the same relative position docs/ occupies for
-# canonical skills, so the untouched links resolve in-repo AND — because
-# install-codex.sh copies both skills/ and docs/ to $CODEX_HOME — on an
-# installed Codex host ($CODEX_HOME/skills/<skill>/ → $CODEX_HOME/docs/).
+# --- Relative docs links (all skill .md files): add the owned namespace ---
+# Canonical `](../../docs/...)` (skill-root files) / `](../../../docs/...)`
+# (references/ files) links gain a `flow-next/` segment in the mirror: the docs
+# mirror above lives at `codex/docs/flow-next/`, and install-codex.sh replaces
+# ONLY that owned dir under `$CODEX_HOME/docs/` — so the namespaced link depth
+# resolves in-repo AND installed, and an install can never touch a non-owned
+# `$CODEX_HOME/docs/` file (#363 codex P1, round 4). The two rules are anchored
+# on the exact canonical depths; canonical prose never contains
+# `docs/flow-next/` and the mirror is fully regenerated from canonical each
+# run, so sync twice yields a zero second-run diff. The validation block below
+# hard-fails on a double-applied segment, on any docs link left un-namespaced,
+# and on any docs link that does not resolve on disk.
 # The first-round depth-aware rewrite (+1 `../`) is deliberately GONE: it made
 # links resolve in the repo tree only, and dangle one level too high once
-# installed (#363 codex P2, round 3). The resolution guard in the validation
-# block below fails the build on any docs link that does not resolve on disk.
+# installed (#363 codex P2, round 3).
+find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
+  sed -i.bak \
+    -e 's|](\.\./\.\./docs/|](../../docs/flow-next/|g' \
+    -e 's|](\.\./\.\./\.\./docs/|](../../../docs/flow-next/|g' \
+    "$f"
+  rm -f "${f}.bak"
+done
 
 # --- Actionable next-step invocations → Codex command names (fn-202 / #363 P2) ---
 # The capture/plan footer templates emit copy-pasteable next-step commands
@@ -1982,22 +1999,29 @@ else
   echo -e "  ${GREEN}✓${NC} No Claude-native Explore-dispatch refs in Codex skill prose"
 fi
 
-# fn-202 (#363 codex P2): every relative `docs/` markdown link in mirror skill
-# prose must resolve on disk. The mirror carries `codex/docs/` (mirrored above,
-# md-only) at the same relative position canonical docs/ occupies, so canonical
-# link depth resolves untouched — in-repo and installed alike. This guard fails
-# on any docs link that still points at a nonexistent file (e.g. a canonical
-# link to a doc that is not markdown, or a docs/ file deleted upstream).
+# fn-202 (#363 codex P2 + P1): every relative `docs/` markdown link in mirror
+# skill prose must carry the owned `flow-next/` namespace segment AND resolve
+# on disk under `codex/docs/flow-next/` (mirrored above, md-only) — the only
+# docs dir install-codex.sh may replace. Fails on an un-namespaced link (the
+# namespace transform missed a new link depth), a double-applied segment
+# (`docs/flow-next/flow-next/`), or a link pointing at a nonexistent file
+# (e.g. a canonical link to a doc that is not markdown, or a docs/ file
+# deleted upstream).
 docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/skills/" 2>/dev/null || true; } | while IFS=: read -r lf ln match; do
   target="${match#](}"
+  case "$target" in
+    *docs/flow-next/flow-next/*) echo "$lf:$ln: docs-link namespace applied twice → $target"; continue ;;
+    *docs/flow-next/*) ;;
+    *) echo "$lf:$ln: docs link missing the flow-next/ namespace → $target"; continue ;;
+  esac
   [ -f "$(dirname "$lf")/$target" ] || echo "$lf:$ln: broken relative docs link → $target"
 done )
 if [ -n "$docs_link_problems" ]; then
-  echo -e "  ${RED}✗${NC} unresolved relative docs links in codex skill prose — extend the depth-aware docs-link transform:"
+  echo -e "  ${RED}✗${NC} bad relative docs links in codex skill prose — extend the namespaced docs-link transform:"
   printf '%s\n' "$docs_link_problems" | head -10
   errors=$((errors + 1))
 else
-  echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill prose resolve"
+  echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill prose are namespaced and resolve"
 fi
 
 # fn-202 (#363 codex P2): the `Recommended next:` footer template is a

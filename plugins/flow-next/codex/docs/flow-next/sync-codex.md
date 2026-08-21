@@ -12,7 +12,7 @@ Run after modifying any of:
 - `plugins/flow-next/agents/**` - agent `.md` files (converted to `.toml`)
 - `plugins/flow-next/templates/spec.md` - canonical scaffold mirrored into `codex/templates/` for R20 relative-path resolution
 - `plugins/flow-next/references/**` - shared disclosure files (e.g. `html-artifacts.md`) mirrored byte-identical into `codex/references/` (tool-name-agnostic by contract; no rewrite pass touches them)
-- `plugins/flow-next/docs/**` - doc pages mirrored (markdown only, `reach/` included) into `codex/docs/` so canonical `../../docs/...` skill cross-links resolve in the mirror and on installed Codex hosts (`install-codex.sh` copies the dir to `$CODEX_HOME/docs/`)
+- `plugins/flow-next/docs/**` - doc pages mirrored (markdown only, `reach/` included) into the owned namespace `codex/docs/flow-next/`; mirror skill cross-links gain the matching `flow-next/` segment so they resolve in the mirror and on installed Codex hosts (`install-codex.sh` replaces ONLY `$CODEX_HOME/docs/flow-next/` — never loose files or siblings under `$CODEX_HOME/docs/`, which a user or another package may own)
 
 Plugin-level `hooks/hooks.json` is gone (fn-114). Do not re-add a hooks stage.
 
@@ -29,7 +29,7 @@ The script runs in numbered stages (see banners in [`../../../scripts/sync-codex
 1. **Copy & patch skills** - canonical `skills/` copied to `codex/skills/`, then per-stage transforms applied (Claude-native tool names rewritten to Codex equivalents; `request_user_input` → plain-text numbered prompt per fn-45).
 2. **Convert agents** - `agents/*.md` → `codex/agents/*.toml` with per-agent reasoning effort, sandbox mode, model mapping, and nickname candidates.
 3. **Zero-default hooks** - remove any stale `codex/hooks.json`; assert absence (Ralph registration is agent-driven into project `.codex/hooks.json` via ralph-init).
-4. **Mirror templates/ + references/ + docs/** - canonical `templates/spec.md` copied to `codex/templates/` so the R20 discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies); canonical `docs/` copied markdown-only to `codex/docs/` so skill cross-links keep their canonical depth and resolve both in-repo and installed (fn-202 / #363).
+4. **Mirror templates/ + references/ + docs/** - canonical `templates/spec.md` copied to `codex/templates/` so the R20 discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies); canonical `docs/` copied markdown-only to the owned namespace `codex/docs/flow-next/`, and mirror skill cross-links (`](../../docs/` / `](../../../docs/`) gain the `flow-next/` segment so they resolve both in-repo and installed — the install replaces only that owned dir, so it can never destroy non-flow-next content under `$CODEX_HOME/docs/` (fn-202 / #363).
 5. **Validation** - counts + drift guards (see below).
 
 ## Validation guards

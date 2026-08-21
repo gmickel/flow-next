@@ -157,8 +157,9 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                 "prompts",
                 "templates",
                 "references",
-                "docs/README.md",
-                "docs/reach/README.md",
+                "docs/flow-next/README.md",
+                "docs/flow-next/pipeline-variations.md",
+                "docs/flow-next/reach/README.md",
                 "plugin.json",
                 "config.toml",
             ):
@@ -166,6 +167,69 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                     (custom_codex / relative_path).exists(),
                     f"custom CODEX_HOME missing install surface: {relative_path}",
                 )
+
+    def test_install_never_touches_non_owned_docs(self) -> None:
+        # #363 codex P1 (round 4): a user or another package may own
+        # $CODEX_HOME/docs/README.md or $CODEX_HOME/docs/reach/. The round-3
+        # installer rm -rf'd docs/reach and copied loose root-level pages over
+        # generic names (README.md, architecture.md) — destroying non-owned
+        # data. The fix confines the docs install to the owned namespace
+        # $CODEX_HOME/docs/flow-next/; everything else under docs/ must
+        # survive an install byte-identical.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            home = root / "primary-home"
+            (home / ".codex").mkdir(parents=True)
+            custom_codex = root / "custom-codex-home"
+            user_reach = custom_codex / "docs" / "reach"
+            user_reach.mkdir(parents=True)
+            sentinel = user_reach / "sentinel.md"
+            sentinel.write_text("user-owned reach page — not flow-next's\n")
+            user_readme = custom_codex / "docs" / "README.md"
+            user_readme.write_text("user-owned docs index — not flow-next's\n")
+
+            result = _run_installer(home, codex_home=custom_codex)
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                f"install-codex.sh failed:\n{result.stdout}\n{result.stderr}",
+            )
+            self.assertEqual(
+                sentinel.read_text(),
+                "user-owned reach page — not flow-next's\n",
+                "installer destroyed a user-owned file under docs/reach/",
+            )
+            self.assertEqual(
+                user_readme.read_text(),
+                "user-owned docs index — not flow-next's\n",
+                "installer overwrote a user-owned docs/README.md",
+            )
+            owned = custom_codex / "docs" / "flow-next"
+            self.assertTrue(
+                (owned / "pipeline-variations.md").is_file(),
+                "owned namespace docs/flow-next/ missing pipeline-variations.md",
+            )
+            # Installed-link resolution: the namespaced relative links written
+            # by sync-codex.sh must resolve from the installed skill dirs.
+            ref_dir = custom_codex / "skills" / "flow-next-capture" / "references"
+            self.assertTrue(
+                (ref_dir / "../../../docs/flow-next/pipeline-variations.md")
+                .resolve()
+                .is_file(),
+                "../../../docs/flow-next/ link dangles from an installed references/ dir",
+            )
+            skill_dir = custom_codex / "skills" / "flow-next-qa"
+            self.assertTrue(
+                (skill_dir / "../../docs/flow-next/ralph.md").resolve().is_file(),
+                "../../docs/flow-next/ link dangles from an installed skill dir",
+            )
+            # And the installed prose actually carries the namespaced spelling.
+            self.assertIn(
+                "](../../../docs/flow-next/pipeline-variations.md)",
+                (ref_dir / "rewrite-mode.md").read_text(encoding="utf-8"),
+                "installed skill prose lost the namespaced docs link",
+            )
 
     def test_explicit_codex_home_with_spaces_receives_surface(self) -> None:
         # A Codex home whose path contains spaces must survive every quoted
