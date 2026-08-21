@@ -257,6 +257,15 @@ for df in "$CODEX_DIR/docs/flow-next/reach"/*.md; do
   rm -f "${df}.bak"
 done
 
+# Image destinations need raw bytes, not the blob HTML page (#363 codex P3,
+# round 10): a mirrored `![...](.../blob/main/...png)` renders broken in an
+# installed viewer. Convert image-extension blob URLs to raw across the docs
+# mirror; idempotent (a raw URL no longer matches blob/).
+find "$CODEX_DIR/docs/flow-next" -name '*.md' -type f | while read -r df; do
+  sed -i.bak -E 's|(github\.com/gmickel/flow-next)/blob/(main/[^)]+\.(png\|jpe?g\|gif\|svg\|webp))|\1/raw/\2|g' "$df"
+  rm -f "${df}.bak"
+done
+
 # --- Docs-mirror invocation banner (#363 codex P2, rounds 7-8) ---------------
 # The mirrored docs pages mention `/flow-next:<cmd>` in examples and prose. A
 # REWRITE cannot work here: docs contain host-SPECIFIC examples (`claude -p

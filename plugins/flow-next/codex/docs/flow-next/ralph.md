@@ -124,7 +124,7 @@ flow-next-tui
 
 Real-time TUI for task progress, streaming logs, and run state.
 
-![flow-next-tui](https://github.com/gmickel/flow-next/blob/main/assets/tui.png)
+![flow-next-tui](https://github.com/gmickel/flow-next/raw/main/assets/tui.png)
 
 ### Uninstall
 
