@@ -1,5 +1,8 @@
 # Other Platforms
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 First-class on Claude Code, OpenAI Codex, Factory Droid, Cursor, xAI Grok Build, and OpenCode.
 
 **That sentence is canonical, and this file is its only home.** Every other surface (the README prose, the README platforms table, and flow-next.dev) restates it verbatim or links here, so promoting or demoting a harness stays a one-place edit. First-class means the canonical plugin files are consumed (as-is or through the generated mirror), skills and slash commands run, multi-agent flows are verified, and setup detects the host. Ralph is intentionally not built for Cursor, Grok Build, or OpenCode; that is a deliberate posture, not a tiering gap.

@@ -1,5 +1,8 @@
 # Reach: OpenCode
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 How this harness obtains a model for a [tier](../orchestration.md#tiers--what-kind-of-model-a-job-wants). Tier names and the routing precedence are defined in [`../orchestration.md`](../orchestration.md#tiers--what-kind-of-model-a-job-wants); this page is only about reach.
 
 flow-next reaches this harness through the in-repo installer (`scripts/install-opencode.sh` — canonical skills plus generated agents/commands scattered into `~/.config/opencode/`).

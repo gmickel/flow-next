@@ -1,8 +1,11 @@
 # Memory System
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 Persistent learnings that survive context compaction. Opt-in, categorized — v0.33.0+. One entry per file, YAML frontmatter, two tracks (`bug` / `knowledge`).
 
-> **On by default, and droppable.** flow-next runs fully without this. The tree itself is nearly free — entries are written as a side effect of work already happening and read by search, never loaded wholesale; the layer with a price is the **audit sweep**, a pass over every entry judged against the current codebase. Leave memory on; run the sweep deliberately with `$flow-next-audit` after a refactor invalidates prior art, rather than on a schedule. See [`running-lean.md`](running-lean.md).
+> **On by default, and droppable.** flow-next runs fully without this. The tree itself is nearly free — entries are written as a side effect of work already happening and read by search, never loaded wholesale; the layer with a price is the **audit sweep**, a pass over every entry judged against the current codebase. Leave memory on; run the sweep deliberately with `/flow-next:audit` after a refactor invalidates prior art, rather than on a schedule. See [`running-lean.md`](running-lean.md).
 
 ## Directory tree
 
@@ -178,7 +181,7 @@ Every entry carries an implicit `status`. The field is optional in frontmatter �
 
 Optional frontmatter fields that carry status: `status`, `stale_reason`, `stale_date`, `hardened_into`, `last_audited`, `audit_notes`.
 
-`hardened_into` is stored **verbatim**; flowctl validates only that `--gate-ref` is non-empty at the CLI boundary. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes`. Parsing that convention is judgment and stays in `$flow-next-audit`, not in flowctl.
+`hardened_into` is stored **verbatim**; flowctl validates only that `--gate-ref` is non-empty at the CLI boundary. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes`. Parsing that convention is judgment and stays in `/flow-next:audit`, not in flowctl.
 
 Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other** statuses' companion fields, not just its own — no field from the prior status survives a transition. `stale → hardened` and `hardened → stale` are both legal; `mark-fresh` returns any status to `active` and drops both families.
 
@@ -193,7 +196,7 @@ Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other*
 
 ## Audit lifecycle (v0.37.0+)
 
-`$flow-next-audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete / Harden**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
+`/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete / Harden**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
 
 **Audit extensions (v0.39.0+):** Phase 0.5 (new) reads every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?). Phase 0.1 (extended) auto-walks `knowledge/decisions/` alongside other categories. **Replace outcomes for decision entries are supersede-not-delete** — the audit writes a new entry with `decision_status: accepted` and sets the old entry's `decision_status: superseded` + `superseded_by: <new-id>`, preserving the historical trail. Other categories keep the existing Replace semantics.
 
@@ -204,15 +207,15 @@ Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other*
 Three flowctl helpers back the audit lifecycle (also callable directly):
 
 ```bash
-# Mark an entry stale (used by $flow-next-audit, also callable directly)
+# Mark an entry stale (used by /flow-next:audit, also callable directly)
 flowctl memory mark-stale <id> --reason "module renamed in PR #123"
-flowctl memory mark-stale <id> --reason "..." --audited-by "$flow-next-audit"
+flowctl memory mark-stale <id> --reason "..." --audited-by "/flow-next:audit"
 flowctl memory mark-stale <id> --reason "..." --json
 
 # Graduate a recurring lesson into a gate (fn-122) — demote the entry to a pointer
 flowctl memory mark-hardened <id> \
   --gate-ref "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes" \
-  [--audited-by "$flow-next-audit"] [--json]
+  [--audited-by "/flow-next:audit"] [--json]
 
 # Clear the stale flag OR un-graduate a hardened entry (both return it to active)
 flowctl memory mark-fresh <id>
@@ -226,7 +229,7 @@ flowctl memory mark-fresh <id>
 
 ## Migrate legacy → categorized (v0.37.0+)
 
-`$flow-next-memory-migrate [mode:autofix] [scope hint]` is the recommended path. Agent-native skill — host agent reads each legacy entry, classifies it into the right `(track, category)` pair using its own intelligence + repo context, writes a categorized entry via `flowctl memory add`. Interactive mode (default) asks via the platform's blocking-question tool on ambiguous entries; autofix mode accepts mechanical defaults and logs ambiguous as `needs-review`. Optional scope hint narrows to a single legacy file (e.g. `$flow-next-memory-migrate pitfalls.md`). Phase 4 cleanup writes a self-ignoring `.flow/memory/_migrated/.gitignore` and renames originals on user consent (autofix declines by default; never auto-deletes).
+`/flow-next:memory-migrate [mode:autofix] [scope hint]` is the recommended path. Agent-native skill — host agent reads each legacy entry, classifies it into the right `(track, category)` pair using its own intelligence + repo context, writes a categorized entry via `flowctl memory add`. Interactive mode (default) asks via the platform's blocking-question tool on ambiguous entries; autofix mode accepts mechanical defaults and logs ambiguous as `needs-review`. Optional scope hint narrows to a single legacy file (e.g. `/flow-next:memory-migrate pitfalls.md`). Phase 4 cleanup writes a self-ignoring `.flow/memory/_migrated/.gitignore` and renames originals on user consent (autofix declines by default; never auto-deletes).
 
 ```bash
 flowctl memory list-legacy            # text mode: filename + entry count + mechanical default per entry
@@ -242,7 +245,7 @@ flowctl memory migrate --dry-run      # print plan (mechanical-only)
 flowctl memory migrate --yes          # apply (mechanical-only)
 ```
 
-`flowctl memory migrate` is **deterministic-only** since v0.37.0 — uses the mechanical filename → `(track, category)` heuristic. The `--no-llm` flag is accepted-but-noop (kept for back-compat with scripted callers). For accurate per-entry classification, run the `$flow-next-memory-migrate` skill instead.
+`flowctl memory migrate` is **deterministic-only** since v0.37.0 — uses the mechanical filename → `(track, category)` heuristic. The `--no-llm` flag is accepted-but-noop (kept for back-compat with scripted callers). For accurate per-entry classification, run the `/flow-next:memory-migrate` skill instead.
 
 `migrate` is idempotent — re-running after legacy files are archived prints `No legacy files to migrate.` JSON mode refuses writes without `--yes` as a safety guard.
 
@@ -250,7 +253,7 @@ flowctl memory migrate --yes          # apply (mechanical-only)
 
 ## Surface the store in AGENTS.md / CLAUDE.md
 
-Point agents at `.flow/memory/` with a one-line note in `AGENTS.md` / `CLAUDE.md` (or both). `$flow-next-audit` and setup already handle discoverability via Edit; there is no dedicated `flowctl memory` patch command.
+Point agents at `.flow/memory/` with a one-line note in `AGENTS.md` / `CLAUDE.md` (or both). `/flow-next:audit` and setup already handle discoverability via Edit; there is no dedicated `flowctl memory` patch command.
 
 ## When enabled
 
@@ -288,7 +291,7 @@ across the boundary.
 ## Upgrading from 0.32.x
 
 1. `git pull && (reinstall plugin)`.
-2. **Recommended:** run `$flow-next-memory-migrate` for agent-native per-entry classification (host agent reads each legacy entry and picks the right `(track, category)` with full repo context). Or `$flow-next-memory-migrate mode:autofix` to accept mechanical defaults without prompts.
+2. **Recommended:** run `/flow-next:memory-migrate` for agent-native per-entry classification (host agent reads each legacy entry and picks the right `(track, category)` with full repo context). Or `/flow-next:memory-migrate mode:autofix` to accept mechanical defaults without prompts.
 3. **Automation alternative:** `flowctl memory migrate --dry-run` then `flowctl memory migrate --yes` for deterministic mechanical-only classification (legacy files move to `.flow/memory/_legacy/`; migration is idempotent).
 4. Optional: add a one-line `.flow/memory/` pointer in `AGENTS.md` / `CLAUDE.md` so agents without flow-next skills still find the store.
 
@@ -300,5 +303,5 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 - [`review-findings.md`](review-findings.md) — structured receipt identity,
   currentness, bounds, fallback, and the consumer boundary with memory.
 - [`glossary.md`](glossary.md) — pairs naturally with the `knowledge/decisions/` subtree (terminology + load-bearing choices).
-- [`strategy.md`](strategy.md) — `$flow-next-capture` source-tags strategy-derived AC as `[strategy:<track>]`; decisions are recorded via memory when capture refuses to write against an active track.
+- [`strategy.md`](strategy.md) — `/flow-next:capture` source-tags strategy-derived AC as `[strategy:<track>]`; decisions are recorded via memory when capture refuses to write against an active track.
 - [`flowctl.md`](flowctl.md) — full `flowctl memory` reference (every subcommand, flag, JSON shape).

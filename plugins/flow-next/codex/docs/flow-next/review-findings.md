@@ -1,5 +1,8 @@
 # Structured Review Findings
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 Review receipts may carry an optional `findings` object alongside their verdict
 and original reviewer prose. The object is a portable, versioned projection of
 the prose: consumers can render and compare findings without parsing Markdown,

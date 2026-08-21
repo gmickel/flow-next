@@ -257,25 +257,23 @@ for df in "$CODEX_DIR/docs/flow-next/reach"/*.md; do
   rm -f "${df}.bak"
 done
 
-# --- Docs-mirror invocation syntax (#363 codex P2, round 7) ------------------
-# The mirrored docs pages present `/flow-next:<cmd>` as copy-paste examples and
-# command mentions; the Codex invocation contract is dropdown / `$flow-next-*`
-# / implicit — a Codex reader copying `/flow-next:` gets a non-command.
-# Rewrite named commands across the docs mirror EXCEPT `platforms.md`: that
-# page's SUBJECT is the per-host syntax contrast (Grok/Cursor use slash, Codex
-# uses `$flow-next-`), so a uniform rewrite there destroys the contract it
-# documents (first attempt did exactly that; the guard below caught it).
-# Wildcard forms (`/flow-next:*`) are not commands and stay. Anchored so
-# output never re-matches; guard hard-fails on any surviving NAMED command
-# outside platforms.md, closing the class.
-find "$CODEX_DIR/docs/flow-next" -name '*.md' -type f ! -name 'platforms.md' | while read -r df; do
-  sed -i.bak -E 's|/flow-next:([a-z][a-z-]*)|$flow-next-\1|g' "$df"
-  rm -f "${df}.bak"
+# --- Docs-mirror invocation banner (#363 codex P2, rounds 7-8) ---------------
+# The mirrored docs pages mention `/flow-next:<cmd>` in examples and prose. A
+# REWRITE cannot work here: docs contain host-SPECIFIC examples (`claude -p
+# "/flow-next:ralph-init"`, `/loop` recipes) where `$flow-next-*` is wrong and
+# even dangerous (`$flow` expands inside double quotes in bash). Two attempts
+# proved any rewrite/exclude-list is an enumeration racing the next page. The
+# invariant instead: docs prose ships VERBATIM, and every mirrored page opens
+# with one disclosure line mapping slash syntax to this host. Guard hard-fails
+# on any page missing the banner.
+DOCS_CODEX_BANNER='> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.'
+find "$CODEX_DIR/docs/flow-next" -name '*.md' -type f | while read -r df; do
+  awk -v banner="$DOCS_CODEX_BANNER" 'NR==1{print; print ""; print banner; print ""; next} {print}' "$df" > "${df}.tmp" && mv "${df}.tmp" "$df"
 done
-DOCS_INVOKE_LEFT=$(grep -rnE '/flow-next:[a-z][a-z-]*' "$CODEX_DIR/docs/flow-next" 2>/dev/null | grep -v '/platforms\.md:' | head -5) || true
-if [ -n "$DOCS_INVOKE_LEFT" ]; then
-  echo -e "  ${RED}✗${NC} named /flow-next: invocation survived in the docs mirror (outside platforms.md) — extend the rewrite:"
-  echo "$DOCS_INVOKE_LEFT"
+DOCS_BANNER_MISSING=$(grep -rL 'Codex install note:' "$CODEX_DIR/docs/flow-next" --include='*.md' 2>/dev/null | head -5) || true
+if [ -n "$DOCS_BANNER_MISSING" ]; then
+  echo -e "  ${RED}X${NC} docs-mirror pages missing the Codex invocation banner:"
+  echo "$DOCS_BANNER_MISSING"
   exit 1
 fi
 

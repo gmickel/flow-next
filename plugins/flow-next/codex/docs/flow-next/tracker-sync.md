@@ -1,10 +1,13 @@
 # Tracker sync bridge
 
-Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, or Jira) and reconcile body / status / comments two-way. Drives the `$flow-next-tracker-sync` skill plus the `flowctl sync …` plumbing.
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
 
-> **Optional.** flow-next runs fully without this. It costs a bidirectional round-trip per lifecycle event you enable, plus a conflict policy to hold an opinion about and a second place state can be wrong; turn it on when other people need to read or edit status where they already work, or invoke it manually with `$flow-next-tracker-sync` and leave the bridge off in between. Spec-only is a first-class mode, not a degraded one. See [`running-lean.md`](running-lean.md).
 
-> **`$flow-next-tracker-sync` is NOT `$flow-next-sync`.** `$flow-next-sync` is **plan-sync** — it updates downstream *task* specs after implementation drift inside flow-next (`flow-next-sync` skill). `$flow-next-tracker-sync` is the **external tracker bridge** documented here. The two share a verb and nothing else.
+Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, or Jira) and reconcile body / status / comments two-way. Drives the `/flow-next:tracker-sync` skill plus the `flowctl sync …` plumbing.
+
+> **Optional.** flow-next runs fully without this. It costs a bidirectional round-trip per lifecycle event you enable, plus a conflict policy to hold an opinion about and a second place state can be wrong; turn it on when other people need to read or edit status where they already work, or invoke it manually with `/flow-next:tracker-sync` and leave the bridge off in between. Spec-only is a first-class mode, not a degraded one. See [`running-lean.md`](running-lean.md).
+
+> **`/flow-next:tracker-sync` is NOT `/flow-next:sync`.** `/flow-next:sync` is **plan-sync** — it updates downstream *task* specs after implementation drift inside flow-next (`flow-next-sync` skill). `/flow-next:tracker-sync` is the **external tracker bridge** documented here. The two share a verb and nothing else.
 
 ## Projection, not coordination
 
@@ -19,7 +22,7 @@ The contrast with Symphony: there, Linear is the canonical finite-state machine 
 
 ## Setup — the discovery ceremony
 
-**Configuring the bridge is its own one-time step, separate from `$flow-next-setup`.** `$flow-next-setup` installs flowctl + project docs and **never touches tracker config** — that keeps the zero-dep base install clean for the (many) users who run no project-management software. The bridge is set up by running **`$flow-next-tracker-sync`**, whose **discovery ceremony** writes the config. (`$flow-next-setup` proposes running it as an optional next step when it finishes, so it's discoverable without being imposed.)
+**Configuring the bridge is its own one-time step, separate from `/flow-next:setup`.** `/flow-next:setup` installs flowctl + project docs and **never touches tracker config** — that keeps the zero-dep base install clean for the (many) users who run no project-management software. The bridge is set up by running **`/flow-next:tracker-sync`**, whose **discovery ceremony** writes the config. (`/flow-next:setup` proposes running it as an optional next step when it finishes, so it's discoverable without being imposed.)
 
 The bridge is **off until explicitly enabled** (`tracker.enabled` defaults `false`, `tracker.type` defaults `null`). The discovery ceremony **detects → surfaces → asks → never assumes**, and writes config **only on confirmation**, with provenance. No signal ⇒ nothing written.
 
@@ -88,7 +91,7 @@ GitHub and GitLab do not ship a native `KEY-N` display form. While `tracker.type
 | `flow` (default; also the fail-closed read for a malformed on-disk value) | Spec-creating skills mint `fn-N-slug` (today's behavior) |
 | `tracker` | With an active bridge, skills mint tracker-keyed ids: named issue → `--tracker-first`; fresh idea → create-first then mint |
 
-Write side: `flowctl config set tracker.specIds <value>` accepts only `flow` or `tracker` (invalid CLI writes are rejected). The leaf is **unset-detectable** (not materialized at init) so `$flow-next-setup` can ask once when a tracker is configured and the key is still absent; once set either way, setup never re-asks. Skills route on this from an existing root config snapshot — no new config read. Bridge inactive / no transport degrades silently to flow-first. Explicit user override always wins.
+Write side: `flowctl config set tracker.specIds <value>` accepts only `flow` or `tracker` (invalid CLI writes are rejected). The leaf is **unset-detectable** (not materialized at init) so `/flow-next:setup` can ask once when a tracker is configured and the key is still absent; once set either way, setup never re-asks. Skills route on this from an existing root config snapshot — no new config read. Bridge inactive / no transport degrades silently to flow-first. Explicit user override always wins.
 
 Network cost is conditional: when the matching `tracker.perEvent.*` touchpoint is already active, tracker-first reorders an existing remote write; when those leaves are off (their default), tracker-first introduces an earlier remote write that flow-first would not make.
 
@@ -193,7 +196,7 @@ typed details. No provider path is selected from prose or provider error text.
 
 ## Lifecycle sync points (on by default — opt-out)
 
-Sync is wired into seven lifecycle skills. **When you hook the bridge up via the `$flow-next-tracker-sync` discovery ceremony, the whole pipeline activates by default** — the point of connecting a tracker is to keep it in sync, so you don't opt in event-by-event. You **opt out** instead: exclude events at ceremony time, or turn any off later with `flowctl config set tracker.perEvent.<event> off`. Leaf values: `off | pull | push | reconcile | comment`.
+Sync is wired into seven lifecycle skills. **When you hook the bridge up via the `/flow-next:tracker-sync` discovery ceremony, the whole pipeline activates by default** — the point of connecting a tracker is to keep it in sync, so you don't opt in event-by-event. You **opt out** instead: exclude events at ceremony time, or turn any off later with `flowctl config set tracker.perEvent.<event> off`. Leaf values: `off | pull | push | reconcile | comment`.
 
 | Event | Config key | Default op | Fires when |
 |---|---|---|---|
@@ -227,7 +230,7 @@ These are the only two unconditional touchpoints; everything else stays `perEven
 A `Tracker sync: MISSING:<event> (retro-fire failed: <reason>)` summary line means the touchpoint did not fire and the one bounded retro-fire could not recover it. The primary work is unaffected: tracker sync is best-effort and never blocks, so the task is done or the PR is open. To recover by hand:
 
 1. **Read the structured failure** from the event receipt. Its class and typed details distinguish `auth`, `unresolved`, `stale_id`, `rate_limited`, `transport`, `capability`, `conflict`, and `external_action_required`.
-2. **Resolve the named condition**, then re-fire the missed touchpoint through `$flow-next-tracker-sync`. The skill supplies semantic inputs and recovery judgment; its one runtime action is the matching `flowctl tracker sync` facade call.
+2. **Resolve the named condition**, then re-fire the missed touchpoint through `/flow-next:tracker-sync`. The skill supplies semantic inputs and recovery judgment; its one runtime action is the matching `flowctl tracker sync` facade call.
 3. **Verify**: `flowctl sync check <spec-id> --events <event> --since <retro-fire-time>` now prints `OK:<event>`.
 
 ## Lifecycle facade
@@ -296,7 +299,7 @@ When `tracker.readyState` is configured (the optional ceremony question above), 
 - **Stale-config degradation.** A configured state name / label that no longer resolves on the tracker (renamed/deleted) ⇒ **warn + `noop` receipt + flag untouched + the sync continues** — one bad knob never aborts the run, and a stale `readyState` must not silently un-ready every linked spec.
 - **Orthogonal to status.** The projection never feeds the who-wins ladder above, never advances `lastSyncedAt` by itself, and never blocks — body/status/comments reconcile exactly as before. `readyState: null` (the default) skips it entirely: no calls, no receipts, no flag writes.
 - **Opting back out.** `flowctl config set tracker.readyState null` clears the knob (the literal `null` token is stored as JSON null) — the projection goes dormant and local `spec ready`/`unready` is authoritative again.
-- **Pilot interplay (1.13.0+, corrected in fn-184).** [`$flow-next-pilot`](../../skills/flow-next-pilot/SKILL.md) selects ready specs and, after two healthy no-advance ticks, runs a local `spec unready` (don't-thrash) and records a strike. On a `readyState`-configured repo that local write is **advisory until the board reflects it** — the next pull projects the issue's state back and re-readies the spec. **A projection-set ready never clears a strike** (fn-87 R7): the board echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec every tick forever. So a struck spec on an armed-`readyState` repo reads ready on the board while pilot keeps skipping it as still-struck. **The recovery is the verb, not the board:** `flowctl pilot strikes clear <spec-id>` (see [`flowctl.md`](flowctl.md#pilot-strikes) and [`troubleshooting.md`](troubleshooting.md)). Moving the issue out of the ready state is still worth doing - it stops pointless re-selection noise and keeps the board honest about what is waiting on a human - but it is not what clears the strike. The board remains the single control plane for **readiness**; strikes are pilot state, not readiness state.
+- **Pilot interplay (1.13.0+, corrected in fn-184).** [`/flow-next:pilot`](../../skills/flow-next-pilot/SKILL.md) selects ready specs and, after two healthy no-advance ticks, runs a local `spec unready` (don't-thrash) and records a strike. On a `readyState`-configured repo that local write is **advisory until the board reflects it** — the next pull projects the issue's state back and re-readies the spec. **A projection-set ready never clears a strike** (fn-87 R7): the board echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec every tick forever. So a struck spec on an armed-`readyState` repo reads ready on the board while pilot keeps skipping it as still-struck. **The recovery is the verb, not the board:** `flowctl pilot strikes clear <spec-id>` (see [`flowctl.md`](flowctl.md#pilot-strikes) and [`troubleshooting.md`](troubleshooting.md)). Moving the issue out of the ready state is still worth doing - it stops pointless re-selection noise and keeps the board honest about what is waiting on a human - but it is not what clears the strike. The board remains the single control plane for **readiness**; strikes are pilot state, not readiness state.
 
 ## Dependency projection — `depends_on_epics` → tracker issue relations
 
@@ -322,11 +325,11 @@ decision and implementation pointer**.
 
 Every run emits a receipt (`flowctl sync receipt --status …`); genuine conflicts **queue** (`flowctl sync defer …`) rather than block. In autonomous / Ralph mode an `always-ask` tiebreak resolves to **queue**, not prompt — same policy, surface-dependent delivery. Deferred conflicts land in the **review deferred-findings sink** (`.flow/review-deferred/<branch>.md`) where the human already looks for deferred work — so tracker-sync never needs `flowctl block`, never stalls the loop. See [`ralph.md`](ralph.md).
 
-The Phase-0 gate recognizes the **full autonomy marker family** (2.2.0+, fn-68 R14): `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, **`FLOW_AUTONOMOUS=1`, or the `mode:autonomous` token** — matching `work` / `make-pr` / `resolve-pr` / `capture`. tracker-sync was the **one** lifecycle-participating skill whose gate omitted `FLOW_AUTONOMOUS`; under the marker NO code path reaches a prompt (discovery ceremony, collision guard, genuine conflict, and `question` authoring all resolve "ask the human" to `sync defer`). This is what makes tracker-sync safe to call **per-tick from [`$flow-next-pilot`](../../skills/flow-next-pilot/SKILL.md) backlog mode** — a live prompt mid-tick would stall the whole autonomous loop.
+The Phase-0 gate recognizes the **full autonomy marker family** (2.2.0+, fn-68 R14): `FLOW_RALPH=1`, `REVIEW_RECEIPT_PATH` set, **`FLOW_AUTONOMOUS=1`, or the `mode:autonomous` token** — matching `work` / `make-pr` / `resolve-pr` / `capture`. tracker-sync was the **one** lifecycle-participating skill whose gate omitted `FLOW_AUTONOMOUS`; under the marker NO code path reaches a prompt (discovery ceremony, collision guard, genuine conflict, and `question` authoring all resolve "ask the human" to `sync defer`). This is what makes tracker-sync safe to call **per-tick from [`/flow-next:pilot`](../../skills/flow-next-pilot/SKILL.md) backlog mode** — a live prompt mid-tick would stall the whole autonomous loop.
 
 ## Backlog-mode enumeration + the async question-valve (2.2.0+, fn-68)
 
-[`$flow-next-pilot`](../../skills/flow-next-pilot/SKILL.md) backlog mode reaches in front of the ready gate and enumerates the whole promoted lane, including tracker tickets with no Flow spec. It surfaces "stuck" as a **question, not a stall**. `flowctl tracker` now owns the deterministic enumeration and comment transport; **fn-141 R8 supersedes fn-57 R3**. The skill retains the semantic question text and recovery choice:
+[`/flow-next:pilot`](../../skills/flow-next-pilot/SKILL.md) backlog mode reaches in front of the ready gate and enumerates the whole promoted lane, including tracker tickets with no Flow spec. It surfaces "stuck" as a **question, not a stall**. `flowctl tracker` now owns the deterministic enumeration and comment transport; **fn-141 R8 supersedes fn-57 R3**. The skill retains the semantic question text and recovery choice:
 
 - **`flowctl tracker wire list-open`** enumerates promoted-lane open issues, filtered to the **exact** `tracker.readyState` state/label (no ordering, no "beyond"). It returns normalized `issue[]` so pilot can union tracker-only tickets with `flowctl specs`. When `tracker.readyState` is unset there is no promoted tracker lane: on **Linear** `list-open` now refuses with an explicit `unresolved`/`ready_state` error naming `tracker.readyState` (fn-182, #311) - a caller treats that refusal as "no ready lane configured", never as an empty board - while GitHub/GitLab/Jira still return the transport-free empty; backlog mode falls back to Flow-ready specs either way. Leaving `readyState` unset remains a legitimate, deliberate configuration.
 - **`list-comments <tracker-id>`** maps to `flowctl tracker wire comment-list --locator …` for every tracker-only candidate before parked-state selection. Normalized comments include immutable `created_at`; a failed or truncated read fails closed.

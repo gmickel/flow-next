@@ -1,9 +1,12 @@
 # Project Strategy
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 `STRATEGY.md` is a project-canonical strategic-intent file shipped in v0.40.0. Lives at the **repo root** (peer of `GLOSSARY.md` / `README.md`), NOT inside `.flow/`. Survives `rm -rf .flow/` — strategic intent is the project's, not flow-next's (R1 / R22, mirrors the glossary R18 invariant).
 
 > Canonical example for this repo: [`../../../STRATEGY.md`](https://github.com/gmickel/flow-next/blob/main/STRATEGY.md).
-> The skill that writes/maintains it: `plugins/flow-next/skills/flow-next-strategy/` — `$flow-next-strategy` is the editor. NO `flowctl strategy add/edit` plumbing (prose is too heavy for atomic field-set CLI).
+> The skill that writes/maintains it: `plugins/flow-next/skills/flow-next-strategy/` — `/flow-next:strategy` is the editor. NO `flowctl strategy add/edit` plumbing (prose is too heavy for atomic field-set CLI).
 
 ## Format
 
@@ -43,11 +46,11 @@ A file with H1 + frontmatter only and no populated H2 sections returns `{exists:
 
 ## How the rest of flow-next uses it
 
-- **`$flow-next-prospect`** Phase 0: reads `STRATEGY.md` when `sections_filled >= 1`. Injects approach + active tracks verbatim into candidate-generation prompt. Adds `out-of-scope-vs-strategy` to the rejection taxonomy. Advisory — never auto-rejects.
-- **`$flow-next-plan`** research scan: emits a `## Strategy Alignment` spec section listing which active tracks the plan serves. Drift surfaced as a `## Strategy drift flagged for review` block (read-only — never auto-supersedes).
-- **`$flow-next-interview`** doc-aware mode: surfaces conflicts in a `## Strategy Conflicts` spec section parallel to `## Glossary Conflicts`. Throttle ≤1 strategy-conflict question per interview round.
-- **`$flow-next-capture`** Phase 0: source-tags strategy-derived acceptance criteria as `[strategy:<track-name>]` (joins `[user]` / `[paraphrase]` / `[inferred]` tags). Refuses to write spec contradicting an active track without `--override-strategy`. On flag fire: prompts to record a decision via `flowctl memory add --track knowledge --category decisions ...`.
-- **`$flow-next-sync`** Step 5: surfaces drift in a `## Strategy drift flagged for review` heading. NEVER auto-supersedes — read-only surface only. Track renames replace inline with a `<!-- Updated by plan-sync: track rename ... -->` breadcrumb.
+- **`/flow-next:prospect`** Phase 0: reads `STRATEGY.md` when `sections_filled >= 1`. Injects approach + active tracks verbatim into candidate-generation prompt. Adds `out-of-scope-vs-strategy` to the rejection taxonomy. Advisory — never auto-rejects.
+- **`/flow-next:plan`** research scan: emits a `## Strategy Alignment` spec section listing which active tracks the plan serves. Drift surfaced as a `## Strategy drift flagged for review` block (read-only — never auto-supersedes).
+- **`/flow-next:interview`** doc-aware mode: surfaces conflicts in a `## Strategy Conflicts` spec section parallel to `## Glossary Conflicts`. Throttle ≤1 strategy-conflict question per interview round.
+- **`/flow-next:capture`** Phase 0: source-tags strategy-derived acceptance criteria as `[strategy:<track-name>]` (joins `[user]` / `[paraphrase]` / `[inferred]` tags). Refuses to write spec contradicting an active track without `--override-strategy`. On flag fire: prompts to record a decision via `flowctl memory add --track knowledge --category decisions ...`.
+- **`/flow-next:sync`** Step 5: surfaces drift in a `## Strategy drift flagged for review` heading. NEVER auto-supersedes — read-only surface only. Track renames replace inline with a `<!-- Updated by plan-sync: track rename ... -->` breadcrumb.
 
 ## Foreign-file refusal (v1)
 

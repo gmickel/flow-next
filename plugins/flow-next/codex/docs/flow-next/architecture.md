@@ -1,5 +1,8 @@
 # Architecture
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 How flow-next stores state, how the spec-first task model works, and the separation of concerns between metadata and narrative content.
 
 The design tenet behind all of it: **everything lives in the repo**. Specs, tasks, memory, receipts are plain markdown + JSON under `.flow/` - in git, code-reviewable, diff-able, fork-survivable. No external services, no global config, no database. Uninstall is `rm -rf .flow/`.
@@ -22,8 +25,8 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 ├── config.json            # Project settings (memory, review, tracker, …)
 ├── .flow_version          # Schema sentinel (tracked; semantics like Cargo.lock)
 ├── .gitignore             # Auto-managed by flowctl - excludes per-run state
-├── usage.md               # Agent CLI reference (written by $flow-next-setup)
-├── bin/                   # Local flowctl install (via $flow-next-setup)
+├── usage.md               # Agent CLI reference (written by /flow-next:setup)
+├── bin/                   # Local flowctl install (via /flow-next:setup)
 │   ├── flowctl            # bash launcher
 │   ├── flowctl.cmd        # Windows launcher
 │   └── flowctl.py         # Python entrypoint
@@ -77,7 +80,7 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 └── .cache/                # (auto-gitignored) CLI model-resolution cache
 ```
 
-`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `$flow-next-setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored. `charts/` and `charts/.transactions/` appear on first `$flow-next-chart` / `flowctl chart create` (the WAL is gitignored; chart maps and decision records are tracked like specs).
+`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored. `charts/` and `charts/.transactions/` appear on first `/flow-next:chart` / `flowctl chart create` (the WAL is gitignored; chart maps and decision records are tracked like specs).
 
 ### Charts layout (fn-135)
 

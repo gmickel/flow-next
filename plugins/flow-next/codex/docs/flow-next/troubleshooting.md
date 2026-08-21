@@ -1,14 +1,17 @@
 # Troubleshooting
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 Common recovery patterns for stuck tasks, broken state, Ralph debugging, and review-backend conflicts. For deeper subsystem guides see [`flowctl.md`](flowctl.md) (CLI reference), [`ralph.md`](ralph.md) (Ralph internals), and the parent [`../README.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/README.md).
 
 ## Updated the plugin — do I re-run setup?
 
-**No.** Setup copies nothing into your repo, so a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) is the whole update: every skill resolves `flowctl` from the plugin install itself, and the agent guide comes from `flowctl usage`. Re-run `$flow-next-setup` only when setup tells you the docs-snippet schema bumped, or when you want to change configuration or re-seed the user-owned files. It stays idempotent and non-destructive (your specs/tasks/memory/config are untouched). See [platforms.md → What setup does](platforms.md#what-setup-does).
+**No.** Setup copies nothing into your repo, so a plugin update (`/plugin` update, `droid plugin update`, or `git pull` + re-install on Codex/Cursor) is the whole update: every skill resolves `flowctl` from the plugin install itself, and the agent guide comes from `flowctl usage`. Re-run `/flow-next:setup` only when setup tells you the docs-snippet schema bumped, or when you want to change configuration or re-seed the user-owned files. It stays idempotent and non-destructive (your specs/tasks/memory/config are untouched). See [platforms.md → What setup does](platforms.md#what-setup-does).
 
 ## I have `.flow/bin/` from an old install
 
-Delete it. `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` are snapshots from the retired copy layout; nothing reads them, and removing them changes nothing observable in any workflow. One exception before you bulk-delete: a `.flow/templates/spec.md` you EDITED is your content - copy it to a repo-root `SPEC.md` first (that is the customization point now); setup's cleanup offer detects a differing template and never deletes it for you. Keeping them is a hazard, not a safety net — a stale copied `flowctl` can shadow the current one (a flag that "should exist" erroring is the classic symptom). `$flow-next-setup` detects the leftovers and offers to delete them (`$flow-next-plan` prints a one-line nudge and moves on); you can also just `rm -rf .flow/bin .flow/templates/spec.md .flow/usage.md` (use `git rm` for tracked copies).
+Delete it. `.flow/bin/`, `.flow/templates/spec.md`, and `.flow/usage.md` are snapshots from the retired copy layout; nothing reads them, and removing them changes nothing observable in any workflow. One exception before you bulk-delete: a `.flow/templates/spec.md` you EDITED is your content - copy it to a repo-root `SPEC.md` first (that is the customization point now); setup's cleanup offer detects a differing template and never deletes it for you. Keeping them is a hazard, not a safety net — a stale copied `flowctl` can shadow the current one (a flag that "should exist" erroring is the classic symptom). `/flow-next:setup` detects the leftovers and offers to delete them (`/flow-next:plan` prints a one-line nudge and moves on); you can also just `rm -rf .flow/bin .flow/templates/spec.md .flow/usage.md` (use `git rm` for tracked copies).
 
 ## Pre-1.0 layout porting
 
@@ -41,7 +44,7 @@ rm -rf .flow/
 flowctl init
 ```
 
-Or run `$flow-next-uninstall` to clean up docs and get the commands printed for manual execution.
+Or run `/flow-next:uninstall` to clean up docs and get the commands printed for manual execution.
 
 ## Debug Ralph runs
 
@@ -73,7 +76,7 @@ Ralph reads receipts to decide whether to advance, retry, or block. A missing or
 
 ## Pilot keeps skipping a spec the board says is ready (strikes ledger, fn-184/#325)
 
-**Symptom:** `$flow-next-pilot` printed `PILOT_VERDICT=BLOCKED ... reason="no advancement (strike 2/2, spec unreadied): ..."` on an earlier tick, and now every tick skips that spec - even though the issue sits in the ready state on the board and `flowctl show <spec-id>` reports `ready: true`.
+**Symptom:** `/flow-next:pilot` printed `PILOT_VERDICT=BLOCKED ... reason="no advancement (strike 2/2, spec unreadied): ..."` on an earlier tick, and now every tick skips that spec - even though the issue sits in the ready state on the board and `flowctl show <spec-id>` reports `ready: true`.
 
 **Why:** pilot records a **strike** for each healthy no-advance tick in a ledger at `<git-common-dir>/flow-next/pilot-strikes.json` (shared across worktrees, never committed - it lives under `.git/`). At strike 2/2 it runs `spec unready`. On a repo with `tracker.readyState` configured, the next tracker pull projects the board state back and re-readies the spec - but **a projection-set ready does not clear a strike** (fn-87 R7): the echo re-grants readiness with no human involved, and clearing on it would re-dispatch the same failing spec forever. So the spec reads ready everywhere a human looks while pilot keeps it struck.
 
@@ -117,14 +120,14 @@ Clearing a strike **does not re-ready the spec** - the two signals are orthogona
 **Symptom:** one non-blocking line like
 
 ```
-note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block $flow-next-setup writes into CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage` - route work there and delete these keys.
+note: .flow/config.json still carries removed key(s): models.roles, models.verifiedAt; flowctl ignores them. Routing is now the model-routing block /flow-next:setup writes into CLAUDE.md / AGENTS.md plus the recipes in `flowctl usage` - route work there and delete these keys.
 ```
 
 **This is expected, not an error.** The role map (`models.roles`) and its staleness stamps (`models.verifiedAt` / `models.verifiedWith`), like the `work.delegate*` keys, are removed - flowctl reads none of them. The advisory prints at most once per invocation, on the config and work entry points only, and never blocks. Delete the keys when convenient.
 
 **Routing not taking effect?** Routing is prose read by the agent, not config parsed by flowctl, so check in this order:
 
-- **The block is in the file the host actually reads** (`CLAUDE.md` on Claude Code / Droid / Grok, `AGENTS.md` on Codex / Cursor / Grok - see [`platforms.md`](platforms.md)), and its lines are **uncommented**. `$flow-next-setup` writes every line commented out on purpose; nothing routes until you uncomment one.
+- **The block is in the file the host actually reads** (`CLAUDE.md` on Claude Code / Droid / Grok, `AGENTS.md` on Codex / Cursor / Grok - see [`platforms.md`](platforms.md)), and its lines are **uncommented**. `/flow-next:setup` writes every line commented out on purpose; nothing routes until you uncomment one.
 - **The grammar is `<tier>: <model>`** (optionally `at <effort>`), with a tier name from the four: `reviewer`, `implementer`, `fast scout`, `thinking scout`. An unrecognized name is treated as unset with one advisory; an unparseable line is ignored.
 - **Something higher in the precedence chain won.** Highest first: an explicit instruction in the invocation, then the routing block, then the agent definition's own default, then the session model. A model this harness cannot reach falls back to the session model, says so once, and continues - routing never fails closed.
 - **The harness may not have that reach at all.** Check its page under [`reach/`](reach/README.md): a host with no subagent primitive and no second CLI runs the work in session, and that is the documented degradation, not a fault.
@@ -169,7 +172,7 @@ Flow-Next's plan-review and impl-review skills include specific instructions for
 
 **Fix:** Remove or comment out custom RepoPrompt CLI instructions from your `CLAUDE.md`/`AGENTS.md` when using Flow-Next reviews. The plugin provides the complete CE-first workflow.
 
-> **Note:** RepoPrompt is macOS-only. When the CE-first ladder (`rpce-cli`, the two CE user links, then Classic `rp-cli`) finds no runnable candidate, `$flow-next-plan` and the review skills do not propose RepoPrompt. Explicit `--review=rp` is still accepted and errors at runtime if no supported RepoPrompt CLI is available.
+> **Note:** RepoPrompt is macOS-only. When the CE-first ladder (`rpce-cli`, the two CE user links, then Classic `rp-cli`) finds no runnable candidate, `/flow-next:plan` and the review skills do not propose RepoPrompt. Explicit `--review=rp` is still accepted and errors at runtime if no supported RepoPrompt CLI is available.
 
 ## Copilot review backend on Windows (fixed in 1.1.9)
 
@@ -199,7 +202,7 @@ POSIX (macOS / Linux / WSL) behavior is unchanged.
    Remove-Item -Recurse -Force .flow\bin        # git rm -rq .flow/bin if it is tracked
    ```
 
-   After this, `flowctl` and `flowctl.cmd` resolve from the plugin install and work in every shell. `$flow-next-setup` offers the same deletion interactively.
+   After this, `flowctl` and `flowctl.cmd` resolve from the plugin install and work in every shell. `/flow-next:setup` offers the same deletion interactively.
 
 2. **Disable the Store alias (per-machine OS workaround).** Settings → Apps → Advanced app settings → **App execution aliases** → toggle **OFF** for `python.exe` **and** `python3.exe`. `python3` then resolves to your real install. Note the `py` launcher is [not included with Store Python](https://learn.microsoft.com/windows/python/faqs), so if you were relying on Store Python, install python.org Python (which ships `py`) to get `py -3`.
 
@@ -207,9 +210,9 @@ Prefer path 1 — the alias toggle is per-machine, not durable, and does not sur
 
 **Sources:** Microsoft Learn [Python on Windows FAQ](https://learn.microsoft.com/windows/python/faqs) (the App Execution Alias stub + "the py launcher is not included with Store Python" + disabling the alias); python.org [Using Python on Windows](https://docs.python.org/3/using/windows.html) and [PEP 397](https://peps.python.org/pep-0397/) (the `py` launcher / `py -3`).
 
-## `$flow-next-map` — clawpatch not found / version mismatch / Node 20
+## `/flow-next:map` — clawpatch not found / version mismatch / Node 20
 
-`$flow-next-map` wraps the upstream `clawpatch` CLI. Three common failure modes:
+`/flow-next:map` wraps the upstream `clawpatch` CLI. Three common failure modes:
 
 **1. `clawpatch` binary missing.** Skill prints `pnpm add -g clawpatch` install instructions verbatim and exits 1. No auto-install — global npm/pnpm installs are user-consent territory.
 
@@ -228,7 +231,7 @@ command -v clawpatch  # should now resolve
 
 **3. `clawpatch --version` falls outside the tested range.** The skill carries a single-source `SUPPORTED_CLAWPATCH` version range in its prose; see `plugins/flow-next/skills/flow-next-map/SKILL.md` for the current pin. Outside range emits a one-line stderr warning naming expected vs found and continues (degrades — never blocks). Re-pin lands on each clawpatch minor.
 
-**4. Node 20 with `clawpatch` installed.** clawpatch's `engines.node: ">=22"` triggers its own error; the skill propagates it verbatim. Upgrade Node 22+ (e.g. `nvm install 22 && nvm use 22`) or skip `$flow-next-map` — scouts gracefully fall back to the grep/glob path when `.clawpatch/` is absent.
+**4. Node 20 with `clawpatch` installed.** clawpatch's `engines.node: ">=22"` triggers its own error; the skill propagates it verbatim. Upgrade Node 22+ (e.g. `nvm install 22 && nvm use 22`) or skip `/flow-next:map` — scouts gracefully fall back to the grep/glob path when `.clawpatch/` is absent.
 
 **5. "Should I commit `.clawpatch/` to the repo?"** No — by default the skill writes a `.clawpatch/.gitignore` with `*` + `!.gitignore`, making the feature index local-per-developer. The map is regenerable from `clawpatch map`, the schema may flip between pre-1.0 minor releases, and committing it creates PR review noise + merge conflicts. See [Sharing contract](../../skills/flow-next-map/SKILL.md#sharing-contract--local-only-by-design) in the skill prose, or the full trade-off table at [flow-next.dev/skills/map](https://flow-next.dev/skills/map/). Teams that want shared indexes can customize the skeleton — unsupported, but the skill won't clobber a customized `.gitignore` on re-run.
 
@@ -243,7 +246,7 @@ rm -rf .flow/               # Core flow state
 rm -rf scripts/ralph/       # Ralph (if enabled)
 ```
 
-Or use `$flow-next-uninstall` which cleans up docs and prints commands to run. Doc cleanup removes two independent marker blocks from `CLAUDE.md`/`AGENTS.md`: the `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` instructions block and, if `$flow-next-setup` scaffolded one, the `<!-- flow-next:model-routing:start -->` … `<!-- flow-next:model-routing:end -->` model-routing block (removed only when its marker pair is well-formed — a damaged pair is reported and left untouched). `GLOSSARY.md` and `STRATEGY.md` at the repo root are intentionally preserved — they outlive flow-next per the survives-uninstall invariant.
+Or use `/flow-next:uninstall` which cleans up docs and prints commands to run. Doc cleanup removes two independent marker blocks from `CLAUDE.md`/`AGENTS.md`: the `<!-- BEGIN FLOW-NEXT -->` … `<!-- END FLOW-NEXT -->` instructions block and, if `/flow-next:setup` scaffolded one, the `<!-- flow-next:model-routing:start -->` … `<!-- flow-next:model-routing:end -->` model-routing block (removed only when its marker pair is well-formed — a damaged pair is reported and left untouched). `GLOSSARY.md` and `STRATEGY.md` at the repo root are intentionally preserved — they outlive flow-next per the survives-uninstall invariant.
 
 ## Cursor in-IDE browser MCP missing (`cursor-ide-browser`)
 
@@ -257,7 +260,7 @@ A mid-run `MCP server does not exist: cursor-ide-browser` after the pane was alr
 
 ## Renamed skill: `browser` → `flow-next-drive` (1.4.0)
 
-The `browser` skill was renamed `flow-next-drive` in 1.4.0 (surface-aware driver ladder). The invocation is now `$flow-next-flow-next-drive`; the Codex mirror is also `flow-next-drive` (previously `agent-browser`, which collided with the user's global `agent-browser` skill and Codex-native browser skills).
+The `browser` skill was renamed `flow-next-drive` in 1.4.0 (surface-aware driver ladder). The invocation is now `/flow-next:flow-next-drive`; the Codex mirror is also `flow-next-drive` (previously `agent-browser`, which collided with the user's global `agent-browser` skill and Codex-native browser skills).
 
 If a cached install still surfaces an orphaned `browser` / `agent-browser` skill after upgrading, it auto-clears within ~7 days as the plugin cache refreshes. To clear it immediately, delete the stale cached marketplace directory under the Claude plugin cache path:
 

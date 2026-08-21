@@ -1,5 +1,8 @@
 # HTML Artifacts — Optional Render Lenses for Specs & PRs
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 Opt-in HTML artifact mode (2.0.0+). When activated, the lifecycle skills (capture, plan, make-pr) also emit beautifully rendered, self-contained HTML pages — **render lenses** — alongside their markdown output: a spec visualizer for business/plan review and a PR review instrument for diff review. Markdown (and tracker-sync) stays 100% the source of truth; every artifact is regenerable and never parsed back as state. OFF by default — markdown-only users see zero new steps, zero token overhead, zero behavior change.
 
 > **Optional.** flow-next runs fully without this. It costs an extra render step on capture, plan, and make-pr, plus an artifact tree to commit or ignore; turn it on when you hand specs to business reviewers or PRs to decision-level reviewers, or ask for a render in conversation when you need one. See [`running-lean.md`](running-lean.md).
@@ -23,7 +26,7 @@ Opt-in HTML artifact mode (2.0.0+). When activated, the lifecycle skills (captur
 
 ## Activation
 
-One config key, written by the `$flow-next-setup` ceremony or set directly:
+One config key, written by the `/flow-next:setup` ceremony or set directly:
 
 ```bash
 flowctl config get artifacts.html.enabled --json    # default: false
@@ -33,7 +36,7 @@ flowctl config set artifacts.html.enabled false     # turn off again
 
 With the mode **off or unset**, participating skills load no reference file, write no artifacts, open no Lavish sessions, and add no output — the single config read is the only addition. The heavy disclosure file incurs zero token cost when off.
 
-`$flow-next-setup` asks once (only when the key is unset): enable or not, then — on yes — commit-vs-gitignore for `.flow/artifacts/` and the optional `lavish-axi` install offer (never auto-installed). See the [config table in `flowctl.md`](flowctl.md#config) for the key reference.
+`/flow-next:setup` asks once (only when the key is unset): enable or not, then — on yes — commit-vs-gitignore for `.flow/artifacts/` and the optional `lavish-axi` install offer (never auto-installed). See the [config table in `flowctl.md`](flowctl.md#config) for the key reference.
 
 flowctl only stores the knob. Generation is agentic: the host agent reads the disclosure reference and writes the HTML — there is no deterministic Python renderer and no new slash command.
 
@@ -67,8 +70,8 @@ Every artifact footer carries the sentence "Render lens, not record.", the sourc
 
 | Lifecycle touchpoint | Hook | What renders |
 |---|---|---|
-| `$flow-next-capture` (fresh spec) | capture workflow §5.10, last in Phase 5 | Spec-only view: thesis, acceptance criteria with source-tag provenance chips, architecture panel, edge cases, boundaries, decision context — the business-review surface |
-| `$flow-next-plan` (tasks now exist) | plan Step 8.5 — runs only **after** the Step 8 refinement loop exits (never mid-edit; late task mutations regenerate before final output) | Same file, same path, regenerated with the plan layer: task dependency DAG with critical path, R-ID → task coverage matrix, plan dials |
+| `/flow-next:capture` (fresh spec) | capture workflow §5.10, last in Phase 5 | Spec-only view: thesis, acceptance criteria with source-tag provenance chips, architecture panel, edge cases, boundaries, decision context — the business-review surface |
+| `/flow-next:plan` (tasks now exist) | plan Step 8.5 — runs only **after** the Step 8 refinement loop exits (never mid-edit; late task mutations regenerate before final output) | Same file, same path, regenerated with the plan layer: task dependency DAG with critical path, R-ID → task coverage matrix, plan dials |
 
 After writing, the skill updates the spec markdown's artifact link line — a single line carrying the `<!-- flow-next:artifact-link -->` marker, **replaced in place** on every regeneration (inserted once after the H1 if absent; repeated runs never duplicate it). The link target is repo-relative (resolves on every ref, survives branch deletion) — never a branch-pinned blob URL.
 
@@ -76,7 +79,7 @@ Generation failure is non-fatal everywhere: skip the link line, one stderr note,
 
 ## PR lens
 
-`$flow-next-make-pr` Phase 1.5 (between the export-payload gather and body rendering) generates `pr.html` — a **read-only review instrument**: masthead + dials, sticky review-progress bar, the 90-second read, a churn map grouped by review intent, the R-ID → evidence table, a where-to-look checklist, and a risk register.
+`/flow-next:make-pr` Phase 1.5 (between the export-payload gather and body rendering) generates `pr.html` — a **read-only review instrument**: masthead + dials, sticky review-progress bar, the 90-second read, a churn map grouped by review intent, the R-ID → evidence table, a where-to-look checklist, and a risk register.
 
 - **Diff-derived, never commit messages.** Inputs are the `flowctl spec export-cognitive-aid` payload plus the real diff stat; commit subjects/bodies are not lens input.
 - **Structured walkthrough parity.** When a supported current v1 PR cognitive-aid object is available, the HTML lens consumes that exact validated object as the authoritative source for artifact identity/currentness, sources, ordered groups, file membership, separate change/attention dimensions, file-level R-ID/task links, deliberate non-changes, and verification. It embeds flowctl's lossless HTML-safe JSON carrier, so tests and consumers can recover the exact object. It may enrich interaction but cannot reclassify, reorder, or mix stale/legacy semantics. See [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
@@ -126,7 +129,7 @@ after hand edits, an interview pass, or drained Lavish annotations. The agent re
 
 ## Lavish integration (optional)
 
-`lavish-axi` (npm) is an optional companion: it serves an artifact in a browser session where humans annotate; annotations flow back to the agent as edits of the **markdown source of truth**, then the lens regenerates. It is detected on PATH (`command -v lavish-axi`) and **never required** — same discipline as clawpatch/`$flow-next-map`: absent means a plain static artifact, zero mention of Lavish, never an error, never an auto-install.
+`lavish-axi` (npm) is an optional companion: it serves an artifact in a browser session where humans annotate; annotations flow back to the agent as edits of the **markdown source of truth**, then the lens regenerates. It is detected on PATH (`command -v lavish-axi`) and **never required** — same discipline as clawpatch/`/flow-next:map`: absent means a plain static artifact, zero mention of Lavish, never an error, never an auto-install.
 
 ```bash
 npm i -g lavish-axi          # or zero-setup per run: npx lavish-axi <artifact.html>

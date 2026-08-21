@@ -1,9 +1,12 @@
 # Project Glossary
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 `GLOSSARY.md` is a human-readable, project-canonical terminology file shipped in v0.39.0. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` — terminology is the project's, not flow-next's.
 
 > Vocabulary discipline for this repo: [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) — a compact dictionary of load-bearing terms with `_Avoid_` aliases, not an encyclopedia (its retired long-form text is archived at [`../../../agent_docs/archive/GLOSSARY-full.md`](https://github.com/gmickel/flow-next/blob/main/agent_docs/archive/GLOSSARY-full.md)).
-> Glossary files are written/maintained via the `flowctl glossary` subcommands (`add` / `list` / `read` / `remove`), driven by `$flow-next-interview`, `$flow-next-audit`, and `$flow-next-sync`. (There is no standalone `flow-next-glossary` skill — `flowctl glossary` is the mechanism.)
+> Glossary files are written/maintained via the `flowctl glossary` subcommands (`add` / `list` / `read` / `remove`), driven by `/flow-next:interview`, `/flow-next:audit`, and `/flow-next:sync`. (There is no standalone `flow-next-glossary` skill — `flowctl glossary` is the mechanism.)
 
 ## Format
 
@@ -42,9 +45,9 @@ Last-term `remove` leaves a `# Glossary` H1 husk on disk — the file is **never
 
 ## How the rest of flow-next uses it
 
-- **`$flow-next-interview`** doc-aware mode (autodetect when `total_terms > 0` or `knowledge/decisions/` is non-empty): looks up canonical wording before terminology questions; surfaces user-vs-canonical conflicts to a `## Glossary Conflicts` spec section; writes new terms via `flowctl glossary add` when the user picks update-glossary.
-- **`$flow-next-audit`** Phase 0.5: walks every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?).
-- **`$flow-next-sync`** Phase 3b.1: glossary renames replace `_Avoid_` aliases with the canonical term inline across downstream task specs, with a `<!-- Updated by plan-sync: glossary rename ... -->` breadcrumb.
+- **`/flow-next:interview`** doc-aware mode (autodetect when `total_terms > 0` or `knowledge/decisions/` is non-empty): looks up canonical wording before terminology questions; surfaces user-vs-canonical conflicts to a `## Glossary Conflicts` spec section; writes new terms via `flowctl glossary add` when the user picks update-glossary.
+- **`/flow-next:audit`** Phase 0.5: walks every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?).
+- **`/flow-next:sync`** Phase 3b.1: glossary renames replace `_Avoid_` aliases with the canonical term inline across downstream task specs, with a `<!-- Updated by plan-sync: glossary rename ... -->` breadcrumb.
 - **`docs-gap-scout`** in the planning phase: reads `GLOSSARY.md` on the ancestor chain to surface canonical terminology in the planning context; flags terminology mismatches between the proposed feature description and the glossary.
 
 ## Forbidden vocabulary (R17)

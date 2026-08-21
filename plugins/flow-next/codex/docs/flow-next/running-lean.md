@@ -1,5 +1,8 @@
 # Running lean - operating profiles
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 flow-next runs fully as **spec -> plan -> work**. Everything else is a layer you can leave off and reach for when a piece of work warrants it.
 
 This page names the two **operating profiles** those layers serve, prices each layer in structural terms, and gives the manual invocation for people who want the capability without the standing cost. It is the source of the optionality caveat that appears at the top of each optional subsystem's page.
@@ -13,7 +16,7 @@ This page names the two **operating profiles** those layers serve, prices each l
 | Who is watching | You are, at the keyboard | Nobody, until morning |
 | What the layers do | Give you a capability on demand | Stand in for the judgment you are not there to apply |
 | Default posture | Run lean; add a layer when the work asks for it | Run gated; the gates are what make the run trustworthy |
-| Typical shape | `spec -> plan -> work`, plus whatever the change needs | `$flow-next-pilot` + `$flow-next-land` under a host loop |
+| Typical shape | `spec -> plan -> work`, plus whatever the change needs | `/flow-next:pilot` + `/flow-next:land` under a host loop |
 
 **Neither is the real mode.** They are two answers to one question: *who applies judgment at each handover?* When you are present, you are the reviewer, the tracker, and the QA - a review backend, a bidirectional tracker sync, and a live QA stage are then buying you convenience, not safety, and you should switch each one on only where the convenience is worth its cost. When nobody is present, those same layers stop being convenience: they are the only thing standing between an unattended loop and an unreviewed merge, and running without them is the actual risk.
 
@@ -47,14 +50,14 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 
 | Layer | Config key | Default | Lean invocation |
 |---|---|---|---|
-| [Tracker sync](#tracker-sync) | `tracker.enabled` | off | `$flow-next-tracker-sync` |
-| [Live QA stage](#live-qa-stage) | `pipeline.qa` | off | `$flow-next-qa <spec>` |
-| [Cross-model review backend](#cross-model-review-backend) | `review.backend` | unset | `$flow-next-impl-review` |
+| [Tracker sync](#tracker-sync) | `tracker.enabled` | off | `/flow-next:tracker-sync` |
+| [Live QA stage](#live-qa-stage) | `pipeline.qa` | off | `/flow-next:qa <spec>` |
+| [Cross-model review backend](#cross-model-review-backend) | `review.backend` | unset | `/flow-next:impl-review` |
 | [HTML render lenses](#html-render-lenses) | `artifacts.html.enabled` | off | ask for a render in conversation |
-| [Plan-sync](#plan-sync) | `planSync.enabled` | **on** | `$flow-next-sync` |
-| [Memory](#memory-and-the-audit-sweep) | `memory.enabled` | **on** | `$flow-next-audit` |
-| [Pre-capture discovery](#pre-capture-discovery) | none | manual | `$flow-next-chart`, `$flow-next-prospect` |
-| [Autonomous loops](#autonomous-loops) | none | manual | `$flow-next-pilot`, `$flow-next-land` |
+| [Plan-sync](#plan-sync) | `planSync.enabled` | **on** | `/flow-next:sync` |
+| [Memory](#memory-and-the-audit-sweep) | `memory.enabled` | **on** | `/flow-next:audit` |
+| [Pre-capture discovery](#pre-capture-discovery) | none | manual | `/flow-next:chart`, `/flow-next:prospect` |
+| [Autonomous loops](#autonomous-loops) | none | manual | `/flow-next:pilot`, `/flow-next:land` |
 | [GitHub scouts](#github-scouts) | `scouts.github` | off | ask a scout in conversation |
 | [Ralph](#ralph-deprecated) | none | off, **deprecated** | see below |
 
@@ -65,7 +68,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 - **Automates away:** keeping a Linear / GitHub / GitLab / Jira issue in step with the spec - body, status, and comments - so people who live in the tracker see current state without anyone retyping it.
 - **Costs:** a bidirectional round-trip per lifecycle event you enable it for, plus a conflict policy you now have to hold an opinion about (`tracker.conflictTiebreak`), plus a second place where state can be wrong. Every `tracker.perEvent.*` key you turn on adds another synchronization point to every spec's life.
 - **Earns its keep when:** other people - PMs, stakeholders, teammates not in the repo - need to read or edit status where they already work, or when a tracker key is your distributed id allocator for parallel agents (`tracker.specIds`).
-- **Lean invocation:** `$flow-next-tracker-sync` on demand. Push a spec to the tracker at the moment you need someone else to see it, and leave the bridge off in between. Spec-only is a first-class mode, not a degraded one: the spec is the source of truth either way.
+- **Lean invocation:** `/flow-next:tracker-sync` on demand. Push a spec to the tracker at the moment you need someone else to see it, and leave the bridge off in between. Spec-only is a first-class mode, not a degraded one: the spec is the source of truth either way.
 
 ### Live QA stage
 
@@ -74,7 +77,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 - **Automates away:** driving the running app like a real user against the spec's acceptance criteria, and filing evidence-backed findings before a human opens the PR.
 - **Costs:** a live-app drive pass per spec, a running deploy for the loop to point at, and a driver to be configured and kept working. As a pilot stage it sits between all-tasks-done and make-pr, so every spec pays it.
 - **Earns its keep when:** nobody will exercise the app before merge - the autonomous profile's usual case - or when the change is UI/runtime-shaped and tests cannot see the failure mode.
-- **Lean invocation:** `$flow-next-qa <spec>` when a change deserves it. If the app is already up on your machine because you just built the feature, you are the live QA pass; the skill is for when you want the findings written down as evidence instead of noticed and forgotten.
+- **Lean invocation:** `/flow-next:qa <spec>` when a change deserves it. If the app is already up on your machine because you just built the feature, you are the live QA pass; the skill is for when you want the findings written down as evidence instead of noticed and forgotten.
 
 ### Cross-model review backend
 
@@ -83,7 +86,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 - **Automates away:** getting a verdict from a model family that did not write the diff, so the reviewer's blind spots are uncorrelated with the writer's.
 - **Costs:** an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds before escalating.
 - **Earns its keep when:** the diff was written by an agent and will be merged without a human reading it line by line. That is the autonomous profile by definition; in the human-driven profile you are the cross-model reviewer.
-- **Lean invocation:** `$flow-next-impl-review` or `$flow-next-plan-review` on the changes that warrant it, or a per-task `review:` pin, leaving the standing backend unset.
+- **Lean invocation:** `/flow-next:impl-review` or `/flow-next:plan-review` on the changes that warrant it, or a per-task `review:` pin, leaving the standing backend unset.
 
 #### Turning the dial: `none` and `host`
 
@@ -117,7 +120,7 @@ Between the two: `host` trades the second CLI for zero setup while keeping the g
 - **Automates away:** updating downstream task specs after an implementation drifts from what the plan assumed, so later tasks re-anchor on what is true rather than what was planned.
 - **Costs:** a reconciliation pass after each completed task.
 - **Earns its keep when:** the spec has several dependent tasks - the usual case, which is why it ships on. On a single-task spec there is nothing downstream to reconcile and the pass is a no-op worth skipping.
-- **Lean invocation:** `flowctl config set planSync.enabled false`, then `$flow-next-sync` when a task genuinely invalidates a downstream assumption.
+- **Lean invocation:** `flowctl config set planSync.enabled false`, then `/flow-next:sync` when a task genuinely invalidates a downstream assumption.
 
 ### Memory and the audit sweep
 
@@ -126,7 +129,7 @@ Between the two: `host` trades the second CLI for zero setup while keeping the g
 - **Automates away:** carrying learnings across context compaction and across sessions, so a bug class you already diagnosed does not get re-diagnosed from scratch.
 - **Costs:** the memory tree itself is nearly free - entries are written as a side effect of work already happening and read by search, not loaded wholesale. The **audit sweep** is the layer with a price: a pass over every entry to judge it against the current codebase.
 - **Earns its keep when:** memory is on, always. The audit earns its keep once entries have had time to go stale - after a refactor that invalidates prior art, or on a periodic cadence.
-- **Lean invocation:** leave memory on; run `$flow-next-audit` deliberately rather than on a schedule.
+- **Lean invocation:** leave memory on; run `/flow-next:audit` deliberately rather than on a schedule.
 
 ### Pre-capture discovery
 
@@ -135,7 +138,7 @@ No config key - these are skills you invoke or do not. Details: [`../skills/flow
 - **Automates away:** finding out what to build - a ranked backlog (`prospect`), a decision map for one oversized unclear idea (`chart`), or structured requirement extraction on an existing spec (`interview`).
 - **Costs:** a discovery loop before any code exists. Chart in particular is an adaptive multi-invocation loop, one decision per tick.
 - **Earns its keep when:** you cannot yet state the outcome in a sentence. When you can, capture directly; discovery on an idea you already understand is ceremony.
-- **Lean invocation:** all three are already manual and none is ever a required stage. `$flow-next-guide` will tell you which, if any, your situation needs.
+- **Lean invocation:** all three are already manual and none is ever a required stage. `/flow-next:guide` will tell you which, if any, your situation needs.
 
 ### Autonomous loops
 
@@ -144,7 +147,7 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 - **Automates away:** the repetition - pilot advances one ready spec by one stage per tick, land babysits the resulting PRs to merged.
 - **Costs:** this is the autonomous profile itself, so it inherits the profile's gates: the layers above stop being optional in the way they are optional for you at a keyboard, because they are what replace you.
 - **Earns its keep when:** there is a queue of blessed, fully specified work and nobody who wants to sit through it.
-- **Lean invocation:** `$flow-next-work` is the human-driven equivalent and needs no loop primitive at all.
+- **Lean invocation:** `/flow-next:work` is the human-driven equivalent and needs no loop primitive at all.
 
 ### GitHub scouts
 
@@ -157,11 +160,11 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 
 ### Ralph (deprecated)
 
-**Deprecated.** A shell script that calls the orchestration primitives - `$flow-next-pilot` to build and `$flow-next-land` to ship, driven by a host loop or `cron` - does what the hardened harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Nothing is removed yet and existing Ralph installs keep working unchanged; new adopters should reach for pilot + land. Details and the full comparison: [`ralph.md`](ralph.md).
+**Deprecated.** A shell script that calls the orchestration primitives - `/flow-next:pilot` to build and `/flow-next:land` to ship, driven by a host loop or `cron` - does what the hardened harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Nothing is removed yet and existing Ralph installs keep working unchanged; new adopters should reach for pilot + land. Details and the full comparison: [`ralph.md`](ralph.md).
 
 ### Implementation offload (no layer to enable)
 
-Offloading implementation to a second CLI is **not an optional layer** — there is no config key to switch on and nothing to price. You drive the other CLI through a headless bridge, ad hoc or as standing routing prose in `CLAUDE.md` / `AGENTS.md` (written for you by the `$flow-next-setup` model-routing scaffold). The recipes, the tier advice, and the rule that the bridged child writes code while the host keeps git, judgment, and the verdict live in the usage guide's `## Orchestration & model steering` section. Details: [`orchestration.md`](orchestration.md#implementation-offload--the-bridge-route).
+Offloading implementation to a second CLI is **not an optional layer** — there is no config key to switch on and nothing to price. You drive the other CLI through a headless bridge, ad hoc or as standing routing prose in `CLAUDE.md` / `AGENTS.md` (written for you by the `/flow-next:setup` model-routing scaffold). The recipes, the tier advice, and the rule that the bridged child writes code while the host keeps git, judgment, and the verdict live in the usage guide's `## Orchestration & model steering` section. Details: [`orchestration.md`](orchestration.md#implementation-offload--the-bridge-route).
 
 ## A lean run still leaves a record
 
@@ -179,6 +182,6 @@ That is what makes a deliberate layer set auditable later: the difference betwee
 - [`../../../README.md`](https://github.com/gmickel/flow-next/blob/main/README.md) - the happy path and the 5-command quick start.
 - [`pipeline-variations.md`](pipeline-variations.md) - the stage axis: five worked routes through the menu, selected by risk and unknowns.
 - [`orchestration.md`](orchestration.md) - which model does what, and how to change it. The routing counterpart to this page: same doctrine, applied to models rather than layers.
-- [`../skills/flow-next-guide/SKILL.md`](../../skills/flow-next-guide/SKILL.md) - `$flow-next-guide`, the router that recommends the smallest sufficient workflow for one specific situation.
+- [`../skills/flow-next-guide/SKILL.md`](../../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the router that recommends the smallest sufficient workflow for one specific situation.
 - [`teams.md`](teams.md) - what changes when several humans and several agents share one repo.
 - [`architecture.md`](architecture.md) - what `.flow/` holds regardless of which layers you run.

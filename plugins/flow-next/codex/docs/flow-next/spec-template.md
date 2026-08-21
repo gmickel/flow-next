@@ -1,5 +1,8 @@
 # Spec Template & Acceptance-Criteria Discipline
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 The canonical spec scaffold lives at [`../templates/spec.md`](../../templates/spec.md). This doc covers the **rules** that surround it — R-ID semantics, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, and the 3-tier template discovery cascade — not the section list itself (R17: cross-link, never re-embed).
 
 ## Canonical scaffold
@@ -217,11 +220,11 @@ The rules mirror R-IDs where they apply:
 - The **spec is the unit of compliance**: spec completion review (not per-task impl review) judges each G-ID against the whole implementation and records `met` / `violated` / `n/a` per criterion in the review receipt's additive `criteria` array. Violations also surface as normal findings.
 - **G-IDs are never restated as R-IDs.** The spec-authoring skills (`plan`, `capture`, `interview`) do not copy standing criteria into a spec's `## Acceptance Criteria` - a copy drifts as `criteria.md` evolves and gets judged twice. A spec references a relevant G-ID in prose; an R-ID covers only what the spec adds beyond the standing rule.
 
-`$flow-next-setup` offers to scaffold the file (opt-in; declining leaves no trace). See [`review-findings.md`](review-findings.md) § Global-criteria compliance for the receipt field, and [`flowctl.md`](flowctl.md) § criteria for the CLI.
+`/flow-next:setup` offers to scaffold the file (opt-in; declining leaves no trace). See [`review-findings.md`](review-findings.md) § Global-criteria compliance for the receipt field, and [`flowctl.md`](flowctl.md) § criteria for the CLI.
 
 ### Source tags - what you said vs what the agent inferred
 
-`$flow-next-capture` **and** `$flow-next-interview` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
+`/flow-next:capture` **and** `/flow-next:interview` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
 
 ```markdown
 - **R1:** Root marketplace manifest exists and imports cleanly. [user]
@@ -256,13 +259,13 @@ Two details in that pipeline are load-bearing, and both exist because a track na
 Then interview only the uncertainty instead of re-litigating settled requirements:
 
 ```text
-$flow-next-interview fn-14 - focus only on the [inferred] acceptance criteria
+/flow-next:interview fn-14 - focus only on the [inferred] acceptance criteria
 (R3, R4, R9, R11); the [user] and [paraphrase] ones are settled, leave them alone
 ```
 
 Append-only R-ID numbering is what makes that targeting safe - a later pass cannot renumber or rewrite the criteria you already blessed, and it will not retag them either.
 
-Scope: tags apply to a spec's `## Acceptance Criteria` bullets. Task acceptance is plain `- [ ]` checklist items and carries no tags, and an interview over a loose markdown file leaves that file's structure alone - tags start when `$flow-next-plan` promotes it to a spec.
+Scope: tags apply to a spec's `## Acceptance Criteria` bullets. Task acceptance is plain `- [ ]` checklist items and carries no tags, and an interview over a loose markdown file leaves that file's structure alone - tags start when `/flow-next:plan` promotes it to a spec.
 
 Note: `flowctl spec export-cognitive-aid --json` does not surface parsed criteria with their tags as a top-level array today (the parse feeds the PR-body coverage table internally), so the grep above is the supported route.
 

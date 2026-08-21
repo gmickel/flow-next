@@ -1,5 +1,8 @@
 # Reach: generic fallback
 
+> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+
+
 The page an **undetectable harness** resolves to. If you are reading this because the harness could not be identified, say so once and proceed on the assumptions below — a guessed harness is worse than a named fallback.
 
 How this harness obtains a model for a [tier](../orchestration.md#tiers--what-kind-of-model-a-job-wants). Tier names and the routing precedence are defined in [`../orchestration.md`](../orchestration.md#tiers--what-kind-of-model-a-job-wants); this page is only about reach.
