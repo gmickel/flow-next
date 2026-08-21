@@ -35,3 +35,4 @@ stage: impl-review - skipped(config: REVIEW_MODE=none)
 - Commits: 04c1e832adff2f34eb405c1cc46430680d2721ee, b7bb6925552b277683b62bed0d6e31a08dbed724
 - Tests: baseline: green - cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_worker_anchor_prose test_cp1252_robustness -q (23 tests OK, pre-edit), verify: same focused suite green post-work (23 tests OK); flowctl gate classify --base 0e039b0bb83fb54c7396297fa277d1137bea6964 -> TIER_B docs-only on the conductor branch (prototype edits live on eval branches, never main), commit-lock.py smoke: serializes; exit 97 on bounded timeout while held; proceeds after release, byte-identity: git diff 02212557..<each eval branch> -- impl-review/plan-review/spec-completion-review skills + agents + templates + scripts = 0 lines on both branches; all phases.md hunks inside Phase 3
 - PRs:
+stage: plan-sync - ran (no drift; no downstream edits)
