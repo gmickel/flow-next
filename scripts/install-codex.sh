@@ -22,6 +22,7 @@
 #   - Scripts:   worktree.sh              → ~/.codex/scripts/  (from codex/skills/)
 #   - Templates: ralph-init templates      → ~/.codex/templates/
 #   - References: codex/references/*.md    → ~/.codex/references/
+#   - Docs:      codex/docs/**/*.md        → ~/.codex/docs/
 #   - Manifest:  .codex-plugin/plugin.json → ~/.codex/plugin.json
 #   - Config:    agent entries             → ~/.codex/config.toml (merged)
 #
@@ -73,7 +74,8 @@ echo
 
 # Create target directories
 mkdir -p "$CODEX_DIR/skills" "$CODEX_DIR/agents" "$CODEX_DIR/scripts" \
-         "$CODEX_DIR/prompts" "$CODEX_DIR/templates" "$CODEX_DIR/references"
+         "$CODEX_DIR/prompts" "$CODEX_DIR/templates" "$CODEX_DIR/references" \
+         "$CODEX_DIR/docs"
 
 # ====================
 # Skills (pre-patched)
@@ -328,6 +330,30 @@ if [ -d "$CODEX_SRC/references" ]; then
     done
     REF_COUNT=$(find "$CODEX_SRC/references" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
     [ "$REF_COUNT" -gt 0 ] && echo -e "${GREEN}✓${NC} $REF_COUNT shared reference file(s)"
+fi
+
+# ====================
+# Docs (cross-linked doc pages — fn-202 / #363 codex P2)
+# ====================
+# Skill prose cross-links `../../docs/<name>.md` (subdir files one level more)
+# relative to each installed skill dir — resolving to $CODEX_DIR/docs/. Without
+# this copy every docs link in the installed mirror dangles. Mirrored by
+# sync-codex.sh into $CODEX_SRC/docs/ — byte-identical to canonical, markdown
+# only, reach/ subdir included (reach pages are link targets). Same copy shape
+# as templates/references above; subdirs replaced wholesale like templates'.
+if [ -d "$CODEX_SRC/docs" ]; then
+    for doc in "$CODEX_SRC/docs/"*.md; do
+        [ -f "$doc" ] || continue
+        cp "$doc" "$CODEX_DIR/docs/"
+    done
+    for docdir in "$CODEX_SRC/docs/"*/; do
+        [ -d "$docdir" ] || continue
+        sub=$(basename "$docdir")
+        rm -rf "$CODEX_DIR/docs/$sub"
+        cp -r "$docdir" "$CODEX_DIR/docs/$sub"
+    done
+    DOC_COUNT=$(find "$CODEX_SRC/docs" -name '*.md' | wc -l | tr -d ' ')
+    [ "$DOC_COUNT" -gt 0 ] && echo -e "${GREEN}✓${NC} $DOC_COUNT doc page(s) → $CODEX_DIR/docs/"
 fi
 
 # ====================

@@ -186,6 +186,19 @@ if [ -d "$PLUGIN_DIR/references" ]; then
   cp -R "$PLUGIN_DIR/references" "$CODEX_DIR/"
 fi
 
+# Mirror canonical docs dir (fn-202 / #363 codex P2: skill prose cross-links
+# `../../docs/<name>.md` — pipeline-variations.md, ralph.md, flowctl.md, the
+# reach/ pages...). Same shape as the templates/references copies above: with
+# `codex/docs/` present, the CANONICAL link depth resolves in BOTH layouts —
+# in-repo (`codex/skills/<skill>/` → `codex/docs/`) and installed
+# (`$CODEX_HOME/skills/<skill>/` → `$CODEX_HOME/docs/`; install-codex.sh copies
+# this dir). Markdown only, subdirs included (reach/ pages are link targets):
+# docs are host-agnostic prose, so NO rewrite pass below touches them.
+if [ -d "$PLUGIN_DIR/docs" ]; then
+  cp -R "$PLUGIN_DIR/docs" "$CODEX_DIR/"
+  find "$CODEX_DIR/docs" -type f ! -name '*.md' -delete
+fi
+
 # --- flow-next-drive: Codex Browser-Use preface ──────────────────────────────
 # The canonical skill is `flow-next-drive` (no `@browser` collision — the old
 # `browser` → `agent-browser` rename is gone; the copy loop above already
@@ -263,27 +276,17 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
-# --- Relative docs-link depth fix (all skill .md files) ---
-# The mirror sits one directory deeper than canonical
-# (codex/skills/<skill>/... vs skills/<skill>/...), and the mirror has no
-# docs/ dir of its own — so canonical `](../../docs/...)` /
-# `](../../../docs/...)` markdown links break in the mirror by exactly one
-# level. Rewrite them depth-aware, keyed on each file's directory depth:
-#   codex/skills/<skill>/*.md            ../../docs/     → ../../../docs/
-#   codex/skills/<skill>/<sub>/*.md      ../../../docs/  → ../../../../docs/
-# Two separate finds (never one blanket sed) so a subdir file already carrying
-# `../../../docs` is not double-rewritten; the literal `](` anchor makes each
-# rule a no-op on its own output, so a second sync run produces zero diff.
-# References/templates links (`../../references/`, `../../templates/`) stay
-# untouched — the mirror carries those dirs at codex/, same relative shape.
-find "$CODEX_DIR/skills" -mindepth 2 -maxdepth 2 -name "*.md" -type f | while read -r f; do
-  sed -i.bak 's|](\.\./\.\./docs/|](../../../docs/|g' "$f"
-  rm -f "${f}.bak"
-done
-find "$CODEX_DIR/skills" -mindepth 3 -name "*.md" -type f | while read -r f; do
-  sed -i.bak 's|](\.\./\.\./\.\./docs/|](../../../../docs/|g' "$f"
-  rm -f "${f}.bak"
-done
+# --- Relative docs links (all skill .md files): NO rewrite, by design ---
+# Canonical `](../../docs/...)` / subdir `](../../../docs/...)` links keep
+# their canonical depth in the mirror: the docs/ mirror copy above gives the
+# mirror a `codex/docs/` dir at the same relative position docs/ occupies for
+# canonical skills, so the untouched links resolve in-repo AND — because
+# install-codex.sh copies both skills/ and docs/ to $CODEX_HOME — on an
+# installed Codex host ($CODEX_HOME/skills/<skill>/ → $CODEX_HOME/docs/).
+# The first-round depth-aware rewrite (+1 `../`) is deliberately GONE: it made
+# links resolve in the repo tree only, and dangle one level too high once
+# installed (#363 codex P2, round 3). The resolution guard in the validation
+# block below fails the build on any docs link that does not resolve on disk.
 
 # --- STRUCTURAL: Task tool → agent invocation ---
 
@@ -1941,11 +1944,11 @@ else
 fi
 
 # fn-202 (#363 codex P2): every relative `docs/` markdown link in mirror skill
-# prose must resolve on disk. The mirror sits one directory deeper than
-# canonical and carries no docs/ dir of its own; the depth-aware transform
-# above adds the missing `../`. This guard fails on any docs link that still
-# points at a nonexistent file — a canonical link at a new depth needs a new
-# depth rule, not a blanket sed.
+# prose must resolve on disk. The mirror carries `codex/docs/` (mirrored above,
+# md-only) at the same relative position canonical docs/ occupies, so canonical
+# link depth resolves untouched — in-repo and installed alike. This guard fails
+# on any docs link that still points at a nonexistent file (e.g. a canonical
+# link to a doc that is not markdown, or a docs/ file deleted upstream).
 docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/skills/" 2>/dev/null || true; } | while IFS=: read -r lf ln match; do
   target="${match#](}"
   [ -f "$(dirname "$lf")/$target" ] || echo "$lf:$ln: broken relative docs link → $target"
@@ -2199,8 +2202,9 @@ else
   errors=$((errors + yaml_errors))
 fi
 
-# Check claude-md-scout renamed (exclude provenance comments in .toml headers)
-claude_md_refs=$( { grep -r 'claude-md-scout' "$CODEX_DIR/" 2>/dev/null || true; } | { grep -v '# Auto-generated' || true; } | wc -l | tr -d ' ')
+# Check claude-md-scout renamed (exclude provenance comments in .toml headers,
+# and the untransformed docs/ mirror — platforms.md documents the rename itself)
+claude_md_refs=$( { grep -r 'claude-md-scout' "$CODEX_DIR/" 2>/dev/null || true; } | { grep -v '# Auto-generated' || true; } | { grep -v "^$CODEX_DIR/docs/" || true; } | wc -l | tr -d ' ')
 if [ "$claude_md_refs" != "0" ]; then
   echo -e "  ${RED}✗${NC} $claude_md_refs 'claude-md-scout' refs remain"
   errors=$((errors + 1))

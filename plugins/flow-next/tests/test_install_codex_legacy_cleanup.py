@@ -157,6 +157,8 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                 "prompts",
                 "templates",
                 "references",
+                "docs/README.md",
+                "docs/reach/README.md",
                 "plugin.json",
                 "config.toml",
             ):
