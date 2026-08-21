@@ -78,7 +78,7 @@ If §2.5 proposed N>1 AND the user picked `approve` (declining the split), appen
 
 ```text
 Note: a <N>-spec split was proposed and declined — the allocation is preserved
-in this conversation; /flow-next:interview <id> can still split later.
+in this conversation; $flow-next-interview <id> can still split later.
 ```
 
 ## Forbidden behavior (split row)

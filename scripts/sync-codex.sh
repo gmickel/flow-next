@@ -288,6 +288,45 @@ done
 # installed (#363 codex P2, round 3). The resolution guard in the validation
 # block below fails the build on any docs link that does not resolve on disk.
 
+# --- Actionable next-step invocations → Codex command names (fn-202 / #363 P2) ---
+# The capture/plan footer templates emit copy-pasteable next-step commands
+# (`Recommended next:` line + `Next:` menu) and the surrounding judgment prose
+# names the legal targets. On Codex, commands resolve as `$flow-next-<cmd>` —
+# via dropdown / `$flow-next-*` / implicit invocation (docs/platforms.md), never
+# `/flow-next:<cmd>` — so these ACTIONABLE surfaces get the same treatment as
+# the impl-review invocations below and phases.md's `Next:` line above. Passive
+# doc mentions in the same files (e.g. "`/flow-next:plan` does the breakdown
+# later", the verbatim-pinned R25 suggestion) stay untouched per the existing
+# rule — every pattern here is anchored to the actionable surface's own text.
+# Idempotent: no output ever re-matches a `/flow-next:` pattern. .bak cleanup
+# per file, same as every sed pass in this script.
+for nf in \
+  "$CODEX_DIR/skills/flow-next-capture/workflow.md" \
+  "$CODEX_DIR/skills/flow-next-capture/references/rewrite-mode.md" \
+  "$CODEX_DIR/skills/flow-next-capture/references/split-proposal.md" \
+  "$CODEX_DIR/skills/flow-next-plan/references/next-steps-menu.md"; do
+  [ -f "$nf" ] || continue
+  sed -i.bak \
+    -e 's|Recommended next: /flow-next:<stage>|Recommended next: $flow-next-<stage>|g' \
+    -e 's|^  /flow-next:\([a-z-]*\) <SPEC_ID>|  $flow-next-\1 <SPEC_ID>|' \
+    -e 's|may need /flow-next:sync to align|may need $flow-next-sync to align|g' \
+    -e 's|`/flow-next:\([a-z-]*\) fn-N-slug`|`$flow-next-\1 fn-N-slug`|g' \
+    -e 's|Parked unknowns lean `/flow-next:interview`|Parked unknowns lean `$flow-next-interview`|g' \
+    -e 's|design risk lean `/flow-next:plan`|design risk lean `$flow-next-plan`|g' \
+    -e 's|still leans `/flow-next:plan`|still leans `$flow-next-plan`|g' \
+    -e 's|Legal targets are ONLY `/flow-next:interview`, `/flow-next:plan`|Legal targets are ONLY `$flow-next-interview`, `$flow-next-plan`|g' \
+    -e 's|Same legal targets (`/flow-next:interview`, `/flow-next:plan`|Same legal targets (`$flow-next-interview`, `$flow-next-plan`|g' \
+    -e 's|`/flow-next:guide` with a "signals conflict" reason|`$flow-next-guide` with a "signals conflict" reason|g' \
+    -e 's|`/flow-next:guide` on genuinely conflicting signals|`$flow-next-guide` on genuinely conflicting signals|g' \
+    -e 's|(routing to `/flow-next:work`)|(routing to `$flow-next-work`)|g' \
+    -e 's|recommend `/flow-next:plan-review`|recommend `$flow-next-plan-review`|g' \
+    -e 's|; /flow-next:interview <id> can still split later|; $flow-next-interview <id> can still split later|g' \
+    -e 's|consider /flow-next:interview <id> after capture lands|consider $flow-next-interview <id> after capture lands|g' \
+    -e 's|Consider reviewing before /flow-next:plan to avoid re-solving|Consider reviewing before $flow-next-plan to avoid re-solving|g' \
+    "$nf"
+  rm -f "${nf}.bak"
+done
+
 # --- STRUCTURAL: Task tool → agent invocation ---
 
 # flow-next-work: phases.md + its reached-path references (wave-join.md,
@@ -1959,6 +1998,20 @@ if [ -n "$docs_link_problems" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill prose resolve"
+fi
+
+# fn-202 (#363 codex P2): the `Recommended next:` footer template is a
+# copy-pasteable invocation — on Codex it must carry the `$flow-next-<stage>`
+# form. A `/flow-next:` spelling here means a new/renamed footer surface missed
+# the actionable next-step transform above — extend that file list, don't
+# blanket-sed (passive doc mentions legitimately keep `/flow-next:`).
+recnext_refs=$( { grep -rn 'Recommended next: /flow-next:' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$recnext_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $recnext_refs 'Recommended next: /flow-next:' template lines remain in codex skill prose — extend the actionable next-step transform"
+  { grep -rn 'Recommended next: /flow-next:' "$CODEX_DIR/skills/" 2>/dev/null || true; } | head -5
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} Recommended-next templates use \$flow-next-<stage> in Codex skill prose"
 fi
 
 # fn-50.6 symmetry rule: agent toml bodies must not carry unrewritten
