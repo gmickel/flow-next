@@ -30,3 +30,4 @@ stage: impl-review - skipped(policy: PARALLEL_WAVE - conductor owns review after
 - Commits: 40a12f9b
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_skill_prose_diet -q (integrated head, green), uvx ruff@0.16.0 check . (green)
 - PRs:
+stage: plan-sync - ran [batched wave dispatch, drift: no; downstream .3 unchanged]

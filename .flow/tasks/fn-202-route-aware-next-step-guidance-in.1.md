@@ -27,3 +27,4 @@ stage: impl-review - skipped(config: REVIEW_MODE=none)
 - Commits: f3639a47
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_skill_prose_diet -q (integrated head, green), uvx ruff@0.16.0 check . (green)
 - PRs:
+stage: plan-sync - ran [batched wave dispatch, drift: no; .3 assumptions verified incl. sync-codex no-heredoc check]
