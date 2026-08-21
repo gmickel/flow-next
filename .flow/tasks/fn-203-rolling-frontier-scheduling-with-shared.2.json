@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-21T17:41:45.055057Z",
+  "depends_on": [
+    "fn-203-rolling-frontier-scheduling-with-shared.1"
+  ],
+  "id": "fn-203-rolling-frontier-scheduling-with-shared.2",
+  "priority": null,
+  "review": "none",
+  "spec": "fn-203-rolling-frontier-scheduling-with-shared",
+  "spec_path": ".flow/tasks/fn-203-rolling-frontier-scheduling-with-shared.2.md",
+  "status": "todo",
+  "title": "Author the two rolling prototype branches (prose-only)",
+  "updated_at": "2026-08-21T19:18:31.713771Z"
+}
