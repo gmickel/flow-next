@@ -263,6 +263,28 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
   rm -f "${f}.bak"
 done
 
+# --- Relative docs-link depth fix (all skill .md files) ---
+# The mirror sits one directory deeper than canonical
+# (codex/skills/<skill>/... vs skills/<skill>/...), and the mirror has no
+# docs/ dir of its own — so canonical `](../../docs/...)` /
+# `](../../../docs/...)` markdown links break in the mirror by exactly one
+# level. Rewrite them depth-aware, keyed on each file's directory depth:
+#   codex/skills/<skill>/*.md            ../../docs/     → ../../../docs/
+#   codex/skills/<skill>/<sub>/*.md      ../../../docs/  → ../../../../docs/
+# Two separate finds (never one blanket sed) so a subdir file already carrying
+# `../../../docs` is not double-rewritten; the literal `](` anchor makes each
+# rule a no-op on its own output, so a second sync run produces zero diff.
+# References/templates links (`../../references/`, `../../templates/`) stay
+# untouched — the mirror carries those dirs at codex/, same relative shape.
+find "$CODEX_DIR/skills" -mindepth 2 -maxdepth 2 -name "*.md" -type f | while read -r f; do
+  sed -i.bak 's|](\.\./\.\./docs/|](../../../docs/|g' "$f"
+  rm -f "${f}.bak"
+done
+find "$CODEX_DIR/skills" -mindepth 3 -name "*.md" -type f | while read -r f; do
+  sed -i.bak 's|](\.\./\.\./\.\./docs/|](../../../../docs/|g' "$f"
+  rm -f "${f}.bak"
+done
+
 # --- STRUCTURAL: Task tool → agent invocation ---
 
 # flow-next-work: phases.md + its reached-path references (wave-join.md,
@@ -1916,6 +1938,24 @@ if [ "$scout_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} No Claude-native Explore-dispatch refs in Codex skill prose"
+fi
+
+# fn-202 (#363 codex P2): every relative `docs/` markdown link in mirror skill
+# prose must resolve on disk. The mirror sits one directory deeper than
+# canonical and carries no docs/ dir of its own; the depth-aware transform
+# above adds the missing `../`. This guard fails on any docs link that still
+# points at a nonexistent file — a canonical link at a new depth needs a new
+# depth rule, not a blanket sed.
+docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/skills/" 2>/dev/null || true; } | while IFS=: read -r lf ln match; do
+  target="${match#](}"
+  [ -f "$(dirname "$lf")/$target" ] || echo "$lf:$ln: broken relative docs link → $target"
+done )
+if [ -n "$docs_link_problems" ]; then
+  echo -e "  ${RED}✗${NC} unresolved relative docs links in codex skill prose — extend the depth-aware docs-link transform:"
+  printf '%s\n' "$docs_link_problems" | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill prose resolve"
 fi
 
 # fn-50.6 symmetry rule: agent toml bodies must not carry unrewritten

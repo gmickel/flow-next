@@ -89,7 +89,7 @@ family is not an independent one. **Routing precedence, highest first: an
 explicit argument in the invocation, then the project routing block in the
 instruction file, then the agent definition's own default, then the session
 model.** How *this* harness reaches that model - and what degrades when it
-cannot - is its reach page: [`docs/reach/README.md`](../../docs/reach/README.md).
+cannot - is its reach page: [`docs/reach/README.md`](../../../docs/reach/README.md).
 A harness that reaches only one model family natively fails closed when the
 writer shares that family (interactive -> ask; autonomous -> stop with
 `NEEDS_HUMAN: host review needs a cross-family reviewer in the AGENTS.md
