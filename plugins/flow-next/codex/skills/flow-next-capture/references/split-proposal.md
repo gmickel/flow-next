@@ -72,6 +72,8 @@ Autofix never reaches this branch (it records the proposal instead).
 
 On the `split-as-proposed` path, emit the footer block once PER created spec (each with its own `Spec captured at…`, its own mandatory `Tracker sync:` line — the sync check ran per spec — and its own next-step hint), followed by one shared line listing the dependency edges.
 
+Each per-spec footer block also carries its own mandatory `Recommended next:` line, judged per spec under the base-footer rule (workflow.md §Phase 6) against the smallest-sufficient rule in [docs/pipeline-variations.md](../../../docs/pipeline-variations.md) — each created spec is its own route. Recommendations are per-spec only; the shared dependency-edge line owns execution order.
+
 If §2.5 proposed N>1 AND the user picked `approve` (declining the split), append:
 
 ```text

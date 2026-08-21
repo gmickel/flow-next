@@ -5,6 +5,14 @@ sentinel — no non-interactive marker is set. Autonomous, Ralph, and
 receipt-driven runs never reach this file; they run Step 8.5 directly after
 Step 6/7 complete.
 
+**Above the numbered list, print exactly ONE recommendation line** — mandatory, never silently omitted — and re-judge it at every menu print: a go-deeper/simplify round changes the risk picture, and stale advice is worse than none.
+
+```
+Recommended next: /flow-next:<stage> fn-N-slug — <one-clause reason>; <named alternative when it applies>
+```
+
+The judged decision is plan-review vs straight-to-work, per the smallest-sufficient rule in [docs/pipeline-variations.md](../../../docs/pipeline-variations.md) — judge against that doc; never copy its rubric here. Judgment inputs: the task breakdown just produced, design risk surfaced during research, and blast radius. Guardrail: recommend skipping plan-review (routing to `/flow-next:work`) ONLY when the plan matches one of the two ceremony shapes that doc names — docs/chore-class, or small-task-class with no design risk — and the line names which shape. ANY remaining design risk → recommend `/flow-next:plan-review` (the cheapest measured catch in the pipeline); a skip recommendation on any other ground is a conduct failure. When signals genuinely conflict, the recommendation is `/flow-next:guide` with a "signals conflict" reason. The line is advisory — a recommendation with a reason, never a directive, gate, or plain-text numbered prompt; the numbered menu below stays verbatim.
+
 Offer options under the spec summary Step 8 already printed:
 
 ```

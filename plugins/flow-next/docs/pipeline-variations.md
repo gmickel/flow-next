@@ -107,10 +107,14 @@ Skipping a stage never skips the **evidence, consent, or review contract** that 
 
 That set - gates, receipts, evidence, review - is the verification spine (the docs-site page *Verification Spine* is its long-form treatment). The variants differ in which unknowns they pay to convert; none of them touches the spine.
 
+The capture and plan closers apply this doc's rule at the decision point: each prints one `Recommended next:` line judged against the risk-and-unknowns selector above, right where the route is chosen.
+
 ## See also
 
 - [`../../../README.md`](../../../README.md#the-pipeline-is-a-menu-not-a-rail) - the menu-not-a-rail doctrine and the composition moves (chain, prompt-into, reorder, parallelize).
 - [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the live router: one situation in, the smallest sufficient route out.
+- [`../skills/flow-next-capture/workflow.md`](../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) - capture's Phase 6 closer, which judges the just-written spec against this doc's rule and prints its `Recommended next:` line.
+- [`../skills/flow-next-plan/references/next-steps-menu.md`](../skills/flow-next-plan/references/next-steps-menu.md) - plan's interactive menu, which applies this doc's rule to the plan-review-vs-work decision.
 - [`running-lean.md`](running-lean.md) - the layer axis: which subsystems to run at all, priced.
 - [`teams.md`](teams.md) - the full nine-step lifecycle and the handover objects the epic variant produces.
 - [`architecture.md`](architecture.md) - what `.flow/` holds regardless of route.
