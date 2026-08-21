@@ -8,3 +8,4 @@ A correct run turns a rough idea into a spec with right-sized tasks in `.flow/`,
 - [ ] New acceptance criteria carry R-IDs in the `- **Rn:** ...` prose form, each behavioral R-ID names its error and boundary cases, and existing R-IDs are never renumbered.
 - [ ] Tasks are sized to fit a single `/flow-next:work` iteration, and the closing summary reports the validate result plus the derived execution waves.
 - [ ] Under `mode:autonomous` no setup questions are asked — the autonomous defaults apply, and genuinely unanswerable input stops with a one-line `NEEDS_HUMAN:` report instead of a prompt.
+- [ ] The interactive menu printed exactly one `Recommended next:` line above the numbered options; a skip-plan-review recommendation named one of the two ceremony shapes (docs/chore-class, or small-task-class with no design risk); `AUTONOMOUS=1` output carried no recommendation line.

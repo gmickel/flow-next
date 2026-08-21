@@ -186,6 +186,106 @@ if [ -d "$PLUGIN_DIR/references" ]; then
   cp -R "$PLUGIN_DIR/references" "$CODEX_DIR/"
 fi
 
+# Mirror canonical docs dir (fn-202 / #363 codex P2 + P1: skill prose
+# cross-links `../../docs/<name>.md` — pipeline-variations.md, ralph.md,
+# flowctl.md, the reach/ pages...). The mirror carries them under the
+# flow-next-OWNED namespace `codex/docs/flow-next/` (never loose under
+# `codex/docs/`): install-codex.sh replaces ONLY `$CODEX_HOME/docs/flow-next/`
+# wholesale, so an install can never delete or overwrite a user- or
+# other-package-owned `$CODEX_HOME/docs/` file such as `docs/README.md` or
+# `docs/reach/` (#363 codex P1, round 4). The docs-link transform below adds
+# the matching `flow-next/` segment to mirror skill prose, so links resolve in
+# BOTH layouts — in-repo (`codex/skills/<skill>/` → `codex/docs/flow-next/`)
+# and installed (`$CODEX_HOME/skills/<skill>/` → `$CODEX_HOME/docs/flow-next/`).
+# Markdown only, subdirs included (reach/ pages are link targets): docs are
+# host-agnostic prose, so no OTHER rewrite pass touches them.
+if [ -d "$PLUGIN_DIR/docs" ]; then
+  mkdir -p "$CODEX_DIR/docs"
+  cp -R "$PLUGIN_DIR/docs" "$CODEX_DIR/docs/flow-next"
+  find "$CODEX_DIR/docs" -type f ! -name '*.md' -delete
+fi
+
+# --- Docs-mirror internal links: close the link universe (#363 codex P2, round 5) ---
+# The copied docs pages carry canonical-relative links written for
+# `plugins/flow-next/docs/<file>` — one directory shallower than their mirror
+# location `codex/docs/flow-next/<file>` — so every link that leaves the docs
+# dir dangles both in-repo and installed. Rewrite by TARGET CLASS, depth-aware
+# per file location (top-level pages vs `reach/` pages), so no further
+# link-class finding is possible:
+#   1. Same-dir doc links (`](running-lean.md`, `](reach/x.md`,
+#      `](../orchestration.md` from reach/) already resolve inside
+#      `docs/flow-next/` — untouched.
+#   2. Links up-and-into INSTALLED trees (`skills/`, `templates/`,
+#      `references/`) gain one `../` — the mirror (and $CODEX_HOME) nests docs
+#      one level deeper than canonical.
+#   3. Links to targets OUTSIDE the installed universe (repo root, the plugin
+#      README, `schema/`, `tests/`, the non-markdown `ci-workflow-example.yml`
+#      the md-only filter above deletes) become absolute canonical GitHub URLs
+#      computed from the CANONICAL docs location — they resolve everywhere and
+#      never dangle on disk.
+# Anchored on the exact canonical prefixes; no rewritten output re-matches any
+# pattern, and the mirror is fully regenerated each run, so sync twice yields a
+# zero second-run diff. The link-closure validation guard below hard-fails on
+# any docs-mirror link that neither resolves on disk nor is an absolute URL.
+DOCS_BLOB_URL="https://github.com/gmickel/flow-next/blob/main"
+for df in "$CODEX_DIR/docs/flow-next"/*.md; do
+  [ -f "$df" ] || continue
+  sed -i.bak \
+    -e "s|](\.\./\.\./\.\./|](${DOCS_BLOB_URL}/|g" \
+    -e "s|](\.\./README\.md|](${DOCS_BLOB_URL}/plugins/flow-next/README.md|g" \
+    -e "s|](\.\./schema/|](${DOCS_BLOB_URL}/plugins/flow-next/schema/|g" \
+    -e "s|](\.\./tests/|](${DOCS_BLOB_URL}/plugins/flow-next/tests/|g" \
+    -e "s|](ci-workflow-example\.yml|](${DOCS_BLOB_URL}/plugins/flow-next/docs/ci-workflow-example.yml|g" \
+    -e 's|](\.\./skills/|](../../skills/|g' \
+    -e 's|](\.\./templates/|](../../templates/|g' \
+    -e 's|](\.\./references/|](../../references/|g' \
+    "$df"
+  rm -f "${df}.bak"
+done
+# reach/ pages sit one level deeper still — same classes, +1 depth.
+for df in "$CODEX_DIR/docs/flow-next/reach"/*.md; do
+  [ -f "$df" ] || continue
+  sed -i.bak \
+    -e "s|](\.\./\.\./\.\./\.\./|](${DOCS_BLOB_URL}/|g" \
+    -e "s|](\.\./\.\./README\.md|](${DOCS_BLOB_URL}/plugins/flow-next/README.md|g" \
+    -e "s|](\.\./\.\./schema/|](${DOCS_BLOB_URL}/plugins/flow-next/schema/|g" \
+    -e "s|](\.\./\.\./tests/|](${DOCS_BLOB_URL}/plugins/flow-next/tests/|g" \
+    -e 's|](\.\./\.\./skills/|](../../../skills/|g' \
+    -e 's|](\.\./\.\./templates/|](../../../templates/|g' \
+    -e 's|](\.\./\.\./references/|](../../../references/|g' \
+    "$df"
+  rm -f "${df}.bak"
+done
+
+# Image destinations need raw bytes, not the blob HTML page (#363 codex P3,
+# round 10): a mirrored `![...](.../blob/main/...png)` renders broken in an
+# installed viewer. Convert image-extension blob URLs to raw across the docs
+# mirror; idempotent (a raw URL no longer matches blob/).
+find "$CODEX_DIR/docs/flow-next" -name '*.md' -type f | while read -r df; do
+  sed -i.bak -E 's|(github\.com/gmickel/flow-next)/blob/(main/[^)]+\.(png\|jpe?g\|gif\|svg\|webp))|\1/raw/\2|g' "$df"
+  rm -f "${df}.bak"
+done
+
+# --- Docs-mirror invocation banner (#363 codex P2, rounds 7-8) ---------------
+# The mirrored docs pages mention `/flow-next:<cmd>` in examples and prose. A
+# REWRITE cannot work here: docs contain host-SPECIFIC examples (`claude -p
+# "/flow-next:ralph-init"`, `/loop` recipes) where `$flow-next-*` is wrong and
+# even dangerous (`$flow` expands inside double quotes in bash). Two attempts
+# proved any rewrite/exclude-list is an enumeration racing the next page. The
+# invariant instead: docs prose ships VERBATIM, and every mirrored page opens
+# with one disclosure line mapping slash syntax to this host. Guard hard-fails
+# on any page missing the banner.
+DOCS_CODEX_BANNER='> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts'\'' own syntax and are quoted verbatim — do not convert them.'
+find "$CODEX_DIR/docs/flow-next" -name '*.md' -type f | while read -r df; do
+  awk -v banner="$DOCS_CODEX_BANNER" 'NR==1{print; print ""; print banner; print ""; next} {print}' "$df" > "${df}.tmp" && mv "${df}.tmp" "$df"
+done
+DOCS_BANNER_MISSING=$(grep -rL 'Codex install note:' "$CODEX_DIR/docs/flow-next" --include='*.md' 2>/dev/null | head -5) || true
+if [ -n "$DOCS_BANNER_MISSING" ]; then
+  echo -e "  ${RED}X${NC} docs-mirror pages missing the Codex invocation banner:"
+  echo "$DOCS_BANNER_MISSING"
+  exit 1
+fi
+
 # --- flow-next-drive: Codex Browser-Use preface ──────────────────────────────
 # The canonical skill is `flow-next-drive` (no `@browser` collision — the old
 # `browser` → `agent-browser` rename is gone; the copy loop above already
@@ -261,6 +361,68 @@ find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
     "$f"
 
   rm -f "${f}.bak"
+done
+
+# --- Relative docs links (all skill .md files): add the owned namespace ---
+# Canonical `](../../docs/...)` (skill-root files) / `](../../../docs/...)`
+# (references/ files) links gain a `flow-next/` segment in the mirror: the docs
+# mirror above lives at `codex/docs/flow-next/`, and install-codex.sh replaces
+# ONLY that owned dir under `$CODEX_HOME/docs/` — so the namespaced link depth
+# resolves in-repo AND installed, and an install can never touch a non-owned
+# `$CODEX_HOME/docs/` file (#363 codex P1, round 4). The two rules are anchored
+# on the exact canonical depths; canonical prose never contains
+# `docs/flow-next/` and the mirror is fully regenerated from canonical each
+# run, so sync twice yields a zero second-run diff. The validation block below
+# hard-fails on a double-applied segment, on any docs link left un-namespaced,
+# and on any docs link that does not resolve on disk.
+# The first-round depth-aware rewrite (+1 `../`) is deliberately GONE: it made
+# links resolve in the repo tree only, and dangle one level too high once
+# installed (#363 codex P2, round 3).
+find "$CODEX_DIR/skills" -name "*.md" -type f | while read -r f; do
+  sed -i.bak \
+    -e 's|](\.\./\.\./docs/|](../../docs/flow-next/|g' \
+    -e 's|](\.\./\.\./\.\./docs/|](../../../docs/flow-next/|g' \
+    "$f"
+  rm -f "${f}.bak"
+done
+
+# --- Actionable next-step invocations → Codex command names (fn-202 / #363 P2) ---
+# The capture/plan footer templates emit copy-pasteable next-step commands
+# (`Recommended next:` line + `Next:` menu) and the surrounding judgment prose
+# names the legal targets. On Codex, commands resolve as `$flow-next-<cmd>` —
+# via dropdown / `$flow-next-*` / implicit invocation (docs/platforms.md), never
+# `/flow-next:<cmd>` — so these ACTIONABLE surfaces get the same treatment as
+# the impl-review invocations below and phases.md's `Next:` line above. Passive
+# doc mentions in the same files (e.g. "`/flow-next:plan` does the breakdown
+# later", the verbatim-pinned R25 suggestion) stay untouched per the existing
+# rule — every pattern here is anchored to the actionable surface's own text.
+# Idempotent: no output ever re-matches a `/flow-next:` pattern. .bak cleanup
+# per file, same as every sed pass in this script.
+for nf in \
+  "$CODEX_DIR/skills/flow-next-capture/workflow.md" \
+  "$CODEX_DIR/skills/flow-next-capture/references/rewrite-mode.md" \
+  "$CODEX_DIR/skills/flow-next-capture/references/split-proposal.md" \
+  "$CODEX_DIR/skills/flow-next-plan/references/next-steps-menu.md"; do
+  [ -f "$nf" ] || continue
+  sed -i.bak \
+    -e 's|Recommended next: /flow-next:<stage>|Recommended next: $flow-next-<stage>|g' \
+    -e 's|^  /flow-next:\([a-z-]*\) <SPEC_ID>|  $flow-next-\1 <SPEC_ID>|' \
+    -e 's|may need /flow-next:sync to align|may need $flow-next-sync to align|g' \
+    -e 's|`/flow-next:\([a-z-]*\) fn-N-slug`|`$flow-next-\1 fn-N-slug`|g' \
+    -e 's|Parked unknowns lean `/flow-next:interview`|Parked unknowns lean `$flow-next-interview`|g' \
+    -e 's|design risk lean `/flow-next:plan`|design risk lean `$flow-next-plan`|g' \
+    -e 's|still leans `/flow-next:plan`|still leans `$flow-next-plan`|g' \
+    -e 's|Legal targets are ONLY `/flow-next:interview`, `/flow-next:plan`|Legal targets are ONLY `$flow-next-interview`, `$flow-next-plan`|g' \
+    -e 's|Same legal targets (`/flow-next:interview`, `/flow-next:plan`|Same legal targets (`$flow-next-interview`, `$flow-next-plan`|g' \
+    -e 's|`/flow-next:guide` with a "signals conflict" reason|`$flow-next-guide` with a "signals conflict" reason|g' \
+    -e 's|`/flow-next:guide` on genuinely conflicting signals|`$flow-next-guide` on genuinely conflicting signals|g' \
+    -e 's|(routing to `/flow-next:work`)|(routing to `$flow-next-work`)|g' \
+    -e 's|recommend `/flow-next:plan-review`|recommend `$flow-next-plan-review`|g' \
+    -e 's|; /flow-next:interview <id> can still split later|; $flow-next-interview <id> can still split later|g' \
+    -e 's|consider /flow-next:interview <id> after capture lands|consider $flow-next-interview <id> after capture lands|g' \
+    -e 's|Consider reviewing before /flow-next:plan to avoid re-solving|Consider reviewing before $flow-next-plan to avoid re-solving|g' \
+    "$nf"
+  rm -f "${nf}.bak"
 done
 
 # --- STRUCTURAL: Task tool → agent invocation ---
@@ -1918,6 +2080,95 @@ else
   echo -e "  ${GREEN}✓${NC} No Claude-native Explore-dispatch refs in Codex skill prose"
 fi
 
+# fn-202 (#363 codex P2 + P1): every relative `docs/` markdown link in mirror
+# skill prose must carry the owned `flow-next/` namespace segment AND resolve
+# on disk under `codex/docs/flow-next/` (mirrored above, md-only) — the only
+# docs dir install-codex.sh may replace. Fails on an un-namespaced link (the
+# namespace transform missed a new link depth), a double-applied segment
+# (`docs/flow-next/flow-next/`), or a link pointing at a nonexistent file
+# (e.g. a canonical link to a doc that is not markdown, or a docs/ file
+# deleted upstream).
+docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/skills/" 2>/dev/null || true; } | while IFS=: read -r lf ln match; do
+  target="${match#](}"
+  case "$target" in
+    *docs/flow-next/flow-next/*) echo "$lf:$ln: docs-link namespace applied twice → $target"; continue ;;
+    *docs/flow-next/*) ;;
+    *) echo "$lf:$ln: docs link missing the flow-next/ namespace → $target"; continue ;;
+  esac
+  [ -f "$(dirname "$lf")/$target" ] || echo "$lf:$ln: broken relative docs link → $target"
+done )
+if [ -n "$docs_link_problems" ]; then
+  echo -e "  ${RED}✗${NC} bad relative docs links in codex skill prose — extend the namespaced docs-link transform:"
+  printf '%s\n' "$docs_link_problems" | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill prose are namespaced and resolve"
+fi
+
+# fn-202 (#363 codex P2, round 5): link-closure property for the docs mirror.
+# Every markdown link in codex/docs/flow-next/** must either (a) resolve on
+# disk within the mirror tree at its mirror location, or (b) be an absolute
+# http(s) URL. Any other link hard-fails the sync — it dangles in-repo or
+# installed (or both). Because install-codex.sh copies codex/skills/,
+# codex/templates/, codex/references/, and codex/docs/flow-next/ verbatim to
+# the SAME relative layout under $CODEX_HOME, the on-disk check against the
+# repo mirror IS the installed-layout check — one tree, two locations, same
+# relative geometry. Fence-aware (fenced code blocks carry link-shaped
+# placeholders like `[link](path)`); inline-code fragments (backticks) and
+# space-bearing pseudo-targets are prose, not links, and are skipped.
+docs_closure_problems=$(python3 - "$CODEX_DIR/docs/flow-next" <<'PYEOF'
+import os, re, sys
+root = sys.argv[1]
+link_re = re.compile(r'\]\(([^)]*)\)')
+for dirpath, _dirs, files in os.walk(root):
+    for name in sorted(files):
+        if not name.endswith('.md'):
+            continue
+        path = os.path.join(dirpath, name)
+        in_fence = False
+        with open(path, encoding='utf-8') as fp:
+            for ln, line in enumerate(fp, 1):
+                if re.match(r'\s*(```|~~~)', line):
+                    in_fence = not in_fence
+                    continue
+                if in_fence:
+                    continue
+                for m in link_re.finditer(line):
+                    target = m.group(1)
+                    if target.startswith(('http://', 'https://', '#')):
+                        continue
+                    if not target or '`' in target or ' ' in target:
+                        continue  # inline-code fragment / prose, not a link
+                    rel = target.split('#', 1)[0]
+                    if not rel:
+                        continue
+                    if not os.path.isfile(os.path.normpath(os.path.join(dirpath, rel))):
+                        rp = os.path.relpath(path, root)
+                        print(f"{rp}:{ln}: docs-mirror link neither resolves on disk nor absolute URL -> {target}")
+PYEOF
+)
+if [ -n "$docs_closure_problems" ]; then
+  echo -e "  ${RED}✗${NC} docs-mirror link universe not closed — extend the docs-mirror link transform above:"
+  printf '%s\n' "$docs_closure_problems" | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} Docs-mirror link universe closed (every link resolves on disk or is an absolute URL)"
+fi
+
+# fn-202 (#363 codex P2): the `Recommended next:` footer template is a
+# copy-pasteable invocation — on Codex it must carry the `$flow-next-<stage>`
+# form. A `/flow-next:` spelling here means a new/renamed footer surface missed
+# the actionable next-step transform above — extend that file list, don't
+# blanket-sed (passive doc mentions legitimately keep `/flow-next:`).
+recnext_refs=$( { grep -rn 'Recommended next: /flow-next:' "$CODEX_DIR/skills/" 2>/dev/null || true; } | wc -l | tr -d ' ')
+if [ "$recnext_refs" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $recnext_refs 'Recommended next: /flow-next:' template lines remain in codex skill prose — extend the actionable next-step transform"
+  { grep -rn 'Recommended next: /flow-next:' "$CODEX_DIR/skills/" 2>/dev/null || true; } | head -5
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} Recommended-next templates use \$flow-next-<stage> in Codex skill prose"
+fi
+
 # fn-50.6 symmetry rule: agent toml bodies must not carry unrewritten
 # plugin-root /skills/ paths - the agents-pipeline rewrite maps them to
 # ${CODEX_HOME:-$HOME/.codex}/skills/. The skills-side guard above has no agents coverage.
@@ -2159,8 +2410,9 @@ else
   errors=$((errors + yaml_errors))
 fi
 
-# Check claude-md-scout renamed (exclude provenance comments in .toml headers)
-claude_md_refs=$( { grep -r 'claude-md-scout' "$CODEX_DIR/" 2>/dev/null || true; } | { grep -v '# Auto-generated' || true; } | wc -l | tr -d ' ')
+# Check claude-md-scout renamed (exclude provenance comments in .toml headers,
+# and the untransformed docs/ mirror — platforms.md documents the rename itself)
+claude_md_refs=$( { grep -r 'claude-md-scout' "$CODEX_DIR/" 2>/dev/null || true; } | { grep -v '# Auto-generated' || true; } | { grep -v "^$CODEX_DIR/docs/" || true; } | wc -l | tr -d ' ')
 if [ "$claude_md_refs" != "0" ]; then
   echo -e "  ${RED}✗${NC} $claude_md_refs 'claude-md-scout' refs remain"
   errors=$((errors + 1))

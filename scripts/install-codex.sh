@@ -22,6 +22,7 @@
 #   - Scripts:   worktree.sh              → ~/.codex/scripts/  (from codex/skills/)
 #   - Templates: ralph-init templates      → ~/.codex/templates/
 #   - References: codex/references/*.md    → ~/.codex/references/
+#   - Docs:      codex/docs/flow-next/     → ~/.codex/docs/flow-next/ (owned namespace only)
 #   - Manifest:  .codex-plugin/plugin.json → ~/.codex/plugin.json
 #   - Config:    agent entries             → ~/.codex/config.toml (merged)
 #
@@ -73,7 +74,8 @@ echo
 
 # Create target directories
 mkdir -p "$CODEX_DIR/skills" "$CODEX_DIR/agents" "$CODEX_DIR/scripts" \
-         "$CODEX_DIR/prompts" "$CODEX_DIR/templates" "$CODEX_DIR/references"
+         "$CODEX_DIR/prompts" "$CODEX_DIR/templates" "$CODEX_DIR/references" \
+         "$CODEX_DIR/docs/flow-next"
 
 # ====================
 # Skills (pre-patched)
@@ -328,6 +330,25 @@ if [ -d "$CODEX_SRC/references" ]; then
     done
     REF_COUNT=$(find "$CODEX_SRC/references" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ')
     [ "$REF_COUNT" -gt 0 ] && echo -e "${GREEN}✓${NC} $REF_COUNT shared reference file(s)"
+fi
+
+# ====================
+# Docs (cross-linked doc pages — fn-202 / #363 codex P2 + P1)
+# ====================
+# Mirror skill prose cross-links `../../docs/flow-next/<name>.md` (references/
+# files one level more) relative to each installed skill dir — resolving to
+# $CODEX_DIR/docs/flow-next/. sync-codex.sh mirrors canonical docs/ (markdown
+# only, reach/ included) into $CODEX_SRC/docs/flow-next/ and namespaces the
+# links to match. OWNERSHIP INVARIANT (#363 codex P1, round 4): flow-next owns
+# ONLY $CODEX_DIR/docs/flow-next — that single dir is replaced wholesale.
+# Never rm or copy loose files into $CODEX_DIR/docs itself: a user or another
+# package may own $CODEX_DIR/docs/README.md, $CODEX_DIR/docs/reach/, or any
+# other sibling, and an install must never delete or overwrite them.
+if [ -d "$CODEX_SRC/docs/flow-next" ]; then
+    rm -rf "$CODEX_DIR/docs/flow-next"
+    cp -r "$CODEX_SRC/docs/flow-next" "$CODEX_DIR/docs/flow-next"
+    DOC_COUNT=$(find "$CODEX_SRC/docs/flow-next" -name '*.md' | wc -l | tr -d ' ')
+    [ "$DOC_COUNT" -gt 0 ] && echo -e "${GREEN}✓${NC} $DOC_COUNT doc page(s) → $CODEX_DIR/docs/flow-next/"
 fi
 
 # ====================

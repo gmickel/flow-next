@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **Capture and plan now tell you the smallest sufficient next step, right when you choose it.** Both closers print one `Recommended next:` line — a route judged from the spec you just wrote (open unknowns → interview, real design risk → plan, near-zero risk → a minimal plan with plan-review typically ceremony) or the plan you just decomposed (plan-review vs straight to work, with review skips reserved for the two documented ceremony shapes). One advisory sentence with a reason and an alternative; the familiar menu stays untouched below it, and autonomous runs are unchanged.
+
 ## [flow-next 4.3.1] - 2026-08-21
 
 ### Changed

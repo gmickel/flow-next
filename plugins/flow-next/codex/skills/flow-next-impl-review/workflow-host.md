@@ -130,7 +130,7 @@ The reviewer runs on the **reviewer tier**. Resolution order: an explicit
 instruction in the invocation, then the project routing block in the
 instruction file, then the agent definition's own default, then the session
 model. How *this* harness reaches that model - and what degrades when it
-cannot - is its reach page: [`docs/reach/README.md`](../../docs/reach/README.md).
+cannot - is its reach page: [`docs/reach/README.md`](../../docs/flow-next/reach/README.md).
 A harness that reaches only one model family natively fails closed when the
 writer shares that family (interactive -> ask; autonomous -> `NEEDS_HUMAN`);
 cross-family then comes through a bridge backend.

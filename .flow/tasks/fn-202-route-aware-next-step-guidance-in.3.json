@@ -11,7 +11,7 @@
   "priority": null,
   "spec": "fn-202-route-aware-next-step-guidance-in",
   "spec_path": ".flow/tasks/fn-202-route-aware-next-step-guidance-in.3.md",
-  "status": "todo",
+  "status": "done",
   "title": "Docs cross-links, conduct rows, CHANGELOG, mirror sync + transform-through checks",
   "updated_at": "2026-08-21T09:42:38.607436Z"
 }
