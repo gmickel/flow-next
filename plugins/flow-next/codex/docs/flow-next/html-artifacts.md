@@ -39,7 +39,7 @@ flowctl only stores the knob. Generation is agentic: the host agent reads the di
 
 ## The disclosure reference
 
-One shared file carries ALL design and generation rules: [`../references/html-artifacts.md`](../references/html-artifacts.md). Participating skills load it only when the mode is active (progressive disclosure). It owns:
+One shared file carries ALL design and generation rules: [`../references/html-artifacts.md`](../../references/html-artifacts.md). Participating skills load it only when the mode is active (progressive disclosure). It owns:
 
 - the hard rules (render-lens-never-record, self-contained single file, fixed paths, idempotent link line, staleness stamp, print CSS, deterministic JS)
 - the anti-slop design contract (warm-black instrument-panel house style — own palette and local-only font stacks, no CDN fonts, no purple gradients)

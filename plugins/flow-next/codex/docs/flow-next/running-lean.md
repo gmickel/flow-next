@@ -4,7 +4,7 @@ flow-next runs fully as **spec -> plan -> work**. Everything else is a layer you
 
 This page names the two **operating profiles** those layers serve, prices each layer in structural terms, and gives the manual invocation for people who want the capability without the standing cost. It is the source of the optionality caveat that appears at the top of each optional subsystem's page.
 
-> Adjacent, not the same: [`../../../README.md`](../../../README.md) is the happy path, and [`pipeline-variations.md`](pipeline-variations.md) owns the **stage** axis - which stages one piece of work runs, chosen by risk and unknowns (the docs-site page *Menu, Not a Rail* is its doctrine). This page is about which **layers** you switch on at all, and what each one costs you to keep on.
+> Adjacent, not the same: [`../../../README.md`](https://github.com/gmickel/flow-next/blob/main/README.md) is the happy path, and [`pipeline-variations.md`](pipeline-variations.md) owns the **stage** axis - which stages one piece of work runs, chosen by risk and unknowns (the docs-site page *Menu, Not a Rail* is its doctrine). This page is about which **layers** you switch on at all, and what each one costs you to keep on.
 
 ## Two profiles
 
@@ -43,7 +43,7 @@ Costs are **structural shapes** - "a bidirectional round-trip per lifecycle even
 
 ## The layers
 
-Defaults below are read from the published schema ([`../schema/flow-config.schema.json`](../schema/flow-config.schema.json)) - inspect your own with `flowctl config get <key>`.
+Defaults below are read from the published schema ([`../schema/flow-config.schema.json`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/schema/flow-config.schema.json)) - inspect your own with `flowctl config get <key>`.
 
 | Layer | Config key | Default | Lean invocation |
 |---|---|---|---|
@@ -69,7 +69,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 
 ### Live QA stage
 
-`pipeline.qa` - **off by default** as a pilot stage; the skill is always available. Details: [`../skills/flow-next-qa/SKILL.md`](../skills/flow-next-qa/SKILL.md).
+`pipeline.qa` - **off by default** as a pilot stage; the skill is always available. Details: [`../skills/flow-next-qa/SKILL.md`](../../skills/flow-next-qa/SKILL.md).
 
 - **Automates away:** driving the running app like a real user against the spec's acceptance criteria, and filing evidence-backed findings before a human opens the PR.
 - **Costs:** a live-app drive pass per spec, a running deploy for the loop to point at, and a driver to be configured and kept working. As a pilot stage it sits between all-tasks-done and make-pr, so every spec pays it.
@@ -112,7 +112,7 @@ Between the two: `host` trades the second CLI for zero setup while keeping the g
 
 ### Plan-sync
 
-`planSync.enabled` - **on by default**. Details: [`../skills/flow-next-sync/SKILL.md`](../skills/flow-next-sync/SKILL.md).
+`planSync.enabled` - **on by default**. Details: [`../skills/flow-next-sync/SKILL.md`](../../skills/flow-next-sync/SKILL.md).
 
 - **Automates away:** updating downstream task specs after an implementation drifts from what the plan assumed, so later tasks re-anchor on what is true rather than what was planned.
 - **Costs:** a reconciliation pass after each completed task.
@@ -130,7 +130,7 @@ Between the two: `host` trades the second CLI for zero setup while keeping the g
 
 ### Pre-capture discovery
 
-No config key - these are skills you invoke or do not. Details: [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md), [`../skills/flow-next-prospect/SKILL.md`](../skills/flow-next-prospect/SKILL.md), [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md).
+No config key - these are skills you invoke or do not. Details: [`../skills/flow-next-chart/SKILL.md`](../../skills/flow-next-chart/SKILL.md), [`../skills/flow-next-prospect/SKILL.md`](../../skills/flow-next-prospect/SKILL.md), [`../skills/flow-next-interview/SKILL.md`](../../skills/flow-next-interview/SKILL.md).
 
 - **Automates away:** finding out what to build - a ranked backlog (`prospect`), a decision map for one oversized unclear idea (`chart`), or structured requirement extraction on an existing spec (`interview`).
 - **Costs:** a discovery loop before any code exists. Chart in particular is an adaptive multi-invocation loop, one decision per tick.
@@ -139,7 +139,7 @@ No config key - these are skills you invoke or do not. Details: [`../skills/flow
 
 ### Autonomous loops
 
-No config key to enable; `pilot.autonomy` (`ready` by default) only widens what pilot selects. Details: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md).
+No config key to enable; `pilot.autonomy` (`ready` by default) only widens what pilot selects. Details: [`../skills/flow-next-pilot/SKILL.md`](../../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../../skills/flow-next-land/SKILL.md).
 
 - **Automates away:** the repetition - pilot advances one ready spec by one stage per tick, land babysits the resulting PRs to merged.
 - **Costs:** this is the autonomous profile itself, so it inherits the profile's gates: the layers above stop being optional in the way they are optional for you at a keyboard, because they are what replace you.
@@ -176,9 +176,9 @@ That is what makes a deliberate layer set auditable later: the difference betwee
 
 ## See also
 
-- [`../../../README.md`](../../../README.md) - the happy path and the 5-command quick start.
+- [`../../../README.md`](https://github.com/gmickel/flow-next/blob/main/README.md) - the happy path and the 5-command quick start.
 - [`pipeline-variations.md`](pipeline-variations.md) - the stage axis: five worked routes through the menu, selected by risk and unknowns.
 - [`orchestration.md`](orchestration.md) - which model does what, and how to change it. The routing counterpart to this page: same doctrine, applied to models rather than layers.
-- [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the router that recommends the smallest sufficient workflow for one specific situation.
+- [`../skills/flow-next-guide/SKILL.md`](../../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the router that recommends the smallest sufficient workflow for one specific situation.
 - [`teams.md`](teams.md) - what changes when several humans and several agents share one repo.
 - [`architecture.md`](architecture.md) - what `.flow/` holds regardless of which layers you run.

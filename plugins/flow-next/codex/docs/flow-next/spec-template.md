@@ -1,10 +1,10 @@
 # Spec Template & Acceptance-Criteria Discipline
 
-The canonical spec scaffold lives at [`../templates/spec.md`](../templates/spec.md). This doc covers the **rules** that surround it — R-ID semantics, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, and the 3-tier template discovery cascade — not the section list itself (R17: cross-link, never re-embed).
+The canonical spec scaffold lives at [`../templates/spec.md`](../../templates/spec.md). This doc covers the **rules** that surround it — R-ID semantics, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, and the 3-tier template discovery cascade — not the section list itself (R17: cross-link, never re-embed).
 
 ## Canonical scaffold
 
-[`../templates/spec.md`](../templates/spec.md) is the single source of truth for the spec structure. The template's frontmatter enumerates the seven canonical sections + auxiliary sections; do not duplicate that list here. Read the template directly before authoring.
+[`../templates/spec.md`](../../templates/spec.md) is the single source of truth for the spec structure. The template's frontmatter enumerates the seven canonical sections + auxiliary sections; do not duplicate that list here. Read the template directly before authoring.
 
 The template is consumed by:
 
@@ -23,7 +23,7 @@ When a skill needs the spec template, it walks three locations in order (first m
 2. `<repo_root>/spec.md` — lowercase honored when uppercase absent
 3. `${PLUGIN_ROOT}/templates/spec.md` — bundled (canonical source of truth)
 
-Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md).
+Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../../references/spec-template-discovery.md).
 
 ## Customizing the scaffold for your project
 
@@ -108,7 +108,7 @@ So the marker is the difference between a section that gets filled and a section
 Two consequences worth knowing:
 
 - A marked section is **rewritable**. If you hand-write user stories and mark them `scope: business`, the next business pass will refine them. That is the point, but it means hand-authored content under a marker you own is not sacred - drop the marker to freeze it.
-- Scope-owner markers are ordinarily authoring guidance and may be stripped from a finished spec body. For project-added sections they must be **kept**, because they are the only ownership signal a later pass has. See [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md).
+- Scope-owner markers are ordinarily authoring guidance and may be stripped from a finished spec body. For project-added sections they must be **kept**, because they are the only ownership signal a later pass has. See [`../references/spec-template-discovery.md`](../../references/spec-template-discovery.md).
 
 `capture` and `plan` seed from the template directly and have no such caveat.
 
@@ -331,7 +331,7 @@ All review receipts may carry these optional fields; existing consumers that rea
 
 ## See also
 
-- [`../templates/spec.md`](../templates/spec.md) — the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
-- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
-- [`../skills/flow-next-interview/SKILL.md`](../skills/flow-next-interview/SKILL.md) — 3-tier discovery cascade walker.
+- [`../templates/spec.md`](../../templates/spec.md) — the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
+- [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) — definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
+- [`../skills/flow-next-interview/SKILL.md`](../../skills/flow-next-interview/SKILL.md) — 3-tier discovery cascade walker.
 - [`flowctl.md`](flowctl.md) — `flowctl spec create / set-plan / export-cognitive-aid` reference.

@@ -4,7 +4,7 @@ Agentic engineering compresses implementation from weeks to hours — and the to
 
 The vocabulary on this page — *handover objects*, *Delegate / Review / Own*, *lifecycle steps [1]–[9]* — comes from the [AI-x-SDLC Starter-Kit methodology guide](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md). That document is the *theory*. This page is the *implementation* — the same lifecycle, mapped to concrete `flowctl` commands and `.flow/` artefacts.
 
-> **Solo dev?** You can skip most of this page. The single-developer flow is `prospect → [optional chart] → capture → plan → work → make-pr`, covered in the [root README](../../../README.md). Chart is only for one oversized/unclear idea; skip it when intent is already stateable. This page is for teams running multiple humans + multiple agents against the same repo.
+> **Solo dev?** You can skip most of this page. The single-developer flow is `prospect → [optional chart] → capture → plan → work → make-pr`, covered in the [root README](https://github.com/gmickel/flow-next/blob/main/README.md). Chart is only for one oversized/unclear idea; skip it when intent is already stateable. This page is for teams running multiple humans + multiple agents against the same repo.
 
 ---
 
@@ -84,7 +84,7 @@ The methodology calls a *handover object* a named, reviewable artefact that carr
 All five properties of a real handover object hold:
 
 1. **Reviewable on its own.** A spec without code, a plan without an implementation, a PR body without a diff — each artefact stands alone as a reviewable unit.
-2. **Cross-model reviewed.** `/flow-next:plan-review` and `/flow-next:impl-review` run a *different* model (RepoPrompt / Codex / Copilot / Cursor) over the artefact before handover. See the [root README — Commands](../../../README.md#commands) for review backends, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
+2. **Cross-model reviewed.** `/flow-next:plan-review` and `/flow-next:impl-review` run a *different* model (RepoPrompt / Codex / Copilot / Cursor) over the artefact before handover. See the [root README — Commands](https://github.com/gmickel/flow-next/blob/main/README.md#commands) for review backends, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
 3. **Verifiable against the prior artefact.** R-IDs in the spec are tracked through `satisfies: [R1, R3]` frontmatter on tasks and through commit-message references; `/flow-next:make-pr` emits an R-ID coverage table that maps every R# to the satisfying task and evidence commit.
 4. **Frozen at handover.** Spec acceptance criteria are numbered `**R1:**`, `**R2:**`, ... and **never renumbered** after the first review cycle (deletions leave gaps). Anyone reading R5 in a six-month-old commit is reading the same R5 today.
 5. **Pointer-shaped, not restated.** A handover names *where* the artefact is - spec id, task id, receipt path, commit range - and *what to run next*; it never carries a second copy of the artefact's content. Restated content is generated twice, drifts the moment the artefact moves, and is re-read at full length by every consumer. A pointer is stable, and the consumer re-reads current truth. Two carve-outs hold. A consumer **without repo access** gets content, because content is the transport there (`/flow-next:export-context`'s external-LLM bundle). And a **bounded control signal** - a verdict enum, an id, a strike class inlined so a transcript-only driver need not re-read the file (`PILOT_VERDICT` / `LAND_VERDICT` lines) - is a pointer, not content.
@@ -135,7 +135,7 @@ In a *one-pizza pod* (3–5 people), one human can carry several roles simultane
 
 Two entry points:
 
-- **`/flow-next:prospect [focus hint]`** — generates ranked candidate ideas grounded in the repo (recent files, open specs, memory, CHANGELOG, `STRATEGY.md`). Use when there is no specific idea yet, only a focus hint. See the [root README — Commands](../../../README.md#commands) row for `/flow-next:prospect`, or [flow-next.dev](https://flow-next.dev) for the narrative.
+- **`/flow-next:prospect [focus hint]`** — generates ranked candidate ideas grounded in the repo (recent files, open specs, memory, CHANGELOG, `STRATEGY.md`). Use when there is no specific idea yet, only a focus hint. See the [root README — Commands](https://github.com/gmickel/flow-next/blob/main/README.md#commands) row for `/flow-next:prospect`, or [flow-next.dev](https://flow-next.dev) for the narrative.
 - **`/flow-next:capture`** — synthesizes a free-form discussion into a spec. Use when the idea has already taken shape in conversation (often after `prospect promote`).
 
 Both produce a spec at `.flow/specs/<id>.md`. Survives `rm -rf .flow/` only if `STRATEGY.md` / `GLOSSARY.md` / `knowledge/decisions/` already capture the rationale; otherwise the rationale lives in the spec body.
@@ -212,7 +212,7 @@ Configure as a required gate via `--require-completion-review` (in `flowctl next
 
 ### [7.5] Live-app QA — optional, before the PR
 
-`/flow-next:qa <spec-id>` is the **live-app** companion to the static reviews above ([6] impl-review, [7] spec-completion-review). Where those verify the *code* against the spec, QA verifies the *running app* against the spec — it drives the deployed app via [`flow-next-drive`](../skills/flow-next-drive/SKILL.md) like an unforgiving real user. The differentiator vs spec-less QA tools is that flow-next already encodes intent: scenarios are derived **directly from the spec** (acceptance criteria → scenarios, R-IDs → coverage table, boundaries → what NOT to test, decision context → expected behavior).
+`/flow-next:qa <spec-id>` is the **live-app** companion to the static reviews above ([6] impl-review, [7] spec-completion-review). Where those verify the *code* against the spec, QA verifies the *running app* against the spec — it drives the deployed app via [`flow-next-drive`](../../skills/flow-next-drive/SKILL.md) like an unforgiving real user. The differentiator vs spec-less QA tools is that flow-next already encodes intent: scenarios are derived **directly from the spec** (acceptance criteria → scenarios, R-IDs → coverage table, boundaries → what NOT to test, decision context → expected behavior).
 
 **The hard rule:** QA is **forbidden from marking PASS (SHIP) by reading source** — the verdict rests on captured evidence from the live app (screenshots, console dumps, observed state), never on agent narration. Findings are structured P0/P1/P2 reports (persona, steps, expected vs actual, evidence) filed to the bug memory track (`track: bug`; `memory add` emits scored `matches`, host decides `--update` vs create) and promotable to fix specs/tasks.
 
@@ -245,7 +245,7 @@ in [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
 
 Mermaid codefences emit when the diff crosses ≥2 modules (max 3 diagrams × 12 nodes; markdown codefence — GitHub / GitLab / Gitea render natively). Default `--draft` if open items > 0 or under Ralph; `--ready` overrides.
 
-The PR body is the cognitive-aid handover. **Don't ask a human to skim a 10K-line diff** — ask the agent to produce a body that surfaces *where the human should focus*. See the [root README — Commands](../../../README.md#commands) row for `/flow-next:make-pr`, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
+The PR body is the cognitive-aid handover. **Don't ask a human to skim a 10K-line diff** — ask the agent to produce a body that surfaces *where the human should focus*. See the [root README — Commands](https://github.com/gmickel/flow-next/blob/main/README.md#commands) row for `/flow-next:make-pr`, or [flow-next.dev](https://flow-next.dev) for the narrative walkthrough.
 
 *(+ optional tracker sync)* — make-pr links the PR to the linked issue unconditionally when the bridge is active (powers Linear Diffs); `tracker.perEvent.makePr` adds an extra status comment and `tracker.perEvent.resolvePr` reflects resolved-thread state. The `perEvent` leaves are on by default once the bridge is hooked up (opt-out per event).
 
@@ -260,7 +260,7 @@ The reviewer reads the PR body before the diff. Reading order:
 5. **Review plan** — every changed area risk-bucketed into Must review / Spot-check / Safe to skim with a ≤~30% focus budget. Read the must-review ~20-30% carefully; the buckets tell you which 70-80% is safe to skim and *why* (derived mirrors, byte-identical copies, and task-state files always land in safe-to-skim with the derivation named).
 6. **Decisions** — every load-bearing architectural choice has a decision record under `knowledge/decisions/` with trade-offs and alternatives.
 
-When review threads land, run `/flow-next:resolve-pr <PR#>`. The skill fetches threads, triages by validity, dispatches per-thread resolver agents (parallel on Claude Code, serial on Codex / Copilot / Droid), and replies + resolves via GraphQL. See the [root README — Commands](../../../README.md#commands) row for `/flow-next:resolve-pr`, or [flow-next.dev](https://flow-next.dev) for the narrative.
+When review threads land, run `/flow-next:resolve-pr <PR#>`. The skill fetches threads, triages by validity, dispatches per-thread resolver agents (parallel on Claude Code, serial on Codex / Copilot / Droid), and replies + resolves via GraphQL. See the [root README — Commands](https://github.com/gmickel/flow-next/blob/main/README.md#commands) row for `/flow-next:resolve-pr`, or [flow-next.dev](https://flow-next.dev) for the narrative.
 
 ### Maintenance — `/flow-next:audit`
 
@@ -540,7 +540,7 @@ By the end of quarter 1, the team has crossed from *using a tool* to *running a 
 ## Where to go next
 
 - **Theory.** [AI-x-SDLC-Starter-Kit methodology guide](https://github.com/gmickel/AI-x-SDLC-Starter-Kit/blob/main/guides/methodology.md) — *why* the lifecycle changes, the touch-point collapse, the productivity disconnect, the cultural-debt problem.
-- **Command reference.** [`docs/flowctl.md`](flowctl.md) — every `flowctl` subcommand, every flag, every JSON shape. The [root README — Commands](../../../README.md#commands) table covers the user-facing slash commands.
+- **Command reference.** [`docs/flowctl.md`](flowctl.md) — every `flowctl` subcommand, every flag, every JSON shape. The [root README — Commands](https://github.com/gmickel/flow-next/blob/main/README.md#commands) table covers the user-facing slash commands.
 - **Autonomous mode.** [docs/ralph.md](ralph.md) — Ralph architecture, configuration, morning review workflow.
 - **CLI reference.** [docs/flowctl.md](flowctl.md) — every `flowctl` subcommand and JSON shape.
 - **Memory schema.** [`docs/memory-schema.md`](memory-schema.md) — categories, frontmatter, audit lifecycle.

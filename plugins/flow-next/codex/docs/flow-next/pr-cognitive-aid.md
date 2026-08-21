@@ -58,8 +58,8 @@ presentation boundary remains documented in
 
 Flow-Next owns the maximum-normal v1 fixture and its metadata:
 
-- [`golden.json`](../tests/fixtures/pr-cognitive-aid/v1/golden.json)
-- [`golden.meta.json`](../tests/fixtures/pr-cognitive-aid/v1/golden.meta.json)
+- [`golden.json`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.json)
+- [`golden.meta.json`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/tests/fixtures/pr-cognitive-aid/v1/golden.meta.json)
 
 Metadata records `schemaVersion`, the upstream `sourcePath`, the full
 `sourceCommit`, the immutable Git `sourceBlob`, the SHA-256 of the exact
@@ -110,9 +110,9 @@ pretty-print the fixture independently in the consumer.
 These high-resolution images are normative hierarchy and interaction
 references, not pixel-copy requirements:
 
-- [Overview, thesis, proof metrics, and logical sequence](../../../.flow/assets/pr-aid/change-walkthrough-overview.jpeg)
-- [Progressive disclosure from step to file to diff](../../../.flow/assets/pr-aid/change-walkthrough-expanded-diff.jpeg)
-- [Grouped files, deliberate non-changes, and verification](../../../.flow/assets/pr-aid/change-walkthrough-grouped-files.jpeg)
+- [Overview, thesis, proof metrics, and logical sequence](https://github.com/gmickel/flow-next/blob/main/.flow/assets/pr-aid/change-walkthrough-overview.jpeg)
+- [Progressive disclosure from step to file to diff](https://github.com/gmickel/flow-next/blob/main/.flow/assets/pr-aid/change-walkthrough-expanded-diff.jpeg)
+- [Grouped files, deliberate non-changes, and verification](https://github.com/gmickel/flow-next/blob/main/.flow/assets/pr-aid/change-walkthrough-grouped-files.jpeg)
 
 Flow-Next approximates that hierarchy in GitHub Markdown. Richer consumers can
 add interaction while preserving the semantic projection above.

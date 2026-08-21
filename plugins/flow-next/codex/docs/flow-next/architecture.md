@@ -271,6 +271,6 @@ The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The 
 - [`review-findings.md`](review-findings.md) - portable structured-review
   receipt contract and currentness rules.
 - [`flowctl.md`](flowctl.md) - full CLI reference (including [`chart`](flowctl.md#chart)).
-- [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md) - optional pre-capture decision-map skill.
-- [`../README.md`](../README.md) - plugin overview.
-- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - Spec, Chart, D-ID, Task, Handover object, Receipt.
+- [`../skills/flow-next-chart/SKILL.md`](../../skills/flow-next-chart/SKILL.md) - optional pre-capture decision-map skill.
+- [`../README.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/README.md) - plugin overview.
+- [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) - Spec, Chart, D-ID, Task, Handover object, Receipt.

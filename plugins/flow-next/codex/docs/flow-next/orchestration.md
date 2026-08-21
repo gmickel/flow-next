@@ -282,7 +282,7 @@ The **packaged** `/flow-next:impl-review` prompt is deliberately NOT changed to 
 
 Session steering is a sentence you type; **durable** steering is the same sentence written once into `CLAUDE.md` / `AGENTS.md`, where the host reads it every turn. That is the routing block: `<tier>: <model>` lines, optionally `at <effort>`, interpreted by intelligence rather than parsed by a config loader — which is why it can be prose and why an unreachable name degrades instead of failing.
 
-`/flow-next:setup` offers to scaffold it from [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../skills/flow-next-setup/templates/model-routing-snippet.md): the four tier lines with their guidance, **every value commented out**, so nothing routes until you fill one in. Setup never asserts which models are installed and never overwrites a block a human has edited. Marker-fenced, so `/flow-next:uninstall` removes it cleanly.
+`/flow-next:setup` offers to scaffold it from [`../skills/flow-next-setup/templates/model-routing-snippet.md`](../../skills/flow-next-setup/templates/model-routing-snippet.md): the four tier lines with their guidance, **every value commented out**, so nothing routes until you fill one in. Setup never asserts which models are installed and never overwrites a block a human has edited. Marker-fenced, so `/flow-next:uninstall` removes it cleanly.
 
 The grammar and the tier meanings are [above](#the-routing-block); the block is yours to edit afterwards. Tier names are durable; model identifiers are volatile — that asymmetry is the whole reason routing is expressed as tiers here and as model names only in your file.
 
@@ -307,7 +307,7 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
   or on any NEEDS_HUMAN.
 ```
 
-Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the hardened harness.
+Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the hardened harness.
 
 ## Unattended chart driving (not a pilot stage)
 
@@ -330,7 +330,7 @@ Contract:
 - **`NEEDS_HUMAN` is terminal for the driver.** Attended types (`prototype`, `interview`) reached under autonomous signals write no answer - the loop parks for a human session.
 - **Chart mode creates; work mode resolves.** Charting an idea must not start answering its own decisions. Status mode (`--status`) mutates nothing.
 
-Plain-language steering still works for humans; the exact flags and `flowctl chart` surface are for automation. Full skill contract: [`../skills/flow-next-chart/SKILL.md`](../skills/flow-next-chart/SKILL.md); CLI: [`flowctl.md`](flowctl.md#chart).
+Plain-language steering still works for humans; the exact flags and `flowctl chart` surface are for automation. Full skill contract: [`../skills/flow-next-chart/SKILL.md`](../../skills/flow-next-chart/SKILL.md); CLI: [`flowctl.md`](flowctl.md#chart).
 
 ## In your repo
 

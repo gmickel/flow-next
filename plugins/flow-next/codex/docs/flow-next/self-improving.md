@@ -38,4 +38,4 @@ Each loop's write moment is embedded in a step that already happens - prime runs
 - [`memory-schema.md`](memory-schema.md) — categorized memory tree, frontmatter schemas, audit lifecycle.
 - [`glossary.md`](glossary.md) — `GLOSSARY.md` shape, resolution walk, subcommands.
 - [`strategy.md`](strategy.md) — `STRATEGY.md` shape, Rumelt sections, downstream consumers.
-- [`../../../STRATEGY.md`](../../../STRATEGY.md) — this repo's own strategy, including the "Self-improving through normal work" track.
+- [`../../../STRATEGY.md`](https://github.com/gmickel/flow-next/blob/main/STRATEGY.md) — this repo's own strategy, including the "Self-improving through normal work" track.

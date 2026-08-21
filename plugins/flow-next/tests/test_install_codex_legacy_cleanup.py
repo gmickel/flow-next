@@ -230,6 +230,40 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
                 (ref_dir / "rewrite-mode.md").read_text(encoding="utf-8"),
                 "installed skill prose lost the namespaced docs link",
             )
+            # Round 5 (#363 codex P2): the mirrored docs pages' OWN links are
+            # rewritten for the namespaced layout (link-closure property).
+            # From the fake $CODEX_HOME: a docs page's back-link into the
+            # installed skills tree resolves on disk...
+            pipeline_page = (owned / "pipeline-variations.md").read_text(encoding="utf-8")
+            self.assertIn(
+                "](../../skills/flow-next-guide/SKILL.md)",
+                pipeline_page,
+                "pipeline-variations.md lost the depth-rewritten guide-skill link",
+            )
+            self.assertTrue(
+                (owned / "../../skills/flow-next-guide/SKILL.md").resolve().is_file(),
+                "docs-mirror ../../skills/ link dangles from installed docs/flow-next/",
+            )
+            # ...a reach page's up-link resolves within the owned docs tree...
+            reach_readme = (owned / "reach" / "README.md").read_text(encoding="utf-8")
+            self.assertIn(
+                "](../orchestration.md#tiers",
+                reach_readme,
+                "reach/README.md lost its same-tree orchestration.md link",
+            )
+            self.assertTrue(
+                (owned / "reach" / "../orchestration.md").resolve().is_file(),
+                "reach-page ../orchestration.md link dangles from installed reach/",
+            )
+            # ...and a link to a non-installed target (repo-root README) is an
+            # absolute canonical URL — resolves everywhere, never dangles on
+            # disk (string assertion only; no network).
+            self.assertIn(
+                "](https://github.com/gmickel/flow-next/blob/main/README.md"
+                "#the-pipeline-is-a-menu-not-a-rail)",
+                pipeline_page,
+                "non-installed-target docs link not rewritten to the absolute canonical URL",
+            )
 
     def test_explicit_codex_home_with_spaces_receives_surface(self) -> None:
         # A Codex home whose path contains spaces must survive every quoted

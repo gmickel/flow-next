@@ -395,5 +395,5 @@ Consumers should therefore:
 - [`architecture.md`](architecture.md) — receipt and history locations.
 - [`memory-schema.md`](memory-schema.md) — durable learning lifecycle.
 - [`spec-template.md`](spec-template.md) — confidence and classification rules.
-- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — canonical Receipt and
+- [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) — canonical Receipt and
   Structured finding terms.

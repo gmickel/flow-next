@@ -205,6 +205,58 @@ if [ -d "$PLUGIN_DIR/docs" ]; then
   find "$CODEX_DIR/docs" -type f ! -name '*.md' -delete
 fi
 
+# --- Docs-mirror internal links: close the link universe (#363 codex P2, round 5) ---
+# The copied docs pages carry canonical-relative links written for
+# `plugins/flow-next/docs/<file>` — one directory shallower than their mirror
+# location `codex/docs/flow-next/<file>` — so every link that leaves the docs
+# dir dangles both in-repo and installed. Rewrite by TARGET CLASS, depth-aware
+# per file location (top-level pages vs `reach/` pages), so no further
+# link-class finding is possible:
+#   1. Same-dir doc links (`](running-lean.md`, `](reach/x.md`,
+#      `](../orchestration.md` from reach/) already resolve inside
+#      `docs/flow-next/` — untouched.
+#   2. Links up-and-into INSTALLED trees (`skills/`, `templates/`,
+#      `references/`) gain one `../` — the mirror (and $CODEX_HOME) nests docs
+#      one level deeper than canonical.
+#   3. Links to targets OUTSIDE the installed universe (repo root, the plugin
+#      README, `schema/`, `tests/`, the non-markdown `ci-workflow-example.yml`
+#      the md-only filter above deletes) become absolute canonical GitHub URLs
+#      computed from the CANONICAL docs location — they resolve everywhere and
+#      never dangle on disk.
+# Anchored on the exact canonical prefixes; no rewritten output re-matches any
+# pattern, and the mirror is fully regenerated each run, so sync twice yields a
+# zero second-run diff. The link-closure validation guard below hard-fails on
+# any docs-mirror link that neither resolves on disk nor is an absolute URL.
+DOCS_BLOB_URL="https://github.com/gmickel/flow-next/blob/main"
+for df in "$CODEX_DIR/docs/flow-next"/*.md; do
+  [ -f "$df" ] || continue
+  sed -i.bak \
+    -e "s|](\.\./\.\./\.\./|](${DOCS_BLOB_URL}/|g" \
+    -e "s|](\.\./README\.md|](${DOCS_BLOB_URL}/plugins/flow-next/README.md|g" \
+    -e "s|](\.\./schema/|](${DOCS_BLOB_URL}/plugins/flow-next/schema/|g" \
+    -e "s|](\.\./tests/|](${DOCS_BLOB_URL}/plugins/flow-next/tests/|g" \
+    -e "s|](ci-workflow-example\.yml|](${DOCS_BLOB_URL}/plugins/flow-next/docs/ci-workflow-example.yml|g" \
+    -e 's|](\.\./skills/|](../../skills/|g' \
+    -e 's|](\.\./templates/|](../../templates/|g' \
+    -e 's|](\.\./references/|](../../references/|g' \
+    "$df"
+  rm -f "${df}.bak"
+done
+# reach/ pages sit one level deeper still — same classes, +1 depth.
+for df in "$CODEX_DIR/docs/flow-next/reach"/*.md; do
+  [ -f "$df" ] || continue
+  sed -i.bak \
+    -e "s|](\.\./\.\./\.\./\.\./|](${DOCS_BLOB_URL}/|g" \
+    -e "s|](\.\./\.\./README\.md|](${DOCS_BLOB_URL}/plugins/flow-next/README.md|g" \
+    -e "s|](\.\./\.\./schema/|](${DOCS_BLOB_URL}/plugins/flow-next/schema/|g" \
+    -e "s|](\.\./\.\./tests/|](${DOCS_BLOB_URL}/plugins/flow-next/tests/|g" \
+    -e 's|](\.\./\.\./skills/|](../../../skills/|g' \
+    -e 's|](\.\./\.\./templates/|](../../../templates/|g' \
+    -e 's|](\.\./\.\./references/|](../../../references/|g' \
+    "$df"
+  rm -f "${df}.bak"
+done
+
 # --- flow-next-drive: Codex Browser-Use preface ──────────────────────────────
 # The canonical skill is `flow-next-drive` (no `@browser` collision — the old
 # `browser` → `agent-browser` rename is gone; the copy loop above already
@@ -2022,6 +2074,56 @@ if [ -n "$docs_link_problems" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill prose are namespaced and resolve"
+fi
+
+# fn-202 (#363 codex P2, round 5): link-closure property for the docs mirror.
+# Every markdown link in codex/docs/flow-next/** must either (a) resolve on
+# disk within the mirror tree at its mirror location, or (b) be an absolute
+# http(s) URL. Any other link hard-fails the sync — it dangles in-repo or
+# installed (or both). Because install-codex.sh copies codex/skills/,
+# codex/templates/, codex/references/, and codex/docs/flow-next/ verbatim to
+# the SAME relative layout under $CODEX_HOME, the on-disk check against the
+# repo mirror IS the installed-layout check — one tree, two locations, same
+# relative geometry. Fence-aware (fenced code blocks carry link-shaped
+# placeholders like `[link](path)`); inline-code fragments (backticks) and
+# space-bearing pseudo-targets are prose, not links, and are skipped.
+docs_closure_problems=$(python3 - "$CODEX_DIR/docs/flow-next" <<'PYEOF'
+import os, re, sys
+root = sys.argv[1]
+link_re = re.compile(r'\]\(([^)]*)\)')
+for dirpath, _dirs, files in os.walk(root):
+    for name in sorted(files):
+        if not name.endswith('.md'):
+            continue
+        path = os.path.join(dirpath, name)
+        in_fence = False
+        with open(path, encoding='utf-8') as fp:
+            for ln, line in enumerate(fp, 1):
+                if re.match(r'\s*(```|~~~)', line):
+                    in_fence = not in_fence
+                    continue
+                if in_fence:
+                    continue
+                for m in link_re.finditer(line):
+                    target = m.group(1)
+                    if target.startswith(('http://', 'https://', '#')):
+                        continue
+                    if not target or '`' in target or ' ' in target:
+                        continue  # inline-code fragment / prose, not a link
+                    rel = target.split('#', 1)[0]
+                    if not rel:
+                        continue
+                    if not os.path.isfile(os.path.normpath(os.path.join(dirpath, rel))):
+                        rp = os.path.relpath(path, root)
+                        print(f"{rp}:{ln}: docs-mirror link neither resolves on disk nor absolute URL -> {target}")
+PYEOF
+)
+if [ -n "$docs_closure_problems" ]; then
+  echo -e "  ${RED}✗${NC} docs-mirror link universe not closed — extend the docs-mirror link transform above:"
+  printf '%s\n' "$docs_closure_problems" | head -10
+  errors=$((errors + 1))
+else
+  echo -e "  ${GREEN}✓${NC} Docs-mirror link universe closed (every link resolves on disk or is an absolute URL)"
 fi
 
 # fn-202 (#363 codex P2): the `Recommended next:` footer template is a

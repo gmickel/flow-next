@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Common recovery patterns for stuck tasks, broken state, Ralph debugging, and review-backend conflicts. For deeper subsystem guides see [`flowctl.md`](flowctl.md) (CLI reference), [`ralph.md`](ralph.md) (Ralph internals), and the parent [`../README.md`](../README.md).
+Common recovery patterns for stuck tasks, broken state, Ralph debugging, and review-backend conflicts. For deeper subsystem guides see [`flowctl.md`](flowctl.md) (CLI reference), [`ralph.md`](ralph.md) (Ralph internals), and the parent [`../README.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/README.md).
 
 ## Updated the plugin — do I re-run setup?
 
@@ -230,7 +230,7 @@ command -v clawpatch  # should now resolve
 
 **4. Node 20 with `clawpatch` installed.** clawpatch's `engines.node: ">=22"` triggers its own error; the skill propagates it verbatim. Upgrade Node 22+ (e.g. `nvm install 22 && nvm use 22`) or skip `/flow-next:map` — scouts gracefully fall back to the grep/glob path when `.clawpatch/` is absent.
 
-**5. "Should I commit `.clawpatch/` to the repo?"** No — by default the skill writes a `.clawpatch/.gitignore` with `*` + `!.gitignore`, making the feature index local-per-developer. The map is regenerable from `clawpatch map`, the schema may flip between pre-1.0 minor releases, and committing it creates PR review noise + merge conflicts. See [Sharing contract](../skills/flow-next-map/SKILL.md#sharing-contract--local-only-by-design) in the skill prose, or the full trade-off table at [flow-next.dev/skills/map](https://flow-next.dev/skills/map/). Teams that want shared indexes can customize the skeleton — unsupported, but the skill won't clobber a customized `.gitignore` on re-run.
+**5. "Should I commit `.clawpatch/` to the repo?"** No — by default the skill writes a `.clawpatch/.gitignore` with `*` + `!.gitignore`, making the feature index local-per-developer. The map is regenerable from `clawpatch map`, the schema may flip between pre-1.0 minor releases, and committing it creates PR review noise + merge conflicts. See [Sharing contract](../../skills/flow-next-map/SKILL.md#sharing-contract--local-only-by-design) in the skill prose, or the full trade-off table at [flow-next.dev/skills/map](https://flow-next.dev/skills/map/). Teams that want shared indexes can customize the skeleton — unsupported, but the skill won't clobber a customized `.gitignore` on re-run.
 
 The skill is **opt-in convenience** — `flowctl` core never imports or requires clawpatch; nothing else in flow-next breaks when the skill can't run.
 
@@ -253,7 +253,7 @@ Drive / QA on Cursor probes the built-in browser by exact MCP id `cursor-ide-bro
 2. In chat, type `@Browser` (no space), or open the Browser pane until it shows connected.
 3. Re-run the probe (`browser_tabs` list). One re-probe after that is enough; do not loop.
 
-A mid-run `MCP server does not exist: cursor-ide-browser` after the pane was already driving is a known Cursor flake, not a first-use miss. `@Browser` does not restore that session. Quit Cursor fully (Cmd-Q), wait ~10s, confirm the Browser pane shows connected, then start a **fresh chat**. Detail: [`platforms.md`](platforms.md) and [`cursor-ide-browser.md`](../skills/flow-next-drive/references/cursor-ide-browser.md).
+A mid-run `MCP server does not exist: cursor-ide-browser` after the pane was already driving is a known Cursor flake, not a first-use miss. `@Browser` does not restore that session. Quit Cursor fully (Cmd-Q), wait ~10s, confirm the Browser pane shows connected, then start a **fresh chat**. Detail: [`platforms.md`](platforms.md) and [`cursor-ide-browser.md`](../../skills/flow-next-drive/references/cursor-ide-browser.md).
 
 ## Renamed skill: `browser` → `flow-next-drive` (1.4.0)
 

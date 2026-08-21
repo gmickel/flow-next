@@ -225,7 +225,7 @@ Overwrite spec markdown from file.
 flowctl spec set-plan fn-1 --file plan.md [--json]
 ```
 
-See [`plugins/flow-next/templates/spec.md`](../templates/spec.md) for the canonical section structure (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) and scope-owner annotations.
+See [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) for the canonical section structure (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) and scope-owner annotations.
 
 ### spec set-plan-review-status
 
@@ -938,7 +938,7 @@ flowctl config set memory.enabled false [--json]
 
 `--raw` applies to all three forms and bypasses merged defaults: scalar reads return `null` for keys absent from the on-disk `.flow/config.json` (distinguishing unset from explicitly-false), and subtree/root reads return only set values with absent leaves omitted (not defaulted). Raw output carries `"raw": true`. Subtree and root output always emit canonical key names; a persisted legacy leaf surfaces silently under its canonical name, and the deprecation warning fires only when the legacy key itself is read as a scalar.
 
-**JSON Schema:** `.flow/config.json` has a published JSON Schema (draft 2020-12) covering the full documented surface below - keys, types, enums, the `review.backend` spec grammar, and per-key descriptions. The committed artifact lives at [`plugins/flow-next/schema/flow-config.schema.json`](../schema/flow-config.schema.json) and is published at the stable URL `https://flow-next.dev/schema/flow-config.schema.json` (latest-mutable, not versioned). `flowctl init` stamps a `$schema` key pointing at that URL into configs it scaffolds or refreshes, so editors validate and autocomplete the file; the value is an inert string - flowctl never fetches it, and `config set` round-trips it untouched. Existing configs are only stamped on a re-init refresh; an already-present `$schema` value (for example a pinned URL) always survives.
+**JSON Schema:** `.flow/config.json` has a published JSON Schema (draft 2020-12) covering the full documented surface below - keys, types, enums, the `review.backend` spec grammar, and per-key descriptions. The committed artifact lives at [`plugins/flow-next/schema/flow-config.schema.json`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/schema/flow-config.schema.json) and is published at the stable URL `https://flow-next.dev/schema/flow-config.schema.json` (latest-mutable, not versioned). `flowctl init` stamps a `$schema` key pointing at that URL into configs it scaffolds or refreshes, so editors validate and autocomplete the file; the value is an inert string - flowctl never fetches it, and `config set` round-trips it untouched. Existing configs are only stamped on a re-init refresh; an already-present `$schema` value (for example a pinned URL) always survives.
 
 **Available settings:**
 
@@ -1757,7 +1757,7 @@ flowctl repo-map list [--count] [--json]
 
 ### prime classify
 
-The **only** flowctl surface `/flow-next:prime` adds: a pure-stdlib, bounded, **no-LLM** emitter for the deterministic layer of the skill's Phase 0.5 project classification. It emits the raw signals (axes 1-4 values + a mechanical confidence, plus raw Axis-5 `shape_markers`); the **skill** layers all judgment on top - Axis-5 shape reasoning, final per-axis confidence, the bounded clarification asks, and playbook selection. No judgment ever lands in flowctl (the CLAUDE.md agentic-vs-deterministic carve-out). The pinned schema lives in [`classification.md`](../skills/flow-next-prime/classification.md); the emitter ships in the single bundled `plugins/flow-next/scripts/flowctl.py`.
+The **only** flowctl surface `/flow-next:prime` adds: a pure-stdlib, bounded, **no-LLM** emitter for the deterministic layer of the skill's Phase 0.5 project classification. It emits the raw signals (axes 1-4 values + a mechanical confidence, plus raw Axis-5 `shape_markers`); the **skill** layers all judgment on top - Axis-5 shape reasoning, final per-axis confidence, the bounded clarification asks, and playbook selection. No judgment ever lands in flowctl (the CLAUDE.md agentic-vs-deterministic carve-out). The pinned schema lives in [`classification.md`](../../skills/flow-next-prime/classification.md); the emitter ships in the single bundled `plugins/flow-next/scripts/flowctl.py`.
 
 ```bash
 flowctl prime classify [root] --json   # root defaults to "."
@@ -1768,7 +1768,7 @@ flowctl prime classify [root] --json   # root defaults to "."
 
 **Bounds (R2 cheapness contract):** every collector is individually budgeted - `git ls-files` counts, `find -maxdepth`, config-presence globs, ONE sampled ambiguity grep, `scc`/`tokei` when present (never `cloc`, never exhaustive reads). It stays under ~10s even on a multi-M-LOC repo, so the skill's `--classify-only` mode (which wraps this emitter plus the judgment layer) is a viable portfolio-triage sweep across 100+ repos. **Redaction (hard contract):** emitted evidence NEVER carries secret values or complete sensitive config lines - key names only (fixture-asserted).
 
-**`--json` shape (fixed field order):** top-level `schema_version`, `assessment_scope` (`repository | workspace-member | constellation-home-base` + confidence + evidence), `axes` (`lifecycle`, `topology.monorepo` + `topology.constellation_member`, `size`, `stacks[]` - each with values, mechanical `confidence`, raw `signals`, and `evidence[]`), raw `shape_markers` (Axis 5 is resolved by the skill, not the emitter), and `collectors[]` (per-collector completeness diagnostics - `status` / `complete` / `sampled` / `truncated` / `cap_hit` / `operations`; the judgment layer downgrades confidence and uses NOT ASSESSED when any collector is incomplete). Full field-level schema + the `--classify-only` human block: [`classification.md`](../skills/flow-next-prime/classification.md).
+**`--json` shape (fixed field order):** top-level `schema_version`, `assessment_scope` (`repository | workspace-member | constellation-home-base` + confidence + evidence), `axes` (`lifecycle`, `topology.monorepo` + `topology.constellation_member`, `size`, `stacks[]` - each with values, mechanical `confidence`, raw `signals`, and `evidence[]`), raw `shape_markers` (Axis 5 is resolved by the skill, not the emitter), and `collectors[]` (per-collector completeness diagnostics - `status` / `complete` / `sampled` / `truncated` / `cap_hit` / `operations`; the judgment layer downgrades confidence and uses NOT ASSESSED when any collector is incomplete). Full field-level schema + the `--classify-only` human block: [`classification.md`](../../skills/flow-next-prime/classification.md).
 
 ### glossary
 

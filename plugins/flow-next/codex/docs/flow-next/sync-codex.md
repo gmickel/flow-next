@@ -1,6 +1,6 @@
 # Codex Mirror Generation (`sync-codex.sh`)
 
-[`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/}` plus mirrored `templates/` and `references/` directories. **No `hooks.json`:** Ralph hooks are opt-in via ralph-init project settings (fn-114 zero-default); the script asserts the mirror ships none. The script is **idempotent** - running twice produces identical output.
+[`../../../scripts/sync-codex.sh`](https://github.com/gmickel/flow-next/blob/main/scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/}` plus mirrored `templates/` and `references/` directories. **No `hooks.json`:** Ralph hooks are opt-in via ralph-init project settings (fn-114 zero-default); the script asserts the mirror ships none. The script is **idempotent** - running twice produces identical output.
 
 > Read the script's top-of-file comments and stage banners for the authoritative behavior. This doc gives the high-level shape and points at the validation guards.
 
@@ -12,7 +12,7 @@ Run after modifying any of:
 - `plugins/flow-next/agents/**` - agent `.md` files (converted to `.toml`)
 - `plugins/flow-next/templates/spec.md` - canonical scaffold mirrored into `codex/templates/` for R20 relative-path resolution
 - `plugins/flow-next/references/**` - shared disclosure files (e.g. `html-artifacts.md`) mirrored byte-identical into `codex/references/` (tool-name-agnostic by contract; no rewrite pass touches them)
-- `plugins/flow-next/docs/**` - doc pages mirrored (markdown only, `reach/` included) into the owned namespace `codex/docs/flow-next/`; mirror skill cross-links gain the matching `flow-next/` segment so they resolve in the mirror and on installed Codex hosts (`install-codex.sh` replaces ONLY `$CODEX_HOME/docs/flow-next/` — never loose files or siblings under `$CODEX_HOME/docs/`, which a user or another package may own)
+- `plugins/flow-next/docs/**` - doc pages mirrored (markdown only, `reach/` included) into the owned namespace `codex/docs/flow-next/`; mirror skill cross-links gain the matching `flow-next/` segment, and the mirrored pages' own internal links are rewritten to the **link-closure property** — every link either resolves on disk within the mirror or is an absolute GitHub URL (`install-codex.sh` replaces ONLY `$CODEX_HOME/docs/flow-next/` — never loose files or siblings under `$CODEX_HOME/docs/`, which a user or another package may own)
 
 Plugin-level `hooks/hooks.json` is gone (fn-114). Do not re-add a hooks stage.
 
@@ -24,12 +24,12 @@ Commit the regenerated `plugins/flow-next/codex/` tree alongside the canonical c
 
 ## Pipeline shape
 
-The script runs in numbered stages (see banners in [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh)):
+The script runs in numbered stages (see banners in [`../../../scripts/sync-codex.sh`](https://github.com/gmickel/flow-next/blob/main/scripts/sync-codex.sh)):
 
 1. **Copy & patch skills** - canonical `skills/` copied to `codex/skills/`, then per-stage transforms applied (Claude-native tool names rewritten to Codex equivalents; `request_user_input` → plain-text numbered prompt per fn-45).
 2. **Convert agents** - `agents/*.md` → `codex/agents/*.toml` with per-agent reasoning effort, sandbox mode, model mapping, and nickname candidates.
 3. **Zero-default hooks** - remove any stale `codex/hooks.json`; assert absence (Ralph registration is agent-driven into project `.codex/hooks.json` via ralph-init).
-4. **Mirror templates/ + references/ + docs/** - canonical `templates/spec.md` copied to `codex/templates/` so the R20 discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies); canonical `docs/` copied markdown-only to the owned namespace `codex/docs/flow-next/`, and mirror skill cross-links (`](../../docs/` / `](../../../docs/`) gain the `flow-next/` segment so they resolve both in-repo and installed — the install replaces only that owned dir, so it can never destroy non-flow-next content under `$CODEX_HOME/docs/` (fn-202 / #363).
+4. **Mirror templates/ + references/ + docs/** - canonical `templates/spec.md` copied to `codex/templates/` so the R20 discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies); canonical `docs/` copied markdown-only to the owned namespace `codex/docs/flow-next/`, and mirror skill cross-links (`../../docs/` / `../../../docs/`) gain the `flow-next/` segment so they resolve both in-repo and installed — the install replaces only that owned dir, so it can never destroy non-flow-next content under `$CODEX_HOME/docs/` (fn-202 / #363). The mirrored pages' own internal links are then rewritten by target class to the **link-closure property**: same-dir doc links stay untouched; links up-and-into installed trees (`skills/`, `templates/`, `references/`) gain one `../` for the deeper mirror location (depth-aware for `reach/` pages); links to targets outside the installed universe (repo root, the plugin README, `schema/`, `tests/`, the non-markdown `ci-workflow-example.yml`) become absolute canonical GitHub URLs computed from the canonical docs location. A validation guard hard-fails the sync on any docs-mirror link that neither resolves on disk at its mirror location nor is an absolute URL — and because the install copies these trees verbatim into the same relative layout under `$CODEX_HOME`, the repo-tree check is the install check.
 5. **Validation** - counts + drift guards (see below).
 
 ## Validation guards
@@ -51,6 +51,7 @@ The script's validation block (search for `# ─── Validation ───` in 
 | R30 legacy CLI vocabulary | `flowctl epic*` legacy form in fresh prose | Build fails |
 | R21 spec-template duplication | Skill markdown enumerates the canonical 7-section sequence (drift hazard) | Build fails |
 | `openai.yaml` coverage | `REQUIRED_OPENAI_YAML_SKILLS` missing the required file | Build fails |
+| Docs-mirror link closure | A `codex/docs/flow-next/**` link neither resolves on disk nor is an absolute URL | Build fails |
 
 Each guard prints `file:line` hits where available so the fix is mechanical: clean canonical first, then re-run sync.
 
@@ -60,15 +61,15 @@ Each guard prints `file:line` hits where available so the fix is mechanical: cle
 
 The Codex Default-mode + CLI surface errors on `request_user_input` calls ([openai/codex#10384](https://github.com/openai/codex/issues/10384), [#11536](https://github.com/openai/codex/issues/11536), [#12694](https://github.com/openai/codex/issues/12694)). Stage 3 rewrites canonical `AskUserQuestion` blocks into plain-text numbered prompts in the mirror, appending an `N+1. Other — type your own answer` option so the mirror still offers the freeform-input affordance. The R6 mirror scan re-runs after the rewrite to catch any surviving references.
 
-For the user-facing smoke procedure that validates this transform, see [`../../../agent_docs/local-dev.md`](../../../agent_docs/local-dev.md) (Codex plain-text smoke section).
+For the user-facing smoke procedure that validates this transform, see [`../../../agent_docs/local-dev.md`](https://github.com/gmickel/flow-next/blob/main/agent_docs/local-dev.md) (Codex plain-text smoke section).
 
 ## R17 cross-link discipline
 
-Memory entry `bug/build-errors/fn-445-review-r17-enforcement-beyond-2026-05-15` confirms: R17 is **review-blocking**. Canonical skill prose never enumerates the spec-template's 7-section sequence; skills cross-link [`../templates/spec.md`](../templates/spec.md) instead. The R21 validation guard catches the structural form (`^## Goal & Context` followed by other canonical headers within 30 lines); reviewer catch is the semantic backstop.
+Memory entry `bug/build-errors/fn-445-review-r17-enforcement-beyond-2026-05-15` confirms: R17 is **review-blocking**. Canonical skill prose never enumerates the spec-template's 7-section sequence; skills cross-link [`../templates/spec.md`](../../templates/spec.md) instead. The R21 validation guard catches the structural form (`^## Goal & Context` followed by other canonical headers within 30 lines); reviewer catch is the semantic backstop.
 
 ## See also
 
-- [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) — canonical pipeline (read the file).
+- [`../../../scripts/sync-codex.sh`](https://github.com/gmickel/flow-next/blob/main/scripts/sync-codex.sh) — canonical pipeline (read the file).
 - [`platforms.md`](platforms.md) — Codex-specific install + caveats.
 - [`spec-template.md`](spec-template.md) — the canonical scaffold the R21 guard protects.
-- [`../../../agent_docs/local-dev.md`](../../../agent_docs/local-dev.md) — local-dev smoke procedure including the Codex plain-text invariant.
+- [`../../../agent_docs/local-dev.md`](https://github.com/gmickel/flow-next/blob/main/agent_docs/local-dev.md) — local-dev smoke procedure including the Codex plain-text invariant.
