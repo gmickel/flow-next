@@ -1,6 +1,6 @@
 # Skills catalog
 
-> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts's own syntax and are quoted verbatim — do not convert them.
+> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
 Every skill flow-next ships, in one table. 30 skills: 25 slash-command-triggered (`/flow-next:<name>`), 5 phrase-triggered (no command file - describe what you want and the host agent matches the skill description; on hosts that surface skills as commands, also invocable by full skill name, e.g. `/flow-next:flow-next-worktree-kit`). Each row links the canonical `SKILL.md`.

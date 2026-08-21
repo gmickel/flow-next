@@ -1,6 +1,6 @@
 # Codex Mirror Generation (`sync-codex.sh`)
 
-> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts's own syntax and are quoted verbatim — do not convert them.
+> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
 [`../../../scripts/sync-codex.sh`](https://github.com/gmickel/flow-next/blob/main/scripts/sync-codex.sh) generates the pre-built Codex files from canonical `skills/` and `agents/` sources. Output: `plugins/flow-next/codex/{skills/,agents/}` plus mirrored `templates/` and `references/` directories. **No `hooks.json`:** Ralph hooks are opt-in via ralph-init project settings (fn-114 zero-default); the script asserts the mirror ships none. The script is **idempotent** - running twice produces identical output.
