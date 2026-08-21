@@ -1,6 +1,6 @@
 # Ralph — Autonomous Loop
 
-> **Deprecated.** A shell script that calls the orchestration primitives — `/flow-next:pilot` to build, `/flow-next:land` to ship, driven by a host loop or `cron` — does what this harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Ralph predates those primitives; it is no longer the way to get an unattended run.
+> **Deprecated.** A shell script that calls the orchestration primitives — `$flow-next-pilot` to build, `$flow-next-land` to ship, driven by a host loop or `cron` — does what this harness does, without the `scripts/ralph/` scaffold, the guard-hook registration, and the second receipt plumbing. Ralph predates those primitives; it is no longer the way to get an unattended run.
 >
 > **Nothing is removed and nothing breaks.** Existing installs keep working exactly as documented on this page, and this page stays maintained as their reference. New adopters should start at [pilot + land](#host-driven-loop-vs-ralph) instead — see [`running-lean.md`](running-lean.md#ralph-deprecated) for where the two profiles sit.
 
@@ -17,7 +17,7 @@ Ralph is Flow-Next's repo-local **hardened** autonomous harness. It exists becau
 
 > **TL;DR**: External shell loop → fresh Claude session per task → cross-model review gates → receipt-based proof-of-work → iterate until SHIP.
 >
-> **Which loop do I want?** The default autonomy path is the in-session **pilot + land pipeline** (`/loop 10m /flow-next:pilot` to build, `/loop 30m /flow-next:land` to ship) — zero scaffold, transcript verdicts, host-driven. Reach for Ralph when a run outlasts a session or prose guardrails aren't enough: Ralph owns the loop in a shell script with hook-enforced guardrails. The two are alternative drivers for the same pipeline and are **never nested**. See [Host-driven loop vs Ralph](#host-driven-loop-vs-ralph).
+> **Which loop do I want?** The default autonomy path is the in-session **pilot + land pipeline** (`/loop 10m $flow-next-pilot` to build, `/loop 30m $flow-next-land` to ship) — zero scaffold, transcript verdicts, host-driven. Reach for Ralph when a run outlasts a session or prose guardrails aren't enough: Ralph owns the loop in a shell script with hook-enforced guardrails. The two are alternative drivers for the same pipeline and are **never nested**. See [Host-driven loop vs Ralph](#host-driven-loop-vs-ralph).
 
 ---
 
@@ -52,16 +52,16 @@ Ralph is Flow-Next's repo-local **hardened** autonomous harness. It exists becau
 
 ## Quick Start
 
-Ralph is **fully opt-in**. Fresh plugin installs register **zero hooks** and spawn no guard process in any session. Enabling Ralph is `/flow-next:ralph-init` (or setup's Ralph **Yes** path): the host agent scaffolds `scripts/ralph/` and merges fingerprinted guard entries into project settings. Claude Code's project-hooks trust prompt is the consent gate; setup asks with default **No**. Until that ceremony completes, non-Ralph sessions pay nothing. The zero-overhead claim is literal for users who never opt in.
+Ralph is **fully opt-in**. Fresh plugin installs register **zero hooks** and spawn no guard process in any session. Enabling Ralph is `$flow-next-ralph-init` (or setup's Ralph **Yes** path): the host agent scaffolds `scripts/ralph/` and merges fingerprinted guard entries into project settings. Claude Code's project-hooks trust prompt is the consent gate; setup asks with default **No**. Until that ceremony completes, non-Ralph sessions pay nothing. The zero-overhead claim is literal for users who never opt in.
 
 ### 1. Initialize (scaffold + register hooks)
 
 ```bash
 # Inside Claude Code
-/flow-next:ralph-init
+$flow-next-ralph-init
 
 # Or from terminal
-claude -p "/flow-next:ralph-init"
+claude -p "$flow-next-ralph-init"
 ```
 
 Creates `scripts/ralph/` with:
@@ -77,7 +77,7 @@ Creates `scripts/ralph/` with:
 
 Also merges host-appropriate hook entries into project settings (Claude: `.claude/settings.json`; Droid: `.factory/hooks.json`; Codex: `.codex/hooks.json` shell+Stop subset; Cursor: scaffold only). Fingerprint: command string contains `scripts/ralph/hooks/ralph-guard`. Idempotent re-run; never clobbers unrelated hooks. See [platforms.md](platforms.md) for per-host detail.
 
-**Upgrade:** After a flow-next upgrade that removed plugin-level hooks, existing Ralph users must re-run `/flow-next:ralph-init` so project hooks re-register and `ralphctl.py` lands under `scripts/ralph/`.
+**Upgrade:** After a flow-next upgrade that removed plugin-level hooks, existing Ralph users must re-run `$flow-next-ralph-init` so project hooks re-register and `ralphctl.py` lands under `scripts/ralph/`.
 
 ### 2. Configure
 
@@ -142,7 +142,7 @@ rm -rf scripts/ralph/
 │  scripts/ralph/ralph.sh                                      │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │  while flowctl next returns work:                      │  │
-│  │    1. claude -p "/flow-next:plan" or :work             │  │
+│  │    1. claude -p "$flow-next-plan" or :work             │  │
 │  │    2. check review receipts                            │  │
 │  │    3. if missing/invalid → retry                       │  │
 │  │    4. if SHIP verdict → next task                      │  │
@@ -153,11 +153,11 @@ rm -rf scripts/ralph/
 ```mermaid
 flowchart TD
   A[ralph.sh loop] --> B[flowctl next]
-  B -->|plan needed| C[/flow-next:plan/]
-  C --> D[/flow-next:plan-review/]
-  B -->|work needed| E[/flow-next:work/]
-  E --> F[/flow-next:impl-review/]
-  B -->|completion review needed| K[/flow-next:spec-completion-review/]
+  B -->|plan needed| C[$flow-next-plan/]
+  C --> D[$flow-next-plan-review/]
+  B -->|work needed| E[$flow-next-work/]
+  E --> F[$flow-next-impl-review/]
+  B -->|completion review needed| K[$flow-next-spec-completion-review/]
   D --> G{Receipt valid?}
   F --> G
   K --> G
@@ -195,11 +195,11 @@ Anthropic's official ralph-wiggum uses a Stop hook to keep Claude in the same se
 
 ### Host-driven loop vs Ralph
 
-**Pilot + land are the default autonomy path** - `/flow-next:pilot` builds (ready spec → draft PR, in-session, host `/loop` / `/goal` owns repetition) and `/flow-next:land` ships (draft PR → merged + released). The pilot build span is `plan → plan-review → work → make-pr`, with an **optional live-QA stage** (`pipeline.qa`, default **off**) inserted at the all-tasks-done juncture: `plan → plan-review → work → **qa** → make-pr`. **Chart is never a pilot stage** - optional pre-capture discovery (`/flow-next:chart`) is driven by host `/loop` on the chart skill itself (one unattended D-ID per tick; `CHART_VERDICT=NEEDS_HUMAN` parks attended decisions). Ralph is the **hardened harness** for the work segment: it consumes specs that are already **fully planned** (its loop iterates plan-review → work → impl-review → completion review - it never runs the planning fan-out and never charts), trades in-session convenience for fresh-session isolation + hook-enforced guardrails, and needs no host loop primitive at all (cron-able on a headless server). Reach for it when a run outlasts a session (`/loop` jobs expire after 7 days) or when prose guardrails aren't enough.
+**Pilot + land are the default autonomy path** - `$flow-next-pilot` builds (ready spec → draft PR, in-session, host `/loop` / `/goal` owns repetition) and `$flow-next-land` ships (draft PR → merged + released). The pilot build span is `plan → plan-review → work → make-pr`, with an **optional live-QA stage** (`pipeline.qa`, default **off**) inserted at the all-tasks-done juncture: `plan → plan-review → work → **qa** → make-pr`. **Chart is never a pilot stage** - optional pre-capture discovery (`$flow-next-chart`) is driven by host `/loop` on the chart skill itself (one unattended D-ID per tick; `CHART_VERDICT=NEEDS_HUMAN` parks attended decisions). Ralph is the **hardened harness** for the work segment: it consumes specs that are already **fully planned** (its loop iterates plan-review → work → impl-review → completion review - it never runs the planning fan-out and never charts), trades in-session convenience for fresh-session isolation + hook-enforced guardrails, and needs no host loop primitive at all (cron-able on a headless server). Reach for it when a run outlasts a session (`/loop` jobs expire after 7 days) or when prose guardrails aren't enough.
 
-**Optional QA stage (`pipeline.qa`, fn-72, default off).** With it on (`flowctl config set pipeline.qa on`), pilot runs one `/flow-next:qa` live pass over the complete build at all-tasks-done, before make-pr — the app is already up on the dev's machine during `work`, so this catches obvious runtime breakage before a human opens the PR. It **augments, never replaces**, CI/staging/manual QA: it reduces human work agentically and **surfaces problems to humans** rather than gating them out. Autonomy-safe by construction — it never prompts, the gate routes on `qa_outcome` (not the Ralph-guard `verdict` projection), `SHIP`/`NA`/`BLOCKED` advance cleanly, and `NEEDS_WORK` **still advances** to the draft PR (findings surfaced in the PR body's Live QA section + the bug-memory track + a tracker-sync comment when the bridge is active). QA never hard-blocks the loop; merge stays the human's + land's decision. With the gate off, pilot's stage set is byte-for-byte unchanged.
+**Optional QA stage (`pipeline.qa`, fn-72, default off).** With it on (`flowctl config set pipeline.qa on`), pilot runs one `$flow-next-qa` live pass over the complete build at all-tasks-done, before make-pr — the app is already up on the dev's machine during `work`, so this catches obvious runtime breakage before a human opens the PR. It **augments, never replaces**, CI/staging/manual QA: it reduces human work agentically and **surfaces problems to humans** rather than gating them out. Autonomy-safe by construction — it never prompts, the gate routes on `qa_outcome` (not the Ralph-guard `verdict` projection), `SHIP`/`NA`/`BLOCKED` advance cleanly, and `NEEDS_WORK` **still advances** to the draft PR (findings surfaced in the PR body's Live QA section + the bug-memory track + a tracker-sync comment when the bridge is active). QA never hard-blocks the loop; merge stays the human's + land's decision. With the gate off, pilot's stage set is byte-for-byte unchanged.
 
-**Backlog mode (`pilot.autonomy=backlog`, fn-68, default off).** By default pilot's consent boundary sits *before* the loop: it only selects from the **already-ready** queue (the fn-58 `ready` gate / tracker board state) and assumes specs are triaged, dep-clear, and unambiguous. Everything in front of that gate — enumerating the whole open backlog, triaging raw items, checking deps, deciding what's next, and unblocking the things that need a human — is manual prompting. Backlog mode (`flowctl config set pilot.autonomy backlog`, or per-run `--backlog` / `--auto`) makes pilot a **standing floor scheduler for the entire open backlog**: each tick enumerates everything open (flow specs via `flowctl ready --all` **plus** tracker issues at the promoted lane, unioned in by the skill), selects the top **dep-ordered** actionable item, **triages** it agentically, and — if it is a workable written spec — advances it one stage along the same `plan → plan-review → work → [qa] → make-pr` pipeline. This is the one place the consent boundary moves: from *before* the loop to **inside the loop, on block**. When it cannot safely proceed it **surfaces a precise async question** (the question valve) into the spec's `## Open Questions` + a tracker comment via tracker-sync, parks the item (`ASKED`), and moves on — "stuck" becomes a question, not a stall, and never an interactive prompt. The load-bearing boundaries hold unchanged: it **never authors a spec** (a thin/missing spec is surfaced as a "run `/flow-next:capture` or `/flow-next:interview`" gap — autonomous scope-invention from a one-line ticket is exactly the slop the valve guards against), **never sets the `ready` flag** (promotion is the human's board act — un-promoted backlog items are skipped silently, never nagged), and **never merges** (land stays human-gated). Readiness is the human's **explicit signal**, never an agent-inferred completeness score; the agent's spec-read can only *withhold* (kick a promoted-but-thin item back with a question), never *force*. It is a **leftward extension of the same single-tick conductor** — one `/loop`/`/goal` target, one verdict grammar, one mental model, the host primitive still owning repetition — not a new skill, not a loop runner. A per-tick **decision log** (`flowctl pilot-log`, stored under `.flow/pilot-runs/`, never a ralph-guard receipt path) records each action + host-reported token cost, yielding the factory-efficiency readout (% moved with no question / one async answer / parked, cost per change) and the self-improvement substrate. The backlog-mode SELECT/TRIAGE/ASK workflow lives in its own reference file under the pilot skill so `SKILL.md`'s core single-tick contract stays thin. With the gate off, pilot behavior is **byte-for-byte unchanged** and the backlog-mode reference is never even read. (Verdict grammar: backlog mode adds `ASKED <id> (<n>)` and keeps `NO_WORK` / `DEFERRED_TO_LAND` verbatim — see the [`/flow-next:pilot` skill page](../../skills/flow-next-pilot/SKILL.md) for the full grammar and `references/backlog-mode.md`.) The cloud-orchestration role (scheduler, hosted environments, the production monitor→triage loop) belongs to the **control plane (mergefoundry)**, not pilot — backlog mode is the governed, in-repo per-tick conductor it would invoke.
+**Backlog mode (`pilot.autonomy=backlog`, fn-68, default off).** By default pilot's consent boundary sits *before* the loop: it only selects from the **already-ready** queue (the fn-58 `ready` gate / tracker board state) and assumes specs are triaged, dep-clear, and unambiguous. Everything in front of that gate — enumerating the whole open backlog, triaging raw items, checking deps, deciding what's next, and unblocking the things that need a human — is manual prompting. Backlog mode (`flowctl config set pilot.autonomy backlog`, or per-run `--backlog` / `--auto`) makes pilot a **standing floor scheduler for the entire open backlog**: each tick enumerates everything open (flow specs via `flowctl ready --all` **plus** tracker issues at the promoted lane, unioned in by the skill), selects the top **dep-ordered** actionable item, **triages** it agentically, and — if it is a workable written spec — advances it one stage along the same `plan → plan-review → work → [qa] → make-pr` pipeline. This is the one place the consent boundary moves: from *before* the loop to **inside the loop, on block**. When it cannot safely proceed it **surfaces a precise async question** (the question valve) into the spec's `## Open Questions` + a tracker comment via tracker-sync, parks the item (`ASKED`), and moves on — "stuck" becomes a question, not a stall, and never an interactive prompt. The load-bearing boundaries hold unchanged: it **never authors a spec** (a thin/missing spec is surfaced as a "run `$flow-next-capture` or `$flow-next-interview`" gap — autonomous scope-invention from a one-line ticket is exactly the slop the valve guards against), **never sets the `ready` flag** (promotion is the human's board act — un-promoted backlog items are skipped silently, never nagged), and **never merges** (land stays human-gated). Readiness is the human's **explicit signal**, never an agent-inferred completeness score; the agent's spec-read can only *withhold* (kick a promoted-but-thin item back with a question), never *force*. It is a **leftward extension of the same single-tick conductor** — one `/loop`/`/goal` target, one verdict grammar, one mental model, the host primitive still owning repetition — not a new skill, not a loop runner. A per-tick **decision log** (`flowctl pilot-log`, stored under `.flow/pilot-runs/`, never a ralph-guard receipt path) records each action + host-reported token cost, yielding the factory-efficiency readout (% moved with no question / one async answer / parked, cost per change) and the self-improvement substrate. The backlog-mode SELECT/TRIAGE/ASK workflow lives in its own reference file under the pilot skill so `SKILL.md`'s core single-tick contract stays thin. With the gate off, pilot behavior is **byte-for-byte unchanged** and the backlog-mode reference is never even read. (Verdict grammar: backlog mode adds `ASKED <id> (<n>)` and keeps `NO_WORK` / `DEFERRED_TO_LAND` verbatim — see the [`$flow-next-pilot` skill page](../../skills/flow-next-pilot/SKILL.md) for the full grammar and `references/backlog-mode.md`.) The cloud-orchestration role (scheduler, hosted environments, the production monitor→triage loop) belongs to the **control plane (mergefoundry)**, not pilot — backlog mode is the governed, in-repo per-tick conductor it would invoke.
 
 | Aspect | Ralph | Pilot |
 |--------|-------|-------|
@@ -213,14 +213,14 @@ Anthropic's official ralph-wiggum uses a Stop hook to keep Claude in the same se
 
 Never nest them. Pilot hard-errors when invoked under `FLOW_RALPH` / `REVIEW_RECEIPT_PATH`; Ralph and pilot are alternative drivers for the same pipeline.
 
-Both drivers deliberately stop at a **draft PR**. The third loop, [`/flow-next:land`](../../skills/flow-next-land/SKILL.md), babysits those PRs the rest of the way — CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow — and ends each tick with a terminal `LAND_VERDICT` line. Land refuses to nest under the Ralph harness too (same `FLOW_RALPH` / `REVIEW_RECEIPT_PATH` guard).
+Both drivers deliberately stop at a **draft PR**. The third loop, [`$flow-next-land`](../../skills/flow-next-land/SKILL.md), babysits those PRs the rest of the way — CI tri-state fix loop, reviewer patience window, resolve-pr convergence, gated explicit merge, spec close, release-follow — and ends each tick with a terminal `LAND_VERDICT` line. Land refuses to nest under the Ralph harness too (same `FLOW_RALPH` / `REVIEW_RECEIPT_PATH` guard).
 
 Driver recipes:
 
-- Claude Code `/loop` v2.1.72+ (loops expire after 7 days): `/loop 10m /flow-next:pilot`
-- Claude Code `/goal` v2.1.139+ (`/goal` validators are transcript-blind, so phrase the stop condition against the verdict grammar): `/goal keep running /flow-next:pilot until it prints PILOT_VERDICT=NO_WORK, or stop after 20 turns` — note `PILOT_VERDICT=DEFERRED_TO_LAND` is its own terminal (an all-done spec whose open PR land owns); route it to `/flow-next:land`, not a pilot re-run. In **backlog mode** the grammar also carries `PILOT_VERDICT=ASKED <id> (<n>)` — a durable park, not a stop: the loop simply continues to the next item next tick, and the human answers async in the spec / tracker.
+- Claude Code `/loop` v2.1.72+ (loops expire after 7 days): `/loop 10m $flow-next-pilot`
+- Claude Code `/goal` v2.1.139+ (`/goal` validators are transcript-blind, so phrase the stop condition against the verdict grammar): `/goal keep running $flow-next-pilot until it prints PILOT_VERDICT=NO_WORK, or stop after 20 turns` — note `PILOT_VERDICT=DEFERRED_TO_LAND` is its own terminal (an all-done spec whose open PR land owns); route it to `$flow-next-land`, not a pilot re-run. In **backlog mode** the grammar also carries `PILOT_VERDICT=ASKED <id> (<n>)` — a durable park, not a stop: the loop simply continues to the next item next tick, and the human answers async in the spec / tracker.
 - Codex `/goal`: opt-in `[features] goals = true`, CLI >= 0.128.0. No `$skill-in-goal` syntax — write a plain-text objective that names pilot behavior and `PILOT_VERDICT=<ADVANCED|ASKED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN>` (`DEFERRED_TO_LAND` routes to land, not a pilot re-run; `ASKED` — backlog mode only — is a park, the loop continues).
-- Ship loop (after the build loop's draft PRs are open — babysitting waits on external CI/reviewer events, so use a cadence): `/loop 30m /flow-next:land`
+- Ship loop (after the build loop's draft PRs are open — babysitting waits on external CI/reviewer events, so use a cadence): `/loop 30m $flow-next-land`
 
 **The full pipeline** runs pilot and land **concurrently** — pilot builds spec N while land babysits spec N−1's PR. Same-session (two `/loop` jobs, ticks serialize) works for small backlogs; the real assembly line is **two instances** (Claude Code / Codex), each in **its own clone or git worktree** — both loops mutate the working tree (pilot checks out spec branches, land checks out PR branches for CI fixes), so two loops sharing one checkout would trip each other's dirty-tree guards. GitHub is the shared state: land pushes the spec close after merging, pilot pulls the base branch before planning, and the strike ledgers are per-clone by design. The loops never contend: land touches only specs with all tasks done (in-flight specs stay pilot's), and pilot skips specs that already have an open PR.
 
@@ -259,7 +259,7 @@ The plan review gate ensures specs are architecturally sound before any implemen
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  1. Find specs with plan_review_status = unknown       │ │
 │  │  2. Return status=plan, spec=fn-1                      │ │
-│  │  3. Ralph invokes /flow-next:plan-review fn-1          │ │
+│  │  3. Ralph invokes $flow-next-plan-review fn-1          │ │
 │  │  4. Skill loops until <verdict>SHIP</verdict>          │ │
 │  │  5. flowctl spec set-plan-review-status fn-1 --status ship │
 │  │  6. Next iteration: spec unlocked for work             │ │
@@ -298,7 +298,7 @@ When `flowctl next` returns `status=plan`:
 
 2. **Review** — Invoke the plan review skill
    ```bash
-   /flow-next:plan-review fn-1 --review=codex
+   $flow-next-plan-review fn-1 --review=codex
    ```
 
 3. **Fix loop** — If `NEEDS_WORK`:
@@ -363,7 +363,7 @@ The spec-completion review gate ensures implementation matches the spec before c
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │  1. All tasks done, completion_review_status != ship   │ │
 │  │  2. Return status=completion_review, spec=fn-1         │ │
-│  │  3. Ralph invokes /flow-next:spec-completion-review fn-1 │ │
+│  │  3. Ralph invokes $flow-next-spec-completion-review fn-1 │ │
 │  │  4. Skill loops until <verdict>SHIP</verdict>          │ │
 │  │  5. flowctl spec set-completion-review-status fn-1 --status ship │
 │  │  6. Next iteration: spec can close                     │ │
@@ -392,7 +392,7 @@ When `flowctl next` returns `status=completion_review`:
 
 1. **Review** — Invoke the spec-completion-review skill
    ```bash
-   /flow-next:spec-completion-review fn-1 --review=codex
+   $flow-next-spec-completion-review fn-1 --review=codex
    ```
 
 2. **Fix loop** — If `NEEDS_WORK`:
@@ -449,7 +449,7 @@ Every review produces a receipt JSON:
 
 This is at-least-once delivery. The agent is untrusted; receipts are proof-of-work.
 
-**`/flow-next:qa` emits a `type: qa_verdict` receipt** (live-app QA pass). The Ralph guard accepts `verdict ∈ {SHIP, NEEDS_WORK, MAJOR_RETHINK, NEEDS_HUMAN}`; QA's four outcomes are carried in a separate `qa_outcome` field while `verdict` holds the enum-compatible projection: `SHIP → SHIP`, `NEEDS_WORK → NEEDS_WORK`, **`BLOCKED → NEEDS_WORK`** (could not verify → no ship claim on a QA basis), **`N/A → SHIP`** (no driveable UI → live QA raises no objection). Written to the caller-supplied `--receipt` / `REVIEW_RECEIPT_PATH`, else `.flow/review-receipts/qa-<spec-id>.json`. In autonomous mode (`mode:autonomous` / `FLOW_AUTONOMOUS=1` — the signal the optional pilot QA stage passes) QA **never prompts**: undocumented target URL / required accounts / no reachable local app ⇒ a clean `BLOCKED` receipt and exit. It always reaches a verdict and always writes a valid receipt; it is **not a hard Ralph receipt-gate in v1** (`parse_receipt_path` is unextended — a `qa-*.json` path validates via the existing verdict-enum check; gating a future board-executor is deferred).
+**`$flow-next-qa` emits a `type: qa_verdict` receipt** (live-app QA pass). The Ralph guard accepts `verdict ∈ {SHIP, NEEDS_WORK, MAJOR_RETHINK, NEEDS_HUMAN}`; QA's four outcomes are carried in a separate `qa_outcome` field while `verdict` holds the enum-compatible projection: `SHIP → SHIP`, `NEEDS_WORK → NEEDS_WORK`, **`BLOCKED → NEEDS_WORK`** (could not verify → no ship claim on a QA basis), **`N/A → SHIP`** (no driveable UI → live QA raises no objection). Written to the caller-supplied `--receipt` / `REVIEW_RECEIPT_PATH`, else `.flow/review-receipts/qa-<spec-id>.json`. In autonomous mode (`mode:autonomous` / `FLOW_AUTONOMOUS=1` — the signal the optional pilot QA stage passes) QA **never prompts**: undocumented target URL / required accounts / no reachable local app ⇒ a clean `BLOCKED` receipt and exit. It always reaches a verdict and always writes a valid receipt; it is **not a hard Ralph receipt-gate in v1** (`parse_receipt_path` is unextended — a `qa-*.json` path validates via the existing verdict-enum check; gating a future board-executor is deferred).
 
 When QA runs as the **optional `pipeline.qa` pilot stage** (default off — see "Optional QA stage" above), the pilot gate reads `qa_outcome` (NOT the Ralph-guard `verdict` projection): `SHIP`/`NA`/`BLOCKED` advance cleanly, and `NEEDS_WORK` still advances to make-pr (draft), with the findings surfaced into the PR body's `## Live QA` section + the bug-memory track. The stage is idempotent — a `head_sha` field on the receipt makes it fresh-iff `id == <spec-id>` AND `head_sha == <spec-branch HEAD>` AND `qa_outcome` is terminal, so a single-tick pilot classifies `qa` at most once per branch head and never re-loops. The QA stage **augments, never replaces** CI/staging/manual QA.
 
@@ -629,7 +629,7 @@ scripts/ralph/runs/<run-id>/
 
 ### Tracker-sync conflicts never block
 
-If the optional `/flow-next:tracker-sync` bridge is enabled (the discovery ceremony activates `tracker.perEvent.*` by default), a sync run **never blocks the Ralph loop**. Every run emits a receipt (`flowctl sync receipt`); a genuine body/status contradiction is **queued**, not raised. In autonomous mode an `always-ask` tiebreak (`tracker.conflictTiebreak`) resolves to *queue*, not prompt — same policy, surface-dependent delivery. The conflict lands in the **review deferred-findings sink** (`.flow/review-deferred/<branch>.md`), where the morning review already looks for deferred work — so tracker-sync needs **no `flowctl block`** and never stalls the run. Confident merges proceed unattended. See [`tracker-sync.md`](tracker-sync.md).
+If the optional `$flow-next-tracker-sync` bridge is enabled (the discovery ceremony activates `tracker.perEvent.*` by default), a sync run **never blocks the Ralph loop**. Every run emits a receipt (`flowctl sync receipt`); a genuine body/status contradiction is **queued**, not raised. In autonomous mode an `always-ask` tiebreak (`tracker.conflictTiebreak`) resolves to *queue*, not prompt — same policy, surface-dependent delivery. The conflict lands in the **review deferred-findings sink** (`.flow/review-deferred/<branch>.md`), where the morning review already looks for deferred work — so tracker-sync needs **no `flowctl block`** and never stalls the run. Confident merges proceed unattended. See [`tracker-sync.md`](tracker-sync.md).
 
 ### HTML render lenses generate only — never poll
 
@@ -792,7 +792,7 @@ rm -rf ~/.config/dcg/
 
 Ralph guard hooks enforce workflow rules deterministically. They are **not** part of the default plugin install.
 
-> **Registration is opt-in.** Fresh installs ship zero hooks (no `plugins/flow-next/hooks/`). `/flow-next:ralph-init` (agent-driven prose) merges fingerprinted entries into project settings. Until that runs and the host trusts project hooks, no guard process ever starts. That is the zero-overhead guarantee for non-Ralph users.
+> **Registration is opt-in.** Fresh installs ship zero hooks (no `plugins/flow-next/hooks/`). `$flow-next-ralph-init` (agent-driven prose) merges fingerprinted entries into project settings. Until that runs and the host trusts project hooks, no guard process ever starts. That is the zero-overhead guarantee for non-Ralph users.
 >
 > **Runtime gate:** After registration, the guard body still exits immediately unless `FLOW_RALPH=1` (set by the harness). Debug log writes only when `RALPH_GUARD_DEBUG=1` (uses `tempfile.gettempdir()`, never unconditional `/tmp`).
 

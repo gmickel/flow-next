@@ -1,6 +1,6 @@
 # PR cognitive-aid consumer contract
 
-`/flow-next:make-pr` can persist one bounded, versioned explanation of a change
+`$flow-next-make-pr` can persist one bounded, versioned explanation of a change
 and render it in GitHub Markdown. The existing host agent composes the intent;
 `flowctl` validates, stores, selects, and renders the object without another
 model or network call.

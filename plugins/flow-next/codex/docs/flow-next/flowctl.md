@@ -134,7 +134,7 @@ Output:
 
 ### setup-block
 
-Apply, resolve, or check a tracked marker block in a mixed-ownership file (e.g. `CLAUDE.md` / `AGENTS.md`, used by `/flow-next:setup`). Atomic helpers only - the skill owns the ask.
+Apply, resolve, or check a tracked marker block in a mixed-ownership file (e.g. `CLAUDE.md` / `AGENTS.md`, used by `$flow-next-setup`). Atomic helpers only - the skill owns the ask.
 
 ```bash
 flowctl setup-block apply --file CLAUDE.md --template <canonical-snippet.md> [--id <BLOCK-ID>] [--json]
@@ -169,7 +169,7 @@ CI recipe (the snippet block is an ordinary tracked file, so a hand-edit is a no
 # exit 0: pristine · exit 2: drift (--json .action: template-drift / customized / hash-absent)
 # exit 3: structural (missing file/markers, corrupt block)
 if ! flowctl setup-block check --file CLAUDE.md --template .flow/templates/claude-block.md; then
-  echo "setup-block drift detected - run /flow-next:setup or flowctl setup-block apply/resolve"
+  echo "setup-block drift detected - run $flow-next-setup or flowctl setup-block apply/resolve"
   exit 1
 fi
 ```
@@ -387,7 +387,7 @@ Format: `backend:model` where backend is a CLI name and model is backend-specifi
 
 ### spec export-cognitive-aid
 
-Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and diff stats into one structured payload (consumed by `/flow-next:make-pr`).
+Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and diff stats into one structured payload (consumed by `$flow-next-make-pr`).
 
 ```bash
 flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
@@ -663,7 +663,7 @@ flowctl brief --full   # lift the 8000-char budget (all rows retained)
 
 ### anchor
 
-Single-call worker anchor bundle — the `/flow-next:work` worker's entire Phase-1 re-anchor in one deterministic, pure read. Session-scope budgeted counterpart: [`brief`](#brief).
+Single-call worker anchor bundle — the `$flow-next-work` worker's entire Phase-1 re-anchor in one deterministic, pure read. Session-scope budgeted counterpart: [`brief`](#brief).
 
 ```bash
 flowctl anchor fn-1.2          # Worker-facing markdown render (default)
@@ -729,7 +729,7 @@ Spec-level deps gate the whole spec (same rule as `next`): when the spec's `depe
 }
 ```
 
-**`ready --all`** (fn-68, backlog mode) — a **spec-level** backlog-wide eligibility scan (ignores `--spec`), the deterministic substrate `/flow-next:pilot` backlog mode (`pilot.autonomy=backlog`) consumes:
+**`ready --all`** (fn-68, backlog mode) — a **spec-level** backlog-wide eligibility scan (ignores `--spec`), the deterministic substrate `$flow-next-pilot` backlog mode (`pilot.autonomy=backlog`) consumes:
 
 ```bash
 flowctl ready --all [--json]
@@ -750,7 +750,7 @@ Returns **deterministic eligibility facts only** for every open flow spec: `read
 
 ### pilot strikes
 
-Read and clear `/flow-next:pilot`'s **strikes ledger** - the don't-thrash counter the pilot skill writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). Ownership is split: flowctl reads and clears, the skill records.
+Read and clear `$flow-next-pilot`'s **strikes ledger** - the don't-thrash counter the pilot skill writes at `<git-common-dir>/flow-next/pilot-strikes.json` (under the git **common** dir, so it is shared across worktrees and can never be swept into a commit). Ownership is split: flowctl reads and clears, the skill records.
 
 ```bash
 flowctl pilot strikes list [--json]
@@ -765,7 +765,7 @@ flowctl pilot strikes clear --all [--json]
 
 ### pilot-log
 
-The per-tick **decision log** `/flow-next:pilot` backlog mode (fn-68) writes — the factory-metrics substrate (and the later self-improvement-synthesis substrate). Receipt-shaped rows under `.flow/pilot-runs/` (a sync-runs-style dir, auto-gitignored) — deliberately **NOT** any `receipts/` path the ralph-guard validates, so a pilot-log row never trips a Ralph receipt gate.
+The per-tick **decision log** `$flow-next-pilot` backlog mode (fn-68) writes — the factory-metrics substrate (and the later self-improvement-synthesis substrate). Receipt-shaped rows under `.flow/pilot-runs/` (a sync-runs-style dir, auto-gitignored) — deliberately **NOT** any `receipts/` path the ralph-guard validates, so a pilot-log row never trips a Ralph receipt gate.
 
 ```bash
 # Append one row (called by the skill at each backlog terminal)
@@ -954,26 +954,26 @@ flowctl config set memory.enabled false [--json]
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
 | `tracker.specIds` | string | `flow` (merged default; **unset-detectable** on disk) | Id scheme for new specs when a tracker bridge is active: `flow` (native `fn-N`) or `tracker` (tracker-keyed `KEY-N-slug` / synthetic `gh-N` / `gl-N`). Strict enum — invalid CLI writes rejected; malformed on-disk values fail closed to `flow`. Not materialized at init so setup can ask once when a tracker is configured and the key is still absent. Skills route to `--tracker-first` / create-first when value is `tracker` and the bridge is active. See [`tracker-sync.md`](tracker-sync.md). |
 | `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
-| `tracker.perEvent.<event>` | string | `off` | Per-lifecycle-event sync op. Events: `capture`, `interview`, `plan`, `work.firstClaim`, `work.done`, `makePr`, `resolvePr`, `completionReview`. Leaf values: `off | pull | push | reconcile | comment`. **Schema default `off`** — so a bare `enabled=true` set without the ceremony fires no lifecycle-event sync (accidental-enable guard; two paths are unconditional whenever the bridge is active — make-pr's PR↔issue link + `In Review` push, and `land.merged`'s `Done`-on-merge — see [`tracker-sync.md`](tracker-sync.md)). But the `/flow-next:tracker-sync` discovery ceremony **activates all events by default (opt-out)** when you hook up the bridge; you turn any off with `config set tracker.perEvent.<event> off`. `completionReview` is seeded `comment` (verdict + R-ID coverage; **never terminal `Done`** — fn-66). |
-| `tracker.perEvent.qa` | string | `off` | **`/flow-next:qa` verdict post (fn-53, R9).** Posts the live-app QA ship verdict (`type: qa_verdict`) as a tracker comment when set non-`off` AND the bridge is active. Leaf values: **`off | comment` only** — `comment` is the only sensible verb for a verdict; `push`/`pull`/`reconcile` operate on the issue body/status and don't apply, so the QA skill treats any non-`off` value as `comment`. **Default `off`, and — unlike the other events — NOT switched on by the discovery ceremony's opt-out default-on set**: a QA verdict post is QA-specific opt-in, enabled explicitly with `config set tracker.perEvent.qa comment`. The post is best-effort and never blocks the verdict. |
-| `tracker.perEvent.land.merged` | string | `off` | **`/flow-next:land` post-merge touchpoint (fn-60, 1.14.0+; fn-66 made it the sole `Done` driver).** After land merges a PR and closes its spec, dispatches tracker-sync (`operation: push <spec-id>`, event tag `land.merged`) — status flips to the **merge-confirmed** terminal state (`done`/`verified`, gated on the GitHub `MERGED` probe) and the merge/release verdict comment is posted. **fn-66: active-by-default whenever the bridge is active** — a real merge is the ONLY event that legitimately projects terminal `Done`, so this touchpoint rides the bridge-active predicate alone (NOT gated behind this leaf, which then only tunes the optional verdict comment). The schema default stays `off` (accidental-enable guard); the land skill fires it on bridge-active regardless. Best-effort — a tracker failure never blocks land's tail or changes the PR's verdict. |
+| `tracker.perEvent.<event>` | string | `off` | Per-lifecycle-event sync op. Events: `capture`, `interview`, `plan`, `work.firstClaim`, `work.done`, `makePr`, `resolvePr`, `completionReview`. Leaf values: `off | pull | push | reconcile | comment`. **Schema default `off`** — so a bare `enabled=true` set without the ceremony fires no lifecycle-event sync (accidental-enable guard; two paths are unconditional whenever the bridge is active — make-pr's PR↔issue link + `In Review` push, and `land.merged`'s `Done`-on-merge — see [`tracker-sync.md`](tracker-sync.md)). But the `$flow-next-tracker-sync` discovery ceremony **activates all events by default (opt-out)** when you hook up the bridge; you turn any off with `config set tracker.perEvent.<event> off`. `completionReview` is seeded `comment` (verdict + R-ID coverage; **never terminal `Done`** — fn-66). |
+| `tracker.perEvent.qa` | string | `off` | **`$flow-next-qa` verdict post (fn-53, R9).** Posts the live-app QA ship verdict (`type: qa_verdict`) as a tracker comment when set non-`off` AND the bridge is active. Leaf values: **`off | comment` only** — `comment` is the only sensible verb for a verdict; `push`/`pull`/`reconcile` operate on the issue body/status and don't apply, so the QA skill treats any non-`off` value as `comment`. **Default `off`, and — unlike the other events — NOT switched on by the discovery ceremony's opt-out default-on set**: a QA verdict post is QA-specific opt-in, enabled explicitly with `config set tracker.perEvent.qa comment`. The post is best-effort and never blocks the verdict. |
+| `tracker.perEvent.land.merged` | string | `off` | **`$flow-next-land` post-merge touchpoint (fn-60, 1.14.0+; fn-66 made it the sole `Done` driver).** After land merges a PR and closes its spec, dispatches tracker-sync (`operation: push <spec-id>`, event tag `land.merged`) — status flips to the **merge-confirmed** terminal state (`done`/`verified`, gated on the GitHub `MERGED` probe) and the merge/release verdict comment is posted. **fn-66: active-by-default whenever the bridge is active** — a real merge is the ONLY event that legitimately projects terminal `Done`, so this touchpoint rides the bridge-active predicate alone (NOT gated behind this leaf, which then only tunes the optional verdict comment). The schema default stays `off` (accidental-enable guard); the land skill fires it on bridge-active regardless. Best-effort — a tracker failure never blocks land's tail or changes the PR's verdict. |
 | `tracker.perTracker.teamId` / `projectId` / `labelMap` / `priorityMap` | mixed | `null` / `{}` | Per-tracker linkage hints (Linear team/project ids; label/priority maps). |
-| `tracker.perTracker.repo` / `project` / `host` | string | `null` | Tracker-specific repo/project linkage. **GitHub** writes `repo` (`owner/name`). **GitLab** writes `project` (the group/sub-group/project path, e.g. `group/subgroup/project`; URL-encoded once for the API, never double-encoded) and, for self-managed hosts, `host`. Written by the `/flow-next:tracker-sync` discovery ceremony on confirmation. |
+| `tracker.perTracker.repo` / `project` / `host` | string | `null` | Tracker-specific repo/project linkage. **GitHub** writes `repo` (`owner/name`). **GitLab** writes `project` (the group/sub-group/project path, e.g. `group/subgroup/project`; URL-encoded once for the API, never double-encoded) and, for self-managed hosts, `host`. Written by the `$flow-next-tracker-sync` discovery ceremony on confirmation. |
 | `tracker.perTracker.baseUrl` / `projectKey` / `authScheme` / `apiVersion` / `statusMap` / `sslVerify` | mixed | `null` / `{}` / `true` | **Jira linkage (fn-70).** `baseUrl`, `projectKey`, `authScheme`, and `apiVersion` default to `null`; `statusMap` defaults to `{}`; `sslVerify` defaults to `true`. The resolver pins `tracker.resolved.destination.apiVersion` to `2` for both deployment shapes because measured v2 issue bodies round-trip as plain strings byte-exact, and migration rewrites a legacy configured `3` to `2`. `baseUrl` is the site base; `projectKey` is the JQL scope; `authScheme` is `cloud-basic` or `bearer-pat`; `statusMap` maps normalized slots to Jira transition targets. `sslVerify=false` is an explicit opt-out for a self-hosted certificate. Written by the discovery ceremony on confirmation (references/jira.md). |
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. Strict enum: invalid CLI writes are rejected, and malformed persisted values return runtime `INVALID_INPUT` before status claims or lifecycle sequence work. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
-| `tracker.readyState` | string | `null` | **Readiness projection (fn-58, 1.12.0+).** The tracker workflow state that means "ready for work" — a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready — a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag — **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
-| `land.release` | bool | `true` | **`/flow-next:land` (fn-60, 1.14.0+).** Run the post-merge release-follow step (the project's own release docs; also no-ops when no release docs are discovered). `false` = stop at merge. |
+| `tracker.readyState` | string | `null` | **Readiness projection (fn-58, 1.12.0+).** The tracker workflow state that means "ready for work" — a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready — a normal state, never an error). Set by the `$flow-next-tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag — **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
+| `land.release` | bool | `true` | **`$flow-next-land` (fn-60, 1.14.0+).** Run the post-merge release-follow step (the project's own release docs; also no-ops when no release docs are discovered). `false` = stop at merge. |
 | `land.patienceMinutes` | int | `30` | Land's reviewer patience window, anchored to the LAST push (a land-authored CI-fix push restarts it). |
 | `land.reviewSignal` | string | `silence` | Land's merge review-signal: `silence` (automated review present + zero unresolved threads + window elapsed), `approve` (formal `reviewDecision == APPROVED`), or a GitHub login (that reviewer's latest review must be clean). |
 | `land.automatedReviewers` | string | `""` | CSV allowlist of reviewer logins land counts as automated, supplementing the `[bot]`-suffix rule. |
 | `land.reviewTrigger` | string | `""` | One-shot comment land posts to summon a reviewer bot on a draft PR with zero automated reviews. Recommended opt-in text: `"@codex review — focus on integration effects, the diff as narrative, and cross-task regressions. Spec/doc-prose findings are welcome as FYI, not merge-gating."` Bots do not auto-review drafts. Empty = never post. Bot comments are outside the review detector and Ralph-guard blast radius. |
-| `land.cleanReviewCommentPattern` | string | `(Didn'?t find any( major)? issues\|No( major)? issues found).*Reviewed commit` | **`/flow-next:land` clean-review comment signal (fn-65, 2.1.1+).** Under the default `silence` review signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate. Land scans `issues/<n>/comments` for an automated-reviewer (`[bot]`-suffix or `land.automatedReviewers`) comment matching this ERE that names the **current head SHA**, and only ever *adds* this evidence (CI, unresolved-thread, and window gates are unchanged; a stale-SHA or non-automated comment is ignored). The default is the structured built-in ERE shown here — it requires BOTH the clean phrase AND the `Reviewed commit` marker, so a bare "no issues" mention never satisfies the gate. `null`/missing (an unseeded older repo) falls back to this built-in default; **set to an empty string `""` to disable the comment scan** (pure reviews-API behavior — the only real off-switch). |
+| `land.cleanReviewCommentPattern` | string | `(Didn'?t find any( major)? issues\|No( major)? issues found).*Reviewed commit` | **`$flow-next-land` clean-review comment signal (fn-65, 2.1.1+).** Under the default `silence` review signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate. Land scans `issues/<n>/comments` for an automated-reviewer (`[bot]`-suffix or `land.automatedReviewers`) comment matching this ERE that names the **current head SHA**, and only ever *adds* this evidence (CI, unresolved-thread, and window gates are unchanged; a stale-SHA or non-automated comment is ignored). The default is the structured built-in ERE shown here — it requires BOTH the clean phrase AND the `Reviewed commit` marker, so a bare "no issues" mention never satisfies the gate. `null`/missing (an unseeded older repo) falls back to this built-in default; **set to an empty string `""` to disable the comment scan** (pure reviews-API behavior — the only real off-switch). |
 | `land.ciFixBudget` | int | `3` | CI-fix attempts per PR before land durably labels it `flow-next:needs-human` and skips it on later ticks. |
 | `land.mergeVerdictCommand` | string | `""` | **Opt-in repo merge-verdict gate (fn-188, #330).** A shell command land runs as the merge gate of record, once per merge attempt — reached only after every other gate (CI, review threads, QA receipt, merge state) is satisfied and the planned action is `merge`. Verdict is the **exit code only**: `0` = green, any non-zero = `NEEDS_HUMAN` with action `none`. **Fail-closed**: a missing/unexecutable command, the 600s timeout, and signal death all *block* — never skip. Context arrives as **environment only** (`FLOW_HEAD_SHA`, `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`); the configured string is never built from PR-derived text. It runs with cwd = repo root on the **base checkout** (land does not check out the PR branch for it), so the command must key on `$FLOW_HEAD_SHA` and refuse when it cannot see that head. **Never executed under `--dry-run`** (the classification report says `would-run: <command>`). **Unset, `null`, and `""` all mean OFF** — note this differs from `land.cleanReviewCommentPattern`, where `null` and `""` mean different things. Intended for repos with no server-side branch protection (free-plan private repos), where no required status check exists. |
 | `land.requestReviewers` | string | `""` | **Opt-in human reviewer request (fn-200, #359).** CSV of GitHub logins and/or `org/team` slugs and/or the literal token `codeowners`. Fires exactly when a human review is the **sole missing merge input** — CI green, zero unresolved threads, and either the `approve`/`<login>` signal is still unsatisfied (no review yet, or a stale/dismissed one) or the `silence` signal is satisfied but `reviewDecision == REVIEW_REQUIRED` (a merge GitHub would refuse). Land then plans the Phase 3 action class `§3.4b — request-reviewers`: flips a draft PR to ready (so "ready" keeps meaning "a human may review now"), requests the list minus the PR author (`codeowners` rides the ready flip — GitHub resolves owners itself; no local CODEOWNERS parsing), and records `reviewRequestSha` in the land ledger — **one-shot per PR per head SHA**, claimed atomically so overlapping ticks cannot double-request; a land-authored CI-fix push moves the head and re-arms only if the human's review is again missing. A failed `gh pr ready` / `--add-reviewer` still records the head (one attempt, no retry loop) and reports `reviewers=failed:<reason>` with the window-bounded verdict (`AWAITING_REVIEW` / `NEEDS_HUMAN`), never `BLOCKED`. **Never gates a merge** — `land.reviewSignal` does; a team that wants a human look on every PR sets `reviewSignal: approve`. `--dry-run` reports `action=request-reviewers reviewers=would-request` (plus `would-ready` for a draft) from Phase 2 alone and mutates nothing. Evidence field on the `signal=` line: `reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>`. **Unset, `null`, and `""` all mean OFF** (`reviewers=off` — reserved for that case; a configured key whose predicate is false reports `reviewers=skipped:not-due`; every other gate, action, and ledger write unchanged). |
 | `artifacts.html.enabled` | bool | `false` | **Optional HTML artifact mode (fn-62, 2.0.0+).** Enable with `flowctl config set artifacts.html.enabled true`: participating skills (capture, plan, make-pr) load the shared render-lens reference and emit self-contained HTML artifacts at the fixed paths `.flow/artifacts/<spec-id>/spec.html` / `pr.html` (regenerable lenses, never timestamped — markdown stays the sole source of truth and artifacts are never parsed back as state). **OFF by default** — with it off, no reference file loads, no artifacts are written, no Lavish session opens; behavior is byte-identical to markdown-only. flowctl only stores the knob; generation is skill-side. |
-| `pipeline.qa` | `off \| on` | `off` | **Optional QA pipeline stage (fn-72, 2.2.0+).** Enable with `flowctl config set pipeline.qa on` — this is a **string-enum** knob (`off \| on`), **NOT a bool**; the activating value is the literal string `on` and **any other value, including bool `true`, is OFF** (the `/flow-next:pilot` gate read is the canonical 3-clause guard `value != "off" && value != "null"`). With it `on`, pilot inserts a `qa` stage at the **all-tasks-done** juncture (before make-pr): one live `/flow-next:qa` pass over the complete build, surfacing its `qa_outcome` into the draft PR. **OFF by default** — with it off, pilot's stage set and behavior are byte-for-byte unchanged. Augments (never replaces) CI/staging/manual QA; `BLOCKED` (no local app) / `NA` (no UI) advance, `NEEDS_WORK` still advances to the draft PR + surfaces findings (it never hard-blocks the loop). flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
+| `pipeline.qa` | `off \| on` | `off` | **Optional QA pipeline stage (fn-72, 2.2.0+).** Enable with `flowctl config set pipeline.qa on` — this is a **string-enum** knob (`off \| on`), **NOT a bool**; the activating value is the literal string `on` and **any other value, including bool `true`, is OFF** (the `$flow-next-pilot` gate read is the canonical 3-clause guard `value != "off" && value != "null"`). With it `on`, pilot inserts a `qa` stage at the **all-tasks-done** juncture (before make-pr): one live `$flow-next-qa` pass over the complete build, surfacing its `qa_outcome` into the draft PR. **OFF by default** — with it off, pilot's stage set and behavior are byte-for-byte unchanged. Augments (never replaces) CI/staging/manual QA; `BLOCKED` (no local app) / `NA` (no UI) advance, `NEEDS_WORK` still advances to the draft PR + surfaces findings (it never hard-blocks the loop). flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
 | `chart.maxDecisions` | int | `12` | **Chart size ceiling (fn-135).** Charting-time only: `chart create --initial-map-file` refuses past this count without `--force-size --reason` (audited: actor, ceiling, proposed count, timestamp, reason). Later sharpening from Open Questions may grow past it. |
 | `chart.claimStaleAfter` | number (hours) | `24` | **Stale-claim recovery threshold (fn-135).** `chart release-claim --break-stale --reason` is allowed only after a claim is at least this old; always audited (actor, prior owner, age, reason). No silent expiry. |
 | `tracker.charts` | `off \| on` | `off` | **Optional chart lifecycle projection (fn-135).** String-enum, **NOT a bool**: only the literal `on` projects charts as parent issues with decision children through the tracker facade. Local chart operations always succeed when off or when the bridge is inactive. Rollups are visibility only - never a control plane. |
@@ -984,7 +984,7 @@ flowctl config set memory.enabled false [--json]
 
 Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` > error.
 
-No auto-detect. Run `/flow-next:setup` (or `flowctl config set review.backend ...`) to configure.
+No auto-detect. Run `$flow-next-setup` (or `flowctl config set review.backend ...`) to configure.
 
 ### review-backend
 
@@ -1162,7 +1162,7 @@ flowctl memory mark-stale <id> --reason "no longer accurate after fn-37 refactor
   [--audited-by "audit-2026-04"] [--json]
 ```
 
-Idempotent — re-marking replaces `audit_notes` and re-stamps `last_audited`. Also drops `hardened_into` (a stale entry never keeps pointing at a gate). Body untouched. Used by `/flow-next:audit`; also callable directly.
+Idempotent — re-marking replaces `audit_notes` and re-stamps `last_audited`. Also drops `hardened_into` (a stale entry never keeps pointing at a gate). Body untouched. Used by `$flow-next-audit`; also callable directly.
 
 #### sync create-first-recovery
 
@@ -1187,12 +1187,12 @@ Graduate a recurring lesson into an enforced gate and demote the entry to a poin
 ```bash
 flowctl memory mark-hardened <id> \
   --gate-ref "pyproject.toml#DTZ -- ruff select entry, bans naive datetimes" \
-  [--audited-by "/flow-next:audit"] [--json]
+  [--audited-by "$flow-next-audit"] [--json]
 ```
 
-`--gate-ref` is required and stored **verbatim** — flowctl checks non-emptiness only. The `<path>#<rule-id> -- <note>` shape is a skill-side convention that `/flow-next:audit` parses for its gate-liveness check; flowctl does not interpret it.
+`--gate-ref` is required and stored **verbatim** — flowctl checks non-emptiness only. The `<path>#<rule-id> -- <note>` shape is a skill-side convention that `$flow-next-audit` parses for its gate-liveness check; flowctl does not interpret it.
 
-The entry file always stays on disk with its body intact, so the provenance of the gate survives. Idempotent — re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable there). Used by `/flow-next:audit` only after the gate is verified live; also callable directly.
+The entry file always stays on disk with its body intact, so the provenance of the gate survives. Idempotent — re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable there). Used by `$flow-next-audit` only after the gate is verified live; also callable directly.
 
 #### memory mark-fresh
 
@@ -1213,7 +1213,7 @@ flowctl memory migrate --dry-run [--json]
 flowctl memory migrate --yes [--json]
 ```
 
-`--no-llm` is accepted-but-noop since 0.37.0 (classification is mechanical-only). For accurate per-entry classification with full repo context, use the agent-native `/flow-next:memory-migrate` skill — host agent classifies in-context.
+`--no-llm` is accepted-but-noop since 0.37.0 (classification is mechanical-only). For accurate per-entry classification with full repo context, use the agent-native `$flow-next-memory-migrate` skill — host agent classifies in-context.
 
 Stderr emits a one-time deprecation hint pointing at the skill (TTY only; suppress via `FLOW_NO_DEPRECATION=1`).
 
@@ -1225,11 +1225,11 @@ Parse legacy flat-files into structured entries with mechanical default `(track,
 flowctl memory list-legacy [--json]
 ```
 
-Returns `{files: []}` (rc=0) when no legacy files exist. Used by `/flow-next:memory-migrate` skill; also useful for ad-hoc inspection.
+Returns `{files: []}` (rc=0) when no legacy files exist. Used by `$flow-next-memory-migrate` skill; also useful for ad-hoc inspection.
 
 ### prospect
 
-Manage prospect artifacts produced by `/flow-next:prospect` under `.flow/prospects/`. Listing and reading are skill-owned (Read the artifact markdown); flowctl owns the mutating verbs.
+Manage prospect artifacts produced by `$flow-next-prospect` under `.flow/prospects/`. Listing and reading are skill-owned (Read the artifact markdown); flowctl owns the mutating verbs.
 
 ```bash
 # Promote a survivor to a new spec with pre-filled spec skeleton
@@ -1243,13 +1243,13 @@ flowctl prospect archive <artifact-id> [--json]
 
 `promote` allocates a spec via the same scan-based logic as `spec create`, inlining the spec write so the prospect-context spec lands on disk from the first byte. Idempotency guard: refuses if `promoted_to` already includes the target idea - pass `--force` to override.
 
-Exit codes: corrupt artifact on `promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `/flow-next:prospect` → 2.
+Exit codes: corrupt artifact on `promote` → 3 (stderr `[ARTIFACT CORRUPT: <reason>]`); duplicate idea on `promote` without `--force` → 2; Ralph-block (`REVIEW_RECEIPT_PATH` / `FLOW_RALPH=1`) on `$flow-next-prospect` → 2.
 
 ## chart
 
-Deterministic store for optional pre-capture decision maps (fn-135). The `/flow-next:chart` skill is **prompt-first** (natural language is the primary control surface); the subcommands below are the exact automation/scripting contract. Onboarding and guide lead with plain language; flags are complete here for drivers.
+Deterministic store for optional pre-capture decision maps (fn-135). The `$flow-next-chart` skill is **prompt-first** (natural language is the primary control surface); the subcommands below are the exact automation/scripting contract. Onboarding and guide lead with plain language; flags are complete here for drivers.
 
-**Not a pilot stage.** Chart is never advanced by `/flow-next:pilot`. Unattended discovery is driven by host `/loop` on `/flow-next:chart` itself (one D-ID per invocation).
+**Not a pilot stage.** Chart is never advanced by `$flow-next-pilot`. Unattended discovery is driven by host `/loop` on `$flow-next-chart` itself (one D-ID per invocation).
 
 **Files:** `.flow/charts/<id>.md` + `.json` (map), `.flow/charts/<id>/<n>.md` + `.json` (decisions), `.flow/charts/<id>-briefing*.md` (immutable handoffs), `.flow/charts/.transactions/` (WAL). Chart ids share the native `fn-N` domain with specs.
 
@@ -1622,13 +1622,13 @@ The `class` enum and fixed process exit codes are exhaustive:
 
 ## flowctl sync
 
-Tracker-sync plumbing for the `/flow-next:tracker-sync` bridge — atomic,
+Tracker-sync plumbing for the `$flow-next-tracker-sync` bridge — atomic,
 deterministic helpers and provider adapters the skill calls. flowctl owns
 transport, field writes, validation, and transaction boundaries; the skill owns
 semantic body/comment composition, conflict judgment, and asking. Full subsystem
 reference: [`tracker-sync.md`](tracker-sync.md).
 
-> **`flowctl sync` (this) is NOT `/flow-next:sync`.** `/flow-next:sync` is plan-sync (downstream task specs after drift). `flowctl sync` / `/flow-next:tracker-sync` is the external tracker bridge.
+> **`flowctl sync` (this) is NOT `$flow-next-sync`.** `$flow-next-sync` is plan-sync (downstream task specs after drift). `flowctl sync` / `$flow-next-tracker-sync` is the external tracker bridge.
 
 ```bash
 # Is the bridge active? (value-checked: enabled OR type ∈ {linear, github, gitlab, jira})
@@ -1718,9 +1718,9 @@ base from readback, and projects status.
 
 ### repo-map
 
-Read clawpatch's `.clawpatch/features/*.json` codebase feature index (`/flow-next:map` skill output; clawpatch is an opt-in convenience - flowctl never imports or requires it).
+Read clawpatch's `.clawpatch/features/*.json` codebase feature index (`$flow-next-map` skill output; clawpatch is an opt-in convenience - flowctl never imports or requires it).
 
-**Bypasses the `ensure_flow_exists()` guard.** Gates on `.clawpatch/` presence instead of `.flow/`. Absent `.clawpatch/` returns `{count: 0, features: [], clawpatch_present: false}` with exit 0 - so `/flow-next:prime`'s DE7 sub-criterion check works without special-casing.
+**Bypasses the `ensure_flow_exists()` guard.** Gates on `.clawpatch/` presence instead of `.flow/`. Absent `.clawpatch/` returns `{count: 0, features: [], clawpatch_present: false}` with exit 0 - so `$flow-next-prime`'s DE7 sub-criterion check works without special-casing.
 
 ```bash
 # List all parsed features (text table or JSON)
@@ -1753,11 +1753,11 @@ flowctl repo-map list [--count] [--json]
 }
 ```
 
-`--count` prints just the scalar feature count in plain mode - used by `/flow-next:prime`'s DE7 detection (`flowctl repo-map list --count > 0`). Under `--json`, `--count` is ignored (the JSON `count` field IS the contract). Single-feature inspection and since-ref filtering are skill-owned (Read the JSON / `git diff`).
+`--count` prints just the scalar feature count in plain mode - used by `$flow-next-prime`'s DE7 detection (`flowctl repo-map list --count > 0`). Under `--json`, `--count` is ignored (the JSON `count` field IS the contract). Single-feature inspection and since-ref filtering are skill-owned (Read the JSON / `git diff`).
 
 ### prime classify
 
-The **only** flowctl surface `/flow-next:prime` adds: a pure-stdlib, bounded, **no-LLM** emitter for the deterministic layer of the skill's Phase 0.5 project classification. It emits the raw signals (axes 1-4 values + a mechanical confidence, plus raw Axis-5 `shape_markers`); the **skill** layers all judgment on top - Axis-5 shape reasoning, final per-axis confidence, the bounded clarification asks, and playbook selection. No judgment ever lands in flowctl (the CLAUDE.md agentic-vs-deterministic carve-out). The pinned schema lives in [`classification.md`](../../skills/flow-next-prime/classification.md); the emitter ships in the single bundled `plugins/flow-next/scripts/flowctl.py`.
+The **only** flowctl surface `$flow-next-prime` adds: a pure-stdlib, bounded, **no-LLM** emitter for the deterministic layer of the skill's Phase 0.5 project classification. It emits the raw signals (axes 1-4 values + a mechanical confidence, plus raw Axis-5 `shape_markers`); the **skill** layers all judgment on top - Axis-5 shape reasoning, final per-axis confidence, the bounded clarification asks, and playbook selection. No judgment ever lands in flowctl (the CLAUDE.md agentic-vs-deterministic carve-out). The pinned schema lives in [`classification.md`](../../skills/flow-next-prime/classification.md); the emitter ships in the single bundled `plugins/flow-next/scripts/flowctl.py`.
 
 ```bash
 flowctl prime classify [root] --json   # root defaults to "."
@@ -1829,7 +1829,7 @@ flowctl glossary remove <term> [--json]
 
 ### strategy
 
-Project strategy commands for `STRATEGY.md` at the **repo root** (single-root; lives outside `.flow/` so it survives flow-next removal). Read-only plumbing - the `/flow-next:strategy` skill writes the file. See [`strategy.md`](strategy.md).
+Project strategy commands for `STRATEGY.md` at the **repo root** (single-root; lives outside `.flow/` so it survives flow-next removal). Read-only plumbing - the `$flow-next-strategy` skill writes the file. See [`strategy.md`](strategy.md).
 
 ```bash
 flowctl strategy status [--json]
@@ -2144,7 +2144,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 
 **Windows users:** Codex CLI's `read-only` sandbox blocks ALL shell commands on Windows (including reads). Use `--sandbox auto` or `--sandbox danger-full-access` for Windows compatibility.
 
-**Note:** Ralph's harness under `scripts/ralph/` is scaffolded into the repo, so re-run `/flow-next:ralph-init` after a plugin update to pick up sandbox fixes there.
+**Note:** Ralph's harness under `scripts/ralph/` is scaffolded into the repo, so re-run `$flow-next-ralph-init` after a plugin update to pick up sandbox fixes there.
 
 #### codex validate
 
@@ -2223,7 +2223,7 @@ Spec form: `cursor[:model]` — **effort is folded into the model name** (Cursor
 
 ### Ralph run control (repo-local after ralph-init)
 
-Ralph control is **not** a `flowctl` subcommand (fn-114 extraction). After `/flow-next:ralph-init`, use the project-local CLI:
+Ralph control is **not** a `flowctl` subcommand (fn-114 extraction). After `$flow-next-ralph-init`, use the project-local CLI:
 
 ```bash
 ./scripts/ralph/ralphctl.py status [--run <id>] [--json]

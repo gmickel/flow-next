@@ -257,6 +257,28 @@ for df in "$CODEX_DIR/docs/flow-next/reach"/*.md; do
   rm -f "${df}.bak"
 done
 
+# --- Docs-mirror invocation syntax (#363 codex P2, round 7) ------------------
+# The mirrored docs pages present `/flow-next:<cmd>` as copy-paste examples and
+# command mentions; the Codex invocation contract is dropdown / `$flow-next-*`
+# / implicit — a Codex reader copying `/flow-next:` gets a non-command.
+# Rewrite named commands across the docs mirror EXCEPT `platforms.md`: that
+# page's SUBJECT is the per-host syntax contrast (Grok/Cursor use slash, Codex
+# uses `$flow-next-`), so a uniform rewrite there destroys the contract it
+# documents (first attempt did exactly that; the guard below caught it).
+# Wildcard forms (`/flow-next:*`) are not commands and stay. Anchored so
+# output never re-matches; guard hard-fails on any surviving NAMED command
+# outside platforms.md, closing the class.
+find "$CODEX_DIR/docs/flow-next" -name '*.md' -type f ! -name 'platforms.md' | while read -r df; do
+  sed -i.bak -E 's|/flow-next:([a-z][a-z-]*)|$flow-next-\1|g' "$df"
+  rm -f "${df}.bak"
+done
+DOCS_INVOKE_LEFT=$(grep -rnE '/flow-next:[a-z][a-z-]*' "$CODEX_DIR/docs/flow-next" 2>/dev/null | grep -v '/platforms\.md:' | head -5) || true
+if [ -n "$DOCS_INVOKE_LEFT" ]; then
+  echo -e "  ${RED}✗${NC} named /flow-next: invocation survived in the docs mirror (outside platforms.md) — extend the rewrite:"
+  echo "$DOCS_INVOKE_LEFT"
+  exit 1
+fi
+
 # --- flow-next-drive: Codex Browser-Use preface ──────────────────────────────
 # The canonical skill is `flow-next-drive` (no `@browser` collision — the old
 # `browser` → `agent-browser` rename is gone; the copy loop above already
