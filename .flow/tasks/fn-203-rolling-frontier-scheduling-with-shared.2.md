@@ -28,9 +28,10 @@ Create the two treatment-arm prototypes as branches of this repo, per the frozen
 - [ ] Review/completion/audit surfaces byte-identical to shipped on both branches (diff shown)
 - [ ] Branch contents match the frozen pre-registration
 ## Done summary
-TBD
+Authored the two fn-203 treatment-arm prototype branches per the frozen pre-registration: `eval/rolling-arm1-isolated` (04c1e832: Phase 3 rewritten to per-worker-return admission with the five fail-closed conditions vs the in-flight set, parallel-handover workers, per-task integration reusing wave-join SHA/evidence normalization, conductor-owned review, full suite at quiesce) and `eval/rolling-arm2-shared` (b7bb6925: same admission, no integration step, wave-join.md repurposed as the shared-checkout discipline - staging-by-declaration, commit mutex via new branch-local references/commit-lock.py following flowctl's cross_process_lock pattern, edit-state ledger + re-run-before-counting verify rules). Both parented at the A0 pin 02212557 (4.4.0); review/completion/audit surfaces proven byte-identical by diff; branch SHAs + authoring notes recorded in agent-evals studies/rolling-frontier-2026-08 (arms/README.md + changelog, commit 6921a2f). Eval branches are never merged to main.
 
+stage: impl-review - skipped(config: REVIEW_MODE=none)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 04c1e832adff2f34eb405c1cc46430680d2721ee, b7bb6925552b277683b62bed0d6e31a08dbed724
+- Tests: baseline: green - cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_worker_anchor_prose test_cp1252_robustness -q (23 tests OK, pre-edit), verify: same focused suite green post-work (23 tests OK); flowctl gate classify --base 0e039b0bb83fb54c7396297fa277d1137bea6964 -> TIER_B docs-only on the conductor branch (prototype edits live on eval branches, never main), commit-lock.py smoke: serializes; exit 97 on bounded timeout while held; proceeds after release, byte-identity: git diff 02212557..<each eval branch> -- impl-review/plan-review/spec-completion-review skills + agents + templates + scripts = 0 lines on both branches; all phases.md hunks inside Phase 3
 - PRs:

@@ -34,3 +34,4 @@ stage: impl-review - ran [r1 NEEDS_WORK (6 findings), r2 NEEDS_WORK (2 survivors
 - Commits: 8bb40cd3051c3b18bf1ac0c33fd43aa39e308b5a, 61fa639e1ee963af69f97fd93608b2ff31b91117, 72e035e65fdb792c8a84ccf747e4b32aec10458b
 - Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_worker_anchor_prose test_cp1252_robustness -q), cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_worker_anchor_prose test_cp1252_robustness -q (re-run green after review fixes), uvx ruff@0.16.0 check ., GATE_SKIPPED:unittest:docs-only - cumulative diff classified tier-B (no executable paths touched)
 - PRs:
+stage: plan-sync - ran (no drift; no downstream edits)
