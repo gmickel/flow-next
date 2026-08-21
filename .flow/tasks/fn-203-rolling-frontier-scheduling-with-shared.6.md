@@ -11,7 +11,7 @@ Documentation and gate pass for the beta release. One finalization task per repo
 **Touches:** [plugins/flow-next/docs/**, CHANGELOG.md, plugins/flow-next/codex/**]
 
 ### Approach
-- Experimental-tier carve-out per adding-skills.md: NO root README or docs/skills.md rows; CHANGELOG entry IS required and must state beta status, invocation, and the Phase C graduation/sunset trigger (the pre-declared field window) so R10 has a recorded trigger.
+- Experimental-tier carve-out per adding-skills.md: NO root README or docs/skills.md rows; CHANGELOG entry IS required and must state beta status, invocation, and the Phase C graduation/sunset trigger - repeating the field window already recorded in the spec's Decision Context by task 3 (the spec is the authority; the CHANGELOG never defines it).
 - architecture.md gains the outside-tree notes-dir + runtime-state-dir description (currently absent).
 - flowctl.md mutex section follows the existing setup-block verb-doc shape (only if arm 2 won).
 - No flow-next.dev changelog entry for an experimental skill - deferred to graduation.
@@ -19,7 +19,7 @@ Documentation and gate pass for the beta release. One finalization task per repo
 - G1 justification for every prose growth surface stated in the PR body.
 ## Acceptance
 - [ ] Docs updated per the list above; experimental-tier exclusions respected
-- [ ] CHANGELOG Unreleased entry names beta status, invocation, and the graduation field-window trigger
+- [ ] CHANGELOG Unreleased entry names beta status, invocation, and the graduation field-window trigger (matching the spec-recorded window)
 - [ ] Full suite + ruff + double sync-codex green; both R8 pin surfaces verified green with zero canonical work-skill diffs
 ## Done summary
 TBD

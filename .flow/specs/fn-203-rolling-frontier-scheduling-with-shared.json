@@ -1,11 +1,113 @@
 {
   "branch_name": "fn-203-rolling-frontier-scheduling-with-shared",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-21T15:50:21.080017Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-203-rolling-frontier-scheduling-with-shared",
+  "impl_review_rounds": {
+    "fn-203-rolling-frontier-scheduling-with-shared.1": 1
+  },
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "34502dd8aa20da6f0c70ee7074e09e3b82ded61a84e7c9babd5aa4d44fc675e1",
+      "backend": "codex",
+      "base_sha": "022125576e21b51f55cbf5017cf37795a8afa44f",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-9205628fcd1f39c24707ed30e9d3a9a6",
+            "classification": "introduced",
+            "findingId": "finding-9205628fcd1f39c24707ed30e9d3a9a6",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-088adf22e39e456c3ca81df1fb32db89",
+            "classification": "introduced",
+            "findingId": "finding-088adf22e39e456c3ca81df1fb32db89",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-ff6bdd66015ab41e357ccf2215816853",
+            "classification": "introduced",
+            "findingId": "finding-ff6bdd66015ab41e357ccf2215816853",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-1ef8d528f4ced39a946c249300a8f41b",
+            "classification": "introduced",
+            "findingId": "finding-1ef8d528f4ced39a946c249300a8f41b",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-48a6744d725fd5c075725bbc0dd14198",
+            "classification": "introduced",
+            "findingId": "finding-48a6744d725fd5c075725bbc0dd14198",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-03d8a6c78abf73b9b3037210b6e26261",
+            "classification": "introduced",
+            "findingId": "finding-03d8a6c78abf73b9b3037210b6e26261",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "8bb40cd3051c3b18bf1ac0c33fd43aa39e308b5a",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 381122,
+      "output_sha256": "43d7663432f84aa50bc4c3a8b33e932d15c10c1652e1333d79a0c95a48015186",
+      "reservation_id": "278a943aeb96461097f6bb463bb281a5",
+      "round_consumed": true,
+      "scope": "impl:fn-203-rolling-frontier-scheduling-with-shared.1",
+      "superseded_by": null,
+      "task": "fn-203-rolling-frontier-scheduling-with-shared.1",
+      "timestamp": "2026-08-21T19:43:21.973483Z",
+      "tool_calls": 29,
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-203-rolling-frontier-scheduling-with-shared.1": 0
+  },
   "spec_path": ".flow/specs/fn-203-rolling-frontier-scheduling-with-shared.md",
   "status": "open",
   "title": "Rolling frontier scheduling with shared notes surface",
@@ -20,5 +122,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-21T19:07:46.351409Z"
+  "updated_at": "2026-08-21T19:43:21.980083Z"
 }

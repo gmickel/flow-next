@@ -18,11 +18,13 @@ Execute the pre-registered study, score it, and record the outcome before any Ph
 - Blind-score via the redaction contract; run full deterministic suites per arm.
 - Include the named secondary probe: one draw of the leading rolling arm at a cap above 3 (reported, not gating).
 - Apply the pre-registered decision rule verbatim; record per-arm pass/fail/inconclusive and the winner (if any) in the study changelog AND append the outcome to this spec's Decision Context.
+- On a passing arm, record the Phase C field window in the SAME spec Decision Context edit: a numeric minimum count of beta-run specs with receipts (R10's pre-declared window). The spec is the sole authority for the window; the task-6 CHANGELOG entry repeats it, never defines it.
 - On no-arm-passes or inconclusive: close tasks 4-7 unimplemented with the result recorded; the spec closes as a completed negative result.
 ## Acceptance
-- [ ] All registered draws executed with isolation and same-second concurrent arm launches as registered (or invalidated draws documented per R1's error path, with the kill rule and spend logged)
+- [ ] All registered draws executed with isolation and the registered launch mode (batch 1 same-second concurrent; any replication batch sequential in randomized arm order), or invalidated draws documented per R1's error path with the kill rule and spend logged
 - [ ] Model/effort verified per draw from the host record, never a self-report; wrong-model draws invalidated
 - [ ] Decision rule and futility rule applied verbatim; outcome recorded in study changelog and spec Decision Context
+- [ ] On a passing arm: numeric Phase C field window recorded in the spec's Decision Context before any Phase B task starts
 - [ ] Gate fail/inconclusive path honored: downstream tasks closed unimplemented if no arm passes
 ## Done summary
 TBD

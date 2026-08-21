@@ -7,8 +7,8 @@ satisfies: [R6]
 The one mechanical flowctl surface: a commit mutex (acquire/run/release around a worker's stage-and-commit). CONDITIONAL: implement only if task 3 crowns arm 2 (shared checkout); if arm 1 wins, close this task with a skip note recorded.
 
 **Size:** S
-**Files:** plugins/flow-next/scripts/flowctl.py, plugins/flow-next/tests/<new focused test module>
-**Touches:** [plugins/flow-next/scripts/flowctl.py, plugins/flow-next/tests/**]
+**Files:** plugins/flow-next/scripts/flowctl.py, plugins/flow-next/tests/<new focused test module>, plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json (regenerated), codex mirror (regenerated)
+**Touches:** [plugins/flow-next/scripts/flowctl.py, plugins/flow-next/tests/**, plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json, plugins/flow-next/codex/**]
 
 ### Approach
 - Reuse the existing cross_process_lock context manager (flowctl.py ~lines 42-99: fcntl/msvcrt kernel lock, bounded 30s poll, CrossProcessLockError) - never a new lock implementation; lock file under the runtime state dir's locks/ subdir.
@@ -17,7 +17,7 @@ The one mechanical flowctl surface: a commit mutex (acquire/run/release around a
 
 ### Key context
 - fn-191 (review-terminal extraction) and fn-190 (startup entry) are open specs touching other regions of flowctl.py - keep this addition small and self-contained to minimize merge churn; rebase rather than restructure if they land first.
-- flowctl.py edits require the SOURCE_SHA256 pin refresh + sync-codex per the repo's flowctl-edit checklist.
+- flowctl.py edits require regenerating the distribution manifest (`python3 scripts/gen_tracker_manifest.py` refreshes plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json) + `./scripts/sync-codex.sh` twice, per the repo checklist - the old single-file SOURCE_SHA256 pin was replaced by the manifest (fn-139.5); `test_tracker_distribution` fails otherwise.
 ## Acceptance
 - [ ] Verb exists with bounded-wait semantics reusing cross_process_lock; JSON output
 - [ ] Focused tests green; tracker manifest/schema untouched or regenerated as the repo rules require

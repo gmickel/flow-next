@@ -4,11 +4,11 @@ satisfies: [R10]
 # fn-203-rolling-frontier-scheduling-with-shared.7 Phase C: graduation or sunset decision + execution
 
 ## Description
-After the pre-declared field window (minimum count of beta-run specs with receipts, as recorded in the task-6 CHANGELOG entry), execute the recorded decision. There is no third outcome in which both topologies remain.
+After the pre-declared field window (minimum count of beta-run specs with receipts, as recorded in the spec's Decision Context by task 3 and repeated in the task-6 CHANGELOG entry), execute the recorded decision. There is no third outcome in which both topologies remain.
 
 **Size:** M
-**Files:** graduation: plugins/flow-next/skills/flow-next-work/phases.md + references/wave-join.md (Phase 3 replaced), beta skill dir deleted, sync-codex entries removed, conduct files updated, prose-pin suites updated deliberately, docs rewritten (orchestration/architecture/flowctl/skills.md), CHANGELOG; sunset: deletions + CHANGELOG only
-**Touches:** [plugins/flow-next/skills/flow-next-work/**, plugins/flow-next/skills/<beta-skill-dir>/**, scripts/sync-codex.sh, agent_docs/conduct/**, plugins/flow-next/docs/**, plugins/flow-next/codex/**, CHANGELOG.md]
+**Files:** graduation: plugins/flow-next/skills/flow-next-work/phases.md + references/wave-join.md (Phase 3 replaced), beta skill dir + command shim deleted, guide routing reverted, sync-codex entries removed, conduct files updated, prose-pin suites updated deliberately, docs rewritten (orchestration/architecture/flowctl/skills.md), CHANGELOG; sunset: deletions (skill dir, command shim, guide route, sync-codex entries, conduct files) + CHANGELOG only
+**Touches:** [plugins/flow-next/skills/flow-next-work/**, plugins/flow-next/skills/<beta-skill-dir>/**, plugins/flow-next/commands/**, plugins/flow-next/skills/flow-next-guide/SKILL.md, scripts/sync-codex.sh, agent_docs/conduct/**, plugins/flow-next/docs/**, plugins/flow-next/codex/**, CHANGELOG.md]
 
 ### Approach
 - Decision inputs: field receipts from beta runs (admission report lines, incident-shaped escalations, review outcomes) mined against the same incident classes the eval counted; the decision and its evidence recorded in this spec before execution.

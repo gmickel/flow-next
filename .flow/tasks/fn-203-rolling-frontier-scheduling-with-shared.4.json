@@ -4,7 +4,8 @@
   "claimed_at": null,
   "created_at": "2026-08-21T17:41:45.055123Z",
   "depends_on": [
-    "fn-203-rolling-frontier-scheduling-with-shared.3"
+    "fn-203-rolling-frontier-scheduling-with-shared.3",
+    "fn-203-rolling-frontier-scheduling-with-shared.5"
   ],
   "id": "fn-203-rolling-frontier-scheduling-with-shared.4",
   "priority": null,
