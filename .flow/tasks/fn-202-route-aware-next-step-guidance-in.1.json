@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-21T09:42:38.607347Z",
+  "depends_on": [],
+  "id": "fn-202-route-aware-next-step-guidance-in.1",
+  "priority": null,
+  "spec": "fn-202-route-aware-next-step-guidance-in",
+  "spec_path": ".flow/tasks/fn-202-route-aware-next-step-guidance-in.1.md",
+  "status": "todo",
+  "title": "Capture closer: Recommended-next line in base, rewrite, and split footers",
+  "updated_at": "2026-08-21T09:42:38.607347Z"
+}
