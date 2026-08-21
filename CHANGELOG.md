@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.4.0] - 2026-08-21
 
 ### Added
 
