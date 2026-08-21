@@ -20,9 +20,10 @@ Add the host-judged `Recommended next:` line to capture's Phase 6 footer surface
 - Error surface: none beyond the mandated guide fallback (no new bash, no config reads)
 
 ## Done summary
-TBD
+Added the mandatory host-judged `Recommended next:` line to capture's three closer footers: base Phase 6 footer (between `Tracker sync:` and the unchanged `Next:` menu), rewrite-mode footer (re-judged on rewrite), and split-proposal per-spec footer blocks (one recommendation per created spec; the shared dependency-edge line owns execution order). Prose names the judgment inputs (readiness, open `[inferred]` criteria, Parked unknowns -> interview; design risk -> plan; near-zero-risk -> plan noting work may suffice), restricts targets to interview/plan/guide (guide as the conflicted-signals fallback; chart excluded), links docs/pipeline-variations.md once per touched file, copies no rubric text, uses no size-based language. Diff is 10 pure insertions, 0 deletions - existing R25/memory-hits/optional footer lines byte-identical and un-reordered.
 
+stage: impl-review - skipped(config: REVIEW_MODE=none)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f3639a47
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_skill_prose_diet -q (integrated head, green), uvx ruff@0.16.0 check . (green)
 - PRs:

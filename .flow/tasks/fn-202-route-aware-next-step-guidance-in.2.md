@@ -20,9 +20,13 @@ Add the recommendation line to plan's INTERACTIVE next-steps surface only.
 - Error surface: none (prose-only, no bash added)
 
 ## Done summary
-TBD
+Added the route-aware `Recommended next:` line to plan's interactive next-steps menu (`plugins/flow-next/skills/flow-next-plan/references/next-steps-menu.md`): exactly one mandatory line above the unchanged numbered list, re-judged at every menu print, judging plan-review-vs-straight-to-work per `docs/pipeline-variations.md` (linked once, no rubric copy). Skip-plan-review is legal only for the two named ceremony shapes (docs/chore-class; small-task-class with no design risk) and the line must name which; any other skip recommendation is defined as a conduct failure; signals-conflict falls back to `/flow-next:guide`. steps.md diff is empty by construction (next-steps-menu.md loads only on the interactive path, so AUTONOMOUS=1 stays recommendation-free). Numbered options and go-deeper/simplify loop text byte-identical; no bash added.
 
+baseline: green (focused suite pre-edit)
+Verify: `flowctl gate classify` → FULL (force-full skills prefix); Quick-command suite green at HEAD; receipt minted `9d256777-unittest`. Focused extra run incl. test_flowctl_surface also green.
+
+stage: impl-review - skipped(policy: PARALLEL_WAVE - conductor owns review after integration; REVIEW_MODE=none)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 40a12f9b
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_skill_prose_diet -q (integrated head, green), uvx ruff@0.16.0 check . (green)
 - PRs:
