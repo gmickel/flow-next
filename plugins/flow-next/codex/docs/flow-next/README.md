@@ -1,6 +1,6 @@
 # Flow-Next docs
 
-> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts's own syntax and are quoted verbatim — do not convert them.
 
 
 The offline-resilient reference for flow-next — **repeatable agentic engineering**: durable specs, re-anchored workers, adversarial reviews, receipts. Each file here is self-contained, terse, and offline-readable. Cross-links use relative repo paths — fork-survivable, no external URLs.

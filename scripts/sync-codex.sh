@@ -266,7 +266,7 @@ done
 # invariant instead: docs prose ships VERBATIM, and every mirrored page opens
 # with one disclosure line mapping slash syntax to this host. Guard hard-fails
 # on any page missing the banner.
-DOCS_CODEX_BANNER='> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.'
+DOCS_CODEX_BANNER='> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts'\''s own syntax and are quoted verbatim — do not convert them.'
 find "$CODEX_DIR/docs/flow-next" -name '*.md' -type f | while read -r df; do
   awk -v banner="$DOCS_CODEX_BANNER" 'NR==1{print; print ""; print banner; print ""; next} {print}' "$df" > "${df}.tmp" && mv "${df}.tmp" "$df"
 done

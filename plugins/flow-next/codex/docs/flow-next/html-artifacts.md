@@ -1,6 +1,6 @@
 # HTML Artifacts — Optional Render Lenses for Specs & PRs
 
-> **Codex install note:** commands written as `/flow-next:<name>` in this page are invoked on this host as `$flow-next-<name>` (or picked from the skills dropdown); examples prefixed `claude -p` or `/loop` are Claude Code host examples and run there unchanged.
+> **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts's own syntax and are quoted verbatim — do not convert them.
 
 
 Opt-in HTML artifact mode (2.0.0+). When activated, the lifecycle skills (capture, plan, make-pr) also emit beautifully rendered, self-contained HTML pages — **render lenses** — alongside their markdown output: a spec visualizer for business/plan review and a PR review instrument for diff review. Markdown (and tracker-sync) stays 100% the source of truth; every artifact is regenerable and never parsed back as state. OFF by default — markdown-only users see zero new steps, zero token overhead, zero behavior change.
