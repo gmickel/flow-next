@@ -8,7 +8,7 @@
   "priority": null,
   "spec": "fn-202-route-aware-next-step-guidance-in",
   "spec_path": ".flow/tasks/fn-202-route-aware-next-step-guidance-in.2.md",
-  "status": "todo",
+  "status": "done",
   "title": "Plan interactive menu: Recommended-next line with plan-review-skip guardrail",
   "updated_at": "2026-08-21T09:42:38.607399Z"
 }
