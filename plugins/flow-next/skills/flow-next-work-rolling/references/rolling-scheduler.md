@@ -46,8 +46,21 @@ else
 fi
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 NOTES_DIR="$NOTES_PARENT/flow-notes/<spec-id>-$RUN_ID"
-mkdir -p "$NOTES_DIR" || NOTES_DIR=""
+if mkdir -p "$NOTES_DIR"; then
+  # Persist the resolved path - bash variables do not survive tool calls.
+  mkdir -p .flow/tmp
+  printf '%s' "$NOTES_DIR" > .flow/tmp/notes_dir
+else
+  NOTES_DIR=""
+fi
 ```
+
+The path embeds a timestamp and PID, so it cannot be re-derived later:
+every later consumer (the 3c pointer lines, 3f cleanup) re-reads it via
+`$(cat .flow/tmp/notes_dir)` instead of assuming the shell variable
+survived. `.flow/tmp/notes_dir` is runtime state under `.flow/tmp` (already
+outside the receipts discipline) and is removed together with the notes
+directory at 3f cleanup.
 
 If creation fails, set `NOTES_DIR` empty, report
 `Notes surface: unavailable (<reason>) - continuing without it`, and run
@@ -208,7 +221,9 @@ resolution, `BASELINE_HANDOFF` judgment) is canonical:
   returns the parallel handover. Review and completion are conductor-owned
   for every backend (3d) - the conductor RECORDS each task's resolved
   `REVIEW_MODE` at dispatch and applies it itself after integration.
-- **Notes pointer line:** when `NOTES_DIR` is non-empty, append one line to
+- **Notes pointer line:** when `.flow/tmp/notes_dir` exists, re-read the
+  path (`NOTES_DIR="$(cat .flow/tmp/notes_dir)"` - never assume the 3.0
+  shell variable survived intervening tool calls) and append one line to
   the canonical prompt template (after the config lines, before "Follow your
   phases"):
 
@@ -227,16 +242,23 @@ a worker return OR a review completion (3d) - handle it, then recompute
 admission at 3a. While one task's review or fix loop runs, the other in-flight
 workers keep running.
 
-**Blocking-dispatch hosts degrade honestly (fail-closed).** On a host whose
-ordinary subagent dispatch BLOCKS until completion and offers no background
-dispatch with completion notifications (portable-host clause - Cursor, Grok,
-and any other host consuming this prose as-is), dispatching multiple workers
-silently recreates the wave barrier: the conductor cannot observe the first
-return until all return, and the run is wave scheduling wearing a rolling
-label. Do not pretend otherwise. The conductor MUST fall back to canonical
-wave scheduling for the run (canonical phases.md Phase 3 semantics) AND record
-the degradation wherever the run reports its shape - the run report and any
-receipt line describing scheduling carries
+**Blocking-dispatch hosts degrade honestly (fail-closed - scheduling/join
+only).** On a host whose ordinary subagent dispatch BLOCKS until completion
+and offers no background dispatch with completion notifications
+(portable-host clause - Cursor, Grok, and any other host consuming this prose
+as-is), dispatching multiple workers silently recreates the wave barrier: the
+conductor cannot observe the first return until all return, and the run is
+wave scheduling wearing a rolling label. Do not pretend otherwise - but
+degrade ONLY the scheduling and the join, never the rest of this beta's
+lifecycle. The conductor keeps running THIS file's phases with wave-shaped
+dispatch: admit a group per 3a, claim per 3b, dispatch the group, and await
+it as a group - the host's blocking dispatch IS the join - then run 3d for
+each returned task in the group (integration, conductor-owned review,
+completion) before the next admission event. The notes surface (3.0 creation,
+3c pointer lines, 3f cleanup) and every other section of this file apply
+unchanged; only the rolling overlap is lost, exactly as the platforms note
+states. Record the degradation wherever the run reports its shape - the run
+report and any receipt line describing scheduling carries
 `Scheduling: degraded to wave (host lacks non-blocking dispatch)` - so a field
 receipt can never claim rolling for a run that actually exercised waves.
 
@@ -278,16 +300,20 @@ default shape.
   that could read N's downstream updates; in rolling mode it records the skip
   line); THEN free the slot and recompute admission at 3a. done(N) fires only
   on SHIP(N).
-- **NEEDS_WORK** → drive the bounded fix loop as that task's continuing
-  in-flight activity: fix, commit, integrate the fix commits, append them to
-  the task's evidence, re-dispatch the re-review concurrently (same slot,
-  still `(review)`). The loop never blocks handling of other events or
-  admission of other tasks.
-- **MAJOR_RETHINK, reviewer dispatch failure, or fix-loop cap exhausted** →
+- **NEEDS_WORK** → TERMINAL. impl-review returns NEEDS_WORK only after its
+  own internal fix loop and churn cap are exhausted; the canonical worker
+  contract is exactly one impl-review invocation per task, then typed
+  escalation. The conductor escalates exactly as that contract does: the
+  typed escalation (below) frees the slot, the task stays un-`done` and is
+  reported NEEDS_HUMAN-style in the run report. Never dispatch a second
+  review for the task and never mutate it further this run - starting a
+  conductor-side fix/re-review cycle on NEEDS_WORK has broken this.
+  Admission of other tasks continues unaffected; recompute at 3a.
+- **MAJOR_RETHINK or reviewer dispatch failure** →
   typed escalation (below) frees the slot; recompute admission at 3a.
 
-Reviewer identity, rubric, diff scope, and the fix-loop cap are canonical
-impl-review's, untouched.
+Reviewer identity, rubric, diff scope, and the internal fix-loop cap are
+canonical impl-review's, untouched.
 
 **Join collision:** a merge conflict at integration means the admission rule's
 declared `**Touches:**` sets were wrong - a wrong admission surfacing
@@ -355,8 +381,12 @@ outcome instead, never here. At quiesce:
    there - only its timing shifts to quiesce, never its semantics.
 
 Then continue with canonical Phase 4 (quality) and Phase 5 (ship). **The notes
-directory outlives quiesce**: delete it (`rm -r "$NOTES_DIR"` when non-empty)
-only as the run's LAST cleanup step, after canonical Phase 5 completes cleanly
+directory outlives quiesce**: delete it only as the run's LAST cleanup step -
+re-read the path from the persisted file
+(`NOTES_DIR="$(cat .flow/tmp/notes_dir)"`; the 3.0 shell variable has not
+survived this many tool calls), then
+`rm -r "$NOTES_DIR" && rm -f .flow/tmp/notes_dir` when non-empty - after
+canonical Phase 5 completes cleanly
 - a quality or ship failure is not a clean completion, and its diagnostic
 notes must still exist. On an interrupted or escalated run leave the directory
 in place (inert prose, removable by hand).
