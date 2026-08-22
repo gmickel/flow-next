@@ -46,10 +46,15 @@ else
 fi
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 NOTES_DIR="$NOTES_PARENT/flow-notes/<spec-id>-$RUN_ID"
-if mkdir -p "$NOTES_DIR"; then
-  # Persist the resolved path - bash variables do not survive tool calls.
-  mkdir -p .flow/tmp
-  printf '%s' "$NOTES_DIR" > .flow/tmp/notes_dir
+# Remove any stale pointer FIRST - an interrupted earlier run can leave
+# .flow/tmp/notes_dir behind, and 3c reads the FILE: if this run's mkdir
+# then failed, workers would inherit the abandoned run's directory (and 3f
+# cleanup would delete it). Clearing only the shell variable has broken this.
+rm -f .flow/tmp/notes_dir
+if mkdir -p "$NOTES_DIR" \
+   && mkdir -p .flow/tmp \
+   && printf '%s' "$NOTES_DIR" > .flow/tmp/notes_dir; then
+  : # Pointer persisted - bash variables do not survive tool calls.
 else
   NOTES_DIR=""
 fi
@@ -62,7 +67,9 @@ survived. `.flow/tmp/notes_dir` is runtime state under `.flow/tmp` (already
 outside the receipts discipline) and is removed together with the notes
 directory at 3f cleanup.
 
-If creation fails, set `NOTES_DIR` empty, report
+If creation OR the pointer persist fails (the two are one failure mode: a
+surface whose pointer never landed is unreachable by 3c's file read), set
+`NOTES_DIR` empty, report
 `Notes surface: unavailable (<reason>) - continuing without it`, and run
 WITHOUT the surface - advisory, never blocking. When it exists, pass its path
 in **every** worker and scout dispatch prompt as a pointer line (3c). Scouts
@@ -225,7 +232,9 @@ resolution, `BASELINE_HANDOFF` judgment) is canonical:
   path (`NOTES_DIR="$(cat .flow/tmp/notes_dir)"` - never assume the 3.0
   shell variable survived intervening tool calls) and append one line to
   the canonical prompt template (after the config lines, before "Follow your
-  phases"):
+  phases"). A MISSING pointer file means this run has no notes surface
+  (3.0 failed and reported it): omit the line and dispatch without it -
+  never treat the absence as an error:
 
   ```
   NOTES_DIR: <path>   # shared run-notes surface - read it by pointer for sibling findings; write markdown notes (findings, integration warnings) there; never restate its content in prompts or returns
@@ -292,7 +301,13 @@ after the verdict. That is a degradation to report
 default shape.
 
 **Review-completion event** (that task only):
-- **SHIP** → run the focused integrated verify; `flowctl done` with the
+- **SHIP** → FIRST, when the review's internal fix loop produced commits,
+  integrate them onto the target branch with the same wave-join.md
+  integration mechanics the task's own workspace commits used (they live in
+  the review context, not on the target) and append their integrated SHAs to
+  the task's evidence commits - a SHIP whose fix commits are not on the
+  target is not a completable state, and running `done` over it has broken
+  this. THEN run the focused integrated verify; `flowctl done` with the
   updated task-unique summary/evidence; verify `done`; run the 3d.1 tracker
   touchpoint; **run 3e for this completed task** (in the serial plan-sync mode
   that is the full canonical dispatch, and no new task is claimed or anchored
