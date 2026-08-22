@@ -16,6 +16,19 @@ Contents:
 - [3e Plan-sync stage lines](#3e-plan-sync-stage-lines) - serial-only execution; mandatory stage-outcome lines
 - [3f Quiesce](#3f-quiesce) - loop rule, full suite at quiesce, completion gate pointer, end-of-run notes cleanup
 
+**Why isolated worktrees (design rationale, fn-203 eval).** The pre-registered
+three-arm eval also tested this scheduler over a single shared checkout with
+commit discipline (stage only your declared paths, commit under a mutex). That
+arm was faster still - and failed quality parity, with a measured mechanism:
+when the Touches declaration is the commit boundary, every NEW file a worker
+creates risks a violation, and tests are exactly the artifact that spawns new
+files - the arm was structurally incentivized toward fewer test files (11 vs 20
+at comparable product code), and constrained verify windows made test iteration
+costly. The per-task worktree pool dissolves both pressures: workers create
+files and run suites freely, and the conductor's per-return integration doubles
+as a quality pass over each diff. Speed bought by under-testing is the failure
+mode this architecture exists to avoid.
+
 ## 3.0 Notes surface + plan-sync gate
 
 **Shared notes surface (create FIRST, advisory).** One per-run notes directory
