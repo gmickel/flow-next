@@ -92,8 +92,24 @@ the run - worker return order is nondeterministic.
 $FLOWCTL ready --spec <spec-id> --json
 ```
 
-If the ready frontier is empty AND the in-flight set is empty, the run has
-quiesced: go to 3f.
+If the ready frontier is empty AND the in-flight set is empty, check for
+**foreign in-flight tasks** before calling it quiesce: read
+`$FLOWCTL tasks --spec <spec-id> --json` and collect every task that is
+`in_progress` but NOT in this conductor's in-flight set - those belong to
+another run (canonical or beta) on the same spec, and `flowctl ready`
+rightly excludes them from the frontier. Only when that foreign set is ALSO
+empty has the run quiesced: go to 3f. When foreign in_progress tasks exist
+with an empty local set, do NOT quiesce - completion review against another
+run's incomplete work is the failure this check exists to prevent. Report
+the contention (task ids + who holds them) and end the run with a typed
+contention outcome:
+
+```text
+Rolling run ended: spec contended (fn-X.N in_progress by another run) - quiesce deferred to that run or a re-invocation
+```
+
+This is the same fail-closed posture as 3b's claim contention: runs never
+steal from or bless over each other.
 
 In SPEC_MODE, apply the **admission rule (fail-closed - canonical fn-176 wave
 rule, re-scoped from wave peers to the in-flight set)**. Admission within one
@@ -163,6 +179,17 @@ the task: claims are spec-scoped in the shared runtime state store, and
 contention fails closed. Never clear or steal another run's claim. Retain
 every successfully claimed task; never abandon a task this conductor already
 moved to `in_progress`.
+
+**All-claims-lost re-entry (no event will save you).** If candidates were
+admitted at this event but EVERY one of them lost its claim race (e.g. the
+sole ready task at loop start was claimed by another run), no worker gets
+dispatched - so no worker-return event will ever re-enter 3a, and waiting
+would hang the loop. Instead, immediately recompute ground truth and re-run
+admission (one immediate re-entry to 3a; the claims that beat us now show as
+foreign in_progress and 3a's foreign-in-flight check sees them). If the
+recomputed frontier is empty and the local in-flight set is empty, route to
+3a's typed contention outcome (`Rolling run ended: spec contended ...`)
+rather than waiting for an event that cannot arrive.
 
 **Tracker touchpoint:** run canonical phases.md 3b.1 exactly as written there
 (read `$WORK_SKILL/phases.md`, section 3b.1) for each claimed task.
@@ -316,8 +343,10 @@ Phase 4. No loop.
 
 **SPEC_MODE**: every event - worker return or review completion - loops back
 to 3a (recompute the frontier, admit, dispatch) after its 3d handling. The
-run reaches **quiesce** when the ready frontier AND the in-flight set are both
-empty. At quiesce:
+run reaches **quiesce** when the ready frontier, the in-flight set, AND 3a's
+foreign in-flight set (tasks `in_progress` under another run on this spec)
+are ALL empty - a non-empty foreign set routes to 3a's typed contention
+outcome instead, never here. At quiesce:
 
 1. Run the full-suite verification once on the final integrated target
    (wave-join.md's integrated-target verification contract - the full gate
