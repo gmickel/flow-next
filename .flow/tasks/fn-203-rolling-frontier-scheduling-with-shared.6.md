@@ -31,3 +31,4 @@ stage: impl-review - ran [r1 NEEDS_WORK (2 P1), r2 NEEDS_WORK (1 P1), r3 SHIP] (
 - Commits: da9539d4a13db15fee979c0c631ad7f1294467ff, 6a9bfa1c31b9095c8361117da53c70354fcaf28f, 5673acb5032693696fd779f155947cab10207830, 9382a3a46c48a830ce3acccb0ac2abbd8d76512e
 - Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (x2, idempotent), GATE_SKIPPED:unittest:green-receipt 5673acb5 - baseline reused from prior post-gate pass (Verify: receipt honored at fix HEAD)
 - PRs:
+stage: plan-sync - ran (.7 placeholder resolved to flow-next-work-rolling)
