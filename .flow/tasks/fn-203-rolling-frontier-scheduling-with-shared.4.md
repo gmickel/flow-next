@@ -31,9 +31,10 @@ Ship the winning arm as a user-invoked experimental-tier beta skill. GATED: impl
 - [ ] Notes dir created/keyed/deleted per R7; creation failure degrades advisory
 - [ ] sync-codex.sh run twice, idempotent, guards green; conduct checklist added and dogfood pass/fail marked
 ## Done summary
-TBD
+Shipped the fn-203 Phase B beta: experimental skill flow-next-work-rolling as a thin delta over canonical work (SKILL.md + references/rolling-scheduler.md; everything else consumed by pointer via a three-rung WORK_SKILL resolution). The scheduler implements arm-1 rolling admission (five fail-closed conditions vs the in-flight set, cap 3, per-event recomputation, In-flight/Admitted/Held report lines), an event-driven conductor-owned review lifecycle (review launched concurrently at worker return; SHIP routes done -> 3d.1 -> 3e plan-sync barrier -> slot free; NEEDS_WORK fix loop never blocks admission), per-task wave-join integration with SHA normalization and serial collision retry, planSync=true serial degradation, and the outside-tree notes surface (spec id + run id keyed, pointer-only, deleted after canonical Phase 5, advisory on creation failure). Command shim, sync-codex REQUIRED+openai.yaml entries (explicit-false catalog), guide routing decision (never a default route), conduct checklist with dogfood record, registry counts 27/31 per the experimental-tier carve-out, and a /bin/bash 3.2 compat fix for the fn-202 docs-link guard. Canonical flow-next-work files byte-unchanged.
 
+stage: impl-review - ran [r1 NEEDS_WORK (4 findings), r2 NEEDS_WORK (1 new P1, 2 declined-with-evidence), r3 SHIP] (model: codex/gpt-5.6-sol)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e4bec4d8e83e5705810daebe41533c402936e88c, fb41b6f8b2359d61b61702174f209c8fc1048778, 113c06ec9dc7c20cd0ddbec4156a9d97a9bea458, 1c1863fbf7497ce4528cd4d99db5d8a0b051f95e
+- Tests: baseline: green - cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_worker_anchor_prose test_cp1252_robustness -q (23 tests OK, pre-edit), python3 scripts/run_tests_parallel.py (full suite, 4437 tests OK at 1c1863fb; green receipt minted gate=unittest), uvx ruff@0.16.0 check . (clean), ./scripts/sync-codex.sh x2 (idempotent, all guards green), dogfood: rolling admission events E0-E3 on real 5-task fixture fn-174 (isolated clone + FLOW_STATE_DIR); planSync=true -> Sequential fallback reported; notes dir create/key/delete + advisory degrade; cross-actor claim contention rc 1, canonical byte-unchanged proof: git diff over skills/flow-next-work + agents/worker.md = 0 lines
 - PRs:
