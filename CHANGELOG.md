@@ -2,7 +2,9 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.5.0] - 2026-08-22
+
+Multi-task runs stop paying for the wave barrier: an opt-in beta scheduler starts the next task the moment any worker finishes, cutting work-phase wall-clock by half in its pre-registered eval while every review gate, receipt, and quality check stays exactly as strict. The architecture was chosen by evidence, and the eval's most useful output is the arm it rejected.
 
 ### Added
 
