@@ -258,6 +258,8 @@ Notes that keep this honest:
 - **The family rule is advice, not enforcement.** Nothing can verify a model's family from a name you invented; the reviewer tier documents the rule and the receipt records what ran.
 - **Scouting splits by kind of work, not by price.** Mechanical inventory goes to the fast scout tier; analysis that degrades on a fast tier goes to the thinking scout tier.
 
+**Experimental alternative for the Work stage:** `/flow-next:work-rolling` (beta) replaces the wave barrier with rolling per-task admission - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review. User-invoked only; pilot and land always dispatch canonical `/flow-next:work`. It graduates into the canonical skill or is deleted on a recorded decision (fn-203 R10). Details: [`../skills/flow-next-work-rolling/SKILL.md`](../skills/flow-next-work-rolling/SKILL.md).
+
 ### The wrapper pattern - self-healing bridges for unattended loops
 
 Raw bridge calls have a silent-failure class: outside a trusted git directory, `codex exec` refuses in about a second with the error only in its log, and `cursor-agent` blocks on an interactive workspace-trust prompt, then exits "successfully" with empty output. An interactive host sees the stderr and just fixes it; an **autonomous loop dies silently**. The pattern that closed this in the eval: wrap the bridge in a thin fast-tier subagent instead of calling it raw. The wrapper composes the self-contained prompt, runs the bridge, verifies output is non-empty/parseable, repairs the environment if not, and retries once. Output quality was identical to raw calls.

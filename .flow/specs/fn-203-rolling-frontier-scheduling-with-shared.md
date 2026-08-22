@@ -143,6 +143,18 @@ pass, and deleting it deleted real quality attention. Two draws were invalidated
 infrastructure (529 storm; print-mode wave incapability) and two for shared-state
 contamination before the valid sequential runs; full ledger in the study changelog.
 
+**R10 field window (recorded 2026-08-22, task .6).** The Phase C
+graduation-or-sunset decision fires after a minimum of **5 beta-run specs with
+receipts**: real (non-fixture) specs driven end-to-end by
+`/flow-next:work-rolling` whose review/done receipts exist on the standard
+surfaces. A run that degraded to fully serial admission for its whole life
+(never more than one task in flight - e.g. `planSync.enabled=true` or a
+perpetually held frontier) does not count toward the window, since it exercises
+none of the scheduler. Recording note: R10 asks for this window before the beta
+ships; the beta shipped in task .4 with the window unrecorded (pre-existing gap
+flagged by .4's reviewer) - it is recorded here, in the first task to land
+after the flag, and applies from this record forward.
+
 
 Eval-first because the last review-architecture redesign looked dominant on paper and was falsified only by its pre-registered eval; the standing decision is no conditional machinery - evidence picks the architecture. Per-task granularity over wave-granular overlap because the measured saving accrues per task boundary (the n=1 measurement ran on the minimum surface) and the wave path is verified serial post-join, so the barrier itself is schedulable idle that wave-granular overlap cannot recover.
 

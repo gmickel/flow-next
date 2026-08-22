@@ -111,6 +111,13 @@ Pre-1.0 repos that still have `.flow/epics/<id>.json` must port by hand: see `fl
 
 The auto-managed `.flow/.gitignore` (written by `flowctl init`) excludes per-run state (`.checkpoint-*.json`, `receipts/`, `tmp/`, `sync-runs/`, `pilot-runs/`, `locks/`, `.cache/`) and historical migration transients (`.backup-pre-1.0/`, `.banner-acknowledged`, `.migrating`, `.migration-manifest`) so users don't accidentally commit runtime artifacts on `git add -A`. User patterns added below the auto-managed footer are preserved on subsequent runs. `.flow/.flow_version` is intentionally tracked (schema sentinel; semantics like `Cargo.lock`).
 
+### Outside-tree runtime state and run-notes dirs
+
+Two kinds of per-run state deliberately live **outside** the working tree, so `git add -A`, branch switches, and worker test hygiene can never sweep or destroy them:
+
+- **Runtime state dir** - task claims and lifecycle state live in the git common dir at `.git/flow-state/`, which every worktree of a repo shares. `FLOW_STATE_DIR` is the documented per-process override for concurrent same-repo pipelines; an orchestrator-set state dir must itself sit outside the repo tree. See [`flowctl.md`](flowctl.md) (Worktree sharing). Pilot's strikes ledger sits beside it at `<git-common-dir>/flow-next/`.
+- **Run-notes dir** - the rolling-frontier work beta (experimental, [`skills/flow-next-work-rolling/`](../skills/flow-next-work-rolling/SKILL.md)) creates one shared notes directory per run at `<state-root>/flow-notes/<spec-id>-<run-id>/`, where `<state-root>` is `FLOW_STATE_DIR`'s parent when set, else the git common dir. Scouts and workers write markdown notes there (exploration findings, integration warnings); every consumer reads it **by pointer** - its content is never embedded into a dispatch prompt. The conductor deletes it on clean run completion; a dir abandoned by an interrupted run is inert prose and safe to remove by hand. Advisory surface: creation failure degrades the run to no notes surface, never blocks it.
+
 Flowctl accepts schema v1 and v2; new fields are optional and defaulted.
 
 New fields:

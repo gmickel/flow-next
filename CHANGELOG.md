@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **Experimental rolling-frontier work beta: `/flow-next:work-rolling`.** A user-invoked beta variant of `/flow-next:work` that admits a new ready task the moment any in-flight task returns, instead of waiting at wave boundaries - isolated per-task workspaces, conductor-owned review at every return event, and a shared outside-tree run-notes surface workers read by pointer. Same inputs as `/flow-next:work`; pilot, land, and Ralph never dispatch it. Architecture picked by the fn-203 pre-registered three-arm eval (rolling + isolated workspaces won: 52.1% work-phase wall saving at quality parity, zero uncontained correctness incidents). **Experimental - it can change or disappear:** per the spec-recorded field window, after a minimum of 5 beta-run specs with receipts a recorded decision either graduates the scheduler into canonical work (deleting the beta) or sunsets it (fn-203 R10); it never becomes a standing second topology. Details: `plugins/flow-next/docs/orchestration.md`, `plugins/flow-next/docs/troubleshooting.md`.
+
 ## [flow-next 4.4.0] - 2026-08-21
 
 ### Added
