@@ -12,9 +12,9 @@ Contents:
 - [3a Admission at every worker-return event](#3a-admission-at-every-worker-return-event) - the five conditions + report lines
 - [3b Claim at admission](#3b-claim-at-admission) - claim-at-admission + tracker touchpoint pointer
 - [3c Spawn workers](#3c-spawn-workers) - always `PARALLEL_WAVE: true`; notes pointer line
-- [3d Per-return integrate, review, complete](#3d-per-return-integrate-review-complete) - conductor-owned review; failure strikes
+- [3d Per-return integrate, review, complete](#3d-per-return-integrate-review-complete) - event-driven lifecycle; conductor-owned review; failure strikes
 - [3e Plan-sync stage lines](#3e-plan-sync-stage-lines) - serial-only execution; mandatory stage-outcome lines
-- [3f Quiesce](#3f-quiesce) - loop rule, full suite at quiesce, notes cleanup, completion gate pointer
+- [3f Quiesce](#3f-quiesce) - loop rule, full suite at quiesce, completion gate pointer, end-of-run notes cleanup
 
 ## 3.0 Notes surface + plan-sync gate
 
@@ -44,8 +44,8 @@ and workers write markdown notes there (exploration findings, integration
 warnings for later tasks); consumers read by pointer. **Never embed the notes
 directory's content into a dispatch prompt** - a dispatch that pasted a note's
 body instead of the path has broken this. The conductor deletes the directory
-on clean run completion (3f); a dir abandoned by an interrupted run is inert
-prose and may be removed by hand.
+only after canonical Phase 5 completes cleanly (see 3f); a dir abandoned by an
+interrupted run is inert prose and may be removed by hand.
 
 **plan-sync gate (fail-closed).** Before the first admission:
 
@@ -165,28 +165,54 @@ resolution, `BASELINE_HANDOFF` judgment) is canonical:
   The same pointer line goes into every scout dispatch this run makes.
 
 **Do not block the loop on the full in-flight set.** After dispatching, wait
-for the next worker-return event (any in-flight worker), handle that return at
-3d, then recompute admission at 3a. While one task's review or fix loop runs,
-the other in-flight workers keep running.
+for the next event (a worker return OR a review completion - 3d), handle it,
+then recompute admission at 3a. While one task's review or fix loop runs, the
+other in-flight workers keep running.
 
 ## 3d Per-Return Integrate, Review, Complete
 
-This section runs once per worker-return event, for THAT task only. Read
-`$WORK_SKILL/references/wave-join.md` and execute its per-task sequence:
-confirm the handover; integrate that task's workspace commits onto the target
-branch; normalize its evidence SHAs to the integrated commit IDs (retaining
-the task's normalized integrated base and head); dispatch its review
-conductor-side when its resolved `REVIEW_MODE` is not `none`
-(`$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
-from a safe review context per wave-join.md - bounded fix loop to SHIP; fix
-commits integrated and appended to evidence); run the focused integrated
-verify; `flowctl done` with the updated task-unique summary/evidence; verify
-`done`. done(N) fires only on SHIP(N). A NEEDS_WORK fix loop on one task never
-blocks admission or progress of other in-flight tasks. Reviewer identity,
-rubric, diff scope, and the fix-loop cap are canonical impl-review's,
-untouched. Concurrent backend reviews use the thin-wrapper-subagent pattern
-from the project's orchestration guidance; a reviewer dispatch failure frees
-the in-flight slot via the typed escalation below.
+**The task lifecycle is event-driven; a task holds its in-flight slot (and
+counts against the cap) from admission until `done` or a typed escalation.**
+Two event kinds drive 3d, and **admission (3a) is recomputed immediately after
+handling EACH event** - never deferred to the end of a task's review tail:
+
+**Worker-return event** (that task only):
+1. Read `$WORK_SKILL/references/wave-join.md` and execute its handover +
+   integration steps: confirm the handover; integrate that task's workspace
+   commits onto the target branch; normalize its evidence SHAs to the
+   integrated commit IDs (retaining the task's normalized integrated base and
+   head).
+2. When the task's resolved `REVIEW_MODE` is not `none`, LAUNCH its review
+   conductor-side
+   (`$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
+   from a safe review context per wave-join.md) **as a concurrent activity via
+   the thin-wrapper-subagent pattern from the project's orchestration
+   guidance - do not wait for the verdict here.** The task transitions to the
+   `(review)` in-flight state, still holding its slot. When `REVIEW_MODE` is
+   `none`, skip to the SHIP branch of the review-completion event below.
+3. Recompute admission at 3a NOW.
+
+**Degraded serial-review path:** a host with no concurrent-dispatch primitive
+for the review runs it inline (blocking) instead; admission then recomputes
+after the verdict. That is a degradation to report
+(`Sequential fallback: review ran inline (no concurrent dispatch)`), never the
+default shape.
+
+**Review-completion event** (that task only):
+- **SHIP** → run the focused integrated verify; `flowctl done` with the
+  updated task-unique summary/evidence; verify `done`; run the 3d.1 tracker
+  touchpoint; FREE the slot; recompute admission at 3a. done(N) fires only on
+  SHIP(N).
+- **NEEDS_WORK** → drive the bounded fix loop as that task's continuing
+  in-flight activity: fix, commit, integrate the fix commits, append them to
+  the task's evidence, re-dispatch the re-review concurrently (same slot,
+  still `(review)`). The loop never blocks handling of other events or
+  admission of other tasks.
+- **MAJOR_RETHINK, reviewer dispatch failure, or fix-loop cap exhausted** →
+  typed escalation (below) frees the slot; recompute admission at 3a.
+
+Reviewer identity, rubric, diff scope, and the fix-loop cap are canonical
+impl-review's, untouched.
 
 **Join collision:** a merge conflict at integration means the admission rule's
 declared `**Touches:**` sets were wrong - a wrong admission surfacing
@@ -228,8 +254,8 @@ never an absence.
 **SINGLE_TASK_MODE**: after 3d→3e for the requested task, go to canonical
 Phase 4. No loop.
 
-**SPEC_MODE**: every worker-return event loops back to 3a (recompute the
-frontier, admit, dispatch), interleaved with 3d for the returning task. The
+**SPEC_MODE**: every event - worker return or review completion - loops back
+to 3a (recompute the frontier, admit, dispatch) after its 3d handling. The
 run reaches **quiesce** when the ready frontier AND the in-flight set are both
 empty. At quiesce:
 
@@ -238,7 +264,10 @@ empty. At quiesce:
    runs only here, never per task); fix and commit any failure.
 2. Run canonical phases.md 3g (completion review gate) exactly as written
    there - only its timing shifts to quiesce, never its semantics.
-3. Delete the notes directory (`rm -rf "$NOTES_DIR"` when non-empty) - clean
-   completion only; on an interrupted or escalated run leave it in place.
 
-Then continue with canonical Phase 4 (quality) and Phase 5 (ship).
+Then continue with canonical Phase 4 (quality) and Phase 5 (ship). **The notes
+directory outlives quiesce**: delete it (`rm -r "$NOTES_DIR"` when non-empty)
+only as the run's LAST cleanup step, after canonical Phase 5 completes cleanly
+- a quality or ship failure is not a clean completion, and its diagnostic
+notes must still exist. On an interrupted or escalated run leave the directory
+in place (inert prose, removable by hand).
