@@ -231,13 +231,19 @@ structurally. Never auto-resolve: follow wave-join.md's collision handling
 (abort the conflicted integration, keep the target clean, record the
 `stage: wave-join - failed(collision: ...)` line). The losing task then enters
 an explicit **collision-hold** state: it KEEPS its claim and its in-flight
-slot (so nothing else claims it), but the conductor admits NO new tasks and
-drains every **other** in-flight task to completion or typed escalation.
-Only when the losing task is the sole occupant does the conductor retry it
-serially from the joined target state; its slot frees on completion or typed
-escalation, exactly like any other task. Waiting on the losing task's own
-slot to empty would deadlock - the drain condition is "every other task",
-never "the whole set". One serial retry, never a correctness loss.
+slot (so nothing else claims it) and is appended to an ordered
+**collision-retry queue** (return order). While that queue is non-empty the
+conductor admits NO new tasks and drains every **non-held** in-flight task to
+completion or typed escalation - a second task that collides during the drain
+joins the queue in the same held state rather than resetting anything. Once
+no non-held task remains, retry the queued tasks one at a time in queue
+order, each serially from the current joined target state; a queued hold is
+parked, not executing, so it never blocks the active retry. Each retried
+task's slot frees on completion or typed escalation, exactly like any other
+task; admission resumes when the queue is empty. Waiting for the WHOLE set to
+drain would deadlock on the held tasks' own slots - the drain condition is
+"every non-held task", never "the whole set". One serial retry per collided
+task, never a correctness loss.
 
 **Worker failure handling (per task).** A worker that returns without a valid
 handover (or whose result is lost) is diagnosed from ground truth INSIDE its
