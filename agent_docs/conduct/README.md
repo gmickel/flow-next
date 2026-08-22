@@ -32,6 +32,7 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 **Build**
 
 - [`work.md`](work.md) — `/flow-next:work`, spec execution with fresh-context workers
+- [`work-rolling.md`](work-rolling.md) — `/flow-next:work-rolling`, experimental rolling-frontier work variant (thin delta over work; canonical checklist applies too)
 - [`sync.md`](sync.md) — `/flow-next:sync`, manual plan-sync after drift
 - [`qa.md`](qa.md) — `/flow-next:qa`, live-app QA and ship verdict
 - [`drive.md`](drive.md) — `flow-next-drive`, surface-aware UI automation

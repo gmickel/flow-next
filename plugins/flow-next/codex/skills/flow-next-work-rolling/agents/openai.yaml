@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Work Rolling [experimental]"
+  short_description: "Rolling-frontier work variant - per-task admission, isolated workspaces, conductor-owned review (experimental - can change or disappear)"
+  brand_color: "#3B82F6"
+policy:
+  allow_implicit_invocation: false

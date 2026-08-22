@@ -265,6 +265,18 @@ If a cached install still surfaces an orphaned `browser` / `agent-browser` skill
 rm -rf ~/.claude/plugins/cache/<marketplace>   # then reload Claude Code
 ```
 
+## Rolling-frontier work beta (`/flow-next:work-rolling`, experimental)
+
+The beta is a thin delta over canonical work; most failures resolve exactly as canonical `/flow-next:work` failures do. Its own failure modes:
+
+- **`NEEDS_HUMAN: canonical flow-next-work skill not found`** - the beta consumes the canonical work skill's files by pointer and cannot run without them. The canonical skill is missing or the plugin install is broken; reinstall/update the flow-next plugin so `skills/flow-next-work/` resolves.
+- **A task is held or dropped as claimed by another actor** - task claims live in the shared runtime state store and are spec-scoped, not skill-scoped, so a beta run and a canonical run on the same spec contend on the same claims and fail closed against each other. That is the designed behavior, not a bug. Do not clear or steal another run's claim; if the other run is truly dead, recover with the human-only repair in [Reset a stuck task](#reset-a-stuck-task).
+- **`Sequential fallback: planSync.enabled=true`** - plan-sync disables concurrent admission entirely (fail-closed); the run degrades to serial, canonical behavior. **`true` is the shipped default**, so this is what a fresh repo gets: rolling admission requires the explicit opt-out `flowctl config set planSync.enabled false`. An interactive beta run offers that command once when the gate fires; an autonomous run only reports it and never mutates config.
+- **`Notes surface: unavailable (...)`** - the shared run-notes directory could not be created. Advisory only: the run continues without it, nothing blocks. A notes dir abandoned by an interrupted run (under `<state-root>/flow-notes/`, see [`architecture.md`](architecture.md#outside-tree-runtime-state-and-run-notes-dirs)) is inert markdown and safe to delete by hand.
+- **A worker reports a merge conflict at integration** - per-task integration reuses the wave-join mechanics; the conflicting task is retried serially, never a correctness loss. Same handling as [the wave-join section above](#worker-reports-a-merge-conflict-at-wave-join-fn-176-wave-dispatch).
+
+The beta is experimental: it can change or disappear (graduate into canonical work, or be deleted, on a recorded decision - fn-203 R10). Pilot, land, and Ralph never dispatch it.
+
 ## See also
 
 - [`flowctl.md`](flowctl.md) — full CLI reference (every command, flag, default).

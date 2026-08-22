@@ -428,8 +428,10 @@ done
 # --- STRUCTURAL: Task tool → agent invocation ---
 
 # flow-next-work: phases.md + its reached-path references (wave-join.md,
-# host-deferred-review.md carry the same actionable invocations post branch-disclosure)
-for wf in "$CODEX_DIR/skills/flow-next-work/phases.md" "$CODEX_DIR"/skills/flow-next-work/references/*.md; do
+# host-deferred-review.md carry the same actionable invocations post branch-disclosure).
+# The work-rolling beta's scheduler reference carries the same actionable
+# per-task impl-review invocation (fn-203 Phase B), so it rides the same pass.
+for wf in "$CODEX_DIR/skills/flow-next-work/phases.md" "$CODEX_DIR"/skills/flow-next-work/references/*.md "$CODEX_DIR"/skills/flow-next-work-rolling/references/*.md; do
   [ -f "$wf" ] || continue
   # Actionable impl-review invocations must use the Codex skill name. Passive
   # /flow-next: mentions elsewhere stay.
@@ -1620,6 +1622,11 @@ generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a se
 # text into every session's shared skills budget is exactly the cost the
 # digest exists to save. Reachable by /flow-next:visual and by $name.
 generate_openai_yaml "flow-next-visual" "Flow Visual" "Restate a spec, task, diff, or the current topic as a compact markdown digest" "#F59E0B" false
+# Work-rolling is an EXPERIMENTAL beta (fn-203 Phase B): user-invoked only,
+# explicit false so it never enters the implicit skill catalog - the pipeline
+# (pilot/land) stays on canonical flow-next-work. Reachable by
+# $flow-next-work-rolling. It graduates or is deleted (fn-203 R10).
+generate_openai_yaml "flow-next-work-rolling" "Flow Work Rolling [experimental]" "Rolling-frontier work variant - per-task admission, isolated workspaces, conductor-owned review (experimental - can change or disappear)" "#3B82F6" false
 generate_openai_yaml "flow-next-ralph-init" "Flow Ralph Init" "Scaffold the repo-local Ralph autonomous harness" "#3B82F6" true
 
 # Internal skills (gray, explicit-only). These are spawned by other skills,
@@ -1741,6 +1748,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-export-context"
   "flow-next-worktree-kit"
   "flow-next-deps"
+  "flow-next-work-rolling"
 )
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
@@ -2090,10 +2098,13 @@ fi
 # deleted upstream).
 docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/skills/" 2>/dev/null || true; } | while IFS=: read -r lf ln match; do
   target="${match#](}"
+  # Leading `(` on each pattern: required for `case` inside `$( )` under
+  # macOS /bin/bash 3.2 (the shebang), which otherwise fails to parse at the
+  # bare `pattern)` form. Semantics unchanged.
   case "$target" in
-    *docs/flow-next/flow-next/*) echo "$lf:$ln: docs-link namespace applied twice → $target"; continue ;;
-    *docs/flow-next/*) ;;
-    *) echo "$lf:$ln: docs link missing the flow-next/ namespace → $target"; continue ;;
+    (*docs/flow-next/flow-next/*) echo "$lf:$ln: docs-link namespace applied twice → $target"; continue ;;
+    (*docs/flow-next/*) ;;
+    (*) echo "$lf:$ln: docs link missing the flow-next/ namespace → $target"; continue ;;
   esac
   [ -f "$(dirname "$lf")/$target" ] || echo "$lf:$ln: broken relative docs link → $target"
 done )

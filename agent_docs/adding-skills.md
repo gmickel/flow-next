@@ -35,7 +35,7 @@ When adding a new `/flow-next:<name>` skill, every step below MUST be done. Skip
 
 A skill may ship **before** it has earned the full checklist above. An experimental skill lives in the plugin and is invocable, but it is deliberately absent from every surface that promises stability:
 
-- **Excluded from** the root `README.md` commands/skills tables, `plugins/flow-next/docs/skills.md`, the docs catalog, and any published skill/command count (step 7 is skipped entirely, including the marketing site).
+- **Excluded from** the root `README.md` commands/skills tables, `plugins/flow-next/docs/skills.md`, the docs catalog, and any published skill/command count (step 7 is skipped entirely, including the marketing site). **Registry manifests are inventory, not published counts**: the count strings in `.claude-plugin/marketplace.json` and the two `plugin.json` files enumerate every shipped dir, experimental included, and DO get bumped — the `ChartRegistryCounts` carve-out in `test_chart_docs_inventory.py` (commit 5b9e039f) pins exactly this split (bump filesystem/registry assertions; leave the published README/docs phrases at the stable total).
 - **Marked in its own frontmatter** - the SKILL.md `description` ends with ` (experimental - can change or disappear)`, so anything routing on descriptions sees the tier without a registry lookup.
 - **Retired by deletion.** There is no deprecation window, no alias, no tombstone doc. The skill dir and its shim go; the CHANGELOG line says it was experimental and is gone.
 - **Graduates by doing the full checklist** - steps 7, 8, and 10 in particular are what an experimental skill is allowed to defer, and graduation is exactly the change that pays them off.
@@ -44,7 +44,7 @@ A skill may ship **before** it has earned the full checklist above. An experimen
 
 **Failure signature.** A skill carrying the experimental suffix that also appears in a README table or a published count is not experimental - it is an undocumented promise. Either finish the checklist or take it out of the tables.
 
-No skill currently ships in this tier; existing skills are not demoted into it.
+Currently in this tier: `flow-next-work-rolling` (fn-203 Phase B — graduates or sunsets per fn-203 R10). Existing stable skills are not demoted into the tier.
 
 ## Backend-split workflow.md (heuristic)
 
