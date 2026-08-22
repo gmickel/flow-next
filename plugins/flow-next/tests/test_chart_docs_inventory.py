@@ -275,16 +275,19 @@ class ChartRegistryCounts(unittest.TestCase):
         # base flow-next is phrase-triggered too
         phrase_count = len(phrase) + (1 if "flow-next" in skill_dirs else 0)
 
-        self.assertEqual(len(skill_dirs), 30, f"skills dirs: {skill_dirs}")
-        self.assertEqual(len(commands), 26, f"commands: {commands}")
+        # 31/27/26 include the experimental flow-next-work-rolling beta
+        # (fn-203.4); the published phrases below stay at the stable totals
+        # per the experimental-tier carve-out.
+        self.assertEqual(len(skill_dirs), 31, f"skills dirs: {skill_dirs}")
+        self.assertEqual(len(commands), 27, f"commands: {commands}")
         self.assertIn("flow-next-chart", skill_dirs)
         self.assertIn("flow-next-guide", skill_dirs)
         self.assertIn("chart", commands)
         self.assertIn("guide", commands)
-        self.assertEqual(len(slash_skills), 25, f"slash skills: {slash_skills}")
+        self.assertEqual(len(slash_skills), 26, f"slash skills: {slash_skills}")
         self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
-        expected_snippet = "26 commands, 30 skills"
+        expected_snippet = "27 commands, 31 skills"
         for path in REGISTRY_COUNT_FILES:
             text = _read(path)
             self.assertIn(
