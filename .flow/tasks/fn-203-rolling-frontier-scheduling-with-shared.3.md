@@ -27,9 +27,21 @@ Execute the pre-registered study, score it, and record the outcome before any Ph
 - [ ] On a passing arm: numeric Phase C field window recorded in the spec's Decision Context before any Phase B task starts
 - [ ] Gate fail/inconclusive path honored: downstream tasks closed unimplemented if no arm passes
 ## Done summary
-Blocked:
-SCOPE_EXCEEDED: the task IS the supervised lab study - 3 sequential draws (~2.5-3h each, 8h ceiling) on an otherwise-idle machine with opus-5@medium verified per draw and live kill rules. A worker subagent cannot supervise multi-hour draws, and launching draws from inside an active session violates the registration's idle-machine contention control. Pre-draw byte-identity verification is done and recorded (agent-evals 408f832). Needs a dedicated supervised session; on completion record outcome in study changelog + spec Decision Context per R2.
+Ran the pre-registered three-arm eval end-to-end as the supervised conductor (worker-context
+block was escalated and the maintainer directed the study to run in-session). Sealed the blind
+checklist, recorded pristine-pin suite state, built isolated draw environments, and supervised
+draws under the frozen kill rules. Two attempts invalidated on infrastructure (529 storm;
+claude -p cannot execute the baseline's async wave path - moved to background sessions), one
+treatment pair invalidated for shared-state contamination (bg sessions don't inherit env;
+fixed via per-draw --settings env injection + launch-time isolation guard). Valid runs: A0
+129.1 min / 37/42; A1 61.9 min (52.1% saving) / 37/42 / zero incidents under the
+maintainer-ratified correctness reading -> PASS; A2 39.8 min / 33/42 -> FAIL on quality
+parity. VERDICT: A1 (rolling + isolated workspaces) wins. R2 recorded in the study changelog
+and this spec's Decision Context before any Phase B work. Capacity probe deferred (non-gating,
+owed). Blind scoring cross-family (codex gpt-5.6-sol high), thresholds frozen pre-exposure,
+incident adjudication pre-unblinding, contested clause put to the maintainer rather than
+self-blessed.
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 408f832, 17b5138, e97fa64, 800e153, 665c62c, 6ff7033, ebd7431, 458564a, 9635d29
+- Tests: pristine-pin + 3 final trees: bun lint:check/typecheck/verify-docs green; cockpit suites 0 fail; mergefoundryd inherited proof.e2e red only, blind checklist 21 items x 3 arms, codex gpt-5.6-sol high, thresholds-first
 - PRs:

@@ -128,6 +128,22 @@ Active tracks served by this plan:
 
 ## Decision Context
 
+**R2 record - Phase A eval outcome (2026-08-22, study `rolling-frontier-2026-08`, verdict entry `9635d29`).**
+Per-arm: **A0 baseline** wall 129.1 min, checklist 37/42. **A1 rolling+isolated: PASS** - wall
+61.9 min (52.1% saving, decisive band, no replication owed), checklist 37/42 (parity), zero
+uncontained correctness incidents (maintainer-ratified reading of the class-2 clause: task-own
+undeclared co-located files with zero sibling contact are declaration-incompleteness, not
+incidents). **A2 rolling+shared: FAIL** - quality regression (33/42 vs baseline 37/42; hard
+rule, its 69.2% wall saving moot). **Winning architecture: A1 - rolling frontier + isolated
+workspaces.** Phase B builds the beta on rolling admission + per-task worktree integration;
+the flowctl commit-mutex (task .5) is closed unimplemented (arm-2-only). A2 post-mortem
+(recorded in the study changelog): its speed was partly bought with ~30% thinner test
+artifacts; leading hypothesis - A1's per-task integration step doubles as a conductor quality
+pass, and deleting it deleted real quality attention. Two draws were invalidated for
+infrastructure (529 storm; print-mode wave incapability) and two for shared-state
+contamination before the valid sequential runs; full ledger in the study changelog.
+
+
 Eval-first because the last review-architecture redesign looked dominant on paper and was falsified only by its pre-registered eval; the standing decision is no conditional machinery - evidence picks the architecture. Per-task granularity over wave-granular overlap because the measured saving accrues per task boundary (the n=1 measurement ran on the minimum surface) and the wave path is verified serial post-join, so the barrier itself is schedulable idle that wave-granular overlap cannot recover.
 
 The shared-checkout arm is included because it deletes the entire integration step (no join, no SHA normalization, no conflict-retry path, fresh bases by construction) and because its two classic failure modes have mechanical answers: staging-by-declaration turns the Touches declaration into the literal commit boundary - putting the invariant where it is true by construction instead of enumerating misbehaviors - and the commit mutex serializes the shared index. It is an arm rather than the default because the third thing isolation buys, verify soundness, is only mitigated, not eliminated: declaration disjointness does not imply build-graph disjointness, so focused verifies can observe a sibling's in-progress edits, and previously observed shared-checkout failure modes (blanket-add sweeps, stale index locks) are documented field pain. The mitigation is deliberately prose-shaped - the edit-state ledger orders verifies around sibling write windows, and the re-run-before-counting rule converts the residual from wrong escalations into single retries, so a slipped ledger line costs latency, never correctness; the final artifact was never at risk because the full suite at quiesce is the actual gate. Whether the residual retry rate is acceptable is an empirical question, which is why phantom-reds are a counted incident class and the zero-uncontained-incidents clause in R1's ship gate keeps a fast-but-leaky arm from winning.
