@@ -1,0 +1,244 @@
+# Rolling frontier scheduler (Phase 3 replacement)
+
+> Loaded from this skill's SKILL.md as the run's Phase 3. `$FLOWCTL` and
+> `$WORK_SKILL` are already resolved by the SKILL.md preamble. Canonical
+> phases.md Phases 1, 2, 4, and 5 run unchanged around this file; every
+> pointer below into `$WORK_SKILL` files means READ that file and execute the
+> named section verbatim - never restate or fork it.
+
+Contents:
+
+- [3.0 Notes surface + plan-sync gate](#30-notes-surface--plan-sync-gate) - run setup, both fail-soft/fail-closed rules
+- [3a Admission at every worker-return event](#3a-admission-at-every-worker-return-event) - the five conditions + report lines
+- [3b Claim at admission](#3b-claim-at-admission) - claim-at-admission + tracker touchpoint pointer
+- [3c Spawn workers](#3c-spawn-workers) - always `PARALLEL_WAVE: true`; notes pointer line
+- [3d Per-return integrate, review, complete](#3d-per-return-integrate-review-complete) - conductor-owned review; failure strikes
+- [3e Plan-sync stage lines](#3e-plan-sync-stage-lines) - serial-only execution; mandatory stage-outcome lines
+- [3f Quiesce](#3f-quiesce) - loop rule, full suite at quiesce, notes cleanup, completion gate pointer
+
+## 3.0 Notes surface + plan-sync gate
+
+**Shared notes surface (create FIRST, advisory).** One per-run notes directory
+outside the mutable tree, sibling to the runtime state dir, keyed by spec id
+plus a run identifier so concurrent runs (other specs, or a beta and a
+canonical session sharing one state root) never collide:
+
+```bash
+# Sibling of the runtime state dir: FLOW_STATE_DIR's parent when set,
+# else the git common dir (where flowctl keeps flow-state/).
+if [ -n "${FLOW_STATE_DIR:-}" ]; then
+  NOTES_PARENT="$(dirname "$FLOW_STATE_DIR")"
+else
+  NOTES_PARENT="$(git rev-parse --path-format=absolute --git-common-dir)"
+fi
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+NOTES_DIR="$NOTES_PARENT/flow-notes/<spec-id>-$RUN_ID"
+mkdir -p "$NOTES_DIR" || NOTES_DIR=""
+```
+
+If creation fails, set `NOTES_DIR` empty, report
+`Notes surface: unavailable (<reason>) - continuing without it`, and run
+WITHOUT the surface - advisory, never blocking. When it exists, pass its path
+in **every** worker and scout dispatch prompt as a pointer line (3c). Scouts
+and workers write markdown notes there (exploration findings, integration
+warnings for later tasks); consumers read by pointer. **Never embed the notes
+directory's content into a dispatch prompt** - a dispatch that pasted a note's
+body instead of the path has broken this. The conductor deletes the directory
+on clean run completion (3f); a dir abandoned by an interrupted run is inert
+prose and may be removed by hand.
+
+**plan-sync gate (fail-closed).** Before the first admission:
+
+```bash
+$FLOWCTL config get planSync.enabled --json
+```
+
+If explicitly `true`, concurrent admission is DISABLED for the entire run:
+dispatch strictly serially (at most one in-flight task; 3e runs after each
+completed task exactly as canonical phases.md 3e ships) and report
+`Sequential fallback: planSync.enabled=true` once. Rolling admission is active
+only when plan-sync is off (null/false/missing - the default).
+
+## 3a Admission at Every Worker-Return Event
+
+The conductor keeps an **in-flight set** of concurrently running tasks (cap 3)
+and admits new ready tasks **at every worker-return event** - the moment any
+in-flight task returns - instead of at wave boundaries. In SINGLE_TASK_MODE
+the in-flight set is always the requested task alone. Recompute admission at
+loop start and at every worker-return event; never precompute admissions for
+the run - worker return order is nondeterministic.
+
+```bash
+$FLOWCTL ready --spec <spec-id> --json
+```
+
+If the ready frontier is empty AND the in-flight set is empty, the run has
+quiesced: go to 3f.
+
+In SPEC_MODE, apply the **admission rule (fail-closed - canonical fn-176 wave
+rule, re-scoped from wave peers to the in-flight set)**. A candidate task is
+admitted only when ALL five conditions hold against EVERY task currently in
+flight; any one unmet holds the candidate:
+
+1. same spec;
+2. in-flight size after admission ≤ 3;
+3. no dependency path between the candidate and any in-flight task, in either
+   direction, **transitively** (walk the `depends_on` closure from
+   `$FLOWCTL show <task-id> --json` / `$FLOWCTL tasks --spec <spec-id> --json`
+   - `flowctl dep` only writes edges, it has no read verb; a direct-only check
+   is wrong);
+4. the candidate carries a `**Touches:**` declaration, and its declared set is
+   **disjoint** vs every in-flight task's declared set
+   (`touches(candidate) ∩ touches(inflight) = ∅`, glob-aware);
+5. the candidate does not touch the always-serial set: `.flow/`, lockfiles,
+   migration dirs, codegen/generated outputs, or spec/task files.
+
+The error paths are the rule: a candidate with no `**Touches:**` declaration →
+held; any intersection → held; any doubt about a glob, a hidden coupling
+(shared fixtures, services), or host capacity → held. An empty admissible set
+with a non-empty frontier degrades to serial dispatch - the next ready task
+dispatches alone once the in-flight set drains - and the report states why
+each held task is held. The failure mode is sequential dispatch, never a risky
+admission. Safety is structural: workers run in isolated workspaces, so a
+wrong admission surfaces at that task's integration as a merge conflict (3d),
+costing one serial retry, never correctness. Never run concurrent writers in
+one checkout. An explicit request to parallelize strengthens the preference
+but never overrides the rule.
+
+Report the decision at every admission event, before claiming (the canonical
+report lines plus three rolling lines - exhaustive shape):
+
+```text
+Ready frontier: [fn-X.4, fn-X.5]
+In-flight: [fn-X.1 (review), fn-X.3 (impl)]
+Admitted: [fn-X.4]
+Held: [fn-X.5: Touches intersects fn-X.3]
+Isolation: <native worktrees | linked worktrees | other safe mechanism>
+Dispatch count: 1
+Sequential fallback: <reason> # only when the admissible set is empty with a non-empty frontier
+```
+
+Done when: the report lines are printed for this admission event and every
+admitted task satisfies all five conditions against the in-flight set.
+
+## 3b Claim at Admission
+
+Claim every task admitted at this event before dispatch:
+
+```bash
+$FLOWCTL start <task-id> --json
+```
+
+If a claim fails, do not dispatch that task: drop it from this admission event
+(it may become admissible again at a later event; recompute from ground
+truth). A failed claim can also mean another run - beta or canonical - owns
+the task: claims are spec-scoped in the shared runtime state store, and
+contention fails closed. Never clear or steal another run's claim. Retain
+every successfully claimed task; never abandon a task this conductor already
+moved to `in_progress`.
+
+**Tracker touchpoint:** run canonical phases.md 3b.1 exactly as written there
+(read `$WORK_SKILL/phases.md`, section 3b.1) for each claimed task.
+
+## 3c Spawn Workers
+
+Read canonical phases.md 3c (`$WORK_SKILL/phases.md`) and execute it with
+these fixed values - everything else (implementer-tier routing, the
+commit-spec-files-first rule, the prompt template, per-task `REVIEW_MODE`
+resolution, `BASELINE_HANDOFF` judgment) is canonical:
+
+- **Every admitted worker - including a one-task admission - gets its own
+  isolated mutable workspace, task-unique summary/evidence paths, and
+  `PARALLEL_WAVE: true`.** There is no self-completing single-worker path in
+  this beta: the worker implements, tests, and commits in its workspace, then
+  returns the parallel handover. Review and completion are conductor-owned
+  for every backend (3d) - the conductor RECORDS each task's resolved
+  `REVIEW_MODE` at dispatch and applies it itself after integration.
+- **Notes pointer line:** when `NOTES_DIR` is non-empty, append one line to
+  the canonical prompt template (after the config lines, before "Follow your
+  phases"):
+
+  ```
+  NOTES_DIR: <path>   # shared run-notes surface - read it by pointer for sibling findings; write markdown notes (findings, integration warnings) there; never restate its content in prompts or returns
+  ```
+
+  The same pointer line goes into every scout dispatch this run makes.
+
+**Do not block the loop on the full in-flight set.** After dispatching, wait
+for the next worker-return event (any in-flight worker), handle that return at
+3d, then recompute admission at 3a. While one task's review or fix loop runs,
+the other in-flight workers keep running.
+
+## 3d Per-Return Integrate, Review, Complete
+
+This section runs once per worker-return event, for THAT task only. Read
+`$WORK_SKILL/references/wave-join.md` and execute its per-task sequence:
+confirm the handover; integrate that task's workspace commits onto the target
+branch; normalize its evidence SHAs to the integrated commit IDs (retaining
+the task's normalized integrated base and head); dispatch its review
+conductor-side when its resolved `REVIEW_MODE` is not `none`
+(`$flow-next-impl-review <task-id> --base <task-normalized-integrated-base> --review=<backend>`
+from a safe review context per wave-join.md - bounded fix loop to SHIP; fix
+commits integrated and appended to evidence); run the focused integrated
+verify; `flowctl done` with the updated task-unique summary/evidence; verify
+`done`. done(N) fires only on SHIP(N). A NEEDS_WORK fix loop on one task never
+blocks admission or progress of other in-flight tasks. Reviewer identity,
+rubric, diff scope, and the fix-loop cap are canonical impl-review's,
+untouched. Concurrent backend reviews use the thin-wrapper-subagent pattern
+from the project's orchestration guidance; a reviewer dispatch failure frees
+the in-flight slot via the typed escalation below.
+
+**Join collision:** a merge conflict at integration means the admission rule's
+declared `**Touches:**` sets were wrong - a wrong admission surfacing
+structurally. Never auto-resolve: follow wave-join.md's collision handling
+(abort the conflicted integration, keep the target clean, re-run the losing
+task SERIALLY from the joined state after the in-flight set drains, record the
+`stage: wave-join - failed(collision: ...)` line). One serial retry, never a
+correctness loss.
+
+**Worker failure handling (per task).** A worker that returns without a valid
+handover (or whose result is lost) is diagnosed from ground truth INSIDE its
+assigned workspace per wave-join.md's partial-failures rules, then classified
+per canonical phases.md 3d (work complete / continuation worker into the SAME
+workspace / retry). **The retry is bounded by the canonical per-task strike
+counter (2 consecutive failures → typed escalation; a third respawn has broken
+this).** A stall-guard terminal (blocked-with-green-code) or the second
+consecutive failure FREES the in-flight slot: the task leaves the set with its
+typed `BLOCKED:` escalation and the loop continues - under SPEC_MODE /
+`mode:autonomous`, emit a `NEEDS_HUMAN` line and keep admitting other tasks;
+interactively, surface the failure and stop. The run never wedges on one task.
+
+**Tracker touchpoint:** when the task reached `done`, run canonical phases.md
+3d.1 exactly as written there.
+
+## 3e Plan-Sync Stage Lines
+
+The 3.0 gate already decided this run's shape. When `planSync.enabled` is
+explicitly `true`, the run is SERIAL and canonical phases.md 3e runs after
+each completed task exactly as shipped (read `$WORK_SKILL/phases.md` 3e and
+its plan-sync-dispatch reference; done(N) precedes plan-sync(N), which
+precedes any anchor that could read N's downstream updates). When plan-sync is
+off (rolling admission active), record the skip line on each completed task -
+`stage: plan-sync - skipped(config: planSync.enabled != true)` - per the
+canonical stage-outcome contract. A skipped stage is an event with a reason,
+never an absence.
+
+## 3f Quiesce
+
+**SINGLE_TASK_MODE**: after 3d→3e for the requested task, go to canonical
+Phase 4. No loop.
+
+**SPEC_MODE**: every worker-return event loops back to 3a (recompute the
+frontier, admit, dispatch), interleaved with 3d for the returning task. The
+run reaches **quiesce** when the ready frontier AND the in-flight set are both
+empty. At quiesce:
+
+1. Run the full-suite verification once on the final integrated target
+   (wave-join.md's integrated-target verification contract - the full gate
+   runs only here, never per task); fix and commit any failure.
+2. Run canonical phases.md 3g (completion review gate) exactly as written
+   there - only its timing shifts to quiesce, never its semantics.
+3. Delete the notes directory (`rm -rf "$NOTES_DIR"` when non-empty) - clean
+   completion only; on an interrupted or escalated run leave it in place.
+
+Then continue with canonical Phase 4 (quality) and Phase 5 (ship).
