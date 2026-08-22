@@ -307,3 +307,16 @@ only as the run's LAST cleanup step, after canonical Phase 5 completes cleanly
 - a quality or ship failure is not a clean completion, and its diagnostic
 notes must still exist. On an interrupted or escalated run leave the directory
 in place (inert prose, removable by hand).
+
+**The run is not over at the last `done` (field receipt #1, 2026-08-22).** The
+final integration is the moment this failure happens: the frontier is empty,
+every task reads `done`, and ending the turn feels complete - but quiesce has
+not run. **Detect quiesce and continue IN THE SAME TURN**: after ANY 3d
+handling, recompute the frontier immediately; when it and the in-flight set
+are both empty, proceed straight into steps 1-2 above and canonical Phases
+4-5 without ending the turn, ever waiting for another event (none is coming),
+or handing control back. A session that ends after the final integration
+without the Phase 5 final summary - unrun quiesce suite, undeleted notes
+directory, no `Tracker sync:` slot - has broken this. This is doubly binding
+in headless/background sessions, where no user exists to nudge the run
+onward.
