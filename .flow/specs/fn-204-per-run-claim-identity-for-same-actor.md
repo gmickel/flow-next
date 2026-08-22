@@ -10,6 +10,8 @@ flowctl identifies claim owners by git email. Two concurrent runs by the same pe
 - Preserve legitimate resume: an explicit resume path (same run-id, or an explicit `--resume`/`--force`) keeps the crash-recovery ergonomics; a DIFFERENT run-id with the same actor refuses like a foreign claim.
 - Audit both work skills' claim/contention prose against the new semantics (the fn-203 beta's foreign-in-flight checks generalize cleanly: "foreign" becomes "not this run-id" rather than "not this actor").
 
+- Also in scope (same concurrent-same-actor class, surfaced by codex r6 on PR #365): the rolling beta's `.flow/tmp/notes_dir` pointer is a single shared path, so two concurrent runs on one checkout cross-wire notes surfaces (second run overwrites the pointer; first run's cleanup can delete the second's active dir). Key the pointer by the same per-run identity this spec introduces.
+
 ## Acceptance Criteria
 
 - R1: A second same-actor run's `flowctl start` on an in_progress task refuses (typed contention) unless an explicit resume path is taken; crash-recovery resume still works; focused deterministic tests cover both.

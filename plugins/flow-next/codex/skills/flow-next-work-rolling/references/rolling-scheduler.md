@@ -212,7 +212,11 @@ recomputed frontier is empty and the local in-flight set is empty, route to
 rather than waiting for an event that cannot arrive.
 
 **Tracker touchpoint:** run canonical phases.md 3b.1 exactly as written there
-(read `$WORK_SKILL/phases.md`, section 3b.1) for each claimed task.
+(read `$WORK_SKILL/phases.md`, section 3b.1) **once per RUN, at the run's
+first successful claim only** - the `work.firstClaim` event is a run-lifecycle
+event, not a per-task one (tracker-touchpoints.md scopes it to the spec's
+first claimed task). Track that it fired; later admission events never re-run
+it. A run that dispatched 3b.1 per claimed task has broken this.
 
 ## 3c Spawn Workers
 
