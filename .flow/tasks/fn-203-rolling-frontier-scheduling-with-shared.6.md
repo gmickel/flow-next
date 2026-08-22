@@ -24,9 +24,10 @@ Documentation and gate pass for the beta release. One finalization task per repo
 - [ ] CHANGELOG Unreleased entry names beta status, invocation, and the graduation field-window trigger (matching the spec-recorded window)
 - [ ] Full suite + ruff + double sync-codex green; both R8 pin surfaces verified green with zero canonical work-skill diffs
 ## Done summary
-TBD
+Phase B finalization for the fn-203 rolling-frontier beta: recorded the R10 Phase C field window in the spec's Decision Context (minimum 5 beta-run specs with receipts; fully-serial runs excluded - closing the .4-reviewer-flagged gap), added the outside-tree runtime-state + run-notes dirs section to architecture.md, an experimental-alternative pointer to orchestration.md, a beta failure-modes section to troubleshooting.md, and a CHANGELOG Unreleased entry naming beta status, invocation, prerequisite, and the graduation field-window trigger. platforms.md deliberately untouched: arm 1 won (no locking) and notes-dir mechanics are host-neutral, so no host difference exists. Review fixes: planSync.enabled=true is the shipped default, so planSync.enabled=false is now stated as an explicit beta prerequisite on every surface; join-collision recovery rewritten as an ordered collision-retry queue (drain non-held tasks only) so single- and multi-collision returns cannot deadlock. Mirror regenerated twice idempotently; full suite + ruff green; both R8 pin surfaces green with zero canonical work-skill diffs and no prompt-hash updates.
 
+stage: impl-review - ran [r1 NEEDS_WORK (2 P1), r2 NEEDS_WORK (1 P1), r3 SHIP] (model: codex, base=merge-base per final-integration-task memory)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: da9539d4a13db15fee979c0c631ad7f1294467ff, 6a9bfa1c31b9095c8361117da53c70354fcaf28f, 5673acb5032693696fd779f155947cab10207830, 9382a3a46c48a830ce3acccb0ac2abbd8d76512e
+- Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (x2, idempotent), GATE_SKIPPED:unittest:green-receipt 5673acb5 - baseline reused from prior post-gate pass (Verify: receipt honored at fix HEAD)
 - PRs:
