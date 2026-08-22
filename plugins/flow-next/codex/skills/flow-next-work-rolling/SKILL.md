@@ -10,7 +10,7 @@ user-invocable: false
 
 **Never fork canonical content.** The canonical work skill's files are read, never copied into this skill and never edited from it. A canonical-work change this skill cannot consume by pointer is a blocking defect of THIS skill's structure, fixed here - never by forking or editing the canonical file (fn-203 R3).
 
-**Termination clause.** This beta graduates into the canonical work skill or is deleted, on a recorded decision (fn-203 R10). It is never a standing second topology. Pilot, land, and Ralph never dispatch it; the pipeline stays on canonical `flow-next-work`, and this skill is user-invoked for its entire life.
+**Experimental.** This beta may change or be replaced as it matures; canonical `/flow-next:work` is unchanged and remains the default.
 
 ## Preamble
 

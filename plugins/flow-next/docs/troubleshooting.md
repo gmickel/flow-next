@@ -275,7 +275,7 @@ The beta is a thin delta over canonical work; most failures resolve exactly as c
 - **`Notes surface: unavailable (...)`** - the shared run-notes directory could not be created. Advisory only: the run continues without it, nothing blocks. A notes dir abandoned by an interrupted run (under `<state-root>/flow-notes/`, see [`architecture.md`](architecture.md#outside-tree-runtime-state-and-run-notes-dirs)) is inert markdown and safe to delete by hand.
 - **A worker reports a merge conflict at integration** - per-task integration reuses the wave-join mechanics; the conflicting task is retried serially, never a correctness loss. Same handling as [the wave-join section above](#worker-reports-a-merge-conflict-at-wave-join-fn-176-wave-dispatch).
 
-The beta is experimental: it can change or disappear (graduate into canonical work, or be deleted, on a recorded decision - fn-203 R10). Pilot, land, and Ralph never dispatch it.
+The beta is experimental: it can change or disappear in a future release. Canonical `/flow-next:work` is unchanged and remains the default.
 
 ## See also
 

@@ -32,7 +32,7 @@
   },
   "planSync": {
     "crossSpec": true,
-    "enabled": true
+    "enabled": false
   },
   "review": {
     "backend": "codex",
