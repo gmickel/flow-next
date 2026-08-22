@@ -104,7 +104,14 @@ mutate config themselves.
 The conductor keeps an **in-flight set** of concurrently running tasks (cap 3)
 and admits new ready tasks **at every worker-return event** - the moment any
 in-flight task returns - instead of at wave boundaries. In SINGLE_TASK_MODE
-the in-flight set is always the requested task alone. Recompute admission at
+(single task, no loop - mirroring canonical phases.md), run start is the run's
+ONE admission event and its sole candidate is the requested task: it is
+admitted (the five conditions are judged against an empty comparison set and
+hold vacuously, except condition 5's always-serial check, which still applies -
+and a single task dispatching alone already IS serial dispatch), claimed per
+3b (a failed claim is 3b's typed contention outcome, never a silent stall),
+dispatched per 3c, and 3d/3f then run as written with the in-flight set being
+that task alone. Recompute admission at
 loop start and at every worker-return event; never precompute admissions for
 the run - worker return order is nondeterministic.
 
@@ -364,7 +371,14 @@ this).** A stall-guard terminal (blocked-with-green-code) or the second
 consecutive failure FREES the in-flight slot: the task leaves the set with its
 typed `BLOCKED:` escalation and the loop continues - under SPEC_MODE /
 `mode:autonomous`, emit a `NEEDS_HUMAN` line and keep admitting other tasks;
-interactively, surface the failure and stop. The run never wedges on one task.
+interactively, surface the failure and stop - but **DRAIN before stopping**:
+stop admitting new tasks, await every live worker return and review
+completion, and run each returned task's 3d handling (integrate, review,
+complete, or escalate as that task's own outcome dictates); only then stop,
+with the failure report covering every task's terminal state. Stopping while
+siblings are live abandons their `in_progress` claims and lets late returns
+arrive after the conductor is gone - no task is ever left silently
+`in_progress`. The run never wedges on one task.
 
 **Tracker touchpoint:** when the task reached `done`, run canonical phases.md
 3d.1 exactly as written there.
