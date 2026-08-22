@@ -4,7 +4,7 @@ satisfies: [R10]
 # fn-203-rolling-frontier-scheduling-with-shared.7 Phase C: graduation or sunset decision + execution
 
 ## Description
-After the pre-declared field window (minimum count of beta-run specs with receipts, as recorded in the spec's Decision Context by task 3 and repeated in the task-6 CHANGELOG entry), execute the recorded decision. There is no third outcome in which both topologies remain.
+After the pre-declared field window (minimum count of beta-run specs with receipts, as recorded in the spec's Decision Context by task 6 - not task 3, which shipped the beta in .4 without recording it - and repeated in the task-6 CHANGELOG entry), execute the recorded decision. There is no third outcome in which both topologies remain. <!-- Updated by plan-sync: fn-203.4 reviewer flagged the field window was never recorded by task .3; task .6 now carries that item -->
 
 **Size:** M
 **Files:** graduation: plugins/flow-next/skills/flow-next-work/phases.md + references/wave-join.md (Phase 3 replaced), beta skill dir + command shim deleted, guide routing reverted, sync-codex entries removed, conduct files updated, prose-pin suites updated deliberately, docs rewritten (orchestration/architecture/flowctl/skills.md), CHANGELOG; sunset: deletions (skill dir, command shim, guide route, sync-codex entries, conduct files) + CHANGELOG only
