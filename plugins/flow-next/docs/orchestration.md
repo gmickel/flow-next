@@ -258,7 +258,7 @@ Notes that keep this honest:
 - **The family rule is advice, not enforcement.** Nothing can verify a model's family from a name you invented; the reviewer tier documents the rule and the receipt records what ran.
 - **Scouting splits by kind of work, not by price.** Mechanical inventory goes to the fast scout tier; analysis that degrades on a fast tier goes to the thinking scout tier.
 
-**Experimental alternative for the Work stage:** `/flow-next:work-rolling` (beta) replaces the wave barrier with rolling per-task admission - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review. User-invoked only; pilot and land always dispatch canonical `/flow-next:work`. It graduates into the canonical skill or is deleted on a recorded decision (fn-203 R10). Details: [`../skills/flow-next-work-rolling/SKILL.md`](../skills/flow-next-work-rolling/SKILL.md).
+**Experimental alternative for the Work stage:** `/flow-next:work-rolling` (beta) replaces the wave barrier with rolling per-task admission - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review. User-invoked only; pilot and land always dispatch canonical `/flow-next:work`. Prerequisite: `planSync.enabled=false` (`true` is the shipped default; with it on, the run fail-closes to serial). It graduates into the canonical skill or is deleted on a recorded decision (fn-203 R10). Details: [`../skills/flow-next-work-rolling/SKILL.md`](../skills/flow-next-work-rolling/SKILL.md).
 
 ### The wrapper pattern - self-healing bridges for unattended loops
 

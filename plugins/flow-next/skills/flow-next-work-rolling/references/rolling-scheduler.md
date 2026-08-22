@@ -53,11 +53,18 @@ interrupted run is inert prose and may be removed by hand.
 $FLOWCTL config get planSync.enabled --json
 ```
 
-If explicitly `true`, concurrent admission is DISABLED for the entire run:
-dispatch strictly serially (at most one in-flight task; 3e runs after each
-completed task exactly as canonical phases.md 3e ships) and report
-`Sequential fallback: planSync.enabled=true` once. Rolling admission is active
-only when plan-sync is off (null/false/missing - the default).
+Unless the answer is explicitly `false`, concurrent admission is DISABLED for
+the entire run: dispatch strictly serially (at most one in-flight task; 3e
+runs after each completed task exactly as canonical phases.md 3e ships) and
+report `Sequential fallback: planSync.enabled=true` once. **`true` is the
+SHIPPED DEFAULT** - `flowctl init` writes `planSync.enabled: true` and
+`config get` answers the default when the key is absent - so a repo that never
+touched this knob takes the serial branch. Rolling admission therefore has an
+explicit beta prerequisite: `planSync.enabled=false`. When the gate fires
+interactively, offer the exact opt-out once - `flowctl config set
+planSync.enabled false`, then re-invoke - and proceed serially on decline.
+Autonomous runs report the unmet prerequisite in the fallback line and NEVER
+mutate config themselves.
 
 ## 3a Admission at Every Worker-Return Event
 
@@ -221,10 +228,16 @@ impl-review's, untouched.
 **Join collision:** a merge conflict at integration means the admission rule's
 declared `**Touches:**` sets were wrong - a wrong admission surfacing
 structurally. Never auto-resolve: follow wave-join.md's collision handling
-(abort the conflicted integration, keep the target clean, re-run the losing
-task SERIALLY from the joined state after the in-flight set drains, record the
-`stage: wave-join - failed(collision: ...)` line). One serial retry, never a
-correctness loss.
+(abort the conflicted integration, keep the target clean, record the
+`stage: wave-join - failed(collision: ...)` line). The losing task then enters
+an explicit **collision-hold** state: it KEEPS its claim and its in-flight
+slot (so nothing else claims it), but the conductor admits NO new tasks and
+drains every **other** in-flight task to completion or typed escalation.
+Only when the losing task is the sole occupant does the conductor retry it
+serially from the joined target state; its slot frees on completion or typed
+escalation, exactly like any other task. Waiting on the losing task's own
+slot to empty would deadlock - the drain condition is "every other task",
+never "the whole set". One serial retry, never a correctness loss.
 
 **Worker failure handling (per task).** A worker that returns without a valid
 handover (or whose result is lost) is diagnosed from ground truth INSIDE its
