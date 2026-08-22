@@ -201,8 +201,12 @@ default shape.
 **Review-completion event** (that task only):
 - **SHIP** → run the focused integrated verify; `flowctl done` with the
   updated task-unique summary/evidence; verify `done`; run the 3d.1 tracker
-  touchpoint; FREE the slot; recompute admission at 3a. done(N) fires only on
-  SHIP(N).
+  touchpoint; **run 3e for this completed task** (in the serial plan-sync mode
+  that is the full canonical dispatch, and no new task is claimed or anchored
+  until it finishes - done(N) precedes plan-sync(N), which precedes any anchor
+  that could read N's downstream updates; in rolling mode it records the skip
+  line); THEN free the slot and recompute admission at 3a. done(N) fires only
+  on SHIP(N).
 - **NEEDS_WORK** → drive the bounded fix loop as that task's continuing
   in-flight activity: fix, commit, integrate the fix commits, append them to
   the task's evidence, re-dispatch the re-review concurrently (same slot,
