@@ -55,6 +55,8 @@ Match the **starting state**. First clear match wins. Chart only when one oversi
 
 There is **no** fixed prospect -> chart -> capture conveyor. Each hop re-evaluates the matrix.
 
+**Experimental variant - never a default route.** `/flow-next:work-rolling` is an experimental rolling-frontier variant of `/flow-next:work` (per-task admission, isolated workspaces, conductor-owned review). The router never recommends it as the route for "planned tasks ready to implement" - that row stays `/flow-next:work`, and pilot/land stay on canonical work. Name it only when the user explicitly asks for rolling or concurrent scheduling of a planned multi-task spec, and say it is experimental (can change or disappear).
+
 **Router staleness is a defect, not drift.** This table is the router's inventory of what ships. Recommending a skill that no longer exists, or failing to know one that does, is a broken router - the recommendation looks confident and sends the user nowhere. Adding or removing a flow-next skill updates this table in the same change (`agent_docs/adding-skills.md`).
 
 ## Prompt-first behavior

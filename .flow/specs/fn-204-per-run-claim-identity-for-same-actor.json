@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-204-per-run-claim-identity-for-same-actor",
+  "created_at": "2026-08-22T20:15:08.961348Z",
+  "depends_on_epics": [],
+  "id": "fn-204-per-run-claim-identity-for-same-actor",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-204-per-run-claim-identity-for-same-actor.md",
+  "status": "open",
+  "title": "Per-run claim identity for same-actor session contention",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-22T20:15:08.962809Z"
+}
