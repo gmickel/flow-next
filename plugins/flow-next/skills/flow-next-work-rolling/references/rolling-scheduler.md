@@ -96,20 +96,27 @@ If the ready frontier is empty AND the in-flight set is empty, the run has
 quiesced: go to 3f.
 
 In SPEC_MODE, apply the **admission rule (fail-closed - canonical fn-176 wave
-rule, re-scoped from wave peers to the in-flight set)**. A candidate task is
-admitted only when ALL five conditions hold against EVERY task currently in
-flight; any one unmet holds the candidate:
+rule, re-scoped from wave peers to the in-flight set)**. Admission within one
+event is **incremental**: consider candidates one at a time (ready-list
+order), and judge each against the **comparison set** = every task currently
+in flight PLUS every candidate already tentatively admitted at THIS event.
+Checking candidates only against the pre-event in-flight set has broken this -
+two candidates with intersecting Touches would both pass. A candidate is
+admitted only when ALL five conditions hold against EVERY task in the
+comparison set; any one unmet holds the candidate (a held candidate is not
+added to the comparison set):
 
 1. same spec;
 2. in-flight size after admission ≤ 3;
-3. no dependency path between the candidate and any in-flight task, in either
-   direction, **transitively** (walk the `depends_on` closure from
+3. no dependency path between the candidate and any comparison-set task, in
+   either direction, **transitively** (walk the `depends_on` closure from
    `$FLOWCTL show <task-id> --json` / `$FLOWCTL tasks --spec <spec-id> --json`
    - `flowctl dep` only writes edges, it has no read verb; a direct-only check
    is wrong);
 4. the candidate carries a `**Touches:**` declaration, and its declared set is
-   **disjoint** vs every in-flight task's declared set
-   (`touches(candidate) ∩ touches(inflight) = ∅`, glob-aware);
+   **disjoint** vs every comparison-set task's declared set
+   (`touches(candidate) ∩ touches(member) = ∅`, glob-aware) - so the tasks
+   admitted at one event are pairwise Touches-disjoint by construction;
 5. the candidate does not touch the always-serial set: `.flow/`, lockfiles,
    migration dirs, codegen/generated outputs, or spec/task files.
 
@@ -184,10 +191,27 @@ resolution, `BASELINE_HANDOFF` judgment) is canonical:
 
   The same pointer line goes into every scout dispatch this run makes.
 
-**Do not block the loop on the full in-flight set.** After dispatching, wait
-for the next event (a worker return OR a review completion - 3d), handle it,
-then recompute admission at 3a. While one task's review or fix loop runs, the
-other in-flight workers keep running.
+**Do not block the loop on the full in-flight set.** Rolling admission
+requires a **non-blocking join mechanism**: on hosts whose subagent dispatch
+runs in the background and delivers a completion notification (Claude Code's
+background Task dispatch is the canonical example), dispatch every admitted
+worker in the background and treat each completion notification as the event -
+a worker return OR a review completion (3d) - handle it, then recompute
+admission at 3a. While one task's review or fix loop runs, the other in-flight
+workers keep running.
+
+**Blocking-dispatch hosts degrade honestly (fail-closed).** On a host whose
+ordinary subagent dispatch BLOCKS until completion and offers no background
+dispatch with completion notifications (portable-host clause - Cursor, Grok,
+and any other host consuming this prose as-is), dispatching multiple workers
+silently recreates the wave barrier: the conductor cannot observe the first
+return until all return, and the run is wave scheduling wearing a rolling
+label. Do not pretend otherwise. The conductor MUST fall back to canonical
+wave scheduling for the run (canonical phases.md Phase 3 semantics) AND record
+the degradation wherever the run reports its shape - the run report and any
+receipt line describing scheduling carries
+`Scheduling: degraded to wave (host lacks non-blocking dispatch)` - so a field
+receipt can never claim rolling for a run that actually exercised waves.
 
 ## 3d Per-Return Integrate, Review, Complete
 
