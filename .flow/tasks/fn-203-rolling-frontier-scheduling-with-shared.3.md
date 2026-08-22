@@ -45,3 +45,4 @@ self-blessed.
 - Commits: 408f832, 17b5138, e97fa64, 800e153, 665c62c, 6ff7033, ebd7431, 458564a, 9635d29
 - Tests: pristine-pin + 3 final trees: bun lint:check/typecheck/verify-docs green; cockpit suites 0 fail; mergefoundryd inherited proof.e2e red only, blind checklist 21 items x 3 arms, codex gpt-5.6-sol high, thresholds-first
 - PRs:
+stage: plan-sync - ran (drift corrected: .4/.5/.6 + R6 row retargeted to arm-1 outcome)

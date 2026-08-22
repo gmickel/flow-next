@@ -101,7 +101,7 @@ Task fn-203-rolling-frontier-scheduling-with-shared.3 validates the core approac
 | R3 | Beta skill as thin delta | .4 | - |
 | R4 | Rolling admission rule + report lines | .4 | - |
 | R5 | Conductor-owned review, SHIP gates done | .4 | - |
-| R6 | Integration per winning arm (join reuse / mutex + staging-by-declaration) | .4, .5 | - |
+| R6 | Integration per winning arm (join reuse / mutex + staging-by-declaration) | .4 | Arm 1 won (fn-203.3, 2026-08-22); .5 (commit-mutex verb) closes unimplemented, arm-2-only. R6 coverage is .4 alone (join-reuse integration). |
 | R7 | Outside-tree notes surface | .4 | - |
 | R8 | Review surfaces untouched, pin suites green | .6 | - |
 | R9 | Docs, mirror, G1/G2, mutex tests | .6 | - |
