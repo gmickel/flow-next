@@ -116,13 +116,13 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# Test 4: Verify new defaults added (memory + planSync now default to True)
+# Test 4: Verify new defaults added (planSync opt-in since 4.5.1: seeds False)
 plansync_val="$(scripts/flowctl config get planSync.enabled --json | "${FLOW_PY[@]}" -c 'import json,sys; print(json.load(sys.stdin).get("value"))')"
-if [[ "$plansync_val" == "True" ]]; then
+if [[ "$plansync_val" == "False" ]]; then
   echo -e "${GREEN}✓${NC} init adds new default keys"
   PASS=$((PASS + 1))
 else
-  echo -e "${RED}✗${NC} init defaults: expected planSync.enabled=True, got $plansync_val"
+  echo -e "${RED}✗${NC} init defaults: expected planSync.enabled=False, got $plansync_val"
   FAIL=$((FAIL + 1))
 fi
 
