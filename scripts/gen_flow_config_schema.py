@@ -51,11 +51,11 @@ DESCRIPTIONS: dict[str, str] = {
         "completed task)."
     ),
     "planSync.enabled": (
-        "Enable plan-sync after task completion. On by default and "
-        "droppable: it costs a reconciliation pass after each completed "
-        "task, and earns that on specs with dependent tasks. Turn it off "
-        "and run /flow-next:sync manually when a task invalidates a "
-        "downstream assumption. See docs/running-lean.md."
+        "Enable plan-sync after task completion. Off by default (opt-in): "
+        "it costs a reconciliation pass after each completed task, and "
+        "earns that on specs with dependent tasks. Leave it off and run "
+        "/flow-next:sync manually when a task invalidates a downstream "
+        "assumption. See docs/running-lean.md."
     ),
     "planSync.crossSpec": (
         "Cross-spec plan-sync: scan other open specs for stale references "

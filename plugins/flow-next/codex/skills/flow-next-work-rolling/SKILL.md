@@ -46,6 +46,6 @@ Task claims live in the shared runtime state store and are spec-scoped, not skil
 
 - Everything canonical work forbids is forbidden here; its guardrails apply verbatim (read them in step 1).
 - **The concurrency cap stays at 3.** Raising it is out of scope for this beta (fn-203 Boundaries).
-- **`planSync.enabled=true` disables concurrent admission entirely** - the run degrades to serial, canonical behavior (fail-closed; the scheduler reference carries the gate). **`true` is the shipped default**, so rolling admission has an explicit prerequisite: `flowctl config set planSync.enabled false`. Interactive runs offer that opt-out once when the gate fires; autonomous runs report the unmet prerequisite and never mutate config.
+- **`planSync.enabled=true` disables concurrent admission entirely** - the run degrades to serial, canonical behavior (fail-closed; the scheduler reference carries the gate). **`false` is the shipped default since 4.5.1** (earlier inits wrote `true`), so the prerequisite bites only on repos that opted into plan-sync: `flowctl config set planSync.enabled false`. Interactive runs offer that opt-out once when the gate fires; autonomous runs report the unmet prerequisite and never mutate config.
 - **Notes-surface content is read by pointer, never embedded** into a dispatch prompt (the scheduler reference carries the rule).
 - **Review surfaces are untouched**: reviewer identity, rubric, diff scope, SHIP-before-done gate, and the fix-loop cap are canonical work's, byte-unchanged (fn-203 R5/R8).

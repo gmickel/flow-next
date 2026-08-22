@@ -394,8 +394,8 @@ Available questions (include only if corresponding config is unset):
   "header": "Plan-Sync",
   "question": "Enable plan-sync? After each task is implemented, a quick sync pass updates the not-yet-started tasks in the same spec to match what was ACTUALLY built - so later tasks never work from a stale plan.",
   "options": [
-    {"label": "Yes (Recommended)", "description": "Sync remaining task specs whenever implementation deviates from the original plan. Costs one reconciliation pass per completed task."},
-    {"label": "No", "description": "Later tasks keep their original wording. Enable later with: flowctl config set planSync.enabled true"}
+    {"label": "No (Recommended)", "description": "The shipped default: the per-task pass usually finds nothing to change. Run /flow-next:sync manually when a task invalidates a downstream assumption - same capability, on demand."},
+    {"label": "Yes", "description": "Sync remaining task specs automatically whenever implementation deviates from the original plan. Costs one reconciliation pass per completed task; earns it on specs with several dependent tasks."}
   ],
   "multiSelect": false
 }

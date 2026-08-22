@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 4.5.1] - 2026-08-22
+
+### Changed
+
+- **Plan-sync becomes opt-in.** Fresh installs no longer pay a reconciliation pass after every completed task: on most specs the auto-dispatched pass finds nothing to change, and manual `/flow-next:sync` keeps the full capability for the moment a task genuinely invalidates a downstream assumption. `flowctl init` now seeds `planSync.enabled: false` and the merged default answers `false` for an absent key; existing configs keep whatever they have, and setup still asks the question with the trade-off explained. A welcome side effect: the rolling-frontier beta's prerequisite (`planSync.enabled=false`) is now the default state, so a fresh repo can invoke `/flow-next:work-rolling` directly. Opt back in with `flowctl config set planSync.enabled true`.
+
 ## [flow-next 4.5.0] - 2026-08-22
 
 Multi-task runs stop paying for the wave barrier: an opt-in beta scheduler starts the next task the moment any worker finishes, cutting work-phase wall-clock by half in its pre-registered eval while every review gate, receipt, and quality check stays exactly as strict. The architecture was chosen by evidence, and the eval's most useful output is the arm it rejected.

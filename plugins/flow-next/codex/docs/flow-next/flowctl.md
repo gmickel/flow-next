@@ -948,7 +948,7 @@ flowctl config set memory.enabled false [--json]
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `memory.enabled` | bool | `true` | Enable memory system |
-| `planSync.enabled` | bool | `true` | Enable plan-sync after task completion |
+| `planSync.enabled` | bool | `false` | Enable plan-sync after task completion (opt-in since 4.5.1; earlier inits wrote `true`) |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
 | `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |

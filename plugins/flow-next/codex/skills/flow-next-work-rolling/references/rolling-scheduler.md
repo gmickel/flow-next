@@ -89,15 +89,15 @@ $FLOWCTL config get planSync.enabled --json
 Unless the answer is explicitly `false`, concurrent admission is DISABLED for
 the entire run: dispatch strictly serially (at most one in-flight task; 3e
 runs after each completed task exactly as canonical phases.md 3e ships) and
-report `Sequential fallback: planSync.enabled=true` once. **`true` is the
-SHIPPED DEFAULT** - `flowctl init` writes `planSync.enabled: true` and
-`config get` answers the default when the key is absent - so a repo that never
-touched this knob takes the serial branch. Rolling admission therefore has an
-explicit beta prerequisite: `planSync.enabled=false`. When the gate fires
-interactively, offer the exact opt-out once - `flowctl config set
-planSync.enabled false`, then re-invoke - and proceed serially on decline.
-Autonomous runs report the unmet prerequisite in the fallback line and NEVER
-mutate config themselves.
+report `Sequential fallback: planSync.enabled=true` once. **`false` is the
+shipped default since 4.5.1** - `flowctl init` writes `planSync.enabled: false`
+and `config get` answers the default when the key is absent - so a fresh repo
+takes the rolling branch. A repo that opted into plan-sync (`true`, including
+every pre-4.5.1 init) fail-closes to serial: the beta prerequisite is
+`planSync.enabled=false`. When the gate fires interactively, offer the exact
+opt-out once - `flowctl config set planSync.enabled false`, then re-invoke -
+and proceed serially on decline. Autonomous runs report the unmet prerequisite
+in the fallback line and NEVER mutate config themselves.
 
 ## 3a Admission at Every Worker-Return Event
 

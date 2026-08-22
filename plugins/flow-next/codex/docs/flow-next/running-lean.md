@@ -54,7 +54,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 | [Live QA stage](#live-qa-stage) | `pipeline.qa` | off | `/flow-next:qa <spec>` |
 | [Cross-model review backend](#cross-model-review-backend) | `review.backend` | unset | `/flow-next:impl-review` |
 | [HTML render lenses](#html-render-lenses) | `artifacts.html.enabled` | off | ask for a render in conversation |
-| [Plan-sync](#plan-sync) | `planSync.enabled` | **on** | `/flow-next:sync` |
+| [Plan-sync](#plan-sync) | `planSync.enabled` | **off** | `/flow-next:sync` |
 | [Memory](#memory-and-the-audit-sweep) | `memory.enabled` | **on** | `/flow-next:audit` |
 | [Pre-capture discovery](#pre-capture-discovery) | none | manual | `/flow-next:chart`, `/flow-next:prospect` |
 | [Autonomous loops](#autonomous-loops) | none | manual | `/flow-next:pilot`, `/flow-next:land` |
@@ -115,12 +115,12 @@ Between the two: `host` trades the second CLI for zero setup while keeping the g
 
 ### Plan-sync
 
-`planSync.enabled` - **on by default**. Details: [`../skills/flow-next-sync/SKILL.md`](../../skills/flow-next-sync/SKILL.md).
+`planSync.enabled` - **off by default since 4.5.1** (earlier inits wrote `true`; an existing config keeps its value). Details: [`../skills/flow-next-sync/SKILL.md`](../../skills/flow-next-sync/SKILL.md).
 
 - **Automates away:** updating downstream task specs after an implementation drifts from what the plan assumed, so later tasks re-anchor on what is true rather than what was planned.
-- **Costs:** a reconciliation pass after each completed task.
-- **Earns its keep when:** the spec has several dependent tasks - the usual case, which is why it ships on. On a single-task spec there is nothing downstream to reconcile and the pass is a no-op worth skipping.
-- **Lean invocation:** `flowctl config set planSync.enabled false`, then `/flow-next:sync` when a task genuinely invalidates a downstream assumption.
+- **Costs:** a reconciliation pass after each completed task - which usually finds nothing to change, which is why it now ships off.
+- **Earns its keep when:** the spec has several dependent tasks and implementations genuinely drift from the plan. Opt in with `flowctl config set planSync.enabled true`.
+- **Lean invocation:** leave it off and run `/flow-next:sync` when a task genuinely invalidates a downstream assumption - manual sync keeps the full capability.
 
 ### Memory and the audit sweep
 

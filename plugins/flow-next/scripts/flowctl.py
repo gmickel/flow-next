@@ -1385,7 +1385,9 @@ def get_default_config() -> dict:
         # plan-sync-skip-gate-not-viable-2026-07-03.md) and its machinery
         # was removed from the shipped CLI. Plan-sync spawns unconditionally
         # whenever `enabled` is true. Do not re-add gate config.
-        "planSync": {"enabled": True, "crossSpec": False},
+        # enabled defaults False since 4.5.1: plan-sync is opt-in (existing
+        # configs with an explicit true are untouched; /flow-next:sync stays).
+        "planSync": {"enabled": False, "crossSpec": False},
         # fn-168 R7 — `maxIterations` is the review-round cap's persistent rung
         # (env MAX_REVIEW_ITERATIONS still wins). Defaulted here, like the
         # land.* block, so `config get review.maxIterations` answers 8
