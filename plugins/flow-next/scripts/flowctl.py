@@ -41122,24 +41122,29 @@ def _self_write_review_status(
     status = status_map.get(verdict)
     if not status:
         return None
+    if kind not in ("plan", "completion"):
+        return None
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_json_path.exists():
         return None
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
-    )
-    now = now_iso()
-    if kind == "plan":
-        spec_data["plan_review_status"] = status
-        spec_data["plan_reviewed_at"] = now
-    elif kind == "completion":
-        spec_data["completion_review_status"] = status
-        spec_data["completion_reviewed_at"] = now
-    else:
-        return None
-    spec_data["updated_at"] = now
-    atomic_write_json(spec_json_path, spec_data)
+    # fn-205.3 (host-review follow-up): every other review-status writer holds
+    # the review sidecar lock; this read-modify-write was the one exception,
+    # racing set-completion-review-status's --if-current compare-and-set.
+    # Lock order unchanged: receipt lock (held by callers) before this lock.
+    with _review_sidecar_lock(flow_dir, spec_id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
+        )
+        now = now_iso()
+        if kind == "plan":
+            spec_data["plan_review_status"] = status
+            spec_data["plan_reviewed_at"] = now
+        else:
+            spec_data["completion_review_status"] = status
+            spec_data["completion_reviewed_at"] = now
+        spec_data["updated_at"] = now
+        atomic_write_json(spec_json_path, spec_data)
     return status
 
 

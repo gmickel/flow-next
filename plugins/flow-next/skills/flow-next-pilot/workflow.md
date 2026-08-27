@@ -350,12 +350,12 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 | tasks exist and `plan_review_status != "ship"` and review backend is configured | `plan-review` |
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
 | the only non-`done` tasks are `in_progress` own/unassigned (other-actor claims were already skipped at SELECT) | `NEEDS_HUMAN`, reason `stale in-progress claim — work's ready-driven loop cannot resume it` |
-| all tasks done and `completion_review_status != "ship"` and review backend is configured | `work` |
-| all tasks done and completion is ship-or-ungated | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **any merged PR + branch head differing from the newest merged head** → `make-pr` (merged-presence wins — historical closed PRs on the branch are irrelevant); **merged with nothing new / closed-without-merge and no merged PR / probe-failed / missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
+| all tasks done and `completion_review_status` outside the satisfying set (`ship`, `not_required`) and review backend is configured | `work` |
+| all tasks done and completion is satisfied-or-ungated (satisfying set `ship`/`not_required`) | run the all-done PR probe (below; `--state all`, fails closed): **open PR** → defer-to-land; **any merged PR + branch head differing from the newest merged head** → `make-pr` (merged-presence wins — historical closed PRs on the branch are irrelevant); **merged with nothing new / closed-without-merge and no merged PR / probe-failed / missing-branch** → `NEEDS_HUMAN`; **no PR** → `qa` (when `QA_STAGE_ENABLED=1` and no *fresh* `qa_verdict` — R1/R1b) else `make-pr` |
 
 A spec whose only remaining tasks are `blocked` still classifies as `work`; if work cannot advance it, the healthy-no-advance strike path handles it. An in-progress-only spec is different: work's Phase 3a drives off `flowctl ready --spec`, which never returns an `in_progress` task, so dispatching would burn strikes or wrongly enter the completion-review path — the stale-claim `NEEDS_HUMAN` is crash-class (no dispatch, no strike).
 
-Review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run.
+Review backend `none` or `ASK` skips both plan-review and completion-review gates; pilot never deadlocks on a gate that cannot run. A persisted `not_required` is the configured-backend analogue: policy excused the completion review, the requirement is satisfied without one, and the spec classifies satisfied-or-ungated — never back to `work`.
 
 The all-done PR probe is the only gh touch in classification. Resolve the spec's `branch_name` first (Phase 3 reuses the same `BRANCH_NAME`):
 
@@ -373,7 +373,7 @@ MERGED_PR=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '.[] | select(.state == "MERG
 MERGED_HEAD=$(printf '%s\n' "${PR_JSON:-[]}" | jq -r '[.[] | select(.state == "MERGED")] | sort_by(.mergedAt) | last | .headRefOid // empty')
 ```
 
-Classification outcomes for the all-done branch (evaluate in order, first match wins — the all-done invariant: an all-done / completion-`ship` spec with no **merged** PR, or with merged gate PRs plus commits beyond them, is *unfinished from the board's perspective* — pilot keeps driving it (`make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`):
+Classification outcomes for the all-done branch (evaluate in order, first match wins — the all-done invariant: an all-done / completion-satisfied (`ship` or `not_required`) spec with no **merged** PR, or with merged gate PRs plus commits beyond them, is *unfinished from the board's perspective* — pilot keeps driving it (`make-pr`), defers it to land (open PR), or surfaces it (`NEEDS_HUMAN`); it never collapses to terminal `NO_WORK`):
 
 - gh missing, unauthenticated, or API failure: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at all-done branch"`.
 - OPEN PR exists: this spec is **deferred to land** — land owns the open PR, not pilot — so record it as a *deferred candidate* and skip to the next SELECT candidate. This is an explicit defer, never a silent finish: if no later candidate is selectable, the tick terminates with the distinct, greppable `PILOT_VERDICT=DEFERRED_TO_LAND` line (Phase 6), never `NO_WORK`. Track the deferred spec id + open-PR url so the terminal line can name it.
@@ -489,7 +489,7 @@ plan_review_status.after=<value>
 advanced=<after == ship>
 ```
 
-For `work`, advancement means at least one task/spec status transition occurred, or `completion_review_status` newly became `ship` when that gate was the work to do:
+For `work`, advancement means at least one task/spec status transition occurred, or `completion_review_status` newly entered the satisfying set (`ship`, or the policy-excused `not_required`) when that gate was the work to do — `not_required` counts as advanced; logging it as a no-advance would burn a false strike:
 
 ```text
 Evidence:

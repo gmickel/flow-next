@@ -1241,3 +1241,104 @@ class TestProtectedRegistrationFiles(unittest.TestCase):
         writers (`config set`, tracker resolve) do not pass through here.
         """
         self.assertTrue(self._blocks("/repo/.flow/config.json"))
+
+
+RALPH_TEMPLATE = PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh"
+
+
+class RalphCompletionGateClassificationTestCase(unittest.TestCase):
+    """fn-205.3 R7 - executable pin: maybe_close_specs classifies every
+    completion_review_status member through the satisfying set
+    {ship, not_required}. `ship` claims a review ran and still demands a
+    receipt; `not_required` is policy-excused and terminates without one;
+    everything else (needs_work, needs_human, unknown, absent, unrecognized)
+    never closes. Runs the extracted shell function, not a re-implementation.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        src = RALPH_TEMPLATE.read_text(encoding="utf-8")
+        match = re.search(r"^maybe_close_specs\(\) \{\n.*?^\}$", src, re.M | re.S)
+        assert match, "maybe_close_specs() not found in ralph.sh"
+        cls.gate_fn = match.group(0)
+
+    def _run_gate(self, review_status: Optional[str], *, receipt: bool = False,
+                  backend: str = "codex") -> bool:
+        """Drive maybe_close_specs for one spec; report whether it closed."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            receipts = tmp / "receipts"
+            receipts.mkdir()
+            closes = tmp / "closes.log"
+            stub = tmp / "flowctl-stub.sh"
+            stub.write_text(
+                "#!/usr/bin/env bash\n"
+                'if [[ "$1" == "show" ]]; then echo "{}"; exit 0; fi\n'
+                'if [[ "$1" == "spec" && "$2" == "close" ]]; then'
+                f' echo "$3" >> "{closes}"; exit 0; fi\n'
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            stub.chmod(0o755)
+            if receipt:
+                (receipts / "completion-fn-t.json").write_text(
+                    "{}", encoding="utf-8")
+            driver = tmp / "driver.sh"
+            driver.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -u\n"
+                f'FLOWCTL="{stub}"\n'
+                f'RECEIPTS_DIR="{receipts}"\n'
+                f'COMPLETION_REVIEW_BACKEND="{backend}"\n'
+                'SPECS_FILE=""\n'
+                f'REVIEW_STATUS_VALUE="{review_status or ""}"\n'
+                'list_open_specs() { echo "fn-t"; }\n'
+                "json_get() {\n"
+                '  case "$1" in\n'
+                '    status) echo "open" ;;\n'
+                '    completion_review_status) printf "%s" "$REVIEW_STATUS_VALUE" ;;\n'
+                "  esac\n"
+                "}\n"
+                'spec_all_tasks_done() { echo "1"; }\n'
+                'verify_receipt() { [[ -f "$1" ]]; }\n'
+                "log() { :; }\n"
+                + self.gate_fn + "\n"
+                "maybe_close_specs\n",
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                ["bash", str(driver)], capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            return closes.exists() and "fn-t" in closes.read_text(
+                encoding="utf-8")
+
+    def test_ship_with_receipt_closes(self) -> None:
+        self.assertTrue(self._run_gate("ship", receipt=True))
+
+    def test_ship_without_receipt_does_not_close(self) -> None:
+        # ship claims a review ran: the receipt stays mandatory.
+        self.assertFalse(self._run_gate("ship", receipt=False))
+
+    def test_not_required_closes_without_receipt(self) -> None:
+        # Policy-excused: no review ran, no receipt exists by construction.
+        self.assertTrue(self._run_gate("not_required", receipt=False))
+
+    def test_needs_work_does_not_close(self) -> None:
+        self.assertFalse(self._run_gate("needs_work", receipt=True))
+
+    def test_needs_human_does_not_close(self) -> None:
+        self.assertFalse(self._run_gate("needs_human", receipt=True))
+
+    def test_unknown_does_not_close(self) -> None:
+        self.assertFalse(self._run_gate("unknown", receipt=True))
+
+    def test_absent_reads_as_unknown_and_does_not_close(self) -> None:
+        self.assertFalse(self._run_gate(None, receipt=True))
+
+    def test_unrecognized_member_fails_closed(self) -> None:
+        self.assertFalse(self._run_gate("shipped", receipt=True))
+
+    def test_backend_none_skips_gate_entirely(self) -> None:
+        # Pre-existing behavior pin: no configured backend means no gate.
+        self.assertTrue(self._run_gate("unknown", receipt=False,
+                                       backend="none"))

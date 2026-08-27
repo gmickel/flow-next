@@ -894,17 +894,26 @@ maybe_close_specs() {
     [[ "$status" == "done" ]] && continue
     all_done="$(spec_all_tasks_done "$json")"
     if [[ "$all_done" == "1" ]]; then
-      # Gate on completion review if enabled (bare backend check — spec form OK)
+      # Gate on completion review if enabled (bare backend check — spec form OK).
+      # One satisfying set {ship, not_required}; anything else — unknown,
+      # needs_work, needs_human, absent, unrecognized — satisfies nothing.
       if [[ "$COMPLETION_REVIEW_BACKEND" != "none" ]]; then
         review_status="$(json_get completion_review_status "$json")"
-        if [[ "$review_status" != "ship" ]]; then
-          # Don't close - selector will return completion_review status
-          continue
-        fi
-        # Also verify receipt exists (ralph.sh enforces, not just guard)
-        if ! verify_receipt "$RECEIPTS_DIR/completion-${spec}.json" "completion_review" "$spec"; then
-          continue
-        fi
+        case "$review_status" in
+          ship)
+            # ship claims a review ran: receipt required (ralph.sh enforces, not just guard)
+            if ! verify_receipt "$RECEIPTS_DIR/completion-${spec}.json" "completion_review" "$spec"; then
+              continue
+            fi
+            ;;
+          not_required)
+            # Policy excused the review: satisfied, and no receipt exists by construction.
+            ;;
+          *)
+            # Don't close - selector will return completion_review status
+            continue
+            ;;
+        esac
       fi
       "$FLOWCTL" spec close "$spec" --json >/dev/null 2>&1 || true
     fi
@@ -1214,25 +1223,35 @@ Violations break automation and leave the user with incomplete work. Be precise,
   completion_review_status=""
   completion_receipt_ok="1"
   if [[ "$status" == "completion_review" && ( "$COMPLETION_REVIEW_BACKEND" == "rp" || "$COMPLETION_REVIEW_BACKEND" == "codex" || "$COMPLETION_REVIEW_BACKEND" == "copilot" || "$COMPLETION_REVIEW_BACKEND" == "cursor" ) ]]; then
-    if ! verify_receipt "$REVIEW_RECEIPT_PATH" "completion_review" "$spec_id"; then
-      echo "ralph: missing completion review receipt; forcing retry" >> "$iter_log"
-      log "missing completion receipt; forcing retry"
-      completion_receipt_ok="0"
-      # Delete corrupted/partial receipt so next attempt starts clean
-      rm -f "$REVIEW_RECEIPT_PATH" 2>/dev/null || true
-      "$FLOWCTL" spec set-completion-review-status "$spec_id" --status needs_work --json >/dev/null 2>&1 || true
-      force_retry=1
-    fi
     spec_json="$("$FLOWCTL" show "$spec_id" --json 2>/dev/null || true)"
     completion_review_status="$(json_get completion_review_status "$spec_json")"
-    if [[ "$completion_review_status" == "ship" && "$completion_receipt_ok" == "1" ]]; then
-      # Completion review passed - spec can now be closed by maybe_close_specs next iteration
-      log "completion_review spec=$spec_id SHIP (will close next iteration)"
+    if [[ "$completion_review_status" == "not_required" ]]; then
+      # Satisfying set {ship, not_required}: policy excused this review — no
+      # review ran, so no receipt exists by construction. Must never be
+      # demoted to needs_work by the receipt check below.
+      log "completion_review spec=$spec_id not_required (policy-excused; will close next iteration)"
       force_retry=0
-    elif [[ "$completion_review_status" == "needs_work" ]]; then
-      # Review found gaps - skill should have handled fix loop but if we get here, retry
-      log "completion_review spec=$spec_id NEEDS_WORK; forcing retry"
-      force_retry=1
+    else
+      if ! verify_receipt "$REVIEW_RECEIPT_PATH" "completion_review" "$spec_id"; then
+        echo "ralph: missing completion review receipt; forcing retry" >> "$iter_log"
+        log "missing completion receipt; forcing retry"
+        completion_receipt_ok="0"
+        # Delete corrupted/partial receipt so next attempt starts clean
+        rm -f "$REVIEW_RECEIPT_PATH" 2>/dev/null || true
+        "$FLOWCTL" spec set-completion-review-status "$spec_id" --status needs_work --json >/dev/null 2>&1 || true
+        force_retry=1
+      fi
+      spec_json="$("$FLOWCTL" show "$spec_id" --json 2>/dev/null || true)"
+      completion_review_status="$(json_get completion_review_status "$spec_json")"
+      if [[ "$completion_review_status" == "ship" && "$completion_receipt_ok" == "1" ]]; then
+        # Completion review passed - spec can now be closed by maybe_close_specs next iteration
+        log "completion_review spec=$spec_id SHIP (will close next iteration)"
+        force_retry=0
+      elif [[ "$completion_review_status" == "needs_work" ]]; then
+        # Review found gaps - skill should have handled fix loop but if we get here, retry
+        log "completion_review spec=$spec_id NEEDS_WORK; forcing retry"
+        force_retry=1
+      fi
     fi
   fi
   receipt_verdict=""
