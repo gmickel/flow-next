@@ -1246,6 +1246,12 @@ class TestProtectedRegistrationFiles(unittest.TestCase):
 RALPH_TEMPLATE = PLUGIN_DIR / "skills" / "flow-next-ralph-init" / "templates" / "ralph.sh"
 
 
+@unittest.skipIf(
+    sys.platform == "win32",
+    "Drives the extracted maybe_close_specs() bash function with shebang stub "
+    "scripts in a temp dir; Windows cannot exec shebang scripts and the POSIX "
+    "paths do not survive, so the driver exits 1 there.",
+)
 class RalphCompletionGateClassificationTestCase(unittest.TestCase):
     """fn-205.3 R7 - executable pin: maybe_close_specs classifies every
     completion_review_status member through the satisfying set
