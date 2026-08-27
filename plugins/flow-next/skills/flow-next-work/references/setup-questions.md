@@ -36,8 +36,7 @@ Quick setup before starting:
 2. **Review** — Run Carmack-level review after?
    a) Codex CLI
    b) RepoPrompt
-   c) Export for external LLM
-   d) None (configure later with --review flag)
+   c) None (configure later with --review flag)
 
 (Reply: "1a 2a", "current branch, codex", or just tell me naturally)
 ```

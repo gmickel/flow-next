@@ -591,6 +591,18 @@ class CompletionReviewAllowSet(TaskInventoryCase):
                 result = self._next()
                 self.assertEqual(result["reason"], "needs_completion_review")
 
+    def test_non_string_value_treated_as_unknown_without_crash(self) -> None:
+        # PR #372 review: a hand-edited spec JSON can hold a list/dict where
+        # the status string belongs. Unhashable values must classify as
+        # unknown (satisfy nothing) instead of TypeError-ing the frozenset
+        # lookup and crashing `flowctl next --require-completion-review`.
+        for review in (["ship"], {"status": "ship"}, 7):
+            with self.subTest(review=review):
+                self.assertFalse(flowctl.completion_review_satisfied(review))
+                self._seed(review)
+                result = self._next()
+                self.assertEqual(result["reason"], "needs_completion_review")
+
 
 if __name__ == "__main__":
     unittest.main()

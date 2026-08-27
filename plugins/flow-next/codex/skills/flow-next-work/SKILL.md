@@ -107,7 +107,7 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 - `--review=host` or "host review" or "host-native review" → host-native fresh-context reviewer subagent (cross-family pin from the AGENTS.md model-routing section)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
-- `--review=export` or "export review" → REFUSE at parse time, before any dispatch: export is not an impl-review backend — never fall through to the configured backend and never pass it as `REVIEW_MODE`; stop and point at `/flow-next:plan-review --review=export`, where export lives
+- `--review=export` or "export review" or "external llm" → REFUSE at parse time, before any dispatch: export is not an impl-review backend — never fall through to the configured backend and never pass it as `REVIEW_MODE`; stop and point at `/flow-next:plan-review --review=export`, where export lives
 
 (All non-`none` review modes route through `/flow-next:impl-review`, which resolves the
 configured/overridden backend — codex, copilot, cursor, rp, or host — itself.)

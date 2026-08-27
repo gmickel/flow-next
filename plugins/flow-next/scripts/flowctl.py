@@ -302,7 +302,12 @@ def completion_review_satisfied(status: object) -> bool:
 
     Membership test, never a `!=` chain: an implicit deny-list would silently
     classify the next member added. Unknown / absent / garbage: not satisfied.
+    Non-str (a hand-edited/corrupted spec JSON can hold a list/dict, which is
+    unhashable and would TypeError on the frozenset lookup) classifies as
+    unknown and satisfies nothing — the gate fails closed, never crashes.
     """
+    if not isinstance(status, str):
+        return False
     return status in COMPLETION_REVIEW_SATISFYING
 
 TASK_SPEC_HEADINGS = [

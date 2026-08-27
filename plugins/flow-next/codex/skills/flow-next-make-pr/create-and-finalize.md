@@ -336,7 +336,7 @@ done
 
 if [[ -z "$PR_URL" ]]; then
   echo "Error: PR create failed after 3 retries on eventual-consistency error." >&2
-  echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
+  echo "Manual recovery: wait 30s and re-run $flow-next-make-pr (skill detects the existing branch and re-tries)." >&2
   exit 1
 fi
 
@@ -383,9 +383,9 @@ fi
 
 When `gh pr create` fails after the retry loop is exhausted, the skill emits manual-recovery instructions to stderr before exiting:
 
-- **Eventual-consistency exhaustion** (3 retries): `Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries).` The branch is already pushed — only the PR creation step needs re-running.
+- **Eventual-consistency exhaustion** (3 retries): `Manual recovery: wait 30s and re-run $flow-next-make-pr (skill detects the existing branch and re-tries).` The branch is already pushed — only the PR creation step needs re-running.
 - **Body too long (422)**: `Manual recovery: re-run with --no-mermaid (saves ~3-8K chars) or wait for the truncation policy to spill to .flow/pr-bodies/.` Should not happen because §4.4 truncation runs before invocation; if it does, the cap heuristic underestimated the body.
-- **PR already exists (409)**: `An OPEN PR exists. /flow-next:resolve-pr addresses review feedback on the existing PR. To replace it, close the open one first via gh pr close.` Phase 0.6 should have caught this; if it slipped through, the user hit a race between Phase 0 check and Phase 4 push.
+- **PR already exists (409)**: `An OPEN PR exists. $flow-next-resolve-pr addresses review feedback on the existing PR. To replace it, close the open one first via gh pr close.` Phase 0.6 should have caught this; if it slipped through, the user hit a race between Phase 0 check and Phase 4 push.
 - **Authentication (401/403)**: `Run 'gh auth status' and 'gh auth login --hostname github.com' to re-authenticate.` Phase 0.1 should have caught this; if it slipped through, the token expired between Phase 0 and Phase 4.
 - **Workflow-scope push rejection**: `git push` fails with `refusing to allow an OAuth App to create or update workflow .github/workflows/…` (or similar) when the branch touches workflow files and the HTTPS token lacks the `workflow` scope. Recovery: push via the SSH remote (`git push git@github.com:<owner>/<repo>.git HEAD`) or re-auth with `gh auth refresh -s workflow`, then re-run — the PR-create step itself is unaffected once the branch is up.
 
