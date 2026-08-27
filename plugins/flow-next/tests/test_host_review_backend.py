@@ -246,7 +246,7 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         )
         for verdict in ("ship", "needs_work", "needs_human"):
             self.assertNotIn(
-                f"--status {verdict}",
+                f"{command} <spec-id> --status {verdict}",
                 work,
                 "work must never write a verdict completion status",
             )

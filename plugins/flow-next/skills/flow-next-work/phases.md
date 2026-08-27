@@ -388,22 +388,29 @@ no config key). Skip the review when ALL of the following hold:
 - (b) that task's per-task impl-review reached SHIP (its receipt/evidence records it; `REVIEW_MODE` was not `none`)
 - (c) every spec R-ID is covered by that task's declared `satisfies`
 
-On skip: record this run-scoped stage-outcome line for the Phase 5 final
-summary (same machinery as other stages this run reached):
-
-```
-stage: completion-review - skipped(policy: single-task, per-task SHIP covers spec surface)
-```
-
-Persist the excused decision — atomically, only from `unknown`:
+On skip, persist the excused decision FIRST — atomically, only from `unknown`:
 
 ```bash
 $FLOWCTL spec set-completion-review-status <spec-id> --status not_required --if-current unknown --json
 ```
 
-Branch on `.written`: `true` records the excused review — go to Phase 4.
-`false` is a CAS miss (a review verdict landed meanwhile) — a normal
-no-skip outcome, not an error: fall through to the status check below.
+Branch on the reported outcome, recording the run-scoped stage-outcome line for
+the Phase 5 final summary ONLY on the two skip branches (a stage line for a
+skip that did not happen is a false receipt):
+
+```
+stage: completion-review - skipped(policy: single-task, per-task SHIP covers spec surface)
+```
+
+- `.written == true` — the skip landed: record the stage line, go to Phase 4.
+- `.written == false` and the reported `completion_review_status` is
+  `not_required` — a prior run already excused this spec (idempotent
+  re-entry): record the stage line, go to Phase 4.
+- `.written == false` with a verdict status (`ship` / `needs_work` /
+  `needs_human`) — a real review landed meanwhile: a normal no-skip outcome,
+  not an error. Do NOT record the skip line; fall through to the status check
+  below.
+
 Never write `ship` here; the skip is a policy outcome, not a SHIP —
 `not_required` claims the requirement is satisfied without a review having run.
 
@@ -416,6 +423,7 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
 ```
 
 - If `ship` → review already passed, go to Phase 4
+- If `not_required` → review excused by policy, go to Phase 4
 - If `unknown` or `needs_work` → needs review
 
 **If review needed** (policy skip did not fire):
@@ -464,7 +472,7 @@ solely by `land.merged`).
 
 Only after SHIP does control return here. If skill outputs `<promise>RETRY</promise>`, there was a backend error - retry the skill invocation.
 
-Done when: the policy skip recorded its stage line and persisted `completion_review_status` `not_required` (via the `--if-current unknown` CAS, falling through to the status check on a miss), or `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
+Done when: the policy skip recorded its stage line and `completion_review_status` reads `not_required` (written by this run's CAS or already excused by a prior run), or a verdict-status CAS miss fell through to the status check without a skip line, or `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
 
 ---
 
@@ -641,7 +649,7 @@ Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
   ├─ 3e: plan-sync after the wave resolves (if enabled + downstream tasks exist)
   ├─ 3f: SPEC_MODE? → loop to 3a | SINGLE_TASK_MODE? → Phase 4
   ├─ no more tasks → 3g
-  │   ├─ policy skip (single-task + per-task SHIP covers spec surface) → record stage line, leave status unknown → Phase 4
+  │   ├─ policy skip (single-task + per-task SHIP covers spec surface) → CAS-persist not_required, record stage line → Phase 4
   │   ├─ status != ship → invoke /flow-next:spec-completion-review → skill fixes, writes SHIP once, returns
   │   └─ status = ship → Phase 4
   └─ Phase 4 (quality) → Phase 5 (ship: verify → commit → sync check → retro-fire MISSING once → summary w/ Tracker sync slot)

@@ -10,6 +10,7 @@
   "id": "fn-205-issue-sweep-skipped-review-status-land",
   "impl_review_rounds": {
     "fn-205-issue-sweep-skipped-review-status-land.1": 0,
+    "fn-205-issue-sweep-skipped-review-status-land.2": 1,
     "fn-205-issue-sweep-skipped-review-status-land.4": 0
   },
   "next_task": 1,
@@ -297,8 +298,18 @@
     "plan": 1,
     "plan#completion": 0
   },
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-205-issue-sweep-skipped-review-status-land.2": 1
+  },
+  "review_reservations": {
+    "58c362d033734b0ebb644f1f4dfebd06": {
+      "artifact_sha256": "d33bcb52550d3106a9fd92b0dbf51f50bcb376e2ee0e2fa7b7084266235a46da",
+      "counter_scope": "impl:fn-205-issue-sweep-skipped-review-status-land.2",
+      "epoch": 0,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "impl:fn-205-issue-sweep-skipped-review-status-land.1": 0,
     "impl:fn-205-issue-sweep-skipped-review-status-land.4": 0,
@@ -318,5 +329,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T10:06:47.414919Z"
+  "updated_at": "2026-08-27T10:16:37.400074Z"
 }
