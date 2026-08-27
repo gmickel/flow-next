@@ -44,9 +44,18 @@ Every closer that prints a copy-pasteable flow-next command must print a form th
 - [ ] TBD
 
 ## Done summary
-TBD
+Every inventoried closer surface (capture workflow/rewrite-mode/split-proposal, plan next-steps menu, work ship footer, make-pr success footer, interview SKILL + write-back, prospect, chart briefing/chart-mode, audit SKILL + workflow, guide routing matrix - 14 files) now carries one host-command-form clause: OpenCode installs (plugin root carries `.flow-next-opencode-manifest`, the existing setup detection signal - no new probe, no flowctl surface) print the flat `/flow-next-<name>` form; any other or indeterminate host prints the command exactly as spelled, which keeps the canonical colon literals for the mirror transform and keeps the clause double-transform-safe on Codex (R6). sync-codex.sh's actionable next-step transform roster widened 4 -> 13 files with anchored per-surface seds, and a new closer-roster hard-fail guard asserts every inventoried literal appears in the mirror only in rewritten `$flow-next-` form (fixed-string, per-file, tab-delimited roster; passive `/flow-next:` mentions unflagged; guard proven load-bearing - removing one sed pattern fails the sync rc=1). Mirror regenerated, sync run twice byte-idempotent; validated at the installed OpenCode layout (flat command stubs, manifest two levels above SKILL.md, clause present in installed skills).
 
+baseline: green (handoff, verified at bcaf2ce5 by fn-205-issue-sweep-skipped-review-status-land.2)
+
+stage: impl-review - skipped(policy: host-deferred + parallel-wave - conductor owns the gate after integration)
+
+Deliberate exclusions (documented in the transform comment): prospect workflow.md's `**Next step:** /flow-next:interview` line documents what flowctl's `write_prospect_artifact` emits verbatim on every host - rewriting the doc would mis-describe the artifact; presentation is governed by the file's host-form clause. make-pr recovery-hint lines (:339,:386,:388) and chart-mode's shape-A `/flow-next:prospect` offer (:69) were not in the task's verified inventory - error-path hints, flagged as possible follow-up. guide + chart clause copies use plain hyphens (em-dash pins in test_guide_routing / test_chart_skill_contract); the other 11 files carry the em-dash form.
+
+Implementation bridged to grok 4.6 via cursor-agent per explicit routing (1 chunk: the 14 clause insertions - usable on first attempt, zero repairs); sync-codex.sh transform/guard surgery and mirror regen taken by the host per the task's stated exception.
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 20c0e8be4f795d0a68e1a64d729c3ce036615fe9
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_install_opencode test_prompt_text_pinned -q, cd plugins/flow-next/tests && python3 -m unittest test_guide_routing test_skill_prose_diet test_chart_skill_contract test_chart_docs_inventory test_interview_scope_flag test_interview_source_tags test_make_pr_reached_path test_pr_cognitive_aid test_host_review_backend test_readback_ask_contract test_spec_id_routing_prose -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (run 2x, byte-idempotent via sorted sha256; closer-roster guard proven to bite: removing one sed pattern fails sync rc=1), bash scripts/install-opencode.sh --dest <tmp> (installed-layout validation: flat command stubs, manifest at config root, clause present in installed skills)
 - PRs:
