@@ -9041,6 +9041,10 @@ so you know what this change is supposed to do, then read the change itself. Use
 changed, so a path absent from it is out of scope — then run `git diff` over the range, or over
 individual paths, to read the hunks at whatever depth each one warrants. Read files at their
 current state to verify implementations, and use the context hints for deeper exploration.
+Verification budget: verify via the task's Quick commands / the focused suites the evidence
+names, plus any command a specific finding needs — running the exact test a finding disputes
+is always licensed. The FULL suite belongs to the run's final gate (work Phase 4/5, rolling
+quiesce), never to a review round.
 
 Nothing is pre-truncated for you. Fetch what you need.
 
@@ -9359,7 +9363,10 @@ This review includes:
 **Primary sources:** You have full repository access. Read the spec and task specs from the
 paths given; use `<changed_files>` as the authoritative scope map — a path absent from it is out
 of scope — then run `git diff` over the range to read the hunks and judge each requirement
-against what actually landed.
+against what actually landed. Verification budget: verify via the spec's Quick commands /
+the focused suites the tasks' evidence names, plus any command a specific gap needs — running
+the exact test a finding disputes is always licensed. The FULL suite belongs to the run's
+final gate (work Phase 4/5, rolling quiesce), never to a review round.
 
 Nothing is pre-truncated for you. Fetch what you need.
 

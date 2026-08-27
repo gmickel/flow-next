@@ -148,6 +148,7 @@ Receipt in every case: `mode: "host"`, the actual reviewer model,
 
 Give the subagent:
 - The impl-review rubric ([references/impl-review-prompt.md](references/impl-review-prompt.md))
+- The rubric's verification-budget rail travels with it (focused suites only; the full suite belongs to the run's final gate) — carried by pointer, never restated or widened in the dispatch prompt
 - Diff scope (`--base` / branch vs main as resolved in Phase 0)
 - Task id / focus areas if any
 - Prior findings for convergence as structured `findings.items` (on re-review; render
