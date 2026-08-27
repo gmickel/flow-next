@@ -23,7 +23,7 @@ One rail, four coupled surfaces. (1) `plugins/flow-next/skills/flow-next-impl-re
 - [ ] No other prompt text changed (the pin diff shows exactly the two intended files)
 
 ## Done summary
-Added the fn-206 reviewer verification-budget rail: both reviewer rubrics (impl-review-prompt.md, completion-review-prompt.md) now state that a review round verifies via the task's Quick commands / the focused suites the evidence names plus finding-targeted commands (the exact test a finding disputes stays licensed), while the FULL suite belongs to the run's final gate (work Phase 4/5, rolling quiesce), never to a review round; flowctl fallback constants kept byte-identical, both host dispatch blocks carry the budget by one pointer line each, pin hashes updated same-commit, the four rendered fixtures + token-delta evidence regenerated via generate_review_prompt_parity_evidence.py recalibrated for fn-206 (baseline ed4ad638, measured max delta 70 tokens; plan/standalone fixtures byte-identical), and the codex mirror + tracker manifest regenerated (sync-codex twice, idempotent).
+Added the fn-206 reviewer verification-budget rail: both reviewer rubrics (impl-review-prompt.md, completion-review-prompt.md) now state that a review round verifies via the task's Quick commands / the focused suites the evidence names plus finding-targeted commands (the exact test a finding disputes stays licensed), while the FULL suite belongs to the run's final gate (work Phase 4/5, rolling quiesce), never to a review round; flowctl fallback constants kept byte-identical, both host dispatch blocks carry the budget by one pointer line each, pin hashes updated same-commit, the four rendered fixtures + token-delta evidence regenerated via generate_review_prompt_parity_evidence.py recalibrated for fn-206 (baseline cd9664bd after the fn-205 squash made the original pre-rebase baseline unreachable; measured max delta 200 tokens across both prompt families, recorded as measurement never enforcement; plan/standalone fixtures byte-identical), and the codex mirror + tracker manifest regenerated (sync-codex twice, idempotent).
 
 stage: impl-review - skipped(policy: parallel-wave + host-deferred - conductor owns the gate)
 
@@ -31,6 +31,6 @@ Reviewer follow-ups accepted as recorded (non-blocking): hermetic criteria rende
 
 stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits: 71b6ba4f7d0718824cb9ceb2cdcf395f533ca3f6
+- Commits: a117511fea (squash of PR #374; the pre-rebase implementation SHA 71b6ba4f was orphaned by the rebase + squash)
 - Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_template_parity test_backend_spec test_skill_prose_diet -q, 213 tests OK at ed4ad638; handoff: fn-205 quiesce full gate green), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_template_parity test_backend_spec test_skill_prose_diet -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:

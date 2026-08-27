@@ -1,6 +1,6 @@
 {
   "baseline": {
-    "commit": "ed4ad6382eb4154c25b6650fc4afd0addb171c0b",
+    "commit": "cd9664bdd8b625c814c48bd72e075cf6d6e15866",
     "kind": "immutable_git_commit"
   },
   "measurement": {
@@ -9,7 +9,7 @@
       "o200k_base"
     ],
     "tool": "tiktoken",
-    "version": "0.13.0"
+    "version": "0.14.0"
   },
   "prompts": {
     "completion": {
