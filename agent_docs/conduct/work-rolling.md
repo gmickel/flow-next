@@ -19,3 +19,11 @@ Per-item pass/fail from the pre-handoff dogfood. Scope note: fn-203.4's acceptan
 - Item 4 (PARALLEL_WAVE handover, conductor-owned review, join-conflict serial retry): **pass via fn-203.3 A1 draw evidence** (not re-exercised live in this session's dry-run; the beta consumes the identical wave-join mechanics by pointer).
 - Item 5 (notes dir lifecycle + advisory degrade): **pass** - created keyed by spec id + run id under the state-dir sibling, note written/read by path, deleted at end of run; unwritable parent degraded to empty `NOTES_DIR` and the run continued.
 - Item 6 (cross-run claim contention): **pass** - second `flowctl start` by a different actor returned rc 1 `claimed by 'beta-run'`; same-actor re-start confirmed as own-task resume.
+
+## Dogfood record - blocking-clause provenance edit, 2026-08-27
+
+The edit binds the degradation clause to measured dispatch behavior instead of a host-name list. Its dogfood is the pair of live end-to-end beta runs that produced the measurement, on the two hosts the old list named (blind 3-task fixture, staggered 90/60/30s tasks, `--review=none`; conductors instructed to bind on measurement rather than the parenthetical - exactly the behavior this edit makes default):
+
+- **Cursor (macOS, heimdall)**: probe CONTROL at t0+8s with both agents running, per-completion notify; run: 3 admitted at one event, returns 30/60/90-ordered, each integrated while the slowest ran, `Scheduling: rolling`, `blocked_by_prose=no`, quiesce same-turn. Items 1, 2, 4, 5 re-exercised live: pass.
+- **Grok Build 1.0.5 (linux, thor)**: probe CONTROL at t0+0s via `spawn_subagent` background mode, FAST notify at t0+33s; run: simultaneous 3-dispatch, .3 integrated (FF-merge) while .1/.2 in flight, .2 integrated via cherry-pick after the target moved, 3g correctly not-applying under `--review=none`, full-gate quiesce + notes cleanup. Items 1, 2, 4, 5 re-exercised live: pass.
+- Items 3 and 6 unchanged by this edit (planSync gate and claim contention untouched); prior records stand.

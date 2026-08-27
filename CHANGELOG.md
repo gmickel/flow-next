@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Cursor and Grok Build now roll instead of self-degrading to waves.** The rolling scheduler's portable-host clause named both hosts as blocking-dispatch by assumption; a five-minute dispatch probe on each disproved it (control returned before completion, per-completion notifications, and a full end-to-end rolling run on a blind three-task fixture — Cursor on macOS and Grok Build 1.0.5 via `spawn_subagent` background mode, both 2026-08-27). The clause and the platforms matrix now bind on measured dispatch behavior with dated provenance, never on host name; a genuinely blocking host still degrades honestly to wave scheduling, unchanged.
+
 ## [flow-next 4.6.0] - 2026-08-27
 
 Autonomous runs stop wedging on reviews that were never going to happen, and stop paying for reviews that already did. A completion review a policy deliberately excused is now a recorded, first-class state every gate honors, so excused specs close and ship instead of looping; reviewers get a stated verification budget, so a review round re-checks what the finding disputes instead of re-running the whole suite the run's final gate already owns. Land's post-merge bookkeeping survives its own ignore rules, dead-end review modes are refused before any work happens, and OpenCode users can finally run every command a closer prints.

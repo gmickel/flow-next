@@ -264,9 +264,16 @@ workers keep running.
 
 **Blocking-dispatch hosts degrade honestly (fail-closed - scheduling/join
 only).** On a host whose ordinary subagent dispatch BLOCKS until completion
-and offers no background dispatch with completion notifications
-(portable-host clause - Cursor, Grok, and any other host consuming this prose
-as-is), dispatching multiple workers silently recreates the wave barrier: the
+and offers no background dispatch with completion notifications, dispatching
+multiple workers silently recreates the wave barrier. **Judge that condition
+by the host's ACTUAL dispatch behavior - a live measurement (dispatch two
+short sleep agents and observe whether control returns before completion,
+with per-completion signals) or a prior in-session one - never by host name:
+the original host list here was an assumption, and both named hosts fell to a
+five-minute probe (measured non-blocking and rolling end-to-end 2026-08-27:
+Cursor on macOS, and Grok Build 1.0.5 via `spawn_subagent` background mode;
+Claude Code's background Task dispatch remains the canonical example).** On a
+genuinely blocking host the failure shape is: the
 conductor cannot observe the first return until all return, and the run is
 wave scheduling wearing a rolling label. Do not pretend otherwise - but
 degrade ONLY the scheduling and the join, never the rest of this beta's
