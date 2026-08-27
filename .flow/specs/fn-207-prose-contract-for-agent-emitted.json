@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-207-prose-contract-for-agent-emitted",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-27T22:27:44.248759Z",
   "created_at": "2026-08-27T21:14:40.920509Z",
   "default_impl": null,
   "default_review": null,
@@ -173,13 +173,39 @@
       "task": "fn-207-prose-contract-for-agent-emitted.2",
       "timestamp": "2026-08-27T22:23:00.156343Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "1d15cebf52885c5ea3abdf58eb7385b2cd6ee680ef7a711d3c9dead294ad91ec",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "467495b80e6fee19d3b325f80e402769ac9f5023",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 1528,
+      "output_sha256": "4f5482a695304cec1db13eb8ba0b17df837ac279ad3994fb54cccca691b115d9",
+      "reservation_id": "94400a09a18c423aae3e29eda2b58a79",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-27T22:27:43.981957Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-207-prose-contract-for-agent-emitted.1": 1,
     "impl:fn-207-prose-contract-for-agent-emitted.2": 1,
     "plan": 1,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {
     "impl:fn-207-prose-contract-for-agent-emitted.2": 1
@@ -196,6 +222,7 @@
     }
   },
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-207-prose-contract-for-agent-emitted.1": 0,
     "impl:fn-207-prose-contract-for-agent-emitted.2": 0,
     "plan": 0
@@ -214,5 +241,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T22:23:00.431067Z"
+  "updated_at": "2026-08-27T22:27:44.249050Z"
 }

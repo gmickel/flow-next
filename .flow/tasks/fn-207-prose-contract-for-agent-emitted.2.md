@@ -59,7 +59,6 @@ Pointer lines authored via the cursor-agent bridge (cursor-grok-4.6-high) per ex
 baseline: green (test_prompt_text_pinned pre-edit OK at b02bd260)
 Verify: gate classify exited FULL (force-full prefix plugins/flow-next/codex/); gate check unittest: RUN (no honorable receipt); python3 scripts/run_tests_parallel.py: files=192 ran=4505 failures=0 errors=0; uvx ruff@0.16.0 check .: all checks passed; green receipt written for gate unittest at HEAD.
 
-stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 ## Evidence
 - Commits: 7169b9e36f23fe85948107bb65ebbfbbbda45a41, f91abd74de38605247a9f9a97ec49f9c67d95986
 - Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (twice, idempotent, guards green), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q, python3 -m unittest test_codex_persona_and_project_doc test_cursor_docs_contract test_chart_docs_inventory -q (review round 2)
