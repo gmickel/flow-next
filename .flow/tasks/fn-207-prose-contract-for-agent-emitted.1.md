@@ -58,3 +58,5 @@ stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 - Commits: 2988793ad2f76c3537a5cebffb24779abb364aa7, b5ca65a0ded6bf321aeacfa207c5c16ff1d77858
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:
+stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer)
+stage: plan-sync - skipped(config: planSync.enabled != true)
