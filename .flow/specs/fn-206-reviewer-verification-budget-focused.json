@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-206-reviewer-verification-budget-focused",
+  "created_at": "2026-08-27T11:11:15.751850Z",
+  "depends_on_epics": [],
+  "id": "fn-206-reviewer-verification-budget-focused",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-206-reviewer-verification-budget-focused.md",
+  "status": "open",
+  "title": "Reviewer verification budget: focused suites only, full gate at quiesce",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-27T11:11:15.754131Z"
+}
