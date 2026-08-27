@@ -280,6 +280,31 @@ SPEC_STATUS = ["open", "done"]
 EPIC_STATUS = SPEC_STATUS  # Backward-compat alias (removed in 2.0).
 TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
 
+# fn-205 R2/R3/R7: completion-review status vocabulary. Canonical declaration
+# lives HERE, not imported from flowctl_tracker: flowctl.py treats the tracker
+# package as optionally absent (all imports lazy, inside functions) while
+# argparse `choices` builds at parse time. A mirror declaration lives in
+# flowctl_tracker/status/policy.py; a parity test pins the two equal - edit
+# both together. `not_required` means "policy excused this review": the
+# requirement is satisfied, but no review ran (`ship` remains the only claim
+# that a review actually happened).
+COMPLETION_REVIEW_STATUSES = (
+    "ship", "needs_work", "needs_human", "unknown", "not_required",
+)
+# One satisfaction predicate, not N comparisons: every gate that asks "is the
+# completion-review requirement satisfied" consumes this set. An unrecognized
+# or absent persisted value reads as `unknown` and satisfies nothing.
+COMPLETION_REVIEW_SATISFYING = frozenset({"ship", "not_required"})
+
+
+def completion_review_satisfied(status: object) -> bool:
+    """True when the completion-review requirement is satisfied.
+
+    Membership test, never a `!=` chain: an implicit deny-list would silently
+    classify the next member added. Unknown / absent / garbage: not satisfied.
+    """
+    return status in COMPLETION_REVIEW_SATISFYING
+
 TASK_SPEC_HEADINGS = [
     "## Description",
     "## Acceptance",
@@ -29908,10 +29933,41 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
     reservation_id = getattr(args, "reservation_id", None)
+    if_current = getattr(args, "if_current", None)
     with _review_sidecar_lock(flow_dir, args.id):
         spec_data = normalize_epic(
             load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
         )
+        if if_current is not None:
+            # fn-205 R1: compare-and-set evaluated inside the lock, so the
+            # check and the write are one critical section. An unrecognized
+            # persisted value reads as `unknown`. A mismatch is a normal
+            # outcome for the caller, not an error: no write, non-error exit,
+            # machine-readable report of the value that won.
+            current = spec_data.get("completion_review_status")
+            if current not in COMPLETION_REVIEW_STATUSES:
+                current = "unknown"
+            if current != if_current:
+                if args.json:
+                    json_output(
+                        {
+                            "id": args.id,
+                            "written": False,
+                            "completion_review_status": current,
+                            "requested_status": args.status,
+                            "if_current": if_current,
+                            "message": (
+                                f"Spec {args.id} completion review status is "
+                                f"{current}, not {if_current}; nothing written"
+                            ),
+                        }
+                    )
+                else:
+                    print(
+                        f"Spec {args.id} completion review status is "
+                        f"{current}, not {if_current}; nothing written"
+                    )
+                return
         if reservation_id:
             _apply_reservation_status_leg(
                 flow_dir, spec_data, reservation_id, args.json
@@ -29925,6 +29981,7 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
         json_output(
             {
                 "id": args.id,
+                "written": True,
                 "completion_review_status": spec_data["completion_review_status"],
                 "completion_reviewed_at": spec_data["completion_reviewed_at"],
                 "message": f"Spec {args.id} completion review status set to {args.status}",
@@ -34050,7 +34107,9 @@ def cmd_next(args: argparse.Namespace) -> None:
             args.require_completion_review
             and tasks
             and all(t.get("status") == "done" for t in tasks.values())
-            and epic_data.get("completion_review_status") != "ship"
+            and not completion_review_satisfied(
+                epic_data.get("completion_review_status")
+            )
         ):
             if args.json:
                 json_output(
@@ -49925,8 +49984,17 @@ def main() -> None:
         p_set_completion_review.add_argument(
             "--status",
             required=True,
-            choices=["ship", "needs_work", "needs_human", "unknown"],
+            choices=list(COMPLETION_REVIEW_STATUSES),
             help="Completion review status",
+        )
+        p_set_completion_review.add_argument(
+            "--if-current",
+            choices=list(COMPLETION_REVIEW_STATUSES),
+            help=(
+                "Compare-and-set: write only when the current status equals "
+                "this value, checked under the sidecar lock; on mismatch "
+                "nothing is written and the JSON reports written=false"
+            ),
         )
         p_set_completion_review.add_argument(
             "--reservation-id",

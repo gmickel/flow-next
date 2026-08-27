@@ -28,6 +28,16 @@ NEEDS_HUMAN_EVIDENCE = frozenset({"closed-unmerged", "ambiguous", "probe-error"}
 PR_EVIDENCE = frozenset({
     "merged", "open", "closed-unmerged", "none", "ambiguous", "probe-error",
 })
+# fn-205: mirror of flowctl.py's canonical declaration. The import direction
+# forbids sharing (flowctl treats this package as optionally absent), so the
+# two copies are pinned equal by a parity test - edit both together.
+# Satisfying means "the completion-review requirement is satisfied": `ship`
+# (a review ran and shipped) or `not_required` (policy excused it). Anything
+# else - unknown, needs_work, needs_human, garbage, absent - satisfies nothing.
+COMPLETION_REVIEW_STATUSES = (
+    "ship", "needs_work", "needs_human", "unknown", "not_required",
+)
+COMPLETION_REVIEW_SATISFYING = frozenset({"ship", "not_required"})
 CONFLICT_TIEBREAKS = frozenset({"always-ask", "flow-wins", "tracker-wins"})
 
 #: GitHub close/reopen reasons — docs list completed|not_planned|reopened;
@@ -211,9 +221,12 @@ def flow_to_normalized(spec_data: dict, pr_evidence: str,
         if spec_status == "done":
             if not completion_review_configured:
                 return "done"  # row 1
-            if review == "ship":
-                return "done"  # row 2 (verified → done slot)
-            return "in_review"  # row 3 (configured, not ship)
+            if review in COMPLETION_REVIEW_SATISFYING:
+                # row 2: ship (verified → done slot) or not_required
+                # (policy-excused). The verified-vs-done LABEL selector in
+                # verb.py stays ship-only; only the slot is decided here.
+                return "done"
+            return "in_review"  # row 3 (configured, not satisfied)
         # Merged PR + still-open spec: PR signal wins over local task rows.
         return "in_review"
 

@@ -529,5 +529,68 @@ class TestCommandScanBudgets(TaskInventoryCase):
         assert_budget(flowctl.cmd_list)
 
 
+class CompletionReviewAllowSet(TaskInventoryCase):
+    """fn-205 R3/R7: one shared satisfying-member set drives the scheduler."""
+
+    KNOWN = ("ship", "needs_work", "needs_human", "unknown", "not_required")
+    _ABSENT = object()
+
+    def test_parity_with_tracker_mirror(self) -> None:
+        # Import direction forbids a shared declaration (tracker package is
+        # optionally absent from flowctl.py), so the two copies are pinned.
+        from flowctl_tracker.status import policy
+
+        self.assertEqual(
+            tuple(flowctl.COMPLETION_REVIEW_STATUSES),
+            tuple(policy.COMPLETION_REVIEW_STATUSES),
+        )
+        self.assertEqual(
+            flowctl.COMPLETION_REVIEW_SATISFYING,
+            policy.COMPLETION_REVIEW_SATISFYING,
+        )
+
+    def _seed(self, review: object) -> None:
+        self.write_spec("fn-1")
+        self.write_task("fn-1.1", status="done", with_markdown=True)
+        if review is not self._ABSENT:
+            path = self.flow / "specs" / "fn-1.json"
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["completion_review_status"] = review
+            path.write_text(json.dumps(data), encoding="utf-8")
+
+    def _next(self) -> dict:
+        with mock.patch.object(flowctl, "get_actor", return_value="tester"):
+            return self.call(
+                flowctl.cmd_next,
+                specs_file=None,
+                require_plan_review=False,
+                require_completion_review=True,
+            )
+
+    def test_member_enumeration_pins_scheduler(self) -> None:
+        # fn-205 R7: an added member cannot silently default - the set pin
+        # fails first, then each member's classification is explicit.
+        self.assertEqual(set(flowctl.COMPLETION_REVIEW_STATUSES), set(self.KNOWN))
+        for member in self.KNOWN:
+            satisfied = member in flowctl.COMPLETION_REVIEW_SATISFYING
+            with self.subTest(member=member):
+                self._seed(member)
+                result = self._next()
+                if satisfied:
+                    self.assertNotEqual(
+                        result.get("reason"), "needs_completion_review")
+                else:
+                    self.assertEqual(result["status"], "completion_review")
+                    self.assertEqual(result["reason"], "needs_completion_review")
+
+    def test_unrecognized_or_absent_value_still_requests_review(self) -> None:
+        # fn-205 fail-closed: garbage and absent satisfy no gate.
+        for review in ("garbage", self._ABSENT):
+            with self.subTest(review=review):
+                self._seed(review)
+                result = self._next()
+                self.assertEqual(result["reason"], "needs_completion_review")
+
+
 if __name__ == "__main__":
     unittest.main()

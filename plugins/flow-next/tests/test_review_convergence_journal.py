@@ -1134,6 +1134,57 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         )
 
 
+class TestCompletionReviewCompareAndSet(_JournalReplayBase):
+    """fn-205 R1: `--if-current` is an atomic CAS under the sidecar lock."""
+
+    def test_cli_accepts_not_required(self):
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertTrue(payload["written"])
+        self.assertEqual(self._data()["completion_review_status"], "not_required")
+
+    def test_plan_review_choices_unchanged(self):
+        # R2: only the completion-review vocabulary widened.
+        code, _, _ = self._run_cli(
+            "spec", "set-plan-review-status", self.spec_id,
+            "--status", "not_required", "--json",
+        )
+        self.assertEqual(code, 2)
+
+    def test_cas_match_writes(self):
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--if-current", "unknown", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertTrue(payload["written"])
+        self.assertEqual(self._data()["completion_review_status"], "not_required")
+
+    def test_concurrent_needs_work_survives_cas_from_unknown(self):
+        # Regression pinned by the task spec: a review verdict landing
+        # between the skip's read and its write is never clobbered.
+        code, _, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "needs_work", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--if-current", "unknown", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertFalse(payload["written"])
+        self.assertEqual(payload["completion_review_status"], "needs_work")
+        self.assertEqual(payload["requested_status"], "not_required")
+        self.assertEqual(self._data()["completion_review_status"], "needs_work")
+
+
 class TestNeedsHumanTerminal(_JournalReplayBase):
     """R3: every delivered NEEDS_HUMAN persists before exit 4."""
 
