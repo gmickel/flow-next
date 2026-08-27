@@ -204,7 +204,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-206-reviewer-verification-budget-focused.md",
-  "status": "open",
+  "status": "done",
   "title": "Reviewer verification budget: focused suites only, full gate at quiesce",
   "tracker": {
     "baseHashFlow": null,
@@ -217,5 +217,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T13:19:34.392313Z"
+  "updated_at": "2026-08-27T16:21:26.664809Z"
 }
