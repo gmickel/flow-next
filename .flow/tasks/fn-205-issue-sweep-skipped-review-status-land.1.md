@@ -1,0 +1,57 @@
+---
+satisfies: [R2, R3, R7]
+---
+# fn-205-issue-sweep-skipped-review-status-land.1 Persist an excused completion-review member behind one shared satisfying-member predicate
+
+## Description
+Add the `not_required` member to the completion-review status vocabulary and route the two flowctl-side gates (merge-evidence projection, `--require-completion-review` scheduler) through a single declared satisfying-member set. Implements R2, R3 and the flowctl half of R7. First task by necessity: the CLI must accept the token before any skill prose writes it (spec Edge Cases, ordering rule).
+
+**Size:** M
+**Files:** `plugins/flow-next/scripts/flowctl.py`, `plugins/flow-next/scripts/flowctl_tracker/status/policy.py`, `plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json` (regenerated), `plugins/flow-next/tests/test_tracker_status.py`, `plugins/flow-next/tests/test_task_inventory.py`, `plugins/flow-next/tests/test_review_convergence_journal.py`
+**Touches:** [plugins/flow-next/scripts/flowctl.py, plugins/flow-next/scripts/flowctl_tracker/**, plugins/flow-next/tests/test_tracker_status.py, plugins/flow-next/tests/test_task_inventory.py, plugins/flow-next/tests/test_review_convergence_journal.py]
+
+### Approach
+- Resolve the declaration home FIRST (this is the spec's early proof point): `flowctl_tracker` is importable from `flowctl.py`, not the reverse, so declaring the known-member set plus the satisfying-set predicate inside the tracker status package and importing it into `flowctl.py` is the non-inverting direction. Verify that import actually resolves in flowctl's install modes before committing to it; if it does not, keep the canonical declaration in `flowctl.py`, mirror it in the tracker package, and add a parity test pinning the two equal. Do not leave two unpinned copies.
+- Widen only the completion-review status `choices` at `flowctl.py:49928`. The plan-review list at `:49906` is a different command and stays as-is.
+- Projection: `flowctl_tracker/status/policy.py:210-216`. Row 2 currently returns `done` on `review == "ship"` and row 3 falls through to `in_review`. Row 2 becomes the allow-set membership test. Rows 4-8 and the `pr_evidence` ordering are untouched — terminal stays reachable only from `merged`.
+- Leave the `verified`-vs-`done` label selector `ship`-only (it is a separate reader in `flowctl_tracker/status/verb.py:376-380`; `flow-next-land/workflow.md:776` already documents `verified` as ship-evidence). R2 requires the label stay `done`.
+- Scheduler: `flowctl.py:34049-34065` — the `!= "ship"` condition becomes a not-in-allow-set test. Keep the emitted `needs_completion_review` reason string unchanged for `unknown` / `needs_work` / `needs_human`.
+- Do not touch the three verdict->status maps (`flowctl.py:10231`, `:11070`, `:41059`) — the skip writes through the CLI, not through a verdict, and the dedup is fn-190's (spec Boundaries).
+- Regenerate `plugins/flow-next/scripts/flowctl_tracker/MANIFEST.json` via `python3 scripts/gen_tracker_manifest.py` in this task — the manifest pins every shipped member and `test_tracker_distribution` fails unhelpfully otherwise.
+- Do NOT run `./scripts/sync-codex.sh` here. The single authoritative mirror regen is the finalization task, so parallel siblings never conflict in `plugins/flow-next/codex/`.
+
+### Investigation targets
+**Required** (read before coding):
+- `plugins/flow-next/scripts/flowctl_tracker/status/policy.py:190-220` — the 8-row projection and the docstring claiming it ports the doctrine table faithfully
+- `plugins/flow-next/scripts/flowctl.py:34049-34065` — `next --require-completion-review` predicate and emission
+- `plugins/flow-next/scripts/flowctl.py:29895-29930` — the writer command; note `completion_reviewed_at` is stamped unconditionally
+- `plugins/flow-next/scripts/flowctl.py:3841-3842` — `normalize_epic` backfills absent -> `unknown`, so key-absence can never be a signal
+
+**Optional** (reference as needed):
+- `plugins/flow-next/tests/test_review_convergence_journal.py:1240-1243` — where the four members are exercised through the CLI today
+
+### Key context
+- Measured forward-compat: an older reader meeting `not_required` degrades to `in_review` / re-requests the review — non-terminal, the safe direction. Old spec JSON needs no migration; do not write one.
+- The allow-set must be an explicit membership test, not a widened `!=` chain: `!= "ship"` is an implicit deny-list, and the next member added would silently classify itself.
+
+### Acceptance
+- [ ] `flowctl spec set-completion-review-status <id> --status not_required` is accepted; plan-review status choices are unchanged
+- [ ] The known-member set and the satisfying-member predicate are declared exactly once (or, if the import direction forbids sharing, mirrored with a parity test that fails on divergence)
+- [ ] Projection: merged + spec `done` + `not_required` + review configured -> `done`; `unknown`, `needs_work`, `needs_human` -> `in_review`; non-merged PR evidence still never reaches terminal (R2)
+- [ ] The `verified` vs `done` label selection is unchanged and still requires `ship` (R2)
+- [ ] `flowctl next --require-completion-review` emits no `needs_completion_review` for a `not_required` spec, and still emits it for `unknown`, `needs_work`, `needs_human` (R3)
+- [ ] A test enumerates every known member and pins each flowctl-side gate's classification, so an added member cannot silently default (R7)
+- [ ] An unrecognized or absent persisted value reads as `unknown` and satisfies no gate
+- [ ] `python3 scripts/gen_tracker_manifest.py` re-run and the manifest committed
+- [ ] `cd plugins/flow-next/tests && python3 -m unittest test_tracker_status test_task_inventory test_review_convergence_journal -q` green
+
+## Acceptance
+- [ ] TBD
+
+## Done summary
+TBD
+
+## Evidence
+- Commits:
+- Tests:
+- PRs:

@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-26T21:41:21.129865Z",
+  "depends_on": [
+    "fn-205-issue-sweep-skipped-review-status-land.2"
+  ],
+  "id": "fn-205-issue-sweep-skipped-review-status-land.5",
+  "priority": null,
+  "spec": "fn-205-issue-sweep-skipped-review-status-land",
+  "spec_path": ".flow/tasks/fn-205-issue-sweep-skipped-review-status-land.5.md",
+  "status": "todo",
+  "title": "Closers print the host's invocable command form, with the mirror transform kept in step",
+  "updated_at": "2026-08-26T21:41:21.129865Z"
+}

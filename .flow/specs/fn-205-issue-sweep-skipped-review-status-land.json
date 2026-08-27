@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-205-issue-sweep-skipped-review-status-land",
+  "created_at": "2026-08-26T21:21:50.477610Z",
+  "depends_on_epics": [],
+  "id": "fn-205-issue-sweep-skipped-review-status-land",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-205-issue-sweep-skipped-review-status-land.md",
+  "status": "open",
+  "title": "Issue sweep: skipped review status, land tail, export roster, OpenCode closers",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-26T21:38:16.315965Z"
+}
