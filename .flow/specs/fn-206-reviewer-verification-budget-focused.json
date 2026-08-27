@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-206-reviewer-verification-budget-focused",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-08-27T13:19:34.392306Z",
   "created_at": "2026-08-27T11:11:15.751850Z",
   "default_impl": null,
   "default_review": null,
@@ -217,5 +217,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T13:19:17.621607Z"
+  "updated_at": "2026-08-27T13:19:34.392313Z"
 }
