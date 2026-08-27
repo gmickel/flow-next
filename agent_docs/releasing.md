@@ -69,7 +69,7 @@ into the GitHub release. It is a user-facing release surface, not an engineering
 ledger. Keep the Keep a Changelog headings (`Added`, `Changed`, `Fixed`), but
 make the release understandable before the inventory begins.
 
-This gate is a changelog specialization of the generic artifact-prose contract in [`plugins/flow-next/docs/prose.md`](../plugins/flow-next/docs/prose.md) (portability test, mechanism-or-number, outcome-first ordering, honesty, the style bans). The generic rules live there and are not restated here; everything below is the changelog-specific machinery that operationalizes them: the four-slot ordering, the hard rejection test with its worked examples, and the docs-site register.
+This gate is a changelog specialization of the generic artifact-prose contract in [`plugins/flow-next/docs/prose.md`](../plugins/flow-next/docs/prose.md) (portability test, mechanism-or-number, outcome-first ordering, honesty, the style bans). The generic rules live there; below they appear only inside changelog specializations, never as standalone restatements — everything that follows is the changelog-specific machinery that operationalizes them: the four-slot ordering, the hard rejection test with its worked examples, and the docs-site register.
 
 For every feature release, write in this order:
 

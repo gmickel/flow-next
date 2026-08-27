@@ -1,6 +1,6 @@
 # Prose contract for agent-emitted artifacts
 
-This page governs the user-facing prose that flow-next skills emit (PR bodies from `/flow-next:make-pr`, tracker comments from `/flow-next:tracker-sync`, spec prose from capture and interview, and changelog entries at release). Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact.
+This page governs the user-facing prose that flow-next skills emit (PR bodies from `/flow-next:make-pr`, tracker comments from `/flow-next:tracker-sync`, spec prose from `/flow-next:capture`, and changelog entries at release). Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact. Other prose surfaces (interview's spec write-back, resolve-pr replies, the visual digest) are governed by the same rules but do not carry pointers yet.
 
 ## The rules
 
@@ -46,7 +46,7 @@ The drafting agent never softens a failure, a bound, or a deliberate miss. `Abou
 
 ## Precedence: structural contracts win
 
-The emitting surface's structural contracts supersede these prose-shape rules.
+When a rule on this page collides with a contract of the emitting surface, the surface contract wins and the prose rule yields.
 
 - **Dedup markers.** The drafting agent leaves tracker-comment dedup markers as the first line, byte-unchanged.
 - **Projection.** The drafting agent never overrides envelopes or projection-only source-truth constraints. The tracker-sync bridge projects. It never authors.
