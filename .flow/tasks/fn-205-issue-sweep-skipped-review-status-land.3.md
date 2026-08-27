@@ -50,9 +50,18 @@ The prose-side half of R7: the gates that read `completion_review_status` direct
 - [ ] TBD
 
 ## Done summary
-TBD
+Closed pilot, Ralph and the status-sync doctrine table on the shared satisfying-member set {ship, not_required} (R7). Pilot's route row, satisfied-or-ungated row, no-deadlock paragraph, all-done invariant, and work advancement logging now name the satisfying set — a policy-excused spec never re-routes to `work` and never logs a false no-advance strike. ralph.sh's completion gate decides via the set at both sites: `maybe_close_specs` closes on `not_required` without a receipt while `ship` still demands one, and the per-iteration block checks `not_required` FIRST so the missing-receipt path can never demote it to `needs_work`; `needs_work` handling and the :1267 verdict map are unchanged (`not_required` maps to no verdict — no review ran). workflow-common.md's consequences paragraph was rewritten (not appended) around the satisfying set and its stale `flowctl ready --require-completion-review` cite fixed to `next`; spec-completion-review Step 0.5 now classifies `not_required` explicitly (not `ship`, not `unknown`; manual re-run may upgrade). status-sync.md vocabulary row lists all five members, rows 2/3 + the row-3 blockquote + fixture S-L match policy.py exactly, and the stale pilot anchor (:117-122) is repointed to the route table (:345-358). make-pr's reads verified `== needs_work` (member-safe, not edited). Bonus (reviewer-flagged via run notes, in-scope): `flowctl.py _self_write_review_status` now holds `_review_sidecar_lock` — it was the last review-status writer racing the fn-205.1 `--if-current` CAS. New executable test `RalphCompletionGateClassificationTestCase` runs the extracted `maybe_close_specs` shell function and pins classification for all 7 members plus ship-receipt pairing and backend-none skip. `prompt_completion.md` untouched; hash pin green. MANIFEST.json regenerated (flowctl.py hash). sync-codex.sh deliberately NOT run — finalization (.6) owns the single mirror regen. Pilot/checkpoint prose gates carry NO sentence-level test pins per the 2026-08-07 doctrine ban — their coverage is the conduct checklist added in the finalization task (deliberate decision, not a gap).
 
+baseline: green (handoff verified at 84b65a47 by fn-205.1; focused re-check 103 tests pre-edit)
+implementer route: bridged all three chunks to grok 4.6 via cursor-agent as instructed; all three bridge outputs matched the specified diffs exactly, no fallback needed.
+Deferred to .6/follow-up (from t1 review notes, declined here as out of my files): tracker-label test for merged+done+not_required -> `done`; CAS+reservation-id mutual exclusion.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+
+Decision (R7, per repo doctrine 2026-08-07): pilot and Step 0.5 checkpoint prose gates carry NO sentence-level test pins — their coverage is the conduct checklist added in the finalization task; the behaviorally testable gates (flowctl predicates, ralph.sh template) are pinned by executable tests instead.
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 533d285b561ca15bfa6e45be5d3c5c8564dd05a8
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_ralph_guard.RalphCompletionGateClassificationTestCase -v, cd plugins/flow-next/tests && python3 -m unittest test_ralph_guard test_prompt_text_pinned test_host_review_backend test_skill_prose_diet test_backend_spec test_ralph_docs_truth test_tracker_status test_ralphctl -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., python3 scripts/gen_tracker_manifest.py
 - PRs:
