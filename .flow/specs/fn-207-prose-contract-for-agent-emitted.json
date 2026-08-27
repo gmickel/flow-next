@@ -11,7 +11,8 @@
   "impl_review_rounds": {
     "fn-207-prose-contract-for-agent-emitted.1": 0,
     "fn-207-prose-contract-for-agent-emitted.2": 0,
-    "fn-207-prose-contract-for-agent-emitted.3": 0
+    "fn-207-prose-contract-for-agent-emitted.3": 0,
+    "fn-207-prose-contract-for-agent-emitted.4": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -236,9 +237,17 @@
     "plan#completion": 1
   },
   "review_pending_rounds": {
-    "impl:fn-207-prose-contract-for-agent-emitted.2": 1
+    "impl:fn-207-prose-contract-for-agent-emitted.2": 1,
+    "impl:fn-207-prose-contract-for-agent-emitted.4": 1
   },
   "review_reservations": {
+    "549d6caa73664ecbaf5610382ae8d304": {
+      "artifact_sha256": "b196da5acfe71e23e5c327f13de63bd53d58aa8703a5d11edd54692e305c28f6",
+      "counter_scope": "impl:fn-207-prose-contract-for-agent-emitted.4",
+      "epoch": 0,
+      "forced": false,
+      "review_type": "impl"
+    },
     "94692bfa59d44fa1915d9246f694f686": {
       "artifact_sha256": "f31282b3ca27a5d6c3dda215257f97ce361483c9705cde55b54d539bc87160a5",
       "counter_scope": "impl:fn-207-prose-contract-for-agent-emitted.2",
@@ -270,5 +279,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T22:48:33.358930Z"
+  "updated_at": "2026-08-27T22:57:49.671792Z"
 }

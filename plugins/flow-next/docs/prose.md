@@ -1,6 +1,6 @@
 # Prose contract for agent-emitted artifacts
 
-This page governs the durable artifact prose emitted by flow-next skills and agents — PR bodies, tracker and PR comments, spec and plan prose, strategy and briefing sections, memory and glossary entries, task done summaries, and changelog entries at release. Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact. Every emission point carries a pointer; the visual digest is excluded by contract because its output is ephemeral chat rendering, never a written artifact.
+This page governs the durable artifact prose emitted by flow-next skills and agents: PR bodies, tracker and PR comments, spec and plan prose, strategy and briefing sections, memory and glossary entries, task done summaries, and changelog entries at release. Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact. Every emission point carries a pointer; the visual digest is excluded by contract because its output is ephemeral chat rendering, never a written artifact.
 
 ## The rules
 
@@ -54,7 +54,7 @@ When a rule on this page collides with a contract of the emitting surface, the s
 
 ## Scope boundary
 
-The contract covers PR bodies, specs, tracker comments, and changelogs. It makes no claim about code quality or maintainability decay. Prompt-side quality rules are an intercept intervention per SlopCodeBench (arXiv 2603.24755). That paper is why the claim stays this narrow. This page governs how the prose reads. Section 2.5 of [`../skills/flow-next-make-pr/workflow.md`](../skills/flow-next-make-pr/workflow.md) governs what the prose may claim. This page cross-links that fabrication-side contract and leaves the eleven rules there.
+The contract covers the durable artifact surfaces named in the opening paragraph: PR bodies, specs and plans, tracker and PR comments, strategy and briefing sections, memory and glossary entries, done summaries, and changelogs. It makes no claim about code quality or maintainability decay. Prompt-side quality rules are an intercept intervention per SlopCodeBench (arXiv 2603.24755). That paper is why the claim stays this narrow. This page governs how the prose reads. Section 2.5 of [`../skills/flow-next-make-pr/workflow.md`](../skills/flow-next-make-pr/workflow.md) governs what the prose may claim. This page cross-links that fabrication-side contract and leaves the eleven rules there.
 
 ## See also
 

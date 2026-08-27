@@ -195,4 +195,4 @@ _Relates to_: Tier
 
 ## Emission point
 
-A named step in a skill where user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture spec-prose synthesis, changelog entries). Emission points cite the prose contract by path — pass the identity, never a copied payload.
+A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/interview/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict comments, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path — pass the identity, never a copied payload.

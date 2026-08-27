@@ -328,8 +328,6 @@ The selected persona texts are read from `personas.md` and concatenated under `#
 
 Issue **one** prompt. Inputs: the Phase 1 grounding snapshot, the focus hint, the persona texts, the generation target. **Do not** include any critique-pass scaffolding — the generator must not self-judge. The critique runs as a separate prompt in Phase 3 without these instructions.
 
-Persisted candidate prose (titles, summaries, risk notes) follows the artifact prose contract in [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is absent.
-
 Prompt template (fill in the bracketed slots):
 
 ```
@@ -357,7 +355,7 @@ Produce [GENERATION_TARGET_DESCRIPTION] candidates. Wide net — encourage contr
 
 ## Output format
 
-Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no commentary outside YAML. The list is consumed verbatim by the next prompt — extra prose breaks the parser.
+Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no commentary outside YAML. The list is consumed verbatim by the next prompt — extra prose breaks the parser. Title, summary, and risk_notes prose follows the artifact prose contract in [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is absent.
 
 ```yaml
 candidates:
