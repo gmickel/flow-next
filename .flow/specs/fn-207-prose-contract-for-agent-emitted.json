@@ -1,0 +1,147 @@
+{
+  "branch_name": "fn-207-prose-contract-for-agent-emitted",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
+  "created_at": "2026-08-27T21:14:40.920509Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-207-prose-contract-for-agent-emitted",
+  "impl_review_rounds": {},
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "ship",
+  "plan_reviewed_at": "2026-08-27T21:32:01.385828Z",
+  "review_attempts": [
+    {
+      "artifact_sha256": "93d8b742e3c8b3dfed98def81a85a18fafe2160e14b30d564d427039f2ec6d86",
+      "backend": "codex",
+      "base_sha": "c748e68938597835da33d112ccfcc258e3fa47af",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-5f17ea33767bc56626652442d4960625",
+            "classification": "introduced",
+            "findingId": "finding-5f17ea33767bc56626652442d4960625",
+            "firstSeenThisRound": true,
+            "severity": "P0",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-d46bcd4c9ff60d1db2d9c01eb8fa92eb",
+            "classification": "introduced",
+            "findingId": "finding-d46bcd4c9ff60d1db2d9c01eb8fa92eb",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c748e68938597835da33d112ccfcc258e3fa47af",
+      "head_sha_observed": true,
+      "kind": "plan",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 365136,
+      "output_sha256": "688ecb9df4c23e28f7c6474388de0a206293bbffff39f9c288a47be30a4f0744",
+      "reservation_id": "1017d3706268418dae5962f33315af40",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-27T21:29:43.341491Z",
+      "tool_calls": 11,
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "8e703e4059d2804d66f4aae935213c1b6c82cf1460a8d6b1713d23ec30efcddf",
+      "backend": "codex",
+      "base_sha": "c748e68938597835da33d112ccfcc258e3fa47af",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-5f17ea33767bc56626652442d4960625",
+            "classification": "introduced",
+            "findingId": "finding-5f17ea33767bc56626652442d4960625",
+            "firstSeenThisRound": false,
+            "severity": "P0",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-d46bcd4c9ff60d1db2d9c01eb8fa92eb",
+            "classification": "introduced",
+            "findingId": "finding-d46bcd4c9ff60d1db2d9c01eb8fa92eb",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "c748e68938597835da33d112ccfcc258e3fa47af",
+      "head_sha_observed": true,
+      "kind": "plan",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 83,
+      "output_sha256": "40d2d19134681e086a006dfc0c8bb45ef809e3140d67088c1eab2d9a33648691",
+      "reservation_id": "baecb2d23563401fb54f760f3afc57bf",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-27T21:32:01.384129Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "plan": 1,
+    "plan#completion": 0
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
+  "spec_path": ".flow/specs/fn-207-prose-contract-for-agent-emitted.md",
+  "status": "open",
+  "title": "Prose contract for agent-emitted artifacts",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-27T21:32:01.386253Z"
+}

@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-27T21:25:51.870596Z",
+  "depends_on": [],
+  "id": "fn-207-prose-contract-for-agent-emitted.1",
+  "priority": null,
+  "spec": "fn-207-prose-contract-for-agent-emitted",
+  "spec_path": ".flow/tasks/fn-207-prose-contract-for-agent-emitted.1.md",
+  "status": "todo",
+  "title": "Author docs/prose.md + index rows + releasing.md cite",
+  "updated_at": "2026-08-27T21:31:28.329122Z"
+}

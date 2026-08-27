@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-27T21:25:51.870650Z",
+  "depends_on": [
+    "fn-207-prose-contract-for-agent-emitted.1"
+  ],
+  "id": "fn-207-prose-contract-for-agent-emitted.2",
+  "priority": null,
+  "spec": "fn-207-prose-contract-for-agent-emitted",
+  "spec_path": ".flow/tasks/fn-207-prose-contract-for-agent-emitted.2.md",
+  "status": "todo",
+  "title": "Emission-point pointers + mirror sync + CHANGELOG",
+  "updated_at": "2026-08-27T21:31:28.580897Z"
+}
