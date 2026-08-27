@@ -11,7 +11,7 @@ Add the `not_required` member to the completion-review status vocabulary and rou
 **Touches:** [plugins/flow-next/scripts/flowctl.py, plugins/flow-next/scripts/flowctl_tracker/**, plugins/flow-next/tests/test_tracker_status.py, plugins/flow-next/tests/test_task_inventory.py, plugins/flow-next/tests/test_review_convergence_journal.py]
 
 ### Approach
-- Resolve the declaration home FIRST (this is the spec's early proof point): `flowctl_tracker` is importable from `flowctl.py`, not the reverse, so declaring the known-member set plus the satisfying-set predicate inside the tracker status package and importing it into `flowctl.py` is the non-inverting direction. Verify that import actually resolves in flowctl's install modes before committing to it; if it does not, keep the canonical declaration in `flowctl.py`, mirror it in the tracker package, and add a parity test pinning the two equal. Do not leave two unpinned copies.
+- Declaration home RESOLVED at plan-review (spec early proof point, verified 2026-08-27): a module-scope import from `flowctl_tracker` is unsafe — flowctl.py treats the tracker package as optionally absent everywhere (all imports lazy, inside functions, with a `sys.path.insert` fallback and graceful degrade: `flowctl.py:1903-1913`, `:39155-39166`), while argparse `choices` builds at parse time. So: keep the canonical known-member set + satisfying-set predicate in `flowctl.py`, mirror the declaration in `flowctl_tracker/status/policy.py` (next to its existing `SLOTS`/`TERMINAL`/`PR_EVIDENCE` constants), and add a parity test pinning the two equal. Do not leave two unpinned copies, and do not import across the boundary at module scope.
 - Widen only the completion-review status `choices` at `flowctl.py:49928`. The plan-review list at `:49906` is a different command and stays as-is.
 - Projection: `flowctl_tracker/status/policy.py:210-216`. Row 2 currently returns `done` on `review == "ship"` and row 3 falls through to `in_review`. Row 2 becomes the allow-set membership test. Rows 4-8 and the `pr_evidence` ordering are untouched — terminal stays reachable only from `merged`.
 - Leave the `verified`-vs-`done` label selector `ship`-only (it is a separate reader in `flowctl_tracker/status/verb.py:376-380`; `flow-next-land/workflow.md:776` already documents `verified` as ship-evidence). R2 requires the label stay `done`.
@@ -33,6 +33,7 @@ Add the `not_required` member to the completion-review status vocabulary and rou
 ### Key context
 - Measured forward-compat: an older reader meeting `not_required` degrades to `in_review` / re-requests the review — non-terminal, the safe direction. Old spec JSON needs no migration; do not write one.
 - The allow-set must be an explicit membership test, not a widened `!=` chain: `!= "ship"` is an implicit deny-list, and the next member added would silently classify itself.
+- `flowctl.py:42606` echoes the written status in the `<backend> completion-review` JSON envelope — no change needed, but include it when enumerating members in the R7 test so a consumer-facing surface is never surprised by the new token.
 
 ### Acceptance
 - [ ] `flowctl spec set-completion-review-status <id> --status not_required` is accepted; plan-review status choices are unchanged
