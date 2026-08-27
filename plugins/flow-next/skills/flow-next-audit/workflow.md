@@ -75,6 +75,8 @@ Run `/flow-next:memory-migrate` first to make these auditable (or `flowctl memor
 
 `<files>` is the comma-joined list (`pitfalls.md, conventions.md`). Continue with categorized entries only.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 ### 0.3 — Apply scope hint (when present)
 
 When `SCOPE_HINT` is empty, every discovered entry stays in scope — skip this step and go to §0.4.

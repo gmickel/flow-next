@@ -96,7 +96,7 @@ LEDGER="$LEDGER_DIR/land-strikes.json"
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b). It is skill-owned scratch; no flowctl plumbing. Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b). It is skill-owned scratch; no flowctl plumbing. Because land state is per-checkout (it lives in the git common dir and never travels with the repo), run land from one host per checkout — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 ## Phase 1 — DISCOVER
 
@@ -779,7 +779,14 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
      "$FLOWCTL" tracker sync "$spec" --op comment --event land.merged --body-file "$BODY_FILE" # verdict comment only
      ```
 
-   Best-effort either way: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Commit any tracked sync state the touchpoint updated, locally and file-scoped (`git add ".flow/specs/${spec}.json" .flow/sync-runs && git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint"` — file-scoped so pre-existing .flow dirtiness never rides along; it carries this spec's sync state + receipts only). **This commit is not pushed here** — it rides step 4's single push together with the close commit, and shares that step's rollback.
+   Best-effort either way: a dispatch failure or tracker error surfaces as a stderr warning in the PR's evidence block and NEVER changes the PR's verdict (the close and any release already stand). Commit any tracked sync state the touchpoint updated, locally and file-scoped:
+
+   ```bash
+   git add ".flow/specs/${spec}.json"
+   git diff --cached --quiet -- ".flow/specs/${spec}.json" || git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint"
+   ```
+
+   The pathspec names the tracked spec sidecar ONLY — never `.flow/sync-runs` or any other auto-ignored path (an exactly-named ignored directory makes `git add` exit 1 with the sidecar left half-staged; an absent one exits 128 — the fix is avoidance, not recovery). Receipts are runtime artifacts and stay untracked. The staged-diff guard makes an unchanged sidecar a success with nothing to commit — including a `resume-tail` re-entry over an already-committed sidecar — never a reported failure. File-scoped so pre-existing .flow dirtiness never rides along. **This commit is not pushed here** — it rides step 4's single push together with the close commit, and shares that step's rollback.
 4. **Persist — push the tail's `.flow` commits (close + any tracker sync state) together.** Last, after every consequential step has already run. The dirty-tree guards exclude `.flow/`, so an unpushed close would silently sit forever while every other clone (and CI) still sees the spec open:
 
    ```bash

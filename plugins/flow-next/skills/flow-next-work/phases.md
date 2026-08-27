@@ -598,6 +598,8 @@ Next: /flow-next:make-pr <spec-id>   # or /flow-next:qa <spec-id> first when pip
 The `Next:` line is the executable handoff — the reader runs it, rather than
 re-deriving which command comes next from the summary above it.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 **Stage-outcome lines (fn-178, binding on every stage this run orchestrated).**
 Each optional stage the run reached (plan-sync, impl-review, completion
 review, QA, a wave dispatch) records exactly one line in the receipt surface it

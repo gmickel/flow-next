@@ -435,11 +435,13 @@ Show summary:
 Done when: every line above is either printed or absent because its stated ONLY-when condition did not hold — the question count, the scope mode, and the written-vs-preserved section split are unconditional and always appear.
 
 Suggest next step based on input type:
-- New idea / spec without tasks → `/flow-next:plan fn-N`
-- Spec with tasks → `/flow-next:work fn-N` (or more interview on specific tasks)
-- Task → `/flow-next:work fn-N.M`
-- File → `/flow-next:plan <file>`
-- Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `/flow-next:visual fn-N` for a spec input, `/flow-next:visual fn-N.M` for a task input, `/flow-next:visual <file-path>` for the file input (an option the user picks, never run for them).
+- New idea / spec without tasks → `$flow-next-plan fn-N`
+- Spec with tasks → `$flow-next-work fn-N` (or more interview on specific tasks)
+- Task → `$flow-next-work fn-N.M`
+- File → `$flow-next-plan <file>`
+- Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `$flow-next-visual fn-N` for a spec input, `$flow-next-visual fn-N.M` for a task input, `$flow-next-visual <file-path>` for the file input (an option the user picks, never run for them).
+
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
 ## Notes
 

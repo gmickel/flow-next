@@ -416,12 +416,14 @@ cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
-  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
-  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → $flow-next-resolve-pr ${PR_URL##*/}
+  - Body inspection → $flow-next-make-pr $SPEC_ID --dry-run
 EOF
 ```
 
 `${PR_URL##*/}` extracts the trailing PR number from the URL (e.g. `https://github.com/foo/bar/pull/123` → `123`). The hint passes the PR number to `/flow-next:resolve-pr` so the reviewer-feedback flow runs without re-resolving the URL.
+
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
 `/flow-next:make-pr ... --update` (regenerate PR body for an existing open PR) is **deferred to v2** — surface as a "TODO" in the next-steps hint only when the user has indicated they'd want it. v1 keeps the surface narrow.
 
@@ -540,15 +542,15 @@ if [[ "$RALPH" == "1" ]]; then
   # Human-readable framing → stderr.
   echo "" >&2
   echo "✅ Draft PR opened: $PR_URL" >&2
-  echo "Reviewer should run: /flow-next:resolve-pr ${PR_URL##*/}" >&2
+  echo "Reviewer should run: $flow-next-resolve-pr ${PR_URL##*/}" >&2
 else
   # Interactive mode: §5.0 success footer to stdout.
   cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
-  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
-  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → $flow-next-resolve-pr ${PR_URL##*/}
+  - Body inspection → $flow-next-make-pr $SPEC_ID --dry-run
 EOF
   if [[ -n "${MEMORY_ID:-}" ]]; then
     echo "  - Memory entry written: $MEMORY_ID"

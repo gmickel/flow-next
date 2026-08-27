@@ -104,7 +104,7 @@ Run this checkpoint after parsing `SPEC_ID` and **before** loading or dispatchin
 any backend. Run the same checkpoint again immediately after host/rp records a
 verdict. It recovers a terminal status write that failed after the verdict round
 was durably consumed, without reserving or dispatching another review.
-This shared step is the sole writer for host and rp terminal status.
+This shared step is the sole writer for host and rp terminal status. A stored `not_required` (work's 3g policy skip) is neither `ship` nor `unknown` here: the checkpoint has no terminal attempt to resume for it, and an explicit manual invocation may still run a real review and overwrite it with `ship`/`needs_work` — the upgrade direction is legal, while the skip's own write stays gated on `unknown`.
 
 ```bash
 if ! TERMINAL_REVIEW_JSON="$($FLOWCTL review-rounds attempts "$SPEC_ID" \

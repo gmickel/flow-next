@@ -106,8 +106,8 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 - `--review=cursor` or "review with cursor" or "cursor review" → Cursor CLI (`cursor-agent`)
 - `--review=host` or "host review" or "host-native review" → host-native fresh-context reviewer subagent (cross-family pin from the AGENTS.md model-routing section)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
-- `--review=export` or "export review" or "external llm" → export for external LLM
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
+- `--review=export` or "export review" → REFUSE at parse time, before any dispatch: export is not an impl-review backend — never fall through to the configured backend and never pass it as `REVIEW_MODE`; stop and point at `/flow-next:plan-review --review=export`, where export lives
 
 (All non-`none` review modes route through `/flow-next:impl-review`, which resolves the
 configured/overridden backend — codex, copilot, cursor, rp, or host — itself.)
@@ -138,7 +138,7 @@ After setup questions answered, read [phases.md](phases.md) and execute each pha
 
 If user chose review, pass the review mode to the worker. The worker agent invokes `/flow-next:impl-review` after implementation and loops until SHIP.
 
-**Completion review gate**: Default-on in SPEC_MODE when a review backend is configured. After all tasks are done, phases.md 3g invokes `/flow-next:spec-completion-review` — except it skips when the spec has exactly one task, that task's per-task impl-review reached SHIP (`REVIEW_MODE` was not `none`), and every spec R-ID is covered by that task's declared `satisfies`. On skip, record the Phase 5 stage line and leave `completion_review_status` `unknown` (policy outcome, not a SHIP). `flowctl next --require-completion-review` is a flowctl-level gate for driver loops; this skill does not read it. The spec-completion-review skill handles the fix loop internally until SHIP.
+**Completion review gate**: Default-on in SPEC_MODE when a review backend is configured. After all tasks are done, phases.md 3g invokes `/flow-next:spec-completion-review` — except it skips when the spec has exactly one task, that task's per-task impl-review reached SHIP (`REVIEW_MODE` was not `none`), and every spec R-ID is covered by that task's declared `satisfies`. On skip, persist `completion_review_status` `not_required` via the CAS setter (`--if-current unknown`) and record the Phase 5 stage line; a miss that reads `not_required` is an already-excused re-entry (same skip branch), while a verdict-status miss falls through to the normal status check without a skip line — policy outcome, never a SHIP. `flowctl next --require-completion-review` is a flowctl-level gate for driver loops; this skill does not read it. The spec-completion-review skill handles the fix loop internally until SHIP.
 
 ## Tracker sync (opt-in, off by default)
 

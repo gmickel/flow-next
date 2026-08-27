@@ -74,6 +74,8 @@ On the `split-as-proposed` path, emit the footer block once PER created spec (ea
 
 Each per-spec footer block also carries its own mandatory `Recommended next:` line, judged per spec under the base-footer rule (workflow.md §Phase 6) against the smallest-sufficient rule in [docs/pipeline-variations.md](../../../docs/flow-next/pipeline-variations.md) — each created spec is its own route. Recommendations are per-spec only; the shared dependency-edge line owns execution order.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 If §2.5 proposed N>1 AND the user picked `approve` (declining the split), append:
 
 ```text

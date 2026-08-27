@@ -398,11 +398,33 @@ done
 # rule — every pattern here is anchored to the actionable surface's own text.
 # Idempotent: no output ever re-matches a `/flow-next:` pattern. .bak cleanup
 # per file, same as every sed pass in this script.
+#
+# fn-205.5 (#364) widened the roster: make-pr's success footer, interview's
+# suggest-next block + write-back suggestions, prospect's promote menu +
+# reply-parsing suggestions, chart's capture handoff + shape-B/frontier
+# closers, audit's legacy-skip remediation lines, and guide's routing-matrix
+# route column are all copy-pasteable closer output and ride the same pass.
+# Each new pattern stays anchored to its surface's own text; a reworded
+# literal must move its anchor in the same change (the closer-roster guard
+# below fails the sync otherwise). Deliberate exclusion: prospect's
+# `**Next step:** /flow-next:interview` artifact template line documents what
+# flowctl's write_prospect_artifact emits verbatim on every host — rewriting
+# the doc would mis-describe the artifact; presentation is governed by the
+# canonical files' host-command-form clause.
 for nf in \
   "$CODEX_DIR/skills/flow-next-capture/workflow.md" \
   "$CODEX_DIR/skills/flow-next-capture/references/rewrite-mode.md" \
   "$CODEX_DIR/skills/flow-next-capture/references/split-proposal.md" \
-  "$CODEX_DIR/skills/flow-next-plan/references/next-steps-menu.md"; do
+  "$CODEX_DIR/skills/flow-next-plan/references/next-steps-menu.md" \
+  "$CODEX_DIR/skills/flow-next-make-pr/create-and-finalize.md" \
+  "$CODEX_DIR/skills/flow-next-interview/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-interview/references/write-back.md" \
+  "$CODEX_DIR/skills/flow-next-prospect/workflow.md" \
+  "$CODEX_DIR/skills/flow-next-chart/references/briefing-and-reopen.md" \
+  "$CODEX_DIR/skills/flow-next-chart/references/chart-mode.md" \
+  "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
+  "$CODEX_DIR/skills/flow-next-guide/SKILL.md"; do
   [ -f "$nf" ] || continue
   sed -i.bak \
     -e 's|Recommended next: /flow-next:<stage>|Recommended next: $flow-next-<stage>|g' \
@@ -421,6 +443,29 @@ for nf in \
     -e 's|; /flow-next:interview <id> can still split later|; $flow-next-interview <id> can still split later|g' \
     -e 's|consider /flow-next:interview <id> after capture lands|consider $flow-next-interview <id> after capture lands|g' \
     -e 's|Consider reviewing before /flow-next:plan to avoid re-solving|Consider reviewing before $flow-next-plan to avoid re-solving|g' \
+    -e 's|Reviewer feedback → /flow-next:resolve-pr|Reviewer feedback → $flow-next-resolve-pr|g' \
+    -e 's|Body inspection → /flow-next:make-pr|Body inspection → $flow-next-make-pr|g' \
+    -e 's|Reviewer should run: /flow-next:resolve-pr|Reviewer should run: $flow-next-resolve-pr|g' \
+    -e 's|→ `/flow-next:plan fn-N`|→ `$flow-next-plan fn-N`|g' \
+    -e 's|→ `/flow-next:work fn-N` (or more interview|→ `$flow-next-work fn-N` (or more interview|g' \
+    -e 's|→ `/flow-next:work fn-N.M`|→ `$flow-next-work fn-N.M`|g' \
+    -e 's|→ `/flow-next:plan <file>`|→ `$flow-next-plan <file>`|g' \
+    -e 's|`/flow-next:visual fn-N` for a spec input|`$flow-next-visual fn-N` for a spec input|g' \
+    -e 's|`/flow-next:visual fn-N.M` for a task input|`$flow-next-visual fn-N.M` for a task input|g' \
+    -e 's|`/flow-next:visual <file-path>` for the file input|`$flow-next-visual <file-path>` for the file input|g' \
+    -e 's|Run `/flow-next:plan fn-N` to research|Run `$flow-next-plan fn-N` to research|g' \
+    -e 's|then suggest `/flow-next:plan`.|then suggest `$flow-next-plan`.|g' \
+    -e 's|instead: `/flow-next:interview <spec-id>`|instead: `$flow-next-interview <spec-id>`|g' \
+    -e 's|suggest `/flow-next:plan <file>` to create spec + tasks|suggest `$flow-next-plan <file>` to create spec + tasks|g' \
+    -e 's|(ask /flow-next:interview what to refine)|(ask $flow-next-interview what to refine)|g' \
+    -e 's|Run /flow-next:chart on the selected survivor|Run $flow-next-chart on the selected survivor|g' \
+    -e 's|Run /flow-next:interview <spec-or-task-id> to refine|Run $flow-next-interview <spec-or-task-id> to refine|g' \
+    -e 's|running `/flow-next:capture .flow/charts/|running `$flow-next-capture .flow/charts/|g' \
+    -e 's|Recommend `/flow-next:capture` or authoring|Recommend `$flow-next-capture` or authoring|g' \
+    -e 's|separate `/flow-next:chart <id>` (or pinned) invocations|separate `$flow-next-chart <id>` (or pinned) invocations|g' \
+    -e 's|recommends `/flow-next:memory-migrate` first|recommends `$flow-next-memory-migrate` first|g' \
+    -e 's|`/flow-next:memory-migrate` first to make these auditable|`$flow-next-memory-migrate` first to make these auditable|g' \
+    -e 's@| `/flow-next:\([a-z-]*\)`@| `$flow-next-\1`@g' \
     "$nf"
   rm -f "${nf}.bak"
 done
@@ -2178,6 +2223,82 @@ if [ "$recnext_refs" != "0" ]; then
   errors=$((errors + 1))
 else
   echo -e "  ${GREEN}✓${NC} Recommended-next templates use \$flow-next-<stage> in Codex skill prose"
+fi
+
+# fn-205.5 (#364): closer-roster expected-output guard. For every file in the
+# actionable next-step transform roster above, its inventoried copy-pasteable
+# closer literals must appear in the mirror ONLY in rewritten ($flow-next-)
+# form. Each entry is one anchored fixed-string check (tab-separated:
+# mirror-relative path <TAB> forbidden colon-form anchor). A hit means a
+# canonical closer literal was reworded without moving its transform anchor
+# (the sed silently stopped matching at exit 0), or a new roster file missed
+# the transform — fix the content or extend the transform, NEVER relax this
+# guard. Deliberately NOT a whole-mirror semantic grep: passive /flow-next:
+# mentions across ~90 mirror files must stay untouched and unflagged. New
+# closer files enter coverage by joining the roster above AND this list;
+# future closers are caught at review time by the conduct checklists.
+closer_literal_fails=0
+while IFS="$(printf '\t')" read -r rel pat; do
+  [ -n "$rel" ] || continue
+  cf="$CODEX_DIR/skills/$rel"
+  if [ ! -f "$cf" ]; then
+    echo -e "  ${RED}✗${NC} closer-roster file missing from mirror: skills/$rel"
+    closer_literal_fails=$((closer_literal_fails + 1))
+    continue
+  fi
+  if grep -qF "$pat" "$cf"; then
+    echo -e "  ${RED}✗${NC} un-rewritten closer literal in skills/$rel: $pat"
+    closer_literal_fails=$((closer_literal_fails + 1))
+  fi
+done <<'CLOSER_ROSTER'
+flow-next-capture/workflow.md	  /flow-next:plan <SPEC_ID>
+flow-next-capture/workflow.md	  /flow-next:interview <SPEC_ID>
+flow-next-capture/workflow.md	  /flow-next:visual <SPEC_ID>
+flow-next-capture/references/rewrite-mode.md	  /flow-next:plan <SPEC_ID>
+flow-next-capture/references/rewrite-mode.md	  /flow-next:interview <SPEC_ID>
+flow-next-capture/references/rewrite-mode.md	  /flow-next:visual <SPEC_ID>
+flow-next-capture/references/split-proposal.md	; /flow-next:interview <id> can still split later
+flow-next-plan/references/next-steps-menu.md	`/flow-next:work fn-N-slug`
+flow-next-plan/references/next-steps-menu.md	`/flow-next:interview fn-N-slug`
+flow-next-plan/references/next-steps-menu.md	`/flow-next:plan-review fn-N-slug`
+flow-next-work/phases.md	Next: /flow-next:make-pr <spec-id>
+flow-next-make-pr/create-and-finalize.md	Reviewer feedback → /flow-next:resolve-pr
+flow-next-make-pr/create-and-finalize.md	Body inspection → /flow-next:make-pr
+flow-next-make-pr/create-and-finalize.md	Reviewer should run: /flow-next:resolve-pr
+flow-next-interview/SKILL.md	→ `/flow-next:plan fn-N`
+flow-next-interview/SKILL.md	→ `/flow-next:work fn-N` (or more interview
+flow-next-interview/SKILL.md	→ `/flow-next:work fn-N.M`
+flow-next-interview/SKILL.md	→ `/flow-next:plan <file>`
+flow-next-interview/SKILL.md	`/flow-next:visual fn-N` for a spec input
+flow-next-interview/SKILL.md	`/flow-next:visual fn-N.M` for a task input
+flow-next-interview/SKILL.md	`/flow-next:visual <file-path>` for the file input
+flow-next-interview/references/write-back.md	Run `/flow-next:plan fn-N` to research
+flow-next-interview/references/write-back.md	then suggest `/flow-next:plan`.
+flow-next-interview/references/write-back.md	instead: `/flow-next:interview <spec-id>`
+flow-next-interview/references/write-back.md	suggest `/flow-next:plan <file>` to create spec + tasks
+flow-next-prospect/workflow.md	(ask /flow-next:interview what to refine)
+flow-next-prospect/workflow.md	Run /flow-next:chart on the selected survivor
+flow-next-prospect/workflow.md	Run /flow-next:interview <spec-or-task-id> to refine
+flow-next-chart/references/briefing-and-reopen.md	running `/flow-next:capture .flow/charts/
+flow-next-chart/references/chart-mode.md	Recommend `/flow-next:capture` or authoring
+flow-next-chart/references/chart-mode.md	separate `/flow-next:chart <id>` (or pinned) invocations
+flow-next-audit/SKILL.md	recommends `/flow-next:memory-migrate` first
+flow-next-audit/SKILL.md	`/flow-next:memory-migrate` first to make these auditable
+flow-next-audit/workflow.md	`/flow-next:memory-migrate` first to make these auditable
+flow-next-guide/SKILL.md	| `/flow-next:strategy`
+flow-next-guide/SKILL.md	| `/flow-next:prospect`
+flow-next-guide/SKILL.md	| `/flow-next:chart`
+flow-next-guide/SKILL.md	| `/flow-next:capture`
+flow-next-guide/SKILL.md	| `/flow-next:interview`
+flow-next-guide/SKILL.md	| `/flow-next:plan`
+flow-next-guide/SKILL.md	| `/flow-next:work`
+flow-next-guide/SKILL.md	| `/flow-next:visual`
+CLOSER_ROSTER
+if [ "$closer_literal_fails" != "0" ]; then
+  echo -e "  ${RED}✗${NC} $closer_literal_fails un-rewritten closer literal(s) — a transform anchor no longer matches its canonical text"
+  errors=$((errors + closer_literal_fails))
+else
+  echo -e "  ${GREEN}✓${NC} Closer-roster literals all appear in rewritten \$flow-next- form"
 fi
 
 # fn-50.6 symmetry rule: agent toml bodies must not carry unrewritten

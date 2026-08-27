@@ -44,6 +44,8 @@ When `frontier` / completion reports **briefable** (no open decisions including 
 
 6. Hand off to capture by running `/flow-next:capture .flow/charts/<chart-id>-briefing.md` (paste-ready; name the B-ID alongside it when several exist). Capture owns source tags on criteria it newly authors; chart evidence stays as D-ID links.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes - the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install - the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 Terminal on successful final briefing:
 
 ```text

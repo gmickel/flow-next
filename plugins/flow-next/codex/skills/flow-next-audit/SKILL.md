@@ -80,7 +80,7 @@ The goal is automated maintenance with human oversight on judgment calls — not
 
 ## Forbidden
 
-- **Auditing legacy flat files** (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md` at the memory root). Skip with a warning that recommends `/flow-next:memory-migrate` first. Report includes the skipped count.
+- **Auditing legacy flat files** (`.flow/memory/pitfalls.md`, `conventions.md`, `decisions.md` at the memory root). Skip with a warning that recommends `$flow-next-memory-migrate` first. Report includes the skipped count.
 - **Auditing under `_audit/`, `_review/`, or any other `_*` directory** under `.flow/memory/`.
 - **Deleting silently.** Delete is reserved for unambiguous cases (code gone AND problem domain gone). Default to Replace or Consolidate when there's still value to preserve.
 - **`git rm` on superseded decision entries.** Decision history stays on disk. Replace for `knowledge/decisions/` entries means write a new entry and mark the old `decision_status: superseded` with `superseded_by: <new-id>` — never delete the old file.
@@ -114,13 +114,15 @@ Execute the phases in [workflow.md](workflow.md) in order:
 
 The full report is the deliverable — print it as markdown to stdout. Do not summarize internally and emit a one-liner.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 Report structure (see [workflow.md](workflow.md) §5 for full schema):
 
 ```text
 Memory Audit Summary
 ====================
 Scanned: N entries
-Skipped legacy: M (run `/flow-next:memory-migrate` first to make these auditable)
+Skipped legacy: M (run `$flow-next-memory-migrate` first to make these auditable)
 
 Kept: X
 Updated: Y
