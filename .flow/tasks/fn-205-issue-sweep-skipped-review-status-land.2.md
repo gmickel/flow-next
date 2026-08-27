@@ -47,9 +47,16 @@ Two edits in the same skill family, combined because they touch the same two fil
 - [ ] TBD
 
 ## Done summary
-TBD
+Work's 3g policy skip now persists `completion_review_status=not_required` via the atomic CAS setter (`--status not_required --if-current unknown`, branching on `.written`; a miss falls through to the normal status check), with the ownership note, Done-when, and SKILL.md gate summary replaced in step (R1); `--review=export` is dropped from work's advertised surfaces (SKILL.md roster, setup-questions tip, commands/work.md argument-hint) and impl-review's own parser now fails closed on it, naming `/flow-next:plan-review --review=export` as the manual path (R5). work-rolling verified export-free by pointer relation (it consumes canonical work's option parsing; no literal `export` in its files) — R5's work-rolling half satisfied by inheritance. `test_host_review_backend.py` updated to the precise ownership invariant: setter appears exactly once in work's phases.md, inside 3g, in CAS form, with no verdict-status writes; the one-write-in-root assertion is unchanged. No edit landed in phases.md section 3c (no sync-codex heredoc flag needed); mirror regen deliberately deferred to finalization task .6. Implementation bridged to grok 4.6 via cursor-agent per explicit routing (3 chunks, all usable; one one-word grammar repair applied by the host).
 
+baseline: green (handoff, verified at 84b65a47 by fn-205-issue-sweep-skipped-review-status-land.1)
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+
+Deliberate divergence note (review r1 #4): the advertised roster's `host` is the user-facing mode; `host-deferred` is the internal worker handoff token (phases.md:227 states the mapping one line above the enum). Review-fix commit 3d39f2f4 adds: parse-time export refusal, CAS-miss classification (idempotent re-entry branch), stage-line ordering, setter-anchored test ban, phase-diagram leftover fix.
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4d407a9d177eb4160d35860ace2c67b8751771e7, 3d39f2f46f6b005e907282989266cde076a4ca18
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_host_review_backend test_skill_prose_diet test_backend_spec test_prompt_text_pinned -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:

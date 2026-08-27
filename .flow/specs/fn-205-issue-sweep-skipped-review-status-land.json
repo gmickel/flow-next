@@ -10,7 +10,7 @@
   "id": "fn-205-issue-sweep-skipped-review-status-land",
   "impl_review_rounds": {
     "fn-205-issue-sweep-skipped-review-status-land.1": 0,
-    "fn-205-issue-sweep-skipped-review-status-land.2": 2,
+    "fn-205-issue-sweep-skipped-review-status-land.2": 0,
     "fn-205-issue-sweep-skipped-review-status-land.3": 0,
     "fn-205-issue-sweep-skipped-review-status-land.4": 0
   },
@@ -317,17 +317,44 @@
       "task": "fn-205-issue-sweep-skipped-review-status-land.3",
       "timestamp": "2026-08-27T10:28:44.978374Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "34ece658da77d4b45af4573b16c55b900783f887d86e17db67a1aa47b325f1db",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "19367bd2deba78f7674badb65c31f92647e33dfe",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 961,
+      "output_sha256": "d52f986a3d294e46ef400a84679df1bc0086d537c828174962da1a442e26172b",
+      "reservation_id": "cd713458e2ac4b48b0fac371a80a6f49",
+      "round_consumed": true,
+      "scope": "impl:fn-205-issue-sweep-skipped-review-status-land.2",
+      "superseded_by": null,
+      "task": "fn-205-issue-sweep-skipped-review-status-land.2",
+      "timestamp": "2026-08-27T11:13:31.941263Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-205-issue-sweep-skipped-review-status-land.1": 1,
+    "impl:fn-205-issue-sweep-skipped-review-status-land.2": 1,
     "impl:fn-205-issue-sweep-skipped-review-status-land.3": 1,
     "impl:fn-205-issue-sweep-skipped-review-status-land.4": 1,
     "plan": 1,
     "plan#completion": 0
   },
   "review_pending_rounds": {
-    "impl:fn-205-issue-sweep-skipped-review-status-land.2": 2
+    "impl:fn-205-issue-sweep-skipped-review-status-land.2": 1
   },
   "review_reservations": {
     "58c362d033734b0ebb644f1f4dfebd06": {
@@ -335,18 +362,14 @@
       "counter_scope": "impl:fn-205-issue-sweep-skipped-review-status-land.2",
       "epoch": 0,
       "forced": false,
-      "review_type": "impl"
-    },
-    "cd713458e2ac4b48b0fac371a80a6f49": {
-      "artifact_sha256": "34ece658da77d4b45af4573b16c55b900783f887d86e17db67a1aa47b325f1db",
-      "counter_scope": "impl:fn-205-issue-sweep-skipped-review-status-land.2",
-      "epoch": 0,
-      "forced": false,
-      "review_type": "impl"
+      "review_type": "impl",
+      "superseded_by": "cd713458e2ac4b48b0fac371a80a6f49",
+      "superseded_epoch": 1
     }
   },
   "review_transport_failures": {
     "impl:fn-205-issue-sweep-skipped-review-status-land.1": 0,
+    "impl:fn-205-issue-sweep-skipped-review-status-land.2": 0,
     "impl:fn-205-issue-sweep-skipped-review-status-land.3": 0,
     "impl:fn-205-issue-sweep-skipped-review-status-land.4": 0,
     "plan": 0
@@ -365,5 +388,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T10:28:45.247871Z"
+  "updated_at": "2026-08-27T11:13:32.212813Z"
 }
