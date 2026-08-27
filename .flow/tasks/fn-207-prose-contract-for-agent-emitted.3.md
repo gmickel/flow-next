@@ -44,9 +44,12 @@ Close the R6 gap: the docs-link namespacing transform and the hard-fail validati
 - [ ] Focused suite green: `cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q`
 
 ## Done summary
-TBD
+Extended sync-codex.sh docs-link machinery to the agents surface (R6): the agent md->toml conversion loop now rewrites `](../docs/` to `](../docs/flow-next/` in generated TOML bodies (agents' shallower depth vs the skills transform), and the fn-202 hard-fail docs-link guard scans codex/agents/ alongside codex/skills/ with unchanged failure semantics. Verified via deliberate broken-link probe (guard exit 1) and positive probe (valid link rewrites + resolves), both removed before commit; sync twice idempotent; full suite green. Script edits authored via the cursor-agent bridge (cursor-grok-4.6-high) per explicit routing instruction; diff verified line by line by the worker.
 
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 836177e3c3726257948c2a5984e93150cd9365b8
+- Tests: baseline: green (./scripts/sync-codex.sh clean + test_prompt_text_pinned OK pre-edit), ./scripts/sync-codex.sh (twice, idempotent, all guards green), broken-link probe: bogus ../docs/nope.md in agents/build-scout.md -> sync exit 1, guard flags codex/agents/build-scout.toml (not committed), positive probe: ../docs/prose.md rewrites to ../docs/flow-next/prose.md and resolves (not committed), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q, python3 scripts/run_tests_parallel.py (files=192 ran=4505 failures=0 errors=0)
 - PRs:
+stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer; SHIP round 1)
+stage: plan-sync - skipped(config: planSync.enabled != true)
