@@ -29032,6 +29032,16 @@ def _reset_excused_completion_review(flow_dir: Path, spec_id: str) -> bool:
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_json_path.exists():
         return False
+    # Lock-free precheck: the overwhelmingly common case is a spec that was
+    # never policy-excused, and taking the sidecar lock on EVERY create broke
+    # the bulk-vs-granular lock-parity contract (test_task_bulk_create).
+    # Only a `not_required` reading takes the lock; the status is re-verified
+    # under it, so a lost race costs at most one extra (harmless) review.
+    try:
+        if load_json(spec_json_path).get("completion_review_status") != "not_required":
+            return False
+    except (OSError, ValueError, TypeError):
+        return False
     try:
         with _review_sidecar_lock(flow_dir, spec_id):
             try:
