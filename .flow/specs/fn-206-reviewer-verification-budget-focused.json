@@ -1,11 +1,71 @@
 {
   "branch_name": "fn-206-reviewer-verification-budget-focused",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-27T11:11:15.751850Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-206-reviewer-verification-budget-focused",
+  "impl_review_rounds": {},
   "next_task": 1,
-  "plan_review_status": "unknown",
-  "plan_reviewed_at": null,
+  "plan_review_rounds": 1,
+  "plan_review_status": "needs_work",
+  "plan_reviewed_at": "2026-08-27T11:17:46.599992Z",
+  "review_attempts": [
+    {
+      "artifact_sha256": "e497781ee5b66036a9f947436f563634b307908748a28823d9c5ac896c1b1c91",
+      "backend": "codex",
+      "base_sha": "ac42d97eb3345d78857bef7322ccb084323c453b",
+      "counter_kind": "plan",
+      "effort": "medium",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-be692b6a0aa07c82237296a1d589d6f2",
+            "classification": "introduced",
+            "findingId": "finding-be692b6a0aa07c82237296a1d589d6f2",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "plan"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "e3e97f347833b7d925dde9fec33be927a06bda2a",
+      "head_sha_observed": true,
+      "kind": "plan",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 193433,
+      "output_sha256": "d9756871733fc9518a3be4614e029acfe71aa41c9346f994c52de4c8899c8f20",
+      "reservation_id": "78a75dbe48cd4fc69cd802424283e2bd",
+      "round_consumed": true,
+      "scope": "plan",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-27T11:17:46.595636Z",
+      "tool_calls": 10,
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "plan": 0
+  },
   "spec_path": ".flow/specs/fn-206-reviewer-verification-budget-focused.md",
   "status": "open",
   "title": "Reviewer verification budget: focused suites only, full gate at quiesce",
@@ -20,5 +80,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T11:15:16.107130Z"
+  "updated_at": "2026-08-27T11:18:21.624980Z"
 }

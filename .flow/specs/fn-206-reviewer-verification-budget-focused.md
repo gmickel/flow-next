@@ -10,7 +10,7 @@ The budget discipline exists on the work/rolling side but is written nowhere the
 
 - R1: The impl-review rubric states the verification budget in one rail: a review round verifies via the task's Quick commands / the focused suites its evidence names (plus targeted commands the findings themselves need); the FULL suite belongs to the run's final gate (work Phase 4/5, rolling quiesce), never to a review round. A reviewer that ran the whole suite has broken this. Errors: the rail must not forbid running the specific test a finding disputes - targeted verification stays licensed.
 - R2: Both places that compose reviewer dispatch prompts for backends where the coordinator writes the prompt (impl-review `workflow-host.md`; spec-completion-review's host path if it shares the shape) carry the budget line, stated once by pointer to the rubric, not restated. Codex/copilot/cursor backends inherit it via the rubric the dispatch already sends.
-- R3: `test_prompt_text_pinned` hashes updated in the same commit with the rationale (deliberate prompt change: reviewer verification budget rail); no other prompt text changes ride along.
+- R3: `test_prompt_text_pinned` hashes AND the four rendered-prompt fixtures in `test_review_prompt_template_parity` (impl, impl_empty_optional, completion, completion_no_tasks) updated in the same commit via that test's measured-rebaseline workflow, with the rationale (deliberate prompt change: reviewer verification budget rail); plan/standalone fixtures untouched; no other prompt text changes ride along.
 
 ## Boundaries
 
@@ -36,5 +36,5 @@ The budget discipline exists on the work/rolling side but is written nowhere the
 ## Quick commands
 
 ```bash
-cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_backend_spec test_skill_prose_diet -q
+cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_template_parity test_backend_spec test_skill_prose_diet -q
 ```
