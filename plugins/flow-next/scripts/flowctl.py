@@ -30089,6 +30089,41 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
                         f"{current}, not {if_current}; nothing written"
                     )
                 return
+        if args.status == "not_required":
+            # PR #372 round 4: `not_required` is the single-task policy
+            # skip's verdict, and its precondition (a) is "the spec has
+            # exactly one task". A caller can judge that policy on a stale
+            # surface (a concurrent task create publishes task 2 between the
+            # caller's check and this write), so the precondition is
+            # re-verified HERE, inside the same critical section as the
+            # write — a deterministic count, no judgment. A refusal is a
+            # normal outcome like a CAS miss: no write, non-error exit,
+            # machine-readable reason. Verdict statuses (`ship`,
+            # `needs_work`, `needs_human`) and `unknown` are untouched.
+            task_count = sum(1 for _ in iter_task_json_files(flow_dir, args.id))
+            if task_count != 1:
+                current = spec_data.get("completion_review_status")
+                if current not in COMPLETION_REVIEW_STATUSES:
+                    current = "unknown"
+                message = (
+                    f"Spec {args.id} has {task_count} tasks; not_required is "
+                    "a single-task policy verdict, nothing written"
+                )
+                if args.json:
+                    json_output(
+                        {
+                            "id": args.id,
+                            "written": False,
+                            "refused": "policy_surface_multi_task",
+                            "completion_review_status": current,
+                            "requested_status": args.status,
+                            "task_count": task_count,
+                            "message": message,
+                        }
+                    )
+                else:
+                    print(message)
+                return
         if reservation_id:
             _apply_reservation_status_leg(
                 flow_dir, spec_data, reservation_id, args.json
@@ -33658,10 +33693,19 @@ def cmd_task_reset(args: argparse.Namespace) -> None:
             clear_task_evidence(dep_id)
             reset_ids.append(dep_id)
 
+    # PR #372 round 4: resetting a task erases the runtime state and evidence
+    # that carried the per-task SHIP behind a policy-excused `not_required`.
+    # The excuse must re-arm with the rest of the surface, exactly like task
+    # create / set-plan / set-spec do (lock-free precheck inside the helper).
+    review_reset = _reset_excused_completion_review(flow_dir, epic_id)
+
     if args.json:
-        json_output({"success": True, "reset": reset_ids})
+        payload: dict = {"success": True, "reset": reset_ids}
+        _note_completion_review_reset(review_reset, epic_id, payload, use_json=True)
+        json_output(payload)
     else:
         print(f"Reset: {', '.join(reset_ids)}")
+        _note_completion_review_reset(review_reset, epic_id, None, use_json=False)
 
 
 def _task_set_section(

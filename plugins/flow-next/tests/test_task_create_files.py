@@ -567,6 +567,9 @@ class ExcusedReviewInvalidationTestCase(TaskCreateFilesTestCase):
         self.assertIs(result.get("completion_review_reset"), True)
 
     def test_bulk_create_resets_not_required_to_unknown(self) -> None:
+        # One task first: not_required is only writable on a one-task surface
+        # (PR #372 round 4 guard).
+        self._create(title="Only task")
         self._set_status("not_required")
         bulk = self._write(
             "bulk.json",
@@ -577,6 +580,9 @@ class ExcusedReviewInvalidationTestCase(TaskCreateFilesTestCase):
         self.assertIs(result.get("completion_review_reset"), True)
 
     def test_set_plan_resets_not_required_to_unknown(self) -> None:
+        # One task first: not_required is only writable on a one-task surface
+        # (PR #372 round 4 guard).
+        self._create(title="Only task")
         self._set_status("not_required")
         plan = self._write("plan.md", "# Plan\n\n- R1: new requirement\n")
         result = self._call(
@@ -659,6 +665,35 @@ class ExcusedReviewInvalidationTestCase(TaskCreateFilesTestCase):
             description=None,
             acceptance=None,
         )
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+    def test_task_reset_resets_not_required_to_unknown(self) -> None:
+        """PR #372 round 4: `task reset` erases the runtime state and
+        evidence carrying the per-task SHIP that justified the excuse, so
+        the excuse must re-arm exactly like create / set-plan / set-spec."""
+        created = self._create(title="Only task")
+        self.flowctl.save_task_runtime(created["id"], {"status": "done"})
+        self._set_status("not_required")
+        result = self._call(
+            func=self.flowctl.cmd_task_reset,
+            task_id=created["id"],
+            cascade=False,
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_reset_never_resets_a_real_ship_verdict(self) -> None:
+        created = self._create(title="Only task")
+        self.flowctl.save_task_runtime(created["id"], {"status": "done"})
+        self._set_status("ship")
+        result = self._call(
+            func=self.flowctl.cmd_task_reset,
+            task_id=created["id"],
+            cascade=False,
+        )
+        self.assertTrue(result["success"])
         self.assertEqual(self._read_status(), "ship")
         self.assertNotIn("completion_review_reset", result)
 

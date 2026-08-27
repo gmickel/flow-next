@@ -409,7 +409,8 @@ stage: completion-review - skipped(policy: single-task, per-task SHIP covers spe
 - `.written == false` with a verdict status (`ship` / `needs_work` /
   `needs_human`) — a real review landed meanwhile: a normal no-skip outcome,
   not an error. Do NOT record the skip line; fall through to the status check
-  below.
+  below. A `refused` surface report (the spec no longer has exactly one task)
+  falls through the same way: no skip line, the status check decides.
 
 Never write `ship` here; the skip is a policy outcome, not a SHIP —
 `not_required` claims the requirement is satisfied without a review having run.
