@@ -45,6 +45,8 @@ This spec makes land correct on stacked PRs: recognize retargets and re-gate, me
 
 ## Decision Context
 
+- Field evidence for urgency (2026-08-27, fn-205/fn-206): land met a MANUAL (non-native) stack in production and the failure was total rather than degraded — the base's squash+delete-branch permanently closed the dependent PR (no reopen, no retarget), forcing a rebase + successor PR by hand outside land's contract (land never rebases). Native stacks route around exactly this via server-side retarget + the stack merge API, which is this spec's R4/R5; until it lands, the recovery playbook lives at `.flow/memory/knowledge/workflow/stacked-pr-squash-close-recovery-2026-08-27.md`. `[plan]`
+
 Why now: verified live that land's current merge call cannot merge a stacked PR and that targeting an upper layer collapses the stack - so without this spec, land is broken or dangerous the moment any babysat PR joins a stack, regardless of who stacked it. Hardening the reader and fixing the merge path are independent of, and prerequisite to, authoring stacks. The no-client-head-pin gap in merge-async is mitigated by minimizing the read-to-submit window and verifying the server-echoed expected head SHA, with mismatch escalating to NEEDS_HUMAN rather than proceeding. [paraphrase]
 
 Driver scoping: in the default human-merge flow (merging layers from GitHub's stack UI) land never merges, so R5 is exercised only when the user chooses land as the driver - running land IS choosing autonomous merging, no extra gate needed. R1-R4 protect every land tick regardless: human merges cause the retargets that land then observes while babysitting CI and review threads on the remaining layers. [paraphrase]
