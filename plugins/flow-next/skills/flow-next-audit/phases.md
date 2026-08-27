@@ -2,6 +2,8 @@
 
 For each entry, classify into exactly one outcome. Calibration below is specific to the `.flow/memory/` schema (track / category / module / tags / status frontmatter, body markdown). For the workflow phases that drive these decisions, see [workflow.md](workflow.md).
 
+Memory-entry body prose authored by the Update / Replace / Harden outcomes follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
+
 | Outcome | Meaning | Default action |
 |---------|---------|----------------|
 | **Keep** | Still accurate and useful | No edit; report reviewed-without-change |

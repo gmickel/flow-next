@@ -418,6 +418,8 @@ cat > "$EVIDENCE_FILE" << EOF
 EOF
 ```
 
+Done-summary prose follows the artifact prose contract in [docs/prose.md](../docs/prose.md); proceed without it when the doc is absent.
+
 Write summary file — use exact `HANDOVER_SUMMARY` in parallel-wave mode,
 otherwise `/tmp/summary.md`:
 ```bash

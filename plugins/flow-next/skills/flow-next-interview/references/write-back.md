@@ -10,6 +10,8 @@
 
 After interview complete, write everything back — **scope depends on input type**.
 
+Spec prose written back here follows the artifact prose contract in [docs/prose.md](../../../docs/prose.md); proceed without it when the doc is absent.
+
 **Single-emission write pattern (all branches below):** compose the body and Write it ONCE via the **Write tool** to a **literal unique path** (the file is what flowctl `--file` consumes; Write is plumbing). Path-persistence rule: bash vars do NOT survive across tool calls, and that applies to the draft path itself — compose the path in agent context (`${TMPDIR:-/tmp}/flow-interview-<kind>-<id>-<agent-chosen 4-char suffix>.md`) and type it verbatim in the Write call AND the flowctl `--file <path>` call; never a shell variable across tool calls (`mktemp` only for paths created and consumed within one bash block).
 
 **Print-then-ask approval (R13 — same contract as capture Phase 4):** before handing the draft to flowctl, obtain write-back approval:

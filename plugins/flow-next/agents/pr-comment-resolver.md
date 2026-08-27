@@ -93,6 +93,8 @@ Pick exactly one verdict:
 
 ### 5. Compose the reply
 
+Reply prose follows the artifact prose contract in [docs/prose.md](../docs/prose.md); proceed without it when the doc is absent.
+
 Always quote the relevant part of the original feedback for continuity:
 
 ```markdown

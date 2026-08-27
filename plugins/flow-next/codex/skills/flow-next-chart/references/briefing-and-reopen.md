@@ -12,6 +12,8 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 ## Phase 4: Briefing handoff
 
+Briefing rationale prose follows the artifact prose contract in [docs/prose.md](../../../docs/flow-next/prose.md); proceed without it when the doc is absent.
+
 When `frontier` / completion reports **briefable** (no open decisions including blocked/claimed; no parked Open Questions), or the user asks "one spec or two" / "ready to capture":
 
 1. Cluster resolved decisions; **default N=1**. Propose split only when clusters are genuinely disjoint.

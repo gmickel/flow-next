@@ -59,6 +59,8 @@ Optional but valuable: the failing network request (method, URL, status, sanitiz
 
 ## Filing to bug memory
 
+Finding-body prose follows the artifact prose contract in [docs/prose.md](../../../docs/flow-next/prose.md); proceed without it when the doc is absent.
+
 flow-next stores findings in the **bug memory track** (not `BUG-NNN.md` files). File the moment a FAIL is confirmed (after reproduce-twice), **with overlap scoring left ON** (never `--no-overlap-check`):
 
 ```bash

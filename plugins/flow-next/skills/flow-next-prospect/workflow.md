@@ -326,6 +326,8 @@ The selected persona texts are read from `personas.md` and concatenated under `#
 
 Issue **one** prompt. Inputs: the Phase 1 grounding snapshot, the focus hint, the persona texts, the generation target. **Do not** include any critique-pass scaffolding — the generator must not self-judge. The critique runs as a separate prompt in Phase 3 without these instructions.
 
+Persisted candidate prose (titles, summaries, risk notes) follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
+
 Prompt template (fill in the bracketed slots):
 
 ```

@@ -3,7 +3,7 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-This page governs the user-facing prose that flow-next skills emit (PR bodies from `/flow-next:make-pr`, tracker comments from `/flow-next:tracker-sync`, spec prose from `/flow-next:capture`, and changelog entries at release). Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact. Other prose surfaces (interview's spec write-back, resolve-pr replies, the visual digest) are governed by the same rules but do not carry pointers yet.
+This page governs the durable artifact prose emitted by flow-next skills and agents — PR bodies, tracker and PR comments, spec and plan prose, strategy and briefing sections, memory and glossary entries, task done summaries, and changelog entries at release. Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact. Every emission point carries a pointer; the visual digest is excluded by contract because its output is ephemeral chat rendering, never a written artifact.
 
 ## The rules
 
