@@ -24,6 +24,8 @@ Next steps:
 5) Simplify (reduce detail level)
 ```
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 If user selects 4 or 5:
 - **Go deeper**: Ask which task(s), then add more context/research to those specific tasks
 - **Simplify**: Remove non-essential sections, tighten acceptance criteria, merge small tasks

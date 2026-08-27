@@ -99,4 +99,6 @@ Next:
 
 The `Recommended next:` line follows the base-footer rule (workflow.md §Phase 6) and is MANDATORY here too — a rewrite is precisely when the route may change, so re-judge the rewritten spec's risk and remaining unknowns (readiness state, open `[inferred]` criteria, Parked unknowns) against the smallest-sufficient rule in [docs/pipeline-variations.md](../../../docs/pipeline-variations.md). Same legal targets (`/flow-next:interview`, `/flow-next:plan` optionally noting a minimal single-task plan fits the near-zero-risk shape, `/flow-next:guide` on genuinely conflicting signals); informational only — never a blocking prompt.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 The `Readiness:` announcement line appears ONLY when §5.3's reset actually changed the flag (`READY_RESET=true`). Never-ready specs print no readiness line — an announcement is not a confirmation prompt, and it must not claim a reset that didn't happen.

@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from flowctl_tracker import status as S  # noqa: E402
 from flowctl_tracker.status import verb as V  # noqa: E402
 from flowctl_tracker.status.policy import (  # noqa: E402
+    COMPLETION_REVIEW_SATISFYING, COMPLETION_REVIEW_STATUSES,
     decide, flow_to_normalized, in_progress_wins_matches, is_deadlock,
     merge_evidence, terminal_wins_matches, validate_conflict_tiebreak,
 )
@@ -190,6 +191,42 @@ class FlowToNormalized(unittest.TestCase):
             "todo")
         self.assertEqual(
             flow_to_normalized(spec, "none", False, tasks=[]), "backlog")
+
+    def test_completion_review_member_enumeration_pins_projection(self) -> None:
+        # fn-205 R7: every known member is classified explicitly; adding a
+        # member fails here until it is deliberately classified.
+        self.assertEqual(
+            set(COMPLETION_REVIEW_STATUSES),
+            {"ship", "needs_work", "needs_human", "unknown", "not_required"},
+        )
+        self.assertEqual(
+            COMPLETION_REVIEW_SATISFYING, frozenset({"ship", "not_required"})
+        )
+        for member in COMPLETION_REVIEW_STATUSES:
+            expected = (
+                "done" if member in COMPLETION_REVIEW_SATISFYING else "in_review"
+            )
+            spec = {"status": "done", "completion_review_status": member}
+            with self.subTest(member=member):
+                self.assertEqual(
+                    flow_to_normalized(spec, "merged", True), expected)
+
+    def test_not_required_never_terminal_without_merged(self) -> None:
+        # fn-205 R2: policy-excused review does not weaken the merge gate.
+        spec = {"status": "done", "completion_review_status": "not_required"}
+        for ev in ("none", "closed-unmerged", "ambiguous", "probe-error", "open"):
+            with self.subTest(ev=ev):
+                self.assertEqual(flow_to_normalized(spec, ev, True), "in_review")
+
+    def test_unrecognized_or_absent_review_value_satisfies_nothing(self) -> None:
+        # fn-205 R7 fail-closed: garbage or absent reads as unknown.
+        for review in ("garbage", None):
+            spec = {"status": "done"}
+            if review is not None:
+                spec["completion_review_status"] = review
+            with self.subTest(review=review):
+                self.assertEqual(
+                    flow_to_normalized(spec, "merged", True), "in_review")
 
 
 # ---------------------------------------------------------------------------
@@ -1723,6 +1760,45 @@ class AmbiguousStatusLabels(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))["tracker"]
             self.assertEqual(saved["lastSyncedAt"], "OLD")
             self.assertEqual(_receipts(flow), [])
+
+
+class NotRequiredTerminalLabel(unittest.TestCase):
+    """fn-205 R2 (silent-widening seam): merged + done + `not_required` is
+    terminal `done` with the `status:done` label; `status:verified` stays
+    reachable from `ship` alone."""
+
+    def test_merged_not_required_applies_done_label_never_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "not_required"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            added: list = []
+
+            def capture_add(req):
+                added.append(json.loads(req.body))
+                return ok([{"name": "status:done"}])
+
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED", "number": 1}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed",
+                                  "state_reason": "completed"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": capture_add,
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["kind"], "applied")
+            # The excused review earns terminal `done`, never `verified`.
+            self.assertEqual(added, [{"labels": ["status:done"]}])
 
 
 class LoadTasksMergesRuntimeState(unittest.TestCase):

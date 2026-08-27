@@ -361,7 +361,7 @@ Then restart OpenCode (or start a new session) and run **`/flow-next-setup`**. S
 
 ### Caveats / intentional limits
 
-- **Slash form is flat:** `/flow-next-plan`, `/flow-next-setup`, not `/flow-next:plan` — OpenCode command names come from flat filenames, so every `/flow-next:<name>` in other docs maps to `/flow-next-<name>` here.
+- **Slash form is flat:** `/flow-next-plan`, `/flow-next-setup`, not `/flow-next:plan` — OpenCode command names come from flat filenames, so every `/flow-next:<name>` in other docs maps to `/flow-next-<name>` here. Skill closers do that mapping for you: on an OpenCode install (detected by the ownership manifest at the plugin root) every copy-pasteable next-step command a skill prints already uses the flat form — the manual mapping note applies to passive docs mentions, not to what closers print.
 - **Setup is supported** — same ceremony as every other host. After install, restart OpenCode (or start a new session) and run `/flow-next-setup`. Detection is the ownership manifest at the plugin root (`.flow-next-opencode-manifest`); never an env var, never an absence signal. Setup writes the Claude-flavor docs snippet to AGENTS.md with `/flow-next:` rewritten to the flat `/flow-next-` form, proposes the routing block on AGENTS.md, and does not offer Ralph.
 - **A co-existing Codex install wins flowctl resolution.** The canonical cascade's first env rung falls back to `~/.codex/scripts/flowctl`; on a machine that also has the Codex install, that copy resolves first and the OpenCode-installed `scripts/` tree is only the backstop. Keep both current by re-running each installer after updates.
 - **No native blocking-ask primitive** — interactive skills degrade to the numbered-prompt fallback already present in canonical prose.

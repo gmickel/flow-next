@@ -4,6 +4,8 @@
 > (NEW IDEA / EXISTING SPEC / Flow Task / File Path). Split out of the always-loaded SKILL.md so
 > its ~160 lines are not held in context across the whole interview.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 ## Write Refined Spec
 
 After interview complete, write everything back — **scope depends on input type**.
@@ -153,7 +155,7 @@ Then hand flowctl the draft file — the literal path typed verbatim (never a sh
 $FLOWCTL spec set-plan <id> --file "${TMPDIR:-/tmp}/flow-interview-spec-<id>-<suffix>.md" --json
 ```
 
-Then suggest: "Run `/flow-next:plan fn-N` to research best practices and create tasks."
+Then suggest: "Run `$flow-next-plan fn-N` to research best practices and create tasks."
 
 ### For EXISTING SPEC (fn-N that already has tasks)
 
@@ -164,7 +166,7 @@ $FLOWCTL tasks --spec <id> --json
 
 **If tasks exist:** Only update the spec (add edge cases, clarify requirements). **Do NOT touch task specs** — plan already created them.
 
-**If no tasks:** Update spec, then suggest `/flow-next:plan`.
+**If no tasks:** Update spec, then suggest `$flow-next-plan`.
 
 The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md). Read the existing spec, refine sections under your scope per the write-policy (preserving sections owned by the other scope byte-for-byte, and project-added sections per the ownership rule above), and append/update the auxiliary interview-audit sections. The R21 drift guard forbids re-embedding the canonical section sequence in this skill - read the existing body, do not regenerate from a template.
 
@@ -216,7 +218,7 @@ $FLOWCTL cat <id>
   ```bash
   $FLOWCTL task set-acceptance <id> --file "${TMPDIR:-/tmp}/flow-interview-acc-<id>-<suffix>.md" --json
   ```
-- Or suggest interviewing the spec instead: `/flow-next:interview <spec-id>`
+- Or suggest interviewing the spec instead: `$flow-next-interview <spec-id>`
 
 **If task is minimal** (just title, empty or stub description):
 - Update task with interview findings
@@ -243,4 +245,4 @@ Rewrite the file with refined spec:
 - Keep it requirements-focused (what, not how)
 - **No source tags here:** this is the user's own document, not a `.flow` spec — preserving its structure outranks injecting our tag grammar. Tags start when `/flow-next:plan <file>` promotes it to a spec.
 
-This is typically a pre-spec doc. After interview, suggest `/flow-next:plan <file>` to create spec + tasks.
+This is typically a pre-spec doc. After interview, suggest `$flow-next-plan <file>` to create spec + tasks.

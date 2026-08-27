@@ -449,6 +449,8 @@ Suggest next step based on input type:
 - File → `/flow-next:plan <file>`
 - Any of the above → also offer a compact visual digest for reviewing the refined result at a glance — `/flow-next:visual fn-N` for a spec input, `/flow-next:visual fn-N.M` for a task input, `/flow-next:visual <file-path>` for the file input (an option the user picks, never run for them).
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 ## Notes
 
 - This process should feel thorough - user should feel they've thought through everything

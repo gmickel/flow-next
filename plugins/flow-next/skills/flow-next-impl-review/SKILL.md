@@ -29,12 +29,12 @@ Conduct a John Carmack-level review of implementation changes on the current bra
 
 Exception: a `--review=<backend>` argument (see Backend Selection below) wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` / `RP_ELIGIBLE` setup lines).
 
-When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor`, `host` (plus `none`). `export` is an explicit one-off review MODE (`--review=export`), not a configured backend — never present it as one. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor`, `host` (plus `none`). `export` is not an impl-review mode at all — a manual export review lives in `/flow-next:plan-review --review=export`; never present it here. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
 
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|copilot|cursor|host|export|none` argument
+1. `--review=rp|codex|copilot|cursor|host|none` argument
 2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`) OR spec form (`codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5`, `cursor:gpt-5.5-high`); `host` is bare-only (`host:<model>` is rejected)
 3. `.flow/config.json` → `review.backend` (same bare / spec forms)
 4. **Error** - no auto-detection
@@ -47,7 +47,7 @@ Check $ARGUMENTS for:
 - `--review=copilot` or `--review copilot` → use copilot
 - `--review=cursor` or `--review cursor` → use cursor
 - `--review=host` or `--review host` → use host
-- `--review=export` or `--review export` → use export
+- `--review=export` or `--review export` → fail closed: report that `export` is not an impl-review backend and stop before any dispatch; the manual path is `/flow-next:plan-review --review=export`
 - `--review=none` or `--review none` → skip review
 
 If found, use that backend and skip all other detection.

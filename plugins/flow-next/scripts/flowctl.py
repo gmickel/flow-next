@@ -280,6 +280,36 @@ SPEC_STATUS = ["open", "done"]
 EPIC_STATUS = SPEC_STATUS  # Backward-compat alias (removed in 2.0).
 TASK_STATUS = ["todo", "in_progress", "blocked", "done"]
 
+# fn-205 R2/R3/R7: completion-review status vocabulary. Canonical declaration
+# lives HERE, not imported from flowctl_tracker: flowctl.py treats the tracker
+# package as optionally absent (all imports lazy, inside functions) while
+# argparse `choices` builds at parse time. A mirror declaration lives in
+# flowctl_tracker/status/policy.py; a parity test pins the two equal - edit
+# both together. `not_required` means "policy excused this review": the
+# requirement is satisfied, but no review ran (`ship` remains the only claim
+# that a review actually happened).
+COMPLETION_REVIEW_STATUSES = (
+    "ship", "needs_work", "needs_human", "unknown", "not_required",
+)
+# One satisfaction predicate, not N comparisons: every gate that asks "is the
+# completion-review requirement satisfied" consumes this set. An unrecognized
+# or absent persisted value reads as `unknown` and satisfies nothing.
+COMPLETION_REVIEW_SATISFYING = frozenset({"ship", "not_required"})
+
+
+def completion_review_satisfied(status: object) -> bool:
+    """True when the completion-review requirement is satisfied.
+
+    Membership test, never a `!=` chain: an implicit deny-list would silently
+    classify the next member added. Unknown / absent / garbage: not satisfied.
+    Non-str (a hand-edited/corrupted spec JSON can hold a list/dict, which is
+    unhashable and would TypeError on the frozenset lookup) classifies as
+    unknown and satisfies nothing — the gate fails closed, never crashes.
+    """
+    if not isinstance(status, str):
+        return False
+    return status in COMPLETION_REVIEW_SATISFYING
+
 TASK_SPEC_HEADINGS = [
     "## Description",
     "## Acceptance",
@@ -28984,6 +29014,96 @@ def _task_create_rollback(published: list[Path]) -> list[str]:
     return cleanup_errors
 
 
+def _reset_excused_completion_review(flow_dir: Path, spec_id: str) -> "bool | str":
+    """Invalidate a policy-excused completion review when the review surface changes.
+
+    `not_required` is a policy verdict about a specific spec shape (e.g. the
+    single-task skip's preconditions). Adding a task or rewriting the plan /
+    task sections changes that shape, so the excuse no longer applies: reset
+    EXACTLY `not_required` back to `unknown` so the completion-review gate
+    re-arms. Real verdicts (`ship`, `needs_work`, `needs_human`) are never
+    touched — a stale SHIP after an edit is pre-existing semantics, out of
+    scope here.
+
+    Tri-state result, best-effort under the review sidecar lock (same lock
+    every other review-status writer holds). The caller has already published
+    its own artifacts, so no outcome here ever fails the command:
+
+      * ``True``   — a reset was written (`not_required` → `unknown`).
+      * ``False``  — nothing to reset (status was not `not_required`).
+      * ``"failed"`` — the precheck read `not_required` but the locked reset
+        could not commit (sidecar lock unavailable); callers must surface
+        this (JSON ``"failed"`` + stderr warning), never swallow it.
+    """
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        return False
+    # Lock-free precheck: the overwhelmingly common case is a spec that was
+    # never policy-excused, and taking the sidecar lock on EVERY create broke
+    # the bulk-vs-granular lock-parity contract (test_task_bulk_create).
+    # Only a `not_required` reading takes the lock; the status is re-verified
+    # under it, so a lost race costs at most one extra (harmless) review.
+    try:
+        if load_json(spec_json_path).get("completion_review_status") != "not_required":
+            return False
+    except (OSError, ValueError, TypeError):
+        return False
+    try:
+        with _review_sidecar_lock(flow_dir, spec_id):
+            try:
+                spec_data = load_json(spec_json_path)
+            except (OSError, ValueError, TypeError):
+                return False
+            if spec_data.get("completion_review_status") != "not_required":
+                return False
+            spec_data["completion_review_status"] = "unknown"
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_path, spec_data)
+            return True
+    except CrossProcessLockError:
+        # Excused, but the reset could not commit: surface, don't swallow —
+        # and never roll back the artifact the caller already published.
+        return "failed"
+
+
+def _note_completion_review_reset(
+    review_reset: "bool | str",
+    spec_id: str,
+    payload: Optional[dict],
+    *,
+    use_json: bool,
+) -> None:
+    """Report `_reset_excused_completion_review`'s tri-state to the user.
+
+    ``True`` → ``completion_review_reset: true`` in JSON / one human line.
+    ``False`` → silent (nothing was excused; nothing to say).
+    ``"failed"`` → ``completion_review_reset: "failed"`` in JSON plus ONE
+    stderr warning naming the spec and the manual remedy. The publishing
+    command itself still succeeds — a bookkeeping reset must not roll back
+    an already-published artifact.
+    """
+    if review_reset is True:
+        if use_json and payload is not None:
+            payload["completion_review_reset"] = True
+        elif not use_json:
+            print(
+                f"Spec {spec_id} completion review status reset to unknown "
+                "(was not_required; review surface changed)"
+            )
+    elif review_reset == "failed":
+        if use_json and payload is not None:
+            payload["completion_review_reset"] = "failed"
+        print(
+            f"Warning: spec {spec_id} completion review status is "
+            "not_required but the review surface changed and the reset to "
+            "unknown could not be written (review sidecar lock unavailable). "
+            "Re-arm the gate manually: flowctl spec "
+            f"set-completion-review-status {spec_id} --status unknown "
+            "--if-current not_required",
+            file=sys.stderr,
+        )
+
+
 def cmd_task_create(args: argparse.Namespace) -> None:
     """Create a new task under a spec.
 
@@ -29168,11 +29288,21 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 use_json=use_json,
             )
 
+        # fn-205 follow-up: new tasks change the review surface — a
+        # policy-excused `not_required` no longer holds.
+        review_reset = _reset_excused_completion_review(flow_dir, spec_id)
         if use_json:
-            json_output({"tasks": created_summaries})
+            payload: dict = {"tasks": created_summaries}
+            _note_completion_review_reset(
+                review_reset, spec_id, payload, use_json=True
+            )
+            json_output(payload)
         else:
             for summary in created_summaries:
                 print(f"Task {summary['id']} created: {summary['title']}")
+            _note_completion_review_reset(
+                review_reset, spec_id, None, use_json=False
+            )
         return
 
     # ── Single-task path ──────────────────────────────────────────────────
@@ -29295,19 +29425,24 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
 
+    # fn-205 follow-up: a new task changes the review surface — a
+    # policy-excused `not_required` no longer holds.
+    review_reset = _reset_excused_completion_review(flow_dir, spec_id)
+
     if use_json:
-        json_output(
-            {
-                "id": task_id,
-                "spec": spec_id,
-                "title": args.title,
-                "depends_on": deps,
-                "spec_path": task_data["spec_path"],
-                "message": f"Task {task_id} created",
-            }
-        )
+        payload = {
+            "id": task_id,
+            "spec": spec_id,
+            "title": args.title,
+            "depends_on": deps,
+            "spec_path": task_data["spec_path"],
+            "message": f"Task {task_id} created",
+        }
+        _note_completion_review_reset(review_reset, spec_id, payload, use_json=True)
+        json_output(payload)
     else:
         print(f"Task {task_id} created: {args.title}")
+        _note_completion_review_reset(review_reset, spec_id, None, use_json=False)
 
 
 def cmd_dep_add(args: argparse.Namespace) -> None:
@@ -29774,16 +29909,27 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
         spec_data=spec_data,
     )
 
+    # fn-205 follow-up: a plan rewrite can change the R-ID surface, breaking
+    # the preconditions behind a policy-excused `not_required`. Reset it via
+    # the LOCKED helper (lock-free precheck outside, sidecar lock +
+    # re-verify + write inside — the task-create shape), NEVER folded into
+    # the unlocked plan JSON stamp above: a concurrent reviewer publishing
+    # `ship` between our read and the plan write must not be clobbered to
+    # `unknown`. Only `not_required` is touched; real verdicts
+    # (ship/needs_work/needs_human) are never reset here.
+    review_reset = _reset_excused_completion_review(flow_dir, args.id)
+
     if args.json:
-        json_output(
-            {
-                "id": args.id,
-                "spec_path": str(spec_md_path),
-                "message": f"Spec {args.id} markdown updated",
-            }
-        )
+        payload = {
+            "id": args.id,
+            "spec_path": str(spec_md_path),
+            "message": f"Spec {args.id} markdown updated",
+        }
+        _note_completion_review_reset(review_reset, args.id, payload, use_json=True)
+        json_output(payload)
     else:
         print(f"Spec {args.id} markdown updated")
+        _note_completion_review_reset(review_reset, args.id, None, use_json=False)
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
@@ -29908,10 +30054,76 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
     reservation_id = getattr(args, "reservation_id", None)
+    if_current = getattr(args, "if_current", None)
     with _review_sidecar_lock(flow_dir, args.id):
         spec_data = normalize_epic(
             load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
         )
+        if if_current is not None:
+            # fn-205 R1: compare-and-set evaluated inside the lock, so the
+            # check and the write are one critical section. An unrecognized
+            # persisted value reads as `unknown`. A mismatch is a normal
+            # outcome for the caller, not an error: no write, non-error exit,
+            # machine-readable report of the value that won.
+            current = spec_data.get("completion_review_status")
+            if current not in COMPLETION_REVIEW_STATUSES:
+                current = "unknown"
+            if current != if_current:
+                if args.json:
+                    json_output(
+                        {
+                            "id": args.id,
+                            "written": False,
+                            "completion_review_status": current,
+                            "requested_status": args.status,
+                            "if_current": if_current,
+                            "message": (
+                                f"Spec {args.id} completion review status is "
+                                f"{current}, not {if_current}; nothing written"
+                            ),
+                        }
+                    )
+                else:
+                    print(
+                        f"Spec {args.id} completion review status is "
+                        f"{current}, not {if_current}; nothing written"
+                    )
+                return
+        if args.status == "not_required":
+            # PR #372 round 4: `not_required` is the single-task policy
+            # skip's verdict, and its precondition (a) is "the spec has
+            # exactly one task". A caller can judge that policy on a stale
+            # surface (a concurrent task create publishes task 2 between the
+            # caller's check and this write), so the precondition is
+            # re-verified HERE, inside the same critical section as the
+            # write — a deterministic count, no judgment. A refusal is a
+            # normal outcome like a CAS miss: no write, non-error exit,
+            # machine-readable reason. Verdict statuses (`ship`,
+            # `needs_work`, `needs_human`) and `unknown` are untouched.
+            task_count = sum(1 for _ in iter_task_json_files(flow_dir, args.id))
+            if task_count != 1:
+                current = spec_data.get("completion_review_status")
+                if current not in COMPLETION_REVIEW_STATUSES:
+                    current = "unknown"
+                message = (
+                    f"Spec {args.id} has {task_count} tasks; not_required is "
+                    "a single-task policy verdict, nothing written"
+                )
+                if args.json:
+                    json_output(
+                        {
+                            "id": args.id,
+                            "written": False,
+                            "refused": "policy_surface_multi_task",
+                            "completion_review_status": current,
+                            "requested_status": args.status,
+                            "task_count": task_count,
+                            "message": message,
+                        }
+                    )
+                else:
+                    print(message)
+                return
         if reservation_id:
             _apply_reservation_status_leg(
                 flow_dir, spec_data, reservation_id, args.json
@@ -29925,6 +30137,7 @@ def cmd_spec_set_completion_review_status(args: argparse.Namespace) -> None:
         json_output(
             {
                 "id": args.id,
+                "written": True,
                 "completion_review_status": spec_data["completion_review_status"],
                 "completion_reviewed_at": spec_data["completion_reviewed_at"],
                 "message": f"Spec {args.id} completion review status set to {args.status}",
@@ -33297,16 +33510,27 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
         canonicalize_task_for_write(task_data)
         atomic_write_json(task_json_path, task_data)
 
+        # fn-205 follow-up: a full spec replace can change satisfies /
+        # acceptance / description — the review surface behind a
+        # policy-excused `not_required`.
+        spec_id = spec_id_from_task(task_id)
+        review_reset = _reset_excused_completion_review(flow_dir, spec_id)
+
         if args.json:
-            json_output(
-                {
-                    "id": task_id,
-                    "title": h1_title,
-                    "message": f"Task {task_id} spec replaced",
-                }
+            payload = {
+                "id": task_id,
+                "title": h1_title,
+                "message": f"Task {task_id} spec replaced",
+            }
+            _note_completion_review_reset(
+                review_reset, spec_id, payload, use_json=True
             )
+            json_output(payload)
         else:
             print(f"Task {task_id} spec replaced")
+            _note_completion_review_reset(
+                review_reset, spec_id, None, use_json=False
+            )
         return
 
     # Section patch mode (existing behavior)
@@ -33342,16 +33566,22 @@ def cmd_task_set_spec(args: argparse.Namespace) -> None:
     canonicalize_task_for_write(task_data)
     atomic_write_json(task_json_path, task_data)
 
+    # fn-205 follow-up: description/acceptance edits change the review
+    # surface behind a policy-excused `not_required`.
+    spec_id = spec_id_from_task(task_id)
+    review_reset = _reset_excused_completion_review(flow_dir, spec_id)
+
     if args.json:
-        json_output(
-            {
-                "id": task_id,
-                "sections": sections_updated,
-                "message": f"Task {task_id} updated: {', '.join(sections_updated)}",
-            }
-        )
+        payload = {
+            "id": task_id,
+            "sections": sections_updated,
+            "message": f"Task {task_id} updated: {', '.join(sections_updated)}",
+        }
+        _note_completion_review_reset(review_reset, spec_id, payload, use_json=True)
+        json_output(payload)
     else:
         print(f"Task {task_id} updated: {', '.join(sections_updated)}")
+        _note_completion_review_reset(review_reset, spec_id, None, use_json=False)
 
 
 def cmd_task_reset(args: argparse.Namespace) -> None:
@@ -33463,10 +33693,19 @@ def cmd_task_reset(args: argparse.Namespace) -> None:
             clear_task_evidence(dep_id)
             reset_ids.append(dep_id)
 
+    # PR #372 round 4: resetting a task erases the runtime state and evidence
+    # that carried the per-task SHIP behind a policy-excused `not_required`.
+    # The excuse must re-arm with the rest of the surface, exactly like task
+    # create / set-plan / set-spec do (lock-free precheck inside the helper).
+    review_reset = _reset_excused_completion_review(flow_dir, epic_id)
+
     if args.json:
-        json_output({"success": True, "reset": reset_ids})
+        payload: dict = {"success": True, "reset": reset_ids}
+        _note_completion_review_reset(review_reset, epic_id, payload, use_json=True)
+        json_output(payload)
     else:
         print(f"Reset: {', '.join(reset_ids)}")
+        _note_completion_review_reset(review_reset, epic_id, None, use_json=False)
 
 
 def _task_set_section(
@@ -33518,16 +33757,22 @@ def _task_set_section(
     canonicalize_task_for_write(task_data)
     atomic_write_json(task_json_path, task_data)
 
+    # fn-205 follow-up: description/acceptance edits change the review
+    # surface behind a policy-excused `not_required`.
+    spec_id = spec_id_from_task(task_id)
+    review_reset = _reset_excused_completion_review(flow_dir, spec_id)
+
     if use_json:
-        json_output(
-            {
-                "id": task_id,
-                "section": section,
-                "message": f"Task {task_id} {section} updated",
-            }
-        )
+        payload = {
+            "id": task_id,
+            "section": section,
+            "message": f"Task {task_id} {section} updated",
+        }
+        _note_completion_review_reset(review_reset, spec_id, payload, use_json=True)
+        json_output(payload)
     else:
         print(f"Task {task_id} {section} updated")
+        _note_completion_review_reset(review_reset, spec_id, None, use_json=False)
 
 
 # --- fn-181 R3/R4/R5: behind-upstream staleness advisory ---
@@ -34050,7 +34295,9 @@ def cmd_next(args: argparse.Namespace) -> None:
             args.require_completion_review
             and tasks
             and all(t.get("status") == "done" for t in tasks.values())
-            and epic_data.get("completion_review_status") != "ship"
+            and not completion_review_satisfied(
+                epic_data.get("completion_review_status")
+            )
         ):
             if args.json:
                 json_output(
@@ -41063,24 +41310,29 @@ def _self_write_review_status(
     status = status_map.get(verdict)
     if not status:
         return None
+    if kind not in ("plan", "completion"):
+        return None
     flow_dir = get_flow_dir()
     spec_json_path = find_spec_json_path(flow_dir, spec_id)
     if not spec_json_path.exists():
         return None
-    spec_data = normalize_epic(
-        load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
-    )
-    now = now_iso()
-    if kind == "plan":
-        spec_data["plan_review_status"] = status
-        spec_data["plan_reviewed_at"] = now
-    elif kind == "completion":
-        spec_data["completion_review_status"] = status
-        spec_data["completion_reviewed_at"] = now
-    else:
-        return None
-    spec_data["updated_at"] = now
-    atomic_write_json(spec_json_path, spec_data)
+    # fn-205.3 (host-review follow-up): every other review-status writer holds
+    # the review sidecar lock; this read-modify-write was the one exception,
+    # racing set-completion-review-status's --if-current compare-and-set.
+    # Lock order unchanged: receipt lock (held by callers) before this lock.
+    with _review_sidecar_lock(flow_dir, spec_id):
+        spec_data = normalize_epic(
+            load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=use_json)
+        )
+        now = now_iso()
+        if kind == "plan":
+            spec_data["plan_review_status"] = status
+            spec_data["plan_reviewed_at"] = now
+        else:
+            spec_data["completion_review_status"] = status
+            spec_data["completion_reviewed_at"] = now
+        spec_data["updated_at"] = now
+        atomic_write_json(spec_json_path, spec_data)
     return status
 
 
@@ -42563,9 +42815,10 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         if publish_out.get("published"):
             # PR #290 bot r5: publication-from-journal already completed the
             # deferred status leg INSIDE the receipt+sidecar lock, and cleared
-            # the recovery payload with it. A second, unlocked read-modify-
-            # write of the spec JSON here would clobber any concurrent
-            # reserve/finalize that landed in between, so just report what the
+            # the recovery payload with it. The locked publication transaction
+            # is the authority for this round; a second read-modify-write here
+            # (now also lock-guarded, fn-205.3) would still be a LATER write
+            # re-deciding an already-published status, so just report what the
             # locked transaction wrote.
             written_status = publish_out.get("status_written")
         else:
@@ -49925,8 +50178,17 @@ def main() -> None:
         p_set_completion_review.add_argument(
             "--status",
             required=True,
-            choices=["ship", "needs_work", "needs_human", "unknown"],
+            choices=list(COMPLETION_REVIEW_STATUSES),
             help="Completion review status",
+        )
+        p_set_completion_review.add_argument(
+            "--if-current",
+            choices=list(COMPLETION_REVIEW_STATUSES),
+            help=(
+                "Compare-and-set: write only when the current status equals "
+                "this value, checked under the sidecar lock; on mismatch "
+                "nothing is written and the JSON reports written=false"
+            ),
         )
         p_set_completion_review.add_argument(
             "--reservation-id",

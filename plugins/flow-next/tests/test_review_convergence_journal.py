@@ -1134,6 +1134,118 @@ class TestArtifactHashDispatchGuard(unittest.TestCase):
         )
 
 
+class TestCompletionReviewCompareAndSet(_JournalReplayBase):
+    """fn-205 R1: `--if-current` is an atomic CAS under the sidecar lock."""
+
+    def _publish_tasks(self, count: int) -> None:
+        """Write minimal task definitions so the surface guard sees them."""
+        tasks_dir = self.root / ".flow" / "tasks"
+        for n in range(1, count + 1):
+            task_id = f"{self.spec_id}.{n}"
+            (tasks_dir / f"{task_id}.json").write_text(
+                json.dumps({"id": task_id, "title": f"T{n}", "status": "todo"})
+            )
+
+    def test_cli_accepts_not_required(self):
+        self._publish_tasks(1)
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertTrue(payload["written"])
+        self.assertEqual(self._data()["completion_review_status"], "not_required")
+
+    def test_plan_review_choices_unchanged(self):
+        # R2: only the completion-review vocabulary widened.
+        code, _, _ = self._run_cli(
+            "spec", "set-plan-review-status", self.spec_id,
+            "--status", "not_required", "--json",
+        )
+        self.assertEqual(code, 2)
+
+    def test_cas_match_writes(self):
+        self._publish_tasks(1)
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--if-current", "unknown", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertTrue(payload["written"])
+        self.assertEqual(self._data()["completion_review_status"], "not_required")
+
+    def test_not_required_refused_on_multi_task_surface(self):
+        # PR #372 round 4 (TOCTOU): a task published between the skip's
+        # policy check and its CAS must make the excuse unwritable. The
+        # count is re-verified inside the locked write section, so a
+        # two-task surface refuses even when the CAS precondition matches.
+        self._publish_tasks(2)
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--if-current", "unknown", "--json",
+        )
+        self.assertEqual(code, 0, err)  # normal outcome, like a CAS miss
+        payload = json.loads(out)
+        self.assertFalse(payload["written"])
+        self.assertEqual(payload["refused"], "policy_surface_multi_task")
+        self.assertEqual(payload["task_count"], 2)
+        self.assertEqual(payload["completion_review_status"], "unknown")
+        self.assertNotIn(
+            "completion_review_status", self._data(),
+        )  # nothing written to disk
+
+    def test_not_required_refused_without_if_current_too(self):
+        # The guard sits on the WRITE path, not on the CAS flag: a direct
+        # (non-CAS) not_required write against a multi-task spec refuses.
+        self._publish_tasks(2)
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertFalse(payload["written"])
+        self.assertEqual(payload["refused"], "policy_surface_multi_task")
+
+    def test_verdict_writes_ignore_the_surface_guard(self):
+        # Only not_required carries the single-task precondition; verdict
+        # statuses and unknown write regardless of task count.
+        self._publish_tasks(2)
+        for status in ("needs_work", "ship", "needs_human", "unknown"):
+            with self.subTest(status=status):
+                code, out, err = self._run_cli(
+                    "spec", "set-completion-review-status", self.spec_id,
+                    "--status", status, "--json",
+                )
+                self.assertEqual(code, 0, err)
+                payload = json.loads(out)
+                self.assertTrue(payload["written"])
+                self.assertEqual(
+                    self._data()["completion_review_status"], status
+                )
+
+    def test_concurrent_needs_work_survives_cas_from_unknown(self):
+        # Regression pinned by the task spec: a review verdict landing
+        # between the skip's read and its write is never clobbered.
+        code, _, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "needs_work", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run_cli(
+            "spec", "set-completion-review-status", self.spec_id,
+            "--status", "not_required", "--if-current", "unknown", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        payload = json.loads(out)
+        self.assertFalse(payload["written"])
+        self.assertEqual(payload["completion_review_status"], "needs_work")
+        self.assertEqual(payload["requested_status"], "not_required")
+        self.assertEqual(self._data()["completion_review_status"], "needs_work")
+
+
 class TestNeedsHumanTerminal(_JournalReplayBase):
     """R3: every delivered NEEDS_HUMAN persists before exit 4."""
 

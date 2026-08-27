@@ -237,10 +237,10 @@ flowctl spec set-plan-review-status fn-1 --status ship|needs_work|needs_human|un
 
 ### spec set-completion-review-status
 
-Set completion review status and timestamp.
+Set completion review status and timestamp. `ship` is the only value that claims a review actually ran; `not_required` records a policy-excused review (written by work's 3g policy skip) — it satisfies the completion-review requirement without claiming a review happened. The satisfying set every gate consumes is `{ship, not_required}`; an unrecognized or absent value reads as `unknown` and satisfies nothing. `--if-current <status>` makes the write a compare-and-set, checked under the sidecar lock: the status is written only when the current value matches, otherwise nothing is written and the JSON reply reports `written: false` plus the current value (exit 0). The 3g skip uses `--status not_required --if-current unknown`, so a review verdict that lands concurrently is never silently overwritten. An excused `not_required` is invalidated when the review surface changes: `task create` (single or bulk), `task set-spec`, `task set-description`, `task set-acceptance`, and `spec set-plan` reset it to `unknown` via the locked helper after their own write lands (reported as `completion_review_reset: true`); pure status/claim writers (`start`, `done`, `set-backend`) never reset, and real verdicts are never touched. When the spec is excused but the sidecar lock is unavailable, the command still succeeds and reports `completion_review_reset: "failed"` plus a stderr warning naming the manual remedy (`spec set-completion-review-status <id> --status unknown --if-current not_required`).
 
 ```bash
-flowctl spec set-completion-review-status fn-1 --status ship|needs_work|needs_human|unknown [--json]
+flowctl spec set-completion-review-status fn-1 --status ship|needs_work|needs_human|unknown|not_required [--if-current <status>] [--json]
 ```
 
 ### spec reset-review-rounds
@@ -793,7 +793,7 @@ Output:
 {"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
 ```
 
-The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status != ship`, returns `status: completion_review`.
+The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status` is outside the satisfying set `{ship, not_required}`, returns `status: completion_review`. A policy-excused `not_required` counts as satisfied; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 
 ### start
 
@@ -1006,7 +1006,7 @@ the reviewer reads them from your checkout. A failed `git` read aborts with the
 underlying git error *before* a review round is reserved, rather than dispatching a
 review with no evidence. The only remaining size guard is
 `CURSOR_ARGV_TRANSPORT_MAX`, a transport boundary for `cursor-agent`'s positional
-argv delivery: it refuses loudly and never truncates. `--review=export` is the
+argv delivery: it refuses loudly and never truncates. Plan-review's `--review=export` is the
 documented exception — it produces an artifact for an LLM with no repository
 access, so there the payload is the only channel available.
 

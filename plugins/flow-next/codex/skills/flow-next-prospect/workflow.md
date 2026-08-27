@@ -809,7 +809,7 @@ Promote a survivor to a spec?
   2) Promote #2: <title>
   ...
   N) Skip
-  i) Interview (ask /flow-next:interview what to refine)
+  i) Interview (ask $flow-next-interview what to refine)
 
 Enter choice [1-N|i|skip]:
 ```
@@ -824,9 +824,11 @@ Normalize the reply (strip whitespace, lowercase). Route by exact match:
 |-------|--------|
 | `1`, `2`, ..., `N-1` (where `N` is the Skip slot) | Run `flowctl prospect promote <artifact-id> --idea <reply>`. Echo the new spec id and exit. |
 | `N`, `skip`, empty string | Print `Skipped. Artifact saved at .flow/prospects/<artifact-id>.md` and exit. |
-| `c`, `chart` | Print suggestion: `Run /flow-next:chart on the selected survivor only if it is still singular, oversized, and unclear; otherwise capture/promote. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke.** |
-| `i`, `interview` | Print suggestion: `Run /flow-next:interview <spec-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** - the user picks the target id. |
+| `c`, `chart` | Print suggestion: `Run $flow-next-chart on the selected survivor only if it is still singular, oversized, and unclear; otherwise capture/promote. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke.** |
+| `i`, `interview` | Print suggestion: `Run $flow-next-interview <spec-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** - the user picks the target id. |
 | anything else | Reprint the menu once with `Unrecognized choice: <reply>`. On second invalid reply, print `Skipped (no valid choice). Artifact saved at .flow/prospects/<artifact-id>.md` and exit cleanly. |
+
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
 ### 6.4 — Exit cleanly regardless
 

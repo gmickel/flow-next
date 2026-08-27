@@ -35,7 +35,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any, Optional
 from unittest import mock
@@ -533,6 +533,220 @@ class TaskCreateFilesTestCase(unittest.TestCase):
                     self.assertTrue(md.startswith("---\nsatisfies: ["))
                 else:
                     self.assertTrue(md.startswith(f"# {result['id']}"))
+
+
+class ExcusedReviewInvalidationTestCase(TaskCreateFilesTestCase):
+    """fn-205 follow-up: `not_required` is a verdict about a spec shape.
+
+    Adding a task (single or bulk) or rewriting the plan changes the review
+    surface, so the excuse must reset to `unknown` in the same command —
+    otherwise scheduler/pilot/Ralph advance an expanded spec without a
+    completion review. Real verdicts (`ship`) are never touched.
+    """
+
+    def _set_status(self, status: str) -> None:
+        self._call(
+            func=self.flowctl.cmd_spec_set_completion_review_status,
+            id=self.spec_id,
+            status=status,
+        )
+
+    def _read_status(self) -> str:
+        path = self.flowctl.find_spec_json_path(
+            self.flowctl.get_flow_dir(), self.spec_id
+        )
+        return json.loads(path.read_text(encoding="utf-8"))[
+            "completion_review_status"
+        ]
+
+    def test_single_create_resets_not_required_to_unknown(self) -> None:
+        self._create(title="Only task")
+        self._set_status("not_required")
+        result = self._create(title="Second task")
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_bulk_create_resets_not_required_to_unknown(self) -> None:
+        # One task first: not_required is only writable on a one-task surface
+        # (PR #372 round 4 guard).
+        self._create(title="Only task")
+        self._set_status("not_required")
+        bulk = self._write(
+            "bulk.json",
+            json.dumps([{"title": "Bulk A"}, {"title": "Bulk B"}]),
+        )
+        result = self._create(title=None, from_json=bulk)
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_set_plan_resets_not_required_to_unknown(self) -> None:
+        # One task first: not_required is only writable on a one-task surface
+        # (PR #372 round 4 guard).
+        self._create(title="Only task")
+        self._set_status("not_required")
+        plan = self._write("plan.md", "# Plan\n\n- R1: new requirement\n")
+        result = self._call(
+            func=self.flowctl.cmd_spec_set_plan, id=self.spec_id, file=plan
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_create_never_resets_a_real_ship_verdict(self) -> None:
+        self._set_status("ship")
+        result = self._create(title="Post-ship task")
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+    def test_set_plan_never_resets_a_real_ship_verdict(self) -> None:
+        self._set_status("ship")
+        plan = self._write("plan2.md", "# Plan\n\nRewritten.\n")
+        result = self._call(
+            func=self.flowctl.cmd_spec_set_plan, id=self.spec_id, file=plan
+        )
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+    def test_task_set_spec_file_resets_not_required_to_unknown(self) -> None:
+        """Round-3 P1: set-spec --file rewrites satisfies/acceptance/
+        description — the same review surface task create re-arms on."""
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        spec = self._write(
+            "replace.md",
+            f"# {created['id']} Only task\n\n## Description\nNew surface\n",
+        )
+        result = self._call(
+            func=self.flowctl.cmd_task_set_spec,
+            id=created["id"],
+            file=spec,
+            description=None,
+            acceptance=None,
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_set_spec_section_patch_resets_not_required(self) -> None:
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        desc = self._write("desc.md", "Sharper description\n")
+        result = self._call(
+            func=self.flowctl.cmd_task_set_spec,
+            id=created["id"],
+            file=None,
+            description=desc,
+            acceptance=None,
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_set_description_resets_not_required(self) -> None:
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        desc = self._write("desc2.md", "Different description\n")
+        result = self._call(
+            func=self.flowctl.cmd_task_set_description,
+            id=created["id"],
+            file=desc,
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_set_spec_never_resets_a_real_ship_verdict(self) -> None:
+        created = self._create(title="Only task")
+        self._set_status("ship")
+        spec = self._write(
+            "replace2.md",
+            f"# {created['id']} Only task\n\n## Acceptance\n- [ ] new\n",
+        )
+        result = self._call(
+            func=self.flowctl.cmd_task_set_spec,
+            id=created["id"],
+            file=spec,
+            description=None,
+            acceptance=None,
+        )
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+    def test_task_reset_resets_not_required_to_unknown(self) -> None:
+        """PR #372 round 4: `task reset` erases the runtime state and
+        evidence carrying the per-task SHIP that justified the excuse, so
+        the excuse must re-arm exactly like create / set-plan / set-spec."""
+        created = self._create(title="Only task")
+        self.flowctl.save_task_runtime(created["id"], {"status": "done"})
+        self._set_status("not_required")
+        result = self._call(
+            func=self.flowctl.cmd_task_reset,
+            task_id=created["id"],
+            cascade=False,
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_reset_never_resets_a_real_ship_verdict(self) -> None:
+        created = self._create(title="Only task")
+        self.flowctl.save_task_runtime(created["id"], {"status": "done"})
+        self._set_status("ship")
+        result = self._call(
+            func=self.flowctl.cmd_task_reset,
+            task_id=created["id"],
+            cascade=False,
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+    def test_task_start_and_done_never_reset(self) -> None:
+        """Pure status/claim writers stay outside the invalidation net."""
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        result = self._call(
+            func=self.flowctl.cmd_start, id=created["id"], force=False, note=None
+        )
+        self.assertNotIn("completion_review_reset", result)
+        self.assertEqual(self._read_status(), "not_required")
+
+    def test_lock_timeout_reports_failed_not_silent_success(self) -> None:
+        """Round-3 P2: excused + sidecar lock unavailable must surface as
+        completion_review_reset: "failed" plus one stderr warning naming
+        the manual remedy — never plain success. The create itself still
+        succeeds (a bookkeeping reset must not roll back the artifact)."""
+        self._create(title="Only task")
+        self._set_status("not_required")
+        stderr = io.StringIO()
+        with mock.patch.object(
+            self.flowctl,
+            "_review_sidecar_lock",
+            side_effect=self.flowctl.CrossProcessLockError("held elsewhere"),
+        ):
+            with redirect_stderr(stderr):
+                result = self._create(title="Second task")
+        self.assertEqual(result.get("completion_review_reset"), "failed")
+        self.assertIn("id", result)  # the create itself still succeeded
+        self.assertEqual(self._read_status(), "not_required")
+        warning = stderr.getvalue()
+        self.assertIn(self.spec_id, warning)
+        self.assertIn(
+            f"set-completion-review-status {self.spec_id} "
+            "--status unknown --if-current not_required",
+            warning,
+        )
+
+    def test_lock_timeout_on_unexcused_spec_stays_false(self) -> None:
+        """The lock-free precheck fields the common case: no excuse on the
+        spec means no lock is ever taken and nothing is reported."""
+        self._create(title="Only task")
+        stderr = io.StringIO()
+        with mock.patch.object(
+            self.flowctl,
+            "_review_sidecar_lock",
+            side_effect=self.flowctl.CrossProcessLockError("held elsewhere"),
+        ):
+            with redirect_stderr(stderr):
+                result = self._create(title="Second task")
+        self.assertNotIn("completion_review_reset", result)
+        self.assertEqual(stderr.getvalue(), "")
 
 
 if __name__ == "__main__":

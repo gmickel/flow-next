@@ -112,6 +112,8 @@ Execute the phases in [workflow.md](workflow.md) in order:
 
 The full report is the deliverable — print it as markdown to stdout. Do not summarize internally and emit a one-liner.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 Report structure (see [workflow.md](workflow.md) §5 for full schema):
 
 ```text

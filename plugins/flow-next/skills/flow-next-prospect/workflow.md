@@ -826,6 +826,8 @@ Normalize the reply (strip whitespace, lowercase). Route by exact match:
 | `i`, `interview` | Print suggestion: `Run /flow-next:interview <spec-or-task-id> to refine. Artifact saved at .flow/prospects/<artifact-id>.md`. **Do not auto-invoke** - the user picks the target id. |
 | anything else | Reprint the menu once with `Unrecognized choice: <reply>`. On second invalid reply, print `Skipped (no valid choice). Artifact saved at .flow/prospects/<artifact-id>.md` and exit cleanly. |
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 ### 6.4 — Exit cleanly regardless
 
 The artifact is on disk. Phase 6 does not retry, does not extend, does not delete. If `flowctl prospect promote` errors, surface its stderr verbatim and exit non-zero — the user can re-run promote manually with the artifact id printed in the saved-to line.

@@ -148,7 +148,7 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 ## Record the terminal verdict exactly once
 
-`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which keeps `flowctl ready --require-completion-review` demanding a review (pilot's gate), feeds make-pr's Open-items / draft heuristic stale state, and blocks tracker-sync's terminal `verified` rung.** The standalone command remains for rp and for repairing a missed write:
+`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for rp and for repairing a missed write:
 
 For host/rp, execute the SKILL.md Step 0.5 checkpoint again now. The
 just-recorded terminal attempt is newer than the stored status, so that shared

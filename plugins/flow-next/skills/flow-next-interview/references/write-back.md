@@ -4,6 +4,8 @@
 > (NEW IDEA / EXISTING SPEC / Flow Task / File Path). Split out of the always-loaded SKILL.md so
 > its ~160 lines are not held in context across the whole interview.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 ## Write Refined Spec
 
 After interview complete, write everything back — **scope depends on input type**.

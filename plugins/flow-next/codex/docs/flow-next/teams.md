@@ -209,7 +209,7 @@ Opt-in flags for hardened review: `--validate` (validator pass on `NEEDS_WORK` t
 
 `/flow-next:spec-completion-review <spec-id>` is the closing gate at end-of-spec. It verifies the *combined* implementation (across all tasks) satisfies the spec — was anything dropped? Were R-IDs left uncovered? Did the plan diverge from the spec along the way?
 
-Configure as a required gate via `--require-completion-review` (in `flowctl next`). The work skill blocks spec-close until spec-completion-review returns SHIP. The fix loop happens internally — the skill keeps iterating until it passes or escalates.
+Configure as a required gate via `--require-completion-review` (in `flowctl next`). The work skill blocks spec-close until the completion-review requirement is satisfied: a SHIP verdict, or the `not_required` status work's own 3g policy skip records when review policy excuses the spec — satisfied never claims a review ran; `ship` alone does. The fix loop happens internally — the skill keeps iterating until it passes or escalates.
 
 *(+ optional tracker sync)* — `tracker.perEvent.completionReview` posts the verdict + R-ID coverage as a comment on the linked issue when the closing gate passes (and at most leaves it at `In Review`); it **never** flips the issue to `Done`/`verified` (fn-66 — `Done` is reserved for a merged PR and driven solely by `land.merged`). On by default once the bridge is hooked up (opt-out per event).
 

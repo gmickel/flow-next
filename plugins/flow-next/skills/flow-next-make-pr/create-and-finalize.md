@@ -423,6 +423,8 @@ EOF
 
 `${PR_URL##*/}` extracts the trailing PR number from the URL (e.g. `https://github.com/foo/bar/pull/123` → `123`). The hint passes the PR number to `/flow-next:resolve-pr` so the reviewer-feedback flow runs without re-resolving the URL.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 `/flow-next:make-pr ... --update` (regenerate PR body for an existing open PR) is **deferred to v2** — surface as a "TODO" in the next-steps hint only when the user has indicated they'd want it. v1 keeps the surface narrow.
 
 ### 5.1 — `--memory` side effect (R23)

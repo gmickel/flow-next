@@ -32,7 +32,7 @@ the reconciliation.
 
 | Side | Vocabulary | Source |
 |---|---|---|
-| **flow** | spec: `open` · `done`; task: `todo` · `in_progress` · `blocked` · `done`; plus the spec's `completion_review_status` (`unknown` · `ship` · `needs_work`) | `flowctl.py` `SPEC_STATUS` / `TASK_STATUS` |
+| **flow** | spec: `open` · `done`; task: `todo` · `in_progress` · `blocked` · `done`; plus the spec's `completion_review_status` (`unknown` · `ship` · `not_required` · `needs_work` · `needs_human`; satisfying set `{ship, not_required}`) | `flowctl.py` `SPEC_STATUS` / `TASK_STATUS` / `COMPLETION_REVIEW_STATUSES` |
 | **normalized** (the stable middle) | `backlog` · `planned` · `in-progress` · `in-review` · `done` · `verified` · `deferred` · `wontfix` | [adapter-interface.md](adapter-interface.md) |
 
 The **tracker side** maps its team-specific workflow-state names into the normalized
@@ -102,8 +102,8 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 | # | flow condition | `prEvidence` | normalized | Rationale |
 |---|---|---|---|---|
 | 1 | spec `done`, no completion-review configured | `merged` | **`done`** | terminal, no review gate, **merge-confirmed** — a merge is a merge |
-| 2 | spec `done`, `completion_review_status == ship` | `merged` | **`verified`** | completion review shipped **and** PR merged — terminal, verified |
-| 3 | spec `done`, `completion_review_status != ship` (incl. `unknown`) | `merged` | `in-review` | PR merged but a configured completion review is not yet `ship` — stay in review until verified |
+| 2 | spec `done`, `completion_review_status` in the satisfying set (`ship` · `not_required`) | `merged` | **`verified`** (`ship`) / **`done`** (`not_required`) | requirement satisfied **and** PR merged — terminal. The verified-vs-done label selector stays `ship`-only: only a review that ran can claim `verified`; policy-excused `not_required` is terminal `done` |
+| 3 | spec `done`, `completion_review_status` outside the satisfying set (`unknown` · `needs_work` · `needs_human` · absent/unrecognized) | `merged` | `in-review` | PR merged but a configured completion review is neither shipped nor excused — stay in review until satisfied |
 | 4 | spec at any local status (incl. all-tasks-done OPEN, or spec `done`) | `open` | `in-review` | open PR awaiting merge — the In Review rung, drives `setStatus(in-review)` (R2). The open-PR signal wins over the local task rows |
 | 5 | spec `done` | `none` | **`in-review`** projection (NOT terminal); loop **preserves** an existing non-terminal state (S-G) | no PR exists — no merge evidence, no open-PR signal → never terminal, never a forced advance (R1) |
 | 6 | spec `done` | `closed-unmerged` / `ambiguous` / `probe-error` | **`in-review`** (NOT terminal) **+ surface NEEDS_HUMAN** | locally shipped but the probe is not a clean MERGED — never terminal; the conflict goes to a human (R6) |
@@ -112,13 +112,13 @@ terminal Done (not stay `in-review`). The merge-evidence INVARIANT is intact: te
 
 > **Why row 3 catches `unknown`.** flowctl normalizes a missing completion-review
 > field to `unknown` (the `completion_review_status` fallback in `flowctl.py`), and for repos without a
-> completion-review backend pilot treats `completion_review_status != ship` as
-> ungated. Row 3 is the `merged` + non-`ship` rung **only when a completion review is
+> completion-review backend pilot skips the gate entirely. Row 3 is the `merged` +
+> not-satisfied rung **only when a completion review is
 > actually configured** — when no completion-review backend is configured at all,
 > row 1 fires first (a spec with no review gate has nothing to wait on, so a merge is
 > terminal `done`). Distinguish the two by `flowctl config`: "no completion-review
-> configured" ⇒ row 1; "configured but the spec's review isn't `ship`/`unknown`-while-
-> backend-present" ⇒ row 3.
+> configured" ⇒ row 1; "configured but the spec's status is outside the satisfying
+> set `{ship, not_required}`" ⇒ row 3.
 
 > **Why rows 4–6 sit above rows 7–8.** A PR signal — open or merged — is stronger
 > evidence of where the work *is* than the local task ledger. In the normal make-pr
@@ -674,7 +674,7 @@ never advanced the issue. Regression guard for Thread A.
 
 **Flow:** spec `done`, **`completion_review_status == unknown`** (no completion-review
 backend configured — flowctl normalizes the missing field to `unknown`,
-the `completion_review_status` fallback in flowctl.py; pilot treats `!= ship` as ungated, flow-next-pilot/workflow.md:117-122).
+the `completion_review_status` fallback in flowctl.py; pilot skips the gate when no backend is configured — see the stage-classification route table, flow-next-pilot/workflow.md:345-358).
 **`prEvidence`:** `merged` (≥1 `MERGED` PR for the spec branch).
 **Tracker:** `status.normalized = "in-review"`.
 
@@ -686,8 +686,26 @@ trap the spec in `in-review`.
 
 **Oracle:** exactly one terminal `setStatus(done)` (issue closed/Done). PASS iff a
 merged ungated/`unknown`-completion spec reaches terminal Done — the pre-fn-66 row
-order let row 3 (`!= ship → in-review`) catch `unknown` first, so `land.merged` never
+order let row 3 (not-satisfied → in-review) catch `unknown` first, so `land.merged` never
 wrote Done for ungated projects. Regression guard for Thread B.
+
+### Fixture S-M — merged + `not_required` spec → terminal Done, `done` label (excused review)
+
+**Flow:** spec `done`, **`completion_review_status == not_required`** (work's 3g policy
+skip excused the completion review — requirement satisfied, no review ran; satisfying
+set `{ship, not_required}`).
+**`prEvidence`:** `merged` (≥1 `MERGED` PR for the spec branch).
+**Tracker:** `status.normalized = "in-review"`.
+
+**Expected:** `flowToNormalized(spec, merged)` → **`done`** (terminal — row 2 fires:
+requirement satisfied **and** merged). `setStatus(trackerId, done)` → issue closed /
+Done. The verified-vs-done label selector stays `ship`-only: GitHub gets
+`status:done`, **not** `status:verified` — only a review that actually ran can claim
+`verified`.
+
+**Oracle:** exactly one terminal `setStatus(done)`; on GitHub the applied status label
+is `status:done` and `status:verified` appears nowhere. PASS iff a merged,
+policy-excused spec reaches terminal Done without borrowing the verified claim.
 
 ## Boundaries
 

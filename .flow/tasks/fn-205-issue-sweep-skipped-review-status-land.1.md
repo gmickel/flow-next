@@ -11,8 +11,9 @@ Add the `not_required` member to the completion-review status vocabulary and rou
 **Touches:** [plugins/flow-next/scripts/flowctl.py, plugins/flow-next/scripts/flowctl_tracker/**, plugins/flow-next/tests/test_tracker_status.py, plugins/flow-next/tests/test_task_inventory.py, plugins/flow-next/tests/test_review_convergence_journal.py]
 
 ### Approach
-- Resolve the declaration home FIRST (this is the spec's early proof point): `flowctl_tracker` is importable from `flowctl.py`, not the reverse, so declaring the known-member set plus the satisfying-set predicate inside the tracker status package and importing it into `flowctl.py` is the non-inverting direction. Verify that import actually resolves in flowctl's install modes before committing to it; if it does not, keep the canonical declaration in `flowctl.py`, mirror it in the tracker package, and add a parity test pinning the two equal. Do not leave two unpinned copies.
+- Declaration home RESOLVED at plan-review (spec early proof point, verified 2026-08-27): a module-scope import from `flowctl_tracker` is unsafe — flowctl.py treats the tracker package as optionally absent everywhere (all imports lazy, inside functions, with a `sys.path.insert` fallback and graceful degrade: `flowctl.py:1903-1913`, `:39155-39166`), while argparse `choices` builds at parse time. So: keep the canonical known-member set + satisfying-set predicate in `flowctl.py`, mirror the declaration in `flowctl_tracker/status/policy.py` (next to its existing `SLOTS`/`TERMINAL`/`PR_EVIDENCE` constants), and add a parity test pinning the two equal. Do not leave two unpinned copies, and do not import across the boundary at module scope.
 - Widen only the completion-review status `choices` at `flowctl.py:49928`. The plan-review list at `:49906` is a different command and stays as-is.
+- Add an optional `--if-current <status>` compare-and-set flag to `spec set-completion-review-status` (review P1): evaluated inside the existing `_review_sidecar_lock` block in `cmd_spec_set_completion_review_status` (`flowctl.py:29895`), so the check and the write are one critical section. On mismatch: no write, visible machine-readable outcome (JSON `written: false` + current value, non-error exit) — a skipped CAS is a normal outcome for the 3g caller, not a failure. Regression test: a `needs_work` written between read and CAS is never clobbered by `--if-current unknown`.
 - Projection: `flowctl_tracker/status/policy.py:210-216`. Row 2 currently returns `done` on `review == "ship"` and row 3 falls through to `in_review`. Row 2 becomes the allow-set membership test. Rows 4-8 and the `pr_evidence` ordering are untouched — terminal stays reachable only from `merged`.
 - Leave the `verified`-vs-`done` label selector `ship`-only (it is a separate reader in `flowctl_tracker/status/verb.py:376-380`; `flow-next-land/workflow.md:776` already documents `verified` as ship-evidence). R2 requires the label stay `done`.
 - Scheduler: `flowctl.py:34049-34065` — the `!= "ship"` condition becomes a not-in-allow-set test. Keep the emitted `needs_completion_review` reason string unchanged for `unknown` / `needs_work` / `needs_human`.
@@ -33,9 +34,11 @@ Add the `not_required` member to the completion-review status vocabulary and rou
 ### Key context
 - Measured forward-compat: an older reader meeting `not_required` degrades to `in_review` / re-requests the review — non-terminal, the safe direction. Old spec JSON needs no migration; do not write one.
 - The allow-set must be an explicit membership test, not a widened `!=` chain: `!= "ship"` is an implicit deny-list, and the next member added would silently classify itself.
+- `flowctl.py:42606` echoes the written status in the `<backend> completion-review` JSON envelope — no change needed, but include it when enumerating members in the R7 test so a consumer-facing surface is never surprised by the new token.
 
 ### Acceptance
 - [ ] `flowctl spec set-completion-review-status <id> --status not_required` is accepted; plan-review status choices are unchanged
+- [ ] `--if-current <status>` performs an atomic compare-and-set under the sidecar lock; mismatch is a visible no-write (JSON reports it), and a concurrent `needs_work` survives a `--if-current unknown` attempt (regression test)
 - [ ] The known-member set and the satisfying-member predicate are declared exactly once (or, if the import direction forbids sharing, mirrored with a parity test that fails on divergence)
 - [ ] Projection: merged + spec `done` + `not_required` + review configured -> `done`; `unknown`, `needs_work`, `needs_human` -> `in_review`; non-merged PR evidence still never reaches terminal (R2)
 - [ ] The `verified` vs `done` label selection is unchanged and still requires `ship` (R2)
@@ -49,9 +52,15 @@ Add the `not_required` member to the completion-review status vocabulary and rou
 - [ ] TBD
 
 ## Done summary
-TBD
+Added the `not_required` completion-review member behind one shared satisfying-member predicate: canonical declaration (`COMPLETION_REVIEW_STATUSES` / `COMPLETION_REVIEW_SATISFYING` / `completion_review_satisfied()`) in `flowctl.py`, mirrored in `flowctl_tracker/status/policy.py` with a parity test (import direction forbids sharing — tracker package is optionally absent). Projection row 2 and the `next --require-completion-review` scheduler now consume the allow-set instead of `==`/`!=` ship chains; `spec set-completion-review-status` gained an atomic `--if-current` compare-and-set under the sidecar lock (mismatch = visible no-write, `written:false`, non-error exit; regression test pins that a concurrent `needs_work` survives `--if-current unknown`). Plan-review choices and the verified-vs-done label selector are unchanged; unrecognized/absent values read as `unknown` and satisfy nothing. Member-enumeration tests pin every flowctl-side gate classification (R7). MANIFEST.json regenerated. Mirror regen (sync-codex.sh) deliberately deferred to the finalization task per task spec.
 
+baseline: green (focused suite, 212 tests pre-edit)
+implementer route: bridged both chunks to grok 4.6 via cursor-agent as instructed; both bridge outputs matched the specified diffs exactly, no fallback needed.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d5e8d0b2b34078f9a42ee79fb8e4926cc5ee1d44
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_status test_task_inventory test_review_convergence_journal -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution test_flowctl_surface -q, uvx ruff@0.16.0 check <changed files>, python3 scripts/gen_tracker_manifest.py
 - PRs:

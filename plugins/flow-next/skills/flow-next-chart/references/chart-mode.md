@@ -2,6 +2,8 @@
 
 Read this file only when Phase 0 routed to **chart mode** (a free-form idea, "chart out ...", or residual prose after flag strip). Work, status, and re-entry paths never need it.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes - the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install - the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 - [Phase 1: Chart mode (ground -> propose -> create)](#phase-1-chart-mode-ground---propose---create)
 - [1.1 - Ordered Grounding Snapshot](#11---ordered-grounding-snapshot)
 - [1.2 - Refuse to chart -> STOP (two shapes)](#12---refuse-to-chart---stop-two-shapes)

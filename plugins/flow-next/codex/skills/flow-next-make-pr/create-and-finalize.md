@@ -336,7 +336,7 @@ done
 
 if [[ -z "$PR_URL" ]]; then
   echo "Error: PR create failed after 3 retries on eventual-consistency error." >&2
-  echo "Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries)." >&2
+  echo "Manual recovery: wait 30s and re-run $flow-next-make-pr (skill detects the existing branch and re-tries)." >&2
   exit 1
 fi
 
@@ -383,9 +383,9 @@ fi
 
 When `gh pr create` fails after the retry loop is exhausted, the skill emits manual-recovery instructions to stderr before exiting:
 
-- **Eventual-consistency exhaustion** (3 retries): `Manual recovery: wait 30s and re-run /flow-next:make-pr (skill detects the existing branch and re-tries).` The branch is already pushed — only the PR creation step needs re-running.
+- **Eventual-consistency exhaustion** (3 retries): `Manual recovery: wait 30s and re-run $flow-next-make-pr (skill detects the existing branch and re-tries).` The branch is already pushed — only the PR creation step needs re-running.
 - **Body too long (422)**: `Manual recovery: re-run with --no-mermaid (saves ~3-8K chars) or wait for the truncation policy to spill to .flow/pr-bodies/.` Should not happen because §4.4 truncation runs before invocation; if it does, the cap heuristic underestimated the body.
-- **PR already exists (409)**: `An OPEN PR exists. /flow-next:resolve-pr addresses review feedback on the existing PR. To replace it, close the open one first via gh pr close.` Phase 0.6 should have caught this; if it slipped through, the user hit a race between Phase 0 check and Phase 4 push.
+- **PR already exists (409)**: `An OPEN PR exists. $flow-next-resolve-pr addresses review feedback on the existing PR. To replace it, close the open one first via gh pr close.` Phase 0.6 should have caught this; if it slipped through, the user hit a race between Phase 0 check and Phase 4 push.
 - **Authentication (401/403)**: `Run 'gh auth status' and 'gh auth login --hostname github.com' to re-authenticate.` Phase 0.1 should have caught this; if it slipped through, the token expired between Phase 0 and Phase 4.
 - **Workflow-scope push rejection**: `git push` fails with `refusing to allow an OAuth App to create or update workflow .github/workflows/…` (or similar) when the branch touches workflow files and the HTTPS token lacks the `workflow` scope. Recovery: push via the SSH remote (`git push git@github.com:<owner>/<repo>.git HEAD`) or re-auth with `gh auth refresh -s workflow`, then re-run — the PR-create step itself is unaffected once the branch is up.
 
@@ -416,12 +416,14 @@ cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
-  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
-  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → $flow-next-resolve-pr ${PR_URL##*/}
+  - Body inspection → $flow-next-make-pr $SPEC_ID --dry-run
 EOF
 ```
 
 `${PR_URL##*/}` extracts the trailing PR number from the URL (e.g. `https://github.com/foo/bar/pull/123` → `123`). The hint passes the PR number to `/flow-next:resolve-pr` so the reviewer-feedback flow runs without re-resolving the URL.
+
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
 `/flow-next:make-pr ... --update` (regenerate PR body for an existing open PR) is **deferred to v2** — surface as a "TODO" in the next-steps hint only when the user has indicated they'd want it. v1 keeps the surface narrow.
 
@@ -540,15 +542,15 @@ if [[ "$RALPH" == "1" ]]; then
   # Human-readable framing → stderr.
   echo "" >&2
   echo "✅ Draft PR opened: $PR_URL" >&2
-  echo "Reviewer should run: /flow-next:resolve-pr ${PR_URL##*/}" >&2
+  echo "Reviewer should run: $flow-next-resolve-pr ${PR_URL##*/}" >&2
 else
   # Interactive mode: §5.0 success footer to stdout.
   cat <<EOF
 ✅ PR opened: $PR_URL
 
 Next steps:
-  - Reviewer feedback → /flow-next:resolve-pr ${PR_URL##*/}
-  - Body inspection → /flow-next:make-pr $SPEC_ID --dry-run
+  - Reviewer feedback → $flow-next-resolve-pr ${PR_URL##*/}
+  - Body inspection → $flow-next-make-pr $SPEC_ID --dry-run
 EOF
   if [[ -n "${MEMORY_ID:-}" ]]; then
     echo "  - Memory entry written: $MEMORY_ID"

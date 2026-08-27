@@ -2,6 +2,8 @@
 
 Read this file only when Phase 0 routed to **chart mode** (a free-form idea, "chart out ...", or residual prose after flag strip). Work, status, and re-entry paths never need it.
 
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes - the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install - the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
+
 - [Phase 1: Chart mode (ground -> propose -> create)](#phase-1-chart-mode-ground---propose---create)
 - [1.1 - Ordered Grounding Snapshot](#11---ordered-grounding-snapshot)
 - [1.2 - Refuse to chart -> STOP (two shapes)](#12---refuse-to-chart---stop-two-shapes)
@@ -75,7 +77,7 @@ CHART_VERDICT=NO_WORK chart=- decision=- reason="direction not destination; narr
 **Shape B - no consequential unknowns.** If after grounding the effort has **no consequential unknowns** (intent and boundaries already stateable; nothing worth parking; no decision that would change capture):
 
 1. Say so clearly.
-2. Recommend `/flow-next:capture` or authoring the spec / direct change path.
+2. Recommend `$flow-next-capture` or authoring the spec / direct change path.
 3. **Create nothing.**
 4. Terminal line:
 
@@ -161,7 +163,7 @@ On success:
 
 - `## Decisions` ledger starts empty of answers (records exist; nothing resolved).
 - Print chart id, path, cost line, frontier summary.
-- **Close by offering independent unattended frontier decisions for parallel dispatch as separate `/flow-next:chart <id>` (or pinned) invocations.** Charting session still resolves none.
+- **Close by offering independent unattended frontier decisions for parallel dispatch as separate `$flow-next-chart <id>` (or pinned) invocations.** Charting session still resolves none.
 - Terminal line example:
 
 ```text

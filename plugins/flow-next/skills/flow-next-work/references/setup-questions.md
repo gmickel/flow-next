@@ -18,7 +18,7 @@ Quick setup: Where to work?
 a) Current branch  b) New branch  c) Isolated worktree
 
 (Reply: "a", "current", or just tell me)
-(Tip: --review=rp|codex|copilot|cursor|host|export|none overrides configured backend)
+(Tip: --review=rp|codex|copilot|cursor|host|none overrides configured backend)
 ```
 
 ## REVIEW_BACKEND is ASK (not configured)
@@ -36,8 +36,7 @@ Quick setup before starting:
 2. **Review** — Run Carmack-level review after?
    a) Codex CLI
    b) RepoPrompt
-   c) Export for external LLM
-   d) None (configure later with --review flag)
+   c) None (configure later with --review flag)
 
 (Reply: "1a 2a", "current branch, codex", or just tell me naturally)
 ```

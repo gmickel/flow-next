@@ -70,10 +70,12 @@ LEGACY_ENTRY_COUNT=$("$FLOWCTL" memory list --json 2>/dev/null \
 
 ```
 Skipped legacy: <LEGACY_ENTRY_COUNT> entries across <files>.
-Run `/flow-next:memory-migrate` first to make these auditable (or `flowctl memory migrate --yes` for deterministic mechanical-only conversion).
+Run `$flow-next-memory-migrate` first to make these auditable (or `flowctl memory migrate --yes` for deterministic mechanical-only conversion).
 ```
 
 `<files>` is the comma-joined list (`pitfalls.md, conventions.md`). Continue with categorized entries only.
+
+**Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
 ### 0.3 — Apply scope hint (when present)
 
@@ -535,7 +537,7 @@ Print to stdout as markdown. The report is the deliverable — do not summarize 
 Memory Audit Summary
 ====================
 Scanned: <TOTAL> entries
-Skipped legacy: <LEGACY_ENTRY_COUNT> (run `/flow-next:memory-migrate` first to make these auditable)
+Skipped legacy: <LEGACY_ENTRY_COUNT> (run `$flow-next-memory-migrate` first to make these auditable)
 
 Kept: <X>
 Updated: <Y>
