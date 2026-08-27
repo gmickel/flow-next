@@ -41,13 +41,16 @@ Full gate at the end (per repo rules): `python3 scripts/run_tests_parallel.py` +
 - **R2:** The prose emission points cite the doc with a one-line pointer at the step that drafts user-facing prose: make-pr body rendering, tracker-sync comment composition, capture spec-prose synthesis. No rule text is duplicated into skill prose. Errors: on hosts where the doc isn't reachable at the cited path, the pointer degrades silently — phrased as a non-blocking aside, never a precondition; skills keep working. Boundary: the emitting surface's structural contracts supersede prose-shape rules — tracker-comment dedup markers stay first-line and unchanged, projection-only source-truth is never overridden, and outcome-first applies only when a sourced outcome exists in the payload (no invented outcome prose).
 - **R3:** Rule ownership is single-copy by layer: prose.md owns the generic prose-craft principles; `agent_docs/releasing.md` cites prose.md and keeps only its changelog-specific machinery (ordering algorithm, hard rejection test with worked examples, docs-site register), explicitly labeled as a changelog specialization. Generic restatements in releasing.md are replaced by the cite; the same generic rule never lives spelled out in both files. Errors: no error surface beyond review judgment.
 - **R4:** `./scripts/sync-codex.sh` runs twice cleanly with the new doc and pointers in place; the mirror's docs-link guards (link resolution + installed-docs link universe) pass. Errors: a guard failure is load-bearing — fix content or extend the transform, never relax the guard.
+- **R5:** Every remaining artifact-prose emission surface carries the same one-line non-blocking pointer, completing coverage (enumerated 2026-08-28 sweep): interview's spec write-back (references/write-back.md), resolve-pr's reply authoring (agents/pr-comment-resolver.md), plan's spec-scaffold and task-prose authoring (steps.md Step 5), chart's briefing rationale (references/briefing-and-reopen.md), strategy's STRATEGY.md authoring (references/first-run.md + update.md), qa's bug-memory finding bodies (references/bug-filing.md), land's verdict-comment synthesis (workflow.md post-merge tail), prospect's persisted candidate prose (workflow.md), prime's glossary definitions (workflow.md §5.5.2), audit's memory-entry authoring (phases.md Update/Replace/Harden), and the worker's task Done summary (agents/worker.md). prose.md's own scope sentence is corrected to match final coverage (the visual digest is excluded as ephemeral-by-contract, not "governed without a pointer"). No rule text duplicated anywhere. Errors: same silent-degrade contract as R2; surfaces whose consumers cannot resolve the doc (OpenCode never scatters docs/) proceed unchanged — a pre-existing, accepted property of the non-blocking aside shape, recorded here.
+- **R6:** The sync-codex docs-link machinery covers `agents/*.md`: the docs-link namespacing transform AND the hard-fail validation guard both extend to the agents surface (they currently scan only `codex/skills/`), so a `../docs/prose.md` pointer in an agent file mirrors to a resolvable `docs/flow-next/` path and a dangling agent docs-link fails the sync loudly. Errors: guard extension only — never relaxation; a failing guard means fix content or extend the transform.
 
 ## Boundaries
 
 - No new skill and no per-skill rule dump — pointers only; this stays a one-or-two-task change.
 - No claim that the contract improves code quality or maintainability decay — artifact prose only.
 - No enforcement machinery (no linter, no test pinning prose sentences — G2 forbids it); this is reviewed prose guidance.
-- Interview's spec write-back, resolve-pr's reply composition, and the visual digest are prose surfaces too — deliberately not in this pass; extend the pointer set in a follow-up once the doc proves itself (one line each, same pattern).
+- The visual digest is excluded by contract: its output is ephemeral chat rendering, never a written artifact — the contract governs durable artifact prose only. (The R5 sweep also excluded: guide and all scouts as read-only/report-back, plan-sync as mechanical substitution, memory-migrate as byte-verbatim migration, ralph-init as pinned-template copying, and the flow-next crud skill as user-supplied titles.)
+- OpenCode installs never scatter `plugins/flow-next/docs/`, so every pointer dangles there — accepted, pre-existing, and exactly why pointers are non-blocking asides; no OpenCode-specific fix ships here.
 - make-pr's existing hallucination guardrails stay where they are (canonical, load-bearing); prose.md cross-links them, never re-derives them.
 - Downstream properties (flow-next.dev, docs guide) are follow-on work in the same workstream, not R-IDs here.
 - No version bump in this change — CHANGELOG entry stages under `## Unreleased` per the batched-release rule.
@@ -61,7 +64,9 @@ Active tracks served by this plan:
 
 Doc-plus-pointers over the alternatives: a new always-on prose skill was rejected (scope creep, G1 context cost, repo rule against unrequested skills); per-skill rule dumps were rejected (duplication, prompt-pin churn, sync-codex tax); baking rules only into releasing.md was rejected (changelog-only reach — make-pr and tracker-sync would stay uncovered). A cited reference doc fits the repo's architecture doctrine: the host agent reads the doc at the emission point — pass identity, not payload.
 
-Plan-time decisions: cite-not-absorb for releasing.md (its changelog gate and worked examples are battle-tested; generic restatements collapse into the cite, the changelog-specific machinery stays as a labeled specialization — trimming, not restructuring). Review-hardened (codex round 1): the byte-intact framing was dropped because releasing.md already restates generic rules — ownership is by layer, not by byte range; and the structural-precedence boundary was added because tracker comments carry contracts (marker-first, projection-only) that prose-shape rules must never override. Interview/resolve-pr/visual pointer coverage deferred to a follow-up rather than widening this pass (the request named three surfaces; the pattern extends in one line per surface later).
+Plan-time decisions: cite-not-absorb for releasing.md (its changelog gate and worked examples are battle-tested; generic restatements collapse into the cite, the changelog-specific machinery stays as a labeled specialization — trimming, not restructuring). Review-hardened (codex round 1): the byte-intact framing was dropped because releasing.md already restates generic rules — ownership is by layer, not by byte range; and the structural-precedence boundary was added because tracker comments carry contracts (marker-first, projection-only) that prose-shape rules must never override.
+
+Scope extension (user decision, 2026-08-28): the original deferral of the remaining surfaces was reversed — "all or nothing". A full emission-surface sweep (skills, agents, templates, sync-codex transform interactions, OpenCode glue, Ralph harness) produced the R5 enumeration and surfaced the R6 gap: the codex mirror's docs-link transform and guard never covered `agents/*.md`, so agent-file pointers would have shipped dangling and undetected. R6 lands before the agent pointers (task ordering enforces it).
 
 ## Early proof point
 
@@ -75,6 +80,8 @@ Task fn-207-prose-contract-for-agent-emitted.1 validates the core approach (the 
 | R2 | One-line pointers at three emission points | fn-207-prose-contract-for-agent-emitted.2 | — |
 | R3 | releasing.md single-copy cite | fn-207-prose-contract-for-agent-emitted.1 | — |
 | R4 | sync-codex twice clean + link guards | fn-207-prose-contract-for-agent-emitted.2 | — |
+| R5 | Full pointer coverage: 11 remaining surfaces + prose.md scope correction | fn-207-prose-contract-for-agent-emitted.4 | — |
+| R6 | sync-codex agents/ docs-link transform + guard extension | fn-207-prose-contract-for-agent-emitted.3 | — |
 
 ## References
 
@@ -83,3 +90,4 @@ Task fn-207-prose-contract-for-agent-emitted.1 validates the core approach (the 
 - GLOSSARY.md "Emission point" term — the pointer discipline (path citation, never payload)
 - Changelog prose rules to cite from: `agent_docs/releasing.md` (changelog writing gate; docs-site register)
 - Mirror machinery: `scripts/sync-codex.sh` (docs-tree mirror; link-depth rewrite; link-closure hard-fail guard)
+
