@@ -156,6 +156,7 @@ Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.
 
 Give the subagent:
+- The completion rubric ([references/completion-review-prompt.md](references/completion-review-prompt.md)) — its verification-budget rail applies by pointer; never restate or widen it in the dispatch prompt
 - Spec requirements / R-IDs / acceptance criteria
 - The exact output of `$FLOWCTL criteria prompt-block`, appended verbatim when
   non-empty (global acceptance criteria + the `## Global criteria` output
