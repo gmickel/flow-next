@@ -47,9 +47,16 @@ Fix the post-merge sync-state step so the tracked spec sidecar commit lands rega
 - [ ] TBD
 
 ## Done summary
-TBD
+Fixed land's post-merge sync-state step (R4/#367): the git add pathspec now names only the tracked spec sidecar (never the auto-ignored `.flow/sync-runs`), and the commit is guarded on a staged-diff check so an unchanged sidecar — including a resume-tail re-entry over an already-committed one — is success with nothing to commit. Added the one-sentence "one land host per checkout" note at the ledger region (#368 option 2, zero machinery) and two new static pins in test_land_config.py for the pathspec and the guarded commit.
 
+baseline: green (96 tests, test_land_config + test_flow_gitignore pre-edit)
+verify: green (98 tests post-edit, suite_rc=0; ruff 0.16.0 clean; GREEN_RECEIPT .flow/tmp/green-receipts/290f8de5-unittest.json)
+tail invariants preserved: two file-scoped .flow commits, single push (count still 3 mentions), TAIL_BASE_OID range rollback, HEAD^ still banned.
+
+stage: impl-review - skipped(policy: host-deferred + parallel-wave - conductor owns the gate)
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 4c4a4233cdc736842753f25c0aadbc92061b54f0
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config test_flow_gitignore -q, uvx ruff@0.16.0 check plugins/flow-next/tests/test_land_config.py, live git sanity: fixed sync-state command green with ignored receipt dir present, unchanged sidecar (resume-tail), and absent receipt dir; nothing left staged
 - PRs:
