@@ -7,8 +7,8 @@ satisfies: [R7]
 The prose-side half of R7: the gates that read `completion_review_status` directly, outside flowctl. Pilot's stage routing is the one that matters most — left alone it re-routes a policy-excused spec to `work` on every tick, which re-skips and ends the tick, a cross-tick livelock that only exits through the no-advance strike path. Parallel with the work-skill task (disjoint files).
 
 **Size:** M
-**Files:** `plugins/flow-next/skills/flow-next-pilot/workflow.md`, `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh`, `plugins/flow-next/skills/flow-next-spec-completion-review/workflow-common.md`, `plugins/flow-next/skills/flow-next-spec-completion-review/SKILL.md`, `plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md`
-**Touches:** [plugins/flow-next/skills/flow-next-pilot/workflow.md, plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh, plugins/flow-next/skills/flow-next-spec-completion-review/workflow-common.md, plugins/flow-next/skills/flow-next-spec-completion-review/SKILL.md, plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md]
+**Files:** `plugins/flow-next/skills/flow-next-pilot/workflow.md`, `plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh`, `plugins/flow-next/skills/flow-next-spec-completion-review/workflow-common.md`, `plugins/flow-next/skills/flow-next-spec-completion-review/SKILL.md`, `plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md`, `plugins/flow-next/tests/test_ralph_guard.py` (or focused sibling)
+**Touches:** [plugins/flow-next/skills/flow-next-pilot/workflow.md, plugins/flow-next/skills/flow-next-ralph-init/templates/ralph.sh, plugins/flow-next/skills/flow-next-spec-completion-review/workflow-common.md, plugins/flow-next/skills/flow-next-spec-completion-review/SKILL.md, plugins/flow-next/skills/flow-next-tracker-sync/references/status-sync.md, plugins/flow-next/tests/test_ralph_guard.py]
 
 ### Approach
 - Pilot route table row at `workflow.md:353` (`all tasks done and completion_review_status != "ship"` -> `work`) becomes a not-in-satisfying-set test. The advancement/logging pair at `:489-502` compares before/after against `ship` too — it must count `not_required` as advanced, or the tick logs a false no-advance and burns a strike.
@@ -39,6 +39,8 @@ The prose-side half of R7: the gates that read `completion_review_status` direct
 - [ ] The Ralph completion gate terminates on the excused member without requiring a completion receipt; `needs_work` handling unchanged
 - [ ] `workflow-common.md`'s consequences paragraph describes the excused member accurately (rewritten, not appended to)
 - [ ] `status-sync.md`'s vocabulary row, projection rows and fixtures match `policy.py`'s behavior exactly
+- [ ] An executable test pins the Ralph completion gate's classification for every member (`ship`, `not_required`, `needs_work`, `needs_human`, `unknown`, absent, unrecognized) — extend `test_ralph_guard.py`/`test_ralphctl.py` prior art or add a focused sibling; `not_required` terminates without a receipt, `ship` still demands one (R7)
+- [ ] Pilot/checkpoint prose gates carry NO sentence-level test pins (repo doctrine, 2026-08-07 ban) — their coverage is the conduct checklist added in the finalization task; state this in the done summary so the gap reads as a decision
 - [ ] `templates/prompt_completion.md` untouched and its hash pin still green: `cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q`
 - [ ] spec-completion-review's Step 0.5 checkpoint classifies `not_required` explicitly (not `ship`, not `unknown`; manual re-run may upgrade it to a real verdict)
 - [ ] status-sync.md's pre-existing defects fixed in passing: `:35` vocabulary lists all five members (incl. `needs_human`), `:677`'s stale pilot anchor repointed to the route table
