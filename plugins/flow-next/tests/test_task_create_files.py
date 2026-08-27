@@ -535,5 +535,71 @@ class TaskCreateFilesTestCase(unittest.TestCase):
                     self.assertTrue(md.startswith(f"# {result['id']}"))
 
 
+class ExcusedReviewInvalidationTestCase(TaskCreateFilesTestCase):
+    """fn-205 follow-up: `not_required` is a verdict about a spec shape.
+
+    Adding a task (single or bulk) or rewriting the plan changes the review
+    surface, so the excuse must reset to `unknown` in the same command —
+    otherwise scheduler/pilot/Ralph advance an expanded spec without a
+    completion review. Real verdicts (`ship`) are never touched.
+    """
+
+    def _set_status(self, status: str) -> None:
+        self._call(
+            func=self.flowctl.cmd_spec_set_completion_review_status,
+            id=self.spec_id,
+            status=status,
+        )
+
+    def _read_status(self) -> str:
+        path = self.flowctl.find_spec_json_path(
+            self.flowctl.get_flow_dir(), self.spec_id
+        )
+        return json.loads(path.read_text(encoding="utf-8"))[
+            "completion_review_status"
+        ]
+
+    def test_single_create_resets_not_required_to_unknown(self) -> None:
+        self._create(title="Only task")
+        self._set_status("not_required")
+        result = self._create(title="Second task")
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_bulk_create_resets_not_required_to_unknown(self) -> None:
+        self._set_status("not_required")
+        bulk = self._write(
+            "bulk.json",
+            json.dumps([{"title": "Bulk A"}, {"title": "Bulk B"}]),
+        )
+        result = self._create(title=None, from_json=bulk)
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_set_plan_resets_not_required_to_unknown(self) -> None:
+        self._set_status("not_required")
+        plan = self._write("plan.md", "# Plan\n\n- R1: new requirement\n")
+        result = self._call(
+            func=self.flowctl.cmd_spec_set_plan, id=self.spec_id, file=plan
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_create_never_resets_a_real_ship_verdict(self) -> None:
+        self._set_status("ship")
+        result = self._create(title="Post-ship task")
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+    def test_set_plan_never_resets_a_real_ship_verdict(self) -> None:
+        self._set_status("ship")
+        plan = self._write("plan2.md", "# Plan\n\nRewritten.\n")
+        result = self._call(
+            func=self.flowctl.cmd_spec_set_plan, id=self.spec_id, file=plan
+        )
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+
 if __name__ == "__main__":
     unittest.main()

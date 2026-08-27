@@ -29014,6 +29014,40 @@ def _task_create_rollback(published: list[Path]) -> list[str]:
     return cleanup_errors
 
 
+def _reset_excused_completion_review(flow_dir: Path, spec_id: str) -> bool:
+    """Invalidate a policy-excused completion review when the review surface changes.
+
+    `not_required` is a policy verdict about a specific spec shape (e.g. the
+    single-task skip's preconditions). Adding a task or rewriting the plan
+    changes that shape, so the excuse no longer applies: reset EXACTLY
+    `not_required` back to `unknown` so the completion-review gate re-arms.
+    Real verdicts (`ship`, `needs_work`, `needs_human`) are never touched —
+    a stale SHIP after an edit is pre-existing semantics, out of scope here.
+
+    Best-effort under the review sidecar lock (same lock every other
+    review-status writer holds): the caller has already published its own
+    artifacts, so a lock/read failure returns False rather than failing a
+    create that succeeded. Returns True when a reset was written.
+    """
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        return False
+    try:
+        with _review_sidecar_lock(flow_dir, spec_id):
+            try:
+                spec_data = load_json(spec_json_path)
+            except (OSError, ValueError, TypeError):
+                return False
+            if spec_data.get("completion_review_status") != "not_required":
+                return False
+            spec_data["completion_review_status"] = "unknown"
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_path, spec_data)
+            return True
+    except CrossProcessLockError:
+        return False
+
+
 def cmd_task_create(args: argparse.Namespace) -> None:
     """Create a new task under a spec.
 
@@ -29198,11 +29232,22 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 use_json=use_json,
             )
 
+        # fn-205 follow-up: new tasks change the review surface — a
+        # policy-excused `not_required` no longer holds.
+        review_reset = _reset_excused_completion_review(flow_dir, spec_id)
         if use_json:
-            json_output({"tasks": created_summaries})
+            payload: dict = {"tasks": created_summaries}
+            if review_reset:
+                payload["completion_review_reset"] = True
+            json_output(payload)
         else:
             for summary in created_summaries:
                 print(f"Task {summary['id']} created: {summary['title']}")
+            if review_reset:
+                print(
+                    f"Spec {spec_id} completion review status reset to unknown "
+                    "(was not_required; review surface changed)"
+                )
         return
 
     # ── Single-task path ──────────────────────────────────────────────────
@@ -29325,19 +29370,29 @@ def cmd_task_create(args: argparse.Namespace) -> None:
     # NOTE: We no longer update spec["next_task"] since scan-based allocation
     # is the source of truth. This reduces merge conflicts.
 
+    # fn-205 follow-up: a new task changes the review surface — a
+    # policy-excused `not_required` no longer holds.
+    review_reset = _reset_excused_completion_review(flow_dir, spec_id)
+
     if use_json:
-        json_output(
-            {
-                "id": task_id,
-                "spec": spec_id,
-                "title": args.title,
-                "depends_on": deps,
-                "spec_path": task_data["spec_path"],
-                "message": f"Task {task_id} created",
-            }
-        )
+        payload = {
+            "id": task_id,
+            "spec": spec_id,
+            "title": args.title,
+            "depends_on": deps,
+            "spec_path": task_data["spec_path"],
+            "message": f"Task {task_id} created",
+        }
+        if review_reset:
+            payload["completion_review_reset"] = True
+        json_output(payload)
     else:
         print(f"Task {task_id} created: {args.title}")
+        if review_reset:
+            print(
+                f"Spec {spec_id} completion review status reset to unknown "
+                "(was not_required; review surface changed)"
+            )
 
 
 def cmd_dep_add(args: argparse.Namespace) -> None:
@@ -29797,6 +29852,13 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
     # Load before the helper's md write only for the clean error surface on
     # corrupt JSON; write order inside the helper remains md then json.
     spec_data = load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+    # fn-205 follow-up: a plan rewrite can change the R-ID surface, breaking
+    # the preconditions behind a policy-excused `not_required` — reset it to
+    # `unknown` in the same atomic JSON stamp. Only `not_required` is touched;
+    # real verdicts (ship/needs_work/needs_human) are never reset here.
+    review_reset = spec_data.get("completion_review_status") == "not_required"
+    if review_reset:
+        spec_data["completion_review_status"] = "unknown"
     _apply_spec_plan_writes(
         spec_md_path=spec_md_path,
         content=content,
@@ -29805,15 +29867,21 @@ def cmd_spec_set_plan(args: argparse.Namespace) -> None:
     )
 
     if args.json:
-        json_output(
-            {
-                "id": args.id,
-                "spec_path": str(spec_md_path),
-                "message": f"Spec {args.id} markdown updated",
-            }
-        )
+        payload = {
+            "id": args.id,
+            "spec_path": str(spec_md_path),
+            "message": f"Spec {args.id} markdown updated",
+        }
+        if review_reset:
+            payload["completion_review_reset"] = True
+        json_output(payload)
     else:
         print(f"Spec {args.id} markdown updated")
+        if review_reset:
+            print(
+                f"Spec {args.id} completion review status reset to unknown "
+                "(was not_required; review surface changed)"
+            )
 
 
 # Backward-compat alias (T2 layers the deprecation warning).
