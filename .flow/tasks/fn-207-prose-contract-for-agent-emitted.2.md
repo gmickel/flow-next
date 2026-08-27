@@ -52,9 +52,17 @@ Wire one-line pointers to docs/prose.md at the three emission points, regenerate
 - [ ] `CHANGELOG.md` gains `## Unreleased` with one user-outcome-first entry; no version bump anywhere
 - [ ] Full gate green: `python3 scripts/run_tests_parallel.py` + `uvx ruff@0.16.0 check .`
 ## Done summary
-TBD
+Wired one-line prose-contract pointers at the three emission points named by the spec (R2): make-pr workflow.md Phase 2 top (body-header rendering, near not inside the section 2.5 guardrails), tracker-sync references/comments-sync.md at structured-comment composition, and capture workflow.md Phase 2 (spec-prose synthesis). Each pointer is exactly one non-blocking line citing docs/prose.md via the standard canonical relative shape (`../../docs/prose.md` skill-root, `../../../docs/prose.md` references) with zero duplicated rule text; the tracker-sync pointer invokes prose.md's "structural contracts win" precedence and keeps marker/envelope/projection-only constraints authoritative. Regenerated the Codex mirror (R4): sync-codex.sh run twice, idempotent, all guards green — prose.md now mirrors to docs/flow-next/prose.md with its README index row, and all three pointer links were namespace-rewritten correctly. CHANGELOG.md gains a new `## Unreleased` Added entry (user-outcome-first per releasing.md's gate); no version bump. Conduct checklists for make-pr/tracker-sync/capture verified against the diff — no falsifiable assertion touched.
 
+Pointer lines authored via the cursor-agent bridge (cursor-grok-4.6-high) per explicit routing instruction, one foreground call, verified against the edit spec with zero stray edits. Commit also carries the conductor's pre-existing fn-207.1 receipt stage lines (uncommitted on the branch at claim time).
+
+baseline: green (test_prompt_text_pinned pre-edit OK at b02bd260)
+Verify: gate classify exited FULL (force-full prefix plugins/flow-next/codex/); gate check unittest: RUN (no honorable receipt); python3 scripts/run_tests_parallel.py: files=192 ran=4505 failures=0 errors=0; uvx ruff@0.16.0 check .: all checks passed; green receipt written for gate unittest at HEAD.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 7169b9e36f23fe85948107bb65ebbfbbbda45a41, f91abd74de38605247a9f9a97ec49f9c67d95986
+- Tests: python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (twice, idempotent, guards green), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q, python3 -m unittest test_codex_persona_and_project_doc test_cursor_docs_contract test_chart_docs_inventory -q (review round 2)
 - PRs:
+stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer; NEEDS_WORK round 1 -> SHIP round 2, fixes f91abd74)
+stage: plan-sync - skipped(config: planSync.enabled != true)

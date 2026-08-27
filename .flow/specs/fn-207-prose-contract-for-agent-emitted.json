@@ -10,7 +10,7 @@
   "id": "fn-207-prose-contract-for-agent-emitted",
   "impl_review_rounds": {
     "fn-207-prose-contract-for-agent-emitted.1": 0,
-    "fn-207-prose-contract-for-agent-emitted.2": 1
+    "fn-207-prose-contract-for-agent-emitted.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -147,10 +147,37 @@
       "task": "fn-207-prose-contract-for-agent-emitted.1",
       "timestamp": "2026-08-27T22:09:54.284193Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "c5986b01d5f19844a674211a24fc222510b9fac1d786441e408aa6d91f08a7e6",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f91abd74de38605247a9f9a97ec49f9c67d95986",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1125,
+      "output_sha256": "0c4b5816bb0cd83df88bc530c481180868c90486cdc3c819b91b68f9397dc148",
+      "reservation_id": "d9724c24f61340109ba68df513da5c3e",
+      "round_consumed": true,
+      "scope": "impl:fn-207-prose-contract-for-agent-emitted.2",
+      "superseded_by": null,
+      "task": "fn-207-prose-contract-for-agent-emitted.2",
+      "timestamp": "2026-08-27T22:23:00.156343Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-207-prose-contract-for-agent-emitted.1": 1,
+    "impl:fn-207-prose-contract-for-agent-emitted.2": 1,
     "plan": 1,
     "plan#completion": 0
   },
@@ -163,11 +190,14 @@
       "counter_scope": "impl:fn-207-prose-contract-for-agent-emitted.2",
       "epoch": 0,
       "forced": false,
-      "review_type": "impl"
+      "review_type": "impl",
+      "superseded_by": "d9724c24f61340109ba68df513da5c3e",
+      "superseded_epoch": 1
     }
   },
   "review_transport_failures": {
     "impl:fn-207-prose-contract-for-agent-emitted.1": 0,
+    "impl:fn-207-prose-contract-for-agent-emitted.2": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-207-prose-contract-for-agent-emitted.md",
@@ -184,5 +214,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T22:16:50.822422Z"
+  "updated_at": "2026-08-27T22:23:00.431067Z"
 }
