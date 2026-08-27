@@ -47,9 +47,20 @@ One finalization task for all four workstreams: the docs surfaces that enumerate
 - [ ] TBD
 
 ## Done summary
-TBD
+Finalized the fn-205 sweep in one commit (5e3c5162): every docs surface that enumerated the completion-review members or the `!= ship` predicate now states the satisfying set `{ship, not_required}` with the stale predicate REPLACED, not annotated (flowctl.md setter section — now documents `not_required` and `--if-current` CAS — and the `next` predicate; ralph.md gate box rewrapped to two 63-char lines plus a one-paragraph policy-skip note; architecture.md ledger-authority prose gains the deliberately ledger-less `not_required` clause; teams.md spec-close sentence; flowctl.md's export mention pinned to plan-review). platforms.md states that closers now emit the flat `/flow-next-<name>` form on OpenCode (manifest-detected), with the manual mapping note demoted to passive docs mentions. Conduct checklists carry the new invariants: work (parse-time export refusal; 3g CAS `not_required` write, never a verdict status), land (sidecar-only pathspec + staged-diff guard; one-land-host-per-clone #368), spec-completion-review (`not_required` Step 0.5 classification, never written by the skill), pilot (satisfying-set routing/advancement, fail-closed unknown — the R7 prose-gate coverage). CHANGELOG gains `## Unreleased` with four user-outcome-first Fixed entries (#371, #367 thanks @sn-furali; #366, #364 issue-referenced, maintainer-reported); no version bump, no bump.sh, no manifest version edits. sync-codex.sh's closer roster gained the routed .5 P2 positive column (third tab-separated field = expected `$flow-next-` literal, `grep -qF` must SUCCEED): a removed sed was proven fatal by .5, and a broken anchor (canonical reword) was negative-proven here — sync rc=1 with "expected rewritten closer literal missing" — then reverted. Mirror regenerated once, authoritatively, run twice byte-idempotent with all guards green; `gen_tracker_manifest.py --check` clean after the flowctl.py comment reword.
 
+Routed P2 uptake (conductor notes; all sibling tasks done, so no collision — taken despite sitting outside this task's declared Touches because the conductor routed them here by name): status-sync.md fixture S-M (merged + `not_required` → terminal Done, `status:done` never `status:verified`); test_tracker_status.py `NotRequiredTerminalLabel` end-to-end label pin (closes the t1-flagged silent-widening seam); test_land_config.py regex net `assertNotRegex(tracker, r"git add[^\n`]*sync-runs")`; flowctl.py:42630 stale "unlocked" comment reworded to the ordering/authority rationale (fn-205.3 lock); land workflow.md "per-checkout" → "one land host per clone".
+
+Reported out-of-scope / follow-up (not taken): ralph.sh doubled `flowctl show` hot-path read (t3 P2, perf only); ralph.sh `status==completion_review` defensive-branch test (near-unreachable); CAS `--if-current` + `--reservation-id` argparse mutual-exclusion or help-text note (latent, no live caller); make-pr recovery-hint lines :339/:386/:388 and chart-mode :69 prospect offer (t5 exclusions, error-path hints not in the verified closer inventory); test_task_inventory satisfying-branch symmetric assertion. Docs-site (flow-next.dev) needs the four fixes in its changelog at the next batched release — separate repo, not edited from here.
+
+baseline: green (conductor handoff, verified at 6416e342 by fn-205.5; no local receipt at HEAD so gate check exit 1 → full suite run here anyway per this task's own acceptance)
+verify: green (full suite 4459 tests suite_rc=0; ruff 0.16.0 clean; GREEN_RECEIPT .flow/tmp/green-receipts/5e3c5162-unittest.json)
+
+stage: impl-review - skipped(policy: host-deferred + parallel-wave - conductor owns the gate after integration)
+stage: plan-sync - skipped(config: planSync.enabled != true)
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b0ed01650cb20158d51aa5fefc75d14d8468dae8
+- Tests: python3 scripts/run_tests_parallel.py (suite_rc=0, 4459 tests, 0 failures; GREEN_RECEIPT .flow/tmp/green-receipts/5e3c5162-unittest.json), uvx ruff@0.16.0 check . (rc=0), cd plugins/flow-next/tests && python3 -m unittest test_tracker_status test_land_config test_flow_gitignore -q (192 tests, focused pre-gate), ./scripts/sync-codex.sh x2 (rc=0 both, diff-hash idempotent, all guards green incl new positive closer column), negative proof: reworded canonical closer literal -> sync rc=1 (expected rewritten literal missing), then reverted, python3 scripts/gen_tracker_manifest.py --check (MANIFEST.json is current)
 - PRs:
