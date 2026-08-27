@@ -2,6 +2,15 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Policy-skipped completion reviews no longer wedge the pipeline** (#371 — thanks @sn-furali). When work's 3g gate skips the completion review by policy, it now records the decision as `completion_review_status: not_required` — "requirement satisfied, no review ran" — instead of leaving `unknown`, which every gate read as "nobody looked". The excused spec now closes cleanly everywhere it used to loop: the tracker projection accepts `--to done` for a merged excused spec (terminal label stays `done`; `verified` still requires a real SHIP), `flowctl next --require-completion-review` stops re-requesting the review, pilot no longer re-routes the spec to `work` every tick, and Ralph's completion gate terminates. Every gate decides through one satisfying set, `{ship, not_required}`; unrecognized values still fail closed as `unknown`, and the skip writes via compare-and-set from `unknown`, so a real verdict is never silently overwritten.
+- **Land's post-merge sync-state commit no longer dies on the receipts directory** (#367 — thanks @sn-furali). The tail's `git add` named the auto-ignored `.flow/sync-runs/` alongside the tracked spec sidecar, so the add failed and the sidecar was left staged or unstaged depending on whether the directory existed. The pathspec now names only the tracked sidecar, and the commit is guarded on a staged diff — an unchanged sidecar (including a resume-tail re-entry over an already-committed one) is success with nothing to commit.
+- **`--review=export` fails closed on work instead of dead-ending mid-run** (#366). Work and work-rolling advertised an export review mode that impl-review could never run to a SHIP verdict. The roster now drops `export` at every mouth — work's advertised surfaces and impl-review's own parser — and an explicit request is refused at parse time with a pointer to `/flow-next:plan-review --review=export`, where export actually lives.
+- **OpenCode users can now run the commands the closers print** (#364). Skill closers printed `/flow-next:<name>` while OpenCode's invocable form is the flat `/flow-next-<name>`. Every closer that prints a copy-pasteable next-step command now emits the flat form on an OpenCode install (detected via the ownership manifest, no new probe) and keeps the documented colon form on every other host; the Codex mirror's rewrite guard gained a positive expected-output check so a reworded closer literal fails the sync instead of silently staling the mirror.
+
 ## [flow-next 4.5.1] - 2026-08-22
 
 ### Changed

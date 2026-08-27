@@ -985,6 +985,10 @@ class PostMergeTailOrderStaticTestCase(unittest.TestCase):
         for line in self.tail.splitlines():
             if line.strip().startswith("git add"):
                 self.assertNotIn("sync-runs", line)
+        # Regex net for inline-prose reintroduction: the line-prefix scan
+        # above misses a `git add ... sync-runs` resurrected mid-line or in
+        # inline code; ban the pairing anywhere in the tracker step.
+        self.assertNotRegex(tracker, r"git add[^\n`]*sync-runs")
 
     def test_sync_state_commit_is_guarded_on_staged_diff(self) -> None:
         """R4 (#367): an unchanged sidecar is success-with-nothing-to-commit.

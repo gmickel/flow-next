@@ -1762,6 +1762,45 @@ class AmbiguousStatusLabels(unittest.TestCase):
             self.assertEqual(_receipts(flow), [])
 
 
+class NotRequiredTerminalLabel(unittest.TestCase):
+    """fn-205 R2 (silent-widening seam): merged + done + `not_required` is
+    terminal `done` with the `status:done` label; `status:verified` stays
+    reachable from `ship` alone."""
+
+    def test_merged_not_required_applies_done_label_never_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            flow = Path(tmp) / ".flow"
+            _write_flow(
+                flow, gh_cfg(),
+                spec_extra={"status": "done",
+                            "completion_review_status": "not_required"},
+                tracker={"id": GH_NODE, "identifier": "#42", "url": "u",
+                         "lastSyncedAt": None, "linkState": "linked"},
+            )
+            added: list = []
+
+            def capture_add(req):
+                added.append(json.loads(req.body))
+                return ok([{"name": "status:done"}])
+
+            ex = fake_execute({
+                "status-parent-read": ok(_gh_parent(
+                    state="open", labels=["status:in_review"])),
+                "merge-evidence": ok([{"state": "MERGED", "number": 1}]),
+                "status-set": ok({"node_id": GH_NODE, "number": 42,
+                                  "state": "closed",
+                                  "state_reason": "completed"}),
+                "status-label-rm": empty_ok(),
+                "status-label-add": capture_add,
+                "status-label-readback": ok([{"name": "status:done"}]),
+            })
+            out = S.status(flow, "fn-1-demo", to="done", execute=ex)
+            self.assertNotIsInstance(out, TrackerError, out)
+            self.assertEqual(out["kind"], "applied")
+            # The excused review earns terminal `done`, never `verified`.
+            self.assertEqual(added, [{"labels": ["status:done"]}])
+
+
 class LoadTasksMergesRuntimeState(unittest.TestCase):
     """Live smoke 2026-07-28: since the fn-111 storage split the task
     DEFINITION (.flow/tasks/<id>.json) keeps its scaffold status while the

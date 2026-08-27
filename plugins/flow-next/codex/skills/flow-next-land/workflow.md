@@ -96,7 +96,7 @@ LEDGER="$LEDGER_DIR/land-strikes.json"
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b). It is skill-owned scratch; no flowctl plumbing. Because land state is per-checkout (it lives in the git common dir and never travels with the repo), run land from one host per checkout — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b). It is skill-owned scratch; no flowctl plumbing. Because land state is per-clone (it lives in the git common dir — shared by all of that clone's worktrees — and never travels with the repo), run land from one host per clone — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
 ## Phase 1 — DISCOVER
 

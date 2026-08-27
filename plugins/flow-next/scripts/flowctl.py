@@ -42627,9 +42627,10 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
         if publish_out.get("published"):
             # PR #290 bot r5: publication-from-journal already completed the
             # deferred status leg INSIDE the receipt+sidecar lock, and cleared
-            # the recovery payload with it. A second, unlocked read-modify-
-            # write of the spec JSON here would clobber any concurrent
-            # reserve/finalize that landed in between, so just report what the
+            # the recovery payload with it. The locked publication transaction
+            # is the authority for this round; a second read-modify-write here
+            # (now also lock-guarded, fn-205.3) would still be a LATER write
+            # re-deciding an already-published status, so just report what the
             # locked transaction wrote.
             written_status = publish_out.get("status_written")
         else:

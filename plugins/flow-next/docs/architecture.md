@@ -134,7 +134,7 @@ outcome, verdict, output hash, and (best-effort) the `head_sha` the review
 observed (the pre-dispatch snapshot on the in-process backend paths;
 finalize-time HEAD is the fallback where no snapshot exists, e.g. rp). `plan_review_status` / `completion_review_status` (plus their
 `*_reviewed_at` stamps) are a denormalized read model derived from that
-ledger; when the two ever diverge, the ledger wins.
+ledger; when the two ever diverge, the ledger wins. One member is deliberately ledger-less: the policy-skip `not_required` (work's 3g gate, written through the compare-and-set setter) records that policy excused the completion review - no attempt row exists because no review ran, and `ship` stays the only status that claims one. Gates consume the satisfying set `{ship, not_required}`; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 
 Each row also answers "was this verdict measured, and against what?"
 (fn-183, #312):

@@ -689,6 +689,24 @@ merged ungated/`unknown`-completion spec reaches terminal Done — the pre-fn-66
 order let row 3 (not-satisfied → in-review) catch `unknown` first, so `land.merged` never
 wrote Done for ungated projects. Regression guard for Thread B.
 
+### Fixture S-M — merged + `not_required` spec → terminal Done, `done` label (excused review)
+
+**Flow:** spec `done`, **`completion_review_status == not_required`** (work's 3g policy
+skip excused the completion review — requirement satisfied, no review ran; satisfying
+set `{ship, not_required}`).
+**`prEvidence`:** `merged` (≥1 `MERGED` PR for the spec branch).
+**Tracker:** `status.normalized = "in-review"`.
+
+**Expected:** `flowToNormalized(spec, merged)` → **`done`** (terminal — row 2 fires:
+requirement satisfied **and** merged). `setStatus(trackerId, done)` → issue closed /
+Done. The verified-vs-done label selector stays `ship`-only: GitHub gets
+`status:done`, **not** `status:verified` — only a review that actually ran can claim
+`verified`.
+
+**Oracle:** exactly one terminal `setStatus(done)`; on GitHub the applied status label
+is `status:done` and `status:verified` appears nowhere. PASS iff a merged,
+policy-excused spec reaches terminal Done without borrowing the verified claim.
+
 ## Boundaries
 
 - **This is the status/metadata layer, not the body merge or the transport.** The

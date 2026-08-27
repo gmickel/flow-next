@@ -364,7 +364,8 @@ The spec-completion review gate ensures implementation matches the spec before c
 ┌─────────────────────────────────────────────────────────────┐
 │  flowctl next --require-completion-review                    │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │  1. All tasks done, completion_review_status != ship   │ │
+│  │  1. All tasks done, completion_review_status outside   │ │
+│  │     the satisfying set {ship, not_required}            │ │
 │  │  2. Return status=completion_review, spec=fn-1         │ │
 │  │  3. Ralph invokes /flow-next:spec-completion-review fn-1 │ │
 │  │  4. Skill loops until <verdict>SHIP</verdict>          │ │
@@ -373,6 +374,8 @@ The spec-completion review gate ensures implementation matches the spec before c
 │  └────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+A policy skip (work's 3g gate) writes `not_required` instead of dispatching the review; the gate treats it as satisfied — the loop terminates — while `ship` stays the only status that claims a review actually ran. An unrecognized or absent value reads as `unknown` and satisfies nothing.
 
 #### Configuration
 
