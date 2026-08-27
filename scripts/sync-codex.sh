@@ -1875,6 +1875,16 @@ for md_file in "$SRC_AGENTS"/*.md; do
   # Rewrite skill-file paths in agent bodies: neither plugin-root variable
   # resolves inside Codex; the installed mirror lives at CODEX_HOME/skills/.
   body="$(echo "$body" | sed -E 's|\$\{DROID_PLUGIN_ROOT:-\$\{CLAUDE_PLUGIN_ROOT\}\}/skills/|${CODEX_HOME:-$HOME/.codex}/skills/|g')"
+  # Relative docs links (fn-207 R6): agents sit one level below the plugin
+  # root, so canonical agent bodies link docs as `](../docs/...)`. The mirror
+  # TOMLs land in codex/agents/ with the docs mirror at codex/docs/flow-next/
+  # (same relative geometry installed: $CODEX_HOME/agents/ vs
+  # $CODEX_HOME/docs/flow-next/), so the link keeps its `../` depth and gains
+  # the owned `flow-next/` namespace segment — same rule as the skills-side
+  # transform above, at the agents' shallower depth. Canonical prose never
+  # contains `docs/flow-next/`, and the mirror is fully regenerated each run,
+  # so the rewrite is idempotent across sync runs.
+  body="$(echo "$body" | sed 's|](\.\./docs/|](../docs/flow-next/|g')"
   # fn-197: no fallback injection here either. Canonical agent bodies carry the
   # full three-rung chain (env var → derived plugin root → .flow/bin); only rung 1
   # is rewritten above, and rungs 2/3 mirror through untouched. Injecting after
@@ -2137,14 +2147,15 @@ else
 fi
 
 # fn-202 (#363 codex P2 + P1): every relative `docs/` markdown link in mirror
-# skill prose must carry the owned `flow-next/` namespace segment AND resolve
-# on disk under `codex/docs/flow-next/` (mirrored above, md-only) — the only
-# docs dir install-codex.sh may replace. Fails on an un-namespaced link (the
+# skill prose AND generated agent TOML bodies (fn-207 R6) must carry the owned
+# `flow-next/` namespace segment AND resolve on disk under
+# `codex/docs/flow-next/` (mirrored above, md-only) — the only docs dir
+# install-codex.sh may replace. Fails on an un-namespaced link (the
 # namespace transform missed a new link depth), a double-applied segment
 # (`docs/flow-next/flow-next/`), or a link pointing at a nonexistent file
 # (e.g. a canonical link to a doc that is not markdown, or a docs/ file
 # deleted upstream).
-docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/skills/" 2>/dev/null || true; } | while IFS=: read -r lf ln match; do
+docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/skills/" "$CODEX_DIR/agents/" 2>/dev/null || true; } | while IFS=: read -r lf ln match; do
   target="${match#](}"
   # Leading `(` on each pattern: required for `case` inside `$( )` under
   # macOS /bin/bash 3.2 (the shebang), which otherwise fails to parse at the
@@ -2157,11 +2168,11 @@ docs_link_problems=$( { grep -rno '](\(\.\./\)\{1,\}docs/[^)#]*' "$CODEX_DIR/ski
   [ -f "$(dirname "$lf")/$target" ] || echo "$lf:$ln: broken relative docs link → $target"
 done )
 if [ -n "$docs_link_problems" ]; then
-  echo -e "  ${RED}✗${NC} bad relative docs links in codex skill prose — extend the namespaced docs-link transform:"
+  echo -e "  ${RED}✗${NC} bad relative docs links in codex skill + agent prose — extend the namespaced docs-link transform:"
   printf '%s\n' "$docs_link_problems" | head -10
   errors=$((errors + 1))
 else
-  echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill prose are namespaced and resolve"
+  echo -e "  ${GREEN}✓${NC} All relative docs links in codex skill + agent prose are namespaced and resolve"
 fi
 
 # fn-202 (#363 codex P2, round 5): link-closure property for the docs mirror.
