@@ -395,8 +395,17 @@ summary (same machinery as other stages this run reached):
 stage: completion-review - skipped(policy: single-task, per-task SHIP covers spec surface)
 ```
 
-Do **not** write `completion_review_status` — leave it `unknown`; the skip is a
-policy outcome, not a SHIP. Go to Phase 4.
+Persist the excused decision — atomically, only from `unknown`:
+
+```bash
+$FLOWCTL spec set-completion-review-status <spec-id> --status not_required --if-current unknown --json
+```
+
+Branch on `.written`: `true` records the excused review — go to Phase 4.
+`false` is a CAS miss (a review verdict landed meanwhile) — a normal
+no-skip outcome, not an error: fall through to the status check below.
+Never write `ship` here; the skip is a policy outcome, not a SHIP —
+`not_required` claims the requirement is satisfied without a review having run.
 
 Otherwise check whether review is still required.
 
@@ -437,8 +446,10 @@ $FLOWCTL show <spec-id> --json | jq -r '.completion_review_status'
      When the sentinel prints, read [references/tracker-touchpoints.md](references/tracker-touchpoints.md), execute its `Completion review` section (`completionReview` leaf check + comment-shaped verdict/R-ID-coverage dispatch), then continue with Phase 4. **`land.merged` is the only driver that writes terminal `Done`/`verified`** — a dispatch from here that flipped the issue terminal has broken this. When the gate is silent (bridge inactive), continue — nothing fires here.
    - Go to Phase 4 (Quality)
 
-**Note:** The spec-completion-review skill owns the terminal
-`completion_review_status` write. Work never writes that status again. After
+**Note:** The spec-completion-review skill owns every terminal
+verdict write to `completion_review_status` (`ship`/`needs_work`/`needs_human`).
+Work's single sanctioned write is the 3g policy-skip CAS
+(`--status not_required --if-current unknown`); work never writes a verdict status. After
 the skill returns SHIP, Work only posts the opt-in verdict / R-ID-coverage
 comment to the linked tracker issue here. **That comment never flips the
 issue to `Done`/`verified`** (fn-66: that is gated on a `MERGED` PR and driven
@@ -453,7 +464,7 @@ solely by `land.merged`).
 
 Only after SHIP does control return here. If skill outputs `<promise>RETRY</promise>`, there was a backend error - retry the skill invocation.
 
-Done when: the policy skip recorded its stage line and left `completion_review_status` `unknown`, or `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
+Done when: the policy skip recorded its stage line and persisted `completion_review_status` `not_required` (via the `--if-current unknown` CAS, falling through to the status check on a miss), or `completion_review_status` reads `ship` (or the gate did not apply), and the opt-in tracker comment either fired or was a documented no-op.
 
 ---
 

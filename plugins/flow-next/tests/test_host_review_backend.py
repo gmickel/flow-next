@@ -231,11 +231,28 @@ class TestHostReviewWorkflowRouting(unittest.TestCase):
         self.assertEqual(root.count(command), 1, "recovery owner must issue one status write")
         self.assertIn("--status-target completion", host)
         self.assertIn("--status-target completion", rp)
-        self.assertNotIn(command, work, "work caller must never repeat the status write")
+        self.assertEqual(
+            work.count(command),
+            1,
+            "work's only completion-status write is the 3g policy-skip CAS",
+        )
+        cas_write = command + " <spec-id> --status not_required --if-current unknown"
+        self.assertIn(cas_write, work, "the 3g skip write must be the atomic CAS form")
+        gate_index = work.index("### 3g. Completion Review Gate")
+        self.assertGreater(
+            work.index(command),
+            gate_index,
+            "work's single status write must live in the 3g gate",
+        )
+        for verdict in ("ship", "needs_work", "needs_human"):
+            self.assertNotIn(
+                f"--status {verdict}",
+                work,
+                "work must never write a verdict completion status",
+            )
         self.assertIn("NEEDS_HUMAN", root)
         self.assertIn("needs_human", host)
         self.assertIn("NEEDS_HUMAN", rp)
-        self.assertIn("Work never writes that status again", work)
         self.assertIn(
             "the spec-completion-review skill writes terminal "
             "`completion_review_status` through its backend-aware shared owner",
