@@ -35,7 +35,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any, Optional
 from unittest import mock
@@ -599,6 +599,119 @@ class ExcusedReviewInvalidationTestCase(TaskCreateFilesTestCase):
         )
         self.assertEqual(self._read_status(), "ship")
         self.assertNotIn("completion_review_reset", result)
+
+    def test_task_set_spec_file_resets_not_required_to_unknown(self) -> None:
+        """Round-3 P1: set-spec --file rewrites satisfies/acceptance/
+        description — the same review surface task create re-arms on."""
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        spec = self._write(
+            "replace.md",
+            f"# {created['id']} Only task\n\n## Description\nNew surface\n",
+        )
+        result = self._call(
+            func=self.flowctl.cmd_task_set_spec,
+            id=created["id"],
+            file=spec,
+            description=None,
+            acceptance=None,
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_set_spec_section_patch_resets_not_required(self) -> None:
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        desc = self._write("desc.md", "Sharper description\n")
+        result = self._call(
+            func=self.flowctl.cmd_task_set_spec,
+            id=created["id"],
+            file=None,
+            description=desc,
+            acceptance=None,
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_set_description_resets_not_required(self) -> None:
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        desc = self._write("desc2.md", "Different description\n")
+        result = self._call(
+            func=self.flowctl.cmd_task_set_description,
+            id=created["id"],
+            file=desc,
+        )
+        self.assertEqual(self._read_status(), "unknown")
+        self.assertIs(result.get("completion_review_reset"), True)
+
+    def test_task_set_spec_never_resets_a_real_ship_verdict(self) -> None:
+        created = self._create(title="Only task")
+        self._set_status("ship")
+        spec = self._write(
+            "replace2.md",
+            f"# {created['id']} Only task\n\n## Acceptance\n- [ ] new\n",
+        )
+        result = self._call(
+            func=self.flowctl.cmd_task_set_spec,
+            id=created["id"],
+            file=spec,
+            description=None,
+            acceptance=None,
+        )
+        self.assertEqual(self._read_status(), "ship")
+        self.assertNotIn("completion_review_reset", result)
+
+    def test_task_start_and_done_never_reset(self) -> None:
+        """Pure status/claim writers stay outside the invalidation net."""
+        created = self._create(title="Only task")
+        self._set_status("not_required")
+        result = self._call(
+            func=self.flowctl.cmd_start, id=created["id"], force=False, note=None
+        )
+        self.assertNotIn("completion_review_reset", result)
+        self.assertEqual(self._read_status(), "not_required")
+
+    def test_lock_timeout_reports_failed_not_silent_success(self) -> None:
+        """Round-3 P2: excused + sidecar lock unavailable must surface as
+        completion_review_reset: "failed" plus one stderr warning naming
+        the manual remedy — never plain success. The create itself still
+        succeeds (a bookkeeping reset must not roll back the artifact)."""
+        self._create(title="Only task")
+        self._set_status("not_required")
+        stderr = io.StringIO()
+        with mock.patch.object(
+            self.flowctl,
+            "_review_sidecar_lock",
+            side_effect=self.flowctl.CrossProcessLockError("held elsewhere"),
+        ):
+            with redirect_stderr(stderr):
+                result = self._create(title="Second task")
+        self.assertEqual(result.get("completion_review_reset"), "failed")
+        self.assertIn("id", result)  # the create itself still succeeded
+        self.assertEqual(self._read_status(), "not_required")
+        warning = stderr.getvalue()
+        self.assertIn(self.spec_id, warning)
+        self.assertIn(
+            f"set-completion-review-status {self.spec_id} "
+            "--status unknown --if-current not_required",
+            warning,
+        )
+
+    def test_lock_timeout_on_unexcused_spec_stays_false(self) -> None:
+        """The lock-free precheck fields the common case: no excuse on the
+        spec means no lock is ever taken and nothing is reported."""
+        self._create(title="Only task")
+        stderr = io.StringIO()
+        with mock.patch.object(
+            self.flowctl,
+            "_review_sidecar_lock",
+            side_effect=self.flowctl.CrossProcessLockError("held elsewhere"),
+        ):
+            with redirect_stderr(stderr):
+                result = self._create(title="Second task")
+        self.assertNotIn("completion_review_reset", result)
+        self.assertEqual(stderr.getvalue(), "")
 
 
 if __name__ == "__main__":

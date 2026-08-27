@@ -690,7 +690,7 @@ if [ "$BIZ_SIGNAL_CATEGORIES" -ge 1 ] && [ "$BIZ_SIGNAL_CATEGORIES" -lt 3 ]; the
   cat <<EOF
 
 This conversation has business-requirements signals; consider
-\`/flow-next:interview --scope=business $SPEC_ID\` to deep-refine the
+\`$flow-next-interview --scope=business $SPEC_ID\` to deep-refine the
 business layer.
 EOF
 fi

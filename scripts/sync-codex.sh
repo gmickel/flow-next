@@ -441,6 +441,7 @@ for nf in \
     -e 's|(routing to `/flow-next:work`)|(routing to `$flow-next-work`)|g' \
     -e 's|recommend `/flow-next:plan-review`|recommend `$flow-next-plan-review`|g' \
     -e 's|; /flow-next:interview <id> can still split later|; $flow-next-interview <id> can still split later|g' \
+    -e 's|/flow-next:interview --scope=business \$SPEC_ID|$flow-next-interview --scope=business $SPEC_ID|g' \
     -e 's|consider /flow-next:interview <id> after capture lands|consider $flow-next-interview <id> after capture lands|g' \
     -e 's|Consider reviewing before /flow-next:plan to avoid re-solving|Consider reviewing before $flow-next-plan to avoid re-solving|g' \
     -e 's|Reviewer feedback → /flow-next:resolve-pr|Reviewer feedback → $flow-next-resolve-pr|g' \
@@ -2269,6 +2270,7 @@ flow-next-capture/references/rewrite-mode.md	  /flow-next:plan <SPEC_ID>	  $flow
 flow-next-capture/references/rewrite-mode.md	  /flow-next:interview <SPEC_ID>	  $flow-next-interview <SPEC_ID>
 flow-next-capture/references/rewrite-mode.md	  /flow-next:visual <SPEC_ID>	  $flow-next-visual <SPEC_ID>
 flow-next-capture/references/split-proposal.md	; /flow-next:interview <id> can still split later	; $flow-next-interview <id> can still split later
+flow-next-capture/workflow.md	/flow-next:interview --scope=business $SPEC_ID	$flow-next-interview --scope=business $SPEC_ID
 flow-next-plan/references/next-steps-menu.md	`/flow-next:work fn-N-slug`	`$flow-next-work fn-N-slug`
 flow-next-plan/references/next-steps-menu.md	`/flow-next:interview fn-N-slug`	`$flow-next-interview fn-N-slug`
 flow-next-plan/references/next-steps-menu.md	`/flow-next:plan-review fn-N-slug`	`$flow-next-plan-review fn-N-slug`
