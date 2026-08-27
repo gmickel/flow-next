@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-205-issue-sweep-skipped-review-status-land",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-27T12:15:55.774556Z",
   "created_at": "2026-08-26T21:21:50.477610Z",
   "default_impl": null,
   "default_review": null,
@@ -397,6 +397,32 @@
       "task": "fn-205-issue-sweep-skipped-review-status-land.6",
       "timestamp": "2026-08-27T12:09:15.708927Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "ff2f54582da26b8647ae51ab9d43d6a7a6d65af56ae90e9d9e2483411aee7052",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "af7208dee4b1a21aec64d37928570361b56452a9",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 1269,
+      "output_sha256": "3965a8e1ab765b28b89c09ee7f7b9fd24e51909c8e58659051653da9bade5c60",
+      "reservation_id": "460e595d286a4355b4bf5fc747a8159e",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-27T12:15:55.513502Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
@@ -407,7 +433,7 @@
     "impl:fn-205-issue-sweep-skipped-review-status-land.5": 1,
     "impl:fn-205-issue-sweep-skipped-review-status-land.6": 1,
     "plan": 1,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {
     "impl:fn-205-issue-sweep-skipped-review-status-land.2": 1
@@ -424,6 +450,7 @@
     }
   },
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-205-issue-sweep-skipped-review-status-land.1": 0,
     "impl:fn-205-issue-sweep-skipped-review-status-land.2": 0,
     "impl:fn-205-issue-sweep-skipped-review-status-land.3": 0,
@@ -446,5 +473,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T12:09:15.975480Z"
+  "updated_at": "2026-08-27T12:15:55.774920Z"
 }
