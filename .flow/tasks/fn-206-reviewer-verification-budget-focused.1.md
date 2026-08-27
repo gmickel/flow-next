@@ -1,0 +1,30 @@
+---
+satisfies: [R1, R2, R3]
+---
+# fn-206-reviewer-verification-budget-focused.1 Add the reviewer verification-budget rail to both reviewer prompts, their flowctl mirrors, and the host dispatch pointers
+
+## Description
+One rail, four coupled surfaces. (1) `plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md` — extend the existing verification sentence (~line 22, 'Read files at their current state to verify implementations') with the budget: verify via the task's Quick commands / the focused suites the evidence names, plus any command a specific finding needs; the FULL suite belongs to the run's final gate (work Phase 4/5, rolling quiesce), never to a review round. One or two sentences, replacing/extending in place (G1). (2) The same rail, adapted to completion scope, in `plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md`. (3) Byte-identical mirror constants in `plugins/flow-next/scripts/flowctl.py` (`IMPL_REVIEW_PROMPT_FALLBACK` at ~:9022 and the completion-review counterpart) — `test_review_prompt_template_parity` pins template==constant; do NOT touch `VALIDATOR_TEMPLATE_FALLBACK`/`DEEP_PASSES_FALLBACK` (hand-written condensations, not mirrors). (4) One pointer line in each host dispatch block (`flow-next-impl-review/workflow-host.md` ~:150 'Give the subagent' list; `flow-next-spec-completion-review/workflow-host.md` equivalent) so host-composed prompts state the budget by pointer, not restatement. Update the SHA-256 pins in `tests/test_prompt_text_pinned.py` for both prompt files IN THE SAME COMMIT with the rationale in the commit message: deliberate prompt change — reviewer verification budget rail (fn-206). Run `./scripts/sync-codex.sh` twice (idempotent) and commit the mirror diff.
+
+**Size:** S
+**Files:** `plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md`, `plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md`, `plugins/flow-next/scripts/flowctl.py`, `plugins/flow-next/skills/flow-next-impl-review/workflow-host.md`, `plugins/flow-next/skills/flow-next-spec-completion-review/workflow-host.md`, `plugins/flow-next/tests/test_prompt_text_pinned.py`, `plugins/flow-next/codex/**` (regenerated)
+**Touches:** [plugins/flow-next/skills/flow-next-impl-review/**, plugins/flow-next/skills/flow-next-spec-completion-review/**, plugins/flow-next/scripts/flowctl.py, plugins/flow-next/tests/test_prompt_text_pinned.py, scripts/sync-codex.sh, plugins/flow-next/codex/**]
+
+## Acceptance
+- [ ] impl-review rubric carries the budget rail at the existing verification sentence: focused/evidence-named suites + finding-targeted commands licensed; full suite explicitly assigned to the run's final gate, banned from review rounds (R1)
+- [ ] The rail does not forbid running the specific test a finding disputes — targeted verification stays licensed, stated in the same sentence (R1)
+- [ ] completion-review prompt carries the completion-scope adaptation of the same rail (R1)
+- [ ] Both flowctl fallback constants byte-identical to their templates; `test_review_prompt_template_parity` green; VALIDATOR/DEEP_PASSES condensations untouched (R2)
+- [ ] Both host workflow dispatch blocks reference the budget by pointer (one line each), no restatement (R2)
+- [ ] `test_prompt_text_pinned.py` hashes updated same-commit; commit message names the deliberate change and fn-206 (R3)
+- [ ] `./scripts/sync-codex.sh` run twice with identical results, guards green, mirror diff committed
+- [ ] `cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_backend_spec test_skill_prose_diet -q` green; `uvx ruff@0.16.0 check .` clean
+- [ ] No other prompt text changed (the pin diff shows exactly the two intended files)
+
+## Done summary
+TBD
+
+## Evidence
+- Commits:
+- Tests:
+- PRs:

@@ -23,3 +23,18 @@ The budget discipline exists on the work/rolling side but is written nowhere the
 
 - Trigger receipt: fn-205 rolling run, task .2 re-review round 2, reviewer process observed running `timeout 580 python3 -m unittest discover -p 'test_*.py'` at 13:02 while .5 admission was blocked on the verdict. Round-1 reviews that scoped to pinned suites returned in 3-5 min; this round ~10 min.
 - Why prompt rail and not conductor-side scoping: the reviewer is an executor with a shell (fn-74/fn-169 doctrine); the budget is information it lacks, not judgment it should be denied. One sentence in the rubric closes it for every backend at once.
+
+
+## Requirement coverage
+
+| Req | Description | Task(s) | Gap justification |
+|-----|-------------|---------|-------------------|
+| R1 | Budget rail in both reviewer prompts (targeted verification stays licensed) | fn-206-reviewer-verification-budget-focused.1 | — |
+| R2 | Host dispatch pointers + byte-identical flowctl mirror constants | fn-206-reviewer-verification-budget-focused.1 | — |
+| R3 | Same-commit hash-pin update with rationale | fn-206-reviewer-verification-budget-focused.1 | — |
+
+## Quick commands
+
+```bash
+cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_backend_spec test_skill_prose_diet -q
+```
