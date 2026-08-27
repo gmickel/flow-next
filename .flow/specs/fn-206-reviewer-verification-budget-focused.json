@@ -8,7 +8,9 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-206-reviewer-verification-budget-focused",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-206-reviewer-verification-budget-focused.1": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
@@ -162,15 +164,43 @@
       "task": null,
       "timestamp": "2026-08-27T11:19:59.745744Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "886aa4ca530be293e370bd2afb1cc2d7aed92381912f05d9d2490491e757ee81",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "71b6ba4f7d0718824cb9ceb2cdcf395f533ca3f6",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 1233,
+      "output_sha256": "2e5b83bd992e1f48cf8ea71c83df1b023a7969165c953931263b14c7be2253fd",
+      "reservation_id": "ce53d8128e214217bd6e94f9aa782bde",
+      "round_consumed": true,
+      "scope": "impl:fn-206-reviewer-verification-budget-focused.1",
+      "superseded_by": null,
+      "task": "fn-206-reviewer-verification-budget-focused.1",
+      "timestamp": "2026-08-27T13:19:17.355711Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
+    "impl:fn-206-reviewer-verification-budget-focused.1": 1,
     "plan": 1,
     "plan#completion": 0
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "impl:fn-206-reviewer-verification-budget-focused.1": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-206-reviewer-verification-budget-focused.md",
@@ -187,5 +217,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T11:19:59.747881Z"
+  "updated_at": "2026-08-27T13:19:17.621607Z"
 }

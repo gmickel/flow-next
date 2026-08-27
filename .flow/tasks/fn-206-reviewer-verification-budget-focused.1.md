@@ -23,9 +23,14 @@ One rail, four coupled surfaces. (1) `plugins/flow-next/skills/flow-next-impl-re
 - [ ] No other prompt text changed (the pin diff shows exactly the two intended files)
 
 ## Done summary
-TBD
+Added the fn-206 reviewer verification-budget rail: both reviewer rubrics (impl-review-prompt.md, completion-review-prompt.md) now state that a review round verifies via the task's Quick commands / the focused suites the evidence names plus finding-targeted commands (the exact test a finding disputes stays licensed), while the FULL suite belongs to the run's final gate (work Phase 4/5, rolling quiesce), never to a review round; flowctl fallback constants kept byte-identical, both host dispatch blocks carry the budget by one pointer line each, pin hashes updated same-commit, the four rendered fixtures + token-delta evidence regenerated via generate_review_prompt_parity_evidence.py recalibrated for fn-206 (baseline ed4ad638, measured max delta 70 tokens; plan/standalone fixtures byte-identical), and the codex mirror + tracker manifest regenerated (sync-codex twice, idempotent).
 
+stage: impl-review - skipped(policy: parallel-wave + host-deferred - conductor owns the gate)
+
+Reviewer follow-ups accepted as recorded (non-blocking): hermetic criteria render inside the rebaseline generator; impl workflow-host pointer gloss to adopt the completion-side no-gloss shape; stale parity-test constants sweep (PRE_CHANGE_COMMIT/TOKEN_EVIDENCE/_SPEC/_DDIFF/_TASKS).
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 71b6ba4f7d0718824cb9ceb2cdcf395f533ca3f6
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_template_parity test_backend_spec test_skill_prose_diet -q, 213 tests OK at ed4ad638; handoff: fn-205 quiesce full gate green), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_review_prompt_template_parity test_backend_spec test_skill_prose_diet -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:
