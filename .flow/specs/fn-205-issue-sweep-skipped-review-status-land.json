@@ -460,7 +460,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-205-issue-sweep-skipped-review-status-land.md",
-  "status": "open",
+  "status": "done",
   "title": "Issue sweep: skipped review status, land tail, export roster, OpenCode closers",
   "tracker": {
     "baseHashFlow": null,
@@ -473,5 +473,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T12:15:55.774920Z"
+  "updated_at": "2026-08-27T16:01:27.472164Z"
 }
