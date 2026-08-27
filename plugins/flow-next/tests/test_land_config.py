@@ -966,6 +966,42 @@ class PostMergeTailOrderStaticTestCase(unittest.TestCase):
         self.assertIn('git commit -m "chore(flow): sync state for ${spec}', tracker)
         self.assertNotIn("git push", tracker)
 
+    def test_sync_state_add_names_only_the_tracked_sidecar(self) -> None:
+        """R4 (#367): never pass an auto-ignored path to `git add`.
+
+        `.flow/sync-runs/` is in flowctl's auto-ignore block; an exactly-named
+        ignored directory makes the add exit 1 with the sidecar left
+        half-staged, and an absent one exits 128 - either way the old `&&`
+        chain died and the sync-state commit never landed.
+        """
+        tracker = self.tail[
+            self.tail.index("3. **Tracker touchpoint") : self.tail.index("4. **Persist —")
+        ]
+        self.assertIn('git add ".flow/specs/${spec}.json"', tracker)
+        # The old broken pathspec (tracked sidecar + ignored receipts dir).
+        self.assertNotIn('git add ".flow/specs/${spec}.json" .flow/sync-runs', self.text)
+        # No `git add` COMMAND line in the tail may name the ignored receipts
+        # dir (prose lines may mention it while banning it).
+        for line in self.tail.splitlines():
+            if line.strip().startswith("git add"):
+                self.assertNotIn("sync-runs", line)
+
+    def test_sync_state_commit_is_guarded_on_staged_diff(self) -> None:
+        """R4 (#367): an unchanged sidecar is success-with-nothing-to-commit.
+
+        The commit is guarded on a staged-diff check rather than letting the
+        commit's own exit code stand in for an error, so `resume-tail` over an
+        already-committed sidecar reports success.
+        """
+        tracker = self.tail[
+            self.tail.index("3. **Tracker touchpoint") : self.tail.index("4. **Persist —")
+        ]
+        self.assertIn(
+            'git diff --cached --quiet -- ".flow/specs/${spec}.json"'
+            ' || git commit -m "chore(flow): sync state for ${spec} land.merged touchpoint"',
+            tracker,
+        )
+
     def test_rollback_is_scoped_to_the_persist_step(self) -> None:
         persist = self.tail[self.tail.index("4. **Persist —") :]
         self.assertIn('git reset --hard "$TAIL_BASE_OID"', persist)
