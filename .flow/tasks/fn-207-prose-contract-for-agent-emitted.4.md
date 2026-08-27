@@ -61,9 +61,16 @@ Wire the R5 pointer set — one-line non-blocking asides at every remaining arti
 - [ ] Full gate green: `python3 scripts/run_tests_parallel.py` + `uvx ruff@0.16.0 check .`
 
 ## Done summary
-TBD
+Landed all 12 remaining prose-contract pointer lines (11 surfaces; strategy has two reference files): interview write-back, resolve-pr replies (agents/pr-comment-resolver.md), plan Step 5, chart briefing, strategy first-run + update, qa bug filing, land verdict comment (structural-contracts-win shape deferring to the merge-evidence gate and projection rules), prospect candidates, prime glossary definitions, audit memory-entry authoring, and the worker done summary (agents/worker.md). Corrected prose.md's intro to name emission-point classes, state complete coverage, and exclude the visual digest as ephemeral-by-contract. Regenerated the codex mirror (sync-codex twice, idempotent, all guards green); the agent-file pointers came out rewritten to `../docs/flow-next/prose.md` in both TOMLs, the first live exercise of the fn-207.3 agents transform. Extended the CHANGELOG `## Unreleased` entry in place, em-dash-free. Conduct checklists for all 11 touched skills verified: pointers are non-contractual one-line asides, no falsifiable assertion breaks.
 
+baseline: green (sync-codex x2 rc=0/0, test_prompt_text_pinned rc=0 pre-edit)
+
+Pointer authoring bridged to cursor-agent (cursor-grok-4.6-high) per explicit routing instruction; bridge output was clean on first pass (13 files, exact placements); host applied two placement corrections (chart and qa pointers moved above their colon-introduced blocks) and dropped a temporal "now" in prose.md.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: c20fcc96ae027fe828fe9fe07cf89dc18492b52f, cf603095337729aca1f9e44391136802fe291f49
+- Tests: python3 scripts/run_tests_parallel.py (4505 ran, 0 failures), uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh x2 (idempotent, guards green; re-run x2 after round-1 fixes), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q
 - PRs:
+stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer; NEEDS_WORK round 1 -> SHIP round 2, fixes cf603095)
+stage: plan-sync - skipped(config: planSync.enabled != true)
