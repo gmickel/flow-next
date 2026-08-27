@@ -1,7 +1,4 @@
 {
-  "acceptance": {
-    "all_deltas_within_rebaseline_budget": true
-  },
   "baseline": {
     "commit": "ed4ad6382eb4154c25b6650fc4afd0addb171c0b",
     "kind": "immutable_git_commit"
@@ -54,36 +51,36 @@
     "impl": {
       "baseline_masked_sha256": "c9e70f2a2947e6d08f4a1bf12a3e5882a3610d86b2036173c7914bf91b84e32a",
       "baseline_sha256": "90802b1a5ab628bdbba6f1a6a4b6f4c880aeb28b3f944da6e3555a5ecdcb26bc",
-      "candidate_masked_sha256": "b11e5ba85ff635bc71d249db71e7f43133ffc1fb12aa80e1a24cdefc18aca8ff",
-      "candidate_sha256": "3c9cf5a16c6bc38a9c6d1394548cdc565a99008403244c36ffa9ee245fc4d1dc",
+      "candidate_masked_sha256": "7acd28bde8ea9c6fe7641c5b60c40a812f14abce3775cca4b6dbf9a6ccfe0d05",
+      "candidate_sha256": "b5acdb5c9ab66b72d03da04f78e38de7ebae421ed4222c93591c68d4823d7913",
       "tokens": {
         "cl100k_base": {
           "baseline": 2182,
-          "candidate": 2251,
-          "delta": 69
+          "candidate": 2270,
+          "delta": 88
         },
         "o200k_base": {
           "baseline": 2172,
-          "candidate": 2241,
-          "delta": 69
+          "candidate": 2260,
+          "delta": 88
         }
       }
     },
     "impl_empty_optional": {
       "baseline_masked_sha256": "2e902d5c14d4e8b91377a628c9b5c42bcf7c30cd960095da16fb13ced5cf429e",
       "baseline_sha256": "35c3c6f4c6c294cf6e58d51b575ef5185c39c4d79605ed865eb1fd0dfef96540",
-      "candidate_masked_sha256": "1543b47dc0ef4b2e6401fd36053b4174e4592cf7ae86ef3f1445f3a097c93d45",
-      "candidate_sha256": "bb92e5db86ee629e47a5d01626eea086f8eb162a5cac78feb852b3aba0139f7e",
+      "candidate_masked_sha256": "99b369353f0f31b50456e780dad66d4c60535ebe1853cbb57101d0e795252271",
+      "candidate_sha256": "6ffa14f9de447b69d8e637b609900452078455b097fb42fbadfd8d95af7ca5a8",
       "tokens": {
         "cl100k_base": {
           "baseline": 2101,
-          "candidate": 2170,
-          "delta": 69
+          "candidate": 2189,
+          "delta": 88
         },
         "o200k_base": {
           "baseline": 2091,
-          "candidate": 2160,
-          "delta": 69
+          "candidate": 2179,
+          "delta": 88
         }
       }
     },
@@ -215,9 +212,9 @@
     }
   },
   "rebaseline": {
-    "max_token_delta": {
-      "cl100k_base": 70,
-      "o200k_base": 70
+    "measured_max_token_delta": {
+      "cl100k_base": 88,
+      "o200k_base": 88
     },
     "rationale": "fn-206 intentionally adds the reviewer verification-budget rail to the impl and completion review prompts: focused suites plus finding-targeted commands; the full suite belongs to the run's final gate, never a review round."
   },

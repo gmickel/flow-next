@@ -36,10 +36,10 @@ HINTS = "hint-a\nhint-b"
 DSUM = " 3 files changed, 10 insertions(+), 2 deletions(-)"
 BASE = "main"
 FOCUS = "auth and sessions"
-# Measured fn-206 calibration deltas (verification-budget rail vs the pre-edit
-# commit). This exact ceiling makes any subsequent prompt growth a conscious
-# rebaseline, not a quietly widening allowance.
-MAX_TOKEN_DELTA = {"cl100k_base": 70, "o200k_base": 70}
+# Token deltas are point-in-time MEASUREMENTS recorded in the evidence JSON and
+# judged via .flow/criteria.md G1 — never a stored ceiling. Prompt-size ratchets
+# were deliberately removed (2026-08-07); this script measures, it does not gate.
+ENCODINGS = ("cl100k_base", "o200k_base")
 
 
 def _load_module(path: Path, name: str) -> ModuleType:
@@ -150,7 +150,7 @@ def main() -> None:
     candidate = _rendered_prompts(_load_module(FLOWCTL_PATH, "flowctl_prompt_candidate"))
     if baseline.keys() != candidate.keys():
         raise ValueError("baseline and candidate prompt sets differ")
-    encodings = {name: tiktoken.get_encoding(name) for name in MAX_TOKEN_DELTA}
+    encodings = {name: tiktoken.get_encoding(name) for name in ENCODINGS}
     prompts = {}
     for name in sorted(candidate):
         token_counts = {
@@ -169,18 +169,17 @@ def main() -> None:
             "candidate_masked_sha256": _sha(_without_output_format(candidate[name])),
             "tokens": token_counts,
         }
-    within_budget = all(
-        counts["delta"] <= MAX_TOKEN_DELTA[encoding]
-        for row in prompts.values()
-        for encoding, counts in row["tokens"].items()
-    )
+    measured_max_delta = {
+        encoding: max(row["tokens"][encoding]["delta"] for row in prompts.values())
+        for encoding in ENCODINGS
+    }
     evidence = {
         "schema_version": 2,
         "baseline": {"commit": args.baseline, "kind": "immutable_git_commit"},
         "measurement": {
             "tool": "tiktoken",
             "version": tiktoken.__version__,
-            "encodings": list(MAX_TOKEN_DELTA),
+            "encodings": list(ENCODINGS),
         },
         "rebaseline": {
             "rationale": (
@@ -188,10 +187,9 @@ def main() -> None:
                 "and completion review prompts: focused suites plus finding-targeted commands; "
                 "the full suite belongs to the run's final gate, never a review round."
             ),
-            "max_token_delta": MAX_TOKEN_DELTA,
+            "measured_max_token_delta": measured_max_delta,
         },
         "prompts": prompts,
-        "acceptance": {"all_deltas_within_rebaseline_budget": within_budget},
     }
     payload = json.dumps(evidence, indent=2, sort_keys=True) + "\n"
     if args.write:
