@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-205-issue-sweep-skipped-review-status-land",
   "impl_review_rounds": {
-    "fn-205-issue-sweep-skipped-review-status-land.1": 1,
+    "fn-205-issue-sweep-skipped-review-status-land.1": 0,
     "fn-205-issue-sweep-skipped-review-status-land.4": 0
   },
   "next_task": 1,
@@ -263,26 +263,44 @@
       "task": "fn-205-issue-sweep-skipped-review-status-land.4",
       "timestamp": "2026-08-27T09:45:49.428811Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "968b35a6be531208698c7b07c1ac8076f055754c2c08d0d1befb83bd45e800f1",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "5b2ba4d215c837837bcfa98453075b91dc2faee5",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 983,
+      "output_sha256": "f2ad5d0ced81502e6c7ea13be0a6c90d94a5af1edb7feb47a64098486b9f16a9",
+      "reservation_id": "77941b61418844929d2cf92824c04e11",
+      "round_consumed": true,
+      "scope": "impl:fn-205-issue-sweep-skipped-review-status-land.1",
+      "superseded_by": null,
+      "task": "fn-205-issue-sweep-skipped-review-status-land.1",
+      "timestamp": "2026-08-27T10:06:47.148835Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
+    "impl:fn-205-issue-sweep-skipped-review-status-land.1": 1,
     "impl:fn-205-issue-sweep-skipped-review-status-land.4": 1,
     "plan": 1,
     "plan#completion": 0
   },
-  "review_pending_rounds": {
-    "impl:fn-205-issue-sweep-skipped-review-status-land.1": 1
-  },
-  "review_reservations": {
-    "77941b61418844929d2cf92824c04e11": {
-      "artifact_sha256": "968b35a6be531208698c7b07c1ac8076f055754c2c08d0d1befb83bd45e800f1",
-      "counter_scope": "impl:fn-205-issue-sweep-skipped-review-status-land.1",
-      "epoch": 0,
-      "forced": false,
-      "review_type": "impl"
-    }
-  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
   "review_transport_failures": {
+    "impl:fn-205-issue-sweep-skipped-review-status-land.1": 0,
     "impl:fn-205-issue-sweep-skipped-review-status-land.4": 0,
     "plan": 0
   },
@@ -300,5 +318,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-27T09:45:49.696933Z"
+  "updated_at": "2026-08-27T10:06:47.414919Z"
 }

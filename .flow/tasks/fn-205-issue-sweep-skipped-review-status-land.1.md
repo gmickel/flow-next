@@ -52,9 +52,15 @@ Add the `not_required` member to the completion-review status vocabulary and rou
 - [ ] TBD
 
 ## Done summary
-TBD
+Added the `not_required` completion-review member behind one shared satisfying-member predicate: canonical declaration (`COMPLETION_REVIEW_STATUSES` / `COMPLETION_REVIEW_SATISFYING` / `completion_review_satisfied()`) in `flowctl.py`, mirrored in `flowctl_tracker/status/policy.py` with a parity test (import direction forbids sharing — tracker package is optionally absent). Projection row 2 and the `next --require-completion-review` scheduler now consume the allow-set instead of `==`/`!=` ship chains; `spec set-completion-review-status` gained an atomic `--if-current` compare-and-set under the sidecar lock (mismatch = visible no-write, `written:false`, non-error exit; regression test pins that a concurrent `needs_work` survives `--if-current unknown`). Plan-review choices and the verified-vs-done label selector are unchanged; unrecognized/absent values read as `unknown` and satisfy nothing. Member-enumeration tests pin every flowctl-side gate classification (R7). MANIFEST.json regenerated. Mirror regen (sync-codex.sh) deliberately deferred to the finalization task per task spec.
 
+baseline: green (focused suite, 212 tests pre-edit)
+implementer route: bridged both chunks to grok 4.6 via cursor-agent as instructed; both bridge outputs matched the specified diffs exactly, no fallback needed.
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: d5e8d0b2b34078f9a42ee79fb8e4926cc5ee1d44
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_tracker_status test_task_inventory test_review_convergence_journal -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution test_flowctl_surface -q, uvx ruff@0.16.0 check <changed files>, python3 scripts/gen_tracker_manifest.py
 - PRs:
