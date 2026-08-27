@@ -53,10 +53,9 @@ File content authored via the cursor-agent bridge (cursor-grok-4.6-high) per exp
 baseline: green (test_prompt_text_pinned pre-edit OK at 5e0bc5bc)
 Verify: gate classify exited FULL (CLAUDE.md unmatched); full gate run per repo docs-tree rule - python3 scripts/run_tests_parallel.py: files=192 ran=4505 failures=0 errors=0; uvx ruff@0.16.0 check .: all checks passed; focused test_prompt_text_pinned green.
 
-stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
+stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer; SHIP round 1, 3 P2 nits applied in b5ca65a0)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
 - Commits: 2988793ad2f76c3537a5cebffb24779abb364aa7, b5ca65a0ded6bf321aeacfa207c5c16ff1d77858
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:
-stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer)
-stage: plan-sync - skipped(config: planSync.enabled != true)
