@@ -395,7 +395,7 @@ ui_blocked() {
 }
 
 ui_complete() {
-  local elapsed progress_info specs_done specs_total tasks_done tasks_total
+  local note="${1:-}" elapsed progress_info specs_done specs_total tasks_done tasks_total
   elapsed="$(elapsed_time)"
   progress_info="$(get_progress)"
   IFS='|' read -r specs_done specs_total tasks_done tasks_total <<< "$progress_info"
@@ -405,6 +405,7 @@ ui_complete() {
   ui "${C_BOLD}${C_GREEN}  ✅ Ralph Complete${C_RESET}                                        ${C_DIM}[${elapsed}]${C_RESET}"
   ui ""
   ui "   ${C_DIM}Tasks:${C_RESET} ${tasks_done}/${tasks_total} ${C_DIM}•${C_RESET} ${C_DIM}Specs:${C_RESET} ${specs_done}/${specs_total}"
+  [[ -n "$note" ]] && ui "   ${C_DIM}$note${C_RESET}"
   ui "${C_BOLD}${C_GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
   ui ""
 }

@@ -2,6 +2,16 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Added
+
+- **Skipping the planning stage is now a first-class, recorded choice.** `/flow-next:work <spec-id>` on a spec with no tasks used to fall through to the completion gate and could end as a "successful" run that implemented nothing. It now forks explicitly: an interactive ask offers plan-first vs work-directly with the consequence of each stated, and the recommendation is judged per spec from size, independent surfaces, and blast radius — no static default. `--no-plan` (or plain language: "skip planning", "work directly") pre-answers the fork so the ask never fires when intent is stated; contradictory signals ask instead of guessing, and the flag on an already-planned spec is ignored with a one-line notice. The direct route mints exactly one minimal implicit task — "implement this spec", satisfying every R-ID, never an emulated plan — and runs the standard pipeline, so receipts, impl review, done evidence, and the single-task completion-review skip all compose unchanged. The minted task's worker carries a broad judicious-subagent license (parallel implementation, research, scouting — shape chosen by the harness at execution time, every subagent joined before commit). Autonomous runs never see the ask: without an explicit no-plan instruction a zero-task spec stops with a typed "spec has no tasks" report; pilot forwards an explicit `--no-plan` to its work dispatch and otherwise keeps routing zero tasks to plan; `flowctl next` surfaces the state as `status: plan, reason: needs_tasks` (Ralph stops typed instead of spinning); `/flow-next:work-rolling` refuses no-plan with the reason stated (a single implicit task degenerates the rolling frontier) and redirects to plain work. The routing surfaces know the route: it is the sixth worked variant in `pipeline-variations.md`, and guide, capture, and interview can now recommend it for near-zero-risk fully-known specs.
+
+### Fixed
+
+- **Three writing agents can dispatch subagents again.** The worker, pr-comment-resolver, and plan-sync agents carried a `disallowedTools: Task` denial from their first commit with no recorded rationale — Task is Claude Code's subagent-dispatch tool (renamed Agent in v2.1.63), not a planning feature, so the ban silently blocked dispatched workers from spawning scouts or parallel research. The audit removes it from the writers and keeps the denial on every read-only agent with the reason now written inline: a read-only agent that can spawn a writing subagent has an escape hatch out of read-only. Cursor and Grok parity confirmed; the OpenCode permission map and Codex sandbox follow automatically.
+
 ## [flow-next 4.8.0] - 2026-08-29
 
 Autonomous loops stop failing quietly. This release hardens the prose contracts every autonomous run executes — the worker's implementation rules, the land conductor's merge and CI gates, and the review rubrics — closing failure classes banked from real overnight runs: budgets burned on stale state, gates trusted on narration instead of evidence, locks that outlive their tick, and cleanup that could sweep away work a human left uncommitted. The pass was itself pressure-tested: fourteen cross-model review rounds on the shipping PR forced twenty-nine further repairs before merge, so the rules below survived the exact kind of scrutiny they exist to impose.

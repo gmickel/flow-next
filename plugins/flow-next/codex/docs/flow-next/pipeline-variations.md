@@ -3,11 +3,11 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-The default pipeline composes ([root README](https://github.com/gmickel/flow-next/blob/main/README.md#compose-the-pipeline)). This page owns the **stage axis**: which stages a given piece of work runs, shown as five worked examples from a full epic down to a docs chore.
+The default pipeline composes ([root README](https://github.com/gmickel/flow-next/blob/main/README.md#compose-the-pipeline)). This page owns the **stage axis**: which stages a given piece of work runs, shown as six worked examples from a full epic down to a docs chore.
 
 > Adjacent, not the same: [`running-lean.md`](running-lean.md) is about which **layers** (subsystems) you switch on at all and what each costs to keep on. This page is about which **stages** one piece of work passes through. [`/flow-next:guide`](../../skills/flow-next-guide/SKILL.md) is the router that answers the question live for one specific situation - this page is the reference it rhymes with, not a second router.
 
-**Read the variants below as worked examples.** They illustrate routes the smallest-sufficient rule produces for five common shapes of work. Your change composes its own route; these show the reasoning, so you can reproduce it, not memorize it.
+**Read the variants below as worked examples.** They illustrate routes the smallest-sufficient rule produces for six common shapes of work. Your change composes its own route; these show the reasoning, so you can reproduce it, not memorize it.
 
 ## Pick by risk and unknowns
 
@@ -35,6 +35,7 @@ The pipeline proper starts where shaped intent exists: at **capture** (turn the 
 |---|---|---|
 | [Epic](#epic) | Many requirement unknowns, high blast radius, multi-task scope | capture → interview → plan → plan-review → work → qa → make-pr → land |
 | [Feature, requirements known](#feature-requirements-known) | Design risk remains; requirements already clear | plan → plan-review → work → make-pr |
+| [No-plan route](#no-plan-route) | Spec exists and is fully known; task decomposition would convert nothing | work `--no-plan` (zero-task fork → one implicit task) |
 | [Small task](#small-task) | Low risk, one implementation context, no real unknowns | plan → work (or `work "idea text"`) |
 | [Bug or defect](#bug-or-defect) | The unknown is the *cause*; the risk is regression | work + regression test as the R-ID |
 | [Docs or chore](#docs-or-chore) | Near-zero risk, fully known | direct change → triage-skip receipt → PR |
@@ -60,6 +61,23 @@ flowchart LR
 ```
 
 Capture and interview are skipped because their unknown is already converted: the requirements exist. Plan turns the brief into R-IDs and tasks; plan-review is kept because the design is where the remaining risk lives. What still holds: R-IDs, gates, review, receipts - the full evidence chain from plan onward.
+
+### No-plan route
+
+**Signal:** a spec already exists and is fully known - acceptance criteria are clear, the work fits one implementation context, and decomposing it into tasks would convert no unknown. The [GLOSSARY entry](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md#no-plan-route) names this the **No-plan route**.
+
+```mermaid
+flowchart LR
+    S([Zero-task spec]) --> F{explicit fork} -->|work directly| M[mint one implicit task] --> W[/work/]
+    F -->|plan first| P[/plan/]
+```
+
+```bash
+/flow-next:work fn-N --no-plan   # pre-answer the fork ("no plan" / "skip planning" in prose works too)
+/flow-next:work fn-N             # or take the fork's interactive ask
+```
+
+`/flow-next:work <spec-id>` on a zero-task spec forks explicitly instead of falling through: an interactive ask offers plan-first vs work-directly with an agent-judged recommendation and its reason (no static default), and `--no-plan` or stated natural-language intent pre-answers it so the ask never fires. The direct route mints exactly one minimal implicit task ("implement this spec", `satisfies` listing all the spec's R-IDs) and runs the standard pipeline from there - receipts, review, evidence, and the single-task completion-review policy skip compose unchanged, and the minted task's dispatch licenses judicious subagent use with the shape chosen at execution time. Autonomous loops keep planning: a zero-task spec under autonomy without an explicit no-plan instruction stops with a typed report, and pilot only forwards an explicit `--no-plan` flag to its work dispatch, never decides it. Not for [`/flow-next:work-rolling`](../../skills/flow-next-work-rolling/SKILL.md), which refuses the route - a single implicit task degenerates the rolling frontier. What still holds: everything - the fork skips plan and its automatic plan-review, nothing else.
 
 ### Small task
 

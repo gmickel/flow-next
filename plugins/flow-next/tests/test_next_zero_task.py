@@ -66,7 +66,6 @@ class NextZeroTaskCase(unittest.TestCase):
         spec_id: str,
         *,
         title: str | None = None,
-        directory: str = "specs",
         status: str = "open",
     ) -> None:
         data = {
@@ -76,13 +75,12 @@ class NextZeroTaskCase(unittest.TestCase):
             "depends_on_epics": [],
             "spec_path": f".flow/specs/{spec_id}.md",
         }
-        (self.flow / directory / f"{spec_id}.json").write_text(
+        (self.flow / "specs" / f"{spec_id}.json").write_text(
             json.dumps(data), encoding="utf-8"
         )
-        if directory == "specs":
-            (self.flow / "specs" / f"{spec_id}.md").write_text(
-                f"# {spec_id}\n", encoding="utf-8"
-            )
+        (self.flow / "specs" / f"{spec_id}.md").write_text(
+            f"# {spec_id}\n", encoding="utf-8"
+        )
 
     def write_task(
         self,
@@ -90,17 +88,15 @@ class NextZeroTaskCase(unittest.TestCase):
         *,
         spec_id: str | None = None,
         status: str = "todo",
-        depends_on: list[str] | None = None,
-        legacy: bool = False,
         with_markdown: bool = False,
     ) -> None:
         owning_spec = spec_id or task_id.rsplit(".", 1)[0]
         data = {
             "id": task_id,
-            ("epic" if legacy else "spec"): owning_spec,
+            "spec": owning_spec,
             "title": task_id,
             "status": status,
-            ("deps" if legacy else "depends_on"): depends_on or [],
+            "depends_on": [],
             "spec_path": f".flow/tasks/{task_id}.md",
         }
         (self.flow / "tasks" / f"{task_id}.json").write_text(

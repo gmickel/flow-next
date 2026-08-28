@@ -2,6 +2,7 @@
 name: flow-next-strategy
 description: Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.
 user-invocable: false
+# Write-only is deliberate (fn-209.1): the update path atomic-writes whole sections (references/update.md), so Edit is not needed
 allowed-tools: Read, Write, Bash
 ---
 
