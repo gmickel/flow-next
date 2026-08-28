@@ -89,29 +89,40 @@ MERGE_VERDICT_CMD="$(lcfg mergeVerdictCommand)"; [[ "$MERGE_VERDICT_CMD" == "nul
 REQUEST_REVIEWERS="$(lcfg requestReviewers)"; [[ "$REQUEST_REVIEWERS" == "null" ]] && REQUEST_REVIEWERS=""
 ```
 
-Resolve the land ledger — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until an ACT/REPORT write site, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`:
+Resolve the land ledger — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until an ACT/REPORT write site, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`. **The tick claim below is taken BEFORE the `LEDGER_JSON` read** — a snapshot read outside the claimed interval could gate this tick on state another tick then rewrote:
 
 ```bash
 LEDGER_DIR="$(git -C "$REPO_ROOT" rev-parse --git-common-dir)/flow-next"
 LEDGER="$LEDGER_DIR/land-strikes.json"
-LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"
 ```
 
-Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b). It is skill-owned scratch; no flowctl plumbing. Because land state is per-clone (it lives in the git common dir — shared by all of that clone's worktrees — and never travels with the repo), run land from one host per clone — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
+Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>", "flake_sig": "<check>|<failure line>|absent"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b; `flake_sig` = the failure signature recorded at the last flake rerun, §3.1). It is skill-owned scratch; no flowctl plumbing. Because land state is per-clone (it lives in the git common dir — shared by all of that clone's worktrees — and never travels with the repo), run land from one host per clone — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
-**Tick concurrency claim.** The ledger's jq+tmp+mv writes are last-writer-wins, so two overlapping ticks on one clone silently lose strikes and pushed-SHA records — the claim makes a tick the ledger's only writer. Take it atomically here, BEFORE any ledger write:
+**Tick concurrency claim.** The ledger's jq+tmp+mv writes are last-writer-wins, so two overlapping ticks on one clone silently lose strikes and pushed-SHA records — the claim makes a tick the ledger's only reader-writer. Take it atomically here, BEFORE the `LEDGER_JSON` read and any ledger write:
 
 ```bash
 mkdir -p "$LEDGER_DIR"
 TICK_LOCK="$LEDGER_DIR/tick.lock"
-# Stale-clear by age: a claim older than 60 minutes is a crashed tick, not a live one.
+# Stale-clear by age, serialized by a reaper claim: a tick claim older than 60
+# minutes is a crashed tick, not a live one (live ticks refresh their mtime
+# between per-PR actions — Phase 3). Only the reaper-claim holder may clear it,
+# and it re-checks the age INSIDE the claim — so two contenders can never race
+# rmdir/mkdir and evict a freshly retaken claim.
+REAP_LOCK="$LEDGER_DIR/tick.reap.lock"
+# A leftover reaper claim (crashed reaper) also clears by age — its live hold is milliseconds, so age is decisive there.
+[[ -d "$REAP_LOCK" && -n "$(find "$REAP_LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]] && rmdir "$REAP_LOCK" 2>/dev/null
 if [[ -d "$TICK_LOCK" && -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]]; then
-  rmdir "$TICK_LOCK" 2>/dev/null || true
+  if mkdir "$REAP_LOCK" 2>/dev/null; then
+    # re-check under the reaper claim: a fresh mtime means another tick retook it — leave it alone
+    [[ -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]] && rmdir "$TICK_LOCK" 2>/dev/null
+    rmdir "$REAP_LOCK" 2>/dev/null
+  fi
 fi
 if ! mkdir "$TICK_LOCK" 2>/dev/null; then
   echo 'LAND_VERDICT=NO_WORK prs=0 pr=- reason="another land tick holds this clone"'
   exit 0
 fi
+LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"   # first ledger read — inside the claimed interval, never before it
 ```
 
 A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rmdir "$TICK_LOCK"` immediately before printing the terminal `LAND_VERDICT` line, on every path that reaches one after this point (the dry-run stop included). The claim is scheduling state, not ledger state — `--dry-run`'s zero-mutation promise (no checkout, push, label, merge, dispatch, or ledger write) is untouched by taking and releasing it.
@@ -279,9 +290,9 @@ Tri-state classification (gh buckets are `pass`, `fail`, `pending`, `skipping`, 
 | `CHECK_TOTAL == 0` and window elapsed | `NEEDS_HUMAN`, reason `no checks registered beyond the patience window` |
 | every bucket ∈ {`pass`, `skipping`} (and `CHECK_TOTAL > 0`) | **green** → continue to review gates |
 
-CI pending → verdict `AWAITING_REVIEW`, action `none`, reason `CI pending (<n> checks)`. Only green proceeds.
+CI pending → verdict `AWAITING_REVIEW`, action `none`, reason `CI pending (<n> checks)`. Only green proceeds to the review gates (§2.6+); red runs the triage below, not a bare `ci-fix` plan.
 
-**Red-CI triage ordering (before a `ci-fix` plan stands).** A base merge or a thread-fix push restarts every check, so CI work done ahead of them is discarded while still consuming the bounded fix budget. Red CI therefore consults state this phase already fetched — no new call, and no `git merge-base` (Phase 2 is read-only with no guaranteed fresh fetch): `MERGE_STATE` ∈ {`BEHIND`, `DIRTY`} (the top-of-phase `PR_STATE` capture) → plan `catch-up` instead — no strike, no rerun; the signal was already in the `gh pr view` read. Otherwise, once §2.5's read is in, `UNRESOLVED > 0` → plan `resolve` first. Only a red head that is current with its base and thread-clean finalizes as `ci-fix`.
+**Red-CI triage ordering (before a `ci-fix` plan stands).** A base merge or a thread-fix push restarts every check, so CI work done ahead of them is discarded while still consuming the bounded fix budget. Red CI therefore consults state this phase already fetched — no new call beyond the gate tree's own reads, and no `git merge-base` (Phase 2 is read-only with no guaranteed fresh fetch), in this order: (1) `MERGE_STATE` ∈ {`BEHIND`, `DIRTY`} (the top-of-phase `PR_STATE` capture) → plan `catch-up` instead — no strike, no rerun; the signal was already in the `gh pr view` read. (2) Otherwise run §2.5's unresolved-thread read — red CI skips the green-only review gates (§2.6+), never this read — and `UNRESOLVED > 0` → plan `resolve` first. (3) Only a red head that is current with its base and thread-clean finalizes as `ci-fix`.
 
 ### 2.5 — Unresolved review threads
 
@@ -517,20 +528,21 @@ Done when: every discovered PR has one planned action class and a provisional ve
 
 ## Phase 3 — ACT (at most ONE action class per PR per tick)
 
-Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Post-merge sibling re-gate**: after any successful merge in a tick, every remaining PR whose planned action is `merge` downgrades to verdict `RESOLVING`, action `none`, unconditionally — the base those siblings were gated against has moved, so their checks (and any §2.9 verdict) judged a merge target that no longer exists. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos; the next tick re-gates them against the new base. A hold, never a strike. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
+Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Post-merge sibling re-gate**: after any successful merge in a tick, every remaining PR whose planned action is `merge` downgrades to verdict `RESOLVING`, action `none`, unconditionally — the base those siblings were gated against has moved, so their checks (and any §2.9 verdict) judged a merge target that no longer exists. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos; the next tick re-gates them against the new base. A hold, never a strike. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"`), so a long tick never ages into Phase 0's stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
 
 ### 3.1 — `ci-fix`
 
 1. `gh pr checkout "$PR_NUMBER"` (the spec branch lives in this repo; checkout tracks it).
 2. Inspect the failing check from the Phase 2 `CHECKS_JSON` (`name`, `bucket`, `link`). When the link maps to a GitHub Actions run (`/actions/runs/<id>` in the URL), derive the run id and read `gh run view <id> --log-failed`. External/status checks with no Actions run: use the check name/link as evidence and attempt only locally-discoverable matching validation. Logs unavailable AND no local validation exists → verdict `NEEDS_HUMAN`, restore branch, continue (never pretend CI was diagnosed).
 3. Judge relatedness against the PR diff:
-   - **Unrelated** (infra flake, e.g. runner timeout, network): ONE `gh run rerun <id>` for that run — verdict `FIXING_CI`, reason `infra flake — rerun dispatched`, restore branch, continue. The FIRST rerun for a PR consumes NO budget strike (diagnosis-only ticks must never durably label a healthy PR); a REPEAT flake on a later tick is a fresh attempt against the budget — it increments `ci_fix_count` alongside `rerun_count`. One rerun per PR per tick. **An identical second failure is never flake**: when the ledger already records a rerun for this PR (`rerun_count >= 1`) and the same check has failed again with the same failure text, a failure that reproduces byte-for-byte is deterministic — do not dispatch another rerun; reclassify as **Related** and read the failed logs this tick instead. (Budget semantics unchanged: repeats already consume a strike either way — only the reclassify-and-read replaces the blind rerun.) Ledger write (every write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, atomic `jq` + `mv`):
+   - **Unrelated** (infra flake, e.g. runner timeout, network): ONE `gh run rerun <id>` for that run — verdict `FIXING_CI`, reason `infra flake — rerun dispatched`, restore branch, continue. The FIRST rerun for a PR consumes NO budget strike (diagnosis-only ticks must never durably label a healthy PR); a REPEAT flake on a later tick is a fresh attempt against the budget — it increments `ci_fix_count` alongside `rerun_count`. One rerun per PR per tick. **An identical second failure is never flake**: the rerun write below records `flake_sig` — the failing check's name plus the first distinctive failure line from the step-2 log read, joined `<check>|<line>` (trimmed, timestamps stripped) — and when the ledger's `flake_sig` for this PR matches the current failure, a failure that reproduces byte-for-byte is deterministic — do not dispatch another rerun; reclassify as **Related** and read the failed logs this tick instead. (An absent `flake_sig` with `rerun_count >= 1` — a pre-signature ledger — falls back to comparing the previous run attempt's failed logs via `gh run view` when retrievable; only a confirmed identical failure reclassifies. Budget semantics unchanged: repeats already consume a strike either way — only the reclassify-and-read replaces the blind rerun.) Ledger write (every write site: `mkdir -p "$LEDGER_DIR"`, seed if missing, atomic `jq` + `mv`):
 
      ```bash
+     FLAKE_SIG="<check name>|<first distinctive failure line>"   # from the step-2 log read
      mkdir -p "$LEDGER_DIR"; [ -s "$LEDGER" ] || echo '{}' > "$LEDGER"
      tmp="$LEDGER.tmp.$$"
-     jq --arg pr "$PR_URL" --arg ts "$TODAY" '
-       .[$pr].rerun_count = ((.[$pr].rerun_count // 0) + 1) | .[$pr].ts = $ts
+     jq --arg pr "$PR_URL" --arg ts "$TODAY" --arg sig "$FLAKE_SIG" '
+       .[$pr].rerun_count = ((.[$pr].rerun_count // 0) + 1) | .[$pr].ts = $ts | .[$pr].flake_sig = $sig
        | (if .[$pr].rerun_count > 1 then .[$pr].ci_fix_count = ((.[$pr].ci_fix_count // 0) + 1) else . end)
      ' "$LEDGER" > "$tmp" && mv "$tmp" "$LEDGER"
      ```

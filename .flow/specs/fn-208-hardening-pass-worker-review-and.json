@@ -1,11 +1,97 @@
 {
   "branch_name": "fn-208-hardening-pass-worker-review-and",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-28T14:01:04.607237Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-208-hardening-pass-worker-review-and",
+  "impl_review_rounds": {
+    "fn-208-hardening-pass-worker-review-and.1": 1
+  },
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "93c3cff88405267e9ba670ed26ba273b9e012e793efb63a9b456519ef0f6ca83",
+      "backend": "codex",
+      "base_sha": "efe60be268df748bdfbfc546a38751f8cf26c912",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-281b08c396bf8afb5bb29b1722fca2dc",
+            "classification": "introduced",
+            "findingId": "finding-281b08c396bf8afb5bb29b1722fca2dc",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-4d60a73de20d8101674f636fadc931ff",
+            "classification": "introduced",
+            "findingId": "finding-4d60a73de20d8101674f636fadc931ff",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7b8a0aa62f3c5c5b356d3eab4e82e23e",
+            "classification": "introduced",
+            "findingId": "finding-7b8a0aa62f3c5c5b356d3eab4e82e23e",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-7b885d9a1e435e299275e6a2b9decd79",
+            "classification": "introduced",
+            "findingId": "finding-7b885d9a1e435e299275e6a2b9decd79",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "178c978aea458de47186c282f3fd42e3d3187015",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 822584,
+      "output_sha256": "7115958e95475e74b1ab05586310db7ed0ea01ab2cc05d8f047c5ab060d100d8",
+      "reservation_id": "782b988abd2d4c25ba982b07e29e3648",
+      "round_consumed": true,
+      "scope": "impl:fn-208-hardening-pass-worker-review-and.1",
+      "superseded_by": null,
+      "task": "fn-208-hardening-pass-worker-review-and.1",
+      "timestamp": "2026-08-28T14:51:32.243209Z",
+      "tool_calls": 11,
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-208-hardening-pass-worker-review-and.1": 0
+  },
   "spec_path": ".flow/specs/fn-208-hardening-pass-worker-review-and.md",
   "status": "open",
   "title": "Hardening pass: worker, review, and autonomy prose",
@@ -20,5 +106,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-28T14:01:04.877749Z"
+  "updated_at": "2026-08-28T14:51:32.259241Z"
 }
