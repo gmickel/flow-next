@@ -51,9 +51,13 @@ TBD
 - [ ] TBD
 
 ## Done summary
-TBD
+Landed the R1 tool-permission audit: worker and pr-comment-resolver no longer carry any `disallowedTools` line, plan-sync denies exactly `Write, Bash`, and all 17 read-only agents keep the full `Edit, Write, Task` denial with a whole-line rationale comment above the key (`# read-only: Task would be a write escape hatch via a spawned writing subagent` — whole-line because a trailing comment breaks the Cursor test tokenizer and the OpenCode token map). CLAUDE.md and platforms.md agent-permissions prose now distinguish read-only from writing agents and state the corrected fact (Task is subagent dispatch, renamed Agent in Claude Code v2.1.63, not a planning tool). Strategy-skill verdict: Write-only kept and recorded deliberate in a frontmatter comment (its update path atomic-writes whole sections per references/update.md). worker.md's two now-false "you cannot dispatch subagents" host-deferred rationale lines were re-grounded on verdict independence (phases.md/host-deferred-review.md instances belong to task .2). Cursor/Grok parity checked 2026-08-29 against the verified records: Cursor never consumed `disallowedTools` (enforcement is `readonly: true`, unchanged; writers never carried it) and Grok consumes canonical frontmatter as-is where a removed deny token only widens access — no host difference, so no new platforms.md difference note. sync-codex survival confirmed by a real run (rc=0, agent TOMLs byte-identical); the two resulting mirror deltas (codex platforms.md doc copy, codex strategy SKILL.md comment) were restored to base — finalization (.6) regen reproduces them.
 
+baseline: green (focused suite `python3 -m unittest test_cursor_agent_frontmatter test_opencode_agent_frontmatter -q` pre-edit, suite_rc=0)
+
+stage: impl-review - skipped(policy: host-deferred + parallel-wave - conductor owns the gate)
+stage: memory-capture - skipped(policy: no NEEDS_WORK->SHIP cycle occurred; review deferred to conductor)
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: ead8e36714f65d89c83852381b4bae1816b3f689
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_cursor_agent_frontmatter test_opencode_agent_frontmatter -q, cd plugins/flow-next/tests && python3 -m unittest test_anchor_bundle test_foreground_rule_fences test_gate_classify test_parallel_work_prose test_worker_anchor_prose test_host_review_backend -q, ./scripts/sync-codex.sh (rc=0, guard-green survival check; codex/** restored - finalization owns regen), uvx ruff@0.16.0 check plugins/flow-next/scripts/lib/opencode_generate.py
+- PRs:stage: plan-sync - skipped(config: planSync.enabled != true)
