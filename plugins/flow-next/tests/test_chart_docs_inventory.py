@@ -299,9 +299,9 @@ class ChartRegistryCounts(unittest.TestCase):
 
         # Docs surfaces that publish counts
         for path, needles in (
-            (DOCS / "skills.md", ("31 skills", "26 slash-command", "5 phrase")),
-            (DOCS / "README.md", ("31 skills",)),
-            (REPO_ROOT / "README.md", ("31 skills",)),
+            (DOCS / "skills.md", ("32 skills", "27 slash-command", "5 phrase")),
+            (DOCS / "README.md", ("32 skills",)),
+            (REPO_ROOT / "README.md", ("32 skills",)),
         ):
             text = _read(path)
             for n in needles:
