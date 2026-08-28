@@ -1,9 +1,9 @@
 # Project Glossary
 
-`GLOSSARY.md` is a human-readable, project-canonical terminology file shipped in v0.39.0. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` — terminology is the project's, not flow-next's.
+`GLOSSARY.md` is a human-readable, project-canonical terminology file shipped in v0.39.0. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` - terminology is the project's, not flow-next's.
 
-> Vocabulary discipline for this repo: [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — a compact dictionary of load-bearing terms with `_Avoid_` aliases, not an encyclopedia (its retired long-form text is archived at [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md)).
-> Glossary files are written/maintained via the `flowctl glossary` subcommands (`add` / `list` / `read` / `remove`), driven by `/flow-next:interview`, `/flow-next:audit`, and `/flow-next:sync`. (There is no standalone `flow-next-glossary` skill — `flowctl glossary` is the mechanism.)
+> Vocabulary discipline for this repo: [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - a compact dictionary of load-bearing terms with `_Avoid_` aliases, not an encyclopedia (its retired long-form text is archived at [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md)).
+> Glossary files are written/maintained via the `flowctl glossary` subcommands (`add` / `list` / `read` / `remove`), driven by `/flow-next:interview`, `/flow-next:audit`, and `/flow-next:sync`. (There is no standalone `flow-next-glossary` skill - `flowctl glossary` is the mechanism.)
 
 ## Format
 
@@ -38,7 +38,7 @@ flowctl glossary remove <term>
 
 ## Husk semantics
 
-Last-term `remove` leaves a `# Glossary` H1 husk on disk — the file is **never** deleted. R18 (survives uninstall) covers both the file living outside `.flow/` AND the file persisting after the last term is removed. Doc-aware autodetect branches on `total_terms > 0`, not on `[[ -f GLOSSARY.md ]]` — the latter would falsely activate doc-aware mode on an empty husk.
+Last-term `remove` leaves a `# Glossary` H1 husk on disk - the file is **never** deleted. R18 (survives uninstall) covers both the file living outside `.flow/` AND the file persisting after the last term is removed. Doc-aware autodetect branches on `total_terms > 0`, not on `[[ -f GLOSSARY.md ]]` - the latter would falsely activate doc-aware mode on an empty husk.
 
 ## How the rest of flow-next uses it
 
@@ -53,6 +53,6 @@ A small list of jargon terms is grep-guarded out of canonical skill / agent / co
 
 ## See also
 
-- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) — this repo's own glossary: 18 load-bearing terms (Spec, Task, R-ID, Receipt, Gate, plan-sync, Tier, Reach, ...) with `_Avoid_` aliases. Long-form text: [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md).
-- [`strategy.md`](strategy.md) — peer doc for the repo-root `STRATEGY.md` file.
-- [`memory-schema.md`](memory-schema.md) — categorized memory schema; the `knowledge/decisions/` subtree pairs naturally with glossary as terminology + load-bearing choices.
+- [`../../../GLOSSARY.md`](../../../GLOSSARY.md) - this repo's own glossary: 18 load-bearing terms (Spec, Task, R-ID, Receipt, Gate, plan-sync, Tier, Reach, ...) with `_Avoid_` aliases. Long-form text: [`../../../agent_docs/archive/GLOSSARY-full.md`](../../../agent_docs/archive/GLOSSARY-full.md).
+- [`strategy.md`](strategy.md) - peer doc for the repo-root `STRATEGY.md` file.
+- [`memory-schema.md`](memory-schema.md) - categorized memory schema; the `knowledge/decisions/` subtree pairs naturally with glossary as terminology + load-bearing choices.

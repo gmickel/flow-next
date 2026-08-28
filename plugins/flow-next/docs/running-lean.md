@@ -21,7 +21,7 @@ The failure mode this page exists to prevent is paying autonomous-profile costs 
 
 Profiles are per run, not per team and not per repo. The same repo can drain a backlog autonomously overnight and take a lean human-driven change the next morning.
 
-## The optionality caveat - canonical pattern
+## The optionality caveat: canonical pattern
 
 **Change this pattern here first.** Each optional subsystem's page carries an instance of it at the top, in this repo and on flow-next.dev. Those instances are deliberate copies (a top-of-page caveat cannot be a link), so edit the shape here and propagate; never fix the shape at an instance.
 
@@ -78,7 +78,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 
 ### Cross-model review backend
 
-`review.backend` - **unset by default**; reviews run in-host. Details: [`orchestration.md`](orchestration.md#review-backends--cross-model-review).
+`review.backend` - **unset by default**; reviews run in-host. Details: [`orchestration.md`](orchestration.md#review-backends-cross-model-review).
 
 - **Automates away:** getting a verdict from a model family that did not write the diff, so the reviewer's blind spots are uncorrelated with the writer's.
 - **Costs:** an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds before escalating.
@@ -161,7 +161,7 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 
 ### Implementation offload (no layer to enable)
 
-Offloading implementation to a second CLI is **not an optional layer** — there is no config key to switch on and nothing to price. You drive the other CLI through a headless bridge, ad hoc or as standing routing prose in `CLAUDE.md` / `AGENTS.md` (written for you by the `/flow-next:setup` model-routing scaffold). The recipes, the tier advice, and the rule that the bridged child writes code while the host keeps git, judgment, and the verdict live in the usage guide's `## Orchestration & model steering` section. Details: [`orchestration.md`](orchestration.md#implementation-offload--the-bridge-route).
+Offloading implementation to a second CLI is **not an optional layer** - there is no config key to switch on and nothing to price. You drive the other CLI through a headless bridge, ad hoc or as standing routing prose in `CLAUDE.md` / `AGENTS.md` (written for you by the `/flow-next:setup` model-routing scaffold). The recipes, the tier advice, and the rule that the bridged child writes code while the host keeps git, judgment, and the verdict live in the usage guide's `## Orchestration & model steering` section. Details: [`orchestration.md`](orchestration.md#implementation-offload-the-bridge-route).
 
 ## A lean run still leaves a record
 

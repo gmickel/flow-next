@@ -12,7 +12,7 @@ Run after modifying any of:
 - `plugins/flow-next/agents/**` - agent `.md` files (converted to `.toml`)
 - `plugins/flow-next/templates/spec.md` - canonical scaffold mirrored into `codex/templates/` for R20 relative-path resolution
 - `plugins/flow-next/references/**` - shared disclosure files (e.g. `html-artifacts.md`) mirrored byte-identical into `codex/references/` (tool-name-agnostic by contract; no rewrite pass touches them)
-- `plugins/flow-next/docs/**` - doc pages mirrored (markdown only, `reach/` included) into the owned namespace `codex/docs/flow-next/`; mirror skill cross-links gain the matching `flow-next/` segment, and the mirrored pages' own internal links are rewritten to the **link-closure property** — every link either resolves on disk within the mirror or is an absolute GitHub URL (`install-codex.sh` replaces ONLY `$CODEX_HOME/docs/flow-next/` — never loose files or siblings under `$CODEX_HOME/docs/`, which a user or another package may own)
+- `plugins/flow-next/docs/**` - doc pages mirrored (markdown only, `reach/` included) into the owned namespace `codex/docs/flow-next/`; mirror skill cross-links gain the matching `flow-next/` segment, and the mirrored pages' own internal links are rewritten to the **link-closure property** - every link either resolves on disk within the mirror or is an absolute GitHub URL (`install-codex.sh` replaces ONLY `$CODEX_HOME/docs/flow-next/` - never loose files or siblings under `$CODEX_HOME/docs/`, which a user or another package may own)
 
 Plugin-level `hooks/hooks.json` is gone (fn-114). Do not re-add a hooks stage.
 
@@ -29,7 +29,7 @@ The script runs in numbered stages (see banners in [`../../../scripts/sync-codex
 1. **Copy & patch skills** - canonical `skills/` copied to `codex/skills/`, then per-stage transforms applied (Claude-native tool names rewritten to Codex equivalents; `request_user_input` → plain-text numbered prompt per fn-45).
 2. **Convert agents** - `agents/*.md` → `codex/agents/*.toml` with per-agent reasoning effort, sandbox mode, model mapping, and nickname candidates.
 3. **Zero-default hooks** - remove any stale `codex/hooks.json`; assert absence (Ralph registration is agent-driven into project `.codex/hooks.json` via ralph-init).
-4. **Mirror templates/ + references/ + docs/** - canonical `templates/spec.md` copied to `codex/templates/` so the R20 discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies); canonical `docs/` copied markdown-only to the owned namespace `codex/docs/flow-next/`, and mirror skill cross-links (`../../docs/` / `../../../docs/`) gain the `flow-next/` segment so they resolve both in-repo and installed — the install replaces only that owned dir, so it can never destroy non-flow-next content under `$CODEX_HOME/docs/` (fn-202 / #363). The mirrored pages' own internal links are then rewritten by target class to the **link-closure property**: same-dir doc links stay untouched; links up-and-into installed trees (`skills/`, `templates/`, `references/`) gain one `../` for the deeper mirror location (depth-aware for `reach/` pages); links to targets outside the installed universe (repo root, the plugin README, `schema/`, `tests/`, the non-markdown `ci-workflow-example.yml`) become absolute canonical GitHub URLs computed from the canonical docs location. A validation guard hard-fails the sync on any docs-mirror link that neither resolves on disk at its mirror location nor is an absolute URL — and because the install copies these trees verbatim into the same relative layout under `$CODEX_HOME`, the repo-tree check is the install check.
+4. **Mirror templates/ + references/ + docs/** - canonical `templates/spec.md` copied to `codex/templates/` so the R20 discovery cascade resolves the same relative path in the mirror; canonical `references/` copied byte-identical to `codex/references/` (shared disclosure files are tool-name-agnostic, so no transform applies); canonical `docs/` copied markdown-only to the owned namespace `codex/docs/flow-next/`, and mirror skill cross-links (`../../docs/` / `../../../docs/`) gain the `flow-next/` segment so they resolve both in-repo and installed - the install replaces only that owned dir, so it can never destroy non-flow-next content under `$CODEX_HOME/docs/` (fn-202 / #363). The mirrored pages' own internal links are then rewritten by target class to the **link-closure property**: same-dir doc links stay untouched; links up-and-into installed trees (`skills/`, `templates/`, `references/`) gain one `../` for the deeper mirror location (depth-aware for `reach/` pages); links to targets outside the installed universe (repo root, the plugin README, `schema/`, `tests/`, the non-markdown `ci-workflow-example.yml`) become absolute canonical GitHub URLs computed from the canonical docs location. A validation guard hard-fails the sync on any docs-mirror link that neither resolves on disk at its mirror location nor is an absolute URL - and because the install copies these trees verbatim into the same relative layout under `$CODEX_HOME`, the repo-tree check is the install check.
 5. **Validation** - counts + drift guards (see below).
 
 ## Validation guards
@@ -44,7 +44,7 @@ The script's validation block (search for `# ─── Validation ───` in 
 | Bare `CLAUDE_PLUGIN_ROOT` refs | Skill bash without `${...:-${...}}` fallback | Warning |
 | `Task flow-next:` refs | Skill text still references the Claude `Task` form | Build fails |
 | `AskUserQuestion` / `ToolSearch` refs | Stage 1 transforms missed a Claude-native tool name | Build fails |
-| `request_user_input` refs (R6) | Stage 3 (fn-45) plain-text rewrite incomplete | Build fails |
+| `request_user_input` refs (R6) | Stage 3 plain-text rewrite incomplete | Build fails |
 | R17 forbidden vocabulary | DDD jargon leaked into mirror | Build fails |
 | R4 meta-file refs | Early-design `GLOSSARY-MAP.md` / `CONTEXT-MAP.md` survived | Build fails |
 | R19 strategy-doc fluff | Rumelt "fluff" tier-1 jargon in strategy skill mirror | Build fails |
@@ -55,7 +55,7 @@ The script's validation block (search for `# ─── Validation ───` in 
 
 Each guard prints `file:line` hits where available so the fix is mechanical: clean canonical first, then re-run sync.
 
-**The guards police the transform, not the prose.** They check tool names, dispatch phrasing, and structural drift — nothing in the script reads what a mirrored page *says*. Where mirrored content carries a user-facing contract of its own, the pin lives in the test suite instead: `tests/test_model_routing_scaffold.py` asserts the mirrored routing block keeps its markers and the four tier names, ships no model identifier, and that the retired pin-ceremony references are actually gone from the mirror (an incomplete regen leaves them loadable). A canonical-only assertion would stay green while every Codex install shipped the deleted ceremony.
+**The guards police the transform, not the prose.** They check tool names, dispatch phrasing, and structural drift - nothing in the script reads what a mirrored page *says*. Where mirrored content carries a user-facing contract of its own, the pin lives in the test suite instead: `tests/test_model_routing_scaffold.py` asserts the mirrored routing block keeps its markers and the four tier names, ships no model identifier, and that the retired pin-ceremony references are actually gone from the mirror (an incomplete regen leaves them loadable). A canonical-only assertion would stay green while every Codex install shipped the deleted ceremony.
 
 ## Plain-text transform (fn-45)
 
@@ -69,7 +69,7 @@ Memory entry `bug/build-errors/fn-445-review-r17-enforcement-beyond-2026-05-15` 
 
 ## See also
 
-- [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) — canonical pipeline (read the file).
-- [`platforms.md`](platforms.md) — Codex-specific install + caveats.
-- [`spec-template.md`](spec-template.md) — the canonical scaffold the R21 guard protects.
-- [`../../../agent_docs/local-dev.md`](../../../agent_docs/local-dev.md) — local-dev smoke procedure including the Codex plain-text invariant.
+- [`../../../scripts/sync-codex.sh`](../../../scripts/sync-codex.sh) - canonical pipeline (read the file).
+- [`platforms.md`](platforms.md) - Codex-specific install + caveats.
+- [`spec-template.md`](spec-template.md) - the canonical scaffold the R21 guard protects.
+- [`../../../agent_docs/local-dev.md`](../../../agent_docs/local-dev.md) - local-dev smoke procedure including the Codex plain-text invariant.

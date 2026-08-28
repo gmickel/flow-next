@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "**/*.md"
+      - "scripts/check_doc_anchors.py"
       - ".github/workflows/docs-linkcheck.yml"
   push:
     branches: [main]
     paths:
       - "**/*.md"
+      - "scripts/check_doc_anchors.py"
 
 jobs:
   linkcheck:
@@ -42,3 +44,9 @@ jobs:
             plugins/flow-next/docs
             plugins/flow-next/skills
           fail: true
+
+      # lychee proves the file exists; it does not check the fragment after '#'.
+      # These docs cross-reference by anchor constantly, so a reworded heading
+      # would otherwise break navigation silently.
+      - name: Check markdown anchors
+        run: python3 scripts/check_doc_anchors.py

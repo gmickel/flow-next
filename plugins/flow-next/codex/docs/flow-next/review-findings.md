@@ -17,6 +17,21 @@ observed 90.57 ms; that cost is operationally negligible within the end-to-end
 workflow and supersedes the original 50 ms target. The benchmark permits no
 model or network I/O.
 
+## Contents
+
+- [Version 1 schema](#version-1-schema)
+- [Canonical values](#canonical-values)
+- [Identity and lineage](#identity-and-lineage)
+- [Anchors](#anchors)
+- [Selecting the current generation](#selecting-the-current-generation)
+- [Bounds](#bounds)
+- [Fallback behavior](#fallback-behavior)
+- [Global-criteria compliance (`criteria`)](#global-criteria-compliance-criteria)
+- [Execution provenance (which model ran a stage)](#execution-provenance-which-model-ran-a-stage)
+- [Memory relationship](#memory-relationship)
+- [Consumer checklist](#consumer-checklist)
+- [See also](#see-also)
+
 ## Version 1 schema
 
 ```json
@@ -117,7 +132,7 @@ an older item.
 `priorFindingId` is an explicit edge used only when a parser cannot preserve an
 older ID byte-for-byte. The new item keeps its new ID and names the older item;
 the edge does not authorize replacing or deleting the prior generation. Only
-stored `id` and `priorFindingId` fields establish identity—consumers never
+stored `id` and `priorFindingId` fields establish identity - consumers never
 match findings by title, body, anchor, ordinal, or other semantic similarity.
 Every non-root generation is a complete snapshot of the lineage:
 omitting a previously known finding makes the chain invalid rather than
@@ -135,7 +150,7 @@ Prior finding #3: withdrawn
 ```
 
 Accepted statuses are `fixed`, `not-fixed`, and `withdrawn` (with the usual
-aliases — `resolved`, `not fixed`, `not_fixed`, `remains open`, `unresolved`,
+aliases - `resolved`, `not fixed`, `not_fixed`, `remains open`, `unresolved`,
 `fixed in review`). Nothing else parses. With exactly one prior finding the
 ordinal may be omitted (`Prior finding: fixed`).
 
@@ -146,7 +161,7 @@ the per-finding lines:
 Prior findings: all fixed
 ```
 
-The aggregate must consume its whole line — a qualified variant
+The aggregate must consume its whole line - a qualified variant
 (`… all fixed except finding #2`) is recognized-but-invalid rather than a sweep,
 because sweeping there would mark the very finding the reviewer excluded as
 fixed. Any per-finding record present **disables** the aggregate entirely
@@ -163,7 +178,7 @@ instead.
 **An unrepeated `not_fixed` does not survive the round.** A carried item at
 `not_fixed` reverts to `open` before the round's own records apply, so a
 `not-fixed` stated once and then not restated cannot look like a repeat.
-`fixed` and `withdrawn` are preserved — they are resolved terminals. This is what
+`fixed` and `withdrawn` are preserved - they are resolved terminals. This is what
 makes the surviving stall rule (`same-not-fixed-lineage`) a statement about two
 consecutive rounds rather than an echo of one.
 
@@ -231,8 +246,8 @@ semantically incomplete stale sibling does not invalidate it. That tip's item
 status is current. A supported receipt bound to another
 `headSha` is stale evidence: retain and label it, but do not use it as current
 resolution, approval, or ship state. A stale sibling tip does not invalidate
-the one head-matching tip. Zero or multiple head-matching tips means “no
-unambiguous current structured findings,” never “no findings.”
+the one head-matching tip. Zero or multiple head-matching tips means "no
+unambiguous current structured findings," never "no findings."
 
 Receipt verdict remains the workflow gate. The `findings` projection explains
 the finding stream; it does not independently grant `SHIP`.
@@ -253,7 +268,7 @@ the finding stream; it does not independently grant `SHIP`.
 | Item suggestion | 4,000 characters |
 
 R-IDs must use `R<digits>`. IDs and ordinals must be unique. `round` and
-`ordinal` are positive JSON integers—booleans do not qualify—and a root
+`ordinal` are positive JSON integers - booleans do not qualify - and a root
 generation without `supersedesReceiptId` must use round 1. Anchor paths must be
 normalized repository-relative paths without `..` traversal. Ranges use
 positive integer lines. On a snapshot-bound anchor, `endLine` must be greater
@@ -270,12 +285,12 @@ the rendered prior-finding block to `cursor-agent`'s argv cap and stopped emitti
 items once the budget ran out. A reviewer shown a SUBSET of its own prior findings
 can truthfully answer `Prior findings: all fixed` for everything it saw, and
 sweeping the untruncated container then marked omitted, unverified findings
-`fixed` — a false SHIP. The interim guard that withheld the aggregate sweep on
+`fixed` - a false SHIP. The interim guard that withheld the aggregate sweep on
 truncating backends is gone with the truncation itself: every backend now renders
 every prior item, so the aggregate is sound by construction on all of them. The
 bounds above remain *rejection* boundaries, which is a different thing entirely.
 
-A resumed re-review carries no rendered items at all — the reviewer holds them in
+A resumed re-review carries no rendered items at all - the reviewer holds them in
 its own session and answers the same per-ordinal grammar from memory of its own
 findings, verified against the current code on disk. Prior findings are the one
 payload with no identity to pass instead: they live in the receipt, not the tree,
@@ -334,7 +349,7 @@ standing global criteria in `.flow/criteria.md` (see
 
 Routing is expressed as intent in prose, so it is best-effort by nature. The
 receipt surfaces therefore record which model *actually executed* a stage,
-wherever the harness exposes that fact — recording only: nothing prescribes a
+wherever the harness exposes that fact - recording only: nothing prescribes a
 model, and nothing fails because a stage went unrecorded.
 
 Three places carry it, all optional and all additive:
@@ -348,19 +363,19 @@ Three places carry it, all optional and all additive:
 One rule governs all three: **an absent value means unknown, never the
 configured or preferred model.** A preference is not an observation, so a
 selector placeholder (`auto`, `default`, a literal `unknown`) records no value
-at all — a ladder floor and an unrouted stage are both honestly unknown.
+at all - a ladder floor and an unrouted stage are both honestly unknown.
 
 `flowctl usage --stages <spec-id>` aggregates the result: every counted stage
 gets a `models` tally (stage-line observations) and a separate `receipt_models`
 tally (receipt observations), keys being the observed models plus `unknown`.
-The two stay separate for the same reason `ran` and `receipts` do — a receipt
+The two stay separate for the same reason `ran` and `receipts` do - a receipt
 is the same review a prose line may already describe, and merging them would
 make a fully receipt-observed review read as half unknown. Together they are
 the after-the-fact check on prose routing.
 
 Consumers read this provenance for reporting only. It is optional metadata on
 records that already existed; no consumer may branch on it, require it, or
-treat its absence as a failure — a receipt without a `model` is exactly as
+treat its absence as a failure - a receipt without a `model` is exactly as
 valid as one carrying it.
 
 ## Memory relationship
@@ -395,8 +410,8 @@ Consumers should therefore:
 
 ## See also
 
-- [`architecture.md`](architecture.md) — receipt and history locations.
-- [`memory-schema.md`](memory-schema.md) — durable learning lifecycle.
-- [`spec-template.md`](spec-template.md) — confidence and classification rules.
-- [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) — canonical Receipt and
+- [`architecture.md`](architecture.md) - receipt and history locations.
+- [`memory-schema.md`](memory-schema.md) - durable learning lifecycle.
+- [`spec-template.md`](spec-template.md) - confidence and classification rules.
+- [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) - canonical Receipt and
   Structured finding terms.

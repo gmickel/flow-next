@@ -3,7 +3,22 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-The canonical spec scaffold lives at [`../templates/spec.md`](../../templates/spec.md). This doc covers the **rules** that surround it — R-ID semantics, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, and the 3-tier template discovery cascade — not the section list itself (R17: cross-link, never re-embed).
+The canonical spec scaffold lives at [`../templates/spec.md`](../../templates/spec.md). This doc covers the **rules** that surround it - R-ID semantics, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, and the 3-tier template discovery cascade - not the section list itself (R17: cross-link, never re-embed).
+
+## Contents
+
+- [Canonical scaffold](#canonical-scaffold)
+- [3-tier discovery cascade](#3-tier-discovery-cascade)
+- [Customizing the scaffold for your project](#customizing-the-scaffold-for-your-project)
+- [Durability: contracts, not coordinates](#durability-contracts-not-coordinates)
+- [Parked unknowns: the optional fog slot](#parked-unknowns-the-optional-fog-slot)
+- [Acceptance criteria: R-ID rules](#acceptance-criteria-r-id-rules)
+- [Confidence anchors (0 / 25 / 50 / 75 / 100)](#confidence-anchors-0-25-50-75-100)
+- [Introduced vs pre-existing](#introduced-vs-pre-existing)
+- [Protected artifacts](#protected-artifacts)
+- [Trivial-diff skip](#trivial-diff-skip)
+- [Receipt schema (additive only)](#receipt-schema-additive-only)
+- [See also](#see-also)
 
 ## Canonical scaffold
 
@@ -22,9 +37,9 @@ The template is consumed by:
 
 When a skill needs the spec template, it walks three locations in order (first match wins):
 
-1. `<repo_root>/SPEC.md` — your customized scaffold (uppercase preferred)
-2. `<repo_root>/spec.md` — lowercase honored when uppercase absent
-3. `${PLUGIN_ROOT}/templates/spec.md` — bundled (canonical source of truth)
+1. `<repo_root>/SPEC.md` - your customized scaffold (uppercase preferred)
+2. `<repo_root>/spec.md` - lowercase honored when uppercase absent
+3. `${PLUGIN_ROOT}/templates/spec.md` - bundled (canonical source of truth)
 
 Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../../references/spec-template-discovery.md).
 
@@ -95,7 +110,7 @@ Keep R-ID bullets in the canonical form - `- **R1:** <criterion>` - with optiona
 
 The other three canonical sections (`Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`) are technical-scope write targets. Removing them is survivable, but the technical interview pass will have fewer places to put what it learns.
 
-### Custom sections and the interview passes - use the scope marker
+### Custom sections and the interview passes: use the scope marker
 
 `flowctl scope write-policy` enumerates the seven canonical sections only, so a section you added appears in neither its `writable` nor its `preserved` list. Ownership of a project-added section therefore comes from **the section's own scope-owner marker in the spec body**, and the interview passes apply a three-way rule:
 
@@ -115,7 +130,7 @@ Two consequences worth knowing:
 
 `capture` and `plan` seed from the template directly and have no such caveat.
 
-### Worked example - adding user stories
+### Worked example: adding user stories
 
 ```markdown
 ## Goal & Context
@@ -139,15 +154,15 @@ Canonical headings untouched, one section added, scope marker set so the busines
 
 We benchmarked adding user-story and test-seam sections to the bundled scaffold. A first pass looked positive; a pre-registered replication did not hold up, and the larger scaffold cost roughly a third more spec length - paid on every downstream read by every worker and reviewer. So the default stays lean and the override stays available. Section preferences are project-specific and the cascade is the right place to express them.
 
-## Durability — contracts, not coordinates
+## Durability: contracts, not coordinates
 
-**A spec states contracts: types, signatures, behaviors, invariants.** It does not state file paths or line numbers. Coordinates rot on the first refactor, and a spec full of rotted coordinates is what turns plan-sync into churn — every downstream task spec gets rewritten because a file moved, not because anything was decided differently.
+**A spec states contracts: types, signatures, behaviors, invariants.** It does not state file paths or line numbers. Coordinates rot on the first refactor, and a spec full of rotted coordinates is what turns plan-sync into churn - every downstream task spec gets rewritten because a file moved, not because anything was decided differently.
 
-One carved exception: **a decision-rich snippet whose exact location is the decision** — the case where "here, not there" is the content, and a reader who lands anywhere else has misread the spec. Name the location then, and only then.
+One carved exception: **a decision-rich snippet whose exact location is the decision** - the case where "here, not there" is the content, and a reader who lands anywhere else has misread the spec. Name the location then, and only then.
 
-**Tasks are exempt and unchanged.** `**Files:**` / `**Touches:**` are a task's job under the task-shape doctrine: a task is a work order pointed at a place, and pointing at the place is the point. The boundary is the artifact, not the topic — the same repo, the same feature, one rule for specs and another for the tasks under them.
+**Tasks are exempt and unchanged.** `**Files:**` / `**Touches:**` are a task's job under the task-shape doctrine: a task is a work order pointed at a place, and pointing at the place is the point. The boundary is the artifact, not the topic - the same repo, the same feature, one rule for specs and another for the tasks under them.
 
-## Parked unknowns — the optional fog slot
+## Parked unknowns: the optional fog slot
 
 `## Parked unknowns` is an optional auxiliary section. It holds what the spec genuinely does not know yet, one bullet per item, so fog is visible instead of dressed up as a decision.
 
@@ -155,11 +170,11 @@ Each bullet must pass the **fog-or-ticket test**:
 
 - **Decidable now** → decide it. It belongs in the canonical section that owns it, not here.
 - **Resolvable by scheduled work** → make it a task or a ticket. A known unknown with a known way to find out is work, not fog.
-- **Genuinely unknown** — needs a decision nobody has made, an experiment nobody has run, or an answer from outside the repo — → park it here in one line, naming what would resolve it.
+- **Genuinely unknown** - needs a decision nobody has made, an experiment nobody has run, or an answer from outside the repo - → park it here in one line, naming what would resolve it.
 
-**Graduate-on-resolution.** When an interview or plan resolves a parked item, the answer moves into the section that owns it and the bullet is deleted from `## Parked unknowns`. A bullet that outlives its own answer reads as an open question on a spec that has in fact closed it — the failure this section exists to prevent. An empty section is omitted, never left as a heading.
+**Graduate-on-resolution.** When an interview or plan resolves a parked item, the answer moves into the section that owns it and the bullet is deleted from `## Parked unknowns`. A bullet that outlives its own answer reads as an open question on a spec that has in fact closed it - the failure this section exists to prevent. An empty section is omitted, never left as a heading.
 
-## Acceptance criteria — R-ID rules
+## Acceptance criteria: R-ID rules
 
 R-IDs are numbered acceptance criteria written as `**R1:** ...`, `**R2:** ...` in plain markdown prose under the `## Acceptance Criteria` section (the canonical section name; the scaffold heading is the authoritative source).
 
@@ -180,7 +195,7 @@ satisfies: [R1, R3]
 
 Rules:
 
-- Plain markdown prose, not YAML — keeps specs human-editable.
+- Plain markdown prose, not YAML - keeps specs human-editable.
 - **Renumber-forbidden** after the first review cycle. Deletions leave gaps (`R1, R3, R5` stays that way); new criteria take the next unused number.
 - **Append-only across passes.** A `--scope=technical` pass cannot rewrite or renumber R-IDs added by an earlier `--scope=business` pass; it appends new criteria with the next unused number.
 - Plan skill writes R-IDs on creation; plan-sync preserves them through drift updates.
@@ -189,9 +204,9 @@ Rules:
 
 ### Error-case enumeration (negative-cases discipline)
 
-Every behavioral R-ID must make its failure surface visible — either by naming the error / invalid-input / boundary cases *inside that bullet*, or by an explicit one-liner that there is none beyond a named parent. Silence is incomplete; a declared "none" is complete.
+Every behavioral R-ID must make its failure surface visible - either by naming the error / invalid-input / boundary cases *inside that bullet*, or by an explicit one-liner that there is none beyond a named parent. Silence is incomplete; a declared "none" is complete.
 
-**What counts as an enumeration.** Per criterion, name the cases the implementation must handle (or deliberately refuse): malformed input, missing files/resources, conflicting state, limits (size, rate, concurrency), and any other boundary the criterion creates. Write them as sub-clauses or sub-bullets under the parent R-ID — **not** as new sub-R-IDs and **not** as a new coverage-table column. Letter-suffix siblings (`R4a`, `R4b`) remain for genuinely separable criteria, unchanged.
+**What counts as an enumeration.** Per criterion, name the cases the implementation must handle (or deliberately refuse): malformed input, missing files/resources, conflicting state, limits (size, rate, concurrency), and any other boundary the criterion creates. Write them as sub-clauses or sub-bullets under the parent R-ID - **not** as new sub-R-IDs and **not** as a new coverage-table column. Letter-suffix siblings (`R4a`, `R4b`) remain for genuinely separable criteria, unchanged.
 
 ```markdown
 - **R1:** Parse config file into typed settings. Errors: malformed JSON → clear
@@ -199,11 +214,11 @@ Every behavioral R-ID must make its failure surface visible — either by naming
 - **R2:** Settings object is frozen after load (no error surface beyond R1).
 ```
 
-**Why ("considered" vs "forgot").** A persisted regression suite entrenches blind spots as faithfully as knowledge — "all tests pass" every session actively signals nothing-to-fix for cases nobody enumerated. Plan-time enumeration is the cheap fix: plan-review's fresh eyes can see an R-ID with neither error clauses nor a no-error-surface line as incomplete, without new review-stage machinery. The discipline exists so a reader can tell *considered and ruled out* from *forgot*.
+**Why ("considered" vs "forgot").** A persisted regression suite entrenches blind spots as faithfully as knowledge - "all tests pass" every session actively signals nothing-to-fix for cases nobody enumerated. Plan-time enumeration is the cheap fix: plan-review's fresh eyes can see an R-ID with neither error clauses nor a no-error-surface line as incomplete, without new review-stage machinery. The discipline exists so a reader can tell *considered and ruled out* from *forgot*.
 
-**G-ID interplay.** Standing error-handling criteria in `.flow/criteria.md` (e.g. "every CLI exits non-zero on user error") are **referenced by G-ID, never restated** as R-ID prose. The error discipline applies only to what the spec *adds* — its own R-IDs — the same non-restatement rule as the rest of the G-ID system. Mid-flight specs written before this discipline exist with no enumerated error cases: the work-stage test-tie scopes to "error cases enumerated in the ACs", so an empty set triggers nothing (not retroactive).
+**G-ID interplay.** Standing error-handling criteria in `.flow/criteria.md` (e.g. "every CLI exits non-zero on user error") are **referenced by G-ID, never restated** as R-ID prose. The error discipline applies only to what the spec *adds* - its own R-IDs - the same non-restatement rule as the rest of the G-ID system. Mid-flight specs written before this discipline exist with no enumerated error cases: the work-stage test-tie scopes to "error cases enumerated in the ACs", so an empty set triggers nothing (not retroactive).
 
-### Global criteria (G-IDs) - the same grammar at project scope
+### Global criteria (G-IDs): the same grammar at project scope
 
 Some acceptance criteria are not about one spec - "every route change regenerates the API contract", "no new dependency without a health check". Those live in an optional, user-owned `.flow/criteria.md` as **G-IDs**: the R-ID grammar with a `G` prefix, one line-anchored bullet per criterion:
 
@@ -222,7 +237,7 @@ The rules mirror R-IDs where they apply:
 
 `/flow-next:setup` offers to scaffold the file (opt-in; declining leaves no trace). See [`review-findings.md`](review-findings.md) § Global-criteria compliance for the receipt field, and [`flowctl.md`](flowctl.md) § criteria for the CLI.
 
-### Source tags - what you said vs what the agent inferred
+### Source tags: what you said vs what the agent inferred
 
 `/flow-next:capture` **and** `/flow-next:interview` tag every acceptance criterion they write at source: `[user]` (the human's words - the PO under a business pass, the tech lead under a technical one), `[paraphrase]` (that meaning, tightened), `[inferred]` (the agent's own inference), plus `[strategy:<track>]` when a criterion traces to a STRATEGY.md track. The tag is a trailing token on the bullet:
 
@@ -276,7 +291,7 @@ Reviewers score every finding on exactly five discrete values:
 | Anchor | Meaning |
 |--------|---------|
 | 100 | Verifiable from code alone, zero interpretation. |
-| 75 | Full execution path traced — input → branch → wrong output. |
+| 75 | Full execution path traced - input → branch → wrong output. |
 | 50 | Depends on conditions visible but not fully confirmable. |
 | 25 | Requires runtime conditions with no direct evidence. |
 | 0 | Speculative. |
@@ -287,17 +302,17 @@ Reviewers score every finding on exactly five discrete values:
 
 Each finding is classified:
 
-- `introduced: true` — caused by this branch's diff.
-- `pre_existing: true` — broken on the base branch.
+- `introduced: true` - caused by this branch's diff.
+- `pre_existing: true` - broken on the base branch.
 
 Verdict gate considers only `introduced` findings. Pre-existing issues surface in a separate non-blocking "Pre-existing issues" section. Receipt carries `introduced_count` + `pre_existing_count` so Ralph stops fighting bugs it didn't introduce.
 
 ## Protected artifacts
 
-Review prompts carry a hardcoded never-flag list — findings recommending deletion or gitignore of these paths are discarded during synthesis:
+Review prompts carry a hardcoded never-flag list - findings recommending deletion or gitignore of these paths are discarded during synthesis:
 
 - `.flow/*` (specs, tasks, memory, state)
-- `.flow/bin/*` (legacy flowctl copies — reviewers never advise deleting a user's committed files; removal is the user's own call at the setup / plan touchpoints)
+- `.flow/bin/*` (legacy flowctl copies - reviewers never advise deleting a user's committed files; removal is the user's own call at the setup / plan touchpoints)
 - `.flow/memory/*` (learnings store)
 - `docs/plans/*`, `docs/solutions/*` (when the project uses them)
 - `scripts/ralph/*` (Ralph harness)
@@ -334,7 +349,7 @@ All review receipts may carry these optional fields; existing consumers that rea
 
 ## See also
 
-- [`../templates/spec.md`](../../templates/spec.md) — the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
-- [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) — definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
-- [`../skills/flow-next-interview/SKILL.md`](../../skills/flow-next-interview/SKILL.md) — 3-tier discovery cascade walker.
-- [`flowctl.md`](flowctl.md) — `flowctl spec create / set-plan / export-cognitive-aid` reference.
+- [`../templates/spec.md`](../../templates/spec.md) - the canonical scaffold (section list, scope-owner annotations, flat-vs-substructured Decision Context).
+- [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) - definitions for *Spec*, *Task*, *R-ID*, *Frozen-at-handover*.
+- [`../skills/flow-next-interview/SKILL.md`](../../skills/flow-next-interview/SKILL.md) - 3-tier discovery cascade walker.
+- [`flowctl.md`](flowctl.md) - `flowctl spec create / set-plan / export-cognitive-aid` reference.

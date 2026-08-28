@@ -34,7 +34,7 @@ A workflow that walks files, makes per-item judgments, investigates code, compos
 
 **Do not spawn `codex`/`copilot`/other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one.
 
-**Implementation offload is prose-routed, not packaged (flow-98 decision).** The `work.delegate*` subsystem is gone: bridging implementation to a second CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) is a routing decision the host reads from the model-routing section in `CLAUDE.md` / `AGENTS.md` plus the bridge recipes in `flowctl usage`, and it is **host-orchestrated implementation-offload, never a judgment hand-off**: the bridged child writes code while the host keeps git, judgment, and the verdict. Nothing about that route licenses spawning an LLM for judgment from inside flowctl. See [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#implementation-offload--the-bridge-route).
+**Implementation offload is prose-routed, not packaged (flow-98 decision).** The `work.delegate*` subsystem is gone: bridging implementation to a second CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) is a routing decision the host reads from the model-routing section in `CLAUDE.md` / `AGENTS.md` plus the bridge recipes in `flowctl usage`, and it is **host-orchestrated implementation-offload, never a judgment hand-off**: the bridged child writes code while the host keeps git, judgment, and the verdict. Nothing about that route licenses spawning an LLM for judgment from inside flowctl. See [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#implementation-offload-the-bridge-route).
 
 ### When to use DETERMINISTIC flowctl Python
 
@@ -191,7 +191,7 @@ This project uses Flow-Next for ALL task tracking. `flowctl` comes from the flow
 
 _Scaffolded by `/flow-next:setup` as an example, then edited. This section is yours: the model ids are properties of your account and your harness, so keep them current against what your CLIs actually serve — ask a harness for its list rather than trusting this block._
 
-Grammar: `<tier>: <model>` or `<tier>: <model> at <effort>`. An absent tier means the session model; an unparseable line is ignored. Tier meanings: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants). How this harness reaches one: [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md).
+Grammar: `<tier>: <model>` or `<tier>: <model> at <effort>`. An absent tier means the session model; an unparseable line is ignored. Tier meanings: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants). How this harness reaches one: [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md).
 
 ```
 reviewer: gpt-5.6-sol at high

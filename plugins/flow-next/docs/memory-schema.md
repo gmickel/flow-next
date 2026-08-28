@@ -1,8 +1,27 @@
 # Memory System
 
-Persistent learnings that survive context compaction. Opt-in, categorized — v0.33.0+. One entry per file, YAML frontmatter, two tracks (`bug` / `knowledge`).
+Persistent learnings that survive context compaction. Opt-in, categorized - v0.33.0+. One entry per file, YAML frontmatter, two tracks (`bug` / `knowledge`).
 
-> **On by default, and droppable.** flow-next runs fully without this. The tree itself is nearly free — entries are written as a side effect of work already happening and read by search, never loaded wholesale; the layer with a price is the **audit sweep**, a pass over every entry judged against the current codebase. Leave memory on; run the sweep deliberately with `/flow-next:audit` after a refactor invalidates prior art, rather than on a schedule. See [`running-lean.md`](running-lean.md).
+> **On by default, and droppable.** flow-next runs fully without this. The tree itself is nearly free - entries are written as a side effect of work already happening and read by search, never loaded wholesale; the layer with a price is the **audit sweep**, a pass over every entry judged against the current codebase. Leave memory on; run the sweep deliberately with `/flow-next:audit` after a refactor invalidates prior art, rather than on a schedule. See [`running-lean.md`](running-lean.md).
+
+## Contents
+
+- [Directory tree](#directory-tree)
+- [Frontmatter schema (bug track)](#frontmatter-schema-bug-track)
+- [Frontmatter schema (knowledge track)](#frontmatter-schema-knowledge-track)
+- [Frontmatter schema (decisions: knowledge track, v0.39.0+)](#frontmatter-schema-decisions-knowledge-track-v0390)
+- [Declined scope: `.flow/memory/declined/`](#declined-scope-flowmemorydeclined)
+- [Enable + init](#enable-init)
+- [Add](#add)
+- [Query](#query)
+- [Entry status](#entry-status)
+- [Audit lifecycle (v0.37.0+)](#audit-lifecycle-v0370)
+- [Migrate legacy → categorized (v0.37.0+)](#migrate-legacy-categorized-v0370)
+- [Surface the store in AGENTS.md / CLAUDE.md](#surface-the-store-in-agentsmd-claudemd)
+- [When enabled](#when-enabled)
+- [Review findings are evidence, memory is learning](#review-findings-are-evidence-memory-is-learning)
+- [Upgrading from 0.32.x](#upgrading-from-032x)
+- [See also](#see-also)
 
 ## Directory tree
 
@@ -57,7 +76,7 @@ applies_when: writing Ralph loop scripts or review shims
 ---
 ```
 
-## Frontmatter schema (decisions — knowledge track, v0.39.0+)
+## Frontmatter schema (decisions: knowledge track, v0.39.0+)
 
 ```yaml
 ---
@@ -75,13 +94,13 @@ superseded_by: null                 # set when decision_status = superseded
 ---
 ```
 
-Decision body convention: 1–3 sentence floor describing trade-offs, irreversibility, and surprise factor. The three decision-specific fields (`decision_status`, `superseded_by`, `alternatives_considered`) are permitted on any knowledge entry but specifically intended for the `decisions/` subtree. Constants `MEMORY_DECISION_FIELDS` / `MEMORY_DECISION_STATUSES` (alongside `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_STATUS`).
+Decision body convention: 1-3 sentence floor describing trade-offs, irreversibility, and surprise factor. The three decision-specific fields (`decision_status`, `superseded_by`, `alternatives_considered`) are permitted on any knowledge entry but specifically intended for the `decisions/` subtree. Constants `MEMORY_DECISION_FIELDS` / `MEMORY_DECISION_STATUSES` (alongside `MEMORY_KNOWLEDGE_FIELDS` / `MEMORY_STATUS`).
 
-## Declined scope — `.flow/memory/declined/`
+## Declined scope: `.flow/memory/declined/`
 
-A ledger of scope the project decided **not** to build. One file per concept: `.flow/memory/declined/<concept-slug>.md`. It sits outside the two tracks — no frontmatter schema, no `flowctl memory` subcommand, no status lifecycle, and no dependence on `memory.enabled`; `memory init` does not create it and the audit sweep does not walk it. Agents write these files directly, the same way they write any memory prose, creating the directory on the first refusal. A repo that never declined anything has no directory, and every read site treats that as "nothing declined" and moves on.
+A ledger of scope the project decided **not** to build. One file per concept: `.flow/memory/declined/<concept-slug>.md`. It sits outside the two tracks - no frontmatter schema, no `flowctl memory` subcommand, no status lifecycle, and no dependence on `memory.enabled`; `memory init` does not create it and the audit sweep does not walk it. Agents write these files directly, the same way they write any memory prose, creating the directory on the first refusal. A repo that never declined anything has no directory, and every read site treats that as "nothing declined" and moves on.
 
-**The write filter is a policy refusal.** A file is created the first time a feature or scope is declined **as a matter of product judgment** — we could build this, and we are choosing not to. Plan's YAGNI rejections that are policy-level, an interview decline, and a spec closed as won't-do are the three moments that qualify.
+**The write filter is a policy refusal.** A file is created the first time a feature or scope is declined **as a matter of product judgment** - we could build this, and we are choosing not to. Plan's YAGNI rejections that are policy-level, an interview decline, and a spec closed as won't-do are the three moments that qualify.
 
 **Anti-poisoning rule: never write a file for "declined because it already exists."** A request answered by pointing at the shipped feature is not a refusal, and recording it as one teaches every future planner that a capability the repo *has* is scope the repo *rejected*. Same for "declined because it's already planned", "declined because it belongs in another spec", and "declined because the request was a misunderstanding". The ledger holds product judgment, nothing else.
 
@@ -101,7 +120,7 @@ has hit yet.
 - 2026-07-19 — raised again in the fn-88 interview (nightly archive).
 ```
 
-**The file is the recurrence state.** `## Prior requests` is a dated append-list, and nothing else tracks how often the concept comes back — three entries under one decision is the signal that the decision deserves a fresh look, and it is visible by reading the file. Appending a request never reopens the decision on its own; only the user does that.
+**The file is the recurrence state.** `## Prior requests` is a dated append-list, and nothing else tracks how often the concept comes back - three entries under one decision is the signal that the decision deserves a fresh look, and it is visible by reading the file. Appending a request never reopens the decision on its own; only the user does that.
 
 ## Enable + init
 
@@ -131,7 +150,7 @@ flowctl memory add \
 
 `--type pitfall|convention|decision` (the old API) still works but emits a deprecation warning. Removed in 0.36.0.
 
-**Overlap scoring** runs on every `add` and the JSON response always emits `matches` (with scores) as a retrieval signal. `memory add` **always creates** a new entry unless the caller passes explicit `--update <id>` (fn-113 — flowctl never auto-mutates on high overlap). Moderate overlap may set `related_to: [existing-id]` on the new entry. Callers (skills) read `matches` and either re-run with `--update <id>` or accept the create.
+**Overlap scoring** runs on every `add` and the JSON response always emits `matches` (with scores) as a retrieval signal. `memory add` **always creates** a new entry unless the caller passes explicit `--update <id>` (fn-113 - flowctl never auto-mutates on high overlap). Moderate overlap may set `related_to: [existing-id]` on the new entry. Callers (skills) read `matches` and either re-run with `--update <id>` or accept the create.
 
 ## Query
 
@@ -162,44 +181,44 @@ Search scoring is weighted: title 5×, tags 3×, body 1.5×, misc 1×. Legacy hi
 
 ## Entry status
 
-Every entry carries an implicit `status`. The field is optional in frontmatter — its absence means `active`, so a plain entry never writes it.
+Every entry carries an implicit `status`. The field is optional in frontmatter - its absence means `active`, so a plain entry never writes it.
 
 | Status | Meaning | Set by | Companion fields written | Companion fields cleared |
 |--------|---------|--------|--------------------------|--------------------------|
 | `active` (default) | The lesson is live and re-injected as context | `mark-fresh` (drops the `status` key entirely) | `last_audited`; `audit_notes` only with `--audited-by` | `stale_reason`, `stale_date`, `hardened_into`, `audit_notes` |
 | `stale` | Audit flagged the advice as no longer accurate | `mark-stale` | `last_audited`, `audit_notes` (from `--reason`) | `hardened_into` |
-| `hardened` (fn-122) | The lesson graduated into an enforced gate — lint rule, CI step, or instruction-file rule | `mark-hardened` | `hardened_into` (from `--gate-ref`), `last_audited`; `audit_notes` only with `--audited-by` | `stale_reason`, `stale_date` |
+| `hardened` | The lesson graduated into an enforced gate - lint rule, CI step, or instruction-file rule | `mark-hardened` | `hardened_into` (from `--gate-ref`), `last_audited`; `audit_notes` only with `--audited-by` | `stale_reason`, `stale_date` |
 
-**Validation is enum-only.** `validate_memory_frontmatter` checks that `status` is one of `active | stale | hardened` and that unknown keys are rejected; it does **not** require any companion field for a given status. The column above describes what the `mark-*` handlers write and clear, which is the contract that matters in practice — a hand-edited entry carrying `status: stale` with no `stale_reason` still validates.
+**Validation is enum-only.** `validate_memory_frontmatter` checks that `status` is one of `active | stale | hardened` and that unknown keys are rejected; it does **not** require any companion field for a given status. The column above describes what the `mark-*` handlers write and clear, which is the contract that matters in practice - a hand-edited entry carrying `status: stale` with no `stale_reason` still validates.
 
 `stale_reason` / `stale_date` are legal optional fields that flowctl's own `mark-stale` does not currently populate (it records the reason in `audit_notes` instead); they exist for hand-written and older entries, and the handlers clear them on any transition out of `stale`.
 
-`hardened` is **not** a weaker `stale`: the lesson is more alive than before, just relocated out of the context window and into something that fires on its own. The entry file stays on disk with its body intact so provenance survives — "why does this lint rule exist?" stays answerable.
+`hardened` is **not** a weaker `stale`: the lesson is more alive than before, just relocated out of the context window and into something that fires on its own. The entry file stays on disk with its body intact so provenance survives - "why does this lint rule exist?" stays answerable.
 
 Optional frontmatter fields that carry status: `status`, `stale_reason`, `stale_date`, `hardened_into`, `last_audited`, `audit_notes`.
 
 `hardened_into` is stored **verbatim**; flowctl validates only that `--gate-ref` is non-empty at the CLI boundary. The skill-side convention is `<path>#<rule-id> -- <note>`, e.g. `pyproject.toml#DTZ -- ruff select entry, bans naive datetimes`. Parsing that convention is judgment and stays in `/flow-next:audit`, not in flowctl.
 
-Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other** statuses' companion fields, not just its own — no field from the prior status survives a transition. `stale → hardened` and `hardened → stale` are both legal; `mark-fresh` returns any status to `active` and drops both families.
+Every mutation (`mark-stale`, `mark-fresh`, `mark-hardened`) clears the **other** statuses' companion fields, not just its own - no field from the prior status survives a transition. `stale → hardened` and `hardened → stale` are both legal; `mark-fresh` returns any status to `active` and drops both families.
 
 ### Cross-version behavior (honest contract)
 
 `validate_memory_frontmatter` runs **only inside `write_memory_entry`** (`flowctl.py`, the single call site). Reads never validate. So against an older flowctl that predates `hardened`:
 
-- **Reads pass through silently.** The old binary parses a `hardened` entry without complaint, and because its default status filter excludes only `stale`, it will **surface** that entry in default `memory list` / `memory search` / `memory-scout` results — the opposite of the intended exclusion. The failure mode is misclassification, not rejection.
+- **Reads pass through silently.** The old binary parses a `hardened` entry without complaint, and because its default status filter excludes only `stale`, it will **surface** that entry in default `memory list` / `memory search` / `memory-scout` results - the opposite of the intended exclusion. The failure mode is misclassification, not rejection.
 - **Writes are refused, loudly.** Any attempt by that older flowctl to rewrite the entry (`mark-stale`, `mark-fresh`, `memory add --update`) fails validation on the unknown `hardened` status value and the unknown `hardened_into` field. The write aborts with an error; nothing is silently corrupted on disk.
 
-**Mitigation is upgrade, not a shim.** There is one flowctl — `plugins/flow-next/scripts/flowctl.py`, shipped with the plugin and never copied into a repo — so a reader that predates an enum extension is simply an out-of-date plugin install, fixed by updating it. No compatibility shim exists or is planned: an enum extension cannot retroactively teach an old reader anything, and a second signalling mechanism would be cost without benefit.
+**Mitigation is upgrade, not a shim.** There is one flowctl - `plugins/flow-next/scripts/flowctl.py`, shipped with the plugin and never copied into a repo - so a reader that predates an enum extension is simply an out-of-date plugin install, fixed by updating it. No compatibility shim exists or is planned: an enum extension cannot retroactively teach an old reader anything, and a second signalling mechanism would be cost without benefit.
 
 ## Audit lifecycle (v0.37.0+)
 
-`/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete / Harden**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native — host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
+`/flow-next:audit [mode:autofix] [scope hint]` walks `.flow/memory/`, reviews each entry against the current codebase, and decides per entry whether to **Keep / Update / Consolidate / Replace / Delete / Harden**. Interactive mode (default) asks via the platform's blocking-question tool; autofix mode applies unambiguous actions and marks ambiguous entries as stale. The skill is agent-native - host agent reads the workflow markdown and executes it directly using its own Read/Grep/Glob tools (no Python audit engine, no codex/copilot subprocess dispatch). Legacy flat files are skipped with a warning.
 
-**Audit extensions (v0.39.0+):** Phase 0.5 (new) reads every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?). Phase 0.1 (extended) auto-walks `knowledge/decisions/` alongside other categories. **Replace outcomes for decision entries are supersede-not-delete** — the audit writes a new entry with `decision_status: accepted` and sets the old entry's `decision_status: superseded` + `superseded_by: <new-id>`, preserving the historical trail. Other categories keep the existing Replace semantics.
+**Audit extensions (v0.39.0+):** Phase 0.5 (new) reads every `GLOSSARY.md` on the ancestor chain and audits each term against the current code (any references intact? renamed? gone?). Phase 0.1 (extended) auto-walks `knowledge/decisions/` alongside other categories. **Replace outcomes for decision entries are supersede-not-delete** - the audit writes a new entry with `decision_status: accepted` and sets the old entry's `decision_status: superseded` + `superseded_by: <new-id>`, preserving the historical trail. Other categories keep the existing Replace semantics.
 
-**Harden (fn-122):** the sixth outcome. When an entry is correct **and** recurring (re-taught across runs — measured from `## Update` heading count and entry-file commit count, since no read-side usage telemetry exists) **and** mechanizable, the audit proposes graduating it into an enforced gate: a lint rule, a CI step, or a rule in the substantive `CLAUDE.md` / `AGENTS.md`. The gate is **verified live** before the lesson is retired (resolved lint config, a job that actually runs, the instruction file agents really read); verification failure leaves the entry `active` and reports a failed graduation. Only on success is the entry demoted via `flowctl memory mark-hardened`, keeping the file on disk as a pointer at the gate. Harden never auto-applies in `mode:autofix` — candidates are reported under Recommended only, because gate surfaces are shared repo infrastructure. Precedence when an entry qualifies for several outcomes: **correctness (Replace / Delete) > Consolidate > Harden** — a wrong lesson is never graduated, and a `related_to` cluster is merged first, since the cluster (not each member) is the Harden unit.
+**Harden (fn-122):** the sixth outcome. When an entry is correct **and** recurring (re-taught across runs - measured from `## Update` heading count and entry-file commit count, since no read-side usage telemetry exists) **and** mechanizable, the audit proposes graduating it into an enforced gate: a lint rule, a CI step, or a rule in the substantive `CLAUDE.md` / `AGENTS.md`. The gate is **verified live** before the lesson is retired (resolved lint config, a job that actually runs, the instruction file agents really read); verification failure leaves the entry `active` and reports a failed graduation. Only on success is the entry demoted via `flowctl memory mark-hardened`, keeping the file on disk as a pointer at the gate. Harden never auto-applies in `mode:autofix` - candidates are reported under Recommended only, because gate surfaces are shared repo infrastructure. Precedence when an entry qualifies for several outcomes: **correctness (Replace / Delete) > Consolidate > Harden** - a wrong lesson is never graduated, and a `related_to` cluster is merged first, since the cluster (not each member) is the Harden unit.
 
-**Un-graduation:** on later audit runs, each hardened entry gets a gate-liveness check against the surface named by `hardened_into`. Gate still present → the entry is reported as still-hardened and not re-investigated in full. Gate gone or inactive → the audit proposes `flowctl memory mark-fresh <id>`, which returns the entry to `active` and drops `hardened_into` so the lesson re-enters the context window. A gate upgrade (instruction-file rule promoted to a lint rule) is just another `mark-hardened` — idempotent, replaces `hardened_into`.
+**Un-graduation:** on later audit runs, each hardened entry gets a gate-liveness check against the surface named by `hardened_into`. Gate still present → the entry is reported as still-hardened and not re-investigated in full. Gate gone or inactive → the audit proposes `flowctl memory mark-fresh <id>`, which returns the entry to `active` and drops `hardened_into` so the lesson re-enters the context window. A gate upgrade (instruction-file rule promoted to a lint rule) is just another `mark-hardened` - idempotent, replaces `hardened_into`.
 
 Three flowctl helpers back the audit lifecycle (also callable directly):
 
@@ -218,15 +237,15 @@ flowctl memory mark-hardened <id> \
 flowctl memory mark-fresh <id>
 ```
 
-`mark-stale` sets `status: stale`, stamps `last_audited` (UTC date), records `audit_notes` from `--reason`, and drops any `hardened_into`. Body is never modified. Idempotent — re-marking replaces `audit_notes` and re-stamps the date.
+`mark-stale` sets `status: stale`, stamps `last_audited` (UTC date), records `audit_notes` from `--reason`, and drops any `hardened_into`. Body is never modified. Idempotent - re-marking replaces `audit_notes` and re-stamps the date.
 
-`mark-hardened` sets `status: hardened` and `hardened_into` (from the required `--gate-ref`, stored verbatim), stamps `last_audited`, clears the stale-only fields, and records `audit_notes` when `--audited-by` is given. Body untouched; the file is never removed, on any track — including `knowledge/decisions/`, where supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status. Idempotent: re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable on that field).
+`mark-hardened` sets `status: hardened` and `hardened_into` (from the required `--gate-ref`, stored verbatim), stamps `last_audited`, clears the stale-only fields, and records `audit_notes` when `--audited-by` is given. Body untouched; the file is never removed, on any track - including `knowledge/decisions/`, where supersession fields (`decision_status`, `superseded_by`, `alternatives_considered`) are preserved alongside the new status. Idempotent: re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable on that field).
 
-`mark-fresh` returns the entry to `active` — it drops `status`, `stale_reason`, `stale_date`, `hardened_into`, and `audit_notes`, then stamps `last_audited`. It is both the un-stale and the un-graduation escape hatch.
+`mark-fresh` returns the entry to `active` - it drops `status`, `stale_reason`, `stale_date`, `hardened_into`, and `audit_notes`, then stamps `last_audited`. It is both the un-stale and the un-graduation escape hatch.
 
 ## Migrate legacy → categorized (v0.37.0+)
 
-`/flow-next:memory-migrate [mode:autofix] [scope hint]` is the recommended path. Agent-native skill — host agent reads each legacy entry, classifies it into the right `(track, category)` pair using its own intelligence + repo context, writes a categorized entry via `flowctl memory add`. Interactive mode (default) asks via the platform's blocking-question tool on ambiguous entries; autofix mode accepts mechanical defaults and logs ambiguous as `needs-review`. Optional scope hint narrows to a single legacy file (e.g. `/flow-next:memory-migrate pitfalls.md`). Phase 4 cleanup writes a self-ignoring `.flow/memory/_migrated/.gitignore` and renames originals on user consent (autofix declines by default; never auto-deletes).
+`/flow-next:memory-migrate [mode:autofix] [scope hint]` is the recommended path. Agent-native skill - host agent reads each legacy entry, classifies it into the right `(track, category)` pair using its own intelligence + repo context, writes a categorized entry via `flowctl memory add`. Interactive mode (default) asks via the platform's blocking-question tool on ambiguous entries; autofix mode accepts mechanical defaults and logs ambiguous as `needs-review`. Optional scope hint narrows to a single legacy file (e.g. `/flow-next:memory-migrate pitfalls.md`). Phase 4 cleanup writes a self-ignoring `.flow/memory/_migrated/.gitignore` and renames originals on user consent (autofix declines by default; never auto-deletes).
 
 ```bash
 flowctl memory list-legacy            # text mode: filename + entry count + mechanical default per entry
@@ -242,9 +261,9 @@ flowctl memory migrate --dry-run      # print plan (mechanical-only)
 flowctl memory migrate --yes          # apply (mechanical-only)
 ```
 
-`flowctl memory migrate` is **deterministic-only** since v0.37.0 — uses the mechanical filename → `(track, category)` heuristic. The `--no-llm` flag is accepted-but-noop (kept for back-compat with scripted callers). For accurate per-entry classification, run the `/flow-next:memory-migrate` skill instead.
+`flowctl memory migrate` is **deterministic-only** since v0.37.0 - uses the mechanical filename → `(track, category)` heuristic. The `--no-llm` flag is accepted-but-noop (kept for back-compat with scripted callers). For accurate per-entry classification, run the `/flow-next:memory-migrate` skill instead.
 
-`migrate` is idempotent — re-running after legacy files are archived prints `No legacy files to migrate.` JSON mode refuses writes without `--yes` as a safety guard.
+`migrate` is idempotent - re-running after legacy files are archived prints `No legacy files to migrate.` JSON mode refuses writes without `--yes` as a safety guard.
 
 > **Removed in v0.37.0:** `FLOW_MEMORY_CLASSIFIER_BACKEND`, `FLOW_MEMORY_CLASSIFIER_MODEL`, `FLOW_MEMORY_CLASSIFIER_EFFORT` env vars are no longer consumed (subprocess classifier dispatch removed). Setting them now triggers a one-time stderr warning. Suppress via `FLOW_NO_DEPRECATION=1`.
 
@@ -296,9 +315,9 @@ Until migration runs, legacy flat files continue to work; `list` / `read` / `sea
 
 ## See also
 
-- [`architecture.md`](architecture.md) — `.flow/` directory layout including the `memory/` tree.
-- [`review-findings.md`](review-findings.md) — structured receipt identity,
+- [`architecture.md`](architecture.md) - `.flow/` directory layout including the `memory/` tree.
+- [`review-findings.md`](review-findings.md) - structured receipt identity,
   currentness, bounds, fallback, and the consumer boundary with memory.
-- [`glossary.md`](glossary.md) — pairs naturally with the `knowledge/decisions/` subtree (terminology + load-bearing choices).
-- [`strategy.md`](strategy.md) — `/flow-next:capture` source-tags strategy-derived AC as `[strategy:<track>]`; decisions are recorded via memory when capture refuses to write against an active track.
-- [`flowctl.md`](flowctl.md) — full `flowctl memory` reference (every subcommand, flag, JSON shape).
+- [`glossary.md`](glossary.md) - pairs naturally with the `knowledge/decisions/` subtree (terminology + load-bearing choices).
+- [`strategy.md`](strategy.md) - `/flow-next:capture` source-tags strategy-derived AC as `[strategy:<track>]`; decisions are recorded via memory when capture refuses to write against an active track.
+- [`flowctl.md`](flowctl.md) - full `flowctl memory` reference (every subcommand, flag, JSON shape).
