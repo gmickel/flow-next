@@ -1,6 +1,6 @@
 # Skills catalog
 
-Every skill flow-next ships, in one table. 32 skills: 27 slash-command-triggered (`/flow-next:<name>`), 5 phrase-triggered (no command file - describe what you want and the host agent matches the skill description; on hosts that surface skills as commands, also invocable by full skill name, e.g. `/flow-next:flow-next-worktree-kit`). Each row links the canonical `SKILL.md`.
+Every skill flow-next ships, in one table. 31 skills: 26 slash-command-triggered (`/flow-next:<name>`), 5 phrase-triggered (no command file - describe what you want and the host agent matches the skill description; on hosts that surface skills as commands, also invocable by full skill name, e.g. `/flow-next:flow-next-worktree-kit`). Each row links the canonical `SKILL.md`.
 
 > Lifecycle position and narrative for the core commands: [root README - How the flow works](../../../README.md#how-the-flow-works). Slash commands also appear in the [root README - Commands table](../../../README.md#commands) with flags and opt-in notes.
 

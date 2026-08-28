@@ -277,8 +277,10 @@ class ChartRegistryCounts(unittest.TestCase):
 
         # 32/28/27 include the experimental flow-next-work-rolling beta
         # (fn-203.4) and the stable flow-next-prose skill (fn-207.5); the
-        # published phrases below exclude only the experimental beta per the
-        # experimental-tier carve-out.
+        # published phrases below (31 skills / 26 slash-command) exclude
+        # exactly one skill - flow-next-work-rolling - per the
+        # experimental-tier carve-out, and must equal the docs/skills.md
+        # table row count.
         self.assertEqual(len(skill_dirs), 32, f"skills dirs: {skill_dirs}")
         self.assertEqual(len(commands), 28, f"commands: {commands}")
         self.assertIn("flow-next-chart", skill_dirs)
@@ -299,9 +301,10 @@ class ChartRegistryCounts(unittest.TestCase):
 
         # Docs surfaces that publish counts
         for path, needles in (
-            (DOCS / "skills.md", ("32 skills", "27 slash-command", "5 phrase")),
-            (DOCS / "README.md", ("32 skills",)),
-            (REPO_ROOT / "README.md", ("32 skills",)),
+            (DOCS / "skills.md", ("31 skills", "26 slash-command", "5 phrase")),
+            (DOCS / "README.md", ("31 skills",)),
+            (REPO_ROOT / "README.md", ("31 skills",)),
+            (PLUGIN / "README.md", ("31 skills",)),
         ):
             text = _read(path)
             for n in needles:

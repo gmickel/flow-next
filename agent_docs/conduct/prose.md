@@ -7,4 +7,4 @@ A correct run applies the shipped prose contract (`plugins/flow-next/docs/prose.
 - [ ] Quoted material, code blocks, command output, and the user's own words are byte-unchanged in the governed reply; the skill rewrote only prose it authored.
 - [ ] The reply leads with the answer (softened rule 8) and never invents an outcome, number, or measurement to satisfy a rule; honesty (rule 10) is visible — bounds and misses stated, not softened.
 - [ ] Nothing out of scope was touched: no trigger on a short conversational turn or tool-call narration, no rewrite of a visual digest, and no rewrite of output destined for a file, PR, or tracker (those surfaces carry their own pointers).
-- [ ] The run is read-only: no Write or Edit tool use, no flowctl state mutation, no commit, no other workflow invoked.
+- [ ] On explicit `/flow-next:prose` invocation the run is read-only: no Write or Edit tool use, no flowctl state mutation, no commit, no other workflow invoked. On ambient application mid-session, the skill itself performs no tool use beyond the `docs/prose.md` Read and mutates no flowctl state (the surrounding session's own edits are out of scope for this row).

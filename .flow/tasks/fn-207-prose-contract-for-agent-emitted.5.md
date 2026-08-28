@@ -1,7 +1,7 @@
 ---
 satisfies: [R7]
 ---
-# fn-207-prose-contract-for-agent-emitted.5 Experimental reply-prose skill /flow-next:prose
+# fn-207-prose-contract-for-agent-emitted.5 Stable reply-prose skill /flow-next:prose
 
 ## Description
 Ship the stable reply-prose skill (R7): trigger-scoped ambient application of docs/prose.md to substantial replies, per the full stable checklist in agent_docs/adding-skills.md (steps 7/8/10 included; user promoted mid-task from the originally planned experimental tier).
@@ -14,7 +14,7 @@ Ship the stable reply-prose skill (R7): trigger-scoped ambient application of do
 - SKILL.md (~25 lines, no bash, no FLOWCTL preamble): frontmatter `name: Flow Prose` + description that (a) triggers on substantial replies/reports/review walkthroughs/summaries and the phrases "/flow-next:prose", "apply the prose contract", "tighten this reply"; (b) excludes short conversational turns, tool-call narration, the visual digest, and any output that lands in a file/PR/tracker (those carry their own pointers); (c) ends with ``. Body: read `../../docs/prose.md` (resolve relative to this SKILL.md; absent -> proceed without it, never block); apply rules 1-10 at draft time, not as an afterpass; dormant for replies: the precedence section's marker/projection bullets, and rule 8 softens to lead-with-the-answer; rule 10 (honesty) fully active; never rewrite quoted material, code, command output, or the user's words.
 - Command shim `commands/prose.md`: bare `name: prose`, non-empty description — mirror `audit.md` shape (adding-skills.md step 2).
 - sync-codex.sh: `generate_openai_yaml "flow-next-prose" "Flow Prose" "<short desc>" "#F59E0B" false` next to the work-rolling precedent (~L1676) + add to `REQUIRED_OPENAI_YAML_SKILLS`. Run TWICE, commit mirror.
-- Registry counts: 27->28 commands, 31->32 skills in the three manifests; update the count-pin test expectations the same way commit 5b9e039f did for chart (registry/filesystem assertions bump, published README/docs phrases stay at the stable total — find pins via the full-suite run).
+- Registry counts: 27->28 commands, 31->32 skills in the three manifests; update the count-pin test expectations the same way commit 5b9e039f did for chart (registry/filesystem assertions to 32/28/27; published phrases and needles to 31/26 — the carve-out excludes exactly the experimental work-rolling beta and must equal the skills.md table row count).
 - Guide: one plain guide matrix row (never a pipeline stage; name it when the user asks for reply prose discipline).
 - prose.md line 3: adjust the exclusion sentence — replies are governed opportunistically via the skill (description-triggered, opportunistic); the visual digest stays excluded.
 - CHANGELOG: extend the existing Unreleased entry with one sentence, em-dash-free.

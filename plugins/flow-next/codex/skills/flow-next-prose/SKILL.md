@@ -9,7 +9,7 @@ allowed-tools: Read
 
 Ambient triggering is host-discretionary. On Codex the host loads it on explicit invocation only.
 
-The agent reads the prose contract at [`../../docs/prose.md`](../../docs/flow-next/prose.md), resolved relative to this SKILL.md file's own location. If the doc is absent, the skill proceeds without it and never blocks the reply.
+The agent reads the prose contract at [docs/prose.md](../../docs/flow-next/prose.md), resolved relative to this SKILL.md file's own location. If the doc is absent, the skill proceeds without it and never blocks the reply.
 
 The agent applies the contract's rules 1-10 at draft time and writes the reply under them from the first draft.
 
