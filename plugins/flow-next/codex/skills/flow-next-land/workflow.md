@@ -144,9 +144,23 @@ if [[ -d "$TICK_LOCK" && -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +240 2>/dev/n
   fi
 fi
 if ! mkdir "$TICK_LOCK" 2>/dev/null; then
-  echo 'LAND_VERDICT=NO_WORK prs=0 pr=- reason="another land tick holds this clone"'
-  exit 0
-fi
+  # Self-ownership reclaim — the recorded PID is $PPID, which spans the whole
+  # SESSION, not one tick: a tick abandoned before its release (tool error,
+  # interruption inside a cadence loop) leaves a claim whose holder stays alive
+  # as long as the session does, so tick_holder_dead never fires and every later
+  # tick would self-block on NO_WORK indefinitely. A claim recording THIS tick's
+  # own $PPID cannot belong to a concurrent writer: one session conducts at most
+  # one tick at a time and the conductor is single-threaded, so it is this
+  # session's own abandoned claim — reclaim it in place (refresh mtime; the pid
+  # record is already correct). Any OTHER live PID keeps held→NO_WORK; a dead
+  # PID keeps the aged-reaper path above.
+  if [[ "$(cat "$TICK_LOCK/pid" 2>/dev/null || true)" == "$PPID" ]]; then
+    touch "$TICK_LOCK"
+  else
+    echo 'LAND_VERDICT=NO_WORK prs=0 pr=- reason="another land tick holds this clone"'
+    exit 0
+  fi
+else
 # Owner record — the reaper's liveness gate reads this. INVARIANT: the recorded
 # process must be one that persists across the tick's prompt turns. Each Bash tool
 # call runs in a transient shell — its `$$` exits when the call returns, so a
@@ -158,12 +172,13 @@ fi
 # any host.
 echo "$PPID" > "$TICK_LOCK/pid"
 fi
+fi
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"   # first ledger read — inside the claimed interval, never before it (dry-run: plain snapshot read; the atomic jq+mv writes keep it consistent)
 ```
 
 **Claim liveness refresh — the stale window measures crash, never work.** Claim-holding ticks only (`--dry-run` holds none and never touches): `touch "$TICK_LOCK"` at every phase boundary, per PR in Phase 2's gate loop and Phase 3's action loop, and immediately before AND immediately after every blocking call (§2.9's 600s merge-verdict command, a resolve-pr dispatch, the merge itself). The after-call touch is load-bearing: a single-threaded conductor cannot refresh WHILE it blocks, so the claim's longest refresh-free interval is exactly one blocking call's duration — the 240-minute stale age is sized above the longest such call (a resolve-pr dispatch; its 2-cycle bound is turns, not wall clock, and can run past an hour), and every other refresh point is minutes apart. So a live tick rarely ages into the window at all — and even when a single dispatch outlasts 240 minutes, the reaper's PID-liveness gate (above) sees the holder still running and never takes over: age nominates, only a dead holder confirms. The cost of the wider window falls on crash recovery only — a crashed claim now waits up to 240 minutes for the reaper, and since a held claim is terminal `NO_WORK`, that delay postpones a tick without ever admitting a second writer.
 
-Two residuals of recording the spanning parent, both in the conservative (hold-longer) direction or age-bounded. First: a session that outlives a crashed tick keeps the recorded PID alive, so takeover waits for session exit — a bounded extra hold, never a second concurrent writer. Second: on a host whose parent process is itself per-tool-call-transient, the liveness gate would misread a live tick as dead — the 240-minute age gate (still the first gate) then bounds the exposure to exactly the pre-PID-gate behavior (age-only takeover); a host adopting land should rerun the two-call probe above if unsure.
+Two residuals of recording the spanning parent, both in the conservative (hold-longer) direction or age-bounded. First: a DIFFERENT session that outlives its crashed tick keeps the recorded PID alive, so takeover waits for that session's exit — a bounded extra hold, never a second concurrent writer (the same session hitting its own abandoned claim reclaims immediately via the self-ownership branch above, so it never self-blocks). Second: on a host whose parent process is itself per-tool-call-transient, the liveness gate would misread a live tick as dead — the 240-minute age gate (still the first gate) then bounds the exposure to exactly the pre-PID-gate behavior (age-only takeover); a host adopting land should rerun the two-call probe above if unsure.
 
 A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK"` (the pid record first — a bare `rmdir` fails on the non-empty dir) immediately before printing the terminal `LAND_VERDICT` line, on EVERY tick-ending path after this point — Phase 4's normal exit AND every early terminal (Phase 1's no-work exit, a mid-tick `NEEDS_HUMAN` that ends the tick early), not only the Phase 4 exit. A tick that printed a terminal line while still holding the claim leaves the clone locked for up to the 240-minute reaper window. A `--dry-run` tick took no claim, so it releases nothing — its zero-mutation promise (no checkout, push, label, merge, dispatch, ledger write, or claim) holds byte-for-byte on the filesystem.
 
@@ -569,7 +584,7 @@ Done when: every discovered PR has one planned action class and a provisional ve
 
 ## Phase 3 — ACT (at most ONE action class per PR per tick)
 
-Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Post-merge sibling re-gate**: after any successful merge in a tick, EVERY remaining PR with a not-yet-executed planned action — `merge`, `ci-fix`, `resolve`, `catch-up`, all of them — downgrades to verdict `RESOLVING`, action `none`, unconditionally: the base those siblings were gated against has moved, so every Phase 2 read behind their plans (checks, `MERGE_STATE`, unresolved counts, any §2.9 verdict) judged a merge target that no longer exists. `ci-fix` is the sharp edge — executed on pre-merge state it edits, pushes, and spends the bounded fix budget on failures the new base may have changed or fixed, and its plan predates the red-CI triage ordering's `BEHIND` check (§2.4), which the merge just invalidated. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos and to every action class; the next tick re-reads each sibling's gates against the new base. A hold, never a strike — deferral costs one tick, never budget. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"` — Phase 0's refresh rule, which also binds Phase 2's gate loop and both sides of every blocking call), so a long tick never ages into the stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
+Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Base-move sibling re-gate**: after any action in this tick that landed commits on the base — a successful merge, OR a successful base push without one (a `resume-tail`'s persist-push of tail `.flow` commits; the 3.5 tail's persist-push when a sibling still awaits its action) — EVERY remaining PR with a not-yet-executed planned action — `merge`, `ci-fix`, `resolve`, `catch-up`, all of them — downgrades to verdict `RESOLVING`, action `none`, unconditionally: the base those siblings were gated against has moved, so every Phase 2 read behind their plans (checks, `MERGE_STATE`, unresolved counts, any §2.9 verdict) judged a merge target that no longer exists — a re-entry `resume-tail` ordered before an open sibling moves the base without any merge in this tick, so a merge-keyed rule would let that sibling act (even merge, absent §2.9) on stale gates. `ci-fix` is the sharp edge — executed on pre-move state it edits, pushes, and spends the bounded fix budget on failures the new base may have changed or fixed, and its plan predates the red-CI triage ordering's `BEHIND` check (§2.4), which the base move just invalidated. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos and to every action class; the next tick re-reads each sibling's gates against the new base. A hold, never a strike — deferral costs one tick, never budget. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"` — Phase 0's refresh rule, which also binds Phase 2's gate loop and both sides of every blocking call), so a long tick never ages into the stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
 
 ### 3.1 — `ci-fix`
 
