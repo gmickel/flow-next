@@ -105,7 +105,7 @@ mkdir -p "$LEDGER_DIR"
 TICK_LOCK="$LEDGER_DIR/tick.lock"
 # Stale-clear by age, serialized by a reaper claim: a tick claim older than 60
 # minutes is a crashed tick, not a live one (live ticks refresh their mtime
-# between per-PR actions — Phase 3). Only the reaper-claim holder may clear it,
+# continuously — the refresh rule below). Only the reaper-claim holder may clear it,
 # and it re-checks the age INSIDE the claim — so two contenders can never race
 # rmdir/mkdir and evict a freshly retaken claim.
 REAP_LOCK="$LEDGER_DIR/tick.reap.lock"
@@ -124,6 +124,8 @@ if ! mkdir "$TICK_LOCK" 2>/dev/null; then
 fi
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"   # first ledger read — inside the claimed interval, never before it
 ```
+
+**Claim liveness refresh — the stale window measures crash, never work.** `touch "$TICK_LOCK"` at every phase boundary, per PR in Phase 2's gate loop and Phase 3's action loop, and immediately before every bounded blocking call (§2.9's 600s merge-verdict command, a resolve-pr dispatch, the merge itself). Refresh points are minutes apart at most — well under the 60-minute stale age — so a live tick of any length never ages into takeover; only a tick that stopped refreshing (crashed) does.
 
 A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rmdir "$TICK_LOCK"` immediately before printing the terminal `LAND_VERDICT` line, on every path that reaches one after this point (the dry-run stop included). The claim is scheduling state, not ledger state — `--dry-run`'s zero-mutation promise (no checkout, push, label, merge, dispatch, or ledger write) is untouched by taking and releasing it.
 
@@ -528,7 +530,7 @@ Done when: every discovered PR has one planned action class and a provisional ve
 
 ## Phase 3 — ACT (at most ONE action class per PR per tick)
 
-Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Post-merge sibling re-gate**: after any successful merge in a tick, every remaining PR whose planned action is `merge` downgrades to verdict `RESOLVING`, action `none`, unconditionally — the base those siblings were gated against has moved, so their checks (and any §2.9 verdict) judged a merge target that no longer exists. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos; the next tick re-gates them against the new base. A hold, never a strike. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"`), so a long tick never ages into Phase 0's stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
+Execute each PR's planned action serially (`ci-fix`, `resolve`, `catch-up`, `label`, `request-reviewers`, `merge`, `resume-tail`). **Post-merge sibling re-gate**: after any successful merge in a tick, every remaining PR whose planned action is `merge` downgrades to verdict `RESOLVING`, action `none`, unconditionally — the base those siblings were gated against has moved, so their checks (and any §2.9 verdict) judged a merge target that no longer exists. This generalizes §3.5's `MV_STALE_BASE` rule out of the opt-in `land.mergeVerdictCommand` branch to all repos; the next tick re-gates them against the new base. A hold, never a strike. **Every checkout is bracketed by branch hygiene**: record `ORIG_BRANCH` (Preamble), and after the per-PR action `git checkout "$ORIG_BRANCH"` + assert the non-`.flow/` tree is clean before the next PR and before tick end — and refresh the tick claim's liveness there too (`touch "$TICK_LOCK"` — Phase 0's refresh rule, which also binds Phase 2's gate loop and every bounded blocking call), so a long tick never ages into the stale window while it is still working. A tick that moved to the next PR from a foreign branch or a dirty tree has broken this — a dirty tree after an action gives that PR verdict `NEEDS_HUMAN` and ends the tick there (no further PRs; report what happened).
 
 ### 3.1 — `ci-fix`
 
