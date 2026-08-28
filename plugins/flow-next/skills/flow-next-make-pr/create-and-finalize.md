@@ -481,7 +481,7 @@ R<i>, R<j>, R<k>. (Source: spec.spec_sections.acceptance_criteria, with task sat
 
 If a section's source data is empty, omit the section heading entirely (same §2.6 omission rule as the PR body). The "Decisions captured" section is skipped when `memory_during_spec.decisions[]` is empty; "R-IDs satisfied" is skipped when `acceptance_criteria` is empty (rare).
 
-The "Impact" section is the only host-agent-prose section. Two-to-four sentences, plain language, anchored to the modules and R-IDs above. **Never speculate about future work** ("this opens the door to..."). State what happened and why a future debugger would care.
+The "Impact" section is the only host-agent-prose section. Two-to-four sentences, plain language, anchored to the modules and R-IDs above. It follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent. **Never speculate about future work** ("this opens the door to..."). State what happened and why a future debugger would care.
 
 ### 5.3 — Memory entry write invocation
 

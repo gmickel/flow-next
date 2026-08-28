@@ -15,6 +15,6 @@ The agent applies the contract's rules 1-10 at draft time and writes the reply u
 
 The reply-dormant parts of the doc are the precedence section's dedup-marker and projection bullets, which stay idle for replies. Rule 8 (user-outcome-first ordering) softens to lead with the answer. Rule 10 (honesty) stays fully active.
 
-The agent never rewrites quoted material, code, command output, or the user's own words.
+The agent never rewrites quoted material, code, or command output, and never restyles the user's words where they are being quoted back. A draft the user hands the skill as the `/flow-next:prose <draft>` argument is submitted for tightening, so the agent rewrites it under the contract.
 
 Pass the identity (the path above). Never copy rule text from the doc into this skill.

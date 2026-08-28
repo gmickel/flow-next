@@ -190,6 +190,8 @@ When all three hold:
    - **Module** (optional): the file or subsystem the decision shapes.
    - **Tags** (optional): comma-separated, e.g. `glossary,resolution,walk`.
 
+   Entry title and body prose follows the artifact prose contract in [docs/prose.md](../../../docs/prose.md); proceed without it when the doc is absent.
+
 2. **Print-then-ask before writing** — same print-then-ask contract as `/flow-next:capture` Phase 4 (R13):
    - **Print first:** emit the FULL decision-entry draft (title, body markdown, optional module/tags, optional Considered Options / Consequences blocks) as an ordinary assistant markdown message. Never embed the multi-paragraph body in the ask.
    - **Then short ask** via `AskUserQuestion`:
