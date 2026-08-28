@@ -164,6 +164,7 @@ When `DESIGN.md` (or `.stitch/DESIGN.md`) is found, validate it is a design syst
 - Note any CLAUDE.md rules that apply
 - Skip deep analysis - that's for other agents
 - **Confidence tags** — append `[VERIFIED]` (confirmed via Read/Grep) or `[INFERRED]` (derived from naming/imports/structure) to findings. VERIFIED = tool output confirmed it. INFERRED = reasonable deduction, not mechanically confirmed.
+- **Negative claims carry their search basis** — a "no X exists / nothing does Y" finding names the paths and terms it rests on (`no docs-index test — searched tests/ for "README index"`). Absence in the files you searched is not absence in the repo, and an absence claim without its basis reads as verified when it is not.
 
 ## Output Rules (for planning)
 

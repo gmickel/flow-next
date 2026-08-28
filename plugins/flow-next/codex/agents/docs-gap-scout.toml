@@ -94,6 +94,8 @@ For identified docs, quick scan to understand structure:
 - Does API doc cover related endpoints?
 - Are there existing ADRs to follow as template?
 
+**Negative claims carry their search basis.** A "no convention/doc/index exists" finding names the paths and terms it rests on (`no adding-a-doc convention — searched agent_docs/ and docs/README.md for "adding"`). Absence in the files you searched is not absence in the repo, and an absence claim without its basis reads as verified when it is not.
+
 ## Output Format
 
 ```markdown
