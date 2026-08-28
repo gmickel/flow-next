@@ -105,23 +105,41 @@ Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count
 TICK_LOCK="$LEDGER_DIR/tick.lock"
 if [[ "$LAND_DRY_RUN" != 1 ]]; then   # dry-run: skip the claim entirely — no mkdir, nothing to release
 mkdir -p "$LEDGER_DIR"
-# Stale-clear by age, serialized by a reaper claim: a tick claim older than 240
-# minutes is a crashed tick, not a live one (live ticks refresh their mtime
-# continuously — the refresh rule below). The threshold is sized ABOVE the
-# longest single blocking call a live tick can make — a resolve-pr dispatch
-# (2-fix-verify-cycle bound; wall clock can exceed an hour), dwarfing §2.9's
-# 600s merge-verdict cap — because the claim's mtime cannot move while the
-# conductor blocks inside a dispatch. A shorter age would let a sibling tick
-# reap a claim whose holder is still working. Only the reaper-claim holder may clear it,
-# and it re-checks the age INSIDE the claim — so two contenders can never race
-# rmdir/mkdir and evict a freshly retaken claim.
+# Stale takeover is OWNER-AWARE, serialized by a reaper claim. Age alone cannot
+# distinguish a crashed tick from a live one: a resolve-pr dispatch is bounded
+# in fix-verify CYCLES, not wall clock, and the conductor cannot refresh the
+# claim's mtime while it blocks inside the dispatch — so any fixed threshold
+# has a hole in the limit. The takeover therefore requires BOTH gates:
+# (1) the claim is older than 240 minutes (sized ABOVE the longest single
+#     blocking call — a resolve-pr dispatch, dwarfing §2.9's 600s merge-verdict
+#     cap — and kept as the FIRST gate so a rebooted host, where the recorded
+#     PID may have been recycled by an unrelated process, still cannot be
+#     reaped early), AND
+# (2) the holder PID recorded in the claim dir is no longer alive
+#     (`kill -0` fails) — a live PID is a running tick, never reaped
+#     regardless of age. PID liveness is decidable here because land is
+#     one-host-per-clone (the ledger section above, #368): every contender for
+#     this clone's claim runs on the holder's own host. A missing/unreadable
+#     pid file on an aged claim reads as dead (crash before the pid write).
+#     PID recycling into a live unrelated process within an aged claim is
+#     accepted residual risk.
+# Only the reaper-claim holder may clear it, and it re-checks BOTH gates
+# INSIDE the claim — so two contenders can never race rmdir/mkdir and evict a
+# freshly retaken claim.
 REAP_LOCK="$LEDGER_DIR/tick.reap.lock"
-# A leftover reaper claim (crashed reaper) also clears by age — its live hold is milliseconds, so age is decisive there.
+# A leftover reaper claim (crashed reaper) clears by age alone — its live hold is milliseconds, so age is decisive there.
 [[ -d "$REAP_LOCK" && -n "$(find "$REAP_LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]] && rmdir "$REAP_LOCK" 2>/dev/null
-if [[ -d "$TICK_LOCK" && -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +240 2>/dev/null)" ]]; then
+tick_holder_dead() {   # true iff the claim's recorded holder is not a live process
+  local pid; pid="$(cat "$TICK_LOCK/pid" 2>/dev/null || true)"
+  [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null
+}
+if [[ -d "$TICK_LOCK" && -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +240 2>/dev/null)" ]] && tick_holder_dead; then
   if mkdir "$REAP_LOCK" 2>/dev/null; then
-    # re-check under the reaper claim: a fresh mtime means another tick retook it — leave it alone
-    [[ -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +240 2>/dev/null)" ]] && rmdir "$TICK_LOCK" 2>/dev/null
+    # re-check BOTH gates under the reaper claim: a fresh mtime means another tick retook it, a live PID means a running tick — leave it alone either way
+    if [[ -n "$(find "$TICK_LOCK" -maxdepth 0 -mmin +240 2>/dev/null)" ]] && tick_holder_dead; then
+      rm -f "$TICK_LOCK/pid" 2>/dev/null
+      rmdir "$TICK_LOCK" 2>/dev/null
+    fi
     rmdir "$REAP_LOCK" 2>/dev/null
   fi
 fi
@@ -129,13 +147,14 @@ if ! mkdir "$TICK_LOCK" 2>/dev/null; then
   echo 'LAND_VERDICT=NO_WORK prs=0 pr=- reason="another land tick holds this clone"'
   exit 0
 fi
+echo "$$" > "$TICK_LOCK/pid"   # owner record — the reaper's liveness gate reads this
 fi
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"   # first ledger read — inside the claimed interval, never before it (dry-run: plain snapshot read; the atomic jq+mv writes keep it consistent)
 ```
 
-**Claim liveness refresh — the stale window measures crash, never work.** Claim-holding ticks only (`--dry-run` holds none and never touches): `touch "$TICK_LOCK"` at every phase boundary, per PR in Phase 2's gate loop and Phase 3's action loop, and immediately before AND immediately after every blocking call (§2.9's 600s merge-verdict command, a resolve-pr dispatch, the merge itself). The after-call touch is load-bearing: a single-threaded conductor cannot refresh WHILE it blocks, so the claim's longest refresh-free interval is exactly one blocking call's duration — the 240-minute stale age is sized above the longest such call (a resolve-pr dispatch; its 2-cycle bound is turns, not wall clock, and can run past an hour), and every other refresh point is minutes apart. So a live tick never ages into takeover; only a tick that stopped refreshing (crashed) does. The cost of the wider window falls on crash recovery only — a crashed claim now waits up to 240 minutes for the reaper, and since a held claim is terminal `NO_WORK`, that delay postpones a tick without ever admitting a second writer.
+**Claim liveness refresh — the stale window measures crash, never work.** Claim-holding ticks only (`--dry-run` holds none and never touches): `touch "$TICK_LOCK"` at every phase boundary, per PR in Phase 2's gate loop and Phase 3's action loop, and immediately before AND immediately after every blocking call (§2.9's 600s merge-verdict command, a resolve-pr dispatch, the merge itself). The after-call touch is load-bearing: a single-threaded conductor cannot refresh WHILE it blocks, so the claim's longest refresh-free interval is exactly one blocking call's duration — the 240-minute stale age is sized above the longest such call (a resolve-pr dispatch; its 2-cycle bound is turns, not wall clock, and can run past an hour), and every other refresh point is minutes apart. So a live tick rarely ages into the window at all — and even when a single dispatch outlasts 240 minutes, the reaper's PID-liveness gate (above) sees the holder still running and never takes over: age nominates, only a dead holder confirms. The cost of the wider window falls on crash recovery only — a crashed claim now waits up to 240 minutes for the reaper, and since a held claim is terminal `NO_WORK`, that delay postpones a tick without ever admitting a second writer.
 
-A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rmdir "$TICK_LOCK"` immediately before printing the terminal `LAND_VERDICT` line, on EVERY tick-ending path after this point — Phase 4's normal exit AND every early terminal (Phase 1's no-work exit, a mid-tick `NEEDS_HUMAN` that ends the tick early), not only the Phase 4 exit. A tick that printed a terminal line while still holding the claim leaves the clone locked for up to the 240-minute reaper window. A `--dry-run` tick took no claim, so it releases nothing — its zero-mutation promise (no checkout, push, label, merge, dispatch, ledger write, or claim) holds byte-for-byte on the filesystem.
+A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK"` (the pid record first — a bare `rmdir` fails on the non-empty dir) immediately before printing the terminal `LAND_VERDICT` line, on EVERY tick-ending path after this point — Phase 4's normal exit AND every early terminal (Phase 1's no-work exit, a mid-tick `NEEDS_HUMAN` that ends the tick early), not only the Phase 4 exit. A tick that printed a terminal line while still holding the claim leaves the clone locked for up to the 240-minute reaper window. A `--dry-run` tick took no claim, so it releases nothing — its zero-mutation promise (no checkout, push, label, merge, dispatch, ledger write, or claim) holds byte-for-byte on the filesystem.
 
 ## Phase 1 — DISCOVER
 
@@ -216,7 +235,7 @@ fi
 # AUTHORED=0 → branch-only match → report NEEDS_HUMAN for this PR, never act on it
 ```
 
-No PR survives discovery (no candidate specs, or no open build-loop-authored PRs among them) → the tick ends HERE, so release the tick claim first — `rmdir "$TICK_LOCK"` (a non-dry-run tick took it in Phase 0; Phase 0's every-tick-ending-path release rule; `--dry-run` took none and releases nothing) — then print the terminal line:
+Discovery produced ZERO classifications — no babysit candidate, no re-entry candidate, AND no `NEEDS_HUMAN` entry (no candidate specs at all, or every candidate skipped silently) → the tick ends HERE, so release the tick claim first — `rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK"` (a non-dry-run tick took it in Phase 0; Phase 0's every-tick-ending-path release rule; `--dry-run` took none and releases nothing) — then print the terminal line. **Any discovery `NEEDS_HUMAN` entry (failed gh probe, multiple open PRs, ambiguous merged+open state, branch-only authorship) disqualifies this exit**: those classifications are processed PRs (Phase 4 counts them in `prs=` and they drive the worst-severity verdict), so they carry through GATE aggregation into REPORT — a `NO_WORK prs=0` printed over a `NEEDS_HUMAN` entry hides the failure from the cadence driver.
 
 ```text
 LAND_VERDICT=NO_WORK prs=0 pr=- reason="no open build-loop-authored PRs"
@@ -900,7 +919,7 @@ NEEDS_HUMAN > BLOCKED > FIXING_CI > RESOLVING > AWAITING_REVIEW > RELEASED > MER
 
 `pr=` in the terminal line is the URL of the deciding PR (first PR carrying the worst verdict); `prs=` is the count of PRs processed (babysit + re-entry + discovery NEEDS_HUMAN entries). Zero processed PRs → `NO_WORK` with `prs=0 pr=-`.
 
-Assert tick-end hygiene before printing: current branch is `ORIG_BRANCH` (or the merged base when 3.5/3.6 ran) and the non-`.flow/` tree is clean — a violation downgrades the tick to `NEEDS_HUMAN` with the hygiene failure as the reason. Then release the Phase 0 tick claim (`rmdir "$TICK_LOCK"`) before printing the terminal line.
+Assert tick-end hygiene before printing: current branch is `ORIG_BRANCH` (or the merged base when 3.5/3.6 ran) and the non-`.flow/` tree is clean — a violation downgrades the tick to `NEEDS_HUMAN` with the hygiene failure as the reason. Then release the Phase 0 tick claim (`rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK"`) before printing the terminal line.
 
 ```text
 LAND_VERDICT=<verdict|NO_WORK> prs=<n> pr=<deciding-pr-url|-> reason="<one line>"
