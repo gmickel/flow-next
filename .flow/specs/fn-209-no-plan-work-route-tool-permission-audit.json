@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-209-no-plan-work-route-tool-permission-audit",
+  "created_at": "2026-08-28T20:55:22.515162Z",
+  "depends_on_epics": [],
+  "id": "fn-209-no-plan-work-route-tool-permission-audit",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-209-no-plan-work-route-tool-permission-audit.md",
+  "status": "open",
+  "title": "No-plan work route + tool-permission audit",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-28T20:55:22.779438Z"
+}

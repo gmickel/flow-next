@@ -196,3 +196,11 @@ _Relates to_: Tier
 ## Emission point
 
 A named step in a skill or agent where durable user-facing prose is drafted (make-pr body rendering, tracker-sync comment composition, capture/interview/plan spec prose, chart briefings, strategy sections, qa finding bodies, land verdict comments, prospect candidates, prime glossary definitions, audit memory entries, worker done summaries, resolve-pr replies, changelog entries). Emission points cite the prose contract by path, passing the identity and never a copied payload.
+
+## No-plan route
+
+The work-level pipeline variation that starts /flow-next:work directly from a zero-task spec: an explicit fork mints one minimal implicit task ("implement this spec") from the spec instead of running plan/plan-review. Interactive-only by default; pilot forwards an explicit no-plan instruction through, never decides it.
+
+_Relates to_: Spec, Task
+
+_Avoid_: plan-less mode, skip-plan flag, zero-task execution
