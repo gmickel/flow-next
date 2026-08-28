@@ -34,7 +34,7 @@ A workflow that walks files, makes per-item judgments, investigates code, compos
 
 **Do not spawn `codex`/`copilot`/other LLMs via subprocess from inside flowctl when invoked from a skill.** The host agent is already an LLM running the skill — there is no need for a second one.
 
-**Implementation offload is prose-routed, not packaged (flow-98 decision).** The `work.delegate*` subsystem is gone: bridging implementation to a second CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) is a routing decision the host reads from the model-routing section in `CLAUDE.md` / `AGENTS.md` plus the bridge recipes in `flowctl usage`, and it is **host-orchestrated implementation-offload, never a judgment hand-off**: the bridged child writes code while the host keeps git, judgment, and the verdict. Nothing about that route licenses spawning an LLM for judgment from inside flowctl. See [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#implementation-offload--the-bridge-route).
+**Implementation offload is prose-routed, not packaged (flow-98 decision).** The `work.delegate*` subsystem is gone: bridging implementation to a second CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) is a routing decision the host reads from the model-routing section in `CLAUDE.md` / `AGENTS.md` plus the bridge recipes in `flowctl usage`, and it is **host-orchestrated implementation-offload, never a judgment hand-off**: the bridged child writes code while the host keeps git, judgment, and the verdict. Nothing about that route licenses spawning an LLM for judgment from inside flowctl. See [`docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#implementation-offload-the-bridge-route).
 
 ### When to use DETERMINISTIC flowctl Python
 
@@ -145,6 +145,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Setup internals (copy-less install, per-artifact resolution chains, snippet/marker invariants) | [`agent_docs/setup.md`](agent_docs/setup.md) |
 | Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) |
 | Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
+| Writing docs (repo docs + flow-next.dev): capability framing, page shape, anchors as contracts | [`agent_docs/writing-docs.md`](agent_docs/writing-docs.md) |
 | Prose contract for agent-emitted artifacts (the rules every durable emission surface drafts under - PR bodies, specs and plans, tracker and PR comments, strategy and briefing sections, memory and glossary entries, done summaries, changelogs; cited by path at each emission point) | [`plugins/flow-next/docs/prose.md`](plugins/flow-next/docs/prose.md) |
 | Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) |
 | Optimizing a skill/agent prompt (token/accuracy, eval-driven) | [`agent_docs/optimizing-skills.md`](agent_docs/optimizing-skills.md) |
@@ -173,6 +174,7 @@ This project uses Flow-Next for ALL task tracking. `flowctl` comes from the flow
 - BEFORE any other flowctl operation, or when unsure of a flag: run `flowctl usage` (CLI cheatsheet + orchestration recipes) or `flowctl --help`.
 - BEFORE bridging work to another model/CLI (`codex exec`, `cursor-agent`, `claude -p`, `grok`) or picking an implementation/review model: run `flowctl usage` and follow "Orchestration & model steering" exactly.
 - Creating a spec: write it directly — `/flow-next:plan` is task breakdown only. `flowctl spec create --title "Short title" --plan-file plan.md --json`, then `/flow-next:plan <spec-id>`. Scaffold cascade (first match wins): `SPEC.md` -> `spec.md` -> bundled template.
+- Substantial replies (reports, reviews, multi-section answers): invoke `/flow-next:prose` BEFORE drafting — the artifact prose contract applies to chat replies too. Short conversational turns skip it.
 - If `flowctl` is not found: your shell lacks the plugin's `scripts/` dir on PATH (only Claude Code injects it). Resolve it the way the skills do - the plugin install's `scripts/flowctl` (Claude/Droid: plugin-root env var; Codex: `${CODEX_HOME:-$HOME/.codex}/scripts/flowctl`; Cursor/Grok: two levels above any flow-next SKILL.md) - or update/reinstall the flow-next plugin. A repo with no `.flow/` yet: run `/flow-next:setup`.
 
 **This repo's own additions (maintainer notes, not part of the shipped snippet):**
@@ -191,7 +193,7 @@ This project uses Flow-Next for ALL task tracking. `flowctl` comes from the flow
 
 _Scaffolded by `/flow-next:setup` as an example, then edited. This section is yours: the model ids are properties of your account and your harness, so keep them current against what your CLIs actually serve — ask a harness for its list rather than trusting this block._
 
-Grammar: `<tier>: <model>` or `<tier>: <model> at <effort>`. An absent tier means the session model; an unparseable line is ignored. Tier meanings: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants). How this harness reaches one: [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md).
+Grammar: `<tier>: <model>` or `<tier>: <model> at <effort>`. An absent tier means the session model; an unparseable line is ignored. Tier meanings: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants). How this harness reaches one: [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md).
 
 ```
 reviewer: gpt-5.6-sol at high

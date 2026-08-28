@@ -16,6 +16,7 @@ Thanks for wanting to make flow-next better. This file is a router, not a manual
 | Add a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) — mind the three-edit rule |
 | Optimize an existing skill/agent prompt | [`agent_docs/optimizing-skills.md`](agent_docs/optimizing-skills.md) |
 | Cut a release (maintainers) | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
+| Write or restructure docs | [`agent_docs/writing-docs.md`](agent_docs/writing-docs.md) |
 | Report a bug / request a feature | [Open an issue](https://github.com/gmickel/flow-next/issues/new/choose) — templates provided |
 | Report a security issue | [`SECURITY.md`](SECURITY.md) — private channel, please |
 

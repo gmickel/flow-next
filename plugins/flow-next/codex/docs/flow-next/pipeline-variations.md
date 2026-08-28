@@ -3,13 +3,13 @@
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
-The default pipeline is a menu, not a rail ([root README](https://github.com/gmickel/flow-next/blob/main/README.md#the-pipeline-is-a-menu-not-a-rail)). This page owns the **stage axis**: which stages a given piece of work runs, shown as five worked examples from a full epic down to a docs chore.
+The default pipeline composes ([root README](https://github.com/gmickel/flow-next/blob/main/README.md#compose-the-pipeline)). This page owns the **stage axis**: which stages a given piece of work runs, shown as five worked examples from a full epic down to a docs chore.
 
 > Adjacent, not the same: [`running-lean.md`](running-lean.md) is about which **layers** (subsystems) you switch on at all and what each costs to keep on. This page is about which **stages** one piece of work passes through. [`/flow-next:guide`](../../skills/flow-next-guide/SKILL.md) is the router that answers the question live for one specific situation - this page is the reference it rhymes with, not a second router.
 
-**The variants below are worked examples, not tiers to pick from a list.** They illustrate routes the smallest-sufficient rule produces for five common shapes of work. Your change composes its own route; these show the reasoning, so you can reproduce it, not memorize it.
+**Read the variants below as worked examples.** They illustrate routes the smallest-sufficient rule produces for five common shapes of work. Your change composes its own route; these show the reasoning, so you can reproduce it, not memorize it.
 
-## The selector is risk and unknowns, not size
+## Pick by risk and unknowns
 
 Size and complexity correlate with ceremony, but neither is the criterion. The question each stage answers is: **what don't we know yet, and what does it cost to be wrong?**
 
@@ -114,7 +114,7 @@ The capture and plan closers apply this doc's rule at the decision point: each p
 
 ## See also
 
-- [`../../../README.md`](https://github.com/gmickel/flow-next/blob/main/README.md#the-pipeline-is-a-menu-not-a-rail) - the menu-not-a-rail doctrine and the composition moves (chain, prompt-into, reorder, parallelize).
+- [`../../../README.md`](https://github.com/gmickel/flow-next/blob/main/README.md#compose-the-pipeline) - how the stages compose and the composition moves (chain, prompt-into, reorder, parallelize).
 - [`../skills/flow-next-guide/SKILL.md`](../../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the live router: one situation in, the smallest sufficient route out.
 - [`../skills/flow-next-capture/workflow.md`](../../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) - capture's Phase 6 closer, which judges the just-written spec against this doc's rule and prints its `Recommended next:` line.
 - [`../skills/flow-next-plan/references/next-steps-menu.md`](../../skills/flow-next-plan/references/next-steps-menu.md) - plan's interactive menu, which applies this doc's rule to the plan-review-vs-work decision.

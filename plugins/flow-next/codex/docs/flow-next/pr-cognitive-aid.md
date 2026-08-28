@@ -67,7 +67,7 @@ Flow-Next owns the maximum-normal v1 fixture and its metadata:
 Metadata records `schemaVersion`, the upstream `sourcePath`, the full
 `sourceCommit`, the immutable Git `sourceBlob`, the SHA-256 of the exact
 `golden.json` bytes, and the executable performance contract. The blob and
-SHA-256 are over the file bytes as checked in—not parsed/reformatted JSON.
+SHA-256 are over the file bytes as checked in - not parsed/reformatted JSON.
 Consumers use those byte identities as the durable provenance seam:
 `sourceCommit` remains an audit breadcrumb and may be absent from a shallow
 checkout or become unreachable after a squash merge, while the blob remains

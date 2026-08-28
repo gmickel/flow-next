@@ -4,6 +4,93 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 
 > **Note:** This is the full human reference. Agents should read the agent guide: `flowctl usage`.
 
+## Contents
+
+- [Available Commands](#available-commands)
+- [Multi-User Safety](#multi-user-safety)
+- [File Structure](#file-structure)
+- [ID Format](#id-format)
+- [Commands](#commands)
+  - [init](#init)
+  - [usage](#usage)
+  - [detect](#detect)
+  - [setup-block](#setup-block)
+  - [scope](#scope)
+  - [spec create](#spec-create)
+  - [spec set-plan](#spec-set-plan)
+  - [spec set-plan-review-status](#spec-set-plan-review-status)
+  - [spec set-completion-review-status](#spec-set-completion-review-status)
+  - [spec reset-review-rounds](#spec-reset-review-rounds)
+  - [review-rounds increment / record / attempts / reset](#review-rounds-increment-record-attempts-reset)
+  - [review-artifact](#review-artifact)
+  - [rp mode-probe](#rp-mode-probe)
+  - [spec set-branch](#spec-set-branch)
+  - [spec set-title](#spec-set-title)
+  - [spec close](#spec-close)
+  - [spec ready / spec unready](#spec-ready-spec-unready)
+  - [spec add-dep / spec rm-dep](#spec-add-dep-spec-rm-dep)
+  - [spec set-backend](#spec-set-backend)
+  - [spec export-cognitive-aid](#spec-export-cognitive-aid)
+  - [spec skeleton](#spec-skeleton)
+  - [task create](#task-create)
+  - [task set-title](#task-set-title)
+  - [task set-description](#task-set-description)
+  - [task set-acceptance](#task-set-acceptance)
+  - [task set-spec](#task-set-spec)
+  - [task reset](#task-reset)
+  - [task set-backend](#task-set-backend)
+  - [dep add](#dep-add)
+  - [show](#show)
+  - [specs](#specs)
+  - [tasks](#tasks)
+  - [list](#list)
+  - [cat](#cat)
+  - [brief](#brief)
+  - [anchor](#anchor)
+  - [ready](#ready)
+  - [pilot strikes](#pilot-strikes)
+  - [pilot-log](#pilot-log)
+  - [next](#next)
+  - [start](#start)
+  - [done](#done)
+  - [block](#block)
+  - [validate](#validate)
+  - [config](#config)
+  - [review-backend](#review-backend)
+  - [review-findings attach](#review-findings-attach)
+  - [pr-cognitive-aid](#pr-cognitive-aid)
+  - [memory](#memory)
+  - [prospect](#prospect)
+- [chart](#chart)
+- [flowctl tracker](#flowctl-tracker)
+  - [Resolve persisted runtime facts](#resolve-persisted-runtime-facts)
+  - [Wire verbs](#wire-verbs)
+  - [Lifecycle and projection verbs](#lifecycle-and-projection-verbs)
+  - [Lifecycle facade](#lifecycle-facade)
+  - [Result envelope and exit codes](#result-envelope-and-exit-codes)
+- [flowctl sync](#flowctl-sync)
+  - [repo-map](#repo-map)
+  - [prime classify](#prime-classify)
+  - [glossary](#glossary)
+  - [strategy](#strategy)
+  - [criteria](#criteria)
+  - [triage-skip](#triage-skip)
+  - [gate](#gate)
+  - [rp](#rp)
+  - [Review command architecture (fn-112)](#review-command-architecture-fn-112)
+  - [codex](#codex)
+  - [copilot](#copilot)
+  - [cursor](#cursor)
+  - [Ralph run control (repo-local after ralph-init)](#ralph-run-control-repo-local-after-ralph-init)
+  - [review-deep-auto](#review-deep-auto)
+  - [review-walkthrough-defer](#review-walkthrough-defer)
+  - [review-walkthrough-record](#review-walkthrough-record)
+  - [checkpoint](#checkpoint)
+  - [status](#status)
+- [Ralph Receipts](#ralph-receipts)
+- [JSON Output](#json-output)
+- [Error Handling](#error-handling)
+
 ## Available Commands
 
 ```
@@ -23,7 +110,7 @@ Works out of the box for parallel branches. No setup required.
 - **Actor resolution**: `FLOW_ACTOR` env → git email → git name → `$USER` → "unknown"
 - **Local validation**: `flowctl validate --all` catches issues before commit
 
-**Worktree sharing.** Runtime claim state lives in the git common dir (`.git/flow-state`), which every worktree of a repo shares. Two agents driving `flowctl` in sibling worktrees therefore read and write each other's task claims unless each sets `FLOW_STATE_DIR` (rung 1, the documented per-process override). An orchestrator-set state dir must live **outside** the repo tree — in-tree dirs can be destroyed by test-hygiene cleanup.
+**Worktree sharing.** Runtime claim state lives in the git common dir (`.git/flow-state`), which every worktree of a repo shares. Two agents driving `flowctl` in sibling worktrees therefore read and write each other's task claims unless each sets `FLOW_STATE_DIR` (rung 1, the documented per-process override). An orchestrator-set state dir must live **outside** the repo tree - in-tree dirs can be destroyed by test-hygiene cleanup.
 
 **Optional**: Add CI gate with `docs/ci-workflow-example.yml` to block bad PRs.
 
@@ -114,7 +201,7 @@ Print the bundled usage guide (CLI cheatsheet + `## Orchestration & model steeri
 flowctl usage
 ```
 
-Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin — this is where the guide comes from), then, as inert legacy grace, a repo-local `.flow/usage.md` left over from the retired copy layout. Exits 1 with a pointer to reinstalling/updating the plugin when neither exists.
+Resolution order: the plugin's bundled `templates/usage.md` (always current with the installed plugin - this is where the guide comes from), then, as inert legacy grace, a repo-local `.flow/usage.md` left over from the retired copy layout. Exits 1 with a pointer to reinstalling/updating the plugin when neither exists.
 
 The Unix and Windows launchers route this exact command through the small `flowctl_bootstrap.py` fast path, so printing static guidance does not load the full CLI. Exact root `--help` similarly reads tracked `flowctl-help.txt`, with parity tests pinning it to argparse output. The bytecode-cache proof was rejected: a runtime-written ignored pyc can validate a source hash without proving its executable payload came from that source. Every non-static command therefore compiles tracked `flowctl.py` in memory, preserves it as the logical `__file__`, and never reads or writes executable cache state.
 
@@ -211,11 +298,11 @@ Output:
 {"success": true, "id": "fn-1-spec-title", "title": "Spec title", "spec_path": ".flow/specs/fn-1-spec-title.md"}
 ```
 
-`--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key — no fresh `fn-NN` is allocated; ids never rename. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
+`--tracker-first` (requires `--tracker-identifier <key-or-ref>`) keys the spec by the tracker key - no fresh `fn-NN` is allocated; ids never rename. Native `KEY-N` (Linear `WOR-17`, Jira `PROJ-123`) mint `wor-17-slug` / `proj-123-slug`. GitHub `#123` / GitLab `<project>#456` mint synthetic keys while `tracker.type` matches (`gh-123-slug` / `gl-456-slug`, project-scoped iid). Bare `wor-17` / `gh-123` / `gl-456` resolve as aliases. Skills route to this automatically when `tracker.specIds=tracker`. See [`tracker-sync.md`](tracker-sync.md) for the hybrid id model.
 
 Pass `--branch` at create time to set `branch_name` in the same call; [`spec set-branch`](#spec-set-branch) is for renaming the branch of an existing spec.
 
-`--plan-file` / `--plan -` (stdin) write the full plan at create time — one-shot create+set-plan; the plan is validated before the id is allocated and a failure rolls back leaving no spec on disk.
+`--plan-file` / `--plan -` (stdin) write the full plan at create time - one-shot create+set-plan; the plan is validated before the id is allocated and a failure rolls back leaving no spec on disk.
 
 ### spec set-plan
 
@@ -237,7 +324,7 @@ flowctl spec set-plan-review-status fn-1 --status ship|needs_work|needs_human|un
 
 ### spec set-completion-review-status
 
-Set completion review status and timestamp. `ship` is the only value that claims a review actually ran; `not_required` records a policy-excused review (written by work's 3g policy skip) — it satisfies the completion-review requirement without claiming a review happened. The satisfying set every gate consumes is `{ship, not_required}`; an unrecognized or absent value reads as `unknown` and satisfies nothing. `--if-current <status>` makes the write a compare-and-set, checked under the sidecar lock: the status is written only when the current value matches, otherwise nothing is written and the JSON reply reports `written: false` plus the current value (exit 0). The 3g skip uses `--status not_required --if-current unknown`, so a review verdict that lands concurrently is never silently overwritten. An excused `not_required` is invalidated when the review surface changes: `task create` (single or bulk), `task set-spec`, `task set-description`, `task set-acceptance`, and `spec set-plan` reset it to `unknown` via the locked helper after their own write lands (reported as `completion_review_reset: true`); pure status/claim writers (`start`, `done`, `set-backend`) never reset, and real verdicts are never touched. When the spec is excused but the sidecar lock is unavailable, the command still succeeds and reports `completion_review_reset: "failed"` plus a stderr warning naming the manual remedy (`spec set-completion-review-status <id> --status unknown --if-current not_required`).
+Set completion review status and timestamp. `ship` is the only value that claims a review actually ran; `not_required` records a policy-excused review (written by work's 3g policy skip) - it satisfies the completion-review requirement without claiming a review happened. The satisfying set every gate consumes is `{ship, not_required}`; an unrecognized or absent value reads as `unknown` and satisfies nothing. `--if-current <status>` makes the write a compare-and-set, checked under the sidecar lock: the status is written only when the current value matches, otherwise nothing is written and the JSON reply reports `written: false` plus the current value (exit 0). The 3g skip uses `--status not_required --if-current unknown`, so a review verdict that lands concurrently is never silently overwritten. An excused `not_required` is invalidated when the review surface changes: `task create` (single or bulk), `task set-spec`, `task set-description`, `task set-acceptance`, and `spec set-plan` reset it to `unknown` via the locked helper after their own write lands (reported as `completion_review_reset: true`); pure status/claim writers (`start`, `done`, `set-backend`) never reset, and real verdicts are never touched. When the spec is excused but the sidecar lock is unavailable, the command still succeeds and reports `completion_review_reset: "failed"` plus a stderr warning naming the manual remedy (`spec set-completion-review-status <id> --status unknown --if-current not_required`).
 
 ```bash
 flowctl spec set-completion-review-status fn-1 --status ship|needs_work|needs_human|unknown|not_required [--if-current <status>] [--json]
@@ -245,7 +332,7 @@ flowctl spec set-completion-review-status fn-1 --status ship|needs_work|needs_hu
 
 ### spec reset-review-rounds
 
-Reset the deterministic review-round counter for a spec — the **human-only re-plan** reset path. Zeroes the spec-scoped `plan_review_rounds` (which plan AND completion reviews share); pass `--impl` to also zero every per-task `impl_review_rounds[<task-id>]`, and advances the matching hash epochs without deleting the append-only attempts ledger. Use this after an explicit re-plan to re-open the review cap; a `SHIP` verdict resets automatically, so this is only for the deliberate re-plan case. Ralph blocks this recovery command. See [codex impl-review § Deterministic review cap](#codex-impl-review) for the full cap/reset semantics.
+Reset the deterministic review-round counter for a spec - the **human-only re-plan** reset path. Zeroes the spec-scoped `plan_review_rounds` (which plan AND completion reviews share); pass `--impl` to also zero every per-task `impl_review_rounds[<task-id>]`, and advances the matching hash epochs without deleting the append-only attempts ledger. Use this after an explicit re-plan to re-open the review cap; a `SHIP` verdict resets automatically, so this is only for the deliberate re-plan case. Ralph blocks this recovery command. See [codex impl-review § Deterministic review cap](#codex-impl-review) for the full cap/reset semantics.
 
 ```bash
 flowctl spec reset-review-rounds fn-1 [--impl] [--json]
@@ -345,7 +432,7 @@ flowctl spec close fn-1 [--json]
 
 ### spec ready / spec unready
 
-Mark / clear the spec's human-owned readiness gate (1.12.0+). Readiness is orthogonal to `status` — a ready spec stays `open` through planning and work, and `done` specs may be toggled.
+Mark / clear the spec's human-owned readiness gate (1.12.0+). Readiness is orthogonal to `status` - a ready spec stays `open` through planning and work, and `done` specs may be toggled.
 
 ```bash
 flowctl spec ready fn-1 [--json]
@@ -357,7 +444,7 @@ Output:
 {"id": "fn-1", "ready": true, "changed": true, "message": "Spec fn-1 marked ready"}
 ```
 
-Both verbs are **idempotent no-ops** when the flag already matches (no write, no `updated_at` bump, `"changed": false`) — which is what lets unconditional callers like `capture --rewrite`'s readiness reset run without turning every spec into a readiness adopter. The on-disk flag is **lazy**: the sidecar carries `ready` only after a toggle actually changes state (absent reads `false`; `spec create` never writes it). Task ids (`fn-1.2`) are rejected — readiness is spec-level only. When `tracker.readyState` is configured, the tracker is authoritative: a local `spec ready` is overwritten by the next pull-side sync (see [`tracker-sync.md`](tracker-sync.md)).
+Both verbs are **idempotent no-ops** when the flag already matches (no write, no `updated_at` bump, `"changed": false`) - which is what lets unconditional callers like `capture --rewrite`'s readiness reset run without turning every spec into a readiness adopter. The on-disk flag is **lazy**: the sidecar carries `ready` only after a toggle actually changes state (absent reads `false`; `spec create` never writes it). Task ids (`fn-1.2`) are rejected - readiness is spec-level only. When `tracker.readyState` is configured, the tracker is authoritative: a local `spec ready` is overwritten by the next pull-side sync (see [`tracker-sync.md`](tracker-sync.md)).
 
 ### spec add-dep / spec rm-dep
 
@@ -393,12 +480,12 @@ Aggregate spec markdown, tasks, memory, glossary diff, strategy alignment, and d
 flowctl spec export-cognitive-aid fn-1 --base origin/main [--json]
 ```
 
-**Deterministic traceability slice.** Four additive fields back the make-pr "Review plan" render with data — all reproducible from repo state at export time, no LLM judgment (the render layer judges, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
+**Deterministic traceability slice.** Four additive fields back the make-pr "Review plan" render with data - all reproducible from repo state at export time, no LLM judgment (the render layer judges, the payload reports). Each is **additive**: absent/empty fields render nothing, so older payload consumers and specs without the relevant signal are unaffected (no schema version bump).
 
-- `diff_summary.files[].changed_symbols` — the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`"). May be empty per file where git can't detect a function — the render falls back to file-level anchoring, never fabricates.
-- `diff_summary.files[].derived` — `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Classifies generated / copied / bookkeeping files so the render can bucket them as safe-to-skim. Precedence is dual-copy → mirror → state → none; a **dual-copy verified byte-identical to its named source at export time** is `dual-copy`, but a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror and `.flow/` state — there is no default dual-copy pair, since nothing is copied into a repo any more; the `dual-copy` kind stays supported for projects that configure their own pairs); a configured value fully replaces the default.
-- `removed_export_refs` — top-level list of symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: removed top-level definitions are word-boundary `git grep`-ed against the working tree (the removals are already gone from HEAD, so they never self-match), bounded to the source extensions the diff touched. Each entry is `{symbol, defined_in, refs: [{path, line, text}]}`. Empty list ⇒ the render states "no removed symbols still referenced (checked at export time)". False positives are acceptable (they steer a human look); completeness is never claimed.
-- `tasks[].evidence.files` — each task's claimed files (recorded at `flowctl done` time) surfaced verbatim, so the render maps task → files → commits without re-deriving. Sits alongside the existing `commits` / `tests` / `files_touched` evidence keys.
+- `diff_summary.files[].changed_symbols` - the function/section context per changed file, parsed from `git diff` hunk headers (the `@@ … @@ <context>` line git derives from its per-language xfuncname detection). Gives must-review items their anchors ("open `_dispatch_review_with_fallback`"). May be empty per file where git can't detect a function - the render falls back to file-level anchoring, never fabricates.
+- `diff_summary.files[].derived` - `{kind: mirror|dual-copy|state|none, source: <path|tool>}`. Classifies generated / copied / bookkeeping files so the render can bucket them as safe-to-skim. Precedence is dual-copy → mirror → state → none; a **dual-copy verified byte-identical to its named source at export time** is `dual-copy`, but a **drifted** copy is `none` (a real review item, not safe-to-skim). Rules come from the optional `makePr.derivedPaths` config leaf (default = flow-next's own shapes: the `plugins/flow-next/codex/` mirror and `.flow/` state - there is no default dual-copy pair, since nothing is copied into a repo any more; the `dual-copy` kind stays supported for projects that configure their own pairs); a configured value fully replaces the default.
+- `removed_export_refs` - top-level list of symbols DELETED in the diff that are STILL referenced elsewhere in the repo (the classic silent-breakage class a skimming reviewer misses). Conservative candidates-not-proof: removed top-level definitions are word-boundary `git grep`-ed against the working tree (the removals are already gone from HEAD, so they never self-match), bounded to the source extensions the diff touched. Each entry is `{symbol, defined_in, refs: [{path, line, text}]}`. Empty list ⇒ the render states "no removed symbols still referenced (checked at export time)". False positives are acceptable (they steer a human look); completeness is never claimed.
+- `tasks[].evidence.files` - each task's claimed files (recorded at `flowctl done` time) surfaced verbatim, so the render maps task → files → commits without re-deriving. Sits alongside the existing `commits` / `tests` / `files_touched` evidence keys.
 
 **Declared vs evidenced coverage (fn-180, #301).** `tasks_summary` answers two
 distinct questions with two sets: `uncovered_r_ids` (existing, unchanged) is
@@ -445,7 +532,7 @@ Single-task output:
 
 #### `--from-json` bulk create
 
-`--from-json <path|->` creates N tasks in one call under one per-spec lock. Mutually exclusive with `--title` and all single-task field flags. Body is a bare, non-empty JSON array of task objects (no wrapper object). Whole file is validated up front; any invalid entry rejects the entire batch — no partial tasks written.
+`--from-json <path|->` creates N tasks in one call under one per-spec lock. Mutually exclusive with `--title` and all single-task field flags. Body is a bare, non-empty JSON array of task objects (no wrapper object). Whole file is validated up front; any invalid entry rejects the entire batch - no partial tasks written.
 
 Example (`tasks.json`):
 ```json
@@ -493,7 +580,7 @@ Set task title. Updates both the JSON `title` field and the markdown H1 together
 flowctl task set-title fn-1.2 --title "New title" [--json]
 ```
 
-Task ids are permanent — only the display title changes (no file rename).
+Task ids are permanent - only the display title changes (no file rename).
 
 ### task set-description
 
@@ -568,9 +655,9 @@ flowctl show fn-1 [--json]     # Spec with tasks
 flowctl show fn-1.2 [--json]   # Task only
 ```
 
-Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (1.12.0+ — absent on-disk key reads `false`, so consumers always see a stable boolean).
+Spec output includes `tasks` array with id/title/status/priority/depends_on, plus an explicit `"ready": <bool>` (1.12.0+ - absent on-disk key reads `false`, so consumers always see a stable boolean).
 
-Task entries under `--json` always carry `status_source`: `"flow-state"` when the runtime state store answered (authoritative), `"committed"` when the answer came from the tracked task file — a snapshot that can be arbitrarily stale in a fresh or diff-scoped checkout. Plain output prints one advisory line per invocation when the runtime state directory is absent entirely (`note: runtime state absent; task status read from committed files and may be stale`). Provenance only — no status semantics change, and the field is never persisted.
+Task entries under `--json` always carry `status_source`: `"flow-state"` when the runtime state store answered (authoritative), `"committed"` when the answer came from the tracked task file - a snapshot that can be arbitrarily stale in a fresh or diff-scoped checkout. Plain output prints one advisory line per invocation when the runtime state directory is absent entirely (`note: runtime state absent; task status read from committed files and may be stale`). Provenance only - no status semantics change, and the field is never persisted.
 
 ### specs
 
@@ -585,7 +672,7 @@ Output:
 {"success": true, "specs": [{"id": "fn-1", "title": "...", "status": "open", "ready": false, "tasks": 5, "done": 2}], "count": 1}
 ```
 
-Human-readable output shows progress: `[open] fn-1: Title (2/5 tasks done)`. Ready specs carry a badge — `[open] [ready] fn-1: …` — shown **only** when the flag is set (no draft-noise for non-adopters).
+Human-readable output shows progress: `[open] fn-1: Title (2/5 tasks done)`. Ready specs carry a badge - `[open] [ready] fn-1: …` - shown **only** when the flag is set (no draft-noise for non-adopters).
 
 ### tasks
 
@@ -611,7 +698,7 @@ List all specs with their tasks grouped together.
 
 Perf: repo-root/state-dir git lookups are memoized per process (fn-109), so listing hundreds of tasks costs a handful of subprocess spawns instead of two per task (30.8s -> <1s at 400 tasks).
 
-Task entries under `--json` carry the same `status_source` provenance field as `show`, and plain output prints the same absent-runtime advisory (one line per invocation). `list`, `status`, and `next` deliberately perform NO upstream-staleness check — they are the high-frequency polls the fn-109 win protects; the behind-upstream advisory below belongs to `ready`/`anchor` only.
+Task entries under `--json` carry the same `status_source` provenance field as `show`, and plain output prints the same absent-runtime advisory (one line per invocation). `list`, `status`, and `next` deliberately perform NO upstream-staleness check - they are the high-frequency polls the fn-109 win protects; the behind-upstream advisory below belongs to `ready`/`anchor` only.
 
 ```bash
 flowctl list [--json]
@@ -649,7 +736,7 @@ flowctl cat fn-1.2    # Task spec
 
 ### brief
 
-Session-scope re-anchor — one budgeted, deterministic, pure-read orientation call for cold sessions. Prints a markdown `# Session brief`: repo path, counts (Open specs / Ready / In progress / Done / Memory on|off), then sections Open specs, Actionable tasks, Recent completions, Memory index lines, and Pointers (go-deeper: `cat`, `anchor <task-id> --md`, `memory search`, `ready` / `list`).
+Session-scope re-anchor - one budgeted, deterministic, pure-read orientation call for cold sessions. Prints a markdown `# Session brief`: repo path, counts (Open specs / Ready / In progress / Done / Memory on|off), then sections Open specs, Actionable tasks, Recent completions, Memory index lines, and Pointers (go-deeper: `cat`, `anchor <task-id> --md`, `memory search`, `ready` / `list`).
 
 ```bash
 flowctl brief          # markdown render (default; 8000-char budget)
@@ -658,12 +745,12 @@ flowctl brief --full   # lift the 8000-char budget (all rows retained)
 ```
 
 - **Budget / truncation:** 8000 chars on both markdown and `--json`. Over budget, whole tiers drop in priority order with an explicit marker per dropped tier, e.g. `[truncated: memory lines omitted — use --full]`.
-- **Guarantees:** no git subprocesses, no writes — deterministic and read-only. Git state is deliberately excluded (run `git status` yourself).
-- Task-scope counterpart: [`anchor`](#anchor) (`flowctl anchor <task-id>`) — verbatim worker Phase-1 bundle, floor-not-ceiling, no budget.
+- **Guarantees:** no git subprocesses, no writes - deterministic and read-only. Git state is deliberately excluded (run `git status` yourself).
+- Task-scope counterpart: [`anchor`](#anchor) (`flowctl anchor <task-id>`) - verbatim worker Phase-1 bundle, floor-not-ceiling, no budget.
 
 ### anchor
 
-Single-call worker anchor bundle — the `/flow-next:work` worker's entire Phase-1 re-anchor in one deterministic, pure read. Session-scope budgeted counterpart: [`brief`](#brief).
+Single-call worker anchor bundle - the `/flow-next:work` worker's entire Phase-1 re-anchor in one deterministic, pure read. Session-scope budgeted counterpart: [`brief`](#brief).
 
 ```bash
 flowctl anchor fn-1.2          # Worker-facing markdown render (default)
@@ -671,7 +758,7 @@ flowctl anchor fn-1.2 --md     # Explicit markdown render
 flowctl anchor fn-1.2 --json   # Machine form (sections + dependencies)
 ```
 
-Sections come in fixed order, each the **verbatim captured stdout of the same production function the standalone command dispatches to** (no re-parsing, no filtering, no truncation): `show <task> --json`, `cat <task>`, `show <spec> --json`, `cat <spec>`, `git status`, `git log -5 --oneline`, `git rev-parse --abbrev-ref HEAD`, `config get memory.enabled --json`, `glossary list --json`, and `memory list --json` (captured only when `memory.enabled` resolves true — mirroring the worker's own conditional read; otherwise the section carries a skip `note`). A final dependencies section lists each `depends_on` task's id, title, status, and `## Done summary` (fence-aware section read), in the task file's recorded order. The byte-for-byte superset test (`tests/test_anchor_bundle.py`) locks every section against the real CLI wire-form output.
+Sections come in fixed order, each the **verbatim captured stdout of the same production function the standalone command dispatches to** (no re-parsing, no filtering, no truncation): `show <task> --json`, `cat <task>`, `show <spec> --json`, `cat <spec>`, `git status`, `git log -5 --oneline`, `git rev-parse --abbrev-ref HEAD`, `config get memory.enabled --json`, `glossary list --json`, and `memory list --json` (captured only when `memory.enabled` resolves true - mirroring the worker's own conditional read; otherwise the section carries a skip `note`). A final dependencies section lists each `depends_on` task's id, title, status, and `## Done summary` (fence-aware section read), in the task file's recorded order. The byte-for-byte superset test (`tests/test_anchor_bundle.py`) locks every section against the real CLI wire-form output.
 
 `--json` shape:
 
@@ -688,9 +775,9 @@ Sections come in fixed order, each the **verbatim captured stdout of the same pr
 }
 ```
 
-- **Fail-open, never a crash:** a broken section is reported inline — markdown renders `(section unavailable: <reason> — run `` `<command>` `` directly)`, JSON carries the `error` field — so the caller falls back to running that one read directly. Same for an unloadable dependency (`error: "task not loadable"`).
-- **Floor, not a ceiling:** the bundle replaces the worker's discrete Phase-1 reads but caps nothing — memory keyword-search (`flowctl memory search`) and every further read stay available.
-- Pure read (no state mutation, no `updated_at` bumps); markdown banner lines (`===== [k/N] …`) cannot collide with embedded content — spec/task bodies never start lines with `===== [`.
+- **Fail-open, never a crash:** a broken section is reported inline - markdown renders `(section unavailable: <reason> — run `` `<command>` `` directly)`, JSON carries the `error` field - so the caller falls back to running that one read directly. Same for an unloadable dependency (`error: "task not loadable"`).
+- **Floor, not a ceiling:** the bundle replaces the worker's discrete Phase-1 reads but caps nothing - memory keyword-search (`flowctl memory search`) and every further read stay available.
+- Pure read (no state mutation, no `updated_at` bumps); markdown banner lines (`===== [k/N] …`) cannot collide with embedded content - spec/task bodies never start lines with `===== [`.
 - `--json` and `--md` are mutually exclusive; invalid/unresolvable task id or missing `.flow/` → standard error exit (JSON envelope under `--json`). Short task ids resolve via the usual resolution rules.
 
 ### ready
@@ -729,7 +816,7 @@ Spec-level deps gate the whole spec (same rule as `next`): when the spec's `depe
 }
 ```
 
-**`ready --all`** (fn-68, backlog mode) — a **spec-level** backlog-wide eligibility scan (ignores `--spec`), the deterministic substrate `/flow-next:pilot` backlog mode (`pilot.autonomy=backlog`) consumes:
+**`ready --all`** (fn-68, backlog mode) - a **spec-level** backlog-wide eligibility scan (ignores `--spec`), the deterministic substrate `/flow-next:pilot` backlog mode (`pilot.autonomy=backlog`) consumes:
 
 ```bash
 flowctl ready --all [--json]
@@ -761,11 +848,11 @@ flowctl pilot strikes clear --all [--json]
 - `list` is empty-safe: a missing ledger, an empty ledger, or a non-git directory all render an empty result and exit `0`.
 - `clear <spec-id>` removes exactly one entry atomically and leaves every other entry untouched. An unknown spec id is a **distinct not-found** (exit `3`) that names the known entries - never silent success. A bare handle (`fn-184`) resolves to its canonical ledger key.
 - Clearing a strike **never touches spec readiness** in either direction. Strikes are pilot state, not readiness state (fn-184, #325).
-- This is the recognized human clear on a repo with `tracker.readyState` armed, where a board-set ready is a projection echo pilot cannot distinguish from a deliberate re-ready: see [`tracker-sync.md`](tracker-sync.md#readiness-projection--trackerreadystate--local-ready-flag) and [`troubleshooting.md`](troubleshooting.md).
+- This is the recognized human clear on a repo with `tracker.readyState` armed, where a board-set ready is a projection echo pilot cannot distinguish from a deliberate re-ready: see [`tracker-sync.md`](tracker-sync.md#readiness-projection-trackerreadystate-local-ready-flag) and [`troubleshooting.md`](troubleshooting.md).
 
 ### pilot-log
 
-The per-tick **decision log** `/flow-next:pilot` backlog mode (fn-68) writes — the factory-metrics substrate (and the later self-improvement-synthesis substrate). Receipt-shaped rows under `.flow/pilot-runs/` (a sync-runs-style dir, auto-gitignored) — deliberately **NOT** any `receipts/` path the ralph-guard validates, so a pilot-log row never trips a Ralph receipt gate.
+The per-tick **decision log** `/flow-next:pilot` backlog mode (fn-68) writes - the factory-metrics substrate (and the later self-improvement-synthesis substrate). Receipt-shaped rows under `.flow/pilot-runs/` (a sync-runs-style dir, auto-gitignored) - deliberately **NOT** any `receipts/` path the ralph-guard validates, so a pilot-log row never trips a Ralph receipt gate.
 
 ```bash
 # Append one row (called by the skill at each backlog terminal)
@@ -894,7 +981,7 @@ All specs output:
 }
 ```
 
-A duplicate native `fn-N` ordinal whose full ids are distinct is a top-level **`root_warnings`** entry (counted in `total_warnings`), not a `root_error` — the full ids are the identity; the collision is untidy, not broken. Bare `fn-N` resolution disambiguates rather than guessing.
+A duplicate native `fn-N` ordinal whose full ids are distinct is a top-level **`root_warnings`** entry (counted in `total_warnings`), not a `root_error` - the full ids are the identity; the collision is untidy, not broken. Bare `fn-N` resolution disambiguates rather than guessing.
 
 Checks:
 - Spec/task markdown exists
@@ -946,41 +1033,41 @@ flowctl config set memory.enabled false [--json]
 |-----|------|---------|-------------|
 | `memory.enabled` | bool | `true` | Enable memory system |
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion (opt-in since 4.5.1; earlier inits wrote `true`) |
-| `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync — scan other open specs for stale references after each task (opt-in; increases sync time)* |
+| `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync - scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
-| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` — cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
-| `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (Ralph / pilot / receipt harness) this key may only **lower** the cap, never raise it — whatever wrote the file and however it was written — so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. Additionally the guard blocks `config set` on this key (in both its leaf and parent-key JSON forms), file-tool writes to `.flow/config.json`, and a `MAX_REVIEW_ITERATIONS=` assignment, because fn-159's invariant is that the implementing agent can never reset or extend its own gate. The guard does not fire on Cursor (different hook events), where the rule degrades to prose only — same as the existing counter-reset block. |
+| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (Ralph / pilot / receipt harness) this key may only **lower** the cap, never raise it - whatever wrote the file and however it was written - so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. Additionally the guard blocks `config set` on this key (in both its leaf and parent-key JSON forms), file-tool writes to `.flow/config.json`, and a `MAX_REVIEW_ITERATIONS=` assignment, because fn-159's invariant is that the implementing agent can never reset or extend its own gate. The guard does not fire on Cursor (different hook events), where the rule degrades to prose only - same as the existing counter-reset block. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
-| `tracker.specIds` | string | `flow` (merged default; **unset-detectable** on disk) | Id scheme for new specs when a tracker bridge is active: `flow` (native `fn-N`) or `tracker` (tracker-keyed `KEY-N-slug` / synthetic `gh-N` / `gl-N`). Strict enum — invalid CLI writes rejected; malformed on-disk values fail closed to `flow`. Not materialized at init so setup can ask once when a tracker is configured and the key is still absent. Skills route to `--tracker-first` / create-first when value is `tracker` and the bridge is active. See [`tracker-sync.md`](tracker-sync.md). |
+| `tracker.specIds` | string | `flow` (merged default; **unset-detectable** on disk) | Id scheme for new specs when a tracker bridge is active: `flow` (native `fn-N`) or `tracker` (tracker-keyed `KEY-N-slug` / synthetic `gh-N` / `gl-N`). Strict enum - invalid CLI writes rejected; malformed on-disk values fail closed to `flow`. Not materialized at init so setup can ask once when a tracker is configured and the key is still absent. Skills route to `--tracker-first` / create-first when value is `tracker` and the bridge is active. See [`tracker-sync.md`](tracker-sync.md). |
 | `tracker.provenance` | string | `null` | Free-form provenance written by the discovery ceremony on confirmation (who/when/signals). |
-| `tracker.perEvent.<event>` | string | `off` | Per-lifecycle-event sync op. Events: `capture`, `interview`, `plan`, `work.firstClaim`, `work.done`, `makePr`, `resolvePr`, `completionReview`. Leaf values: `off | pull | push | reconcile | comment`. **Schema default `off`** — so a bare `enabled=true` set without the ceremony fires no lifecycle-event sync (accidental-enable guard; two paths are unconditional whenever the bridge is active — make-pr's PR↔issue link + `In Review` push, and `land.merged`'s `Done`-on-merge — see [`tracker-sync.md`](tracker-sync.md)). But the `/flow-next:tracker-sync` discovery ceremony **activates all events by default (opt-out)** when you hook up the bridge; you turn any off with `config set tracker.perEvent.<event> off`. `completionReview` is seeded `comment` (verdict + R-ID coverage; **never terminal `Done`** — fn-66). |
-| `tracker.perEvent.qa` | string | `off` | **`/flow-next:qa` verdict post (fn-53, R9).** Posts the live-app QA ship verdict (`type: qa_verdict`) as a tracker comment when set non-`off` AND the bridge is active. Leaf values: **`off | comment` only** — `comment` is the only sensible verb for a verdict; `push`/`pull`/`reconcile` operate on the issue body/status and don't apply, so the QA skill treats any non-`off` value as `comment`. **Default `off`, and — unlike the other events — NOT switched on by the discovery ceremony's opt-out default-on set**: a QA verdict post is QA-specific opt-in, enabled explicitly with `config set tracker.perEvent.qa comment`. The post is best-effort and never blocks the verdict. |
-| `tracker.perEvent.land.merged` | string | `off` | **`/flow-next:land` post-merge touchpoint (fn-60, 1.14.0+; fn-66 made it the sole `Done` driver).** After land merges a PR and closes its spec, dispatches tracker-sync (`operation: push <spec-id>`, event tag `land.merged`) — status flips to the **merge-confirmed** terminal state (`done`/`verified`, gated on the GitHub `MERGED` probe) and the merge/release verdict comment is posted. **fn-66: active-by-default whenever the bridge is active** — a real merge is the ONLY event that legitimately projects terminal `Done`, so this touchpoint rides the bridge-active predicate alone (NOT gated behind this leaf, which then only tunes the optional verdict comment). The schema default stays `off` (accidental-enable guard); the land skill fires it on bridge-active regardless. Best-effort — a tracker failure never blocks land's tail or changes the PR's verdict. |
+| `tracker.perEvent.<event>` | string | `off` | Per-lifecycle-event sync op. Events: `capture`, `interview`, `plan`, `work.firstClaim`, `work.done`, `makePr`, `resolvePr`, `completionReview`. Leaf values: `off | pull | push | reconcile | comment`. **Schema default `off`** - so a bare `enabled=true` set without the ceremony fires no lifecycle-event sync (accidental-enable guard; two paths are unconditional whenever the bridge is active - make-pr's PR↔issue link + `In Review` push, and `land.merged`'s `Done`-on-merge - see [`tracker-sync.md`](tracker-sync.md)). But the `/flow-next:tracker-sync` discovery ceremony **activates all events by default (opt-out)** when you hook up the bridge; you turn any off with `config set tracker.perEvent.<event> off`. `completionReview` is seeded `comment` (verdict + R-ID coverage; **never terminal `Done`**). |
+| `tracker.perEvent.qa` | string | `off` | **`/flow-next:qa` verdict post.** Posts the live-app QA ship verdict (`type: qa_verdict`) as a tracker comment when set non-`off` AND the bridge is active. Leaf values: **`off | comment` only** - `comment` is the only sensible verb for a verdict; `push`/`pull`/`reconcile` operate on the issue body/status and don't apply, so the QA skill treats any non-`off` value as `comment`. **Default `off`, and - unlike the other events - NOT switched on by the discovery ceremony's opt-out default-on set**: a QA verdict post is QA-specific opt-in, enabled explicitly with `config set tracker.perEvent.qa comment`. The post is best-effort and never blocks the verdict. |
+| `tracker.perEvent.land.merged` | string | `off` | **`/flow-next:land` post-merge touchpoint (1.14.0+), and the sole `Done` driver.** After land merges a PR and closes its spec, dispatches tracker-sync (`operation: push <spec-id>`, event tag `land.merged`) - status flips to the **merge-confirmed** terminal state (`done`/`verified`, gated on the GitHub `MERGED` probe) and the merge/release verdict comment is posted. **Active by default whenever the bridge is active.** - a real merge is the ONLY event that legitimately projects terminal `Done`, so this touchpoint rides the bridge-active predicate alone (NOT gated behind this leaf, which then only tunes the optional verdict comment). The schema default stays `off` (accidental-enable guard); the land skill fires it on bridge-active regardless. Best-effort - a tracker failure never blocks land's tail or changes the PR's verdict. |
 | `tracker.perTracker.teamId` / `projectId` / `labelMap` / `priorityMap` | mixed | `null` / `{}` | Per-tracker linkage hints (Linear team/project ids; label/priority maps). |
 | `tracker.perTracker.repo` / `project` / `host` | string | `null` | Tracker-specific repo/project linkage. **GitHub** writes `repo` (`owner/name`). **GitLab** writes `project` (the group/sub-group/project path, e.g. `group/subgroup/project`; URL-encoded once for the API, never double-encoded) and, for self-managed hosts, `host`. Written by the `/flow-next:tracker-sync` discovery ceremony on confirmation. |
-| `tracker.perTracker.baseUrl` / `projectKey` / `authScheme` / `apiVersion` / `statusMap` / `sslVerify` | mixed | `null` / `{}` / `true` | **Jira linkage (fn-70).** `baseUrl`, `projectKey`, `authScheme`, and `apiVersion` default to `null`; `statusMap` defaults to `{}`; `sslVerify` defaults to `true`. The resolver pins `tracker.resolved.destination.apiVersion` to `2` for both deployment shapes because measured v2 issue bodies round-trip as plain strings byte-exact, and migration rewrites a legacy configured `3` to `2`. `baseUrl` is the site base; `projectKey` is the JQL scope; `authScheme` is `cloud-basic` or `bearer-pat`; `statusMap` maps normalized slots to Jira transition targets. `sslVerify=false` is an explicit opt-out for a self-hosted certificate. Written by the discovery ceremony on confirmation (references/jira.md). |
+| `tracker.perTracker.baseUrl` / `projectKey` / `authScheme` / `apiVersion` / `statusMap` / `sslVerify` | mixed | `null` / `{}` / `true` | **Jira linkage.** `baseUrl`, `projectKey`, `authScheme`, and `apiVersion` default to `null`; `statusMap` defaults to `{}`; `sslVerify` defaults to `true`. The resolver pins `tracker.resolved.destination.apiVersion` to `2` for both deployment shapes because measured v2 issue bodies round-trip as plain strings byte-exact, and migration rewrites a legacy configured `3` to `2`. `baseUrl` is the site base; `projectKey` is the JQL scope; `authScheme` is `cloud-basic` or `bearer-pat`; `statusMap` maps normalized slots to Jira transition targets. `sslVerify=false` is an explicit opt-out for a self-hosted certificate. Written by the discovery ceremony on confirmation (references/jira.md). |
 | `tracker.staleAfterHours` | int | `24` | Staleness threshold (hours) consumed by `sync list-stale`. |
 | `tracker.conflictTiebreak` | string | `always-ask` | Status who-wins tiebreak: `flow-wins | tracker-wins | always-ask`. Strict enum: invalid CLI writes are rejected, and malformed persisted values return runtime `INVALID_INPUT` before status claims or lifecycle sequence work. In Ralph mode `always-ask` resolves to *queue*, not prompt. |
-| `tracker.readyState` | string | `null` | **Readiness projection (fn-58, 1.12.0+).** The tracker workflow state that means "ready for work" — a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` — a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready — a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag — **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
-| `land.release` | bool | `true` | **`/flow-next:land` (fn-60, 1.14.0+).** Run the post-merge release-follow step (the project's own release docs; also no-ops when no release docs are discovered). `false` = stop at merge. |
+| `tracker.readyState` | string | `null` | **Readiness projection (1.12.0+).** The tracker workflow state that means "ready for work" - a Linear workflow-state **name** or a **Jira status name** (both matched case-insensitive/trimmed against `status.raw`; names, not `state.type` - a custom "Ready" state is typically `type=unstarted`, indistinguishable from Todo by type alone; the Jira name is used RAW in the promoted-lane JQL, validated to exist at ceremony time), or a GitHub / GitLab **label** (pre-created at ceremony time; label present ⇒ ready, absent ⇒ not ready - a normal state, never an error). Set by the `/flow-next:tracker-sync` discovery ceremony (optional, skippable). When set, every pull-side sync projects the state onto the local spec `ready` flag - **one-way, tracker → local; the tracker is authoritative** (a local `spec ready` is overwritten on the next sync, and capture/interview's mark-ready prompt is gated off). A single scalar at the tracker top level (sibling of `conflictTiebreak`), not under `perTracker`. `null` = projection off (readiness gate dormant); clear with `flowctl config set tracker.readyState null` (the literal `null` token is stored as JSON null, not the string). |
+| `land.release` | bool | `true` | **`/flow-next:land` (1.14.0+).** Run the post-merge release-follow step (the project's own release docs; also no-ops when no release docs are discovered). `false` = stop at merge. |
 | `land.patienceMinutes` | int | `30` | Land's reviewer patience window, anchored to the LAST push (a land-authored CI-fix push restarts it). |
 | `land.reviewSignal` | string | `silence` | Land's merge review-signal: `silence` (automated review present + zero unresolved threads + window elapsed), `approve` (formal `reviewDecision == APPROVED`), or a GitHub login (that reviewer's latest review must be clean). |
 | `land.automatedReviewers` | string | `""` | CSV allowlist of reviewer logins land counts as automated, supplementing the `[bot]`-suffix rule. |
-| `land.reviewTrigger` | string | `""` | One-shot comment land posts to summon a reviewer bot on a draft PR with zero automated reviews. Recommended opt-in text: `"@codex review — focus on integration effects, the diff as narrative, and cross-task regressions. Spec/doc-prose findings are welcome as FYI, not merge-gating."` Bots do not auto-review drafts. Empty = never post. Bot comments are outside the review detector and Ralph-guard blast radius. |
-| `land.cleanReviewCommentPattern` | string | `(Didn'?t find any( major)? issues\|No( major)? issues found).*Reviewed commit` | **`/flow-next:land` clean-review comment signal (fn-65, 2.1.1+).** Under the default `silence` review signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate. Land scans `issues/<n>/comments` for an automated-reviewer (`[bot]`-suffix or `land.automatedReviewers`) comment matching this ERE that names the **current head SHA**, and only ever *adds* this evidence (CI, unresolved-thread, and window gates are unchanged; a stale-SHA or non-automated comment is ignored). The default is the structured built-in ERE shown here — it requires BOTH the clean phrase AND the `Reviewed commit` marker, so a bare "no issues" mention never satisfies the gate. `null`/missing (an unseeded older repo) falls back to this built-in default; **set to an empty string `""` to disable the comment scan** (pure reviews-API behavior — the only real off-switch). |
+| `land.reviewTrigger` | string | `""` | One-shot comment land posts to summon a reviewer bot on a draft PR with zero automated reviews. Recommended opt-in text: `"@codex review - focus on integration effects, the diff as narrative, and cross-task regressions. Spec/doc-prose findings are welcome as FYI, not merge-gating."` Bots do not auto-review drafts. Empty = never post. Bot comments are outside the review detector and Ralph-guard blast radius. |
+| `land.cleanReviewCommentPattern` | string | `(Didn'?t find any( major)? issues\|No( major)? issues found).*Reviewed commit` | **`/flow-next:land` clean-review comment signal (2.1.1+).** Under the default `silence` review signal, a review bot that posts a no-findings **issue comment** instead of a formal APPROVE (e.g. Codex's "Didn't find any major issues. Reviewed commit: `<sha>`") also satisfies the gate. Land scans `issues/<n>/comments` for an automated-reviewer (`[bot]`-suffix or `land.automatedReviewers`) comment matching this ERE that names the **current head SHA**, and only ever *adds* this evidence (CI, unresolved-thread, and window gates are unchanged; a stale-SHA or non-automated comment is ignored). The default is the structured built-in ERE shown here - it requires BOTH the clean phrase AND the `Reviewed commit` marker, so a bare "no issues" mention never satisfies the gate. `null`/missing (an unseeded older repo) falls back to this built-in default; **set to an empty string `""` to disable the comment scan** (pure reviews-API behavior - the only real off-switch). |
 | `land.ciFixBudget` | int | `3` | CI-fix attempts per PR before land durably labels it `flow-next:needs-human` and skips it on later ticks. |
-| `land.mergeVerdictCommand` | string | `""` | **Opt-in repo merge-verdict gate (fn-188, #330).** A shell command land runs as the merge gate of record, once per merge attempt — reached only after every other gate (CI, review threads, QA receipt, merge state) is satisfied and the planned action is `merge`. Verdict is the **exit code only**: `0` = green, any non-zero = `NEEDS_HUMAN` with action `none`. **Fail-closed**: a missing/unexecutable command, the 600s timeout, and signal death all *block* — never skip. Context arrives as **environment only** (`FLOW_HEAD_SHA`, `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`); the configured string is never built from PR-derived text. It runs with cwd = repo root on the **base checkout** (land does not check out the PR branch for it), so the command must key on `$FLOW_HEAD_SHA` and refuse when it cannot see that head. **Never executed under `--dry-run`** (the classification report says `would-run: <command>`). **Unset, `null`, and `""` all mean OFF** — note this differs from `land.cleanReviewCommentPattern`, where `null` and `""` mean different things. Intended for repos with no server-side branch protection (free-plan private repos), where no required status check exists. |
-| `land.requestReviewers` | string | `""` | **Opt-in human reviewer request (fn-200, #359).** CSV of GitHub logins and/or `org/team` slugs and/or the literal token `codeowners`. Fires exactly when a human review is the **sole missing merge input** — CI green, zero unresolved threads, and either the `approve`/`<login>` signal is still unsatisfied (no review yet, or a stale/dismissed one) or the `silence` signal is satisfied but `reviewDecision == REVIEW_REQUIRED` (a merge GitHub would refuse). Land then plans the Phase 3 action class `§3.4b — request-reviewers`: flips a draft PR to ready (so "ready" keeps meaning "a human may review now"), requests the list minus the PR author (`codeowners` rides the ready flip — GitHub resolves owners itself; no local CODEOWNERS parsing), and records `reviewRequestSha` in the land ledger — **one-shot per PR per head SHA**, claimed atomically so overlapping ticks cannot double-request; a land-authored CI-fix push moves the head and re-arms only if the human's review is again missing. A failed `gh pr ready` / `--add-reviewer` still records the head (one attempt, no retry loop) and reports `reviewers=failed:<reason>` with the window-bounded verdict (`AWAITING_REVIEW` / `NEEDS_HUMAN`), never `BLOCKED`. **Never gates a merge** — `land.reviewSignal` does; a team that wants a human look on every PR sets `reviewSignal: approve`. `--dry-run` reports `action=request-reviewers reviewers=would-request` (plus `would-ready` for a draft) from Phase 2 alone and mutates nothing. Evidence field on the `signal=` line: `reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>`. **Unset, `null`, and `""` all mean OFF** (`reviewers=off` — reserved for that case; a configured key whose predicate is false reports `reviewers=skipped:not-due`; every other gate, action, and ledger write unchanged). |
-| `artifacts.html.enabled` | bool | `false` | **Optional HTML artifact mode (fn-62, 2.0.0+).** Enable with `flowctl config set artifacts.html.enabled true`: participating skills (capture, plan, make-pr) load the shared render-lens reference and emit self-contained HTML artifacts at the fixed paths `.flow/artifacts/<spec-id>/spec.html` / `pr.html` (regenerable lenses, never timestamped — markdown stays the sole source of truth and artifacts are never parsed back as state). **OFF by default** — with it off, no reference file loads, no artifacts are written, no Lavish session opens; behavior is byte-identical to markdown-only. flowctl only stores the knob; generation is skill-side. |
-| `pipeline.qa` | `off \| on` | `off` | **Optional QA pipeline stage (fn-72, 2.2.0+).** Enable with `flowctl config set pipeline.qa on` — this is a **string-enum** knob (`off \| on`), **NOT a bool**; the activating value is the literal string `on` and **any other value, including bool `true`, is OFF** (the `/flow-next:pilot` gate read is the canonical 3-clause guard `value != "off" && value != "null"`). With it `on`, pilot inserts a `qa` stage at the **all-tasks-done** juncture (before make-pr): one live `/flow-next:qa` pass over the complete build, surfacing its `qa_outcome` into the draft PR. **OFF by default** — with it off, pilot's stage set and behavior are byte-for-byte unchanged. Augments (never replaces) CI/staging/manual QA; `BLOCKED` (no local app) / `NA` (no UI) advance, `NEEDS_WORK` still advances to the draft PR + surfaces findings (it never hard-blocks the loop). flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
-| `chart.maxDecisions` | int | `12` | **Chart size ceiling (fn-135).** Charting-time only: `chart create --initial-map-file` refuses past this count without `--force-size --reason` (audited: actor, ceiling, proposed count, timestamp, reason). Later sharpening from Open Questions may grow past it. |
-| `chart.claimStaleAfter` | number (hours) | `24` | **Stale-claim recovery threshold (fn-135).** `chart release-claim --break-stale --reason` is allowed only after a claim is at least this old; always audited (actor, prior owner, age, reason). No silent expiry. |
-| `tracker.charts` | `off \| on` | `off` | **Optional chart lifecycle projection (fn-135).** String-enum, **NOT a bool**: only the literal `on` projects charts as parent issues with decision children through the tracker facade. Local chart operations always succeed when off or when the bridge is inactive. Rollups are visibility only - never a control plane. |
-| `pilot.autonomy` | `ready \| backlog` | `ready` | **Pilot backlog mode (fn-68).** A **scalar string-enum** (`ready \| backlog`), **NOT a bool**. `ready` (default) = current behavior: pilot selects only already-ready specs. Set to the literal `backlog` (`flowctl config set pilot.autonomy backlog`, or per-run `--backlog` / `--auto`) to enable **backlog mode** — pilot widens selection to the whole open backlog (flow specs via `ready --all` + tracker issues unioned by the skill), triages the top dep-ordered item, and either advances it or surfaces an async question (`ASKED`). **Only the literal `backlog` activates** — any other value (bool `true`, a typo, `null`) leaves pilot byte-for-byte in `ready` mode, and `references/backlog-mode.md` is never read. Backlog mode **never authors a spec, never sets `ready`, never merges**; readiness stays the human's explicit signal. flowctl only stores the knob; the SELECT/TRIAGE/ASK workflow is host-agent skill wiring. |
-| `pilot.gateClasses` | string[] | `[]` | **Backlog-mode force-gate (fn-68).** An optional list of class names (e.g. `["risky", "prod-config"]`) that, in backlog mode, force **surfacing before action** — a matching item is parked with a question (`ASKED`) instead of advanced full-auto, even when otherwise workable. A **sibling** key, deliberately NOT `pilot.autonomy.gate` (a scalar and an object cannot share the `pilot.autonomy` dot-path). Empty `[]` (default) = full-auto for every workable item. |
+| `land.mergeVerdictCommand` | string | `""` | **Opt-in repo merge-verdict gate.** A shell command land runs as the merge gate of record, once per merge attempt - reached only after every other gate (CI, review threads, QA receipt, merge state) is satisfied and the planned action is `merge`. Verdict is the **exit code only**: `0` = green, any non-zero = `NEEDS_HUMAN` with action `none`. **Fail-closed**: a missing/unexecutable command, the 600s timeout, and signal death all *block* - never skip. Context arrives as **environment only** (`FLOW_HEAD_SHA`, `FLOW_BASE_REF`, `FLOW_PR_NUMBER`, `FLOW_SPEC_ID`); the configured string is never built from PR-derived text. It runs with cwd = repo root on the **base checkout** (land does not check out the PR branch for it), so the command must key on `$FLOW_HEAD_SHA` and refuse when it cannot see that head. **Never executed under `--dry-run`** (the classification report says `would-run: <command>`). **Unset, `null`, and `""` all mean OFF** - note this differs from `land.cleanReviewCommentPattern`, where `null` and `""` mean different things. Intended for repos with no server-side branch protection (free-plan private repos), where no required status check exists. |
+| `land.requestReviewers` | string | `""` | **Opt-in human reviewer request.** CSV of GitHub logins and/or `org/team` slugs and/or the literal token `codeowners`. Fires exactly when a human review is the **sole missing merge input** - CI green, zero unresolved threads, and either the `approve`/`<login>` signal is still unsatisfied (no review yet, or a stale/dismissed one) or the `silence` signal is satisfied but `reviewDecision == REVIEW_REQUIRED` (a merge GitHub would refuse). Land then plans the Phase 3 action class `§3.4b request-reviewers`: flips a draft PR to ready (so "ready" keeps meaning "a human may review now"), requests the list minus the PR author (`codeowners` rides the ready flip - GitHub resolves owners itself; no local CODEOWNERS parsing), and records `reviewRequestSha` in the land ledger - **one-shot per PR per head SHA**, claimed atomically so overlapping ticks cannot double-request; a land-authored CI-fix push moves the head and re-arms only if the human's review is again missing. A failed `gh pr ready` / `--add-reviewer` still records the head (one attempt, no retry loop) and reports `reviewers=failed:<reason>` with the window-bounded verdict (`AWAITING_REVIEW` / `NEEDS_HUMAN`), never `BLOCKED`. **Never gates a merge** - `land.reviewSignal` does; a team that wants a human look on every PR sets `reviewSignal: approve`. `--dry-run` reports `action=request-reviewers reviewers=would-request` (plus `would-ready` for a draft) from Phase 2 alone and mutates nothing. Evidence field on the `signal=` line: `reviewers=<requested|would-request|already:<sha8>|skipped:<reason>|failed:<reason>|off>`. **Unset, `null`, and `""` all mean OFF** (`reviewers=off` - reserved for that case; a configured key whose predicate is false reports `reviewers=skipped:not-due`; every other gate, action, and ledger write unchanged). |
+| `artifacts.html.enabled` | bool | `false` | **Optional HTML artifact mode (2.0.0+).** Enable with `flowctl config set artifacts.html.enabled true`: participating skills (capture, plan, make-pr) load the shared render-lens reference and emit self-contained HTML artifacts at the fixed paths `.flow/artifacts/<spec-id>/spec.html` / `pr.html` (regenerable lenses, never timestamped - markdown stays the sole source of truth and artifacts are never parsed back as state). **OFF by default** - with it off, no reference file loads, no artifacts are written, no Lavish session opens; behavior is byte-identical to markdown-only. flowctl only stores the knob; generation is skill-side. |
+| `pipeline.qa` | `off \| on` | `off` | **Optional QA pipeline stage (2.2.0+).** Enable with `flowctl config set pipeline.qa on` - this is a **string-enum** knob (`off \| on`), **NOT a bool**; the activating value is the literal string `on` and **any other value, including bool `true`, is OFF** (the `/flow-next:pilot` gate read is the canonical 3-clause guard `value != "off" && value != "null"`). With it `on`, pilot inserts a `qa` stage at the **all-tasks-done** juncture (before make-pr): one live `/flow-next:qa` pass over the complete build, surfacing its `qa_outcome` into the draft PR. **OFF by default** - with it off, pilot's stage set and behavior are byte-for-byte unchanged. Augments (never replaces) CI/staging/manual QA; `BLOCKED` (no local app) / `NA` (no UI) advance, `NEEDS_WORK` still advances to the draft PR + surfaces findings (it never hard-blocks the loop). flowctl only stores the knob; the QA stage is host-agent skill wiring (no new subcommand/engine). |
+| `chart.maxDecisions` | int | `12` | **Chart size ceiling.** Charting-time only: `chart create --initial-map-file` refuses past this count without `--force-size --reason` (audited: actor, ceiling, proposed count, timestamp, reason). Later sharpening from Open Questions may grow past it. |
+| `chart.claimStaleAfter` | number (hours) | `24` | **Stale-claim recovery threshold.** `chart release-claim --break-stale --reason` is allowed only after a claim is at least this old; always audited (actor, prior owner, age, reason). No silent expiry. |
+| `tracker.charts` | `off \| on` | `off` | **Optional chart lifecycle projection.** String-enum, **NOT a bool**: only the literal `on` projects charts as parent issues with decision children through the tracker facade. Local chart operations always succeed when off or when the bridge is inactive. Rollups are visibility only - never a control plane. |
+| `pilot.autonomy` | `ready \| backlog` | `ready` | **Pilot backlog mode.** A **scalar string-enum** (`ready \| backlog`), **NOT a bool**. `ready` (default) = current behavior: pilot selects only already-ready specs. Set to the literal `backlog` (`flowctl config set pilot.autonomy backlog`, or per-run `--backlog` / `--auto`) to enable **backlog mode** - pilot widens selection to the whole open backlog (flow specs via `ready --all` + tracker issues unioned by the skill), triages the top dep-ordered item, and either advances it or surfaces an async question (`ASKED`). **Only the literal `backlog` activates** - any other value (bool `true`, a typo, `null`) leaves pilot byte-for-byte in `ready` mode, and `references/backlog-mode.md` is never read. Backlog mode **never authors a spec, never sets `ready`, never merges**; readiness stays the human's explicit signal. flowctl only stores the knob; the SELECT/TRIAGE/ASK workflow is host-agent skill wiring. |
+| `pilot.gateClasses` | string[] | `[]` | **Backlog-mode force-gate.** An optional list of class names (e.g. `["risky", "prod-config"]`) that, in backlog mode, force **surfacing before action** - a matching item is parked with a question (`ASKED`) instead of advanced full-auto, even when otherwise workable. A **sibling** key, deliberately NOT `pilot.autonomy.gate` (a scalar and an object cannot share the `pilot.autonomy` dot-path). Empty `[]` (default) = full-auto for every workable item. |
 
-\* The pre-1.1.3 legacy alias `planSync.crossEpic` was **removed in 2.0.0** (it was readable through 1.x with a stderr deprecation warning). `flowctl` no longer reads or writes it — a leftover `crossEpic` key in `.flow/config.json` is inert. If you relied on it, set the canonical key once: `flowctl config set planSync.crossSpec true`.
+\* The pre-1.1.3 legacy alias `planSync.crossEpic` was **removed in 2.0.0** (it was readable through 1.x with a stderr deprecation warning). `flowctl` no longer reads or writes it - a leftover `crossEpic` key in `.flow/config.json` is inert. If you relied on it, set the canonical key once: `flowctl config set planSync.crossSpec true`.
 
 Priority: `--review=...` argument > `FLOW_REVIEW_BACKEND` env > `.flow/config.json` > error.
 
@@ -997,7 +1084,7 @@ identities depends on the review kind:
 |---|---|
 | implementation | `<spec>` (task-spec path), `<diff_range>`, `<changed_files>`, `<context_hints>` |
 | completion | `<spec>` + `<task_specs>` (paths), `<diff_range>`, `<changed_files>` |
-| plan | `<spec>` + `<task_specs>` (paths), `<context_hints>` — a plan review has no diff |
+| plan | `<spec>` + `<task_specs>` (paths), `<context_hints>` - a plan review has no diff |
 
 `<changed_files>` is `git diff --numstat --no-renames` for the reviewed range (every
 path exact and complete); `<diff_range>` is the `base..head` range plus the command
@@ -1007,7 +1094,7 @@ underlying git error *before* a review round is reserved, rather than dispatchin
 review with no evidence. The only remaining size guard is
 `CURSOR_ARGV_TRANSPORT_MAX`, a transport boundary for `cursor-agent`'s positional
 argv delivery: it refuses loudly and never truncates. Plan-review's `--review=export` is the
-documented exception — it produces an artifact for an LLM with no repository
+documented exception - it produces an artifact for an LLM with no repository
 access, so there the payload is the only channel available.
 
 
@@ -1021,24 +1108,24 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 {"backend": "codex", "spec": "codex:gpt-5.4:high", "model": "gpt-5.4", "effort": "high", "source": "env"}
 ```
 
-Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name — no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
+Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name - no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
 
 | Backend form | Meaning |
 |--------------|---------|
-| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent on a cross-family model resolved via the reviewer tier of the AGENTS.md model-routing block — never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
+| `host` | **Model-less selection sentinel** (bare `host` only). Review runs as a host-native fresh-context subagent on a cross-family model resolved via the reviewer tier of the AGENTS.md model-routing block - never the session model reviewing its own diff; no subprocess. Preferred from inside Cursor. |
 | `host:<model>` | **REJECTED.** Errors with a hint to name the model on the `reviewer` tier of the AGENTS.md model-routing block instead (a model never rides the `host` backend string). |
 
-#### Model resolution (strongest-available, never-fail — fn-76)
+#### Model resolution (strongest-available, never-fail: fn-76)
 
 When a review runs **without an explicit model** (unconfigured `codex` / `copilot` / `cursor`), flow-next resolves the *strongest model the account can actually run* instead of a fixed hardcoded default. The mechanism is **optimistic-first**, so the happy path costs nothing:
 
-- **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-5.6-sol`, `copilot` → `gpt-5.5`, `cursor` → `gpt-5.6-sol-high`). The ranking is a *preference*, never a parse-time gate — an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
-- **Happy path (zero overhead).** The top model dispatches directly — no probe, no list call, no extra subprocess. On a current CLI where the default just works, the argv is byte-identical to a hardcoded default.
-- **Fallback ladder (failure only).** If — and only if — that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails — codex omits `--model`, copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged — the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
+- **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-5.6-sol`, `copilot` → `gpt-5.5`, `cursor` → `gpt-5.6-sol-high`). The ranking is a *preference*, never a parse-time gate - an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
+- **Happy path (zero overhead).** The top model dispatches directly - no probe, no list call, no extra subprocess. On a current CLI where the default just works, the argv is byte-identical to a hardcoded default.
+- **Fallback ladder (failure only).** If - and only if - that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails - codex omits `--model`, copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged - the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
 - **Cache.** The resolved fallback is memoized per **`(backend, CLI version, effective routing intent)`** in `.flow/.cache/model-resolution.json` (locked atomic write, gitignored). Changing the registry ladder or the requested routing intent forces a fresh resolution even when the requested model name happens to match the old default. Downgrade/floor entries expire after 24 hours so newly available stronger models are re-probed without requiring a CLI upgrade. A corrupt, missing, legacy, or expired entry is a cold start, never an error; concurrent mutations preserve unrelated entries; explicit models bypass the cache entirely.
 - **Hygiene.** A downgrade or floor emits **one** stderr warning naming what was tried and what ran; the receipt records the model **actually used** (else `"auto"` / `"default"`), never a fabricated name.
 
-Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `review` > env > config) are byte-identical to before — no probing, no cache, no retry-downgrade; an explicit unavailable model errors clearly.
+Explicit pins anywhere in the precedence chain (`--spec` > per-task/per-spec `review` > env > config) are byte-identical to before - no probing, no cache, no retry-downgrade; an explicit unavailable model errors clearly.
 
 ### review-findings attach
 
@@ -1111,9 +1198,9 @@ fixture, and vendoring rules: [`pr-cognitive-aid.md`](pr-cognitive-aid.md).
 
 Manage persistent learnings under `.flow/memory/`.
 
-**Schema (v0.33.0+):** Categorized YAML — one entry per file under `bug/<category>/*.md` or `knowledge/<category>/*.md`. Frontmatter: `title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields (`problem_type` / `root_cause` / `resolution_type` for `bug`; `applies_when` for `knowledge`). Optional `status: active|stale|hardened`, `stale_reason` / `stale_date` (stale-side only), `hardened_into` (written by `mark-hardened`), `last_audited`, `audit_notes`. Validation is enum-only — no companion field is *required* for a status — but every `mark-*` mutation clears the other statuses' companion fields; see [memory-schema.md](memory-schema.md#entry-status) for the full matrix and the cross-version contract.
+**Schema (v0.33.0+):** Categorized YAML - one entry per file under `bug/<category>/*.md` or `knowledge/<category>/*.md`. Frontmatter: `title`, `date`, `track`, `category`, `module`, `tags`, plus track-specific fields (`problem_type` / `root_cause` / `resolution_type` for `bug`; `applies_when` for `knowledge`). Optional `status: active|stale|hardened`, `stale_reason` / `stale_date` (stale-side only), `hardened_into` (written by `mark-hardened`), `last_audited`, `audit_notes`. Validation is enum-only - no companion field is *required* for a status - but every `mark-*` mutation clears the other statuses' companion fields; see [memory-schema.md](memory-schema.md#entry-status) for the full matrix and the cross-version contract.
 
-**Knowledge categories:** `architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`, `decisions` (the last shipped in 0.39.0 for load-bearing architectural choices). Decision entries may add three optional fields: `decision_status` (enum: `proposed | accepted | superseded`), `superseded_by` (id reference), `alternatives_considered` (free-form prose). Body convention: 1–3 sentence floor describing trade-offs, irreversibility, and surprise factor.
+**Knowledge categories:** `architecture-patterns`, `conventions`, `tooling-decisions`, `workflow`, `best-practices`, `decisions` (the last shipped in 0.39.0 for load-bearing architectural choices). Decision entries may add three optional fields: `decision_status` (enum: `proposed | accepted | superseded`), `superseded_by` (id reference), `alternatives_considered` (free-form prose). Body convention: 1-3 sentence floor describing trade-offs, irreversibility, and surprise factor.
 
 **Bug categories:** `build-errors`, `test-failures`, `runtime-errors`, `performance`, `security`, `integration`, `data`, `ui`.
 
@@ -1151,7 +1238,7 @@ flowctl memory read <id> [--json]
 
 `memory read` accepts: full id (`bug/runtime-errors/slug-YYYY-MM-DD`), `slug+date`, `slug` (latest date wins), or legacy forms (`legacy/pitfalls.md`, `legacy/pitfalls#N`).
 
-`--status` defaults to `active`, which excludes **both** stale and hardened entries from default `list` / `search` results — audit-flagged advice stops polluting `memory-scout` output, and a hardened lesson now lives in an enforced gate, so re-injecting it as context is waste. Pass `--status stale`, `--status hardened`, or `--status all` to include them.
+`--status` defaults to `active`, which excludes **both** stale and hardened entries from default `list` / `search` results - audit-flagged advice stops polluting `memory-scout` output, and a hardened lesson now lives in an enforced gate, so re-injecting it as context is waste. Pass `--status stale`, `--status hardened`, or `--status all` to include them.
 
 #### memory mark-stale
 
@@ -1162,7 +1249,7 @@ flowctl memory mark-stale <id> --reason "no longer accurate after fn-37 refactor
   [--audited-by "audit-2026-04"] [--json]
 ```
 
-Idempotent — re-marking replaces `audit_notes` and re-stamps `last_audited`. Also drops `hardened_into` (a stale entry never keeps pointing at a gate). Body untouched. Used by `/flow-next:audit`; also callable directly.
+Idempotent - re-marking replaces `audit_notes` and re-stamps `last_audited`. Also drops `hardened_into` (a stale entry never keeps pointing at a gate). Body untouched. Used by `/flow-next:audit`; also callable directly.
 
 #### sync create-first-recovery
 
@@ -1190,9 +1277,9 @@ flowctl memory mark-hardened <id> \
   [--audited-by "/flow-next:audit"] [--json]
 ```
 
-`--gate-ref` is required and stored **verbatim** — flowctl checks non-emptiness only. The `<path>#<rule-id> -- <note>` shape is a skill-side convention that `/flow-next:audit` parses for its gate-liveness check; flowctl does not interpret it.
+`--gate-ref` is required and stored **verbatim** - flowctl checks non-emptiness only. The `<path>#<rule-id> -- <note>` shape is a skill-side convention that `/flow-next:audit` parses for its gate-liveness check; flowctl does not interpret it.
 
-The entry file always stays on disk with its body intact, so the provenance of the gate survives. Idempotent — re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable there). Used by `/flow-next:audit` only after the gate is verified live; also callable directly.
+The entry file always stays on disk with its body intact, so the provenance of the gate survives. Idempotent - re-marking replaces `hardened_into` (`last_audited` is date precision, so a same-day re-mark is unobservable there). Used by `/flow-next:audit` only after the gate is verified live; also callable directly.
 
 #### memory mark-fresh
 
@@ -1213,7 +1300,7 @@ flowctl memory migrate --dry-run [--json]
 flowctl memory migrate --yes [--json]
 ```
 
-`--no-llm` is accepted-but-noop since 0.37.0 (classification is mechanical-only). For accurate per-entry classification with full repo context, use the agent-native `/flow-next:memory-migrate` skill — host agent classifies in-context.
+`--no-llm` is accepted-but-noop since 0.37.0 (classification is mechanical-only). For accurate per-entry classification with full repo context, use the agent-native `/flow-next:memory-migrate` skill - host agent classifies in-context.
 
 Stderr emits a one-time deprecation hint pointing at the skill (TTY only; suppress via `FLOW_NO_DEPRECATION=1`).
 
@@ -1280,6 +1367,8 @@ Every `flowctl chart … --json` response uses a versioned envelope:
 **`sharpen_file_unknown_key`** (`chart.resolve --sharpen-file`, class `validation`) rejects any key in `sharpen.json` outside the accepted set (`decisions`, `remove_questions`, `remove_parked`, `parked_removals`, `notes_append`) before anything is allocated or persisted - a typo (e.g. a bare `notes` key) gets this error naming the offending key(s) and the accepted set, not a silent no-op and not a prose-scan error, since the structural check runs first.
 
 ### Subcommands
+
+<a id="chart-resolve"></a>
 
 Exact automation surface (all take `--json`):
 
@@ -1622,7 +1711,7 @@ The `class` enum and fixed process exit codes are exhaustive:
 
 ## flowctl sync
 
-Tracker-sync plumbing for the `/flow-next:tracker-sync` bridge — atomic,
+Tracker-sync plumbing for the `/flow-next:tracker-sync` bridge - atomic,
 deterministic helpers and provider adapters the skill calls. flowctl owns
 transport, field writes, validation, and transaction boundaries; the skill owns
 semantic body/comment composition, conflict judgment, and asking. Full subsystem
@@ -1711,9 +1800,9 @@ base from readback, and projects status.
 - **`set-merge-base`** is a **paired-snapshot** writer: `--flow`/`--flow-file` AND `--tracker`/`--tracker-file` must come **together** (a partial one-sided write is rejected so the 3-way base never pins one half to a stale sync point).
 - **`list-dep-relations`** remains a local-state enumerator after fn-141 R8 superseded fn-57 R3. It reads the spec's `depends_on_epics`, resolves each dep spec's tracker link + **local** status from sync state, and reports whether the edge is already in the `depRelations` provenance ledger: `[{dep_spec, dep_tracker_id, dep_identifier, dep_status, projected}]`. `dep_status` is the local dep-spec status (`done`/`open`/…), never a remote fetch. Flow is authoritative, and the completed-blocker rule keys off the local dep spec being `done`. Self-edges are skipped. A dep spec with no tracker link surfaces as `dep_tracker_id: null`. Deterministic remote relation mutation belongs to `flowctl tracker relate` and the lifecycle facade.
 - **`set-dep-relation`** records a projected blocked-by edge in the per-spec `depRelations` ledger (the `.flow/specs/<id>.json` sidecar, atomic write). `--from-tracker-id` is the **blocked** (current) issue; `--to-tracker-id` is the **blocking** (dependency) issue. The ledger entry's `key` is an opaque hash of the directed pair (never a raw issue key inline - trackers auto-linkify keys even inside HTML comments). Idempotent append (mirrors `spec add-dep`): re-recording the same directed edge is a no-op that does **not** bump `updatedAt`, so reruns are true no-ops. Self-edges are rejected. Stale ledger entries are pruned by the skill (edit the sidecar); there is no clear-dep-relation CLI.
-- **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash. **`--event <perEvent-key>`** tags the receipt with the lifecycle touchpoint it served (`work.firstClaim`, `work.done`, `capture`, `makePr`, …) — free-form, NOT enum-validated (the perEvent key set is an open extension point). Pre-flag receipts carry `event: null` and never satisfy an event-specific `sync check`.
+- **`receipt --status`** enum: `pushed | pulled | merged | updated | diverged | queued | errored | noop`. When no transport is reachable the run is a `noop` + receipt note, never a crash. **`--event <perEvent-key>`** tags the receipt with the lifecycle touchpoint it served (`work.firstClaim`, `work.done`, `capture`, `makePr`, …) - free-form, NOT enum-validated (the perEvent key set is an open extension point). Pre-flag receipts carry `event: null` and never satisfy an event-specific `sync check`.
 - **`check`** is the **read-only** end-of-skill audit. fn-141 R8 supersedes fn-57 R3 by moving deterministic tracker mutations into `flowctl tracker`; this command itself still reads only local receipts. For each event in `--events` (comma-separated perEvent keys that *triggered this run*), it reports `OK:<event>` / `MISSING:<event>` (`--json`: `{events, missing, count}`). MISSING iff the event triggered AND its `tracker.perEvent` leaf is enabled AND the bridge is active AND no receipt with a matching `event` tag and `timestamp ≥ --since` exists. Any receipt status clears (the check asserts the touchpoint *ran*); `--since` is the run-scoping lower bound (older receipts never clear); linkage is NOT a precondition (a never-linked spec that should have create-if-unlinked'd is exactly the miss this catches). **Bridge inactive → silent constant-time exit 0 before any IO**; this is the zero-overhead path for non-tracker repos. Exit 0 always; output drives agent action, not the exit code.
-- **`defer`** queues a genuine conflict to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) — **never blocks**. In Ralph mode an `always-ask` tiebreak resolves to *queue*, not prompt.
+- **`defer`** queues a genuine conflict to the review deferred-findings sink (`.flow/review-deferred/<branch>.md`) - **never blocks**. In Ralph mode an `always-ask` tiebreak resolves to *queue*, not prompt.
 - The hybrid id model (tracker-first `wor-17-slug` / `gh-123-slug` / `gl-456-slug` canonical / flow-first `fn-NN` + resolvable alias) is keyed at create/link time: `flowctl spec create --tracker-first --tracker-identifier <key-or-ref>` (see [`spec create`](#spec-create)). Skills auto-route when `tracker.specIds=tracker`. Ids never rename; resolution is case-insensitive. Details in [`tracker-sync.md`](tracker-sync.md) + [`architecture.md`](architecture.md).
 
 ### repo-map
@@ -1772,7 +1861,7 @@ flowctl prime classify [root] --json   # root defaults to "."
 
 ### glossary
 
-Manage `GLOSSARY.md` — the project's canonical terminology file. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` (R18 — terminology is the project's, not flow-next's).
+Manage `GLOSSARY.md` - the project's canonical terminology file. Lives at the **repo root** (and optionally subdirectories), NOT inside `.flow/`. Survives `rm -rf .flow/` (R18 - terminology is the project's, not flow-next's).
 
 **Format:** H2-per-term markdown aligned with `open-gitops/documents` and `glossarify-md` so generic markdown tooling reads it cleanly.
 
@@ -1822,7 +1911,7 @@ flowctl glossary remove <term> [--json]
 {"success": true, "path": "GLOSSARY.md", "term": "Spec", "definition": "...", "avoid": [], "relates_to": []}
 ```
 
-**Husk semantics:** Last-term `remove` leaves a `# Glossary` H1 husk — the file is never deleted (R18). Doc-aware autodetect should branch on `total_terms > 0` (or `file_count > 0` and any group's `count > 0`), not on `[[ -f GLOSSARY.md ]]` — the latter would falsely activate doc-aware mode on an empty husk.
+**Husk semantics:** Last-term `remove` leaves a `# Glossary` H1 husk - the file is never deleted (R18). Doc-aware autodetect should branch on `total_terms > 0` (or `file_count > 0` and any group's `count > 0`), not on `[[ -f GLOSSARY.md ]]` - the latter would falsely activate doc-aware mode on an empty husk.
 
 **Helpers (Python imports):** Downstream skills should call the subcommands rather than reimplementing parsing, but the building blocks are exposed for ad-hoc reuse: `find_nearest_glossary` / `find_all_glossaries` / `parse_glossary_file` / `render_glossary_file` / `validate_glossary_entry` / `_glossary_term_matches` / `_glossary_strip_fenced_code`. Constants: `GLOSSARY_FILE` (`"GLOSSARY.md"`), `GLOSSARY_WALK_MAX_DEPTH` (`32`).
 
@@ -1916,7 +2005,7 @@ The contract is `command_sha256`: a receipt certifies exactly one command string
 
 `gate_id` is a bounded slug validated at both boundaries: `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. Literal `.` and `..` are explicitly rejected. The ID is interpolated into the receipt filename, so traversal characters are impossible; invalid IDs exit `2`.
 
-`gate check` exits `0` (honored: skip the re-run) only when all of these hold: an exact-HEAD receipt satisfies `schema == 1`, matching `head_sha`, matching `command_sha256`, and `0 <= age <= 24h`; or, when that exact filename is absent, one of the eight newest parseable candidates (timestamp descending, filename tie-break) satisfies those shared checks plus a full canonical commit SHA, filename-SHA consistency, no symlink, ancestry to HEAD, and a two-dot diff to HEAD containing only the receipt ignore set. Malformed, stale, non-ancestor, and otherwise ineligible candidates are skipped rather than aborting the bounded walk. Cleanliness uses `git status --porcelain=v1 -z --no-renames --untracked-files=all` once per probe and permits no entries outside `.flow/**` minus `.flow/bin/**` minus `.flow/config.json`. A dirty `.flow/config.json` is execution-affecting and returns `1`, and so is a dirty `.flow/bin/**` — inert in a copy-less repo, still correct in one that has not deleted its legacy copies yet. Receipts under `.flow/tmp/` do not self-dirty a check.
+`gate check` exits `0` (honored: skip the re-run) only when all of these hold: an exact-HEAD receipt satisfies `schema == 1`, matching `head_sha`, matching `command_sha256`, and `0 <= age <= 24h`; or, when that exact filename is absent, one of the eight newest parseable candidates (timestamp descending, filename tie-break) satisfies those shared checks plus a full canonical commit SHA, filename-SHA consistency, no symlink, ancestry to HEAD, and a two-dot diff to HEAD containing only the receipt ignore set. Malformed, stale, non-ancestor, and otherwise ineligible candidates are skipped rather than aborting the bounded walk. Cleanliness uses `git status --porcelain=v1 -z --no-renames --untracked-files=all` once per probe and permits no entries outside `.flow/**` minus `.flow/bin/**` minus `.flow/config.json`. A dirty `.flow/config.json` is execution-affecting and returns `1`, and so is a dirty `.flow/bin/**` - inert in a copy-less repo, still correct in one that has not deleted its legacy copies yet. Receipts under `.flow/tmp/` do not self-dirty a check.
 
 | Condition | Exit |
 | --- | --- |
@@ -1968,7 +2057,7 @@ that direct result as authoritative: `status=completed`, non-empty rewritten
 `review.response` are all required. The response is written atomically to
 `--response-file`; no visible compose-tab projection, selection augmentation,
 or second initial chat is required or allowed. Any CE operational/schema
-failure stops—the wrapper never downgrades to Classic.
+failure stops - the wrapper never downgrades to Classic.
 
 CE follow-ups use the returned chat identity without tab state:
 
@@ -2001,7 +2090,10 @@ Reviewer tallies prefer one fenced `json` block (`suppressed_count`, `classifica
 
 ### codex
 
-OpenAI Codex CLI wrappers — cross-platform alternative to RepoPrompt.
+<a id="codex-impl-review"></a>
+<a id="deterministic-review-cap"></a>
+
+OpenAI Codex CLI wrappers - cross-platform alternative to RepoPrompt.
 
 **Requirements:**
 ```bash
@@ -2009,7 +2101,7 @@ npm install -g @openai/codex
 codex auth
 ```
 
-**Model:** Uses the registry's ranking top at high effort by default (no user config needed) — resolved strongest-available via the [model-resolution ladder](#model-resolution-strongest-available-never-fail--fn-76) (on an older codex CLI that rejects it, the ladder transparently downgrades to `gpt-5.5` and caches that). Override with `FLOW_CODEX_MODEL` env var.
+**Model:** Uses the registry's ranking top at high effort by default (no user config needed) - resolved strongest-available via the [model-resolution ladder](#model-resolution-strongest-available-never-fail--fn-76) (on an older codex CLI that rejects it, the ladder transparently downgrades to `gpt-5.5` and caches that). Override with `FLOW_CODEX_MODEL` env var.
 
 **Commands:**
 
@@ -2031,11 +2123,11 @@ flowctl codex completion-review <spec-id> [--sandbox <mode>] [--receipt <path>] 
 
 **How it works:**
 
-1. **Gather context hints** — Analyzes changed files, extracts symbols (functions, classes), finds references in unchanged files
-2. **Build review prompt** — Uses same Carmack-level criteria as RepoPrompt (7 criteria each for plan/impl)
-3. **Run codex** — Executes `codex exec` with the prompt (or `codex exec resume` for session continuity)
-4. **Parse verdict** — Extracts `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from output
-5. **Write receipt** — If `--receipt` provided, writes JSON for Ralph gating
+1. **Gather context hints** - Analyzes changed files, extracts symbols (functions, classes), finds references in unchanged files
+2. **Build review prompt** - Uses same Carmack-level criteria as RepoPrompt (7 criteria each for plan/impl)
+3. **Run codex** - Executes `codex exec` with the prompt (or `codex exec resume` for session continuity)
+4. **Parse verdict** - Extracts `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` from output
+5. **Write receipt** - If `--receipt` provided, writes JSON for Ralph gating
 
 **Context hints example:**
 ```
@@ -2081,25 +2173,25 @@ When the project defines global criteria in `.flow/criteria.md`, completion-revi
 
 **Session continuity:** Receipt includes `session_id` (thread_id from codex). Subsequent reviews read the existing receipt and resume the conversation, maintaining full context across fix → re-review cycles.
 
-**Deterministic review cap + convergence (fn-90/fn-159 — all backends: codex/copilot/cursor internally; rp via `flowctl review-rounds`):**
+**Deterministic review cap + convergence (fn-90/fn-159 - all backends: codex/copilot/cursor internally; rp via `flowctl review-rounds`):**
 
-The fix→re-review loop is bounded by a **flowctl-owned cumulative round counter on spec state**, not just the host LLM's in-agent iteration counter (which resets on every fresh `/flow-next:*-review` invocation — the loop-runaway root cause). It applies to every backend and every review kind:
+The fix→re-review loop is bounded by a **flowctl-owned cumulative round counter on spec state**, not just the host LLM's in-agent iteration counter (which resets on every fresh `/flow-next:*-review` invocation - the loop-runaway root cause). It applies to every backend and every review kind:
 
-- **Counter surfaces:** plan reviews increment a spec-scoped `plan_review_rounds`; impl reviews increment a per-task `impl_review_rounds[<task-id>]`. **Completion reviews reuse the spec-scoped `plan_review_rounds` counter** (they are spec-scoped, no task in context) — a plan review and a completion review on the same spec spend the *same* cap, so neither can independently re-open the runaway. Both surface in `flowctl show --json`.
+- **Counter surfaces:** plan reviews increment a spec-scoped `plan_review_rounds`; impl reviews increment a per-task `impl_review_rounds[<task-id>]`. **Completion reviews reuse the spec-scoped `plan_review_rounds` counter** (they are spec-scoped, no task in context) - a plan review and a completion review on the same spec spend the *same* cap, so neither can independently re-open the runaway. Both surface in `flowctl show --json`.
 - **Artifact guard:** a reservation carries the caller-computed SHA-256 of the
   exact final artifact the reviewer receives, domain-separated by review type.
   The last consumed artifact in the current counter scope and hash epoch is the
   baseline. An unchanged retry exits `1` with `NOT_RETRYABLE: artifact unchanged
   since last verdict` and consumes nothing. Absent or unreadable identity warns
   and fails open. `SHIP` and both human reset verbs (`review-rounds reset` and
-  `spec reset-review-rounds`) advance the hash epoch — a post-reset re-review of
+  `spec reset-review-rounds`) advance the hash epoch - a post-reset re-review of
   an unchanged artifact dispatches cleanly without `--force`; `--force` bypasses
   the guard, stamps the attempt as forced, and is blocked in Ralph.
 - **Early terminal:** before reserving, flowctl compares the last two
   non-truncated structured-findings digests in the current epoch. It exits `4`
   with `ESCALATE: review loop stalled (same-not-fixed-lineage)` when the
   reviewer explicitly marked the same finding chain `not-fixed` in **both**
-  rounds — the one signal grounded in a stated resolution rather than an
+  rounds - the one signal grounded in a stated resolution rather than an
   inferred trend. It requires the same backend and review kind across both
   rounds, so a backend switch is bounded by the round cap alone. fn-168 removed
   the two trend/presence heuristics that used to sit beside it (they escalated
@@ -2132,15 +2224,15 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 
 **Receipt convergence-ratchet fields (fn-90, back-compatible):**
 
-- The receipt stores the prior round's review text in a `review` field. On a re-review, flowctl injects it into a **shrink-only convergence-ratchet preamble** (verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ verdict MUST be SHIP) instead of ordering a fresh blind review each round. A receipt written by older flowctl **without** the `review` field parses fine and is treated as a **fresh round-1 review** (no ratchet) — full back-compat. The **rp backend needs no injected ratchet**: its re-reviews deliberately stay in the SAME RepoPrompt chat (no `--new-chat`), so the reviewer retains genuine conversational memory of its own prior findings — the fresh-blind churn the ratchet compensates for does not occur there; on rp only the cap applies.
-- **Receipt default paths are spec/task-scoped.** The skill/workflow defaults are now `/tmp/plan-review-receipt-<spec>.json`, `/tmp/completion-review-receipt-<spec>.json`, and `/tmp/impl-review-receipt-<task>.json` (standalone branch review with no task falls back to the unscoped name) — concurrent reviews of different specs/tasks no longer collide on one shared `/tmp` receipt. An explicit **`REVIEW_RECEIPT_PATH`** (or `--receipt`) still wins, unchanged.
-- **Codex/copilot verdict extraction is honest.** The verdict parse isolates the **final agent message** from the stream (dropping `command_execution` / `aggregated_output` tool output) and takes the **last** `<verdict>` match — a verdict literal echoed in tool output or a quoted-grammar literal in the final message can no longer beat the reviewer's real verdict. The offline regression that locks this in: `optimization/review-prompt/reveval_parse_guard.py` (runs in the gate via `test_reveval_parse_guard.py`).
+- The receipt stores the prior round's review text in a `review` field. On a re-review, flowctl injects it into a **shrink-only convergence-ratchet preamble** (verify each prior finding fixed; only a NEW ≥ Major finding may block; all prior fixed + no new ≥ Major ⇒ verdict MUST be SHIP) instead of ordering a fresh blind review each round. A receipt written by older flowctl **without** the `review` field parses fine and is treated as a **fresh round-1 review** (no ratchet) - full back-compat. The **rp backend needs no injected ratchet**: its re-reviews deliberately stay in the SAME RepoPrompt chat (no `--new-chat`), so the reviewer retains genuine conversational memory of its own prior findings - the fresh-blind churn the ratchet compensates for does not occur there; on rp only the cap applies.
+- **Receipt default paths are spec/task-scoped.** The skill/workflow defaults are now `/tmp/plan-review-receipt-<spec>.json`, `/tmp/completion-review-receipt-<spec>.json`, and `/tmp/impl-review-receipt-<task>.json` (standalone branch review with no task falls back to the unscoped name) - concurrent reviews of different specs/tasks no longer collide on one shared `/tmp` receipt. An explicit **`REVIEW_RECEIPT_PATH`** (or `--receipt`) still wins, unchanged.
+- **Codex/copilot verdict extraction is honest.** The verdict parse isolates the **final agent message** from the stream (dropping `command_execution` / `aggregated_output` tool output) and takes the **last** `<verdict>` match - a verdict literal echoed in tool output or a quoted-grammar literal in the final message can no longer beat the reviewer's real verdict. The offline regression that locks this in: `optimization/review-prompt/reveval_parse_guard.py` (runs in the gate via `test_reveval_parse_guard.py`).
 
 **Sandbox mode (`--sandbox`):** Controls Codex CLI's file system access. Available modes:
-- `read-only` (default on Unix) — Can only read files
-- `workspace-write` — Can write files in workspace
-- `danger-full-access` — Full file system access (required for Windows)
-- `auto` — Resolves to `danger-full-access` on Windows, `read-only` on Unix
+- `read-only` (default on Unix) - Can only read files
+- `workspace-write` - Can write files in workspace
+- `danger-full-access` - Full file system access (required for Windows)
+- `auto` - Resolves to `danger-full-access` on Windows, `read-only` on Unix
 
 **Windows users:** Codex CLI's `read-only` sandbox blocks ALL shell commands on Windows (including reads). Use `--sandbox auto` or `--sandbox danger-full-access` for Windows compatibility.
 
@@ -2170,12 +2262,12 @@ flowctl codex deep-pass --pass performance --receipt /tmp/impl-fn-1.3.json --pri
 
 Pass options: `adversarial`, `security`, `performance`. Primary findings JSONL provides cross-pass agreement / dedup context. Receipt is required (provides `session_id` for resume).
 
-**Mode split (fn-113.4).** Same markers as validate. Autonomous: fingerprint merge, confidence promotion, `deep_*` receipt fields, and SHIP → NEEDS_WORK on blocking introduced findings. Interactive: raw deep findings only (`host_judges: true`); no merge/promotion math and no receipt mutation — the host judges.
+**Mode split (fn-113.4).** Same markers as validate. Autonomous: fingerprint merge, confidence promotion, `deep_*` receipt fields, and SHIP → NEEDS_WORK on blocking introduced findings. Interactive: raw deep findings only (`host_judges: true`); no merge/promotion math and no receipt mutation - the host judges.
 
 
 ### copilot
 
-GitHub Copilot CLI wrappers — alternative review backend, parallel to codex. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model.
+GitHub Copilot CLI wrappers - alternative review backend, parallel to codex. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model.
 
 ```bash
 # Implementation review
@@ -2199,7 +2291,7 @@ Spec form: `copilot[:model[:effort]]`. Default model resolved via env (`FLOW_COP
 
 ### cursor
 
-Cursor `cursor-agent` CLI wrappers — alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and reviewer models from families the other backends can't reach in one place — ask `cursor-agent --list-models` for the current set rather than copying identifiers from here.
+Cursor `cursor-agent` CLI wrappers - alternative review backend, parallel to codex/copilot. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model. Unlocks Cursor-billed review (your existing Cursor subscription, no separate API key) and reviewer models from families the other backends can't reach in one place - ask `cursor-agent --list-models` for the current set rather than copying identifiers from here.
 
 ```bash
 # Implementation review
@@ -2219,7 +2311,7 @@ flowctl cursor deep-pass --pass adversarial|security|performance \
   --receipt /tmp/impl-fn-1.3.json [--primary-findings primary.jsonl] [--spec ...] [--json]
 ```
 
-Spec form: `cursor[:model]` — **effort is folded into the model name** (Cursor convention), so `cursor:<model>:<effort>` is rejected. Default model resolved via env (`FLOW_CURSOR_MODEL`, no `FLOW_CURSOR_EFFORT`) / config / registry. Receipt fields mirror codex/copilot but **omit `effort`**: `mode: "cursor"`, `spec: "cursor:<model>"`, `session_id` for resume. Sessions are **resume-only** — the first call omits `--resume` and persists Cursor's generated `session_id`; a continuation passes `--resume <stored-id>` only when the receipt's `mode == "cursor"` (cross-backend → fresh). Runs `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (read-only Q&A; never mutates the tree). Keep the model list synced with `cursor-agent --list-models`. **Auth:** stored `cursor-agent` login OR `CURSOR_API_KEY`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot` — a cursor user who enables it also needs codex/copilot present; with the judge off (the default) cursor reviews use the deterministic whitelist, zero extra dependency.
+Spec form: `cursor[:model]` - **effort is folded into the model name** (Cursor convention), so `cursor:<model>:<effort>` is rejected. Default model resolved via env (`FLOW_CURSOR_MODEL`, no `FLOW_CURSOR_EFFORT`) / config / registry. Receipt fields mirror codex/copilot but **omit `effort`**: `mode: "cursor"`, `spec: "cursor:<model>"`, `session_id` for resume. Sessions are **resume-only** - the first call omits `--resume` and persists Cursor's generated `session_id`; a continuation passes `--resume <stored-id>` only when the receipt's `mode == "cursor"` (cross-backend → fresh). Runs `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (read-only Q&A; never mutates the tree). Keep the model list synced with `cursor-agent --list-models`. **Auth:** stored `cursor-agent` login OR `CURSOR_API_KEY`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot` - a cursor user who enables it also needs codex/copilot present; with the judge off (the default) cursor reviews use the deterministic whitelist, zero extra dependency.
 
 ### Ralph run control (repo-local after ralph-init)
 
@@ -2264,7 +2356,7 @@ flowctl review-walkthrough-defer --findings-file deferred.jsonl \
 
 ### review-walkthrough-record
 
-Stamp the receipt with walkthrough bucket counts (`fn-32.3 --interactive`). Additive — never changes verdict.
+Stamp the receipt with walkthrough bucket counts (`fn-32.3 --interactive`). Additive - never changes verdict.
 
 ```bash
 flowctl review-walkthrough-record --receipt /tmp/impl-fn-1.3.json \

@@ -129,7 +129,7 @@ _Avoid_: prompt, main file, header, preamble
 
 ## Tier
 
-What kind of model a job wants: `reviewer`, `implementer`, `fast scout`, `thinking scout`, or unset (the session model). A tier binds a model to a stage's execution, never to which stages run — which stages run is decided by what you invoked. The four names are a user-facing interface defined in exactly one place, [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants); an unrecognized name is treated as unset with one advisory.
+What kind of model a job wants: `reviewer`, `implementer`, `fast scout`, `thinking scout`, or unset (the session model). A tier binds a model to a stage's execution, never to which stages run — which stages run is decided by what you invoked. The four names are a user-facing interface defined in exactly one place, [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants); an unrecognized name is treated as unset with one advisory.
 
 
 _Relates to_: Reach, Review backend
@@ -151,7 +151,7 @@ _Relates to_: Tier
 
 ## Reviewer tier
 
-The tier for anything grading work someone else produced. The only tier carrying a family rule: a reviewer from the writer's own family is not an independent verdict. The rule is advice, not enforcement — the receipt records what ran, and nothing fails closed on it. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+The tier for anything grading work someone else produced. The only tier carrying a family rule: a reviewer from the writer's own family is not an independent verdict. The rule is advice, not enforcement — the receipt records what ran, and nothing fails closed on it. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
 
 
 _Relates to_: Tier, Review backend
@@ -162,7 +162,7 @@ _Relates to_: Tier, Review backend
 
 ## Implementer tier
 
-The tier for work handed to another harness — plan on the session model, implement somewhere cheaper or faster. Absent, the session model implements. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+The tier for work handed to another harness — plan on the session model, implement somewhere cheaper or faster. Absent, the session model implements. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
 
 
 _Relates to_: Tier, Task
@@ -173,7 +173,7 @@ _Relates to_: Tier, Task
 
 ## Fast scout tier
 
-The tier for mechanical inventory scanning, where the cheapest model is the correct one. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+The tier for mechanical inventory scanning, where the cheapest model is the correct one. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
 
 
 _Relates to_: Tier
@@ -184,7 +184,7 @@ _Relates to_: Tier
 
 ## Thinking scout tier
 
-The tier for analysis that degrades badly on a fast model — requirement analysis and pattern judgment, not scans. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers--what-kind-of-model-a-job-wants).
+The tier for analysis that degrades badly on a fast model — requirement analysis and pattern judgment, not scans. Canonical definition: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants).
 
 
 _Relates to_: Tier

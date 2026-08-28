@@ -4,6 +4,17 @@ How flow-next stores state, how the spec-first task model works, and the separat
 
 The design tenet behind all of it: **everything lives in the repo**. Specs, tasks, memory, receipts are plain markdown + JSON under `.flow/` - in git, code-reviewable, diff-able, fork-survivable. No external services, no global config, no database. Uninstall is `rm -rf .flow/`.
 
+## Contents
+
+- [Spec-first task model](#spec-first-task-model)
+- [`.flow/` directory layout](#flow-directory-layout)
+- [ID format](#id-format)
+- [Separation of concerns](#separation-of-concerns)
+- [Verification tiers: the spec's Quick commands](#verification-tiers-the-specs-quick-commands)
+- [Task completion](#task-completion)
+- [flow-next vs flow](#flow-next-vs-flow)
+- [See also](#see-also)
+
 ## Spec-first task model
 
 Flow-next does not support standalone tasks. Every unit of work belongs to a spec `fn-N-slug` (even if it's a single task). Tasks are always `fn-N-slug.M` and inherit context from the parent spec.
@@ -216,7 +227,7 @@ There are no task IDs outside a spec. If you want a single task, create a spec w
 
 Skills and the host agent read the markdown for content; flowctl reads the JSON for plumbing. This split makes the two surfaces independently evolvable: schema changes in JSON without touching markdown, prose edits in markdown without touching schema.
 
-## Verification tiers — the spec's Quick commands
+## Verification tiers: the spec's Quick commands
 
 A spec's `## Quick commands` block is the only place that says how this work gets verified, and **you author it**. Three consumers read the same block:
 
@@ -228,9 +239,9 @@ A spec's `## Quick commands` block is the only place that says how this work get
 
 The convention the bundled template states: **per-task commands list focused suites for the files that task touches; the full suite runs once at the final gate** (prefer the repo's parallel entrypoint when it has one). Two mechanisms keep that from turning into repeated whole-suite runs: `gate check` honors a green receipt for the same commit and the same exact command string, so an unchanged HEAD skips the re-run; and `gate classify` drops a docs-only diff to lint and format only.
 
-That makes the tier a **project decision, not a framework one**. If you want per-task verification to stay narrow, author narrow commands and keep the full-suite entrypoint as the final-gate command; if your project would rather pay the full suite every task, list it and it will run. State the policy in your conductor instructions (`CLAUDE.md` / `AGENTS.md`) when it matters — the host agent reads those, and it is the same lever that names any CI-guarded paths the classifier cannot see (see "Known fail-open" in [`flowctl.md`](flowctl.md)).
+That makes the tier a **project decision, not a framework one**. If you want per-task verification to stay narrow, author narrow commands and keep the full-suite entrypoint as the final-gate command; if your project would rather pay the full suite every task, list it and it will run. State the policy in your conductor instructions (`CLAUDE.md` / `AGENTS.md`) when it matters - the host agent reads those, and it is the same lever that names any CI-guarded paths the classifier cannot see (see "Known fail-open" in [`flowctl.md`](flowctl.md)).
 
-Selection here is **authored, never computed**: nothing infers that a change to one module should pull in a distant suite. That is the boundary of this design — it prevents needless full runs; it does not find the right tests for you. The full suite before the PR and your CI remain the backstop.
+Selection here is **authored, never computed**: nothing infers that a change to one module should pull in a distant suite. That is the boundary of this design - it prevents needless full runs; it does not find the right tests for you. The full suite before the PR and your CI remain the backstop.
 
 ## Task completion
 
@@ -265,7 +276,7 @@ This creates a complete audit trail: what was planned, what was done, how it was
 
 The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The repo now ships flow-next only. The historical comparison table lives in CHANGELOG; the live shape is:
 
-- Task tracking lives in `.flow/` (no external tracker). flowctl itself is never copied there — every host resolves it from the plugin install (see [platforms.md → What setup does](platforms.md#what-setup-does)).
+- Task tracking lives in `.flow/` (no external tracker). flowctl itself is never copied there - every host resolves it from the plugin install (see [platforms.md → What setup does](platforms.md#what-setup-does)).
 - Install: plugin only - no external services, no config-file edits.
 - Artifacts: `.flow/specs/` (markdown + JSON sidecar), `.flow/tasks/` (markdown + JSON sidecar), and optionally `.flow/charts/` (decision maps + decision records + briefings).
 - Multi-user safe: scan-based IDs + soft claims (task assignee; chart decision claims).

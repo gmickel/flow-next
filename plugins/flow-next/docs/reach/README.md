@@ -1,8 +1,8 @@
 # Reach pages
 
-**Reach** is how the active harness obtains a model for a [tier](../orchestration.md#tiers--what-kind-of-model-a-job-wants): the in-session model, an in-host subagent, shelling out to another CLI, or not available at all. Tier names, the routing block, and the routing precedence are defined once in [`../orchestration.md`](../orchestration.md#tiers--what-kind-of-model-a-job-wants); these pages state only what each harness can and cannot do.
+**Reach** is how the active harness obtains a model for a [tier](../orchestration.md#tiers-what-kind-of-model-a-job-wants): the in-session model, an in-host subagent, shelling out to another CLI, or not available at all. Tier names, the routing block, and the routing precedence are defined once in [`../orchestration.md`](../orchestration.md#tiers-what-kind-of-model-a-job-wants); these pages state only what each harness can and cannot do.
 
-Skills never name a spawn primitive, a CLI flag, or a vendor path — they ask for a tier, and reach lives here.
+Skills never name a spawn primitive, a CLI flag, or a vendor path - they ask for a tier, and reach lives here.
 
 | Harness | Page |
 |---|---|
