@@ -424,7 +424,8 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-chart/references/chart-mode.md" \
   "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
-  "$CODEX_DIR/skills/flow-next-guide/SKILL.md"; do
+  "$CODEX_DIR/skills/flow-next-guide/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-work-rolling/SKILL.md"; do
   [ -f "$nf" ] || continue
   sed -i.bak \
     -e 's|Recommended next: /flow-next:<stage>|Recommended next: $flow-next-<stage>|g' \
@@ -468,6 +469,11 @@ for nf in \
     -e 's|separate `/flow-next:chart <id>` (or pinned) invocations|separate `$flow-next-chart <id>` (or pinned) invocations|g' \
     -e 's|recommends `/flow-next:memory-migrate` first|recommends `$flow-next-memory-migrate` first|g' \
     -e 's|`/flow-next:memory-migrate` first to make these auditable|`$flow-next-memory-migrate` first to make these auditable|g' \
+    -e 's|redirect to plain `/flow-next:work <spec-id> --no-plan`|redirect to plain `$flow-next-work <spec-id> --no-plan`|g' \
+    -e 's|(or `/flow-next:work fn-N --no-plan` when the refined spec|(or `$flow-next-work fn-N --no-plan` when the refined spec|g' \
+    -e 's;| `/flow-next:work <spec-id> --no-plan` (or answer;| `$flow-next-work <spec-id> --no-plan` (or answer;g' \
+    -e 's|leans `/flow-next:work <SPEC_ID> --no-plan`|leans `$flow-next-work <SPEC_ID> --no-plan`|g' \
+    -e 's|`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|g' \
     -e 's@| `/flow-next:\([a-z-]*\)`@| `$flow-next-\1`@g' \
     "$nf"
   rm -f "${nf}.bak"
@@ -2359,6 +2365,11 @@ flow-next-guide/SKILL.md	| `/flow-next:interview`	| `$flow-next-interview`
 flow-next-guide/SKILL.md	| `/flow-next:plan`	| `$flow-next-plan`
 flow-next-guide/SKILL.md	| `/flow-next:work`	| `$flow-next-work`
 flow-next-guide/SKILL.md	| `/flow-next:visual`	| `$flow-next-visual`
+flow-next-capture/workflow.md	leans `/flow-next:work <SPEC_ID> --no-plan`	leans `$flow-next-work <SPEC_ID> --no-plan`
+flow-next-capture/workflow.md	`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk	`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk
+flow-next-interview/SKILL.md	(or `/flow-next:work fn-N --no-plan`	(or `$flow-next-work fn-N --no-plan`
+flow-next-guide/SKILL.md	| `/flow-next:work <spec-id> --no-plan` (or answer	| `$flow-next-work <spec-id> --no-plan` (or answer
+flow-next-work-rolling/SKILL.md	redirect to plain `/flow-next:work <spec-id> --no-plan`	redirect to plain `$flow-next-work <spec-id> --no-plan`
 CLOSER_ROSTER
 if [ "$closer_literal_fails" != "0" ]; then
   echo -e "  ${RED}✗${NC} $closer_literal_fails un-rewritten closer literal(s) — a transform anchor no longer matches its canonical text"
