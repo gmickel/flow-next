@@ -1,0 +1,14 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-28T21:56:26.768253Z",
+  "depends_on": [],
+  "id": "fn-209-no-plan-work-route-tool-permission-audit.2",
+  "priority": null,
+  "spec": "fn-209-no-plan-work-route-tool-permission-audit",
+  "spec_path": ".flow/tasks/fn-209-no-plan-work-route-tool-permission-audit.2.md",
+  "status": "todo",
+  "title": "work zero-task fork: ask + flag/NL, minimal implicit task, judicious-subagent prose, gated reference",
+  "updated_at": "2026-08-28T22:06:04.963700Z"
+}
