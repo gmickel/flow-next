@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-28T14:05:57.152228Z",
+  "depends_on": [
+    "fn-208-hardening-pass-worker-review-and.1"
+  ],
+  "id": "fn-208-hardening-pass-worker-review-and.2",
+  "priority": null,
+  "spec": "fn-208-hardening-pass-worker-review-and",
+  "spec_path": ".flow/tasks/fn-208-hardening-pass-worker-review-and.2.md",
+  "status": "todo",
+  "title": "Worker gate integrity, review additions, scattered one-liners",
+  "updated_at": "2026-08-28T14:05:57.152228Z"
+}
