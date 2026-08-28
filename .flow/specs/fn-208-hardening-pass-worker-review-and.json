@@ -462,7 +462,7 @@
     "impl:fn-208-hardening-pass-worker-review-and.2": 0
   },
   "spec_path": ".flow/specs/fn-208-hardening-pass-worker-review-and.md",
-  "status": "open",
+  "status": "done",
   "title": "Hardening pass: worker, review, and autonomy prose",
   "tracker": {
     "baseHashFlow": null,
@@ -475,5 +475,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-28T15:35:16.995662Z"
+  "updated_at": "2026-08-28T22:41:08.571624Z"
 }
