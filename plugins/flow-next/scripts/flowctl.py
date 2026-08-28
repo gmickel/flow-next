@@ -19926,10 +19926,10 @@ def cmd_usage(args: argparse.Namespace) -> None:
 
 # fn-121/fn-197: the snippet sentinel version, as a documented anchor only.
 # No code reads these since fn-197 deleted the setup-mode pre-check blocks -
-# they exist so the template's `<!-- flow-next:snippet:v1 -->` sentinel has a
+# they exist so the template's `<!-- flow-next:snippet:v2 -->` sentinel has a
 # named source of truth. Bumping the version is a doc/template decision (the
 # setup Docs step re-proposes on CONTENT drift, not on this number).
-SNIPPET_SCHEMA_VERSION = 1
+SNIPPET_SCHEMA_VERSION = 2
 # fn-197: the machine-readable manifest of legacy copy-mode artifacts — the
 # single source of truth for /flow-next:setup's and /flow-next:plan's residue
 # probes. Copy-less installs write none of these; a repo that still carries

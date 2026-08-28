@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **The installed docs snippet now names the prose contract for chat replies.** 4.7.1 moved `/flow-next:prose` to the drafting moment, but the trigger stayed opportunistic — a host that never consulted its skill catalog could still ship a multi-section reply outside the contract. The CLAUDE.md/AGENTS.md block that `/flow-next:setup` writes now carries a one-line standing instruction: invoke the prose skill before drafting any substantial reply; short conversational turns skip it. Snippet sentinel bumped to `v2`. Upgrade action: existing repos pick the line up on their next `/flow-next:setup` run (the Docs step proposes a marker-bounded refresh on content drift); nothing breaks unrefreshed.
+
 ## [flow-next 4.7.1] - 2026-08-28
 
 ### Changed
