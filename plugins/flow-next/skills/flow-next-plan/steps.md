@@ -244,7 +244,10 @@ This shapes what the plan needs to cover. A pure backend refactor needs differen
   "not this milestone") are ordinary YAGNI lines, not ledger entries. The
   ledger file is memory prose written directly, like the rest of
   `.flow/memory/` — it is not a plan artifact and changes nothing about the
-  rule that every spec and task goes through `flowctl` into `.flow/`.
+  rule that every spec and task goes through `flowctl` into `.flow/`. Its body
+  prose follows the artifact prose contract in
+  [docs/prose.md](../../docs/prose.md); proceed without it when the doc is
+  absent.
 - One collection/surface/format now beats N configurable ones later; ship the
   single concrete case the request names.
 - This discipline trims SCOPE, never rigor: error/negative-case enumeration

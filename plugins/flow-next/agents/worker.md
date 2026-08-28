@@ -288,7 +288,7 @@ Only runs when **all** are true:
 - Fix was mechanical (lockfile bump, typo, formatting-only)
 - Same fingerprint (title + module + primary tag) was already captured in this session — skip the call entirely if you know it's a repeat; if you know the prior entry id, re-run with `memory add --update <id>` instead of creating a sibling
 
-Otherwise, synthesize a bug-track entry from the NEEDS_WORK findings + the fix you applied:
+Otherwise, synthesize a bug-track entry from the NEEDS_WORK findings + the fix you applied. Entry-body prose follows the artifact prose contract in [docs/prose.md](../docs/prose.md); proceed without it when the doc is absent.
 
 ```bash
 FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
