@@ -548,7 +548,7 @@ WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
-FORBIDDEN: <paths outside this task's declared Touches>; no force-push; no rebase of the target
+FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target
 TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 
 Follow your phases exactly."
@@ -556,7 +556,9 @@ Follow your phases exactly."
 `FORBIDDEN` echoes the task's declared write surface into the dispatch — an
 out-of-scope edit is the collision class the Touches-disjointness rule exists
 to prevent, and force-pushes/rebases of the target rewrite history peers have
-already built on. `TIMEBOX` is the return-partial contract: expiry means the
+already built on. The ban covers implementation edits only: the lifecycle
+artifacts worker.md itself requires (the persisted base file, the handover
+summary/evidence, the `flowctl done` receipt) stay writable. `TIMEBOX` is the return-partial contract: expiry means the
 worker writes its handover with whatever it has and returns — a partial
 handover is diagnosable; a lane that runs on past its cap is not. The
 conductor sets `<cap>` at dispatch — its own judgment from the task's declared
@@ -610,7 +612,7 @@ SECTION3C
   # from the mirror at exit 0. Assert the load-bearing dispatch fields survive;
   # a failure here means: update SECTION3C, never relax the guard.
   for dispatch_field in \
-    "FORBIDDEN: <paths outside this task's declared Touches>; no force-push; no rebase of the target" \
+    "FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target" \
     "TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on"; do
     if ! grep -qF "$dispatch_field" "$phases"; then
       echo "SYNC-FAIL: mirror phases.md 3c lost dispatch field: $dispatch_field (update SECTION3C in sync-codex.sh)" >&2
