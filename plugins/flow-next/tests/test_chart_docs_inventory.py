@@ -305,6 +305,7 @@ class ChartRegistryCounts(unittest.TestCase):
             (DOCS / "README.md", ("31 skills",)),
             (REPO_ROOT / "README.md", ("31 skills",)),
             (PLUGIN / "README.md", ("31 skills",)),
+            (DOCS / "teams.md", ("all 27 commands",)),
         ):
             text = _read(path)
             for n in needles:

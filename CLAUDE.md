@@ -136,6 +136,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Live-app QA (`/flow-next:qa` — opt-in; drives the running app, never passes by reading source) | [`plugins/flow-next/skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) |
 | Opinionated agent-readiness assessment (`/flow-next:prime` - classify, operability verdict, ranked next-actions) | [`plugins/flow-next/skills/flow-next-prime/SKILL.md`](plugins/flow-next/skills/flow-next-prime/SKILL.md) |
 | Compact markdown digest of a spec, task, diff, or the current topic (`/flow-next:visual` — the light register below the HTML lenses) | [`plugins/flow-next/skills/flow-next-visual/SKILL.md`](plugins/flow-next/skills/flow-next-visual/SKILL.md) |
+| Reply-prose discipline on request (`/flow-next:prose` — applies the artifact prose contract to a substantial chat reply) | [`plugins/flow-next/skills/flow-next-prose/SKILL.md`](plugins/flow-next/skills/flow-next-prose/SKILL.md) |
 | HTML artifact mode (opt-in render lenses under `.flow/artifacts/`) | [`plugins/flow-next/docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md) |
 | Cross-platform install matrix (Claude / Codex / Droid / OpenCode) | [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) |
 | Codebase feature map (optional) | [`plugins/flow-next/skills/flow-next-map/`](plugins/flow-next/skills/flow-next-map/) — `/flow-next:map` wraps `clawpatch map` |

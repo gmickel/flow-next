@@ -83,7 +83,7 @@ Task fn-207-prose-contract-for-agent-emitted.1 validates the core approach (the 
 | R4 | sync-codex twice clean + link guards | fn-207-prose-contract-for-agent-emitted.2 | — |
 | R5 | Full pointer coverage: 11 remaining surfaces + prose.md scope correction | fn-207-prose-contract-for-agent-emitted.4 | — |
 | R6 | sync-codex agents/ docs-link transform + guard extension | fn-207-prose-contract-for-agent-emitted.3 | — |
-| R7 | Experimental reply-prose skill (flow-next-prose) | fn-207-prose-contract-for-agent-emitted.5 | — |
+| R7 | Stable reply-prose skill (flow-next-prose) | fn-207-prose-contract-for-agent-emitted.5 | — |
 
 ## References
 
