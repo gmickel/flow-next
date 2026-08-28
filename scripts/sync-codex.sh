@@ -1675,6 +1675,11 @@ generate_openai_yaml "flow-next-visual" "Flow Visual" "Restate a spec, task, dif
 # (pilot/land) stays on canonical flow-next-work. Reachable by
 # $flow-next-work-rolling. It graduates or is deleted (fn-203 R10).
 generate_openai_yaml "flow-next-work-rolling" "Flow Work Rolling [experimental]" "Rolling-frontier work variant - per-task admission, isolated workspaces, conductor-owned review (experimental - can change or disappear)" "#3B82F6" false
+# Prose stays OUT of the implicit skill catalog (explicit false), same budget
+# rationale as visual: its trigger-rich description would tax every session's
+# shared catalog. Codex reaches it by explicit invocation only
+# ($flow-next-prose or the /flow-next-prose command stub).
+generate_openai_yaml "flow-next-prose" "Flow Prose" "Apply the artifact prose contract to substantial replies" "#F59E0B" false
 generate_openai_yaml "flow-next-ralph-init" "Flow Ralph Init" "Scaffold the repo-local Ralph autonomous harness" "#3B82F6" true
 
 # Internal skills (gray, explicit-only). These are spawned by other skills,
@@ -1797,6 +1802,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-worktree-kit"
   "flow-next-deps"
   "flow-next-work-rolling"
+  "flow-next-prose"
 )
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')

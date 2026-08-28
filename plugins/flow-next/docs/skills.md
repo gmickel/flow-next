@@ -1,6 +1,6 @@
 # Skills catalog
 
-Every skill flow-next ships, in one table. 30 skills: 25 slash-command-triggered (`/flow-next:<name>`), 5 phrase-triggered (no command file - describe what you want and the host agent matches the skill description; on hosts that surface skills as commands, also invocable by full skill name, e.g. `/flow-next:flow-next-worktree-kit`). Each row links the canonical `SKILL.md`.
+Every skill flow-next ships, in one table. 31 skills: 26 slash-command-triggered (`/flow-next:<name>`), 5 phrase-triggered (no command file - describe what you want and the host agent matches the skill description; on hosts that surface skills as commands, also invocable by full skill name, e.g. `/flow-next:flow-next-worktree-kit`). Each row links the canonical `SKILL.md`.
 
 > Lifecycle position and narrative for the core commands: [root README - How the flow works](../../../README.md#how-the-flow-works). Slash commands also appear in the [root README - Commands table](../../../README.md#commands) with flags and opt-in notes.
 
@@ -39,6 +39,7 @@ The idea-to-merge pipeline, in order. Chart and guide sit **upstream of capture*
 |---|---|---|
 | [`flow-next-prime`](../skills/flow-next-prime/SKILL.md) | `/flow-next:prime` | Opinionated codebase assessment - classifies the project (lifecycle / topology / size / stack / delivery shape), probes size/legibility + operability with bounded deterministic evidence (the `flowctl prime classify` emitter), judges **substance not existence**, and leads with an operability verdict + ranked next-actions instead of a bare level. Scans the pillars as the evidence layer, verifies commands actually run, checks GitHub settings, fixes agent readiness with consent. `--classify-only` = cheap portfolio-triage sweep across many repos. |
 | [`flow-next-visual`](../skills/flow-next-visual/SKILL.md) | `/flow-next:visual` | Restate a spec, a task, a diff range, or the current topic as a compact markdown digest — task tree, planned file-layout diff, R-ID coverage, shape sketches. Read-only, chat output only; a lighter register than the opt-in HTML render lenses. |
+| [`flow-next-prose`](../skills/flow-next-prose/SKILL.md) | `/flow-next:prose` | Apply the artifact prose contract ([`prose.md`](prose.md)) to a substantial reply, report, or summary at draft time. Scoped to chat prose - short turns, tool narration, the visual digest, and file/PR/tracker output stay out (those artifact surfaces carry their own pointers). |
 | [`flow-next-audit`](../skills/flow-next-audit/SKILL.md) | `/flow-next:audit` | Memory garbage collection — review each `.flow/memory/` entry against current code; Keep / Update / Consolidate / Replace / Delete / Harden. |
 | [`flow-next-memory-migrate`](../skills/flow-next-memory-migrate/SKILL.md) | `/flow-next:memory-migrate` | Lift pre-fn-30 legacy flat memory files into the categorized YAML schema. |
 | [`flow-next-sync`](../skills/flow-next-sync/SKILL.md) | `/flow-next:sync` | Plan-sync — update downstream task specs after implementation drift. Distinct from `tracker-sync`. |

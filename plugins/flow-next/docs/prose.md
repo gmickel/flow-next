@@ -1,6 +1,6 @@
 # Prose contract for agent-emitted artifacts
 
-This page governs the durable artifact prose emitted by flow-next skills and agents: PR bodies, tracker and PR comments, spec and plan prose, strategy and briefing sections, memory and glossary entries, task done summaries, and changelog entries at release. Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact. Every emission point carries a pointer; the visual digest is excluded by contract because its output is ephemeral chat rendering, never a written artifact.
+This page governs the durable artifact prose emitted by flow-next skills and agents: PR bodies, tracker and PR comments, spec and plan prose, strategy and briefing sections, memory and glossary entries, task done summaries, and changelog entries at release. Emission points cite this file by path. The drafting agent reads it at the moment it writes the artifact. Every emission point carries a pointer. Substantial chat replies are governed opportunistically by the `/flow-next:prose` skill, which is description-triggered and never a pointer or a guarantee. The visual digest is excluded by contract because its output is ephemeral chat rendering, never a written artifact.
 
 ## The rules
 

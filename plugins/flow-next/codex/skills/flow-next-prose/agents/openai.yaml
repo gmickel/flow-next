@@ -1,0 +1,6 @@
+interface:
+  display_name: "Flow Prose"
+  short_description: "Apply the artifact prose contract to substantial replies"
+  brand_color: "#F59E0B"
+policy:
+  allow_implicit_invocation: false
