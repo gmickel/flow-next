@@ -201,6 +201,6 @@ A named step in a skill or agent where durable user-facing prose is drafted (mak
 
 The work-level pipeline variation that starts /flow-next:work directly from a zero-task spec: an explicit fork mints one minimal implicit task ("implement this spec") from the spec instead of running plan/plan-review. Interactive-only by default; pilot forwards an explicit no-plan instruction through, never decides it.
 
-_Relates to_: Spec, Task
+_Relates to_: Spec, Task, R-ID
 
 _Avoid_: plan-less mode, skip-plan flag, zero-task execution

@@ -1,6 +1,6 @@
 # Running lean - operating profiles
 
-flow-next runs fully as **spec -> plan -> work**. Everything else is a layer you can leave off and reach for when a piece of work warrants it.
+flow-next runs fully as **spec -> plan -> work**. Everything else is a layer you can leave off and reach for when a piece of work warrants it. (The plan stage has a recorded direct variant for zero-task specs - the [no-plan route](pipeline-variations.md#no-plan-route); the default framing here is unchanged.)
 
 This page names the two **operating profiles** those layers serve, prices each layer in structural terms, and gives the manual invocation for people who want the capability without the standing cost. It is the source of the optionality caveat that appears at the top of each optional subsystem's page.
 
@@ -177,7 +177,7 @@ That is what makes a deliberate layer set auditable later: the difference betwee
 ## See also
 
 - [`../../../README.md`](../../../README.md) - the happy path and the 5-command quick start.
-- [`pipeline-variations.md`](pipeline-variations.md) - the stage axis: five worked routes through the menu, selected by risk and unknowns.
+- [`pipeline-variations.md`](pipeline-variations.md) - the stage axis: six worked routes through the menu, selected by risk and unknowns.
 - [`orchestration.md`](orchestration.md) - which model does what, and how to change it. The routing counterpart to this page: same doctrine, applied to models rather than layers.
 - [`../skills/flow-next-guide/SKILL.md`](../skills/flow-next-guide/SKILL.md) - `/flow-next:guide`, the router that recommends the smallest sufficient workflow for one specific situation.
 - [`teams.md`](teams.md) - what changes when several humans and several agents share one repo.
