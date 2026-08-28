@@ -246,7 +246,14 @@ out-of-scope edit is the collision class the Touches-disjointness rule exists
 to prevent, and force-pushes/rebases of the target rewrite history peers have
 already built on. `TIMEBOX` is the return-partial contract: expiry means the
 worker writes its handover with whatever it has and returns — a partial
-handover is diagnosable; a lane that runs on past its cap is not.
+handover is diagnosable; a lane that runs on past its cap is not. The
+conductor sets `<cap>` at dispatch — its own judgment from the task's declared
+scope and Quick commands; no config key stores it. The contract is
+cooperative, not host-enforced: on a host where the dispatch blocks, the
+conductor cannot act mid-flight, so the cap is applied at its next control
+point — the worker's return, the host's own tool timeout or error, or a lost
+result — where 3d's side-effects rule classifies whatever the lane left
+behind.
 
 `BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 
