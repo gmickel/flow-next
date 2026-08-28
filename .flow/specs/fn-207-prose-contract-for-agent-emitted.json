@@ -397,7 +397,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-207-prose-contract-for-agent-emitted.md",
-  "status": "open",
+  "status": "done",
   "title": "Prose contract for agent-emitted artifacts",
   "tracker": {
     "baseHashFlow": null,
@@ -410,5 +410,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-28T08:51:44.175840Z"
+  "updated_at": "2026-08-28T10:06:52.444902Z"
 }
