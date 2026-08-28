@@ -55,9 +55,16 @@ TBD
 - [ ] TBD
 
 ## Done summary
-TBD
+Added the zero-task fork to work's spec-mode entry (never-planned distinguished from all-done; legacy fall-through unreachable), a new gated references/no-plan-route.md owning the ask (agent-judged recommendation with stated reason), the autonomous marker-family refusal, plan-first stop semantics, the minimal implicit-task mint (--satisfies = all spec R-IDs, no Touches, resume-on-re-run), the FORBIDDEN-omitted dispatch shape, and the judicious-subagent license (portable-host degradation, worker-sole-committer bound, await-before-staging join barrier); SKILL.md parses --no-plan + natural-language intent with contradictory-signals-ask and ignored-with-notice on planned specs; host-deferred rationale corrected to verdict independence in phases.md 3c and references/host-deferred-review.md.
 
+R7 gate evaluation (defensive, no forced moves): every existing work reference is already sentinel/route-gated (wave-join, tracker-touchpoints, host-deferred-review, setup-questions, spec-id-mint, plan-sync-dispatch); the remaining always-loaded phases.md prose (wave dispatch rule, 3g) IS the plan-full reached path, so no plan-full-only machinery was lifted - lifting it would add a read hop to the default path.
+
+Dogfood (AC): live exercise on throwaway spec fn-1-throwaway-no-plan-dogfood in a hermetic scratch repo - (1) autonomous refusal emitted the typed NEEDS_HUMAN line under FLOW_AUTONOMOUS=1 with no no-plan instruction; (2) the fork ask rendered with an agent-judged work-directly recommendation and stated reason (no live user in a worker context - recorded as rendered); (3) NO_PLAN=1 pre-answered the fork and minted exactly one task (satisfies [R1, R2], no Touches), post-mint count 1, re-run resolved as resume with no second mint. Evidence log: scratchpad/fn209-2-dogfood.log.
+
+No sync-codex run (mirror regen wholly owned by task .6). Canonical 3c untouched.
+
+stage: impl-review - skipped(policy: host-deferred + parallel-wave - conductor owns the gate)
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: a410e6cf458b5bcacefebbf6a01bd7012465279e
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_spec_id_routing_prose test_worker_anchor_prose test_work_reached_path_routes test_work_argument_literal test_skill_prose_diet test_precheck_mode_contract test_host_review_backend -q (88 tests, OK; baseline green pre-edit, green post-commit), flowctl gate classify --base 935418692d8a4b8d304135cbffc40a46cc4a3af0 -> FULL (force-full prefix plugins/flow-next/skills/); full suite deferred to task .6 final gate per spec Quick commands, dogfood: no-plan route exercised on throwaway spec fn-1-throwaway-no-plan-dogfood in hermetic repo - autonomous refusal, ask render (agent-judged rec), flag pre-answer mint (satisfies [R1,R2], count 1, resume no re-mint); log: fn209-2-dogfood.log
+- PRs:stage: plan-sync - skipped(config: planSync.enabled != true)
