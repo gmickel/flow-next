@@ -100,8 +100,10 @@ PROMPT_HASHES = {
         "01b6b78ce0515285db7d7c20ae6ad1a04b6619f4fa429c1a4189375392cedf3c",
     "R_ID_COVERAGE_BLOCK":
         "51280cbdbe6fe1f570d221111b245e207aa6cdb9f07d0952b24f7029fa34ab80",
+    # fn-208.2: baseline gains the Middle Man / pass-through smell the
+    # quality-auditor already carries but impl-review was blind to.
     "SMELL_BASELINE_BLOCK":
-        "abf0284deeb387691bfa91f139e63d80c546f4c2b05403f821597465dcafdd5e",
+        "0fcf594a970ca41958003e4a41f99f0b8d590704d9c1ef32e47cd80722c68db9",
     "SPEC_SKELETON_TEMPLATE":
         "181c5cd5cba913346dc8c1800871dd42d139321319f86b80a67248ca15063ead",
     "STANDALONE_REVIEW_PROMPT_FALLBACK":

@@ -227,6 +227,8 @@ at `src/components/LoginForm.tsx:25-40`.
 - Clear file references and patterns
 - Testable acceptance criteria
 
+**Refactor-shaped tasks name an equivalence harness.** A restructuring-without-behavior-change task states its behavior pin in the body — a script diffing old-vs-new outputs, or a recorded baseline replayed against the new code. "Existing tests pass" is not a pin when the tests never covered the moved behavior.
+
 ---
 
 ## When Code IS Appropriate

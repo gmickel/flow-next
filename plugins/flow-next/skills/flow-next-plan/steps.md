@@ -218,6 +218,10 @@ This shapes what the plan needs to cover. A pure backend refactor needs differen
 
 **Before deciding, can you state the open question precisely — not answer it?** If the question itself will not come out sharp, that is an interview or chart signal, not a planning input: planning a fog is how a plan acquires scope nobody asked for. Recommend `/flow-next:interview` (a spec that needs sharpening) or `/flow-next:chart` (an idea that needs shaping) and stop, rather than deciding through the blur.
 
+**An empirically answerable fork gets a throwaway probe, not a question.** When a fork the plan hinges on is something the running code can settle (a behavior, a timing, an output), run the probe and read the answer instead of parking it as an open question or asking the user — the ask is the slow path for a fact the machine already holds. Safety predicate: a probe runs automatically only when it is non-mutating (read-only observation) or fully disposable (a scratch copy, a throwaway environment); a fork whose answer requires a stateful or destructive command — a migration, a deployment, a write API, anything that touches live state — stays an open question or goes to the user.
+
+**Wildly divergent independent opinions mean the framing was underspecified.** When independent inputs (scout reports, review verdicts, consulted models) disagree wildly on the same question, do not average them and do not quietly pick the one you prefer — reframe the question and re-run it; divergence measures the question, not the answerers.
+
 **Scope minimality (YAGNI — binding on the plan you write):**
 - Every task must trace to an R-ID, and every R-ID must trace to the REQUEST.
   A capability the request never asked for — an extra command, an export path,
@@ -556,6 +560,13 @@ below (they bind on both routes). Route B sessions skip that file entirely.
    - Validate paths exist at plan time (repo-scout already found them)
    - "Required" = must read before implementing. "Optional" = helpful reference
    - Targets come from repo-scout findings in Step 1
+
+   **Refactor-shaped tasks name an equivalence harness.** A task whose job is
+   restructuring-without-behavior-change names its behavior pin in the task
+   body: a script diffing old-vs-new outputs, or a recorded baseline replayed
+   against the new code. "Tests still pass" is not a pin when the tests never
+   covered the moved behavior — an unpinned refactor is where silent behavior
+   change ships as cleanup.
 
    **`satisfies` frontmatter rules (optional, additive):**
    - Populate `--satisfies` only when the task obviously advances specific R-IDs from the spec's `## Acceptance Criteria` section.

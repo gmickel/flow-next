@@ -29,6 +29,10 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 Cold session / tick start: `$FLOWCTL brief` first for session-scope orientation (one budgeted call).
 
+**Re-read this skill file at every tick start.** A long `/loop` run executing from a stale in-context copy drifts from the file the repo actually ships — the file on disk is the contract, the remembered copy is not.
+
+**Probe an idle dispatched agent read-only** — its side effects (commits, receipts, status fields), never a resume message: a resume restarts the agent, so "checking on" an agent that was merely slow turns one run into two.
+
 ## Hard guards (before anything else)
 
 Run these guards before selection, ledger writes, branch changes, or skill dispatch.

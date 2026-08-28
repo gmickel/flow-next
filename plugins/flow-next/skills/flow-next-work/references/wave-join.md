@@ -28,6 +28,16 @@ Join: complete (2/2 returned)
 Use the host's chosen integration mechanism to bring each successful worker's
 commits onto the target branch.
 
+**Workspace cleanup gate:** tear down a workspace only when BOTH hold — the
+task's changes are verified integrated on the target, and the workspace tree
+is clean. "Verified integrated" means the task's original commits are
+reachable from the target HEAD, or — after a rewriting integration
+(cherry-pick, rebase) that gives them new IDs — the task's normalized
+integrated commit IDs (step 2 below) are. A workspace whose changes cannot be
+confirmed on the target, or that holds uncommitted work, PAUSES its cleanup
+and is reported to the conductor, never deleted — a teardown that assumed
+integration was complete is how finished work disappears without a trace.
+
 ## Join collision handling
 
 **Join collision handling (fn-176 — never auto-resolve).** A merge conflict at

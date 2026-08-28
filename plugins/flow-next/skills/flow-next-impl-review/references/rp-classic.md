@@ -77,7 +77,7 @@ Conduct a John Carmack-level review:
 
 ## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
 Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
-Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality.
+Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality · Middle Man / pass-through (forwards the same arguments to another call of the same shape — a layer hiding nothing).
 
 ## Scenario Exploration (for changed code only)
 

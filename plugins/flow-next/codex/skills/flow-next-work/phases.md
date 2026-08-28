@@ -140,12 +140,17 @@ Report the decision before claiming:
 ```text
 Ready frontier: [fn-X.1, fn-X.2]
 Selected wave: [fn-X.1, fn-X.2]
+Selection rule: <why THIS subset of the frontier — the dispatch-rule condition or preference that picked it>
 Isolation: <native worktrees | linked worktrees | other safe mechanism>
 Dispatch count: 2
 Sequential fallback: <reason> # only when multiple tasks were ready but one selected
 ```
 
-Done when: the four report lines are printed (plus `Sequential fallback:` when one applies) and the selected wave satisfies all five conditions above.
+The `Selection rule:` line is printed before claiming — an unstated selection
+is unreviewable, and a wrong wave discovered at the join can no longer say why
+it was picked.
+
+Done when: the five report lines are printed (plus `Sequential fallback:` when one applies) and the selected wave satisfies all five conditions above.
 
 ### 3b. Claim the Selected Wave
 
@@ -231,8 +236,26 @@ WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
+FORBIDDEN: implementation edits outside this task's declared Touches (worker lifecycle writes are exempt: .flow/tmp/, the handover paths above, the receipt flowctl done writes); no force-push; no rebase of the target
+TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 
 Follow your phases exactly."
+
+`FORBIDDEN` echoes the task's declared write surface into the dispatch — an
+out-of-scope edit is the collision class the Touches-disjointness rule exists
+to prevent, and force-pushes/rebases of the target rewrite history peers have
+already built on. The ban covers implementation edits only: the lifecycle
+artifacts worker.md itself requires (the persisted base file, the handover
+summary/evidence, the `flowctl done` receipt) stay writable. `TIMEBOX` is the return-partial contract: expiry means the
+worker writes its handover with whatever it has and returns — a partial
+handover is diagnosable; a lane that runs on past its cap is not. The
+conductor sets `<cap>` at dispatch — its own judgment from the task's declared
+scope and Quick commands; no config key stores it. The contract is
+cooperative, not host-enforced: on a host where the dispatch blocks, the
+conductor cannot act mid-flight, so the cap is applied at its next control
+point — the worker's return, the host's own tool timeout or error, or a lost
+result — where 3d's side-effects rule classifies whatever the lane left
+behind.
 
 `BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 
@@ -271,6 +294,14 @@ $FLOWCTL show <task-id> --json
 
 A host-deferred worker returns with the task still `in_progress` BY DESIGN — that is the contract, not a failure. Before any failure classification, read [references/host-deferred-review.md](references/host-deferred-review.md) and execute its `3d.0 gate` section (re-read the persisted base, confirm the handover, run the mandatory `/flow-next:impl-review --review=host`, update evidence, then `done` only on SHIP). Only after this gate does the standard rule below apply to host-deferred tasks.
 
+**Progress is side effects only** — commits in the lane's workspace, a moved
+task status, handover files on disk. A lane past its `TIMEBOX` with none of
+these is stuck, whatever its narration said: diagnose in its workspace, stand
+it down, and count the stand-down against the existing 2-strike cap below —
+never a third budget. (Known risk, accepted: a slow-but-healthy lane can be
+stood down; the strike cap bounds that cost to one bounded retry, never
+correctness.)
+
 If status is not `done` (and the 3d.0 gate did not apply or already ran), the worker agent failed. Diagnose from ground truth (below) then retry — **but the retry is bounded**: keep a per-task failure strike counter. **After 2 consecutive non-`done` returns for the *same task*** (a worker that keeps aborting early or a persistently red Quick command), retrying stops and the failure escalates. A third respawn of the same task has broken this. Under `SPEC_MODE` / `mode:autonomous`, emit the worker's typed `BLOCKED: <reason>` as a `NEEDS_HUMAN` line and move on to the next ready task (autonomy's "never hang" promise has no loop-guard otherwise — a bad Quick command or broken baseline would rerun worker agents forever); interactively, surface the failure and stop.
 
 **Lost / errored worker result (`[Tool result missing due to internal error]`).** On long runs the host (Agent-tool) can drop the worker's completion report — you get an error placeholder instead of the report, even though the worker's *work* may be complete. Don't block waiting for a result that will never arrive. Treat a missing/errored result the same as "status not `done`" and **diagnose from ground truth** before retrying:
@@ -283,7 +314,7 @@ git status --short                       # uncommitted-but-complete changes?
 
 Classify and act:
 - **Already `done`** (status `done`, clean worktree at HEAD) — the report was lost but the task finished. Proceed to plan-sync (3e) as normal.
-- **Code present but not finalized** (commits and/or uncommitted changes exist, but status is still `in_progress` and build/review/`flowctl done` never ran) — spawn a **re-anchoring continuation worker** that re-reads the spec + current task status + `git status`/`git diff` and resumes from the late phase (verify build → review → `flowctl done`), rather than restarting the task from scratch.
+- **Code present but not finalized** (commits and/or uncommitted changes exist, but status is still `in_progress` and build/review/`flowctl done` never ran) — spawn a **re-anchoring continuation worker** that re-reads the spec + current task status + `git status`/`git diff` and resumes from the late phase (verify build → review → `flowctl done`), rather than restarting the task from scratch. For that continuation worker, the inherited trail is **authoritative for what was decided and written** — never redo it — but its **pass/fail claims are unproven**: re-verify on the real artifact (run the gate, read the receipt) before `done`. Trusting an inherited "tests green" narration is how a dead lane's unverified claim becomes a completed task.
 - **Nothing landed** (no commits, clean worktree, still `in_progress`) — the worker aborted early; retry the task normally.
 
 Done when: every dispatched task in the wave reads `done`, or has been escalated with a typed reason after its second consecutive failure — and no task is left silently `in_progress`.
@@ -364,6 +395,25 @@ loop-back behavior differs:
 
 **SPEC_MODE**: After 3d→3e, recompute the next ready frontier at 3a. Never
 select it before the current wave is joined and resolved.
+
+### 3f.1 Pause path (wave boundary only, explicit signal only)
+
+A run may pause ONLY at a wave boundary (the current wave joined and resolved,
+before the next 3a selection), and ONLY on an explicit pause request or an
+imminent-compaction signal from the host. An autonomous "keep going"
+instruction never triggers it — a self-granted pause is an availability
+failure dressed as prudence. To pause: commit this run's WIP (with a
+broken-tree note in the commit message if the tree is not coherent). Commit
+scope is the paths this run produced — `.flow/` state, the resume map, files
+its workers touched per their handovers — never the whole tree: on a
+current-branch run the tree may carry uncommitted work that predates the run
+(the run-start `git status` shows it), and the spec base alone cannot tell it
+from the run's own (the same rule as the worker's BLOCKED revert scope) —
+leave it uncommitted and name it in the resume map instead of sweeping it into
+the pause commit. Then write the workspace/handover map — task ids, statuses,
+workspace paths, handover paths, next frontier, any pre-existing uncommitted
+paths left in place — to `/tmp/<spec-id>-resume.md`. In-context state does not
+survive summarization; the resume file is the only map the next session gets.
 
 ### 3g. Completion Review Gate (SPEC_MODE only)
 
@@ -509,6 +559,13 @@ After all tasks complete (or periodically for large specs):
   - **Consider** never blocks.
   - When deciding fixes, read each `Out-of-axis observation:` as belonging to the named axis's territory. This is a fix-decision step only — the presented reports above stay verbatim.
 
+- **Caught gate manipulation strengthens the gate, never just reverts the
+  edit.** When this phase (or any review) catches a test, gate, or baseline
+  edited to make it pass, reverting the edit only restores the state the
+  manipulation already got past once — harden the gate in its own change (pin
+  the value, add the missing assertion, guard the baseline) so the same edit
+  cannot pass silently again.
+
 Host skips cannot land in task evidence because tasks are already done by Phase 4. **Every skip/honor outcome is accumulated as it happens** (gate_id, plus the receipt `<sha8>` where one was honored) **and surfaces as its own `Gates:` line in the Phase 5 final summary.** A silent skip, or several mixed outcomes collapsed into one line, has broken this (a periodic Phase 4 pass can produce several: some gates receipt-reused, some run full, a later pass docs-only).
 
 Done when: lint/format ran, every full gate either ran green or was receipt-honored, and one `Gates:` line is queued per outcome.
@@ -582,11 +639,19 @@ Tests: <commands + result>
 Review: <verdict | n/a>
 Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B>   # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
+Shipped: <n PRs merged | 0 (no PR yet — spec complete, unshipped)>
 Next: $flow-next-make-pr <spec-id>   # or $flow-next-qa <spec-id> first when pipeline.qa=on
 ```
 
 The `Next:` line is the executable handoff — the reader runs it, rather than
 re-deriving which command comes next from the summary above it.
+
+**Shipped-count honesty:** an all-done spec with no PR counts as ZERO shipped —
+`done` tasks on an unmerged branch are inventory, not delivery. The `Shipped:`
+line carries that count explicitly: `0 (no PR yet — spec complete, unshipped)`
+in the normal pre-make-pr state, never omitted. The `Next:`
+line is the remaining work (make-pr, qa, land), never a victory lap; a summary
+that read all-done-no-PR as finished has broken this.
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
