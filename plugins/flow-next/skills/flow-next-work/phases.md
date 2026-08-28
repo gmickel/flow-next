@@ -415,8 +415,10 @@ imminent-compaction signal from the host. An autonomous "keep going"
 instruction never triggers it — a self-granted pause is an availability
 failure dressed as prudence. To pause: commit this run's WIP (with a
 broken-tree note in the commit message if the tree is not coherent). Commit
-scope is the paths this run produced — `.flow/` state, the resume map, files
-its workers touched per their handovers — never the whole tree: on a
+scope is the paths this run produced — `.flow/` state, files its workers
+touched per their handovers — never the whole tree (the resume map is written
+AFTER this commit, to `/tmp`, outside the repository — it is the explicit
+handoff, never a staged path): on a
 current-branch run the tree may carry uncommitted work that predates the run
 (the run-start `git status` shows it), and the spec base alone cannot tell it
 from the run's own (the same rule as the worker's BLOCKED revert scope) —
