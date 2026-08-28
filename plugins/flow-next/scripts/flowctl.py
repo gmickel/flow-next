@@ -34244,6 +34244,23 @@ def cmd_next(args: argparse.Namespace) -> None:
             for task in inventory.by_spec.get(epic_id, [])
         }
 
+        if not tasks:
+            # fn-209 R8: a non-closed spec with zero tasks is never-planned.
+            # Surface it as a plan unit (mirrors pilot's classification)
+            # instead of silently falling through to the next spec / none.
+            if args.json:
+                json_output(
+                    {
+                        "status": "plan",
+                        "spec": epic_id,
+                        "task": None,
+                        "reason": "needs_tasks",
+                    }
+                )
+            else:
+                print(f"plan {epic_id} needs_tasks")
+            return
+
         # Resume in_progress tasks owned by current actor
         in_progress = [
             t
