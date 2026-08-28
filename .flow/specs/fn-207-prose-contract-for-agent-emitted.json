@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-207-prose-contract-for-agent-emitted",
   "completion_review_status": "ship",
-  "completion_reviewed_at": "2026-08-27T23:10:29.713890Z",
+  "completion_reviewed_at": "2026-08-28T08:51:44.175536Z",
   "created_at": "2026-08-27T21:14:40.920509Z",
   "default_impl": null,
   "default_review": null,
@@ -16,7 +16,7 @@
     "fn-207-prose-contract-for-agent-emitted.5": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-08-27T21:32:01.385828Z",
   "review_attempts": [
@@ -306,6 +306,32 @@
       "task": "fn-207-prose-contract-for-agent-emitted.5",
       "timestamp": "2026-08-28T08:42:18.422569Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "0d2397d21075098c70bd9e8dbef596996c845cd70e9a1b7f563f0b36d5067296",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 2,
+      "head_sha": "39e9147470c114e0e2ee86ec65aa7328660dacce",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 1322,
+      "output_sha256": "1ff984d773d959899020ee4226ab208bebb50042982489b70b83612b1f969900",
+      "reservation_id": "af24b6db7e524cf3ad0a8c37098247cd",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-28T08:51:43.907580Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
@@ -315,7 +341,7 @@
     "impl:fn-207-prose-contract-for-agent-emitted.4": 1,
     "impl:fn-207-prose-contract-for-agent-emitted.5": 1,
     "plan": 1,
-    "plan#completion": 2
+    "plan#completion": 3
   },
   "review_pending_rounds": {
     "impl:fn-207-prose-contract-for-agent-emitted.2": 1,
@@ -356,7 +382,9 @@
       "counter_scope": "plan",
       "epoch": 2,
       "forced": false,
-      "review_type": "completion"
+      "review_type": "completion",
+      "superseded_by": "af24b6db7e524cf3ad0a8c37098247cd",
+      "superseded_epoch": 3
     }
   },
   "review_transport_failures": {
@@ -382,5 +410,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-28T08:42:59.689584Z"
+  "updated_at": "2026-08-28T08:51:44.175840Z"
 }
