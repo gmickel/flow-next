@@ -260,7 +260,7 @@ class TestInstallCodexLegacyCleanup(unittest.TestCase):
             # disk (string assertion only; no network).
             self.assertIn(
                 "](https://github.com/gmickel/flow-next/blob/main/README.md"
-                "#the-pipeline-is-a-menu-not-a-rail)",
+                "#compose-the-pipeline)",
                 pipeline_page,
                 "non-installed-target docs link not rewritten to the absolute canonical URL",
             )

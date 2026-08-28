@@ -327,7 +327,7 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
 
 Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the hardened harness.
 
-## Unattended chart driving (not a pilot stage)
+## Unattended chart driving (outside the build loop)
 
 `/flow-next:chart` is **optional pre-capture discovery**, never a stage in the pilot pipeline (`plan → plan-review → work → [qa] → make-pr`). Pilot does not select charts, advance D-IDs, or emit chart briefings.
 

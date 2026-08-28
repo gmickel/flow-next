@@ -633,11 +633,11 @@ scripts/ralph/runs/<run-id>/
 
 **`progress.txt` contract:** `ralph.sh` writes one key per line (`iteration=`, `spec=`, `task=`, `promise=`, and on terminal write `completion_reason=` + `promise=COMPLETE`). `ralphctl.py` and the `flowctl status` soft-probe parse the same key=value lines (prose tails ignored). A run is active while `progress.txt` exists and is not terminal (`promise=COMPLETE` with `completion_reason=`).
 
-### Tracker-sync conflicts never block
+### Tracker-sync conflicts queue
 
 If the optional `/flow-next:tracker-sync` bridge is enabled (the discovery ceremony activates `tracker.perEvent.*` by default), a sync run **never blocks the Ralph loop**. Every run emits a receipt (`flowctl sync receipt`); a genuine body/status contradiction is **queued**, not raised. In autonomous mode an `always-ask` tiebreak (`tracker.conflictTiebreak`) resolves to *queue*, not prompt - same policy, surface-dependent delivery. The conflict lands in the **review deferred-findings sink** (`.flow/review-deferred/<branch>.md`), where the morning review already looks for deferred work - so tracker-sync needs **no `flowctl block`** and never stalls the run. Confident merges proceed unattended. See [`tracker-sync.md`](tracker-sync.md).
 
-### HTML render lenses generate only: never poll
+### HTML render lenses generate only
 
 With the opt-in HTML artifact mode active (`artifacts.html.enabled`, OFF by default), autonomous runs may **generate** render lenses at the normal lifecycle touchpoints - plan regenerates `.flow/artifacts/<spec-id>/spec.html`, make-pr emits `pr.html` with its narrow `chore(flow): pr artifact <spec-id>` commit - but they **never open a Lavish session and never run `lavish-axi poll`**: an autonomous loop never blocks on a human. The guard is mechanical in the skill snippets (the non-interactive marker family - `FLOW_RALPH`, `FLOW_AUTONOMOUS`, `REVIEW_RECEIPT_PATH` - forces `LAVISH_OK=false`), not prose-only. Artifact generation failure is non-fatal (one stderr note, the run proceeds), all artifact messaging routes to stderr, and the make-pr `PR_URL=<url>` single-line stdout contract plus every receipt are untouched. See [`html-artifacts.md`](html-artifacts.md).
 

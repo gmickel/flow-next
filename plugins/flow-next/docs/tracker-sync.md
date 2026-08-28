@@ -339,7 +339,7 @@ decision and implementation pointer**.
 - **Warnings, never silent drops.** A dependency spec with **no tracker link** is surfaced as a warning naming the dep spec id (and parent), in the skill report and on the `sync receipt`; the rest of the sync proceeds (item-level failure isolation). Self-edges are skipped with a warning. A dependency **cycle** in the flow graph is tolerated - each declared edge is projected as an independent direct relation, with **no** graph traversal or transitive expansion.
 - **Collision - human-removed relations are not recreated.** An edge present in the `depRelations` ledger AND still in `depends_on_epics`, but **missing remotely** (a tracker user removed the projected relation), is evaluated **before** per-side rules: it emits `sync defer` + a `queued` receipt rather than silently recreating the relation. Re-creating a human-removed relation is the explicit anti-behavior - same conservative posture as the body/status who-wins ladder.
 
-## Ralph-safe / autonomous-safe: never blocks
+## Ralph-safe / autonomous-safe: conflicts queue
 
 Every run emits a receipt (`flowctl sync receipt --status …`); genuine conflicts **queue** (`flowctl sync defer …`) rather than block. In autonomous / Ralph mode an `always-ask` tiebreak resolves to **queue**, not prompt - same policy, surface-dependent delivery. Deferred conflicts land in the **review deferred-findings sink** (`.flow/review-deferred/<branch>.md`) where the human already looks for deferred work - so tracker-sync never needs `flowctl block`, never stalls the loop. See [`ralph.md`](ralph.md).
 

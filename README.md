@@ -47,16 +47,16 @@ Flow-Next puts the discipline in the operating model. It turns rough intent into
 
 Flow-Next is an AI agent orchestration plugin: agent-native skills layered on a bundled pure-stdlib Python CLI (`flowctl`). The host agent is the intelligence; flowctl is the deterministic plumbing. One arc, from the conversation you already had to a merged pull request: decide what to build, build it, prove it. Every skill runs from plain language, and the slash commands are the precise form of the same thing. No external services, no SaaS, no global config.
 
-**Ship more without lowering the bar.**
+**Everything reaches your queue already reviewed.**
 A different model reviews every plan and every implementation, the loop iterates until SHIP, and a task cannot be marked done without evidence JSON.
 
-**Reviews stop being where work waits.**
+**Open a PR that already makes its argument.**
 The pull request arrives explaining itself: which acceptance criterion each change satisfies, which decisions still need a human, what deliberately did not change.
 
-**Your team's context stops living in three people's heads.**
+**Your team's context lives in the repo.**
 Specs, decisions, glossary, and memory are files in your repository that the next run reads. A teammate joining on Monday reads the same thing the agent does.
 
-**Climb to autonomy without a leap of faith.**
+**Hand over as much as the receipts have earned.**
 One dial from a supervised pair to a loop draining the backlog overnight. The gates do not change as you climb.
 
 **Plan on your best model, implement on a cheaper one.**
@@ -178,11 +178,11 @@ That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `
 
 ---
 
-## The pipeline is a menu, not a rail
+## Compose the pipeline
 
-The 5-command path is the opinionated default: rails for your first week, with everything else still available. Every stage is a composable primitive. Skip stages, reorder them, chain them in one sentence, prompt *into* any of them, and whichever subset you run, the same execution, evidence, and review contracts hold. (Directly answers [#28](https://github.com/gmickel/flow-next/issues/28) and [#91](https://github.com/gmickel/flow-next/issues/91).)
+The 5-command path is the opinionated default, and every stage is a composable primitive. Skip stages, reorder them, chain them in one sentence, prompt *into* any of them, and whichever subset you run, the same execution, evidence, and review contracts hold. (Directly answers [#28](https://github.com/gmickel/flow-next/issues/28) and [#91](https://github.com/gmickel/flow-next/issues/91).)
 
-**You never have to type a slash command or a `--flag`.** Plain language is a first-class entry point: every skill runs from it, and every argument has a plain-language equivalent, so "implement fn-12 on a new branch and review it with codex" *is* `/flow-next:work fn-12 --branch=new --review=codex`. The explicit forms below are the precise, copy-pasteable version. The skills also compose past the pipeline: research a competitor's pricing, then "capture a spec for it"; run a load test, then "spec the fixes the numbers point to". The exploration is the input, the spec is the durable output.
+**Plain language is a first-class entry point.** every skill runs from it, and every argument has a plain-language equivalent, so "implement fn-12 on a new branch and review it with codex" *is* `/flow-next:work fn-12 --branch=new --review=codex`. The explicit forms below are the precise, copy-pasteable version. The skills also compose past the pipeline: research a competitor's pricing, then "capture a spec for it"; run a load test, then "spec the fixes the numbers point to". The exploration is the input, the spec is the durable output.
 
 **Prototype first when the question needs it.** Capture's input can be a conversation, a half-formed briefing package, a business-language BRD, an eval result, or a working prototype. Some questions ("how should this look?", "does this state model survive the awkward cases?") cannot be settled in prose, so build the thing badly on purpose and then *"capture a spec from this prototype, ignore the code quality, I want the intent and the requirements it demonstrates."* What happens to that code is a separate call made at **plan** time against your architecture and standards. The general move is to let something real answer the question and then capture the answer: probe a performance complaint, reproduce a bug report as the failing test that becomes R1, run an eval for a model choice, bake off candidate approaches as one task each. See [Specs without waterfall](https://flow-next.dev/understand/specs-without-waterfall/) and the [cookbook](https://flow-next.dev/guides/cookbook/#compose-beyond-the-pipeline).
 

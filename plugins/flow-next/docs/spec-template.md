@@ -147,11 +147,11 @@ Cover the unhappy paths too, not only the demo path.
 
 Canonical headings untouched, one section added, scope marker set so the business pass owns it.
 
-### Why this is not the default
+### Why the default stays lean
 
 We benchmarked adding user-story and test-seam sections to the bundled scaffold. A first pass looked positive; a pre-registered replication did not hold up, and the larger scaffold cost roughly a third more spec length - paid on every downstream read by every worker and reviewer. So the default stays lean and the override stays available. Section preferences are project-specific and the cascade is the right place to express them.
 
-## Durability: contracts, not coordinates
+## Durability: state the contract
 
 **A spec states contracts: types, signatures, behaviors, invariants.** It does not state file paths or line numbers. Coordinates rot on the first refactor, and a spec full of rotted coordinates is what turns plan-sync into churn - every downstream task spec gets rewritten because a file moved, not because anything was decided differently.
 

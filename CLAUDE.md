@@ -145,6 +145,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Setup internals (copy-less install, per-artifact resolution chains, snippet/marker invariants) | [`agent_docs/setup.md`](agent_docs/setup.md) |
 | Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) |
 | Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
+| Writing docs (repo docs + flow-next.dev): capability framing, page shape, anchors as contracts | [`agent_docs/writing-docs.md`](agent_docs/writing-docs.md) |
 | Prose contract for agent-emitted artifacts (the rules every durable emission surface drafts under - PR bodies, specs and plans, tracker and PR comments, strategy and briefing sections, memory and glossary entries, done summaries, changelogs; cited by path at each emission point) | [`plugins/flow-next/docs/prose.md`](plugins/flow-next/docs/prose.md) |
 | Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) |
 | Optimizing a skill/agent prompt (token/accuracy, eval-driven) | [`agent_docs/optimizing-skills.md`](agent_docs/optimizing-skills.md) |
