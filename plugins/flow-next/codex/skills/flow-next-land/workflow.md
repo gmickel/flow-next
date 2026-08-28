@@ -147,12 +147,23 @@ if ! mkdir "$TICK_LOCK" 2>/dev/null; then
   echo 'LAND_VERDICT=NO_WORK prs=0 pr=- reason="another land tick holds this clone"'
   exit 0
 fi
-echo "$$" > "$TICK_LOCK/pid"   # owner record — the reaper's liveness gate reads this
+# Owner record — the reaper's liveness gate reads this. INVARIANT: the recorded
+# process must be one that persists across the tick's prompt turns. Each Bash tool
+# call runs in a transient shell — its `$$` exits when the call returns, so a
+# later tick's `kill -0` would read a live tick as dead mid-work. The shell's
+# PARENT is the conducting harness process, which spans the whole tick (and
+# session). Verified empirically on Claude Code (2026-08-28): two consecutive
+# prompt turns saw `$$` differ (3040014, then 3040115) while `$PPID` held stable
+# (1031926, `ps -o comm=` → claude) — rerun that two-call probe to re-verify on
+# any host.
+echo "$PPID" > "$TICK_LOCK/pid"
 fi
 LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"   # first ledger read — inside the claimed interval, never before it (dry-run: plain snapshot read; the atomic jq+mv writes keep it consistent)
 ```
 
 **Claim liveness refresh — the stale window measures crash, never work.** Claim-holding ticks only (`--dry-run` holds none and never touches): `touch "$TICK_LOCK"` at every phase boundary, per PR in Phase 2's gate loop and Phase 3's action loop, and immediately before AND immediately after every blocking call (§2.9's 600s merge-verdict command, a resolve-pr dispatch, the merge itself). The after-call touch is load-bearing: a single-threaded conductor cannot refresh WHILE it blocks, so the claim's longest refresh-free interval is exactly one blocking call's duration — the 240-minute stale age is sized above the longest such call (a resolve-pr dispatch; its 2-cycle bound is turns, not wall clock, and can run past an hour), and every other refresh point is minutes apart. So a live tick rarely ages into the window at all — and even when a single dispatch outlasts 240 minutes, the reaper's PID-liveness gate (above) sees the holder still running and never takes over: age nominates, only a dead holder confirms. The cost of the wider window falls on crash recovery only — a crashed claim now waits up to 240 minutes for the reaper, and since a held claim is terminal `NO_WORK`, that delay postpones a tick without ever admitting a second writer.
+
+Two residuals of recording the spanning parent, both in the conservative (hold-longer) direction or age-bounded. First: a session that outlives a crashed tick keeps the recorded PID alive, so takeover waits for session exit — a bounded extra hold, never a second concurrent writer. Second: on a host whose parent process is itself per-tool-call-transient, the liveness gate would misread a live tick as dead — the 240-minute age gate (still the first gate) then bounds the exposure to exactly the pre-PID-gate behavior (age-only takeover); a host adopting land should rerun the two-call probe above if unsure.
 
 A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rm -f "$TICK_LOCK/pid"; rmdir "$TICK_LOCK"` (the pid record first — a bare `rmdir` fails on the non-empty dir) immediately before printing the terminal `LAND_VERDICT` line, on EVERY tick-ending path after this point — Phase 4's normal exit AND every early terminal (Phase 1's no-work exit, a mid-tick `NEEDS_HUMAN` that ends the tick early), not only the Phase 4 exit. A tick that printed a terminal line while still holding the claim leaves the clone locked for up to the 240-minute reaper window. A `--dry-run` tick took no claim, so it releases nothing — its zero-mutation promise (no checkout, push, label, merge, dispatch, ledger write, or claim) holds byte-for-byte on the filesystem.
 
