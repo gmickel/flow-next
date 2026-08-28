@@ -54,6 +54,7 @@ else
   # What changed since the merge-base (includes uncommitted work)
   git diff "$MB" --stat
   git diff "$MB" --name-only
+  git diff "$MB" --numstat   # per-file added/deleted counts — feeds the standards axis's mechanical file-size check
   git diff "$MB"
 fi
 ```
@@ -263,7 +264,7 @@ Skip entirely if no DESIGN.md in project root. If DESIGN.md exists and the diff 
 
 **8. Structure over instruction** — when a finding's natural fix is "add a comment" or "adopt a convention someone must remember", ask for the structural constraint instead: a type, a lint rule, a runtime check. A remembered rule is the failure mode (it fails on the first reader who never read it); an encoded one cannot be forgotten.
 
-**9. File-size crossing (mechanical)** — a file that crosses the 1000-line threshold **in this diff** is a Should-Fix finding. Crossing only — never files already past the threshold (introduced-only discipline); the numstat from the shared diff step is already in hand, so this costs no extra read.
+**9. File-size crossing (mechanical)** — a file that crosses the 1000-line threshold **in this diff** is a Should-Fix finding. Crossing only — never files already past the threshold (introduced-only discipline). Compute it from data already in hand: the shared diff step's `--numstat` gives per-file added/deleted lines; current line count minus (added − deleted) is the pre-diff count. Pre-diff ≤ 1000 and current > 1000 → crossed.
 
 You cannot read the repo's maintainer docs, so the baseline travels with you. Each line is *what it looks like → the fix shape*:
 

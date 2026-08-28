@@ -236,8 +236,17 @@ WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
+FORBIDDEN: <paths outside this task's declared Touches>; no force-push; no rebase of the target
+TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 
 Follow your phases exactly."
+
+`FORBIDDEN` echoes the task's declared write surface into the dispatch — an
+out-of-scope edit is the collision class the Touches-disjointness rule exists
+to prevent, and force-pushes/rebases of the target rewrite history peers have
+already built on. `TIMEBOX` is the return-partial contract: expiry means the
+worker writes its handover with whatever it has and returns — a partial
+handover is diagnosable; a lane that runs on past its cap is not.
 
 `BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 

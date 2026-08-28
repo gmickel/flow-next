@@ -548,8 +548,17 @@ WORKSPACE: <isolated mutable workspace>
 HANDOVER_SUMMARY: <task-unique summary path>
 HANDOVER_EVIDENCE: <task-unique evidence path>
 BASELINE_HANDOFF: green (verified at <sha8> by <task-id>)
+FORBIDDEN: <paths outside this task's declared Touches>; no force-push; no rebase of the target
+TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on
 
 Follow your phases exactly."
+
+`FORBIDDEN` echoes the task's declared write surface into the dispatch — an
+out-of-scope edit is the collision class the Touches-disjointness rule exists
+to prevent, and force-pushes/rebases of the target rewrite history peers have
+already built on. `TIMEBOX` is the return-partial contract: expiry means the
+worker writes its handover with whatever it has and returns — a partial
+handover is diagnosable; a lane that runs on past its cap is not.
 
 `BASELINE_HANDOFF` is optional. The conductor MAY pass it only when ALL hold: the prior task in this run reached done with its Phase 5 Verify green over the SAME Quick commands, HEAD has not moved since except by that task's own receipt commit, and the new task's declared Touches do not intersect files changed since that verification. Conductor judgment on stated facts; when in doubt, omit the line. The first task of a run never receives a handoff (nothing verified yet).
 
@@ -588,6 +597,19 @@ SECTION3C
     -e 's/\*\*For each task\*\*, spawn a worker subagent with fresh context/**For each task**, use the worker agent with fresh context/g' \
     "$phases"
   rm -f "${phases}.bak"
+
+  # fn-208.2 guard: SECTION3C above is a HARDCODED replacement of canonical 3c,
+  # so a canonical dispatch-template field the heredoc misses vanishes silently
+  # from the mirror at exit 0. Assert the load-bearing dispatch fields survive;
+  # a failure here means: update SECTION3C, never relax the guard.
+  for dispatch_field in \
+    "FORBIDDEN: <paths outside this task's declared Touches>; no force-push; no rebase of the target" \
+    "TIMEBOX: <cap> - on expiry write the handover with partial findings and return, never run on"; do
+    if ! grep -qF "$dispatch_field" "$phases"; then
+      echo "SYNC-FAIL: mirror phases.md 3c lost dispatch field: $dispatch_field (update SECTION3C in sync-codex.sh)" >&2
+      exit 1
+    fi
+  done
 fi
 
 # flow-next-work: SKILL.md
