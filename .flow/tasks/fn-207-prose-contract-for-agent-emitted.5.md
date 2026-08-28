@@ -59,8 +59,8 @@ Shipped /flow-next:prose, a reply-prose skill applying the shipped prose contrac
 baseline: green (sync-codex x2 idempotent, test_prompt_text_pinned green, clean tree)
 stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 ## Evidence
-- Commits: 3b10966e77f7e8b396051a5bf947b0aea72a7d65, 90c44c45c095c7b86c4662d1795dfdbe0bc67d9f, 7ff878a67f4a6075a4a0f9bf3797c087e85ddc80
+- Commits: e3014698, 15fcc083, 25b2511c (rebased from 3b10966e, 90c44c45, 7ff878a6 when the branch replayed onto the bot-fix head b17202ad)
 - Tests: python3 scripts/run_tests_parallel.py (4505 ran, 0 failures), uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh (x2, idempotent, guards green; re-run after each fix round), cd plugins/flow-next/tests && python3 -m unittest test_chart_docs_inventory test_prompt_text_pinned -q, ./scripts/install-opencode.sh --dest /tmp/oc-proof2 --force (command stub generated, skill + docs scattered)
 - PRs:
-stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer; NEEDS_WORK round 1 -> SHIP round 2, fixes 90c44c45 + 7ff878a6)
+stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer; NEEDS_WORK round 1 -> SHIP round 2, fixes 15fcc083 + 25b2511c post-rebase)
 stage: plan-sync - skipped(config: planSync.enabled != true)

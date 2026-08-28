@@ -47,7 +47,7 @@ Full gate at the end (per repo rules): `python3 scripts/run_tests_parallel.py` +
 
 ## Boundaries
 
-- No new skill and no per-skill rule dump — pointers only; this stays a one-or-two-task change.
+- No per-skill rule dump — pointers only. (The original "no new skill" boundary and one-or-two-task sizing were superseded by user decisions during the run: R5 widened coverage to every durable surface, and R7 ships the one deliberate exception, the stable /flow-next:prose reply skill — see R7 and Decision Context for the promotion record.)
 - No claim that the contract improves code quality or maintainability decay — artifact prose only.
 - No enforcement machinery (no linter, no test pinning prose sentences — G2 forbids it); this is reviewed prose guidance.
 - The visual digest is excluded by contract: its output is ephemeral chat rendering, never a written artifact — the pointer contract governs durable artifact prose. (R7 later extends governance to substantial replies via the opportunistic `/flow-next:prose` skill — description-triggered, never a pointer, never a guarantee; the visual digest stays excluded even there.) (The R5 sweep also excluded: guide and all scouts as read-only/report-back, plan-sync as mechanical substitution, memory-migrate as byte-verbatim migration, ralph-init as pinned-template copying, and the flow-next crud skill as user-supplied titles.)
