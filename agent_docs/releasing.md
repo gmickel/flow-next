@@ -69,6 +69,8 @@ into the GitHub release. It is a user-facing release surface, not an engineering
 ledger. Keep the Keep a Changelog headings (`Added`, `Changed`, `Fixed`), but
 make the release understandable before the inventory begins.
 
+This gate is a changelog specialization of the generic artifact-prose contract in [`plugins/flow-next/docs/prose.md`](../plugins/flow-next/docs/prose.md) (portability test, mechanism-or-number, outcome-first ordering, honesty, the style bans). The generic rules live there; below they appear only inside changelog specializations, never as standalone restatements — everything that follows is the changelog-specific machinery that operationalizes them: the four-slot ordering, the hard rejection test with its worked examples, and the docs-site register.
+
 For every feature release, write in this order:
 
 1. **User outcome.** Open the release section with a short unheaded paragraph:
@@ -173,28 +175,15 @@ fine WHERE THE READER ACTS ON THEM. Blank lines around this block so MDX renders
 
 **Register (MANDATORY - the docs-site changelog is customer-facing, NOT the repo CHANGELOG in disguise):**
 
-- **Use the fixed narrative order:** human outcome first, changed journey second,
-  portable data and implementation details third. For review features, the
-  human reviewer is the protagonist. Explain how they orient themselves, follow
-  the change, focus risk, inspect evidence, and retain merge judgment.
-- **Lead with the reader's problem, not the mechanism.** The title and bold
-  one-liner answer "what was hard before, what can I do now, and why should I
-  care?" They never lead with a command, schema, artifact name, fixture, parser,
-  or benchmark. Wrong: "Snapshot-based config get: three read forms backed by
-  one command-scoped snapshot". Right: "The skills you run most now read
-  configuration once instead of seven times - less waiting, fewer places for a
-  half-written task to exist."
-- **Walk the feature as the user experiences it.** The first detail paragraphs
-  describe the old burden, the new flow, and the control or confidence gained.
-  Internal machinery belongs in an "Under the hood" tail.
+- **The generic prose contract applies** ([`prose.md`](../plugins/flow-next/docs/prose.md), cited above): outcome first with mechanism last, name the number, plain hyphens, honesty. Changelog-specific register on top of it: this page is customer-facing, and for review features the human reviewer is the protagonist - explain how they orient themselves, follow the change, focus risk, inspect evidence, and retain merge judgment. The first detail paragraphs describe the old burden, the new flow, and the control or confidence gained; internal machinery belongs in an "Under the hood" tail.
+- **The title and bold one-liner answer "what was hard before, what can I do now, and why should I care?"** They never lead with a command, schema, artifact name, fixture, parser, or benchmark. Wrong: "Snapshot-based config get: three read forms backed by one command-scoped snapshot". Right: "The skills you run most now read configuration once instead of seven times - less waiting, fewer places for a half-written task to exist."
 - **Every paragraph earns its place by answering why / what it means for you.**
   Function names, LOC counts, fence/prose-contract mechanics, fn-task numbering,
   test counts, and compatibility contracts belong in the repo CHANGELOG or the
   technical tail - reference them earlier only when the reader must act on them.
 - **Upgrade actions come FIRST and are imperative.** If the reader must do something ("re-run ralph-init", "switch off the legacy JSON keys"), it opens the details block under a "do these first" framing - never buried mid-list. **If `SNIPPET_SCHEMA_VERSION` bumped in this release, say so there** - it is the only thing that makes a user re-run `/flow-next:setup` (plugin updates never do).
 - **Numbers are outcomes, not inventory.** "30 seconds to half a second" and "half the wall-clock" persuade; "-1,251 LOC" and "ran=1935" are inventory. Keep measured evidence (that is the register: proof-backed, never adjective-backed), drop bookkeeping.
-- **Honesty stays.** Bounds, deliberate misses, and what did NOT change are part of the story ("about 35% of runs still force a full suite as the safety floor"). The register is candid practitioner, zero hype - see the messaging architecture (claim hierarchy) in the maintainer's private config.
-- **Plain hyphens, never em dashes**, in all new prose.
+- **Honesty stays** (prose.md rule 10, load-bearing in this register). Bounds, deliberate misses, and what did NOT change are part of the story ("about 35% of runs still force a full suite as the safety floor"). The register is candid practitioner, zero hype - see the messaging architecture (claim hierarchy) in the maintainer's private config.
 
 **Docs-site hard rejection test:** hide the final technical paragraph and ask:
 "Can a user explain why this release matters, how their workflow changes, and

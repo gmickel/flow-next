@@ -733,6 +733,8 @@ git log --oneline -1   # evidence echo: the squash commit referencing the PR
    The leaf never gates the terminal status. Land synthesizes comment content by
    name: merged PR URL plus release outcome, or the failed merge-probe diagnostic.
 
+   Verdict-comment wording follows the artifact prose contract in [docs/prose.md](../../docs/prose.md) under its "structural contracts win" precedence — the merge-evidence gate and tracker projection rules in this file stay authoritative; proceed without the doc when it is absent.
+
    ```bash
    TRACKER_FIRE=0
    if [ "$("$FLOWCTL" sync active --json | jq -r '.active')" = "true" ]; then

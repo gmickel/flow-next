@@ -379,6 +379,8 @@ write no artifact, add no body line, and print no artifact-related output.
 
 **Goal:** turn the structured payload from Phase 1 into the **header half** of the PR body — the sections a reviewer reads *first* to decide where to focus. Header half = Title + summary block + TL;DR + R-ID coverage table + Critical changes + How to review this PR + Review plan. The context half (Decisions / Memory / Glossary / Open items) lands in §Phase 2 (cont). The mermaid `## Structural changes` section lands in §Phase 3.
 
+Body prose follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
+
 The host agent's reasoning IS the renderer. **There is no Python renderer to call** — the agent reads the payload and emits markdown directly. flowctl provided the structured input; the skill turns it into prose. This is the "harness's own model is the QA layer" part of the spec.
 
 ### 2.0 — Section order (load-bearing)

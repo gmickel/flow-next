@@ -210,6 +210,8 @@ The title may be `[inferred]` if the conversation never named one explicitly. Ph
 
 **Goal:** draft the spec body using the CLAUDE.md richer template, with **per-line source tags** so hallucinated content is visible at Phase 4 read-back.
 
+Spec prose follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
+
 ### 2.1 — Source-tag taxonomy
 
 Every acceptance criterion line, every decision-context line, and every scope-bounding line in the spec carries one tag: `[user]` / `[paraphrase]` / `[inferred]` / `[strategy:<track>]`. The four-tag table — meanings, acceptance tests, worked examples, when-to-use-which — is the single copy in [phases.md](phases.md) §Source-tag taxonomy.

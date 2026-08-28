@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-27T22:38:56.205232Z",
+  "depends_on": [
+    "fn-207-prose-contract-for-agent-emitted.3"
+  ],
+  "id": "fn-207-prose-contract-for-agent-emitted.4",
+  "priority": null,
+  "spec": "fn-207-prose-contract-for-agent-emitted",
+  "spec_path": ".flow/tasks/fn-207-prose-contract-for-agent-emitted.4.md",
+  "status": "todo",
+  "title": "Full pointer coverage: 11 surfaces + prose.md scope correction",
+  "updated_at": "2026-08-27T22:38:56.205232Z"
+}

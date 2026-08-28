@@ -46,9 +46,16 @@ Author the prose-contract reference doc and register it, then collapse releasing
 - [ ] prose.md contains no links to `agent_docs/*`
 - [ ] Focused suites green: `cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q`
 ## Done summary
-TBD
+Authored plugins/flow-next/docs/prose.md (ten artifact-prose rules, structural-contracts-win precedence, artifact-only scope boundary citing SlopCodeBench arXiv 2603.24755, See also cross-linking make-pr's section 2.5 hallucination guardrails; no agent_docs links, passes its own rules on read-through), registered it in the docs README Subsystem references table and the root CLAUDE.md Where-to-look table, and collapsed agent_docs/releasing.md's generic prose restatements into a cite: the changelog writing gate and docs-site register are now explicitly labeled changelog specializations of prose.md, the fixed-narrative-order / lead-with-problem / plain-hyphens register bullets are replaced by the cite, and the ordering algorithm, hard rejection tests, and worked examples stay. Satisfies R1 and R3.
 
+File content authored via the cursor-agent bridge (cursor-grok-4.6-high) per explicit routing instruction, two foreground batches, both verified against the edit spec with zero stray edits. Note for .2: sync-codex mirror regen deliberately left to .2 (its task), so the mirror does not yet carry prose.md.
+
+baseline: green (test_prompt_text_pinned pre-edit OK at 5e0bc5bc)
+Verify: gate classify exited FULL (CLAUDE.md unmatched); full gate run per repo docs-tree rule - python3 scripts/run_tests_parallel.py: files=192 ran=4505 failures=0 errors=0; uvx ruff@0.16.0 check .: all checks passed; focused test_prompt_text_pinned green.
+
+stage: impl-review - ran (model: claude-fable-5, host backend, cross-family from grok-4.6 writer; SHIP round 1, 3 P2 nits applied in b5ca65a0)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 2988793ad2f76c3537a5cebffb24779abb364aa7, b5ca65a0ded6bf321aeacfa207c5c16ff1d77858
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:

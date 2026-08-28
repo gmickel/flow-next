@@ -29,6 +29,8 @@ After the first section is captured, read `references/strategy-template.md`
 before building the draft. This load is non-optional once a write is reached;
 the reference carries the exact document shape and post-write checklist.
 
+Section prose written to STRATEGY.md follows the artifact prose contract in [docs/prose.md](../../../docs/prose.md); proceed without it when the doc is absent.
+
 After each section is captured, build the partial draft and write to `STRATEGY.md` via `Write` tool **before the next question fires**. `last_updated` bumps on every save. No draft state file. Mid-flow abandonment leaves a partially-populated file readable on disk; resume is via Phase 0 → update routing.
 
 The partial-draft shape: frontmatter + H1 + the captured section(s) + placeholder bodies (`_Not yet captured._`) for unfilled required sections. Optional sections are absent until Phase 1.4.

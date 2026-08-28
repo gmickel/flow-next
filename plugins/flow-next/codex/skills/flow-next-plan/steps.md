@@ -244,7 +244,10 @@ This shapes what the plan needs to cover. A pure backend refactor needs differen
   "not this milestone") are ordinary YAGNI lines, not ledger entries. The
   ledger file is memory prose written directly, like the rest of
   `.flow/memory/` — it is not a plan artifact and changes nothing about the
-  rule that every spec and task goes through `flowctl` into `.flow/`.
+  rule that every spec and task goes through `flowctl` into `.flow/`. Its body
+  prose follows the artifact prose contract in
+  [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is
+  absent.
 - One collection/surface/format now beats N configurable ones later; ship the
   single concrete case the request names.
 - This discipline trims SCOPE, never rigor: error/negative-case enumeration
@@ -300,6 +303,8 @@ Default to standard unless complexity demands more or less.
 - Risks + mitigations
 
 ## Step 5: Write to .flow
+
+Plan and task-spec prose follows the artifact prose contract in [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is absent.
 
 **Calibration (read first):** before writing task specs, read [`examples.md`](examples.md) — good/bad task-spec shapes, investigation-target formats, T-shirt sizing, and coverage-table examples. It is the few-shot anchor that keeps task specs well-sized and well-shaped; skipping it is why plans drift toward vague or over-split tasks.
 

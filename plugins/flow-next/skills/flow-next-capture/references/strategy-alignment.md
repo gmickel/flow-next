@@ -88,7 +88,7 @@ Use `AskUserQuestion` (lead-with-recommendation, `[high]` toward yes):
 - **body**: `Override strategy track "<track>" — record as a decision? Recommended: yes — override decisions belong in the decisions track (load-bearing architectural choice). Confidence: [high].`
 - **options**: frozen — `yes` (write decision entry), `no` (proceed without recording; audit trail logged to stderr only).
 
-On `yes`, invoke `flowctl memory add` with the override rationale piped via `--body-file -` stdin:
+On `yes`, invoke `flowctl memory add` with the override rationale piped via `--body-file -` stdin. The rationale prose follows the artifact prose contract in [docs/prose.md](../../../docs/prose.md); proceed without it when the doc is absent.
 
 ```bash
 "$FLOWCTL" memory add \

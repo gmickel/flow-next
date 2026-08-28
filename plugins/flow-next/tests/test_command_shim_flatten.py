@@ -48,7 +48,8 @@ FRONTMATTER_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 EXPECTED_COMMANDS = frozenset({
     "audit", "capture", "chart", "guide", "impl-review", "interview", "land",
     "make-pr", "map", "memory-migrate", "pilot", "plan", "plan-review", "prime",
-    "prospect", "qa", "ralph-init", "resolve-pr", "setup", "spec-completion-review",
+    "prose", "prospect", "qa", "ralph-init", "resolve-pr", "setup",
+    "spec-completion-review",
     "strategy", "sync", "tracker-sync", "uninstall", "visual", "work",
     "work-rolling",
 })

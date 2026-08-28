@@ -76,7 +76,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Factory Droid | auto-translates the Claude plugin format on install | canonical files as-is (`DROID_PLUGIN_ROOT` alias) |
 | Cursor | RECOMMENDED: team-marketplace repo import (root `.cursor-plugin/marketplace.json`); fallback: `scripts/install-cursor.sh` / `.ps1` (blanket rsync to `~/.cursor/plugins/local/`, excludes codex/ + tests/); manifest at `plugins/flow-next/.cursor-plugin/plugin.json` | canonical files AS-IS - no rewrite pass exists |
 | Grok Build | reads the Claude plugin format directly (compat, verified) | canonical files as-is |
-| OpenCode | installer scatter (`scripts/install-opencode.sh` -> `~/.config/opencode/`; skills as-is, generated agents/commands; setup detects via the ownership manifest) | canonical files + generated glue |
+| OpenCode | installer scatter (`scripts/install-opencode.sh` -> `~/.config/opencode/`; skills as-is, support dirs `scripts/`+`templates/`+`references/`+`docs/` at the config root — plugin-root geometry, so relative docs links resolve; generated agents/commands; setup detects via the ownership manifest) | canonical files + support dirs + generated glue |
 
 **Architectural rule:** canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites them in the Codex mirror. Skill prose stays concrete; cross-platform maintenance lives in one place — the sync script. Cursor/Droid/Grok get NO rewrite pass, so anything Claude-specific in canonical prose must either work there or carry an explicit portable-host clause.
 
@@ -136,6 +136,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Live-app QA (`/flow-next:qa` — opt-in; drives the running app, never passes by reading source) | [`plugins/flow-next/skills/flow-next-qa/SKILL.md`](plugins/flow-next/skills/flow-next-qa/SKILL.md) |
 | Opinionated agent-readiness assessment (`/flow-next:prime` - classify, operability verdict, ranked next-actions) | [`plugins/flow-next/skills/flow-next-prime/SKILL.md`](plugins/flow-next/skills/flow-next-prime/SKILL.md) |
 | Compact markdown digest of a spec, task, diff, or the current topic (`/flow-next:visual` — the light register below the HTML lenses) | [`plugins/flow-next/skills/flow-next-visual/SKILL.md`](plugins/flow-next/skills/flow-next-visual/SKILL.md) |
+| Reply-prose discipline on request (`/flow-next:prose` — applies the artifact prose contract to a substantial chat reply) | [`plugins/flow-next/skills/flow-next-prose/SKILL.md`](plugins/flow-next/skills/flow-next-prose/SKILL.md) |
 | HTML artifact mode (opt-in render lenses under `.flow/artifacts/`) | [`plugins/flow-next/docs/html-artifacts.md`](plugins/flow-next/docs/html-artifacts.md) |
 | Cross-platform install matrix (Claude / Codex / Droid / OpenCode) | [`plugins/flow-next/docs/platforms.md`](plugins/flow-next/docs/platforms.md) |
 | Codebase feature map (optional) | [`plugins/flow-next/skills/flow-next-map/`](plugins/flow-next/skills/flow-next-map/) — `/flow-next:map` wraps `clawpatch map` |
@@ -144,6 +145,7 @@ If three or more apply, stop and convert to a skill. The deterministic path is h
 | Setup internals (copy-less install, per-artifact resolution chains, snippet/marker invariants) | [`agent_docs/setup.md`](agent_docs/setup.md) |
 | Adding a new `/flow-next:<name>` skill | [`agent_docs/adding-skills.md`](agent_docs/adding-skills.md) |
 | Cutting a release | [`agent_docs/releasing.md`](agent_docs/releasing.md) |
+| Prose contract for agent-emitted artifacts (the rules every durable emission surface drafts under - PR bodies, specs and plans, tracker and PR comments, strategy and briefing sections, memory and glossary entries, done summaries, changelogs; cited by path at each emission point) | [`plugins/flow-next/docs/prose.md`](plugins/flow-next/docs/prose.md) |
 | Local plugin dev + smoke tests + Ralph e2e | [`agent_docs/local-dev.md`](agent_docs/local-dev.md) |
 | Optimizing a skill/agent prompt (token/accuracy, eval-driven) | [`agent_docs/optimizing-skills.md`](agent_docs/optimizing-skills.md) |
 | Per-skill conduct checklists (review rubric + dogfood list for skill-prose changes) | [`agent_docs/conduct/README.md`](agent_docs/conduct/README.md) |

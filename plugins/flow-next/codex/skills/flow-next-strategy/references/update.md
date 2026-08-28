@@ -46,6 +46,8 @@ Build the option list dynamically:
 
 For the chosen section, re-run the per-section interview from `references/interview.md` — full pushback, NOT a rubber-stamp. After capture, atomic-write that section's new body. Untouched sections preserved byte-identical (verified by `git diff --unified=0` if questioned). `last_updated` bumps to today's ISO date.
 
+Section prose written to STRATEGY.md follows the artifact prose contract in [docs/prose.md](../../../docs/flow-next/prose.md); proceed without it when the doc is absent.
+
 ### 2.4 — Loop or exit
 
 After a section is updated, return to the routing question — user can revisit another section or pick `done`. On `done`, run the read-back once for confirmation, without loading the first-run reference:

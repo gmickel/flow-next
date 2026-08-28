@@ -357,7 +357,7 @@ The auxiliary sections — `Strategy Alignment` / `Strategy Conflicts` / `Glossa
 
 ### Declined-scope ledger (applies to every pass)
 
-When the user declines a feature or scope **as product judgment** — we could build this, we are choosing not to — record it in `.flow/memory/declined/<concept-slug>.md` on the FIRST such refusal: title, the decision in one line, short reasoning, then `## Prior requests` opened with today's date and the request that just came in. File already there → append the dated line to `## Prior requests` and leave the decision untouched. Agent-written prose, like the rest of `.flow/memory/` — no flowctl verb.
+When the user declines a feature or scope **as product judgment** — we could build this, we are choosing not to — record it in `.flow/memory/declined/<concept-slug>.md` on the FIRST such refusal: title, the decision in one line, short reasoning, then `## Prior requests` opened with today's date and the request that just came in. File already there → append the dated line to `## Prior requests` and leave the decision untouched. Agent-written prose, like the rest of `.flow/memory/` — no flowctl verb. The entry body follows the artifact prose contract in [docs/prose.md](../../docs/prose.md); proceed without it when the doc is absent.
 
 **Never write one for scope declined because it already exists**, is already planned, or lives in another spec. That is an answer, not a refusal, and filing it teaches the next planner that shipped capability is rejected scope. A skipped question is not a decline either — skips go to `## Open Questions` per the skip contract.
 

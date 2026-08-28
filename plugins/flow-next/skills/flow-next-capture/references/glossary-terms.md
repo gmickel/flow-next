@@ -19,7 +19,7 @@ GLOSSARY_TERMS=$("$FLOWCTL" glossary list --json 2>/dev/null | jq -r '.total_ter
   2. **Project-specific** — a coined noun / flow / distinction, not generic English ("receipt gate" yes; "function" no).
   3. **Absent from the glossary** — no existing entry matches on `term` or `avoid` aliases (case-insensitive, whitespace-collapsed — the `_glossary_term_matches` contract; do not reinvent matching logic).
 
-Collect at most **5** proposals (`GLOSSARY_PROPOSALS`), each with a one-line definition drawn from how the user actually used the term. Proposals surface at Phase 4 read-back; writes happen only in Phase 5.8 after consent.
+Collect at most **5** proposals (`GLOSSARY_PROPOSALS`), each with a one-line definition drawn from how the user actually used the term. Definition prose follows the artifact prose contract in [docs/prose.md](../../../docs/prose.md); proceed without it when the doc is absent. Proposals surface at Phase 4 read-back; writes happen only in Phase 5.8 after consent.
 
 ## Phase 4 — read-back surface + consent
 

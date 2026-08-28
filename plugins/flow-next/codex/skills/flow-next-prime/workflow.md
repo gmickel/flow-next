@@ -721,6 +721,8 @@ Selection bar: a term earns a slot when an agent could plausibly build around th
 
 ### 5.5.2 Propose terms
 
+Definition prose follows the artifact prose contract in [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is absent.
+
 Draft ~10-20 candidates (fewer is fine for small repos — never pad). Each proposal carries:
 
 - **Term** — canonical name

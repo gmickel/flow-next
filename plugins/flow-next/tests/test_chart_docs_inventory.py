@@ -275,19 +275,22 @@ class ChartRegistryCounts(unittest.TestCase):
         # base flow-next is phrase-triggered too
         phrase_count = len(phrase) + (1 if "flow-next" in skill_dirs else 0)
 
-        # 31/27/26 include the experimental flow-next-work-rolling beta
-        # (fn-203.4); the published phrases below stay at the stable totals
-        # per the experimental-tier carve-out.
-        self.assertEqual(len(skill_dirs), 31, f"skills dirs: {skill_dirs}")
-        self.assertEqual(len(commands), 27, f"commands: {commands}")
+        # 32/28/27 include the experimental flow-next-work-rolling beta
+        # (fn-203.4) and the stable flow-next-prose skill (fn-207.5); the
+        # published phrases below (31 skills / 26 slash-command) exclude
+        # exactly one skill - flow-next-work-rolling - per the
+        # experimental-tier carve-out, and must equal the docs/skills.md
+        # table row count.
+        self.assertEqual(len(skill_dirs), 32, f"skills dirs: {skill_dirs}")
+        self.assertEqual(len(commands), 28, f"commands: {commands}")
         self.assertIn("flow-next-chart", skill_dirs)
         self.assertIn("flow-next-guide", skill_dirs)
         self.assertIn("chart", commands)
         self.assertIn("guide", commands)
-        self.assertEqual(len(slash_skills), 26, f"slash skills: {slash_skills}")
+        self.assertEqual(len(slash_skills), 27, f"slash skills: {slash_skills}")
         self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
-        expected_snippet = "27 commands, 31 skills"
+        expected_snippet = "28 commands, 32 skills"
         for path in REGISTRY_COUNT_FILES:
             text = _read(path)
             self.assertIn(
@@ -298,9 +301,11 @@ class ChartRegistryCounts(unittest.TestCase):
 
         # Docs surfaces that publish counts
         for path, needles in (
-            (DOCS / "skills.md", ("30 skills", "25 slash-command", "5 phrase")),
-            (DOCS / "README.md", ("30 skills",)),
-            (REPO_ROOT / "README.md", ("30 skills",)),
+            (DOCS / "skills.md", ("31 skills", "26 slash-command", "5 phrase")),
+            (DOCS / "README.md", ("31 skills",)),
+            (REPO_ROOT / "README.md", ("31 skills",)),
+            (PLUGIN / "README.md", ("31 skills",)),
+            (DOCS / "teams.md", ("all 27 commands",)),
         ):
             text = _read(path)
             for n in needles:

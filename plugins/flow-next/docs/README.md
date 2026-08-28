@@ -5,7 +5,7 @@ The offline-resilient reference for flow-next — **repeatable agentic engineeri
 **Start here by intent:**
 
 - *"What is this and how do I install it?"* → [root README](../../../README.md) — pitch, tenets, install, 5-command happy path.
-- *"What skills exist?"* → [`skills.md`](skills.md) - all 30 skills, triggers, one-liners.
+- *"What skills exist?"* → [`skills.md`](skills.md) - all 31 skills, triggers, one-liners.
 - *"Do I need all of this?"* → [`running-lean.md`](running-lean.md) — no. The base loop is spec → plan → work; everything else is a layer with a stated cost, a trigger, and a manual invocation.
 - *"Which stages does THIS change need?"* → [`pipeline-variations.md`](pipeline-variations.md) — five worked routes (epic → docs chore), selected by risk and unknowns, never by size.
 - *"How do we adopt this as a team?"* → [`teams.md`](teams.md) — handover objects, Spec-as-PR, adoption ladder.
@@ -24,10 +24,11 @@ The offline-resilient reference for flow-next — **repeatable agentic engineeri
 |-----|--------------|
 | [`running-lean.md`](running-lean.md) | Which layers to run at all — the human-driven vs autonomous profiles (neither is the real mode), a priced catalog of every optional layer (what it automates away / what it costs structurally / when it earns its keep / the manual invocation), the **canonical optionality caveat pattern** every subsystem page copies, and how `skipped(reason)` stage receipts keep a lean run auditable |
 | [`architecture.md`](architecture.md) | `.flow/` directory layout (specs, tasks, **charts**), spec-first task model, ID format (shared `fn-N` domain with charts), separation of concerns, task completion shape |
-| [`skills.md`](skills.md) | Skills catalog - all 30 skills (25 slash-command, 5 phrase-triggered), grouped by lifecycle / autonomy / maintenance, each linked to its `SKILL.md` (includes optional chart + guide) |
+| [`skills.md`](skills.md) | Skills catalog - all 31 skills (26 slash-command, 5 phrase-triggered), grouped by lifecycle / autonomy / maintenance, each linked to its `SKILL.md` (includes optional chart + guide) |
 | [`spec-template.md`](spec-template.md) | Canonical scaffold cross-link, **customizing the scaffold via root `SPEC.md`** (what is safe to change, what breaks), R-ID rules, confidence anchors, introduced-vs-pre-existing, protected artifacts, trivial-diff skip, receipt schema |
 | [`review-findings.md`](review-findings.md) | Portable v1 structured-findings contract — canonical enums, durable IDs, snapshot-bound anchors, receipt lineage/currentness, bounds, memory relationship, and fail-safe consumer fallback |
 | [`pr-cognitive-aid.md`](pr-cognitive-aid.md) | Portable v1 PR cognitive-aid contract — immutable artifact home, identity/currentness, cross-render semantic parity, canonical fixture, and byte-pinned downstream vendoring |
+| [`prose.md`](prose.md) | Prose contract for agent-emitted artifacts - the ten artifact-prose rules (portability test, mechanism-or-number, outcome-first ordering, style bans), the structural-contracts-win precedence rule (dedup markers, projection-only source truth, sourced outcomes), and the artifact-only scope boundary; cited by path at every durable emission point (PR bodies, specs and plans, tracker and PR comments, strategy and briefing sections, memory and glossary entries, done summaries, changelogs) |
 | [`memory-schema.md`](memory-schema.md) | Categorized memory tree (bug / knowledge tracks), frontmatter schemas, decisions subtree, audit lifecycle, legacy migration |
 | [`tracker-sync.md`](tracker-sync.md) | `/flow-next:tracker-sync` bridge: projection-not-coordination, discovery ceremony, hybrid id model, sync-state schema, deterministic `flowctl tracker` transport and capabilities, lifecycle touchpoints, optional **chart lifecycle projection** (`tracker.charts`), Ralph-safe conflict queueing; distinct from `/flow-next:sync` (plan-sync) |
 | [`html-artifacts.md`](html-artifacts.md) | Optional HTML artifact mode (2.0.0+) — `artifacts.html.enabled` activation, the shared disclosure reference, spec lens (capture §5.10 / plan Step 8.5, state-dependent rendering), PR lens (make-pr Phase 1.5, R-ID-verified review instrument), GitHub display limitation + commit-vs-gitignore, conversational regen, Lavish (`lavish-axi`) optional companion, autonomous generate-only discipline |

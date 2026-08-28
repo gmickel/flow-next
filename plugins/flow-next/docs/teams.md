@@ -498,7 +498,7 @@ The collaboration doesn't disappear. The *ceremony tax* does. Standups, refineme
 
 ## Adoption ladder
 
-Don't try to roll out all 26 commands at once. Layer them in.
+Don't try to roll out all 27 commands at once. Layer them in.
 
 ### Week 1: Prove it works
 

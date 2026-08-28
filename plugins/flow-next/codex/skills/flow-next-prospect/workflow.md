@@ -355,7 +355,7 @@ Produce [GENERATION_TARGET_DESCRIPTION] candidates. Wide net — encourage contr
 
 ## Output format
 
-Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no commentary outside YAML. The list is consumed verbatim by the next prompt — extra prose breaks the parser.
+Emit a flat YAML list. **One item per candidate.** No nesting, no preamble, no commentary outside YAML. The list is consumed verbatim by the next prompt — extra prose breaks the parser. Title, summary, and risk_notes prose follows the artifact prose contract in [docs/prose.md](../../docs/flow-next/prose.md); proceed without it when the doc is absent.
 
 ```yaml
 candidates:

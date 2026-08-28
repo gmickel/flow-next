@@ -44,6 +44,8 @@ whose policy implies a comment, e.g. `work.done` → status comment + evidence).
 every `perEvent` leaf defaulting to `off`, **nothing is posted until a user opts in**
 (spec Boundaries).
 
+Comment wording follows the artifact prose contract in [docs/prose.md](../../../docs/prose.md) under its "structural contracts win" precedence — the marker, envelope, and projection-only constraints in this file stay authoritative; proceed without the doc when it is absent.
+
 ### Which lifecycle events post a comment (R8 / R10)
 
 The R10 lifecycle touchpoints (wired into the 7 skills in fn-52.6) that produce a
