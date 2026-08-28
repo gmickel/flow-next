@@ -188,9 +188,12 @@ Read relevant code, implement the feature/fix. Follow existing patterns.
 Rules:
 - Small, focused changes
 - Follow existing code style
-- **Never edit a test, gate, or baseline to make it pass.** A gate you believe
-  is wrong is `BLOCKED: TOOLING_FAILURE`, never an editable obstacle — gate
-  manipulation is the failure class every green signal's trust rests on.
+- **Never weaken a test, gate, or baseline to make a wrong implementation
+  pass.** A gate you believe is wrong is `BLOCKED: TOOLING_FAILURE`, never an
+  editable obstacle — gate manipulation is the failure class every green
+  signal's trust rests on. Exception by declared intent only: when the task's
+  acceptance names the changed output (e.g. a deliberate prompt edit), update
+  its pin/snapshot in the same commit and state what changed and why.
 - **Rename edits: spot-check every rename** against string literals, prose,
   generated mirrors, and back-references before committing — a rename swept
   only through code identifiers is this repo's highest-frequency banked
