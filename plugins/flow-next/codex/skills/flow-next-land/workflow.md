@@ -99,11 +99,12 @@ LEDGER="$LEDGER_DIR/land-strikes.json"
 
 Ledger schema, keyed by PR URL: `{"<pr-url>": {"ci_fix_count": <n>, "rerun_count": <n>, "decision_at_push": "<APPROVED|...|->", "land_pushed_sha": "<sha|->", "ts": "<iso8601>", "triggerSha": "<sha|absent>", "reviewRequestSha": "<sha|absent>", "flake_sig": "<check>|<failure line>|absent"}}` (`triggerSha` = last bot-trigger head, §2.6; `reviewRequestSha` = last human-request head, §3.4b; `flake_sig` = the failure signature recorded at the last flake rerun, §3.1). It is skill-owned scratch; no flowctl plumbing. Because land state is per-clone (it lives in the git common dir — shared by all of that clone's worktrees — and never travels with the repo), run land from one host per clone — a second host or a fresh clone starts an independent ledger (#368). Every write site runs `mkdir -p "$LEDGER_DIR"` plus `[ -s "$LEDGER" ] || echo '{}' > "$LEDGER"` first, then writes atomically with `jq` plus `mv`.
 
-**Tick concurrency claim.** The ledger's jq+tmp+mv writes are last-writer-wins, so two overlapping ticks on one clone silently lose strikes and pushed-SHA records — the claim makes a tick the ledger's only reader-writer. Take it atomically here, BEFORE the `LEDGER_JSON` read and any ledger write:
+**Tick concurrency claim.** The ledger's jq+tmp+mv writes are last-writer-wins, so two overlapping ticks on one clone silently lose strikes and pushed-SHA records — the claim makes a tick the ledger's only reader-writer. Take it atomically here, BEFORE the `LEDGER_JSON` read and any ledger write. **A `--dry-run` tick takes NO claim**: it stops at the dry-run gate and writes nothing, so there is no writer to serialize against — and taking one would `mkdir -p` the ledger dir, leaving a directory behind in a clone that had none (breaking the zero-mutation promise):
 
 ```bash
-mkdir -p "$LEDGER_DIR"
 TICK_LOCK="$LEDGER_DIR/tick.lock"
+if [[ "$LAND_DRY_RUN" != 1 ]]; then   # dry-run: skip the claim entirely — no mkdir, nothing to release
+mkdir -p "$LEDGER_DIR"
 # Stale-clear by age, serialized by a reaper claim: a tick claim older than 60
 # minutes is a crashed tick, not a live one (live ticks refresh their mtime
 # continuously — the refresh rule below). Only the reaper-claim holder may clear it,
@@ -123,12 +124,13 @@ if ! mkdir "$TICK_LOCK" 2>/dev/null; then
   echo 'LAND_VERDICT=NO_WORK prs=0 pr=- reason="another land tick holds this clone"'
   exit 0
 fi
-LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"   # first ledger read — inside the claimed interval, never before it
+fi
+LEDGER_JSON="$(cat "$LEDGER" 2>/dev/null || echo '{}')"   # first ledger read — inside the claimed interval, never before it (dry-run: plain snapshot read; the atomic jq+mv writes keep it consistent)
 ```
 
-**Claim liveness refresh — the stale window measures crash, never work.** `touch "$TICK_LOCK"` at every phase boundary, per PR in Phase 2's gate loop and Phase 3's action loop, and immediately before every bounded blocking call (§2.9's 600s merge-verdict command, a resolve-pr dispatch, the merge itself). Refresh points are minutes apart at most — well under the 60-minute stale age — so a live tick of any length never ages into takeover; only a tick that stopped refreshing (crashed) does.
+**Claim liveness refresh — the stale window measures crash, never work.** Claim-holding ticks only (`--dry-run` holds none and never touches): `touch "$TICK_LOCK"` at every phase boundary, per PR in Phase 2's gate loop and Phase 3's action loop, and immediately before every bounded blocking call (§2.9's 600s merge-verdict command, a resolve-pr dispatch, the merge itself). Refresh points are minutes apart at most — well under the 60-minute stale age — so a live tick of any length never ages into takeover; only a tick that stopped refreshing (crashed) does.
 
-A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rmdir "$TICK_LOCK"` immediately before printing the terminal `LAND_VERDICT` line, on every path that reaches one after this point (the dry-run stop included). The claim is scheduling state, not ledger state — `--dry-run`'s zero-mutation promise (no checkout, push, label, merge, dispatch, or ledger write) is untouched by taking and releasing it.
+A held claim is terminal `NO_WORK` — never a wait loop, never a second writer. Release the claim at every tick end: `rmdir "$TICK_LOCK"` immediately before printing the terminal `LAND_VERDICT` line, on every path that reaches one after this point. A `--dry-run` tick took no claim, so it releases nothing — its zero-mutation promise (no checkout, push, label, merge, dispatch, ledger write, or claim) holds byte-for-byte on the filesystem.
 
 ## Phase 1 — DISCOVER
 
@@ -524,7 +526,7 @@ fi
 
 ### Dry-run stops here (R17)
 
-`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. **When `land.mergeVerdictCommand` is set and the would-be action is `merge`, the report states `mergeVerdict=would-run: <command>`** (§2.9) - the command is NOT executed, because the zero-mutation promise covers it exactly as it covers the review trigger's would-trigger. **When §2.6b planned `request-reviewers`, the report states `action=request-reviewers reviewers=would-request` (plus `would-ready` when the PR is a draft)** — no `gh pr ready`, no `--add-reviewer`, no ledger write: the action class lives in Phase 3, which `--dry-run` never enters. Release the Phase 0 tick claim (`rmdir "$TICK_LOCK"`) before printing the terminal line. Nothing was checked out, pushed, labeled, merged, dispatched, executed, or written (ledger untouched).
+`LAND_DRY_RUN == 1` → print the full classification report per PR (CI tri-state read with bucket counts, review-signal state, unresolved count, window age, ledger state, would-be action) plus the discovery table, then the aggregated terminal line computed by the Phase 4 worst-severity rule with the reason prefixed `dry-run: no mutations —`. **When `AUTO_REVIEW_SOURCE == comment`, the review-signal line names the comment path and its evidence** — e.g. `review: silence satisfied via clean-review comment (AUTO_REVIEW_EVIDENCE)` — so a transcript reader sees a comment, not a formal review, carried the gate; a report that hid the comment path has broken this. **When `land.mergeVerdictCommand` is set and the would-be action is `merge`, the report states `mergeVerdict=would-run: <command>`** (§2.9) - the command is NOT executed, because the zero-mutation promise covers it exactly as it covers the review trigger's would-trigger. **When §2.6b planned `request-reviewers`, the report states `action=request-reviewers reviewers=would-request` (plus `would-ready` when the PR is a draft)** — no `gh pr ready`, no `--add-reviewer`, no ledger write: the action class lives in Phase 3, which `--dry-run` never enters. Phase 0 took no tick claim under `--dry-run`, so there is nothing to release. Nothing was checked out, pushed, labeled, merged, dispatched, executed, written, or claimed (ledger and its directory untouched).
 
 Done when: every discovered PR has one planned action class and a provisional verdict, and the tree, ledger, and remote are untouched.
 
