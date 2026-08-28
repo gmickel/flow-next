@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## [flow-next 4.7.1] - 2026-08-28
+
+### Changed
+
+- **`/flow-next:prose` now self-applies while the agent drafts, on every host.** The skill description was reshaped to the drafting moment - the agent reads the contract before writing a substantial reply, instead of waiting for a user phrase like "tighten this reply" - and Codex joins the ambient behavior: the skill enters the implicit catalog with a dieted drafting-moment entry (measured 2026-08-28, the global catalog sits under half the 8,000-char budget, so the earlier explicit-only carve-out was protecting headroom that was never at risk). Manual invocation with a draft to tighten is unchanged.
+
 ## [flow-next 4.7.0] - 2026-08-28
 
 ### Added

@@ -1675,11 +1675,13 @@ generate_openai_yaml "flow-next-visual" "Flow Visual" "Restate a spec, task, dif
 # (pilot/land) stays on canonical flow-next-work. Reachable by
 # $flow-next-work-rolling. It graduates or is deleted (fn-203 R10).
 generate_openai_yaml "flow-next-work-rolling" "Flow Work Rolling [experimental]" "Rolling-frontier work variant - per-task admission, isolated workspaces, conductor-owned review (experimental - can change or disappear)" "#3B82F6" false
-# Prose stays OUT of the implicit skill catalog (explicit false), same budget
-# rationale as visual: its trigger-rich description would tax every session's
-# shared catalog. Codex reaches it by explicit invocation only
-# ($flow-next-prose or the /flow-next-prose command stub).
-generate_openai_yaml "flow-next-prose" "Flow Prose" "Apply the artifact prose contract to substantial replies" "#F59E0B" false
+# Prose is IN the implicit catalog (true): the entry is dieted (below 200
+# chars), the measured global catalog sits under half the 8000-char budget,
+# and the skill's whole point is ambient self-application while the agent
+# drafts a substantial reply - the short description below carries that
+# drafting-moment shape so Codex matches it the same way other hosts match
+# the canonical description.
+generate_openai_yaml "flow-next-prose" "Flow Prose" "Use while drafting a substantial reply, report, or summary for the user - read the prose contract before writing and draft under its rules" "#F59E0B" true
 generate_openai_yaml "flow-next-ralph-init" "Flow Ralph Init" "Scaffold the repo-local Ralph autonomous harness" "#3B82F6" true
 
 # Internal skills (gray, explicit-only). These are spawned by other skills,
@@ -1741,6 +1743,7 @@ DIET = {
     "flow-next-spec-completion-review": "Verify that a spec's completed tasks fully implement the spec requirements. Use at spec completion before close.",
     "flow-next-ralph-init": "Scaffold the repo-local Ralph autonomous harness and project hooks. Use when asked to set up Ralph.",
     "flow-next": "Manage .flow/ tasks and specs. Use for show or list tasks, task status, what is ready, show fn-N. NOT for planning or executing (use the plan and work skills).",
+    "flow-next-prose": "Use while drafting a substantial reply, report, or summary for the user - read the prose contract before writing and draft under its rules. Not for short turns or file/PR output.",
 }
 failed = 0
 for skill, desc in DIET.items():

@@ -1,13 +1,13 @@
 ---
 name: flow-next-prose
-description: "Apply the artifact prose contract while drafting substantial replies, reports, review walkthroughs, and summaries. Triggers on /flow-next:prose, 'apply the prose contract', and 'tighten this reply'. Do not trigger on short conversational turns, tool-call narration, the visual digest, or any output that lands in a file, PR, or tracker (those artifact surfaces carry their own pointers to the contract)."
+description: "Use while drafting any substantial reply, report, review walkthrough, or summary for the user - read the artifact prose contract before writing, not after, and draft under its rules. Do not use for short conversational turns, tool-call narration, the visual digest, or output that lands in a file, PR, or tracker (those artifact surfaces carry their own pointers). Also invocable directly as /flow-next:prose [draft]."
 user-invocable: false
 allowed-tools: Read
 ---
 
 # Flow Prose
 
-Ambient triggering is host-discretionary. On Codex the host loads it on explicit invocation only.
+Ambient triggering is host-discretionary on every host: the host matches this skill's description at the moment the agent begins drafting a substantial reply.
 
 The agent reads the prose contract at [docs/prose.md](../../docs/prose.md), resolved relative to this SKILL.md file's own location. If the doc is absent, the skill proceeds without it and never blocks the reply.
 
