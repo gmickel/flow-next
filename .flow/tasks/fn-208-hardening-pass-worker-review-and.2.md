@@ -90,9 +90,10 @@ Plus the comment-as-alibi block (R4): a comment justifying a workaround is a fin
 - [ ] sync-codex twice green, conduct checklists verified, CHANGELOG under ## Unreleased, no version bump, full gate green
 
 ## Done summary
-TBD
+Landed the fn-208.2 batch: the 13 worker gate-integrity/evidence-honesty rules plus the comment-as-alibi block in worker.md; the conductor-side edits in work phases.md/wave-join.md (Selection rule line at 3a, FORBIDDEN+TIMEBOX in the 3c dispatch template, side-effects-only progress with silent-lane stand-down under the existing 2-strike cap, continuation-worker trail posture, 3f.1 pause path bound to explicit signals only, workspace cleanup gate, zero-shipped accounting, caught-gate-manipulation-strengthens-the-gate); the seven unpinned review additions (quality-auditor evidence scale, boundary leakage, legacy dual-path, naming-and-traceability, structure over instruction, mechanical 1000-line crossing at Should-Fix fed by a new --numstat in the shared diff step, shallow-module smell with its falsifiable sign) plus the Middle Man / pass-through smell in SMELL_BASELINE_BLOCK and rp-classic.md with the prompt pin hash updated and review-prompt fixtures rebaselined via the generator; the scattered one-liners (pilot/land tick-start re-read + read-only idle probe, interview/plan probe-and-divergence pair, plan refactor equivalence-harness sentence, audit intake filters); one knowledge memory entry (state-before-code debugging) and one bug entry (SECTION3C mirror drift, from the review round); CHANGELOG staged under ## Unreleased, no version bump. Review round 1 NEEDS_WORK (SECTION3C heredoc lacked the new dispatch fields, auditor lacked numstat, fn136 evidence wrongly rebaselined) fixed in dc36ac67 with a new hard-fail sync guard; round 2 SHIP.
 
+stage: impl-review - ran [2 rounds, NEEDS_WORK -> SHIP] (model: gpt-5.6-sol via codex)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: b48c7f9fd7d29060f5cb0eb9f59285cad2d52253, dc36ac67b535be0a71dcdf5ec6a0c415f310db2d
+- Tests: baseline: green (./scripts/sync-codex.sh x2 rc=0; cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_chart_docs_inventory -q, 30/30 OK), ./scripts/sync-codex.sh && ./scripts/sync-codex.sh (twice, idempotent, guards green incl. new SECTION3C dispatch-field guard), cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_chart_docs_inventory test_review_prompt_template_parity -q (54 tests OK), python3 scripts/run_tests_parallel.py (192 files, 4505 tests, 0 failures), uvx ruff@0.16.0 check . (clean)
 - PRs:

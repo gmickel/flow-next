@@ -10,7 +10,7 @@
   "id": "fn-208-hardening-pass-worker-review-and",
   "impl_review_rounds": {
     "fn-208-hardening-pass-worker-review-and.1": 0,
-    "fn-208-hardening-pass-worker-review-and.2": 1
+    "fn-208-hardening-pass-worker-review-and.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -298,10 +298,71 @@
       "timestamp": "2026-08-28T15:21:34.738580Z",
       "tool_calls": 29,
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "41224c73dbcd846aede8e455e2eed1322f86d2318830e8e001c72090d2414a38",
+      "backend": "codex",
+      "base_sha": "fb35e5941fb04100101c200242ccbb58b6b4c89d",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-65345ba606670dfd92e6a671104fd933",
+            "classification": "introduced",
+            "findingId": "finding-65345ba606670dfd92e6a671104fd933",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-b4be81798d0f99b0cb051e988d92c106",
+            "classification": "introduced",
+            "findingId": "finding-b4be81798d0f99b0cb051e988d92c106",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-d635035f7b26d2ec96c34d7b49dc6163",
+            "classification": "introduced",
+            "findingId": "finding-d635035f7b26d2ec96c34d7b49dc6163",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "dc36ac67b535be0a71dcdf5ec6a0c415f310db2d",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 902,
+      "output_sha256": "9fc187314ed5562de60613596d52ee5d193340a4b1e116be0bf256eeba2b7513",
+      "reservation_id": "cad0b9c3398b401fbdf394bea516543a",
+      "round_consumed": true,
+      "scope": "impl:fn-208-hardening-pass-worker-review-and.2",
+      "superseded_by": null,
+      "task": "fn-208-hardening-pass-worker-review-and.2",
+      "timestamp": "2026-08-28T15:24:24.901948Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
-    "impl:fn-208-hardening-pass-worker-review-and.1": 1
+    "impl:fn-208-hardening-pass-worker-review-and.1": 1,
+    "impl:fn-208-hardening-pass-worker-review-and.2": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
@@ -323,5 +384,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-28T15:21:34.752199Z"
+  "updated_at": "2026-08-28T15:24:24.904013Z"
 }
