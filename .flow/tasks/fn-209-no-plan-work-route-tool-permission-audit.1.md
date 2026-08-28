@@ -17,11 +17,12 @@ Land the R1 audit pass across agent frontmatter, the docs that describe it, the 
 - Strategy skill verdict: `flow-next-strategy/SKILL.md:5` lacks Edit while pilot/land/map carry it. Read its maintain path; either add Edit or record Write-only as deliberate in a one-line comment beside the allowlist.
 - Cursor/Grok parity check (short, evidence-based): confirm Cursor honors `disallowedTools`/`readonly` on canonical files and Grok's Claude-plugin compat leaves the post-audit model intact; record findings (dated) in `platforms.md` only if behavior differs.
 - Do NOT touch `phases.md` or `references/host-deferred-review.md` here - the host-deferred rationale fix belongs to task 2 (file ownership).
+- Note for reviewers: the mandated frontmatter rationale comment is NOT a "comment as alibi" under worker.md's new :214-222 rule - it documents an invariant on a config key, not a workaround; say so in the commit message if flagged.
 
 ### Investigation targets
 **Required** (read before coding):
 - `plugins/flow-next/agents/plan-sync.md:1-8` - frontmatter shape to edit
-- `scripts/sync-codex.sh:1875-1890` - frontmatter case parser (how unknown/comment lines flow)
+- `scripts/sync-codex.sh:1857-1888` - frontmatter case parser (`disallowedTools:*)` at :1882 swallows the whole line incl. trailing comments; `""|\#*)` at :1885 swallows whole-line comments; no default arm - unknown keys drop silently)
 - `plugins/flow-next/scripts/lib/opencode_generate.py:47-100` - token map + closed allowlist the comment must not break
 - `plugins/flow-next/tests/test_cursor_agent_frontmatter.py:78-135` - Edit+Write invariants that must stay green
 
@@ -36,6 +37,16 @@ Land the R1 audit pass across agent frontmatter, the docs that describe it, the 
 - [ ] Cursor/Grok parity check done with dated evidence; platforms.md updated only on a real difference
 - [ ] `python3 -m unittest test_cursor_agent_frontmatter test_opencode_agent_frontmatter -q` green
 
+### Acceptance
+- [ ] TBD
+
+### Done summary
+TBD
+
+### Evidence
+- Commits:
+- Tests:
+- PRs:
 ## Acceptance
 - [ ] TBD
 
