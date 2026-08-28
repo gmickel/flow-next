@@ -58,7 +58,7 @@ routing, Decision Context shape detection).
 
 Full guide, incl. the known limitation for custom sections under an interview pass:
 flow-next docs, "Customizing the scaffold for your project"
-(plugins/flow-next/docs/spec-template.md - https://flow-next.dev/docs/spec-template/).
+(plugins/flow-next/docs/spec-template.md - https://flow-next.dev/guides/spec-scaffold/).
 -->
 
 <!--

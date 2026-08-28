@@ -474,7 +474,7 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land. From inside Cursor, prefer a host-native fresh-context subagent pinned cross-family via AGENTS.md model-routing (no second CLI). External CLIs remain available. Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/review/workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. From inside Cursor, prefer a host-native fresh-context subagent pinned cross-family via AGENTS.md model-routing (no second CLI). External CLIs remain available. Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/guides/review-workflow/",
   "options": [
     {"label": "Host (Recommended)", "description": "Fresh-context host-native subagent; name a cross-family model on the `reviewer` tier of the AGENTS.md routing block (setup writes that block commented out; the slugs are yours to fill in). No external CLI. Preferred from inside Cursor."},
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
@@ -491,7 +491,7 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land. This host reaches only one model family natively — host-native review fails closed unless the writer is from another family; cross-family review comes via bridge backends (codex/cursor/copilot). Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/review/workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. This host reaches only one model family natively — host-native review fails closed unless the writer is from another family; cross-family review comes via bridge backends (codex/cursor/copilot). Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/guides/review-workflow/",
   "options": [
     {"label": "Host", "description": "Fresh-context host-native subagent; name the model on the `reviewer` tier of the AGENTS.md routing block (setup writes it commented out; you fill in the slug). Fail-closed: this host is single-native-family — native host review refuses same-family self-review (interactive → ask; autonomous → NEEDS_HUMAN) unless the writer is non-Grok. Cross-family via bridges."},
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
@@ -508,7 +508,7 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land; a review backend is a second AI CLI - ideally a DIFFERENT model family than the one writing the code, for uncorrelated blind spots. Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run - so pick the gate you will actually keep. Each CLI needs its own install/subscription. Guide: https://flow-next.dev/review/workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land; a review backend is a second AI CLI - ideally a DIFFERENT model family than the one writing the code, for uncorrelated blind spots. Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run - so pick the gate you will actually keep. Each CLI needs its own install/subscription. Guide: https://flow-next.dev/guides/review-workflow/",
   "options": [
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
