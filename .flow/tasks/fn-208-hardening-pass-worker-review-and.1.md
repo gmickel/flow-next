@@ -49,9 +49,10 @@ All six are conservative by construction: refund or hold budget, never widen. Ru
 - [ ] Conduct checklist for land verified; focused suites green
 
 ## Done summary
-TBD
+Landed the six R1 land-conductor defect repairs in `plugins/flow-next/skills/flow-next-land/workflow.md` (codex mirror regenerated): red-CI triage ordering (BEHIND/DIRTY -> catch-up, open threads -> resolve, before any budget-consuming ci-fix; no git merge-base added), identical-repeat-failure reclassification backed by a recorded ledger `flake_sig`, the post-merge sibling re-gate generalized from the MV_STALE_BASE opt-in branch to all repos, an atomic tick concurrency claim (claim before the first ledger read, reaper-serialized stale takeover with in-claim age re-check, liveness refresh at every phase boundary and bounded blocking call, held claim -> terminal NO_WORK, released at tick end), dependency contiguity before merge (depends_on_epics must all be done, else AWAITING_REVIEW naming the blocker), and the comment-text-is-evidence posture in the clean-review scan. All budget semantics are refunds or holds. Conduct checklist for land verified against the diff.
 
+stage: impl-review - ran [3 rounds, NEEDS_WORK x2 -> SHIP]
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 178c978aea458de47186c282f3fd42e3d3187015, e7ff18623128af9e0c10b3a40aae959361b399e2, 11b8c500b8a5f8440da5d0465a2d139992f46d51
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_prompt_text_pinned test_chart_docs_inventory test_land_config test_skill_prose_diet test_precheck_mode_contract -q (149 tests OK, baseline: green), ./scripts/sync-codex.sh x2 (idempotent, guards green), python3 scripts/run_tests_parallel.py (4505 tests OK, green receipt minted), uvx ruff@0.16.0 check . (clean)
 - PRs:
