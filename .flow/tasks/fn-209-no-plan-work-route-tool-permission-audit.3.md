@@ -38,9 +38,13 @@ TBD
 - [ ] TBD
 
 ## Done summary
-TBD
+Pilot now accepts an explicit `--no-plan` flag (new `PILOT_NO_PLAN` var in the Mode Detection parser, flag-form only — no NL path added, documented after the parser) and forwards it to the work dispatch: a new first-match classification row routes a zero-task spec to `work` dispatched with `--no-plan` when the flag is set, while the default `0 tasks exist -> plan` row and every other row stay byte-unchanged. The frontmatter description lists the flag; unknown-flag stderr behavior is untouched.
 
+baseline: green (focused pilot-adjacent suites: test_precheck_mode_contract test_pilot_strikes_prose test_pilot_backlog_mirror_safety test_skill_prose_diet test_guide_routing — 74 tests OK pre-edit)
+implementer: grok-4.6 bridge (foreground, single clean pass; host verified diff, ran gates, committed)
+
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: c725c16a62eec2aa8ff82c85ff94daa46594764b
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_precheck_mode_contract test_pilot_strikes_prose test_pilot_backlog_mirror_safety test_skill_prose_diet test_guide_routing -q, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., parser dogfood: extracted Mode Detection block executed with '--spec fn-9 --no-plan' (PILOT_NO_PLAN=1), '--spec fn-9' (PILOT_NO_PLAN=0), '--no-plan --bogus' (unknown-flag stderr unchanged)
+- PRs:stage: plan-sync - skipped(config: planSync.enabled != true)
