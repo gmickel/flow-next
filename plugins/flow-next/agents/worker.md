@@ -570,9 +570,13 @@ likewise returns `in_progress` for the conductor's review.
   `done`; parallel-wave and host-deferred handovers must report `in_progress`
 - **Return points, never restates** - the return carries the task id, status, summary/evidence paths, and commit range so the conductor reads current truth; a return that restates summary content the files already carry has broken this
 - **Never return `BLOCKED` from a broken tree** — before escalating, commit a
-  coherent partial or revert to base, and state which in the escalation. A
-  blocked task whose tree is mid-surgery poisons every later worker and
-  conductor pass in that checkout.
+  coherent partial or revert YOUR OWN edits, and state which in the escalation.
+  Revert scope is the files this task touched, never the whole tree: on a
+  current-branch run the tree may carry uncommitted work that predates you
+  (the Phase-1 bundle's `git status` shows it), and `BASE_COMMIT` alone cannot
+  tell it from yours — leave it in place and name it in the escalation instead
+  of reverting it. A blocked task whose tree is mid-surgery poisons every later
+  worker and conductor pass in that checkout.
 - **Typed escalation** — when blocking a task, use this format:
   ```
   BLOCKED: <category>
