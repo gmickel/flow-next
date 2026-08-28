@@ -19,6 +19,7 @@ Run:
 from __future__ import annotations
 
 import importlib.util
+import re
 import unittest
 from pathlib import Path
 from typing import Any
@@ -101,6 +102,19 @@ def _normalize(text: str) -> str:
     return text.replace("\r\n", "\n")
 
 
+# G2: prose wording is pinned by test_prompt_text_pinned.py alone. Fixtures
+# assert the section's presence and placement, never its sentences, so a
+# deliberate SMELL_BASELINE_BLOCK edit needs only the hash update - no
+# fixture rebaseline re-pinning the prose here.
+_SMELL_SECTION_RE = re.compile(
+    r"## Code-smell baseline[^\n]*\n.*?(?=\n## |\Z)", re.DOTALL
+)
+
+
+def _mask_smell_baseline(text: str) -> str:
+    return _SMELL_SECTION_RE.sub("## Code-smell baseline\n<SMELL_BASELINE>", text)
+
+
 def _without_output_format(text: str) -> str:
     start = text.index("## Output Format\n")
     offset = start + len("## Output Format\n")
@@ -159,8 +173,8 @@ class TestReviewPromptRenderedFixtures(_HermeticCriteria):
     def _assert_fixture(self, name: str, rendered: str) -> None:
         path = FIXTURES / f"{name}.txt"
         self.assertTrue(path.is_file(), f"fixture missing: {path}")
-        baseline = _normalize(path.read_text(encoding="utf-8"))
-        current = _normalize(rendered)
+        baseline = _mask_smell_baseline(_normalize(path.read_text(encoding="utf-8")))
+        current = _mask_smell_baseline(_normalize(rendered))
 
         self.assertEqual(current, baseline, f"rendered {name} drifted from fixture")
 

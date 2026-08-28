@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-208-hardening-pass-worker-review-and",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "needs_work",
+  "completion_reviewed_at": "2026-08-28T15:31:46.914089Z",
   "created_at": "2026-08-28T14:01:04.607237Z",
   "default_impl": null,
   "default_review": null,
@@ -13,7 +13,7 @@
     "fn-208-hardening-pass-worker-review-and.2": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 0,
+  "plan_review_rounds": 1,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "review_attempts": [
@@ -358,6 +358,51 @@
       "task": "fn-208-hardening-pass-worker-review-and.2",
       "timestamp": "2026-08-28T15:24:24.901948Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "1a66b673f807d77e083539199a6881c4b3caea066da293e1a30bec482b1d15bd",
+      "backend": "codex",
+      "base_sha": "efe60be268df748bdfbfc546a38751f8cf26c912",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-974eafbd1f0782b5e64e39082c5d6ecd",
+            "classification": "introduced",
+            "findingId": "finding-974eafbd1f0782b5e64e39082c5d6ecd",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "9723027c8253a48ce0e4cc4c14e577d6df54948e",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 1588084,
+      "output_sha256": "2a6972f3483288389bc798c3f98b6758780e540fd8103850198fa7268d6cbe00",
+      "reservation_id": "847962f5cf294d4bb7252040337d3ecb",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-28T15:31:46.892889Z",
+      "tool_calls": 33,
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -367,6 +412,7 @@
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-208-hardening-pass-worker-review-and.1": 0,
     "impl:fn-208-hardening-pass-worker-review-and.2": 0
   },
@@ -384,5 +430,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-28T15:24:24.904013Z"
+  "updated_at": "2026-08-28T15:31:46.924870Z"
 }
