@@ -27,9 +27,9 @@ A sentence that restates the heading above it wastes the reader's first fixation
 
 `The conductor integrates the commit` names the actor. Passive voice is acceptable only when the actor is unknown or irrelevant.
 
-### 6. An adverb is a missing measurement
+### 6. A vague intensifier is a missing measurement
 
-The drafting agent replaces `substantially reduced` with the measured delta or the concrete before/after. If neither exists, the claim does not belong in the artifact.
+The drafting agent replaces `substantially reduced` with the measured delta or the concrete before/after. If neither exists, the claim does not belong in the artifact. The rule covers degree adverbs such as `substantially`, `significantly`, and `dramatically`. An adverb that fixes a bound (`never deletes`, `runs only in Ralph mode`) or names a mechanism (`automatically`) carries the information rule 10 requires, and stays.
 
 ### 7. The plain word
 
