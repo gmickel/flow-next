@@ -1,0 +1,20 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-28T21:56:26.768399Z",
+  "depends_on": [
+    "fn-209-no-plan-work-route-tool-permission-audit.1",
+    "fn-209-no-plan-work-route-tool-permission-audit.2",
+    "fn-209-no-plan-work-route-tool-permission-audit.3",
+    "fn-209-no-plan-work-route-tool-permission-audit.4",
+    "fn-209-no-plan-work-route-tool-permission-audit.5"
+  ],
+  "id": "fn-209-no-plan-work-route-tool-permission-audit.6",
+  "priority": null,
+  "spec": "fn-209-no-plan-work-route-tool-permission-audit",
+  "spec_path": ".flow/tasks/fn-209-no-plan-work-route-tool-permission-audit.6.md",
+  "status": "todo",
+  "title": "Finalization: mirror regen, manifest, changelogs, What's-new, full gate",
+  "updated_at": "2026-08-28T22:06:05.718687Z"
+}
