@@ -59,8 +59,8 @@ Specs, decisions, glossary, and memory are files in your repository that the nex
 **Climb to autonomy without a leap of faith.**
 One dial from a supervised pair to a loop draining the backlog overnight. The gates do not change as you climb.
 
-**Spend the expensive model where it earns its keep.**
-Route any model to any role, by parameter or by sentence. Cost and quality become steering decisions you make per task.
+**Plan on your best model, implement on a cheaper one.**
+Name a model per role once in your `CLAUDE.md`, or say it in the prompt for a single run. Whatever you pick, the model that wrote the diff never reviews it.
 
 **Your process outlives your agent.**
 The same specs, gates, receipts, and task state across harnesses. Everything sits in your repository under `.flow/`, in git and code-reviewable, and uninstall is `rm -rf .flow/`.
@@ -170,11 +170,11 @@ droid plugin marketplace add \
 
 That's the inner loop. Branch in (`/flow-next:prospect` for ranked candidates, `/flow-next:chart` when one oversized idea is still unclear - optional pre-capture discovery, never mandatory - `/flow-next:guide` when you're unsure which path is smallest, `/flow-next:interview` for structured discovery on an existing spec), branch out (`/flow-next:pilot` + `/flow-next:land` for the autonomous assembly line, `/flow-next:audit` for memory garbage collection).
 
-**You do not have to run all of it.** The base loop is spec → plan → work; every other subsystem is a layer with a stated cost, a trigger, and a manual invocation. [Running lean](plugins/flow-next/docs/running-lean.md) prices each one and frames the two ways to run: **human-driven** (you are present, so you can be the reviewer, the tracker, the QA — run lean) and **autonomous** (nobody is watching, so those layers are what replace you — run gated). Neither is the real mode.
+**You do not have to run all of it.** The base loop is spec → plan → work; every other subsystem is a layer with a stated cost, a trigger, and a manual invocation. [Running lean](plugins/flow-next/docs/running-lean.md) prices each one and frames the two ways to run: **human-driven** (you are present, so you can be the reviewer, the tracker, the QA, so run lean) and **autonomous** (nobody is watching, so those layers are what replace you, run gated). Neither is the real mode.
 
 ### After every update
 
-**Nothing to do.** Nothing is copied into your repo: `flowctl` resolves from the plugin install on every host, the agent guide is pulled live via `flowctl usage`, and the spec template resolves from the bundled copy. Plugin updates land silently. Re-run `/flow-next:setup` only when setup tells you the docs-snippet schema bumped, or to change configuration. If a repo still carries `.flow/bin/` from an older install, delete it — setup offers to, and nothing reads it. Details: [platforms.md](plugins/flow-next/docs/platforms.md).
+**Nothing to do.** Nothing is copied into your repo: `flowctl` resolves from the plugin install on every host, the agent guide is pulled live via `flowctl usage`, and the spec template resolves from the bundled copy. Plugin updates land silently. Re-run `/flow-next:setup` only when setup tells you the docs-snippet schema bumped, or to change configuration. If a repo still carries `.flow/bin/` from an older install, delete it; setup offers to, and nothing reads it. Details: [platforms.md](plugins/flow-next/docs/platforms.md).
 
 ---
 
@@ -198,7 +198,7 @@ Parallelize       /flow-next:plan reports execution waves. /flow-next:work inspe
 Route models      flowctl config set review.backend codex · per-task review: pins · a codex exec bridge for implementation.
 ```
 
-Skills are prompts executed by the host agent. If the variation you want is not already a parameter, describe it and the host builds the arrangement on the spot ([orchestration guide](plugins/flow-next/docs/orchestration.md)). Use the smallest sufficient workflow — pick stages by risk and unknowns, never by size; [pipeline variations](plugins/flow-next/docs/pipeline-variations.md) walks five worked routes from full epic down to docs chore. Full recipe catalog: [flow-next.dev/cookbook](https://flow-next.dev/guides/cookbook).
+Skills are prompts executed by the host agent. If the variation you want is not already a parameter, describe it and the host builds the arrangement on the spot ([orchestration guide](plugins/flow-next/docs/orchestration.md)). Use the smallest sufficient workflow, picking stages by risk and unknowns rather than by size; [pipeline variations](plugins/flow-next/docs/pipeline-variations.md) walks five worked routes from full epic down to docs chore. Full recipe catalog: [flow-next.dev/cookbook](https://flow-next.dev/guides/cookbook).
 
 ---
 
@@ -349,7 +349,7 @@ flowctl spec ready fn-12          # bless work (or move its issue on the tracker
 
 Run both concurrently (two instances, **separate clones**) and you have the full assembly line: board → pilot → draft PR → land → released. The `ready` flag (or your tracker's board state) is the consent boundary: humans bless specs, loops drain them. 📖 **[Going autonomous](https://flow-next.dev/autonomy/going-autonomous)**
 
-**Ralph** is the hardened harness for **fully planned** specs (it never plans): an external shell loop drives a *fresh* session per iteration, so failed attempts die with the session instead of polluting the next one, under hook-enforced guardrails with receipts on disk. **Ralph is deprecated** — a script calling `/flow-next:pilot` and `/flow-next:land` on a loop or a `cron` does the same job without the scaffold and the guard hooks. Nothing is removed and existing installs keep working; new setups should use pilot + land. ([Why](plugins/flow-next/docs/running-lean.md#ralph-deprecated).)
+**Ralph** is the hardened harness for **fully planned** specs (it never plans): an external shell loop drives a *fresh* session per iteration, so failed attempts die with the session instead of polluting the next one, under hook-enforced guardrails with receipts on disk. **Ralph is deprecated.** A script calling `/flow-next:pilot` and `/flow-next:land` on a loop or a `cron` does the same job without the scaffold and the guard hooks. Nothing is removed and existing installs keep working; new setups should use pilot + land. ([Why](plugins/flow-next/docs/running-lean.md#ralph-deprecated).)
 
 ```bash
 /flow-next:ralph-init           # One-time setup
@@ -399,7 +399,7 @@ Scope honesty, because the architecture depends on it:
 
 ## Commands
 
-The 26 command-backed skills are invocable as `/flow-next:<name>` or in plain language; the 5 phrase-triggered skills answer to plain language (and to their full skill name, below). The inner loop is `capture` → `plan` → `work` → `make-pr` → `resolve-pr`. Upstream of it sit `strategy`, `prospect`, optional `chart` (pre-capture decision map for oversized unclear ideas), `guide` (smallest-sufficient router), and `interview`; around it, the review gates (`plan-review`, `impl-review`, `spec-completion-review`, `qa`); after it, the loops (`pilot`, `land`, `ralph-init`) and the maintenance skills (`audit`, `sync`, `memory-migrate`). `visual` sits beside all of them: point it at a spec, a task, a diff, or the conversation and it restates the thing as a compact markdown digest — task tree, file-layout diff, R-ID coverage — for when the text is too dense to review by reading (plain-language triggers on description-matching hosts; explicit-only on Codex — see [docs/platforms.md](plugins/flow-next/docs/platforms.md)). `prose` makes the agent draft its substantial chat replies under the shipped artifact prose contract ([docs/prose.md](plugins/flow-next/docs/prose.md)) — self-applied at the drafting moment on every host, and invocable directly with a draft to tighten. `setup`, `prime`, `tracker-sync`, and `map` handle the project itself.
+The 26 command-backed skills are invocable as `/flow-next:<name>` or in plain language; the 5 phrase-triggered skills answer to plain language (and to their full skill name, below). The inner loop is `capture` → `plan` → `work` → `make-pr` → `resolve-pr`. Upstream of it sit `strategy`, `prospect`, optional `chart` (pre-capture decision map for oversized unclear ideas), `guide` (smallest-sufficient router), and `interview`; around it, the review gates (`plan-review`, `impl-review`, `spec-completion-review`, `qa`); after it, the loops (`pilot`, `land`, `ralph-init`) and the maintenance skills (`audit`, `sync`, `memory-migrate`). `visual` sits beside all of them: point it at a spec, a task, a diff, or the conversation and it restates the thing as a compact markdown digest (task tree, file-layout diff, R-ID coverage) for when the text is too dense to review by reading (plain-language triggers on description-matching hosts; explicit-only on Codex, see [docs/platforms.md](plugins/flow-next/docs/platforms.md)). `prose` makes the agent draft its substantial chat replies under the shipped artifact prose contract ([docs/prose.md](plugins/flow-next/docs/prose.md)), self-applied at the drafting moment on every host, and invocable directly with a draft to tighten. `setup`, `prime`, `tracker-sync`, and `map` handle the project itself.
 
 **Phrase-triggered skills** (no dedicated slash command, just ask): `flow-next-deps` ("what's blocking what?", dependency graph + execution order), `flow-next-drive` (drive a running app like a real user; powers `/flow-next:qa`), `flow-next-export-context` (export RepoPrompt context for external-LLM review), `flow-next-worktree-kit` (worktree create/list/switch/cleanup + `.env` copying), and base `flow-next` ("show me my tasks", "what's ready?"). On hosts that surface skills as commands (Claude Code does), each is also invocable by its full skill name, e.g. `/flow-next:flow-next-worktree-kit`.
 
@@ -478,7 +478,7 @@ Detailed install + cross-platform patterns in [`docs/platforms.md`](plugins/flow
 
 | Project | Platform |
 |---|---|
-| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode — superseded by the in-repo installer |
+| [flow-next-opencode](https://github.com/gmickel/flow-next-opencode) | OpenCode, superseded by the in-repo installer |
 | [FlowFactory](https://github.com/Gitmaxd/flowfactory) | Factory.ai Droid |
 | [Ralph TUI](flow-next-tui/) | Cross-platform TUI for Ralph runs |
 
