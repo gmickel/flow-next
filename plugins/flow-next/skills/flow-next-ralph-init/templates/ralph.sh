@@ -1041,6 +1041,16 @@ while (( iter <= MAX_ITERATIONS )); do
   # Export iteration for receipt tracking
   export RALPH_ITERATION="$iter"
 
+  # Zero-task spec (fn-209 R8): flowctl next surfaces it as status=plan with
+  # reason=needs_tasks. Ralph never plans a taskless spec - dispatching the
+  # plan-review prompt here would spin on an unchanged artifact. Typed stop.
+  if [[ "$status" == "plan" && "$reason" == "needs_tasks" ]]; then
+    log "zero-task spec $spec_id - stopping (run /flow-next:plan $spec_id)"
+    ui_complete "spec $spec_id has no tasks - run /flow-next:plan $spec_id"
+    write_completion_marker "NEEDS_TASKS"
+    exit 0
+  fi
+
   if [[ "$status" == "plan" ]]; then
     export SPEC_ID="$spec_id"
     export PLAN_REVIEW
@@ -1124,7 +1134,8 @@ Violations break automation and leave the user with incomplete work. Be precise,
   [[ "${FLOW_RALPH_CLAUDE_VERBOSE:-}" == "1" ]] && claude_args+=(--verbose)
 
   # Block Explore subagent auto-delegation - causes READ-ONLY failures in autonomous mode
-  # Worker already has disallowedTools: Task but CLI-level is more reliable (precedence 2 vs 6)
+  # Worker frontmatter no longer denies Task (fn-209 tool-permission audit), so this
+  # CLI-level deny is the sole layer blocking Explore auto-delegation in Ralph runs
   # See: https://code.claude.com/docs/en/sub-agents#disable-specific-subagents
   claude_args+=(--disallowedTools "Task(Explore)")
 
