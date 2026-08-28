@@ -50,9 +50,10 @@ TBD
 - [ ] TBD
 
 ## Done summary
-TBD
+Taught the routing surfaces the shipped no-plan route (R9) and added work-rolling's pre-check refusal (R10): pipeline-variations gained the sixth variant (table row + `### No-plan route` section cross-linked to the GLOSSARY entry, fixing its orphan status), the guide matrix, capture's legal-target list, and interview's next-step hint each name `work --no-plan`, running-lean carries a one-line variant pointer (default spec->plan->work framing verified unchanged) plus a five->six count fix, work-rolling refuses no-plan before reading canonical files (single implicit task degenerates the rolling frontier; redirect to plain work), and six conduct checklists (work, work-rolling, guide, capture, interview, pilot) got appended house-grammar items. All prose was written against the shipped behavior in `references/no-plan-route.md` and the work SKILL.md option block, not the spec alone. Docs-only, no version bump. Out-of-Touches drift noted for task .6 in the run notes: README.md:201 and docs/teams.md:66 still say "five worked routes/examples".
 
+stage: impl-review - skipped(policy: host-deferred - conductor owns the gate)
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: 2ca45a95ad8f0101988f6f46b389f478624d6a3c
+- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_cursor_agent_frontmatter test_opencode_agent_frontmatter -q; rc=0, 13 tests), python3 scripts/run_tests_parallel.py (rc=1: single inherited failure test_reference_encoding_guard::test_every_reference_has_a_codex_mirror_twin for flow-next-work/references/no-plan-route.md created by sibling task .2 - mirror regen is task .6 scope by design; failure present at base_commit, this task's diff touches no file under flow-next-work/ or codex/; all other suites green)
+- PRs:stage: plan-sync - skipped(config: planSync.enabled != true)
