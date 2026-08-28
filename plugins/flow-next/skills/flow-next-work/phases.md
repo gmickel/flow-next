@@ -650,6 +650,7 @@ Tests: <commands + result>
 Review: <verdict | n/a>
 Gates: <full | baseline reused (green receipt <sha8>) | docs-only tier-B>   # one line per outcome; repeat for each
 Tracker sync: <OK | MISSING:<event> → retro-fired → OK | MISSING:<event> (retro-fire failed: <reason>) | n/a (bridge inactive)>
+Shipped: <n PRs merged | 0 (no PR yet — spec complete, unshipped)>
 Next: /flow-next:make-pr <spec-id>   # or /flow-next:qa <spec-id> first when pipeline.qa=on
 ```
 
@@ -657,7 +658,9 @@ The `Next:` line is the executable handoff — the reader runs it, rather than
 re-deriving which command comes next from the summary above it.
 
 **Shipped-count honesty:** an all-done spec with no PR counts as ZERO shipped —
-`done` tasks on an unmerged branch are inventory, not delivery. The `Next:`
+`done` tasks on an unmerged branch are inventory, not delivery. The `Shipped:`
+line carries that count explicitly: `0 (no PR yet — spec complete, unshipped)`
+in the normal pre-make-pr state, never omitted. The `Next:`
 line is the remaining work (make-pr, qa, land), never a victory lap; a summary
 that read all-done-no-PR as finished has broken this.
 
