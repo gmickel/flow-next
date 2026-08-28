@@ -8981,7 +8981,7 @@ Status ∈ met / partial / not-addressed / deferred. After the table emit `Unadd
 SMELL_BASELINE_BLOCK = """
 ## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
 Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
-Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality.
+Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality · Middle Man / pass-through (forwards the same arguments to another call of the same shape — a layer hiding nothing).
 """
 
 # Plan-review analog of the code-smell baseline: the four things a strong plan

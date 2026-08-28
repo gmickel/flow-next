@@ -168,9 +168,14 @@ If DESIGN.md is missing or the path is wrong, note it and proceed — design con
    - No existing rate limiter found — creating new
    ```
 
-3. Read **Optional** files as needed during implementation.
+3. **Defect-pattern sweep (bug-shaped tasks):** when the task fixes a defect,
+   grep for the defect's *pattern*, not just the reported instance — bounded to
+   the surface the ACs cover. A sibling instance left behind is the recurrence
+   class: the same bug refiled from the next call site.
 
-4. Continue to Phase 2 only after investigation is complete.
+4. Read **Optional** files as needed during implementation.
+
+5. Continue to Phase 2 only after investigation is complete.
 
 Done when: every Required file named by `## Investigation targets` has been read, the similar-code search has been reported (reuse / extend / new), and no code has been written yet.
 
@@ -183,6 +188,32 @@ Read relevant code, implement the feature/fix. Follow existing patterns.
 Rules:
 - Small, focused changes
 - Follow existing code style
+- **Never edit a test, gate, or baseline to make it pass.** A gate you believe
+  is wrong is `BLOCKED: TOOLING_FAILURE`, never an editable obstacle — gate
+  manipulation is the failure class every green signal's trust rests on.
+- **Rename edits: spot-check every rename** against string literals, prose,
+  generated mirrors, and back-references before committing — a rename swept
+  only through code identifiers is this repo's highest-frequency banked
+  failure class (rename drift across mirrors).
+- **Debugging: a refuted hypothesis ships as a revert.**
+  Belt-and-suspenders that "might help" does not ship; only the smallest
+  evidence-justified change does — a leftover speculative fix is unexplained
+  code the next reader must reverse-engineer.
+- **Lifecycle-shaped tasks** (a task adding or changing a CLI verb, lifecycle
+  step, or loop iteration): interrogate the design — what happens when it runs
+  twice? crashed at any point? does it converge? An
+  it-depends-on-leftover-state answer means the design is missing a
+  reconciliation step — interrogate the design and surface the gap; never add
+  unrequested machinery to paper over it.
+- **Replacing an API/verb/key: deletion of the replaced path is inside the
+  task**, not a follow-up — a live legacy dual-path is exactly the drift the
+  replacement was supposed to end.
+- **Comments are not alibis.** A comment justifying a workaround is a finding
+  — fix the code, not the narration. A constraint stated in a comment
+  (do-not-remove, ordering-matters) wants the cheapest enforceable encoding
+  (an assert, a test, a lint rule) and then deletion of the comment — prose
+  guards nothing. Keep-list: license headers, external-constraint notes, lint
+  suppressions with reasons, public API contracts, issue links.
 - **Build to the AC, not past it (YAGNI):** no public surface, command, config
   knob, or public abstraction the task spec doesn't name (internal helpers
   that are the smallest way to satisfy the ACs are implementation, not added
@@ -194,6 +225,9 @@ Rules:
   runtime state) — never trim a guard as scope.
 - Add tests if spec requires them
 - Required tests cover every error case enumerated in the ACs (R-IDs) the task satisfies; done summary references those tests. Specs with no enumerated error cases trigger nothing (not retroactive).
+- **Confirm a new test fails for the intended reason before fixing** — run it
+  red first and read why it failed; a test that never failed proves nothing
+  about the fix and banks a false regression guard.
 - **Test mass discipline:** one focused test per AC and per enumerated error
   case — coverage comes from the enumeration, not from volume. Use table-driven
   / parametrized cases instead of copy-pasted variants; do not re-test branches
@@ -201,6 +235,10 @@ Rules:
   whole file it lives in. Redundant test mass is generation cost at authoring
   time AND suite cost on every later run, and it catches nothing the
   enumeration missed.
+- **Never weaken an existing assertion to match a wrong implementation** —
+  removed checks, widened matchers, an equality degraded to a truthiness
+  probe. The test-mass rule above bounds volume; this bounds strength:
+  assertion weakening ships the exact bug the assertion existed to catch.
 - **Tiered runs during the loop:** while iterating, run the **focused** tests for
   the code under change (per-task Quick commands convention). The **full** suite
   runs exactly where the existing gates already require it (whatever the
@@ -224,6 +262,11 @@ Task: <TASK_ID>"
 ```
 
 Use conventional commits. Scope from task context.
+
+**Bug-shaped tasks:** a commit carrying the failing reproduction BEFORE the fix
+commit is allowed and preferred, never required — it pins the defect the fix
+claims to close, so the fix's evidence is a red-to-green transition rather than
+a green run that may never have been red.
 
 Done when: the task's work is committed with a conventional-commit subject naming `Task: <TASK_ID>`.
 
@@ -387,6 +430,18 @@ BASE_COMMIT=$(cat .flow/tmp/base_commit)
 ```
 If verification fails, fix and re-commit before proceeding.
 
+**INCONCLUSIVE is a third state, never a pass.** A gate observation that
+errored, timed out, or observed the wrong surface (wrong directory, wrong
+suite, empty selection) is recorded verbatim in the evidence as inconclusive —
+recording it as green is the evidence-honesty failure the receipts exist to
+prevent. Re-run it properly or escalate; never round it up.
+
+**A suspicious green is not green** (beside the suite-output capture rule): a
+gate that passed suspiciously fast, or collected zero tests/cases, gets its
+observation checked — the log, the collected count — before any receipt is
+written. A false green receipt is reused by every later `gate check`, so one
+unexamined pass poisons the whole green-receipt chain.
+
 **Sandbox-blocked commit:** if the environment's sandbox denies `git commit`,
 neither stall nor loop retrying. On the standard single-worker path, still write
 the evidence file and complete `flowctl done`, recording the restriction in
@@ -511,6 +566,10 @@ likewise returns `in_progress` for the conductor's review.
 - **Verify terminal state** - standard single-worker `flowctl show` must report
   `done`; parallel-wave and host-deferred handovers must report `in_progress`
 - **Return points, never restates** - the return carries the task id, status, summary/evidence paths, and commit range so the conductor reads current truth; a return that restates summary content the files already carry has broken this
+- **Never return `BLOCKED` from a broken tree** — before escalating, commit a
+  coherent partial or revert to base, and state which in the escalation. A
+  blocked task whose tree is mid-surgery poisons every later worker and
+  conductor pass in that checkout.
 - **Typed escalation** — when blocking a task, use this format:
   ```
   BLOCKED: <category>
@@ -524,5 +583,8 @@ likewise returns `in_progress` for the conductor's review.
   - `DEPENDENCY_BLOCKED` — waiting on another task, PR, or service
   - `DESIGN_CONFLICT` — implementation conflicts with existing architecture
   - `SCOPE_EXCEEDED` — task is larger than estimated, needs splitting
-  - `TOOLING_FAILURE` — build/test/infra broken, not a code issue
+  - `TOOLING_FAILURE` — build/test/infra broken, not a code issue. A broken
+    gate is fixed in its own change, never silently worked around inside the
+    task diff — a workaround buried in the feature diff hides the tooling
+    failure from every later task that hits it
   - `EXTERNAL_BLOCKED` — waiting on external API, key, or approval

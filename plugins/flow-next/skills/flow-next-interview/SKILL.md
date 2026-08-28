@@ -278,9 +278,12 @@ Before every question, classify it via the [questions-shared.md](questions-share
 - **Codebase-answerable** ("what exists / how it's wired / what conventions live here") → use Read / Grep / Glob to answer; log to spec's `## Resolved via Codebase` section with file:line evidence.
 - **Project-docs-answerable** (business pass, R26) → resolve from the project docs; log to spec's `## Resolved via Project Docs` section with `path:line` evidence. The read list and bounds live in [`references/pass-business.md`](references/pass-business.md).
 - **Glossary-lookup-answerable** (`DOC_AWARE=1` only) — terms with a canonical entry in the nearest-ancestor `GLOSSARY.md` → silently resolve from the entry; log to spec's `## Glossary Conflicts` section only when the user's wording diverges from canonical AND the term is load-bearing (behavior (a) in [`references/doc-aware.md`](references/doc-aware.md)).
+- **Empirically-answerable** — a fork the running code can settle (a behavior, a timing, an output) → run a throwaway probe (execute the command, read the output) instead of asking; log the observation like a codebase-answerable. The ask is the slow path: a question the user must relay back to the machine costs a round-trip the probe answers in seconds.
 - **User-judgment-required** ("what should exist / what tradeoff to make / what priority") → ask via `AskUserQuestion`.
 
 If you find yourself answering a "should" question via grep, that's the bug. Stop and ask the user.
+
+**Divergent independent answers mean the question was underspecified.** When independent sources (scouts, docs, probes) return wildly divergent answers to the same question, do not average them and do not quietly pick a favorite — reframe the question more precisely and re-run it; divergence is a signal about the framing, not a vote to be tallied.
 
 **Async fact-scouts (optional, rounds mode):** while the user answers the current round you MAY dispatch ONE read-only fact-scout subagent to resolve codebase lookups that gate NEXT-round questions. Before dispatching one, read [`references/fact-scouts.md`](references/fact-scouts.md) — the brief contract, scout tier, digest discipline, and the never-block rule are binding. Not dispatching a scout needs no reading: investigate inline as usual.
 

@@ -28,6 +28,12 @@ Join: complete (2/2 returned)
 Use the host's chosen integration mechanism to bring each successful worker's
 commits onto the target branch.
 
+**Workspace cleanup gate:** tear down a workspace only when BOTH hold — the
+task's commits are reachable from the target HEAD, and the workspace tree is
+clean. Uncommitted work in a workspace PAUSES its cleanup and is reported to
+the conductor, never deleted — a teardown that assumed integration was
+complete is how finished work disappears without a trace.
+
 ## Join collision handling
 
 **Join collision handling (fn-176 — never auto-resolve).** A merge conflict at

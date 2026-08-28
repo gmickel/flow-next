@@ -1,6 +1,6 @@
 {
   "baseline": {
-    "commit": "cd9664bdd8b625c814c48bd72e075cf6d6e15866",
+    "commit": "fb35e5941fb04100101c200242ccbb58b6b4c89d",
     "kind": "immutable_git_commit"
   },
   "measurement": {
@@ -9,78 +9,78 @@
       "o200k_base"
     ],
     "tool": "tiktoken",
-    "version": "0.14.0"
+    "version": "0.13.0"
   },
   "prompts": {
     "completion": {
-      "baseline_masked_sha256": "32f503fea45c69d1af298c47dc8f96f1cbe700d26815c66888d692fded589d8c",
-      "baseline_sha256": "10949edda69c204aef8514d73ed9a4398f396e74676f0ca759394c3ed068e747",
+      "baseline_masked_sha256": "cc542dcdec9af37143dfb89a2dc5e94e521c283216a12b289bca309725d36e1b",
+      "baseline_sha256": "afa964d9fc6336cef53a4518d9d029a01ee7592e6b847259d8f60d1cbb4f6567",
       "candidate_masked_sha256": "cc542dcdec9af37143dfb89a2dc5e94e521c283216a12b289bca309725d36e1b",
       "candidate_sha256": "afa964d9fc6336cef53a4518d9d029a01ee7592e6b847259d8f60d1cbb4f6567",
       "tokens": {
         "cl100k_base": {
-          "baseline": 2228,
+          "baseline": 2298,
           "candidate": 2298,
-          "delta": 70
+          "delta": 0
         },
         "o200k_base": {
-          "baseline": 2217,
+          "baseline": 2287,
           "candidate": 2287,
-          "delta": 70
+          "delta": 0
         }
       }
     },
     "completion_no_tasks": {
-      "baseline_masked_sha256": "d1ca51294c49ca7a04d2397d1b080bf53ed1ce2b1c57e323e91cd3349112f27b",
-      "baseline_sha256": "2fbe87e97bcdd07dd89ece0a605d4b6b9be499af8bae435244193c941c0ef75f",
+      "baseline_masked_sha256": "3fa8bd87af2a62bdab598280ebb2142c92025564fcc20213d775094e61d96d5d",
+      "baseline_sha256": "f3b8b371856eba05f49a1ed845df7ff3fa20b5f3a75522bf3067ef8a76bd6024",
       "candidate_masked_sha256": "3fa8bd87af2a62bdab598280ebb2142c92025564fcc20213d775094e61d96d5d",
       "candidate_sha256": "f3b8b371856eba05f49a1ed845df7ff3fa20b5f3a75522bf3067ef8a76bd6024",
       "tokens": {
         "cl100k_base": {
-          "baseline": 2200,
+          "baseline": 2270,
           "candidate": 2270,
-          "delta": 70
+          "delta": 0
         },
         "o200k_base": {
-          "baseline": 2189,
+          "baseline": 2259,
           "candidate": 2259,
-          "delta": 70
+          "delta": 0
         }
       }
     },
     "impl": {
-      "baseline_masked_sha256": "c9e70f2a2947e6d08f4a1bf12a3e5882a3610d86b2036173c7914bf91b84e32a",
-      "baseline_sha256": "90802b1a5ab628bdbba6f1a6a4b6f4c880aeb28b3f944da6e3555a5ecdcb26bc",
-      "candidate_masked_sha256": "7acd28bde8ea9c6fe7641c5b60c40a812f14abce3775cca4b6dbf9a6ccfe0d05",
-      "candidate_sha256": "b5acdb5c9ab66b72d03da04f78e38de7ebae421ed4222c93591c68d4823d7913",
+      "baseline_masked_sha256": "7acd28bde8ea9c6fe7641c5b60c40a812f14abce3775cca4b6dbf9a6ccfe0d05",
+      "baseline_sha256": "b5acdb5c9ab66b72d03da04f78e38de7ebae421ed4222c93591c68d4823d7913",
+      "candidate_masked_sha256": "9a0683ea021abb5dd928a7fc7fd6a790b9d83ea5132aab46b926abe9640bc1e9",
+      "candidate_sha256": "b958053971bd8b03583be8a7f1ebff0baae20b8cfeda01054a6eb1aea96bffc8",
       "tokens": {
         "cl100k_base": {
-          "baseline": 2182,
-          "candidate": 2270,
-          "delta": 88
+          "baseline": 2270,
+          "candidate": 2294,
+          "delta": 24
         },
         "o200k_base": {
-          "baseline": 2172,
-          "candidate": 2260,
-          "delta": 88
+          "baseline": 2260,
+          "candidate": 2284,
+          "delta": 24
         }
       }
     },
     "impl_empty_optional": {
-      "baseline_masked_sha256": "2e902d5c14d4e8b91377a628c9b5c42bcf7c30cd960095da16fb13ced5cf429e",
-      "baseline_sha256": "35c3c6f4c6c294cf6e58d51b575ef5185c39c4d79605ed865eb1fd0dfef96540",
-      "candidate_masked_sha256": "99b369353f0f31b50456e780dad66d4c60535ebe1853cbb57101d0e795252271",
-      "candidate_sha256": "6ffa14f9de447b69d8e637b609900452078455b097fb42fbadfd8d95af7ca5a8",
+      "baseline_masked_sha256": "99b369353f0f31b50456e780dad66d4c60535ebe1853cbb57101d0e795252271",
+      "baseline_sha256": "6ffa14f9de447b69d8e637b609900452078455b097fb42fbadfd8d95af7ca5a8",
+      "candidate_masked_sha256": "157b760e5303309fce36ce323b3e068515a494e3147faa82c84b51fbd54c6024",
+      "candidate_sha256": "c57f58cbf3231e45b7d6fff587c1654cecf51a6590b29b8b51e24e7561c08795",
       "tokens": {
         "cl100k_base": {
-          "baseline": 2101,
-          "candidate": 2189,
-          "delta": 88
+          "baseline": 2189,
+          "candidate": 2213,
+          "delta": 24
         },
         "o200k_base": {
-          "baseline": 2091,
-          "candidate": 2179,
-          "delta": 88
+          "baseline": 2179,
+          "candidate": 2203,
+          "delta": 24
         }
       }
     },
@@ -177,44 +177,44 @@
     "standalone": {
       "baseline_masked_sha256": "8d76ab5053ea4d703b599ceddb4e436c7a630e3201c3523cfb823f4dcf6054ba",
       "baseline_sha256": "dd7c94a39715840e0dc71f0756853c3c4600820fe87afd821ebd6e08e568b71b",
-      "candidate_masked_sha256": "8d76ab5053ea4d703b599ceddb4e436c7a630e3201c3523cfb823f4dcf6054ba",
-      "candidate_sha256": "dd7c94a39715840e0dc71f0756853c3c4600820fe87afd821ebd6e08e568b71b",
+      "candidate_masked_sha256": "2b8933ed9471e6df5a3964a9fd984a002adb00a1fe3823f8d6326a4d8d690055",
+      "candidate_sha256": "f90c8d05cf1783692d5b0a6fe825db49bd3e2a4e1cb05e90f3bd1bc610c17515",
       "tokens": {
         "cl100k_base": {
           "baseline": 1856,
-          "candidate": 1856,
-          "delta": 0
+          "candidate": 1880,
+          "delta": 24
         },
         "o200k_base": {
           "baseline": 1845,
-          "candidate": 1845,
-          "delta": 0
+          "candidate": 1869,
+          "delta": 24
         }
       }
     },
     "standalone_no_focus": {
       "baseline_masked_sha256": "97b6fbcf4723120272e28363cb16cf413b8de935dee862a03836d11c8d26ada2",
       "baseline_sha256": "c23f070598de08da12fc8705f4ce1ca03c4262e14fa5c277d76998a0e8453f3a",
-      "candidate_masked_sha256": "97b6fbcf4723120272e28363cb16cf413b8de935dee862a03836d11c8d26ada2",
-      "candidate_sha256": "c23f070598de08da12fc8705f4ce1ca03c4262e14fa5c277d76998a0e8453f3a",
+      "candidate_masked_sha256": "d2a62ce895ed3f43384db226d7c21c41b1b17c5f5e81c26c5f6dca28d161cbde",
+      "candidate_sha256": "894322560a0f07c5581e17d49d4cee6993cc863cf890d0ddacd865744a60c823",
       "tokens": {
         "cl100k_base": {
           "baseline": 1839,
-          "candidate": 1839,
-          "delta": 0
+          "candidate": 1863,
+          "delta": 24
         },
         "o200k_base": {
           "baseline": 1828,
-          "candidate": 1828,
-          "delta": 0
+          "candidate": 1852,
+          "delta": 24
         }
       }
     }
   },
   "rebaseline": {
     "measured_max_token_delta": {
-      "cl100k_base": 88,
-      "o200k_base": 88
+      "cl100k_base": 24,
+      "o200k_base": 24
     },
     "rationale": "fn-206 intentionally adds the reviewer verification-budget rail to the impl and completion review prompts: focused suites plus finding-targeted commands; the full suite belongs to the run's final gate, never a review round."
   },

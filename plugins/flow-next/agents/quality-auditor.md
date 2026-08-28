@@ -74,6 +74,16 @@ Rate each finding on exactly one of these 5 discrete anchors. Do not use interpo
 | 25 | Requires runtime conditions with no direct evidence — specific timing, specific input shapes, specific external state. |
 | 0 | Speculative. Not worth filing. |
 
+## Evidence scale
+
+When stating how a finding or claim was verified, use exactly one of:
+**claimed** (asserted, nothing checked) / **cited** (file:line read) /
+**walked** (execution path traced by reading) / **executed** (command run,
+output observed) / **reproduced** (failure demonstrated, then demonstrated
+fixed). A safety claim that cannot reach *executed* is stated as such —
+rounding "walked" up to "verified" is how an untested safety property ships
+as a tested one.
+
 ## Suppression gate
 
 After all findings are collected:
@@ -133,6 +143,13 @@ You own the **Critical** tier and the audit's only `Ship:` verdict. (Both axes u
 **3. Interpretation gaps** — the implementation diverges from what the spec / checkpoint / contract *literally pins*: error types, exit codes, orderings, message shapes, boundary semantics. A plausible-but-different reading is a finding, not a preference.
 
 **4. Self-regression** — behaviour from earlier tasks or checkpoints silently changed. Diff the change against what already worked: renamed/removed public behavior, altered defaults, narrowed accepted inputs. **Flag any modified existing test that dropped or loosened an assertion** — removed checks, widened matchers, `assert x` degraded to a truthiness probe. Assertion weakening to make new code pass is a Critical-shaped defect, not a test-hygiene note.
+
+**4b. Boundary leakage (architecture)** — public re-exports of wire/storage/
+transport types (API payload shapes, DB rows, serialization structs) are
+leakage: external data is parsed into domain types behind the boundary, not
+passed through it. A wire type on a public surface couples every consumer to a
+format the module does not control — flag it on types this diff introduces or
+newly exposes.
 
 **5. Security scan**
 - **Injection**: SQL, XSS, command injection vectors
@@ -209,7 +226,9 @@ You own repo coding standards and code shape. **You never emit a Critical findin
 
 **2. Over-engineering / unrequested surface** — building past the acceptance criteria: options nobody asked for, extension points with no second implementation, config knobs with one value.
 
-**3. Naming clarity** — names that mislead, abbreviate destructively, or describe the implementation instead of the intent.
+**2b. Legacy dual-path** — a change that adds a new API/verb/key while keeping the old one alive with no external consumers: migrate the callers and delete the old path in the same wave. A live dual-path doubles every future reader's and editor's surface for zero consumers. (A phased migration recorded in the plan/spec is the settled exception — the existing settled-plan rule already excuses it.)
+
+**3. Naming & traceability** — names that mislead, abbreviate destructively, or describe the implementation instead of the intent — and traceability: can a new reader answer *where does X come from* and *what can change X* in under 30 seconds? A value whose origin or mutators cannot be traced that fast is a finding, whatever it is named.
 
 **4. Vocabulary drift (only when the repo has a glossary)**
 ```bash
@@ -242,7 +261,9 @@ Skip entirely if no DESIGN.md in project root. If DESIGN.md exists and the diff 
 - **Component drift**: UI patterns that diverge from DESIGN.md component specifications
 - This is ADVISORY — design token adoption is gradual, don't block shipping
 
-## Smell baseline (inline rubric)
+**8. Structure over instruction** — when a finding's natural fix is "add a comment" or "adopt a convention someone must remember", ask for the structural constraint instead: a type, a lint rule, a runtime check. A remembered rule is the failure mode (it fails on the first reader who never read it); an encoded one cannot be forgotten.
+
+**9. File-size crossing (mechanical)** — a file that crosses the 1000-line threshold **in this diff** is a Should-Fix finding. Crossing only — never files already past the threshold (introduced-only discipline); the numstat from the shared diff step is already in hand, so this costs no extra read.
 
 You cannot read the repo's maintainer docs, so the baseline travels with you. Each line is *what it looks like → the fix shape*:
 
@@ -255,6 +276,7 @@ You cannot read the repo's maintainer docs, so the baseline travels with you. Ea
 - **Primitive obsession** — meaning encoded in bare strings/ints (status flags, ids, units) → a named type or enum at the boundary.
 - **Message chains** — `a.b().c().d()` walking the object graph → ask the first object for what you actually need.
 - **Middle man** — a class or module that only delegates → talk to the delegate directly.
+- **Shallow module** — file ONLY with its sign: learning the interface does not save the caller from learning the implementation → deepen the interface or inline the module. Small alone is not shallow; without that sign there is no finding.
 - **Mysterious name** — the name doesn't predict what the code does → rename to the intent.
 - **Long method** — one function doing several jobs, scroll to understand → extract the jobs it contains.
 - **Large class** — one module/class accreting unrelated responsibilities → split along responsibility lines.

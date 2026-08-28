@@ -2,6 +2,8 @@
 
 Execute these phases in order. One invocation is one tick: discover authored PRs, classify each through the gate tree, take at most ONE action class per PR, and end with the terminal verdict line.
 
+**Re-read this workflow file at every tick start** — a long cadence loop executing from a stale in-context copy drifts from the file the repo actually ships. **Probe an idle dispatched agent read-only** (its side effects: commits, receipts, status fields), never via a resume message — a resume restarts the agent, turning one slow run into two.
+
 ## Review no-repeat terminal
 
 `NOT_RETRYABLE: artifact unchanged since last verdict` with exit `1` from any

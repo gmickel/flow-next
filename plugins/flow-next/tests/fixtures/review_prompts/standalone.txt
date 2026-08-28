@@ -64,7 +64,7 @@ You MAY mention these as "FYI" observations without affecting the verdict.
 
 ## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
 Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
-Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality.
+Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality · Middle Man / pass-through (forwards the same arguments to another call of the same shape — a layer hiding nothing).
 
 ## Requirements coverage (only if the spec has R-IDs like `- **R1:** ...`)
 If R-IDs are present, read the epic's `## Acceptance Criteria` (tolerate legacy `## Acceptance` / `## Acceptance criteria`) and emit:

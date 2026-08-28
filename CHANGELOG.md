@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Autonomous runs stop trusting their own narration.** A hardening pass of roughly 34 short prose rules closes the failure classes the memory store had already banked: workers may never edit a test, gate, or baseline to make it pass, never weaken an assertion to match a wrong implementation, and record an errored or wrong-surface gate observation as inconclusive instead of green; a gate that passed suspiciously fast or collected zero cases gets its log checked before any green receipt is minted, so one false pass can no longer poison every later run that honors the receipt. The land conductor reads merge state and open threads before burning its CI-fix budget, re-gates a sibling PR after any merge, reclassifies a repeat identical failure instead of re-running it blind, honors spec dependencies at merge, and claims each tick atomically so overlapping ticks stop losing state. Wave dispatches now print their selection rule, carry an explicit path ban and a runtime cap with a return-partial contract, judge a silent lane by its side effects under the existing 2-strike cap, and only tear down a workspace whose commits are reachable and whose tree is clean. Reviews gain a named evidence scale (claimed / cited / walked / executed / reproduced), a structure-over-instruction probe, wire-type-leakage and legacy-dual-path checks, the shallow-module smell with its falsifiable sign, a mechanical 1000-line-crossing check capped at Should-Fix, and the pass-through smell in the impl-review baseline. Interview and plan answer empirically answerable forks with a throwaway probe instead of a question and treat wildly divergent independent opinions as an underspecified framing to reframe, never average; memory intake routes mechanizable lessons to gate proposals and fixes retrieval, not content, when an existing rule failed to fire.
+
 ## [flow-next 4.7.1] - 2026-08-28
 
 ### Changed

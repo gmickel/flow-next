@@ -25,6 +25,12 @@ The 6 outcomes apply to every categorized entry, including the `knowledge/decisi
 
 Keep and Update are unaffected by this ordering: an entry that needs a reference fix and also qualifies for Harden gets the Update applied and then hardened in the same run (fix the lesson before retiring it).
 
+**Intake filters** — for lessons arriving at the store (a new entry proposed during this audit, or judged as a fresh capture would be):
+
+1. **A mechanizable lesson routes to a gate proposal, not a memory entry.** If a machine can check it deterministically, writing it as prose parks enforcement in the context window forever — propose the gate (the Harden target types below) instead of banking the entry.
+2. **Accept only lessons that route to something actually used in the transcript** — a file, command, or decision the session genuinely touched. A lesson abstracted past its evidence is speculation wearing a memory entry's clothes.
+3. **A rule that existed but did not fire gets a retrieval fix, not a rewrite.** When the lesson was already in the store and the failure still happened, the defect is retrieval — description, placement, module/tags — not content; rewriting a correct rule that nobody surfaced just forks it.
+
 ---
 
 ## Keep
