@@ -2,6 +2,7 @@
 name: workflow-scout
 description: Used by /flow-next:prime to scan for CI/CD, PR templates, issue templates, and workflow automation. Do not invoke directly.
 model: haiku
+# read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
 color: "#8B5CF6"

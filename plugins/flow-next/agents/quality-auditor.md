@@ -2,6 +2,7 @@
 name: quality-auditor
 description: Single-axis quality audit of recent changes — correctness or standards, per the AXIS line in the dispatch.
 model: opus
+# read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
 color: "#EC4899"

@@ -2,6 +2,7 @@
 name: observability-scout
 description: Used by /flow-next:prime to scan for observability setup including logging, tracing, metrics, and health endpoints. Do not invoke directly.
 model: haiku
+# read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
 color: "#F59E0B"

@@ -2,6 +2,7 @@
 name: practice-scout
 description: Gather modern best practices and pitfalls for the requested change.
 model: sonnet
+# read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
 color: "#EAB308"
