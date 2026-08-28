@@ -78,9 +78,10 @@ drop one), but:
 - **No-Relationship is a COUNT, not an enumeration** — `N other open specs: no relationship` (never
   list each unrelated id; that list scales with the spec count and is pure noise).
 - **Negative claims carry their search basis** — the no-relationship count (and any "nothing depends
-  on this" verdict) names what was actually scanned (`26 open specs via specs --json; full cat on the
-  8 touching shared files`). Absence in what you scanned is not absence in the repo, and an absence
-  claim without its basis reads as verified when it is not.
+  on this" verdict) names what it scanned (`26 open specs via specs --json; full cat on the
+  8 touching shared files`): concrete commands and counts, never "everything". Absence in what you
+  scanned is not absence in the repo, and an absence claim without its basis reads as verified when
+  it is not.
 - Omit any of the three relationship sections that has no entries (don't emit an empty heading).
 
 ```markdown
