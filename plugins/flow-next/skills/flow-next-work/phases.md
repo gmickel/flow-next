@@ -46,6 +46,16 @@ Detect input type in this order (first match wins):
 **Flow spec ID (fn-N-slug or legacy fn-N/fn-N-xxx)** → SPEC_MODE:
 - Read spec metadata: `$FLOWCTL show <id> --json`
 - Read spec markdown: `$FLOWCTL cat <id>`
+- **Zero-task fork:** if the metadata's `tasks` array is EMPTY, the spec was
+  never planned — distinct from all-tasks-done, where tasks exist and read
+  `done` (that state proceeds normally and reaches 3g). Read
+  [references/no-plan-route.md](references/no-plan-route.md), execute its fork
+  (autonomous refusal / pre-answer / ask), then continue with Phase 2 only
+  after its Direct route minted the implicit task — its plan-first and refusal
+  branches end the run. A zero-task spec never proceeds past this fork, so the
+  legacy fall-through (a zero-task run reaching Phase 3 and a completion
+  review over an empty diff) is unreachable. A spec with tasks — whatever
+  their status — never reads that file.
 - Get first ready task: `$FLOWCTL ready --spec <id> --json`
 
 **Spec file start (.md path that exists)**:
@@ -229,7 +239,7 @@ wins for every task); OTHERWISE resolve task-aware — `REVIEW_MODE=$($FLOWCTL r
 its backend rather than the project default. `none` still skips review. (This is why the worker passes
 `--review=$REVIEW_MODE` below — the value already carries the correct explicit-or-per-task precedence.)
 
-**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `/flow-next:impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](references/host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** Verdict independence: the agent that wrote the code never dispatches or issues its own review verdict, so the fresh reviewer subagent the `host` backend requires is dispatched by the conductor, never the worker. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker — the worker then defers `flowctl done` and the conductor runs `/flow-next:impl-review <task-id> --review=host` itself as the mandatory gate before `done`; `rg host-deferred` in this file must always find it. Read [references/host-deferred-review.md](references/host-deferred-review.md) for the full contract (worker deferral, SHIP/NEEDS_WORK handling, evidence update, Codex-mirror parity) and execute it — including its 3d.0 gate — before completing this task.
 
 All other backends keep the worker-owned review dispatch + worker-owned `flowctl done` unchanged.
 
