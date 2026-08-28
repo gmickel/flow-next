@@ -402,10 +402,17 @@ A run may pause ONLY at a wave boundary (the current wave joined and resolved,
 before the next 3a selection), and ONLY on an explicit pause request or an
 imminent-compaction signal from the host. An autonomous "keep going"
 instruction never triggers it — a self-granted pause is an availability
-failure dressed as prudence. To pause: commit any WIP (with a broken-tree note
-in the commit message if the tree is not coherent), then write the
-workspace/handover map — task ids, statuses, workspace paths, handover paths,
-next frontier — to `/tmp/<spec-id>-resume.md`. In-context state does not
+failure dressed as prudence. To pause: commit this run's WIP (with a
+broken-tree note in the commit message if the tree is not coherent). Commit
+scope is the paths this run produced — `.flow/` state, the resume map, files
+its workers touched per their handovers — never the whole tree: on a
+current-branch run the tree may carry uncommitted work that predates the run
+(the run-start `git status` shows it), and the spec base alone cannot tell it
+from the run's own (the same rule as the worker's BLOCKED revert scope) —
+leave it uncommitted and name it in the resume map instead of sweeping it into
+the pause commit. Then write the workspace/handover map — task ids, statuses,
+workspace paths, handover paths, next frontier, any pre-existing uncommitted
+paths left in place — to `/tmp/<spec-id>-resume.md`. In-context state does not
 survive summarization; the resume file is the only map the next session gets.
 
 ### 3g. Completion Review Gate (SPEC_MODE only)
