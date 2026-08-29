@@ -371,7 +371,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-209-no-plan-work-route-tool-permission-audit.md",
-  "status": "open",
+  "status": "done",
   "title": "No-plan work route + tool-permission audit",
   "tracker": {
     "baseHashFlow": null,
@@ -384,5 +384,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-29T00:06:56.713744Z"
+  "updated_at": "2026-08-29T06:15:03.338452Z"
 }
