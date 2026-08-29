@@ -56,7 +56,7 @@ Read `.flow/features/README.md`. Glob `.flow/features/*.md`, excluding the index
 **Drift memos.** Consume the `feature-map-drift` tag:
 
 ```bash
-DRIFT_RAW="$($FLOWCTL memory search "feature-map-drift" --json --limit 10 2>/dev/null || true)"
+DRIFT_RAW="$($FLOWCTL memory search "feature-map-drift" --json 2>/dev/null || true)"   # uncapped: every pending drift memo is consumed - a silent cap would let CLEAN certify a known stale route
 ```
 
 Parse with `jq`. `has("error")` or empty → no memos, continue. Fold relevant hits into this pass's targets (feature slug, route, Surface they name). Titles, tags, named routes only. Never paste memory bodies into later prompts.
@@ -182,7 +182,7 @@ A harness fix from Phase 5 is re-driven live (this same Doctor + drive + proof l
 | **Harness gap** | The app works. The harness the map owns cannot drive it. | Fix that owned harness script. Re-drive live (Phase 4 Doctor + drive + proof) before it ships. A harness fix that was not re-driven does not ship. |
 | **Product bug** | App behavior is actually broken. | Report it. Never in the PR. Never edit product code to make a drive pass. |
 
-**Reporting a product bug.** File to the bug memory track when memory is enabled. Write the body under `$RUN_DIR` first, then `memory add --track bug --body-file ... --json`. Overlap scoring stays on (never `--no-overlap-check`). Parse the JSON with `jq` or python. Memory disabled: record the finding in the run notes only. Either way the finding stays out of the `changed` diff.
+**Reporting a product bug.** File to the bug memory track when memory is enabled. Write the body under `$RUN_DIR` first, then file with the full required field set: `"$FLOWCTL" memory add --track bug --category <bug category, e.g. runtime-errors|ui|integration> --title "<feature>: <one-line symptom>" --module <surface or component> --body-file <path> --json` (`--category` and `--title` are required - a call without them exits nonzero, and under `set -e` that would end the run without its terminal verdict). Overlap scoring stays on (never `--no-overlap-check`); a high-overlap `matches` result folds via `--update <id>` instead of creating a sibling. Parse the JSON with `jq` or python. Memory disabled: record the finding in the run notes only. Either way the finding stays out of the `changed` diff.
 
 **Edit scope.** `.flow/features/**` plus harness scripts the map already names as launch, seed, or drive helpers. Never product code. A path the map does not already own is out of scope.
 
@@ -216,7 +216,7 @@ Every feature was covered (live exercise, `verified-unreachable` with the requir
 At least one proven map or owned-harness correction.
 
 1. **Re-read every changed file.** A file not re-read does not ship.
-2. **Re-fetch and re-verify the base first**: fetch `origin/<default>` again and re-run the entry gate's comparison - a base that advanced during the source/live passes means the proofs no longer describe the code the PR will be reviewed against; end `BLOCKED` naming the moved base (re-run maintain from the updated checkout). Then create a **fresh branch** `chore/features-maintain-<YYYY-MM-DD>-<run-id>` (the preamble's `$RUN_ID` suffix keeps a second same-day pass collision-free locally and on the remote) from `origin/<default>` (both gates just proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
+2. **Re-fetch and re-verify the base first**: fetch `origin/<default>` again and re-run the entry gate's PRODUCT-CODE comparison only (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` plus the untracked-product check) - the run's own map/harness edits are dirty by design at this point, so the map comparison belongs to the entry gate alone, never here. A base whose product code advanced during the source/live passes means the proofs no longer describe the code the PR will be reviewed against; end `BLOCKED` naming the moved base (re-run maintain from the updated checkout). Then create a **fresh branch** `chore/features-maintain-<YYYY-MM-DD>-<run-id>` (the preamble's `$RUN_ID` suffix keeps a second same-day pass collision-free locally and on the remote) from `origin/<default>` (both gates just proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
 3. Stage **only** `.flow/features/**` plus the owned harness files that were re-driven. Never `$RUN_DIR`, never run notes, never scratch, never evidence. Never `git add -A`.
 4. Commit, **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly:
 

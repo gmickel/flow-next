@@ -414,21 +414,30 @@ When Phase 1.3 loaded the map and a mapped route does not match the live app, fi
 
 ```bash
 # Same memory.enabled no-op + QA_FILED_MEMORY path tracking as §5.4. Never --no-overlap-check.
-# Same high-overlap handling as §5.4 too: when the add reports a high overlap_level
-# with an existing feature-map-drift entry for the same feature+route, --update that
-# entry instead of stacking a near-identical one (autonomous QA reruns hit the same
-# stale route every pass until a maintain run fixes it).
 if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
   mkdir -p .flow/tmp/qa-"$SPEC_ID"
   cat > .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md <<'EOF'
 Expected: <mapped route / command>
 Observed: <what the live app did>
 EOF
-  _out="$($FLOWCTL memory add \
-    --track knowledge --category workflow \
-    --title "<feature> <route>" \
-    --tags "feature-map-drift" \
-    --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
+  # fn-113.2 fold, executable (same discipline as the 5.4 skeleton): a prior
+  # entry for this feature+route is UPDATED, never siblinged.
+  _prior="$($FLOWCTL memory search "feature-map-drift <feature> <route>" --json 2>/dev/null \
+    | jq -r '[.results[]? | select((.tags // []) | index("feature-map-drift"))][0].id // empty')"
+  if [ -n "$_prior" ]; then
+    _out="$($FLOWCTL memory add \
+      --track knowledge --category workflow \
+      --title "<feature> <route>" \
+      --tags "feature-map-drift" \
+      --update "$_prior" \
+      --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
+  else
+    _out="$($FLOWCTL memory add \
+      --track knowledge --category workflow \
+      --title "<feature> <route>" \
+      --tags "feature-map-drift" \
+      --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
+  fi
   _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
   [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
 fi
