@@ -31,17 +31,16 @@ broken this.
 Judge the spec (size, independent surfaces, blast-radius / riskiness of touched areas)
 and state the recommendation plus its reason in one line. No static default. If the
 spec is unreadable or those inputs are missing, recommend plan-first with exactly that
-stated reason. Then ask and wait:
+stated reason.
 
-```
-This spec has no tasks. How should this run proceed?
-Recommend: <plan first | work directly> — <one-line reason>
+**Ask the user via plain text.** Render the options below as a numbered list `1.` … `N.`, followed by a final option `N+1. Other — type your own answer`. Print the question, then the numbered list, then **stop and wait for the user's next message before continuing**. Parse the reply as: a bare number `1`–`N+1` → that option; the literal text of an option label → that option; free text after `Other` → custom answer.
 
-a) Plan first — stop; run $flow-next-plan (reviewed task breakdown, parallelizable waves, per-task review)
-b) Work directly — mint one implicit task and run the pipeline now (no task decomposition, whole spec as one unit; 3g single-task skip applies)
+Then ask via `plain-text numbered prompt` — question "This spec has no tasks. How should this run
+proceed?" plus the recommendation line, with these two options — and wait for the
+answer. Never silently skip the question.
 
-(Reply: "a", "b", "plan first", or just tell me)
-```
+- **Plan first** — stop; run $flow-next-plan (reviewed task breakdown, parallelizable waves, per-task review)
+- **Work directly** — mint one implicit task and run the pipeline now (no task decomposition, whole spec as one unit; 3g single-task skip applies)
 
 A run that continued before the answer arrived has broken this.
 
@@ -58,7 +57,8 @@ task, no further confirmation:
 
 ```bash
 $FLOWCTL task create --spec <spec-id> --title "Implement <spec title>" --satisfies "R1,R2,..." \
-  --acceptance "Every R-ID in the parent spec's ## Acceptance Criteria is satisfied; judge this task against the spec's criteria directly." --json
+  --acceptance "Every R-ID in the parent spec's ## Acceptance Criteria is satisfied; judge this task against the spec's criteria directly." \
+  --require-empty-spec --json
 ```
 
 `--satisfies` lists ALL the spec's R-IDs (keeps the 3g single-task policy skip and the
@@ -71,8 +71,12 @@ judge, while the 3g skip then waives completion review. A goal-only spec words t
 same pointer against the spec's goal instead of R-IDs. MINIMAL body — the task never emulates plan-full by
 copying a plan into the body; the agent works from the spec, the task artifact exists
 for the plumbing (receipts, evidence, review dispatch, done). No `Touches:` line — a
-whole-spec task genuinely cannot name its paths. Re-run after the mint resolves as the
-normal resume path (task count is 1) — a second mint is unreachable by construction.
+whole-spec task genuinely cannot name its paths. `--require-empty-spec` makes the mint
+atomic: flowctl refuses (nonzero exit, naming the existing task) when the spec already
+has any task, checked under the same lock that allocates ids — so of two concurrent
+direct-route runs exactly one mints, and the loser treats the refusal as the normal
+resume path. Re-run after the mint resolves the same way (task count is 1) — a second
+mint is unreachable by construction.
 Then continue with Phase 2 (branch choice) and the standard pipeline. A run that
 minted a second task, or copied a plan into the body, has broken this.
 

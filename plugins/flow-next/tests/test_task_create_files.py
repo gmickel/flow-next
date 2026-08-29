@@ -535,6 +535,80 @@ class TaskCreateFilesTestCase(unittest.TestCase):
                     self.assertTrue(md.startswith(f"# {result['id']}"))
 
 
+class RequireEmptySpecTestCase(TaskCreateFilesTestCase):
+    """fn-209: `--require-empty-spec` — atomic zero-task precondition.
+
+    The work/pilot direct route mints exactly one implicit task; two
+    concurrent invocations can both observe an empty task array before the
+    mint, so the precondition must be re-checked under the same lock that
+    allocates ids. Without the flag, nothing changes.
+    """
+
+    def _create_ns(self, *, require_empty_spec: bool, **overrides):
+        ns = dict(
+            spec=self.spec_id,
+            epic=None,
+            title="Implicit",
+            priority=None,
+            deps=None,
+            acceptance_file=None,
+            description_file=None,
+            acceptance=None,
+            description=None,
+            satisfies=None,
+            from_json=None,
+            require_empty_spec=require_empty_spec,
+        )
+        ns.update(overrides)
+        return ns
+
+    def test_flag_on_empty_spec_succeeds(self) -> None:
+        result = self._call(
+            func=self.flowctl.cmd_task_create,
+            **self._create_ns(require_empty_spec=True),
+        )
+        self.assertEqual(result["id"], f"{self.spec_id}.1")
+
+    def test_flag_on_nonempty_spec_refuses_naming_existing_task(self) -> None:
+        first = self._create(title="First")
+        ns = argparse.Namespace(
+            **self._create_ns(require_empty_spec=True, title="Second"), json=True
+        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as ctx:
+                self.flowctl.cmd_task_create(ns)
+        self.assertNotEqual(ctx.exception.code, 0)
+        err = json.loads(buf.getvalue())["error"]
+        self.assertIn("--require-empty-spec", err)
+        self.assertIn(first["id"], err)
+        # Refusal leaves no partial task behind.
+        self.assertFalse(
+            (self.tmpdir / ".flow" / "tasks" / f"{self.spec_id}.2.json").exists()
+        )
+
+    def test_without_flag_nonempty_spec_still_succeeds(self) -> None:
+        self._create(title="First")
+        result = self._create(title="Second")
+        self.assertEqual(result["id"], f"{self.spec_id}.2")
+
+    def test_flag_guards_bulk_path_too(self) -> None:
+        self._create(title="First")
+        bulk = self._write("tasks.json", '[{"title": "Bulk one"}]')
+        ns = argparse.Namespace(
+            **self._create_ns(
+                require_empty_spec=True, title=None, from_json=bulk
+            ),
+            json=True,
+        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            with self.assertRaises(SystemExit) as ctx:
+                self.flowctl.cmd_task_create(ns)
+        self.assertNotEqual(ctx.exception.code, 0)
+        self.assertIn("--require-empty-spec", json.loads(buf.getvalue())["error"])
+
+
 class ExcusedReviewInvalidationTestCase(TaskCreateFilesTestCase):
     """fn-205 follow-up: `not_required` is a verdict about a spec shape.
 

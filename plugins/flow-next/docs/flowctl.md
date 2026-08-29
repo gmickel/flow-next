@@ -514,7 +514,7 @@ Create task under spec.
 flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] \
   [--description-file desc.md | --description "..."] \
   [--acceptance-file accept.md | --acceptance "..."] \
-  [--satisfies R1,R3] [--priority 10] [--json]
+  [--satisfies R1,R3] [--priority 10] [--require-empty-spec] [--json]
 
 # Bulk (mutually exclusive with --title and single-task field flags)
 flowctl task create --spec fn-1 --from-json tasks.json [--json]
@@ -524,6 +524,8 @@ flowctl task create --spec fn-1 --from-json - [--json]   # stdin
 Section content is normalized on write (here and in `task set-description` / `set-acceptance` / `set-spec`): a leading title-like H2 (e.g. `## Acceptance Criteria (…)`) is stripped, and any remaining `## ` headings in the content are demoted to `### ` (fenced code blocks untouched) so they never become section boundaries.
 
 `--description-file` / inline `--description` write the `## Description` section at create time through the same normalization pipeline as `task set-spec`'s description path (the pair is mutually exclusive). Same for `--acceptance-file` / `--acceptance`. `--satisfies` writes the `satisfies:` YAML frontmatter block: a comma-separated list of spec R-IDs, whitespace-trimmed, each token matching `R[1-9][0-9]*[a-z]?` (`R1`, `R10`, `R4a`; `R0`, `R4A`, and `R4ab` are invalid); empty tokens and duplicates are rejected (error, not dedupe) and input order is preserved. All inputs are read and validated before any file is written; a malformed value leaves no partial task on disk. With these flags a freshly planned task is complete in one call; `task set-spec` remains the path for later edits to an existing task.
+
+`--require-empty-spec` refuses (nonzero exit, naming the existing task) when the spec already has any task; the check runs under the same per-spec lock that allocates ids, so exactly one of N concurrent creates succeeds — used by the work/pilot direct route's implicit-task mint.
 
 Single-task output:
 ```json
