@@ -51,6 +51,15 @@ Do NOT mark NEEDS_WORK for:
 - Style nitpicks in files you didn't change
 
 You MAY mention these as "FYI" observations without affecting the verdict.
+
+**Comment-as-alibi:** A comment that exists to justify a workaround or narrate
+around a hack is itself a finding: it flags the underlying code. Judge severity
+from the workaround, not the prose — well-written justification does not lower
+it. Rewriting or deleting the comment while keeping the workaround does not
+resolve the finding; the fix is the code, or the constraint encoded as an
+assert, a test, or a lint rule. Never flag licensed comments: license headers,
+external-constraint notes, lint suppressions with reasons, public API
+contracts, issue links.
 {smell_baseline_block}
 {r_id_coverage_block}
 {confidence_rubric_block}

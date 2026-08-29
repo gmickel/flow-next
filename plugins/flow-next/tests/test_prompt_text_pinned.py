@@ -88,8 +88,10 @@ PROMPT_HASHES = {
         "a4b3105a7a8a3a56ba21d035d89dfc5cc62a496f4e1317b00fa89b01e197aafc",
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
+    # fn-210.1: comment-as-alibi finding class (workaround-justifying comments
+    # flag the underlying code; keep-list copied from the worker authoring rule).
     "IMPL_REVIEW_PROMPT_FALLBACK":
-        "5d45bb43b6983eeac8c0eeaa5a3298eb131e6f0d7625609ad9f79eba4904ca4e",
+        "983a06432cd3f94d1c2f84247ba1fda8818d21a779fbc4ad41c28465b27ffc4d",
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
@@ -106,8 +108,9 @@ PROMPT_HASHES = {
         "0fcf594a970ca41958003e4a41f99f0b8d590704d9c1ef32e47cd80722c68db9",
     "SPEC_SKELETON_TEMPLATE":
         "181c5cd5cba913346dc8c1800871dd42d139321319f86b80a67248ca15063ead",
+    # fn-210.1: same comment-as-alibi finding class as impl-review.
     "STANDALONE_REVIEW_PROMPT_FALLBACK":
-        "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
+        "08864bd5ede15540cd59947e2155d7ae8e895182b4028a23faced216d79760c8",
     # Condensation of validate-pass.md, NOT a copy of it (#118).
     "VALIDATOR_TEMPLATE_FALLBACK":
         "558ab25ab09ade0e315d924e72615c76f4ac8c9348cf60cfbfd761896664a36c",
@@ -173,9 +176,9 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":
         "41f7aa18ca28c48ec6ab27fac0c3fd18224232a76e1fbc6cef631435370dfc58",
     "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md":
-        "5d45bb43b6983eeac8c0eeaa5a3298eb131e6f0d7625609ad9f79eba4904ca4e",
+        "983a06432cd3f94d1c2f84247ba1fda8818d21a779fbc4ad41c28465b27ffc4d",
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
-        "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
+        "08864bd5ede15540cd59947e2155d7ae8e895182b4028a23faced216d79760c8",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
         "dfef7509111bbaac438d85149a84ee3fc85bf407b3e499605d554bad9a8664fb",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
