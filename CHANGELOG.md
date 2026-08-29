@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.10.0] - 2026-08-29
 
 QA and drive keep how a user reaches each screen. Navigation, preconditions, and gotchas survive the run instead of evaporating, so the next pass starts from proven routes rather than rediscovering them.
 
