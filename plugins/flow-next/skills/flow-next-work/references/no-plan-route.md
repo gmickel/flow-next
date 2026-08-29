@@ -61,7 +61,8 @@ $FLOWCTL task create --spec <spec-id> --title "Implement <spec title>" --satisfi
 ```
 
 `--satisfies` lists ALL the spec's R-IDs (keeps the 3g single-task policy skip and the
-make-pr coverage table correct). MINIMAL body — the task never emulates plan-full by
+make-pr coverage table correct); a spec with no R-IDs (goal-only) omits the flag
+entirely — never pass it empty. MINIMAL body — the task never emulates plan-full by
 copying a plan into the body; the agent works from the spec, the task artifact exists
 for the plumbing (receipts, evidence, review dispatch, done). No `Touches:` line — a
 whole-spec task genuinely cannot name its paths. Re-run after the mint resolves as the

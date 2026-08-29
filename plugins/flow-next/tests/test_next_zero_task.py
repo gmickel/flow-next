@@ -67,6 +67,7 @@ class NextZeroTaskCase(unittest.TestCase):
         *,
         title: str | None = None,
         status: str = "open",
+        plan_review_status: str | None = None,
     ) -> None:
         data = {
             "id": spec_id,
@@ -75,6 +76,8 @@ class NextZeroTaskCase(unittest.TestCase):
             "depends_on_epics": [],
             "spec_path": f".flow/specs/{spec_id}.md",
         }
+        if plan_review_status is not None:
+            data["plan_review_status"] = plan_review_status
         (self.flow / "specs" / f"{spec_id}.json").write_text(
             json.dumps(data), encoding="utf-8"
         )
@@ -181,6 +184,34 @@ class NextZeroTaskCase(unittest.TestCase):
         self.assertEqual(result["status"], "work")
         self.assertEqual(result["task"], "fn-1.1")
         self.assertEqual(result["reason"], "ready_task")
+
+    def test_zero_task_wins_over_plan_review_gate(self) -> None:
+        # Regression (PR #382 review): with --require-plan-review, a
+        # never-planned zero-task spec whose plan_review_status is not
+        # "ship" must surface needs_tasks, not needs_plan_review — the
+        # spec needs planning first, and Ralph's typed zero-task stop
+        # keys on that reason.
+        self.write_spec("fn-1", plan_review_status="none")
+        result = self._cmd_next(require_plan_review=True)
+        self.assertEqual(
+            result,
+            {
+                "success": True,
+                "status": "plan",
+                "spec": "fn-1",
+                "task": None,
+                "reason": "needs_tasks",
+            },
+        )
+
+    def test_plan_review_gate_still_fires_with_tasks(self) -> None:
+        # Ordering sanity: a spec that HAS tasks but no ship verdict still
+        # hits the plan-review gate under --require-plan-review.
+        self.write_spec("fn-1", plan_review_status="none")
+        self.write_task("fn-1.1", with_markdown=True)
+        result = self._cmd_next(require_plan_review=True)
+        self.assertEqual(result["status"], "plan")
+        self.assertEqual(result["reason"], "needs_plan_review")
 
     def test_all_done_completion_review_not_swallowed(self) -> None:
         self.write_spec("fn-1")

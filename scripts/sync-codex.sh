@@ -425,7 +425,8 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
   "$CODEX_DIR/skills/flow-next-guide/SKILL.md" \
-  "$CODEX_DIR/skills/flow-next-work-rolling/SKILL.md"; do
+  "$CODEX_DIR/skills/flow-next-work-rolling/SKILL.md" \
+  "$CODEX_DIR/skills/flow-next-work/references/no-plan-route.md"; do
   [ -f "$nf" ] || continue
   sed -i.bak \
     -e 's|Recommended next: /flow-next:<stage>|Recommended next: $flow-next-<stage>|g' \
@@ -474,6 +475,11 @@ for nf in \
     -e 's;| `/flow-next:work <spec-id> --no-plan` (or answer;| `$flow-next-work <spec-id> --no-plan` (or answer;g' \
     -e 's|leans `/flow-next:work <SPEC_ID> --no-plan`|leans `$flow-next-work <SPEC_ID> --no-plan`|g' \
     -e 's|`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|g' \
+    -e 's|spec has no tasks - run /flow-next:plan <spec-id>|spec has no tasks - run $flow-next-plan <spec-id>|g' \
+    -e 's|stop; run /flow-next:plan (reviewed task breakdown|stop; run $flow-next-plan (reviewed task breakdown|g' \
+    -e 's|pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`|pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`|g' \
+    -e 's|with a pointer to `/flow-next:plan` or|with a pointer to `$flow-next-plan` or|g' \
+    -e 's|`/flow-next:interview` — never mint an empty task|`$flow-next-interview` — never mint an empty task|g' \
     -e 's@| `/flow-next:\([a-z-]*\)`@| `$flow-next-\1`@g' \
     "$nf"
   rm -f "${nf}.bak"
@@ -2370,6 +2376,11 @@ flow-next-capture/workflow.md	`/flow-next:work <SPEC_ID> --no-plan` (near-zero-r
 flow-next-interview/SKILL.md	(or `/flow-next:work fn-N --no-plan`	(or `$flow-next-work fn-N --no-plan`
 flow-next-guide/SKILL.md	| `/flow-next:work <spec-id> --no-plan` (or answer	| `$flow-next-work <spec-id> --no-plan` (or answer
 flow-next-work-rolling/SKILL.md	redirect to plain `/flow-next:work <spec-id> --no-plan`	redirect to plain `$flow-next-work <spec-id> --no-plan`
+flow-next-work/references/no-plan-route.md	spec has no tasks - run /flow-next:plan <spec-id>	spec has no tasks - run $flow-next-plan <spec-id>
+flow-next-work/references/no-plan-route.md	stop; run /flow-next:plan (reviewed task breakdown	stop; run $flow-next-plan (reviewed task breakdown
+flow-next-work/references/no-plan-route.md	pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`	pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`
+flow-next-work/references/no-plan-route.md	with a pointer to `/flow-next:plan` or	with a pointer to `$flow-next-plan` or
+flow-next-work/references/no-plan-route.md	`/flow-next:interview` — never mint an empty task	`$flow-next-interview` — never mint an empty task
 CLOSER_ROSTER
 if [ "$closer_literal_fails" != "0" ]; then
   echo -e "  ${RED}✗${NC} $closer_literal_fails un-rewritten closer literal(s) — a transform anchor no longer matches its canonical text"

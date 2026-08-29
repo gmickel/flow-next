@@ -34207,20 +34207,6 @@ def cmd_next(args: argparse.Namespace) -> None:
             blocked_epics[epic_id] = blocked_by
             continue
 
-        if args.require_plan_review and epic_data.get("plan_review_status") != "ship":
-            if args.json:
-                json_output(
-                    {
-                        "status": "plan",
-                        "spec": epic_id,
-                        "task": None,
-                        "reason": "needs_plan_review",
-                    }
-                )
-            else:
-                print(f"plan {epic_id} needs_plan_review")
-            return
-
         if not tasks_dir.exists():
             error_exit(
                 f"{TASKS_DIR}/ missing. Run 'flowctl init' or fix repo state.",
@@ -34248,6 +34234,10 @@ def cmd_next(args: argparse.Namespace) -> None:
             # fn-209 R8: a non-closed spec with zero tasks is never-planned.
             # Surface it as a plan unit (mirrors pilot's classification)
             # instead of silently falling through to the next spec / none.
+            # This check fires BEFORE the --require-plan-review gate: what a
+            # never-planned spec needs first is planning, regardless of
+            # plan_review_status, and Ralph's typed zero-task stop keys on
+            # reason=needs_tasks.
             if args.json:
                 json_output(
                     {
@@ -34259,6 +34249,20 @@ def cmd_next(args: argparse.Namespace) -> None:
                 )
             else:
                 print(f"plan {epic_id} needs_tasks")
+            return
+
+        if args.require_plan_review and epic_data.get("plan_review_status") != "ship":
+            if args.json:
+                json_output(
+                    {
+                        "status": "plan",
+                        "spec": epic_id,
+                        "task": None,
+                        "reason": "needs_plan_review",
+                    }
+                )
+            else:
+                print(f"plan {epic_id} needs_plan_review")
             return
 
         # Resume in_progress tasks owned by current actor

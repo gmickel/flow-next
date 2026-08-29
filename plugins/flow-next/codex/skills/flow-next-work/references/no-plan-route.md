@@ -19,7 +19,7 @@ that asked under a clean `NO_PLAN=1` has broken this.
 Under ANY autonomy marker (`FLOW_RALPH`, `FLOW_AUTONOMOUS`, `AUTONOMOUS=1` /
 `mode:autonomous`, `REVIEW_RECEIPT_PATH` — scan the marker family/namespace, never a
 fixed two-var list) WITHOUT an explicit no-plan instruction in the invocation, stop
-with the typed report: `NEEDS_HUMAN: spec has no tasks - run /flow-next:plan <spec-id>`.
+with the typed report: `NEEDS_HUMAN: spec has no tasks - run $flow-next-plan <spec-id>`.
 Never ask, never fall through. An explicit no-plan instruction in the dispatching
 invocation is the only thing that lets an autonomous run take the Direct route — and a
 contradicted signal (flag says direct, prose says plan) is never an explicit no-plan
@@ -37,7 +37,7 @@ stated reason. Then ask and wait:
 This spec has no tasks. How should this run proceed?
 Recommend: <plan first | work directly> — <one-line reason>
 
-a) Plan first — stop; run /flow-next:plan (reviewed task breakdown, parallelizable waves, per-task review)
+a) Plan first — stop; run $flow-next-plan (reviewed task breakdown, parallelizable waves, per-task review)
 b) Work directly — mint one implicit task and run the pipeline now (no task decomposition, whole spec as one unit; 3g single-task skip applies)
 
 (Reply: "a", "b", "plan first", or just tell me)
@@ -47,13 +47,13 @@ A run that continued before the answer arrived has broken this.
 
 ## Plan-first answer
 
-STOP this run with a one-line pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`. Work never invokes plan itself and never chains into it. A run that invoked or chained `/flow-next:plan` has broken this.
+STOP this run with a one-line pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`. Work never invokes plan itself and never chains into it. A run that invoked or chained `/flow-next:plan` has broken this.
 
 ## Direct route: mint the implicit task
 
 Refuse if the spec has no usable acceptance content (no acceptance criteria, no goal a
-worker could act on): hand back to the user with a pointer to `/flow-next:plan` or
-`/flow-next:interview` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
+worker could act on): hand back to the user with a pointer to `$flow-next-plan` or
+`$flow-next-interview` — never mint an empty task. Otherwise mint exactly ONE MINIMAL
 task, no further confirmation:
 
 ```bash
@@ -61,7 +61,8 @@ $FLOWCTL task create --spec <spec-id> --title "Implement <spec title>" --satisfi
 ```
 
 `--satisfies` lists ALL the spec's R-IDs (keeps the 3g single-task policy skip and the
-make-pr coverage table correct). MINIMAL body — the task never emulates plan-full by
+make-pr coverage table correct); a spec with no R-IDs (goal-only) omits the flag
+entirely — never pass it empty. MINIMAL body — the task never emulates plan-full by
 copying a plan into the body; the agent works from the spec, the task artifact exists
 for the plumbing (receipts, evidence, review dispatch, done). No `Touches:` line — a
 whole-spec task genuinely cannot name its paths. Re-run after the mint resolves as the

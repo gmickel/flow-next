@@ -883,7 +883,7 @@ Output:
 {"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_tasks|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
 ```
 
-A non-closed spec with zero tasks (never-planned) surfaces as `status: plan` with `reason: needs_tasks` rather than being silently skipped — the same classification pilot applies to the zero-task state. Selection stops at the first such spec in id order, exactly as with the other statuses.
+A non-closed spec with zero tasks (never-planned) surfaces as `status: plan` with `reason: needs_tasks` rather than being silently skipped — the same classification pilot applies to the zero-task state. Selection stops at the first such spec in id order, exactly as with the other statuses. The zero-task check fires before the `--require-plan-review` gate: a never-planned spec reports `needs_tasks` even when its `plan_review_status` is not `ship`, because planning is what it needs first (and Ralph's typed zero-task stop keys on that reason).
 
 The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status` is outside the satisfying set `{ship, not_required}`, returns `status: completion_review`. A policy-excused `not_required` counts as satisfied; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 
