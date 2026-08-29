@@ -431,14 +431,14 @@ EOF
   if [ -n "$_prior" ]; then
     _out="$($FLOWCTL memory add \
       --track knowledge --category workflow \
-      --title "<feature> <route>" \
+      --title "drift: <surface>/<feature-slug> <sub-feature-id>" \
       --tags "feature-map-drift" \
       --update "$_prior" \
       --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
   else
     _out="$($FLOWCTL memory add \
       --track knowledge --category workflow \
-      --title "<feature> <route>" \
+      --title "drift: <surface>/<feature-slug> <sub-feature-id>" \
       --tags "feature-map-drift" \
       --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
   fi
