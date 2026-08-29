@@ -29,9 +29,11 @@ Finalization: register the skill on every platform surface and ship the repo hal
 - [ ] Non-refusal cold seed smoke recorded (real map, at least one proven route); full gate green
 - [ ] Site placement remains fully specified in the spec (executed at release) - no site edits from this repo task
 ## Done summary
-TBD
+Finalization: registered flow-next-features across the codex-mirror machinery (generate_openai_yaml call, DIET surfaced description, REQUIRED_OPENAI_YAML_SKILLS entry; mirror regenerated idempotently), swept every count surface deliberately (filesystem 33 skills / 29 commands, published 32 skills / 27 slash excluding the rolling beta: both count-pinning test files updated with the fn-211.4 rationale, plus root README, plugin README, docs/skills.md, docs/teams.md, docs/README.md, CLAUDE.md Where-to-look row, and manifest description strings), and shipped the repo half of the R8 docs story: self-improving.md gains the feature map as a compounding loop (table row + full seeded/grows/read-by/pruned section, count language made evergreen), architecture.md gains the features layout subsection, skills roster + docs index rows with consumes-map clauses on the qa/drive rows, the conduct checklist page + index row, the guide routing matrix row, and the user-outcome-first CHANGELOG entry under Unreleased. The site half of R8 stays decided-in-spec, executed at release per the release doc's downstream walk. Conductor review fix: one duplicated CLAUDE.md table row deduped (9c62a3e5). Grok-4.6 bridge implementation; conductor in-host review verdict SHIP; focused suites (38), doc anchors, and triple sync-codex idempotency green.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
+stage: impl-review - ran (in-host, verdict SHIP; one fix commit 9c62a3e5) (model: claude-fable-5)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 79a1d9a7, 9c62a3e5
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_features_skill_contract test_command_shim_flatten test_chart_docs_inventory -q  # 38 OK (integrated target), python3 scripts/check_doc_anchors.py  # OK, ./scripts/sync-codex.sh x3  # exit 0, idempotent
 - PRs:
