@@ -136,7 +136,7 @@ The orchestrator (this skill, main thread) merges payloads. Readers do not write
 
 **Goal:** every remaining feature is exercised once against an instance this run started. Required even when source looks clean.
 
-Read [references/doctor-and-proof.md](references/doctor-and-proof.md) **before the first drive**, on each fresh session, and again after any failed drive. Skipping a required Doctor run has broken this.
+`cli` surfaces drive directly - run the documented command in a run-owned session and capture stdout/stderr/exit per the proof standards; the drive-skill pointer is for UI surfaces. Read [references/doctor-and-proof.md](references/doctor-and-proof.md) **before the first drive**, on each fresh session, and again after any failed drive. Skipping a required Doctor run has broken this.
 
 Never drive an instance this run did not start. An orphaned port (a process this run did not start) ends `BLOCKED` with the reclaim instruction for the human. Never kill by process name. Two concurrent runs isolate by disposable profile/port; where the app cannot run twice, the owned-port check fails and this run ends `BLOCKED`. Never a shared drive.
 

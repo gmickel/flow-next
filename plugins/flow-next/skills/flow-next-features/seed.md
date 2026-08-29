@@ -4,7 +4,9 @@ Execute these phases in order. Each gates on the prior. Stop on a user-blocking 
 
 Autonomy refusal and `MODE=seed` are already resolved in [SKILL.md](SKILL.md). Feature file shape: [references/feature-entry-contract.md](references/feature-entry-contract.md). Doctor + proof: [references/doctor-and-proof.md](references/doctor-and-proof.md).
 
-**Live driving consumes the drive skill by pointer.** Read [`plugins/flow-next/skills/flow-next-drive/SKILL.md`](../flow-next-drive/SKILL.md) (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this. Execute the universal flow (`observe → snapshot fresh refs → act → verify → capture`) yourself. A transcript that "calls" flow-next-drive as if it were an API has broken this too.
+**CLI surfaces drive directly.** A `**Surface:** cli` route needs no driver ladder: run the documented command in an isolated session this run owns and capture stdout, stderr, and the exit code per the proof standards (the drive-skill pointer below is for UI surfaces - web, desktop, and anything the ladder classifies). Doctor still applies (right build, owned session, no shared instance), and QA's own scenario scope is unchanged - cli map entries serve seed/maintain proofs and human readers.
+
+**Live driving of UI surfaces consumes the drive skill by pointer.** Read [`plugins/flow-next/skills/flow-next-drive/SKILL.md`](../flow-next-drive/SKILL.md) (surface detection + universal flow + ladder) and the relevant rung reference under `plugins/flow-next/skills/flow-next-drive/references/`. **That prose stays there.** A copy of CDP / agent-browser / Computer-Use actuation detail written into this file has broken this. Execute the universal flow (`observe → snapshot fresh refs → act → verify → capture`) yourself. A transcript that "calls" flow-next-drive as if it were an API has broken this too.
 
 Run notes and live evidence land under `.flow/tmp/features-<run-id>/` (gitignored, same per-run tmp convention QA uses), referenced by path, never inlined. The committed map is `.flow/features/` only.
 
@@ -81,7 +83,7 @@ Per candidate record: slug, `Surface`, one-line user-visible behavior, likely en
 For each candidate, for each user entry point:
 
 1. **Doctor** - before the first drive this session; again after any failed drive; again on a fresh session.
-2. **Drive** via the flow-next-drive read-and-drive contract (pointer above). Universal flow: observe → snapshot fresh refs → act → verify → capture.
+2. **Drive**: UI surfaces via the flow-next-drive read-and-drive contract (pointer above; universal flow: observe → snapshot fresh refs → act → verify → capture); `cli` surfaces by running the documented command directly in the run-owned session and capturing stdout/stderr/exit.
 3. **Proof** follows [references/doctor-and-proof.md](references/doctor-and-proof.md): capture the user action **and** the resulting state, not just the final screen; verify side effects beside what is visible; exercise the real user path, never a test-only endpoint.
 4. Only a proven route is eligible to land.
 
