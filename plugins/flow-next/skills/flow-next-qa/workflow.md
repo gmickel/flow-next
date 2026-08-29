@@ -425,7 +425,7 @@ EOF
   # filter + exact title equality via memory list - scored search tokenizes
   # and can return a different route of the same feature.
   _prior="$($FLOWCTL memory list --track knowledge --json 2>/dev/null \
-    | jq -r --arg t "<feature> <route>" '[.entries[]? | select((.tags // []) | index("feature-map-drift")) | select(.title == $t)][0].entry_id // empty')"
+    | jq -r --arg t "drift: <surface>/<feature-slug> <sub-feature-id>" '[.entries[]? | select((.tags // []) | index("feature-map-drift")) | select(.title == $t)][0].entry_id // empty')"
   if [ -n "$_prior" ]; then
     _out="$($FLOWCTL memory add \
       --track knowledge --category workflow \
