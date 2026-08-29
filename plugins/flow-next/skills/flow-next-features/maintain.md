@@ -102,7 +102,7 @@ A reader that reports source entry points gone is source-confirmed deletion: dro
 
 A reader that errors or times out: mark that feature `blocked-for-this-pass`. Name it. The pass continues for the rest.
 
-**Collapse:** every reader fails, or the host cannot dispatch a read-only scout at all. End `BLOCKED` (skip to Phase 6 teardown). Reason names the collapse.
+**Collapse:** every reader failed - dispatched or inline alike (a host with no dispatch runs the inline path above; that is a fallback, never a collapse). End `BLOCKED` (skip to Phase 6 teardown). Reason names the collapse.
 
 The orchestrator (this skill, main thread) merges payloads. Readers do not write.
 

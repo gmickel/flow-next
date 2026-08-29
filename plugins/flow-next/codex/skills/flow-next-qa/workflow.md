@@ -412,10 +412,14 @@ surface/file in a running list for Phase 6. **A PASS asserted from reading sourc
 
 ### 5.5 - Stale mapped routes
 
-When Phase 1.3 loaded the map and a mapped route does not match the live app, file a knowledge-track memory entry tagged `feature-map-drift`. Title names the feature and the route. Body is two lines: Expected, Observed. QA never edits `.flow/features/` mid-run. This is not a P0/P1/P2 product finding.
+When Phase 1.3 loaded the map and a mapped route does not match the live app, file a knowledge-track memory entry tagged `feature-map-drift`. Title names the feature and the route. Body is two lines: Expected, Observed. QA never edits `.flow/features/` mid-run. This is not a P0/P1/P2 product finding - **and it never strands the scenario**: after recording the memo, derive an alternate route for that scenario exactly as Phase 2 does without a map and continue verifying the AC (the map supplied navigation, not the verdict); only when no route at all reaches the surface does the scenario take the ordinary no-live-scenario / blocked handling.
 
 ```bash
 # Same memory.enabled no-op + QA_FILED_MEMORY path tracking as §5.4. Never --no-overlap-check.
+# Same high-overlap handling as §5.4 too: when the add reports a high overlap_level
+# with an existing feature-map-drift entry for the same feature+route, --update that
+# entry instead of stacking a near-identical one (autonomous QA reruns hit the same
+# stale route every pass until a maintain run fixes it).
 if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
   mkdir -p .flow/tmp/qa-"$SPEC_ID"
   cat > .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md <<'EOF'
@@ -439,7 +443,7 @@ When memory is disabled, record Expected/Observed in the run notes instead.
 - Every filed finding was reproduced a second time before filing, and carries severity, persona, steps to reproduce, expected-vs-actual, and evidence pointers (screenshot path, console path, full URL, plus the persisted write side-effect on a write path).
 - **Severity rests on observed user impact.** A P0 relabelled P1 to keep the verdict green has broken this.
 - Filing ran with overlap scoring on, and a memory-disabled repo still recorded the finding in the run notes so Phase 6 counts it.
-- When a mapped route did not match the live app, it was filed as knowledge-track memory tagged `feature-map-drift` (or recorded in the run notes if memory is disabled). The map itself was not edited.
+- When a mapped route did not match the live app, it was filed as knowledge-track memory tagged `feature-map-drift` (deduped against an existing high-overlap entry via --update; or recorded in the run notes if memory is disabled), the scenario fell back to ordinary route derivation, and the map itself was not edited.
 
 ---
 
