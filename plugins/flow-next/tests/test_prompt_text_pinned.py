@@ -85,15 +85,15 @@ PROMPT_HASHES = {
     "CLASSIFICATION_RUBRIC_BLOCK":
         "fbde8f499ba3d82b50901b12a984912490b66c6e69f1b74c38edf80c28567a06",
     "COMPLETION_REVIEW_PROMPT_FALLBACK":
-        "96de1660db7509bad19523c23a888987fe02da816e313efca8a536648c8d133f",
+        "a4b3105a7a8a3a56ba21d035d89dfc5cc62a496f4e1317b00fa89b01e197aafc",
     "CONFIDENCE_RUBRIC_BLOCK":
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     "IMPL_REVIEW_PROMPT_FALLBACK":
-        "3c3acf0338af1af0c309c7cda034ac8f0301aae9170e888ad2fecb4684a94607",
+        "5d45bb43b6983eeac8c0eeaa5a3298eb131e6f0d7625609ad9f79eba4904ca4e",
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
-        "5b0c3d14835ed8ab25bd497ba0cbc94c3fa5c00815573e8519eef9ad517682c8",
+        "dfef7509111bbaac438d85149a84ee3fc85bf407b3e499605d554bad9a8664fb",
     "PROTECTED_ARTIFACTS_BLOCK":
         "e9b68af0cf36f6b2cb1b70c9bcc5ff67ccb86295f369d02ffcec4f25fd6f2d5e",
     "REVIEW_JSON_TALLY_BLOCK":
@@ -173,13 +173,13 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":
         "41f7aa18ca28c48ec6ab27fac0c3fd18224232a76e1fbc6cef631435370dfc58",
     "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md":
-        "3c3acf0338af1af0c309c7cda034ac8f0301aae9170e888ad2fecb4684a94607",
+        "5d45bb43b6983eeac8c0eeaa5a3298eb131e6f0d7625609ad9f79eba4904ca4e",
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
         "6f366a927f449312e623220362e9eb63351f5b8dd427e5669b236a362bad1357",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
-        "5b0c3d14835ed8ab25bd497ba0cbc94c3fa5c00815573e8519eef9ad517682c8",
+        "dfef7509111bbaac438d85149a84ee3fc85bf407b3e499605d554bad9a8664fb",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
-        "96de1660db7509bad19523c23a888987fe02da816e313efca8a536648c8d133f",
+        "a4b3105a7a8a3a56ba21d035d89dfc5cc62a496f4e1317b00fa89b01e197aafc",
     # Rendered by ralph.sh each autonomous loop - production prompts, and the
     # ones an unattended run depends on most. fn-159.6 clarifies that a review
     # call's tag set differs from the step's return set: NEEDS_WORK loops

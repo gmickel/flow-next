@@ -2,10 +2,7 @@
 
 A conduct checklist is a per-skill regression harness for **prose** changes. Each page lists 4–6 falsifiable, observable behaviors a session correctly running that skill exhibits — anchored on the skill's own terminal outputs (verdict lines, receipts, files written under `.flow/`, flowctl state transitions, refusal conditions) so a maintainer can check each item true or false from a transcript in seconds.
 
-Two moments to use one:
-
-- **Reviewing a PR that touches a skill's prose** — load that skill's checklist and use its items as the review criteria.
-- **After editing a skill's prose** — dogfood the skill once and mark every item pass/fail before handing off.
+When to use one: **reviewing a PR or change that touches a skill's prose** — load that skill's checklist and use its items as the review criteria. A dogfood run of the edited skill is worth doing for a new skill or a behavior-changing rewrite, at the maintainer's discretion; it is never a merge requirement, and no per-item pass/fail record is expected at handoff. A checklist item is a rubric line for the reviewer, not a gate a bot may hold a PR on — the maintainer decides when a change lands.
 
 These pages are maintainer documentation. They are never loaded at runtime by an agent executing the skill, and no `SKILL.md` or skill reference file points at them. When a skill's contract genuinely changes, update its checklist in the same change.
 

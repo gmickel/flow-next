@@ -9107,7 +9107,9 @@ Do NOT mark NEEDS_WORK for:
 You MAY mention these as "FYI" observations without affecting the verdict.
 
 **Settled plan:** A finding that re-litigates a recorded Decision Context decision
-or matching `knowledge/decisions` entry is FYI, never blocking.
+or matching `knowledge/decisions` entry is FYI, never blocking. Process-compliance
+observations (checklist ceremony, dogfood records, handoff paperwork) are likewise
+FYI, never blocking — the maintainer decides when a change lands.
 
 {smell_baseline_block}{r_id_coverage_block}
 {confidence_rubric_block}
@@ -9310,6 +9312,10 @@ unreachable from this review context. Read task files for their content, never f
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+**Settled decisions:** A finding that re-litigates a recorded Decision Context
+decision or matching `knowledge/decisions` entry is FYI, never blocking — the
+maintainer decides direction, the review verifies the plan executes it.
+
 ## Blocking calibration
 
 - **P0** — following the plan produces a wrong or impossible implementation.
@@ -9443,6 +9449,11 @@ Report untraced changes but do NOT auto-reject. `UNDOCUMENTED_ADDITION` is a fla
 - **P0** — following the plan produces a wrong or impossible implementation.
 - **P1** — material ambiguity likely to mislead a competent implementer.
 - **P2/P3** — consistency or polish; never blocking.
+
+**Settled decisions:** A finding that re-litigates a recorded Decision Context
+decision or matching `knowledge/decisions` entry is FYI, never blocking. Process-compliance
+observations (checklist ceremony, dogfood records, handoff paperwork) are likewise
+FYI, never blocking — the maintainer decides when a change lands.
 
 {r_id_coverage_block}
 {confidence_rubric_block}

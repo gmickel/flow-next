@@ -88,6 +88,10 @@ unreachable from this review context. Read task files for their content, never f
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+**Settled decisions:** A finding that re-litigates a recorded Decision Context
+decision or matching `knowledge/decisions` entry is FYI, never blocking — the
+maintainer decides direction, the review verifies the plan executes it.
+
 ## Blocking calibration
 
 - **P0** — following the plan produces a wrong or impossible implementation.

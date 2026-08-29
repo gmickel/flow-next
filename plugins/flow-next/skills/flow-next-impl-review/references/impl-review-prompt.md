@@ -81,7 +81,9 @@ Do NOT mark NEEDS_WORK for:
 You MAY mention these as "FYI" observations without affecting the verdict.
 
 **Settled plan:** A finding that re-litigates a recorded Decision Context decision
-or matching `knowledge/decisions` entry is FYI, never blocking.
+or matching `knowledge/decisions` entry is FYI, never blocking. Process-compliance
+observations (checklist ceremony, dogfood records, handoff paperwork) are likewise
+FYI, never blocking — the maintainer decides when a change lands.
 
 {smell_baseline_block}{r_id_coverage_block}
 {confidence_rubric_block}
