@@ -423,7 +423,7 @@ EOF
   # fn-113.2 fold, executable (same discipline as the 5.4 skeleton): a prior
   # entry for this feature+route is UPDATED, never siblinged.
   _prior="$($FLOWCTL memory search "feature-map-drift <feature> <route>" --json 2>/dev/null \
-    | jq -r '[.results[]? | select((.tags // []) | index("feature-map-drift"))][0].id // empty')"
+    | jq -r '[.matches[]? | select((.tags // []) | index("feature-map-drift"))][0].entry_id // empty')"
   if [ -n "$_prior" ]; then
     _out="$($FLOWCTL memory add \
       --track knowledge --category workflow \

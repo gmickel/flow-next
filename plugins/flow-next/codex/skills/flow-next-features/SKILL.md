@@ -71,7 +71,7 @@ printf 'MODE=%s\n' "$MODE"
 
 | Mode | When | Behavior |
 |------|------|----------|
-| **seed** | `.flow/features/` absent, or explicit init intent | Interview the repo, prove each route with one live drive, write the index plus one file per proven feature. Explicit re-init over an existing map: every pre-existing feature file is either re-proven this run (and re-indexed) or removed with the removal named in the verdict reason - a file neither re-proven nor removed cannot remain, and `SEEDED` over unproven leftovers has broken this. See [seed.md](seed.md). |
+| **seed** | `.flow/features/` absent, or explicit init intent | Interview the repo, prove each route with one live drive, write the index plus one file per proven feature. Explicit re-init over an existing map first requires `.flow/features/` to be CLEAN in git (`git status --porcelain -- .flow/features/` empty - uncommitted map edits could be overwritten or deleted unrecoverably; dirty ends `BLOCKED` asking to commit or stash). Then every pre-existing feature file is either re-proven this run (and re-indexed) or removed with the removal named in the verdict reason - a file neither re-proven nor removed cannot remain, and `SEEDED` over unproven leftovers has broken this. See [seed.md](seed.md). |
 | **maintain** | `.flow/features/` present and no init intent | Audit-shaped pass over the existing map. See [maintain.md](maintain.md). |
 
 ## Interaction Principles
