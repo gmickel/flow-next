@@ -31,7 +31,7 @@ mkdir -p "$RUN_DIR"
 
 **Entry gate (both checks, before any inspection):**
 
-1. **On the default base.** Resolve the default branch (`gh repo view --json defaultBranchRef` or `git remote show origin`), fetch it, and require the checkout's product code to match `origin/<default>` (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read). A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
+1. **On the default base.** Resolve the default branch (`gh repo view --json defaultBranchRef` or `git remote show origin`), fetch it, and require BOTH to match `origin/<default>`: the product code (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read) AND the owned map itself (`git diff --quiet origin/<default> -- .flow/features/`). Excluding only Flow runtime/bookkeeping keeps the audit honest - a branch-only map would otherwise be proven and certified as if it were the default branch's. A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
 2. **Owned paths clean.** `git status --porcelain -- .flow/features/` (plus any harness paths the map owns) must be empty. Pre-existing uncommitted edits under owned paths cannot be told apart from this run's edits later, and the `BLOCKED` restore would discard them. Dirty: end `BLOCKED` asking the user to commit or stash first. This makes every later owned-path change attributable to this run by construction.
 
 `jq` and a working Python (`python3`, `python`, or `py -3`) must be on PATH. `$FLOWCTL` is required for `memory search` / `memory add` on the `feature-map-drift` tag. Memory disabled or uninitialised: treat drift search and bug filing as empty, record that in the run notes, continue.
@@ -78,7 +78,7 @@ Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay
 
 **Goal:** one read-only view of every remaining feature file, concurrently. Readers never drive, never edit.
 
-Dispatch **one** `Task` with `subagent_type: Explore` **per feature file**, all in the **same turn** so they run concurrently. Serial dispatch of two or more has broken this. On hosts without Explore, use the host's generic read-only dispatch with Edit/Write disallowed. `Task` is also disallowed for the child (a nested writing subagent is an escape hatch).
+Dispatch **one** `Task` with `subagent_type: Explore` **per feature file**, batched to the host's concurrent-subagent capacity: fill a batch in one turn, await it, dispatch the next - readers within a batch run concurrently, and a map larger than the cap costs extra batches, never a failure. A host with no concurrent dispatch at all degrades to reading the files inline on the main thread (read-only, same return shape) and reports `Sequential fallback: source wave ran inline`. Exceeding the cap is a batching concern, never `blocked-for-this-pass` - that mark is for a reader that errored. On hosts without Explore, use the host's generic read-only dispatch with Edit/Write disallowed. `Task` is also disallowed for the child (a nested writing subagent is an escape hatch).
 
 Pass each reader an identity (the feature file path) plus the contract pointer. Do not embed the file body. Instruct:
 
@@ -216,7 +216,7 @@ Every feature was covered (live exercise, `verified-unreachable` with the requir
 At least one proven map or owned-harness correction.
 
 1. **Re-read every changed file.** A file not re-read does not ship.
-2. Create a **fresh branch** `chore/features-maintain-<YYYY-MM-DD>` from `origin/<default>` (the entry gate already proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
+2. Create a **fresh branch** `chore/features-maintain-<YYYY-MM-DD>-<run-id>` (the preamble's `$RUN_ID` suffix keeps a second same-day pass collision-free locally and on the remote) from `origin/<default>` (the entry gate already proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
 3. Stage **only** `.flow/features/**` plus the owned harness files that were re-driven. Never `$RUN_DIR`, never run notes, never scratch, never evidence. Never `git add -A`.
 4. Commit, **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly:
 
