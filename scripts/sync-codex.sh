@@ -473,6 +473,8 @@ for nf in \
     -e 's|redirect to plain `/flow-next:work <spec-id> --no-plan`|redirect to plain `$flow-next-work <spec-id> --no-plan`|g' \
     -e 's|(or `/flow-next:work fn-N --no-plan` when the refined spec|(or `$flow-next-work fn-N --no-plan` when the refined spec|g' \
     -e 's;| `/flow-next:work <spec-id> --no-plan` (or answer;| `$flow-next-work <spec-id> --no-plan` (or answer;g' \
+    -e 's|Prefer `/flow-next:plan` when independent surfaces|Prefer `$flow-next-plan` when independent surfaces|g' \
+    -e 's|and `/flow-next:work-rolling` refuses the route|and `$flow-next-work-rolling` refuses the route|g' \
     -e 's|leans `/flow-next:work <SPEC_ID> --no-plan`|leans `$flow-next-work <SPEC_ID> --no-plan`|g' \
     -e 's|`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|g' \
     -e 's|spec has no tasks - run /flow-next:plan <spec-id>|spec has no tasks - run $flow-next-plan <spec-id>|g' \
@@ -2375,6 +2377,8 @@ flow-next-capture/workflow.md	leans `/flow-next:work <SPEC_ID> --no-plan`	leans 
 flow-next-capture/workflow.md	`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk	`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk
 flow-next-interview/SKILL.md	(or `/flow-next:work fn-N --no-plan`	(or `$flow-next-work fn-N --no-plan`
 flow-next-guide/SKILL.md	| `/flow-next:work <spec-id> --no-plan` (or answer	| `$flow-next-work <spec-id> --no-plan` (or answer
+flow-next-guide/SKILL.md	Prefer `/flow-next:plan` when independent surfaces	Prefer `$flow-next-plan` when independent surfaces
+flow-next-guide/SKILL.md	and `/flow-next:work-rolling` refuses the route	and `$flow-next-work-rolling` refuses the route
 flow-next-work-rolling/SKILL.md	redirect to plain `/flow-next:work <spec-id> --no-plan`	redirect to plain `$flow-next-work <spec-id> --no-plan`
 flow-next-work/references/no-plan-route.md	spec has no tasks - run /flow-next:plan <spec-id>	spec has no tasks - run $flow-next-plan <spec-id>
 flow-next-work/references/no-plan-route.md	stop; run /flow-next:plan (reviewed task breakdown	stop; run $flow-next-plan (reviewed task breakdown

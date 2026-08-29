@@ -57,12 +57,18 @@ worker could act on): hand back to the user with a pointer to `/flow-next:plan` 
 task, no further confirmation:
 
 ```bash
-$FLOWCTL task create --spec <spec-id> --title "Implement <spec title>" --satisfies "R1,R2,..." --json
+$FLOWCTL task create --spec <spec-id> --title "Implement <spec title>" --satisfies "R1,R2,..." \
+  --acceptance "Every R-ID in the parent spec's ## Acceptance Criteria is satisfied; judge this task against the spec's criteria directly." --json
 ```
 
 `--satisfies` lists ALL the spec's R-IDs (keeps the 3g single-task policy skip and the
 make-pr coverage table correct); a spec with no R-IDs (goal-only) omits the flag
-entirely — never pass it empty. MINIMAL body — the task never emulates plan-full by
+entirely — never pass it empty. The `--acceptance` line is a POINTER at the parent
+spec, never copied criteria text — expanding the R-IDs into the task body is the
+emulated-plan anti-pattern. Without it the task file carries a `TBD` placeholder and
+the per-task impl review (whose contract is the task's acceptance) has nothing real to
+judge, while the 3g skip then waives completion review. A goal-only spec words the
+same pointer against the spec's goal instead of R-IDs. MINIMAL body — the task never emulates plan-full by
 copying a plan into the body; the agent works from the spec, the task artifact exists
 for the plumbing (receipts, evidence, review dispatch, done). No `Touches:` line — a
 whole-spec task genuinely cannot name its paths. Re-run after the mint resolves as the
