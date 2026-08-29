@@ -31,10 +31,13 @@ How to decide:
 
 When unsure whether a desktop app exposes CDP, probe for B first (try to launch/attach with a debug port). If no port is reachable, fall to C.
 
+When `.flow/features/` exists, Read `.flow/features/README.md` and the matching feature files first. They pre-resolve the route, preconditions, and gotchas. Select by `**Surface:**` plus sub-feature IDs ([feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md)). Live detection above remains the fallback when the map is absent or does not cover this target.
+
 ### Done when
 
 - The target is classified A, B, or C **before any driving starts**, and the classification is stated. A pass that started acting before naming the surface has broken this.
 - A desktop app was probed for a CDP port before being routed to C.
+- When `.flow/features/` existed, matching feature files were read before driving; live detection was the fallback otherwise.
 
 ## Step 2 — The universal flow (all surfaces)
 
