@@ -454,7 +454,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-211-feature-map-compounding-user-pov-drive.md",
-  "status": "open",
+  "status": "done",
   "title": "Feature map: compounding user-POV drive knowledge",
   "tracker": {
     "baseHashFlow": null,
@@ -467,5 +467,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-29T13:58:59.244707Z"
+  "updated_at": "2026-08-29T18:45:04.258960Z"
 }
