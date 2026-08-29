@@ -423,9 +423,11 @@ Expected: <mapped route / command>
 Observed: <what the live app did>
 EOF
   # fn-113.2 fold, executable (same discipline as the 5.4 skeleton): a prior
-  # entry for this feature+route is UPDATED, never siblinged.
-  _prior="$($FLOWCTL memory search "feature-map-drift <feature> <route>" --json 2>/dev/null \
-    | jq -r '[.matches[]? | select((.tags // []) | index("feature-map-drift"))][0].entry_id // empty')"
+  # entry for EXACTLY this feature+route is UPDATED, never siblinged. Tag
+  # filter + exact title equality via memory list - scored search tokenizes
+  # and can return a different route of the same feature.
+  _prior="$($FLOWCTL memory list --track knowledge --json 2>/dev/null \
+    | jq -r --arg t "<feature> <route>" '[.entries[]? | select((.tags // []) | index("feature-map-drift")) | select(.title == $t)][0].entry_id // empty')"
   if [ -n "$_prior" ]; then
     _out="$($FLOWCTL memory add \
       --track knowledge --category workflow \

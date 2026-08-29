@@ -57,10 +57,14 @@ Read `.flow/features/README.md`. Glob `.flow/features/*.md`, excluding the index
 **Drift memos.** Consume the `feature-map-drift` tag:
 
 ```bash
-DRIFT_RAW="$($FLOWCTL memory search "feature-map-drift" --json 2>/dev/null || true)"   # uncapped: every pending drift memo is consumed - a silent cap would let CLEAN certify a known stale route
+# Deterministic tag filter, never scored search: memory search tokenizes its
+# query, so "feature-map-drift" would match on the loose tokens (feature, map,
+# drift) and can miss or misrank the exact tag. Enumerate and filter instead.
+DRIFT_RAW="$($FLOWCTL memory list --track knowledge --json 2>/dev/null || true)"
+DRIFT_IDS="$(printf '%s' "$DRIFT_RAW" | jq -r '[.entries[]? | select((.tags // []) | index("feature-map-drift"))] | .[].entry_id' 2>/dev/null || true)"
 ```
 
-Parse with `jq`. `has("error")` or empty → no memos, continue. Fold relevant hits into this pass's targets (feature slug, route, Surface they name). Titles, tags, named routes only. Never paste memory bodies into later prompts.
+Empty → no memos, continue. Fold every listed memo into this pass's targets (feature slug, route, Surface from its title). Titles, tags, named routes only. Never paste memory bodies into later prompts.
 
 **Source-confirmed deletion.** Removing a feature the product deleted is a source-confirmed deletion. No live drive is required to prove an absence. Drop the feature file and its index row. Record the source fact in the run notes (the missing surface, the path that used to implement it). A deletion without that source fact is not confirmed - leave the file for the source wave.
 
