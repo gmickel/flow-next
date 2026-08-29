@@ -112,6 +112,12 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 (All non-`none` review modes route through `/flow-next:impl-review`, which resolves the
 configured/overridden backend — codex, copilot, cursor, rp, or host — itself.)
 
+**No-plan (zero-task specs only)**:
+- `--no-plan` or "no plan" or "skip planning" or "work directly without planning" → set `NO_PLAN=1`; it pre-answers Phase 1's zero-task fork so the fork's ask never fires when intent is stated
+- Contradictory signals (the flag says direct, the prose asks to plan first) → the fork asks instead of guessing
+- The signal on a spec that already has tasks is ignored with a one-line notice and the planned tasks run
+- The fork's semantics (ask, autonomous refusal, implicit-task mint) live in phases.md Phase 1's gated [references/no-plan-route.md](references/no-plan-route.md), read only when the fork fires
+
 **Autonomous mode**:
 - `AUTONOMOUS=1` → suppress all setup questions; use the defaults above.
 

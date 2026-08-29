@@ -446,7 +446,7 @@ Show summary:
 Done when: every line above is either printed or absent because its stated ONLY-when condition did not hold — the question count, the scope mode, and the written-vs-preserved section split are unconditional and always appear.
 
 Suggest next step based on input type:
-- New idea / spec without tasks → `/flow-next:plan fn-N`
+- New idea / spec without tasks → `/flow-next:plan fn-N` (or `/flow-next:work fn-N --no-plan` when the refined spec is near-zero-risk and fully known — the zero-task fork mints one implicit task and runs work directly)
 - Spec with tasks → `/flow-next:work fn-N` (or more interview on specific tasks)
 - Task → `/flow-next:work fn-N.M`
 - File → `/flow-next:plan <file>`

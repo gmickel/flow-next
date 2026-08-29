@@ -2,6 +2,7 @@
 name: env-scout
 description: Used by /flow-next:prime to scan for environment setup, .env templates, Docker, and devcontainer configuration. Do not invoke directly.
 model: haiku
+# read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
 color: "#06B6D4"

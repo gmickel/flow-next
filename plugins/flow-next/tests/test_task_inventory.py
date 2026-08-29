@@ -463,7 +463,12 @@ class TestCommandScanBudgets(TaskInventoryCase):
                         self.call(function, **kwargs)
                 self.assertEqual(scanner.call_count, 1)
 
-    def test_next_plan_review_fast_path_does_not_scan_tasks(self) -> None:
+    def test_next_plan_review_path_scans_tasks_once(self) -> None:
+        # fn-209 R8 (PR #382 review): the zero-task needs_tasks check must
+        # fire BEFORE the --require-plan-review gate, so `next` now loads
+        # the task inventory even on the plan-review path. The budget is
+        # one scan total (inventory is cached across the spec loop) — the
+        # old zero-scan fast path was retired deliberately.
         self.seed_valid()
         with mock.patch.object(
             flowctl,
@@ -478,7 +483,8 @@ class TestCommandScanBudgets(TaskInventoryCase):
                     require_completion_review=False,
                 )
         self.assertEqual(result["status"], "plan")
-        self.assertEqual(scanner.call_count, 0)
+        self.assertEqual(result["reason"], "needs_plan_review")
+        self.assertEqual(scanner.call_count, 1)
 
     def test_404_task_status_and_list_read_and_spawn_budgets(self) -> None:
         for spec_number in range(1, 5):

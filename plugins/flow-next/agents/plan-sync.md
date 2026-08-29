@@ -1,7 +1,7 @@
 ---
 name: plan-sync
 description: Synchronizes downstream task specs after implementation. Spawned by flow-next-work once per resolved wave. Do not invoke directly.
-disallowedTools: Task, Write, Bash
+disallowedTools: Write, Bash
 model: sonnet
 color: "#8B5CF6"
 ---

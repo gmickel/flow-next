@@ -33,9 +33,15 @@ Reconcile `cmd_next`'s silent zero-task fall-through (empty task maps skip every
 - [ ] TBD
 
 ## Done summary
-TBD
+flowctl next now surfaces a non-closed zero-task spec as `status: plan` / `reason: needs_tasks` (the recommended shape, mirroring pilot's classification) instead of silently skipping it; docs/flowctl.md's next contract gained the reason and a behavior note, and the new deterministic module tests/test_next_zero_task.py pins the path (6 tests, zero-task cases red-first-proven against pre-edit code; done-spec skip, ready-task, and completion-review paths asserted unchanged). Consumer audit before the shape choice: ralph.sh handles `status=plan` generically (zero-task specs now route to planning rather than NO_WORK), pilot never calls `next`, work does not read it — no consumer breaks.
 
+baseline: green (test_task_inventory + uvx ruff@0.16.0 check ., pre-edit)
+gates: focused per spec Quick commands — test_next_zero_task + test_task_inventory green (suite_rc=0), ruff green; `gate classify` says FULL tier (flowctl.py touched) — full suite deferred to the conductor/finalization gate per spec Quick-commands convention, no receipt written
+implementer: grok-4.6 bridge (foreground, single pass; host verified diff, fixed one assertion for json_output's `success: true`, ran tests, committed)
+follow-up for task .6: flowctl.py touched — gen_tracker_manifest.py + sync-codex twice at finalization
+
+stage: impl-review - skipped(policy: PARALLEL_WAVE + host-deferred - conductor owns the gate)
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: 2b702c78d08c573b8b12f041d4bb172aaa51e0db, 91fda415
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_next_zero_task -q, cd plugins/flow-next/tests && python3 -m unittest test_next_zero_task test_task_inventory -q, uvx ruff@0.16.0 check .
+- PRs:stage: plan-sync - skipped(config: planSync.enabled != true)

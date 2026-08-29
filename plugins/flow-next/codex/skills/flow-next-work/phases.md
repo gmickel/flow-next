@@ -46,6 +46,16 @@ Detect input type in this order (first match wins):
 **Flow spec ID (fn-N-slug or legacy fn-N/fn-N-xxx)** → SPEC_MODE:
 - Read spec metadata: `$FLOWCTL show <id> --json`
 - Read spec markdown: `$FLOWCTL cat <id>`
+- **Zero-task fork:** if the metadata's `tasks` array is EMPTY, the spec was
+  never planned — distinct from all-tasks-done, where tasks exist and read
+  `done` (that state proceeds normally and reaches 3g). Read
+  [references/no-plan-route.md](references/no-plan-route.md), execute its fork
+  (autonomous refusal / pre-answer / ask), then continue with Phase 2 only
+  after its Direct route minted the implicit task — its plan-first and refusal
+  branches end the run. A zero-task spec never proceeds past this fork, so the
+  legacy fall-through (a zero-task run reaching Phase 3 and a completion
+  review over an empty diff) is unreachable. A spec with tasks — whatever
+  their status — never reads that file.
 - Get first ready task: `$FLOWCTL ready --spec <id> --json`
 
 **Spec file start (.md path that exists)**:

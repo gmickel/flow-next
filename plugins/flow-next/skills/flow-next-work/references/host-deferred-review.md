@@ -12,7 +12,7 @@ Contents:
 
 ## Worker/conductor contract
 
-**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** The worker agent carries `disallowedTools: Task` and cannot dispatch the fresh reviewer subagent the `host` backend requires. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker, and the completion contract changes:
+**Host review routes OUTSIDE the worker (fn-123 R5) — and gates BEFORE `done`.** Verdict independence: the agent that wrote the code never dispatches or issues its own review verdict, so the fresh reviewer subagent the `host` backend requires is dispatched by the conductor, never the worker. When the resolved review mode is `host`, pass `REVIEW_MODE: host-deferred` to the worker, and the completion contract changes:
 
 1. The worker skips its in-worker review dispatch in Phase 4 (never self-certifies SHIP) **and defers Phase 5's `flowctl done`**: it implements, commits, writes its summary + evidence files to the handover paths, and returns WITHOUT calling `flowctl done` (the task stays `in_progress`).
 2. The conductor then runs `/flow-next:impl-review <task-id> --review=host` itself — this is the mandatory gate.

@@ -2,7 +2,6 @@
 name: pr-comment-resolver
 description: Resolve a single PR review thread by evaluating validity, implementing fixes, or replying. Spawned by flow-next-resolve-pr skill; not for direct user invocation.
 model: inherit
-disallowedTools: Task
 color: "#10B981"
 user-invocable: false
 ---

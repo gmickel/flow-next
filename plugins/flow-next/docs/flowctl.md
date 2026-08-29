@@ -514,7 +514,7 @@ Create task under spec.
 flowctl task create --spec fn-1 --title "Task title" [--deps fn-1.2,fn-1.3] \
   [--description-file desc.md | --description "..."] \
   [--acceptance-file accept.md | --acceptance "..."] \
-  [--satisfies R1,R3] [--priority 10] [--json]
+  [--satisfies R1,R3] [--priority 10] [--require-empty-spec] [--json]
 
 # Bulk (mutually exclusive with --title and single-task field flags)
 flowctl task create --spec fn-1 --from-json tasks.json [--json]
@@ -524,6 +524,8 @@ flowctl task create --spec fn-1 --from-json - [--json]   # stdin
 Section content is normalized on write (here and in `task set-description` / `set-acceptance` / `set-spec`): a leading title-like H2 (e.g. `## Acceptance Criteria (…)`) is stripped, and any remaining `## ` headings in the content are demoted to `### ` (fenced code blocks untouched) so they never become section boundaries.
 
 `--description-file` / inline `--description` write the `## Description` section at create time through the same normalization pipeline as `task set-spec`'s description path (the pair is mutually exclusive). Same for `--acceptance-file` / `--acceptance`. `--satisfies` writes the `satisfies:` YAML frontmatter block: a comma-separated list of spec R-IDs, whitespace-trimmed, each token matching `R[1-9][0-9]*[a-z]?` (`R1`, `R10`, `R4a`; `R0`, `R4A`, and `R4ab` are invalid); empty tokens and duplicates are rejected (error, not dedupe) and input order is preserved. All inputs are read and validated before any file is written; a malformed value leaves no partial task on disk. With these flags a freshly planned task is complete in one call; `task set-spec` remains the path for later edits to an existing task.
+
+`--require-empty-spec` refuses (nonzero exit, naming the existing task) when the spec already has any task; the check runs under the same per-spec lock that allocates ids, so exactly one of N concurrent creates succeeds — used by the work/pilot direct route's implicit-task mint.
 
 Single-task output:
 ```json
@@ -877,8 +879,10 @@ flowctl next [--specs-file specs.json] [--require-plan-review] [--require-comple
 
 Output:
 ```json
-{"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
+{"status":"plan|work|completion_review|none","spec":"fn-12","task":"fn-12.3","reason":"needs_plan_review|needs_tasks|needs_completion_review|resume_in_progress|ready_task|none|blocked_by_spec_deps","blocked_specs":{"fn-12":["fn-3"]}}
 ```
+
+A non-closed spec with zero tasks (never-planned) surfaces as `status: plan` with `reason: needs_tasks` rather than being silently skipped — the same classification pilot applies to the zero-task state. Selection stops at the first such spec in id order, exactly as with the other statuses. The zero-task check fires before the `--require-plan-review` gate: a never-planned spec reports `needs_tasks` even when its `plan_review_status` is not `ship`, because planning is what it needs first (and Ralph's typed zero-task stop keys on that reason).
 
 The `--require-completion-review` flag gates spec closure on completion review. When all tasks are done but `completion_review_status` is outside the satisfying set `{ship, not_required}`, returns `status: completion_review`. A policy-excused `not_required` counts as satisfied; an unrecognized or absent value reads as `unknown` and satisfies nothing.
 

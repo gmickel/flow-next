@@ -66,6 +66,7 @@ PILOT_REVIEW=""
 PILOT_RESEARCH="grep"
 PILOT_DEPTH="short"
 PILOT_BACKLOG_OVERRIDE=""   # "" = use config; "1" = force backlog (--backlog/--auto)
+PILOT_NO_PLAN=0   # "1" = explicit --no-plan: forward to the work dispatch (R4); never inferred
 
 PREV=""
 for ARG in $RAW_ARGS; do
@@ -79,6 +80,7 @@ for ARG in $RAW_ARGS; do
     --spec|--review|--research|--depth) PREV="$ARG" ;;
     --spec=*)     PILOT_SPEC="${ARG#--spec=}" ;;
     --dry-run)    PILOT_DRY_RUN=1 ;;
+    --no-plan)    PILOT_NO_PLAN=1 ;;
     --backlog|--auto) PILOT_BACKLOG_OVERRIDE=1 ;;
     --review=*)   PILOT_REVIEW="${ARG#--review=}" ;;
     --research=*) PILOT_RESEARCH="${ARG#--research=}" ;;
@@ -88,10 +90,12 @@ for ARG in $RAW_ARGS; do
   esac
 done
 [[ -n "$PREV" ]] && echo "Flag $PREV given without a value (ignored by /flow-next:pilot)" >&2
-export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE
+export PILOT_SPEC PILOT_DRY_RUN PILOT_REVIEW PILOT_RESEARCH PILOT_DEPTH PILOT_BACKLOG_OVERRIDE PILOT_NO_PLAN
 ```
 
 No branch flag exists in v1. Branch resolution is pilot-owned from the selected spec's `branch_name`.
+
+Pilot takes `--no-plan` in flag form only — the parser has no natural-language path, and none is added: a phrase like "skip planning" in the invocation is not parsed here (`$ARGUMENTS` is word-split by the loop, so verbatim natural-language passthrough is impossible by construction). Pilot never decides no-plan on its own; the flag is an explicit per-invocation instruction, forwarded to the work dispatch.
 
 ### Autonomy mode resolution (R1) — gate the wide backlog behavior
 

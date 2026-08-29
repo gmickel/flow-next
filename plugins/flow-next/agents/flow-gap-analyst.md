@@ -2,6 +2,7 @@
 name: flow-gap-analyst
 description: Map user flows, edge cases, and missing requirements from a brief spec.
 model: sonnet
+# read-only: Task would be a write escape hatch via a spawned writing subagent
 disallowedTools: Edit, Write, Task
 readonly: true
 color: "#EF4444"

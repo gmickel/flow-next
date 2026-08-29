@@ -29212,6 +29212,13 @@ def cmd_task_create(args: argparse.Namespace) -> None:
                 # One lock acquisition for the whole batch — never N separate
                 # scan+alloc cycles (R3).
                 base = scan_max_task_id(flow_dir, spec_id)
+                # fn-209: same atomic zero-task precondition as the single path.
+                if getattr(args, "require_empty_spec", False) and base != 0:
+                    error_exit(
+                        f"--require-empty-spec: spec {spec_id} already has a "
+                        f"task ({spec_id}.{base}); refusing to create another.",
+                        use_json=use_json,
+                    )
                 planned: list[dict] = []
                 for offset, item in enumerate(items):
                     task_num = base + 1 + offset
@@ -29373,6 +29380,15 @@ def cmd_task_create(args: argparse.Namespace) -> None:
             # MU-1: scan while holding the allocation lock. The previous
             # unlocked scan let concurrent creators all choose the same id.
             task_num = scan_max_task_id(flow_dir, spec_id) + 1
+            # fn-209: --require-empty-spec makes the zero-task precondition
+            # atomic with allocation — two concurrent implicit-task mints
+            # (work/pilot direct route) must not both succeed.
+            if getattr(args, "require_empty_spec", False) and task_num != 1:
+                error_exit(
+                    f"--require-empty-spec: spec {spec_id} already has a task "
+                    f"({spec_id}.{task_num - 1}); refusing to create another.",
+                    use_json=use_json,
+                )
             task_id = f"{spec_id}.{task_num}"
             task_json_path = flow_dir / TASKS_DIR / f"{task_id}.json"
             task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
@@ -34207,20 +34223,6 @@ def cmd_next(args: argparse.Namespace) -> None:
             blocked_epics[epic_id] = blocked_by
             continue
 
-        if args.require_plan_review and epic_data.get("plan_review_status") != "ship":
-            if args.json:
-                json_output(
-                    {
-                        "status": "plan",
-                        "spec": epic_id,
-                        "task": None,
-                        "reason": "needs_plan_review",
-                    }
-                )
-            else:
-                print(f"plan {epic_id} needs_plan_review")
-            return
-
         if not tasks_dir.exists():
             error_exit(
                 f"{TASKS_DIR}/ missing. Run 'flowctl init' or fix repo state.",
@@ -34243,6 +34245,41 @@ def cmd_next(args: argparse.Namespace) -> None:
             task["id"]: task
             for task in inventory.by_spec.get(epic_id, [])
         }
+
+        if not tasks:
+            # fn-209 R8: a non-closed spec with zero tasks is never-planned.
+            # Surface it as a plan unit (mirrors pilot's classification)
+            # instead of silently falling through to the next spec / none.
+            # This check fires BEFORE the --require-plan-review gate: what a
+            # never-planned spec needs first is planning, regardless of
+            # plan_review_status, and Ralph's typed zero-task stop keys on
+            # reason=needs_tasks.
+            if args.json:
+                json_output(
+                    {
+                        "status": "plan",
+                        "spec": epic_id,
+                        "task": None,
+                        "reason": "needs_tasks",
+                    }
+                )
+            else:
+                print(f"plan {epic_id} needs_tasks")
+            return
+
+        if args.require_plan_review and epic_data.get("plan_review_status") != "ship":
+            if args.json:
+                json_output(
+                    {
+                        "status": "plan",
+                        "spec": epic_id,
+                        "task": None,
+                        "reason": "needs_plan_review",
+                    }
+                )
+            else:
+                print(f"plan {epic_id} needs_plan_review")
+            return
 
         # Resume in_progress tasks owned by current actor
         in_progress = [
@@ -50565,6 +50602,15 @@ def main() -> None:
     )
     p_task_create.add_argument(
         "--priority", type=int, help="Priority (lower = earlier)"
+    )
+    p_task_create.add_argument(
+        "--require-empty-spec",
+        action="store_true",
+        help=(
+            "Refuse (nonzero exit) if the spec already has any task; checked "
+            "under the same lock that allocates ids, so exactly one of N "
+            "concurrent creates can succeed (implicit-task mint, fn-209)"
+        ),
     )
     p_task_create.add_argument("--json", action="store_true", help="JSON output")
     p_task_create.set_defaults(func=cmd_task_create)
