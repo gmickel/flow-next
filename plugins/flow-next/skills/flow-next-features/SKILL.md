@@ -11,7 +11,7 @@ A committed directory (`.flow/features/`, beside `.flow/memory/`) records, from 
 
 Split that keeps existing contracts intact: **map = how a user gets there (compounds). Spec = what to prove this time. Live drive = proof.**
 
-**Read [seed.md](seed.md) for seed-mode phases.** Feature file shape: [references/feature-entry-contract.md](references/feature-entry-contract.md). Doctor + proof: [references/doctor-and-proof.md](references/doctor-and-proof.md). Maintain (when `MODE=maintain`) executes [maintain.md](maintain.md). If that file is not in this skill directory yet, end `BLOCKED` naming that maintain is not shipped.
+**Read [seed.md](seed.md) for seed-mode phases.** Feature file shape: [references/feature-entry-contract.md](references/feature-entry-contract.md). Doctor + proof: [references/doctor-and-proof.md](references/doctor-and-proof.md). Maintain (when `MODE=maintain`) executes [maintain.md](maintain.md).
 
 There is no flowctl features subcommand. The skill validates the four-H2 shape itself. The only flowctl calls are `memory search` / `memory add` for the `feature-map-drift` tag handoff on the maintain path.
 
@@ -98,7 +98,7 @@ printf 'MODE=%s\n' "$MODE"
 1. Run the autonomy-refusal fence. On refuse, the `FEATURES_VERDICT=REFUSED` line is the last line of the run.
 2. Run the mode-detection fence. Honor `MODE`.
 3. **seed** - execute [seed.md](seed.md) in order.
-4. **maintain** - execute [maintain.md](maintain.md) in order. If `maintain.md` is absent, the last line is `FEATURES_VERDICT=BLOCKED features=0 reason="maintain mode not shipped yet"` and the run stops.
+4. **maintain** - execute [maintain.md](maintain.md) in order.
 
 ## Terminal line
 
