@@ -181,6 +181,18 @@ class TerminalGrammar(unittest.TestCase):
         for token in ("SEEDED", "CLEAN", "CHANGED", "BLOCKED", "REFUSED"):
             self.assertIn(token, skill)
 
+    def test_grammar_is_bound_to_a_last_line_contract(self) -> None:
+        # Structural relation, not a prose pin: the section that carries the
+        # grammar must also carry the "last line" token, so removing the
+        # last-line contract (while keeping the grammar) fails here.
+        skill = _read(SKILL_MD)
+        heading = skill.find("## Terminal line")
+        self.assertNotEqual(heading, -1, "## Terminal line section missing")
+        nxt = skill.find("\n## ", heading + 1)
+        section = skill[heading : nxt if nxt != -1 else len(skill)]
+        self.assertIn(VERDICT_GRAMMAR, section)
+        self.assertIn("last line", section)
+
 
 class ShimFrontmatter(unittest.TestCase):
     def test_bare_name_features(self) -> None:

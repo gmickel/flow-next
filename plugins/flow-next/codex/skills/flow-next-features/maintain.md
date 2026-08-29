@@ -134,7 +134,7 @@ Read [references/doctor-and-proof.md](references/doctor-and-proof.md) **before t
 
 Never drive an instance this run did not start. An orphaned port (a process this run did not start) ends `BLOCKED` with the reclaim instruction for the human. Never kill by process name. Two concurrent runs isolate by disposable profile/port; where the app cannot run twice, the owned-port check fails and this run ends `BLOCKED`. Never a shared drive.
 
-A checkout that does not build or start as-is: end `REFUSED` with the precise breakage. No usable driver on this host: end `REFUSED` naming the missing driver. Same refusal family as seed. Never write map edits against a broken base.
+A checkout that does not build or start as-is: end `BLOCKED` naming the precise breakage. No usable driver on this host: end `BLOCKED` naming the missing driver. (Seed uses `REFUSED` for these; maintain's outcome set is exactly clean/changed/blocked, so a pre-pass failure here is a named block.) Never write map edits against a broken base.
 
 Start the instance this run will own. Doctor once for this session, then execute the drive plan:
 
@@ -162,7 +162,7 @@ A harness fix from Phase 5 is re-driven live (this same Doctor + drive + proof l
 - Every feature that was in the drive plan has one live exercise with evidence at a named path, or is `verified-unreachable` with the pair above.
 - Doctor ran at the required times. No drive used an instance this run did not start.
 - Teardown is done once the last (re-)drive finished, or is deferred only while a Phase 5 re-drive is still queued.
-- `REFUSED` / `BLOCKED` already terminated when Doctor or the driver forbade a drive.
+- `BLOCKED` already terminated when Doctor, the checkout, or the driver forbade a drive.
 
 ---
 
@@ -197,7 +197,7 @@ Re-drive every harness fix before leaving this phase. Then teardown (Phase 4 rul
 
 Teardown first if the instance is still up (Phase 4 rule). Evidence stays at named paths under `$RUN_DIR`.
 
-Pick exactly one. `blocked-for-this-pass` features prevent `CLEAN` (coverage was incomplete). They do not by themselves prevent `CHANGED` for the features that were proven.
+Pick exactly one. `blocked-for-this-pass` features prevent `CLEAN` (coverage was incomplete). They do not by themselves prevent `CHANGED` for the features that were proven - but the terminal `reason` of a `CHANGED` or `BLOCKED` run MUST name every `blocked-for-this-pass` feature slug. An outcome line that silently drops a blocked feature has broken this.
 
 ### CLEAN
 
@@ -239,10 +239,6 @@ A named blocker stopped the pass: orphaned port, concurrent isolation failure, s
 
 `features=<n>` is the count of features fully covered before the block (`0` if none).
 
-### REFUSED
-
-Checkout does not start, or no usable driver on this host (Phase 4). Same family as seed. No branch, no PR.
-
 ### Terminal line
 
 Print as the **last line** of the run, nothing after it:
@@ -251,7 +247,7 @@ Print as the **last line** of the run, nothing after it:
 FEATURES_VERDICT=<SEEDED|CLEAN|CHANGED|BLOCKED|REFUSED> features=<n> reason="<one line>"
 ```
 
-Maintain emits `CLEAN`, `CHANGED`, or `BLOCKED` (and `REFUSED` when checkout or driver forbids a live pass). Not `SEEDED`. `reason` is one line, quoted.
+Maintain emits exactly `CLEAN`, `CHANGED`, or `BLOCKED`. Not `SEEDED`, not `REFUSED` (those belong to seed and the SKILL.md autonomy fence). `reason` is one line, quoted.
 
 ### Done when
 
@@ -259,3 +255,4 @@ Maintain emits `CLEAN`, `CHANGED`, or `BLOCKED` (and `REFUSED` when checkout or 
 - `CLEAN`: no branch, no PR.
 - `CHANGED`: one open PR; every shipped file was re-read; body has the four sections; notes, scratch, and evidence are not in the diff.
 - `BLOCKED`: reason names the blocker; no resume file; next run starts from the committed map.
+- Every `blocked-for-this-pass` feature slug appears in the terminal `reason` when the outcome is `CHANGED` or `BLOCKED`.
