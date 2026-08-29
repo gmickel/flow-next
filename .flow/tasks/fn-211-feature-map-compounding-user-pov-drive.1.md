@@ -30,9 +30,11 @@ Create the canonical skill `plugins/flow-next/skills/flow-next-features/` and it
 - [ ] `test_features_skill_contract.py` executes the autonomy predicate with an out-of-list marker AND the state-routing predicate across absent/present/present-plus-init (asserting seed/maintain/seed), validates the worked example shape, and asserts the terminal grammar - all behavioral, no prose pins
 - [ ] No implementation code; no file paths in the map contract beyond the `.flow/features/` layout itself
 ## Done summary
-TBD
+Built the /flow-next:features skill foundation: SKILL.md (state-resolved seed/maintain mode detection and the autonomy-namespace refusal, both as executable bash fences; FEATURES_VERDICT terminal grammar; forbidden list), seed.md (six phases with Done-when gates: repo interview, checkout health + Doctor, top-handful identification, prove-every-route live driving by pointer to flow-next-drive, map write, cleanup + verdict), references/feature-entry-contract.md (four-H2 contract + required Surface line, worked example feature file and index shape), references/doctor-and-proof.md (Doctor checks/ownership/orphan/concurrent/wedged-UI rules + proof standards), the command shim, and test_features_skill_contract.py (9 behavioral tests: executes the autonomy fence with a novel out-of-list marker, executes mode routing across absent/present/present-plus-init, validates the worked example shape, asserts the terminal grammar). Implemented by a grok-4.6 bridge worker in an isolated worktree; conductor in-host review verdict SHIP; focused test green on the integrated target.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
+stage: impl-review - ran (in-host, verdict SHIP) (model: claude-fable-5)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: e1eb4f6e
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_features_skill_contract -q  # 9 tests OK (integrated target)
 - PRs:
