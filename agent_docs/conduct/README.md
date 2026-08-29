@@ -49,6 +49,7 @@ These pages are maintainer documentation. They are never loaded at runtime by an
 - [`map.md`](map.md) — `/flow-next:map`, semantic feature index
 - [`prime.md`](prime.md) — `/flow-next:prime`, agent-readiness assessment
 - [`audit.md`](audit.md) — `/flow-next:audit`, memory entry audit
+- [`features.md`](features.md) - `/flow-next:features`, user-POV drive map seed/maintain
 - [`memory-migrate.md`](memory-migrate.md) — `/flow-next:memory-migrate`, flat-to-categorized memory lift
 - [`tracker-sync.md`](tracker-sync.md) — `/flow-next:tracker-sync`, spec-to-tracker projection
 - [`setup.md`](setup.md) — `/flow-next:setup`, platform detection and install

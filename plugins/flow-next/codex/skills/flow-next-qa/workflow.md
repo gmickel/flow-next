@@ -172,11 +172,28 @@ The `spec.spec_sections` object carries the fields Phase 2 maps:
 
 If `acceptance_criteria` is empty, there is nothing to derive scenarios from — emit a clean **N/A verdict** in Phase 6 (no driveable intent), never crash.
 
+### 1.3 - Feature map (existence-gated)
+
+The map supplies navigation only. This run's ACs/R-IDs still come from the spec payload; live captured evidence remains the SHIP basis (the hard rule above).
+
+```bash
+if [ -d "$REPO_ROOT/.flow/features" ]; then
+  : "Read $REPO_ROOT/.flow/features/README.md, then matching feature files"
+fi
+```
+
+When the directory exists: Read the index README. Select features whose `**Surface:**` identifier matches the surface this run targets, plus those features' sub-feature IDs (the index `Surfaces` grouping). Load the matching files' `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps. Selection and file shape: [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md).
+
+**A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
+
+When it is absent: skip. Behavior is byte-identical to today; the only added cost is the existence check.
+
 ### Done when
 
 - `SPEC_ID` names a spec (`.tasks != null`), resolved from the argument, the `branch_name` match, or an info prompt. Under `NO_PROMPT=1` an unresolved id ended the run as the documented hard error rather than a default.
 - `BASE_REF` resolved through the cascade and validated, **or** the autonomous no-base path set `QA_OUTCOME=BLOCKED` with a `blocked_reason` and short-circuited to §6.3. A hang or a prompt on the autonomous path has broken this.
 - `$PAYLOAD` holds one `spec export-cognitive-aid` result carrying both `spec.spec_sections` and the top-level `tasks[]`. **Phase 2 reads that payload.** A second export call, or a `flowctl show` used as the evidence source, has broken this.
+- If `.flow/features/` existed, matching feature files were loaded for navigation; a per-target miss fell back to normal derivation; if absent, only the existence check ran.
 
 ---
 
@@ -214,7 +231,7 @@ Record, per R-ID, a `coverage_source ∈ {live, subtracted:<task-id>:<test-cmd>}
 
 ### 2.1 — The five mappings
 
-Walk `spec.spec_sections` and build the scenario set:
+Walk `spec.spec_sections` and build the scenario set. When Phase 1.3 loaded a matching feature for this target, scenario `steps` cite those map-sourced routes and commands; do not re-derive them. Targets the map does not cover derive routes exactly as without a map.
 
 1. **AC → scenarios.** Each `acceptance_criteria[]` entry with a *user-observable* surface becomes ≥1 scenario: a persona, a goal, and the steps a real user takes to exercise that criterion on the live app. Backend / CLI / non-UI criteria yield **no** scenario (they are covered by static review) — note them as "not live-QA-able" rather than inventing a fake UI path. **For every write-path / state-changing scenario, also derive an error-path variant** (invalid input, an empty/error/permission state) — ACs are written as positive assertions, so a happy-path-only set silently misses exactly the states real users hit.
 2. **R-IDs → coverage spine.** Every `acceptance_criteria[].id` is a row in the coverage table (reuse the make-pr R-ID coverage-table pattern — see §2.2). Each scenario maps back to the R-ID(s) it exercises. R-IDs with no scenario are flagged `⚠️ no live scenario` (an honest gap, never a confident PASS).
@@ -261,7 +278,7 @@ Scenarios carry forward to Phase 3 (prepare) and Phase 4 (execute). At least one
 ### Done when
 
 - Every `acceptance_criteria[].id` is a row of the §2.2 table, in spec order with gaps preserved, and each row carries exactly one of `live`, `subtracted (<task-id> · <test-cmd>)`, `backend/CLI — not live-QA-able`, or `⚠️ no live scenario`. **A runtime or UI criterion marked `subtracted` has broken this.**
-- Every scenario record carries `r_ids`, persona, goal, steps, and expected — with each write-path scenario paired with an error-path variant.
+- Every scenario record carries `r_ids`, persona, goal, steps, and expected — with each write-path scenario paired with an error-path variant. When the map was loaded, `steps` cite map-sourced routes/commands.
 - Each `boundaries[]` entry is recorded as an exclusion, so a "missing" feature a boundary declares out of scope is not filed in Phase 5.
 
 ---
@@ -393,11 +410,51 @@ Track every finding (including P2) in `QA_FINDINGS`, with id, severity, discrete
 (`0|25|50|75|100`), classification (`introduced|pre_existing`), reason, and
 surface/file in a running list for Phase 6. **A PASS asserted from reading source has broken R1** — but reading source to *explain* an already-evidenced failure (root-cause hint for the fix) is fine; the PASS gate is what's evidence-locked, not the post-hoc explanation.
 
+### 5.5 - Stale mapped routes
+
+When Phase 1.3 loaded the map and a mapped route does not match the live app, file a knowledge-track memory entry tagged `feature-map-drift`. Title names the feature and the route. Body is two lines: Expected, Observed. QA never edits `.flow/features/` mid-run. This is not a P0/P1/P2 product finding - **and it never strands the scenario**: after recording the memo, derive an alternate route for that scenario exactly as Phase 2 does without a map and continue verifying the AC (the map supplied navigation, not the verdict); only when no route at all reaches the surface does the scenario take the ordinary no-live-scenario / blocked handling.
+
+```bash
+# Same memory.enabled no-op + QA_FILED_MEMORY path tracking as §5.4. Never --no-overlap-check.
+if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ]; then
+  mkdir -p .flow/tmp/qa-"$SPEC_ID"
+  cat > .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md <<'EOF'
+Expected: <mapped route / command>
+Observed: <what the live app did>
+EOF
+  # fn-113.2 fold, executable (same discipline as the 5.4 skeleton): a prior
+  # entry for EXACTLY this feature+route is UPDATED, never siblinged. Tag
+  # filter + exact title equality via memory list - scored search tokenizes
+  # and can return a different route of the same feature.
+  _prior="$($FLOWCTL memory list --track knowledge --json 2>/dev/null \
+    | jq -r --arg t "drift: <surface>/<feature-slug> <sub-feature-id>" '[.entries[]? | select((.tags // []) | index("feature-map-drift")) | select(.title == $t)][0].entry_id // empty')"
+  if [ -n "$_prior" ]; then
+    _out="$($FLOWCTL memory add \
+      --track knowledge --category workflow \
+      --title "drift: <surface>/<feature-slug> <sub-feature-id>" \
+      --tags "feature-map-drift" \
+      --update "$_prior" \
+      --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
+  else
+    _out="$($FLOWCTL memory add \
+      --track knowledge --category workflow \
+      --title "drift: <surface>/<feature-slug> <sub-feature-id>" \
+      --tags "feature-map-drift" \
+      --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
+  fi
+  _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
+  [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
+fi
+```
+
+When memory is disabled, record Expected/Observed in the run notes instead.
+
 ### Done when
 
 - Every filed finding was reproduced a second time before filing, and carries severity, persona, steps to reproduce, expected-vs-actual, and evidence pointers (screenshot path, console path, full URL, plus the persisted write side-effect on a write path).
 - **Severity rests on observed user impact.** A P0 relabelled P1 to keep the verdict green has broken this.
 - Filing ran with overlap scoring on, and a memory-disabled repo still recorded the finding in the run notes so Phase 6 counts it.
+- When a mapped route did not match the live app, it was filed as knowledge-track memory tagged `feature-map-drift` (deduped against an existing high-overlap entry via --update; or recorded in the run notes if memory is disabled), the scenario fell back to ordinary route derivation, and the map itself was not edited.
 
 ---
 
@@ -636,7 +693,7 @@ The default path `.flow/review-receipts/qa-<spec-id>.json` is **committed** (the
 
 ### 6.3b — Commit QA's own handoff (autonomous mode only)
 
-When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the bug-memory entries tracked in `QA_FILED_MEMORY` at §5.4), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits, so this whole step does not exist on the interactive path. The precondition (the loop operates on committed state; a dirty `.flow/memory` should be committed first) is in [references/autonomy.md](references/autonomy.md) §5.
+When `QA_AUTONOMOUS=1` (the pilot stage dispatched this pass — autonomy ≠ Ralph), QA commits **its own outputs** so the dispatching pilot stage hands off a clean tree and the branch the eventual make-pr pushes carries exactly what the `## Live QA` body advertises. **QA committing its own writes is the agentic, precise answer** — it knows exactly which files it produced (the receipt above, plus the memory entries tracked in `QA_FILED_MEMORY` at §5.4 / §5.5), so pilot never has to guess or diff the tree. Never a `.flow/memory` glob (it would sweep pre-existing dirty memory) and never `git add -A`. **User-invoked QA does not auto-commit** — the user owns their commits, so this whole step does not exist on the interactive path. The precondition (the loop operates on committed state; a dirty `.flow/memory` should be committed first) is in [references/autonomy.md](references/autonomy.md) §5.
 
 ```bash
 if [ "$QA_AUTONOMOUS" = "1" ]; then

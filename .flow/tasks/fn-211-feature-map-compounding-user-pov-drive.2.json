@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-08-29T12:23:20.001548Z",
+  "depends_on": [
+    "fn-211-feature-map-compounding-user-pov-drive.1"
+  ],
+  "id": "fn-211-feature-map-compounding-user-pov-drive.2",
+  "priority": null,
+  "spec": "fn-211-feature-map-compounding-user-pov-drive",
+  "spec_path": ".flow/tasks/fn-211-feature-map-compounding-user-pov-drive.2.md",
+  "status": "todo",
+  "title": "Maintain mode: audit-shaped pass with clean/changed/blocked",
+  "updated_at": "2026-08-29T12:31:09.391229Z"
+}
