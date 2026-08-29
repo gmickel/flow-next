@@ -74,9 +74,13 @@ for the plumbing (receipts, evidence, review dispatch, done). No `Touches:` line
 whole-spec task genuinely cannot name its paths. `--require-empty-spec` makes the mint
 atomic: flowctl refuses (nonzero exit, naming the existing task) when the spec already
 has any task, checked under the same lock that allocates ids — so of two concurrent
-direct-route runs exactly one mints, and the loser treats the refusal as the normal
-resume path. Re-run after the mint resolves the same way (task count is 1) — a second
-mint is unreachable by construction.
+direct-route runs exactly one mints. The loser STOPS with a typed report naming that
+existing task — it never claims, resumes, or dispatches in the same invocation: the
+winner is live, and same-actor `flowctl start` cannot tell the two runs apart (per-run
+claim identity is fn-204's structural fix, not this route's). A LATER re-invocation —
+after the concurrent run finished or died — resumes the task through the normal path
+(task count is 1; a second mint is unreachable by construction): crash-resume stays
+legal, concurrent double-dispatch does not.
 Then continue with Phase 2 (branch choice) and the standard pipeline. A run that
 minted a second task, or copied a plan into the body, has broken this.
 
