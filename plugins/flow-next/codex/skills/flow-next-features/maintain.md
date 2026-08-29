@@ -29,6 +29,11 @@ RUN_DIR="$REPO_ROOT/.flow/tmp/features-$RUN_ID"
 mkdir -p "$RUN_DIR"
 ```
 
+**Entry gate (both checks, before any inspection):**
+
+1. **On the default base.** Resolve the default branch (`gh repo view --json defaultBranchRef` or `git remote show origin`), fetch it, and require the checkout's product code to match `origin/<default>` (`git diff --quiet origin/<default> -- . ':(exclude).flow/'` or an equivalent read). A maintain pass proves routes against the code its PR will ship on; proof gathered on a diverged feature branch is proof of the wrong base. Diverged: end `BLOCKED` with the instruction to run maintain from the default branch (or a clean checkout of it). Never switch branches over the user's working state.
+2. **Owned paths clean.** `git status --porcelain -- .flow/features/` (plus any harness paths the map owns) must be empty. Pre-existing uncommitted edits under owned paths cannot be told apart from this run's edits later, and the `BLOCKED` restore would discard them. Dirty: end `BLOCKED` asking the user to commit or stash first. This makes every later owned-path change attributable to this run by construction.
+
 `jq` and a working Python (`python3`, `python`, or `py -3`) must be on PATH. `$FLOWCTL` is required for `memory search` / `memory add` on the `feature-map-drift` tag. Memory disabled or uninitialised: treat drift search and bug filing as empty, record that in the run notes, continue.
 
 This file is self-sufficient. Do not assume SKILL.md already exported `$FLOWCTL`.
@@ -62,6 +67,7 @@ Contract-broken files (missing `**Surface:**`, H2s out of order or missing) stay
 
 ### Done when
 
+- The entry gate passed: checkout matches the default base and owned paths were clean (or the run already ended `BLOCKED`).
 - Index rows and feature files agree, or every remaining mismatch is queued as a this-pass edit.
 - Drift memos were searched; relevant ones are on the target list.
 - Source-confirmed deletions are recorded and not queued for a drive.
@@ -210,7 +216,7 @@ Every feature was covered (live exercise, `verified-unreachable` with the requir
 At least one proven map or owned-harness correction.
 
 1. **Re-read every changed file.** A file not re-read does not ship.
-2. Create a **fresh branch from the repository's default base**, never from the current `HEAD` - a maintain run invoked on an in-progress feature branch must not sweep that branch's commits into the map PR. Resolve the default branch (`git remote show origin` / `gh repo view --json defaultBranchRef`), fetch it, then `git switch -c chore/features-maintain-<YYYY-MM-DD> origin/<default>` - the uncommitted map/harness edits ride the switch. If the switch would conflict with local state (it touches paths the map does not own), end `BLOCKED` naming the conflict instead of shipping a mixed PR.
+2. Create a **fresh branch** `chore/features-maintain-<YYYY-MM-DD>` from `origin/<default>` (the entry gate already proved the checkout matches it, so the proofs gathered this run apply to exactly the code this PR ships on; the uncommitted map/harness edits ride the switch). If the switch conflicts with local state, end `BLOCKED` naming the conflict instead of shipping a mixed PR.
 3. Stage **only** `.flow/features/**` plus the owned harness files that were re-driven. Never `$RUN_DIR`, never run notes, never scratch, never evidence. Never `git add -A`.
 4. Commit, **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly:
 
@@ -235,7 +241,7 @@ If the push or `gh pr create` fails: do not claim `CHANGED`. End `BLOCKED` namin
 
 A named blocker stopped the pass: orphaned port, concurrent isolation failure, source-reader collapse, or a `gh pr create` failure after proven commits. Reason names what blocked.
 
-**Terminal for this invocation.** The next run re-enters fresh from the committed map. No resume file, no checkpoint. Do not open a PR of unproven edits. Restore uncommitted map/harness edits to HEAD. Run notes remain under `$RUN_DIR` for the human; the next invocation ignores that directory.
+**Terminal for this invocation.** The next run re-enters fresh from the committed map. No resume file, no checkpoint. Do not open a PR of unproven edits. Restore uncommitted map/harness edits to HEAD - the entry gate proved owned paths were clean at start, so everything dirty under them is this run's own work; pre-existing user edits were never admitted. Run notes remain under `$RUN_DIR` for the human; the next invocation ignores that directory.
 
 `features=<n>` is the count of features fully covered before the block (`0` if none).
 

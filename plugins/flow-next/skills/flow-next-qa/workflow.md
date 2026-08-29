@@ -182,6 +182,8 @@ fi
 
 When the directory exists: Read the index README. Select features whose `**Surface:**` identifier matches the surface this run targets, plus those features' sub-feature IDs (the index `Surfaces` grouping). Load the matching files' `How to get to it (user POV)`, `Driving it`, and `Gotchas` for navigation, preconditions, and traps. Selection and file shape: [feature-entry-contract.md](../flow-next-features/references/feature-entry-contract.md).
 
+**A per-target miss is treated like an absent map.** Seed writes a handful of features on purpose, so a map that exists but does not cover this spec's target (no matching Surface, no matching feature, or an entry that fails the contract shape) falls back to the normal route derivation below for that target - never a reduced scenario set because the directory happened to exist.
+
 When it is absent: skip. Behavior is byte-identical to today; the only added cost is the existence check.
 
 ### Done when
@@ -189,7 +191,7 @@ When it is absent: skip. Behavior is byte-identical to today; the only added cos
 - `SPEC_ID` names a spec (`.tasks != null`), resolved from the argument, the `branch_name` match, or an info prompt. Under `NO_PROMPT=1` an unresolved id ended the run as the documented hard error rather than a default.
 - `BASE_REF` resolved through the cascade and validated, **or** the autonomous no-base path set `QA_OUTCOME=BLOCKED` with a `blocked_reason` and short-circuited to §6.3. A hang or a prompt on the autonomous path has broken this.
 - `$PAYLOAD` holds one `spec export-cognitive-aid` result carrying both `spec.spec_sections` and the top-level `tasks[]`. **Phase 2 reads that payload.** A second export call, or a `flowctl show` used as the evidence source, has broken this.
-- If `.flow/features/` existed, matching feature files were loaded for navigation; if absent, only the existence check ran.
+- If `.flow/features/` existed, matching feature files were loaded for navigation; a per-target miss fell back to normal derivation; if absent, only the existence check ran.
 
 ---
 
@@ -227,7 +229,7 @@ Record, per R-ID, a `coverage_source ∈ {live, subtracted:<task-id>:<test-cmd>}
 
 ### 2.1 — The five mappings
 
-Walk `spec.spec_sections` and build the scenario set. When Phase 1.3 loaded the map, scenario `steps` cite those map-sourced routes and commands; do not re-derive them.
+Walk `spec.spec_sections` and build the scenario set. When Phase 1.3 loaded a matching feature for this target, scenario `steps` cite those map-sourced routes and commands; do not re-derive them. Targets the map does not cover derive routes exactly as without a map.
 
 1. **AC → scenarios.** Each `acceptance_criteria[]` entry with a *user-observable* surface becomes ≥1 scenario: a persona, a goal, and the steps a real user takes to exercise that criterion on the live app. Backend / CLI / non-UI criteria yield **no** scenario (they are covered by static review) — note them as "not live-QA-able" rather than inventing a fake UI path. **For every write-path / state-changing scenario, also derive an error-path variant** (invalid input, an empty/error/permission state) — ACs are written as positive assertions, so a happy-path-only set silently misses exactly the states real users hit.
 2. **R-IDs → coverage spine.** Every `acceptance_criteria[].id` is a row in the coverage table (reuse the make-pr R-ID coverage-table pattern — see §2.2). Each scenario maps back to the R-ID(s) it exercises. R-IDs with no scenario are flagged `⚠️ no live scenario` (an honest gap, never a confident PASS).
