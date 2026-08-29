@@ -31,9 +31,11 @@ Add the maintain mode (maintain.md) to the skill task 1 scaffolded. Split from t
 - [ ] `blocked` is terminal with fresh re-entry; no resume/checkpoint machinery introduced
 - [ ] maintain.md carries the three-rung FLOWCTL preamble
 ## Done summary
-TBD
+Added maintain mode (maintain.md): self-sufficient preamble (three-rung FLOWCTL, per-run RUN_DIR), then the audit-shaped pass - index hygiene with feature-map-drift memo consumption and source-confirmed deletion, a concurrent read-only source wave (one Explore-shaped reader per feature, failure-isolated, collapse ends BLOCKED), reconcile (merge recipes into few app states, spot-check cited drift only, churn sweep requiring a concrete source path), the required live pass under the Doctor discipline with verified-unreachable requiring prerequisite + attempted route, triage into doc-drift/harness-gap/product-bug (product bugs filed to bug memory, never in the diff; harness fixes re-driven before shipping), and ship-or-stop with outcomes CLEAN (no branch, no PR) / CHANGED (fresh branch, four-section hand-written chore-PR body via --body-file, never make-pr, never merge; gh pr create failure downgrades to BLOCKED) / BLOCKED (terminal, fresh re-entry, no resume state). SKILL.md's two transitional maintain-not-shipped clauses removed. Reviewed deviation, accepted: maintain also emits REFUSED for the broken-checkout/no-usable-driver family, matching the shared SKILL.md verdict grammar seed uses - more coherent than overloading BLOCKED. Grok-4.6 bridge implementation; conductor in-host review verdict SHIP; contract test green on the integrated target.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
+stage: impl-review - ran (in-host, verdict SHIP) (model: claude-fable-5)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 07844ded
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_features_skill_contract -q  # 9 tests OK (integrated target)
 - PRs:
