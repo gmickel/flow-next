@@ -113,11 +113,14 @@ Write **one file per proven feature**. Each opens with H1 title + one paragraph 
 
 Partial seed: write the proven files; name failures in the index and in the verdict `reason`. Do not write a file for a failed route.
 
+**Zero proven features: write nothing.** When no route proved, do not create `.flow/features/` at all - no index, no directory. Mode detection treats a present directory as a map, so an empty husk would silently flip every later run into maintain against nothing. End `BLOCKED` (or `REFUSED` when the cause was a refusal condition) naming every failed route; the next invocation re-enters seed cleanly.
+
 ### Done when
 
 - The index carries the four operating-rule sections plus surface grouping/selection semantics (consumers select by surface + sub-feature IDs).
 - Each feature file matches the four-H2 + `**Surface:**` contract.
 - Failures are named. Zero undriven files sit under `.flow/features/`.
+- A zero-proven run wrote nothing: `.flow/features/` does not exist, so the next run re-enters seed.
 
 ---
 

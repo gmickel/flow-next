@@ -1693,7 +1693,7 @@ generate_openai_yaml "flow-next-guide"     "Flow Guide"     "Prompt-first router
 generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" true "Capture this as a spec: "
 generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" true
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
-generate_openai_yaml "flow-next-features"  "Flow Features"  "Seed or maintain the committed user-POV feature map at .flow/features/" "#3B82F6" true
+generate_openai_yaml "flow-next-features"  "Flow Features"  "Seed or maintain the committed user-POV feature map at .flow/features/" "#3B82F6" false
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" true
 generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" true
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true

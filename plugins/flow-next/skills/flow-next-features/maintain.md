@@ -210,9 +210,9 @@ Every feature was covered (live exercise, `verified-unreachable` with the requir
 At least one proven map or owned-harness correction.
 
 1. **Re-read every changed file.** A file not re-read does not ship.
-2. Create a **fresh branch** (`chore/features-maintain-<YYYY-MM-DD>`).
+2. Create a **fresh branch from the repository's default base**, never from the current `HEAD` - a maintain run invoked on an in-progress feature branch must not sweep that branch's commits into the map PR. Resolve the default branch (`git remote show origin` / `gh repo view --json defaultBranchRef`), fetch it, then `git switch -c chore/features-maintain-<YYYY-MM-DD> origin/<default>` - the uncommitted map/harness edits ride the switch. If the switch would conflict with local state (it touches paths the map does not own), end `BLOCKED` naming the conflict instead of shipping a mixed PR.
 3. Stage **only** `.flow/features/**` plus the owned harness files that were re-driven. Never `$RUN_DIR`, never run notes, never scratch, never evidence. Never `git add -A`.
-4. Commit, then open **one chore PR** directly:
+4. Commit, **push the branch with upstream tracking** (`git push -u origin <branch>` - `gh pr create` on an unpushed branch prompts, and a prompt in a non-interactive shell wedges the run), then open **one chore PR** directly:
 
 ```bash
 gh pr create --title "chore(features): maintain pass" --body-file "$PR_BODY"
@@ -227,7 +227,7 @@ Write `$PR_BODY` to a file under `$RUN_DIR` (or a tempfile). Hand-written body m
 
 `--body-file`, never a heredoc. Never invoke `/flow-next:make-pr` (it requires a spec behind the diff). **Never merge.** Never `gh pr merge`. Never `/flow-next:land`. The PR stays open for the human or land.
 
-If `gh pr create` fails: do not claim `CHANGED`. End `BLOCKED` naming the branch and that the PR did not open.
+If the push or `gh pr create` fails: do not claim `CHANGED`. End `BLOCKED` naming the branch and which step did not land.
 
 `features=<n>` is the count of feature files remaining in the map after corrections.
 
@@ -253,6 +253,6 @@ Maintain emits exactly `CLEAN`, `CHANGED`, or `BLOCKED`. Not `SEEDED`, not `REFU
 
 - Exactly one verdict. Last line is one `FEATURES_VERDICT=` line matching the grammar above.
 - `CLEAN`: no branch, no PR.
-- `CHANGED`: one open PR; every shipped file was re-read; body has the four sections; notes, scratch, and evidence are not in the diff.
+- `CHANGED`: one open PR from a branch cut off the default base and pushed with upstream tracking; every shipped file was re-read; body has the four sections; notes, scratch, and evidence are not in the diff.
 - `BLOCKED`: reason names the blocker; no resume file; next run starts from the committed map.
 - Every `blocked-for-this-pass` feature slug appears in the terminal `reason` when the outcome is `CHANGED` or `BLOCKED`.
