@@ -7,7 +7,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-210-comment-as-alibi-finding-class-in-code.md",
-  "status": "open",
+  "status": "done",
   "title": "Comment-as-alibi finding class in code review prompts",
   "tracker": {
     "baseHashFlow": null,
@@ -20,5 +20,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-29T10:13:08.911810Z"
+  "updated_at": "2026-08-29T10:53:03.255004Z"
 }
