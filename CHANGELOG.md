@@ -6,6 +6,7 @@ All notable changes to the flow-next.
 
 ### Changed
 
+- **A workaround wearing a justifying comment no longer sails through code review as well-documented.** Implementation and standalone review now treat that comment as a signal on the underlying code. Severity is judged from the workaround, not the prose; rewriting or deleting the comment while keeping the hack does not resolve the finding. The fix is the code, or the constraint encoded as an assert, a test, or a lint rule. Licensed comments stay unflagged: license headers, external-constraint notes, lint suppressions with reasons, public API contracts, issue links.
 - **Review bots can no longer hold a merge hostage on process ceremony.** Decisions recorded in a spec's Decision Context (or ruled by the maintainer on the PR) are settled: the plan-review and completion-review prompts gained the settled-decisions rule the impl-review prompt already carried, and all three now state that process-compliance observations — checklist ceremony, dogfood records, handoff paperwork — are FYI, never blocking. The recommended `land.reviewTrigger` text tells external bots the same. Conduct checklists remain review rubrics; the mandatory dogfood-and-record handoff step is removed from the maintainer docs.
 
 ## [flow-next 4.9.0] - 2026-08-29

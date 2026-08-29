@@ -57,6 +57,15 @@ Do NOT mark NEEDS_WORK for:
 
 You MAY mention these as "FYI" observations without affecting the verdict.
 
+**Comment-as-alibi:** A comment that exists to justify a workaround or narrate
+around a hack is itself a finding: it flags the underlying code. Judge severity
+from the workaround, not the prose — well-written justification does not lower
+it. Rewriting or deleting the comment while keeping the workaround does not
+resolve the finding; the fix is the code, or the constraint encoded as an
+assert, a test, or a lint rule. Never flag licensed comments: license headers,
+external-constraint notes, lint suppressions with reasons, public API
+contracts, issue links.
+
 ## Code-smell baseline (always-on, judgement calls — repo standards override; skip what tooling enforces)
 Beyond correctness, name any of these you spot and quote the hunk (each a heuristic, never a hard violation):
 Long Method · Large Class · Long Parameter List · Duplicated Code · Feature Envy (uses another object's data more than its own) · Data Clumps (same values always passed together — wants a type) · Primitive Obsession (bare primitives where a small type belongs) · Speculative Generality · Middle Man / pass-through (forwards the same arguments to another call of the same shape — a layer hiding nothing).
