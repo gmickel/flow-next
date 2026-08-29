@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-209-no-plan-work-route-tool-permission-audit",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-08-29T00:06:56.713048Z",
   "created_at": "2026-08-28T20:55:22.515162Z",
   "default_impl": null,
   "default_review": null,
@@ -332,15 +332,42 @@
       "task": null,
       "timestamp": "2026-08-28T22:07:56.220784Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "623a6686d71d2c97914a8bb9f2b891f18b4d5f6fd9a43a9b118b88b5a29d05a8",
+      "backend": "host",
+      "counter_kind": "plan",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "765bf53082bcdb4977de00b68014ce0aef5b04b8",
+      "head_sha_observed": false,
+      "kind": "completion",
+      "outcome": "verdict",
+      "output_bytes": 10494,
+      "output_sha256": "dd80e1f08271b851bcb19c9e3e498de0f1db6b8fe8c44c7683bb7e68dd37d5cc",
+      "reservation_id": "4a8be92f35c94b1ca29ed811fa80a8a7",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-08-29T00:06:56.450272Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "plan": 1,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-209-no-plan-work-route-tool-permission-audit.md",
@@ -357,5 +384,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-28T22:07:56.224617Z"
+  "updated_at": "2026-08-29T00:06:56.713744Z"
 }
