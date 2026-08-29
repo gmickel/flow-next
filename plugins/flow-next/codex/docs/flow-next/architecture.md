@@ -61,6 +61,9 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 │   ├── fn-140-briefing.md       # Always-latest briefing index (convenience copy, rewritten each emission)
 │   ├── fn-140-briefing-1.md     # Per-cluster briefing when a multi-spec split is confirmed
 │   └── .transactions/           # (auto-gitignored) write-ahead journal for multi-file chart mutations
+├── features/              # Committed user-POV drive map (fn-211)
+│   ├── README.md                # Index + operating rules (baseline preconditions, driving conventions, proof standards)
+│   └── <feature>.md             # One file per user-facing feature (four H2s + Surface line)
 ├── memory/                # Persistent learnings (opt-in, categorized)
 │   ├── bug/               # Track: failures / defects
 │   │   ├── build-errors/
@@ -91,7 +94,7 @@ Rationale: keeps the system simple, improves re-anchoring, makes automation (Ral
 └── .cache/                # (auto-gitignored) CLI model-resolution cache
 ```
 
-`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored. `charts/` and `charts/.transactions/` appear on first `/flow-next:chart` / `flowctl chart create` (the WAL is gitignored; chart maps and decision records are tracked like specs).
+`flowctl init` creates `specs/`, `tasks/`, `memory/`, `meta.json`, `config.json`, and the auto-managed `.gitignore`. `/flow-next:setup` additionally stamps `bin/`, `templates/`, and `usage.md`. Runtime dirs (`sync-runs/`, `pilot-runs/`, `locks/`, `tmp/`, `receipts/`, `.cache/`) appear on first use and stay gitignored. `charts/` and `charts/.transactions/` appear on first `/flow-next:chart` / `flowctl chart create` (the WAL is gitignored; chart maps and decision records are tracked like specs). `features/` appears on first `/flow-next:features` seed (tracked like specs; the skill validates the four-H2 shape itself - there is no `flowctl features` subcommand).
 
 ### Charts layout (fn-135)
 
@@ -106,6 +109,17 @@ Charts share the native `fn-N` allocation domain with specs: one cross-kind coun
 | `.flow/charts/.transactions/` | Crash-recovery WAL: pre-state fingerprints, intended mutation set, publication phase. Every chart command recovers an incomplete journal under the resource lock before reading state. |
 
 Multi-file chart mutations (map + sidecars + ledger + dependent cascade) are one recoverable transaction: no-clobber creates, staged replacements, atomic rename, rollback to pre-call state on failure. Full CLI contract: [`flowctl.md`](flowctl.md#chart).
+
+### Feature-map layout (fn-211)
+
+The feature map is committed team knowledge, like specs and memory: a directory a cold agent can drive from. Consumers (QA, drive) discover it by existence check only. Absent directory is today's behavior at zero added cost. There is no config key, no registration, and no `flowctl` validation of the four-H2 shape - `/flow-next:features` validates that itself.
+
+| Path | Role |
+|---|---|
+| `.flow/features/README.md` | Index and operating rules: baseline preconditions, driving conventions, proof standards, feature-entry contract, surfaces grouped by `**Surface:**`. |
+| `.flow/features/<feature>.md` | One file per user-facing feature. H1 + one paragraph of user-visible behavior, required `**Surface:**` line, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it`, `Gotchas`. |
+
+Maintain's `changed` PR ships `.flow/features/**` plus owned harness corrections. Run notes, scratch state, and live-pass evidence stay under the gitignored per-run tmp convention. Skill: [`../skills/flow-next-features/SKILL.md`](../../skills/flow-next-features/SKILL.md).
 
 Review receipts may contain the optional versioned `findings` projection. Before
 advancing a latest receipt pointer, Flow-Next preserves its valid prior
@@ -281,7 +295,7 @@ The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The 
 
 - Task tracking lives in `.flow/` (no external tracker). flowctl itself is never copied there - every host resolves it from the plugin install (see [platforms.md → What setup does](platforms.md#what-setup-does)).
 - Install: plugin only - no external services, no config-file edits.
-- Artifacts: `.flow/specs/` (markdown + JSON sidecar), `.flow/tasks/` (markdown + JSON sidecar), and optionally `.flow/charts/` (decision maps + decision records + briefings).
+- Artifacts: `.flow/specs/` (markdown + JSON sidecar), `.flow/tasks/` (markdown + JSON sidecar), optionally `.flow/charts/` (decision maps + decision records + briefings), and optionally `.flow/features/` (committed user-POV drive map).
 - Multi-user safe: scan-based IDs + soft claims (task assignee; chart decision claims).
 - Uninstall: delete `.flow/` (and `scripts/ralph/` if enabled). `GLOSSARY.md` / `STRATEGY.md` at the repo root persist by design.
 
@@ -293,5 +307,6 @@ The legacy `flow` plugin was removed in flow-next 1.0.2 (commit `ffc7189`). The 
   receipt contract and currentness rules.
 - [`flowctl.md`](flowctl.md) - full CLI reference (including [`chart`](flowctl.md#chart)).
 - [`../skills/flow-next-chart/SKILL.md`](../../skills/flow-next-chart/SKILL.md) - optional pre-capture decision-map skill.
+- [`../skills/flow-next-features/SKILL.md`](../../skills/flow-next-features/SKILL.md) - seed/maintain the committed user-POV drive map.
 - [`../README.md`](https://github.com/gmickel/flow-next/blob/main/plugins/flow-next/README.md) - plugin overview.
 - [`../../../GLOSSARY.md`](https://github.com/gmickel/flow-next/blob/main/GLOSSARY.md) - Spec, Chart, D-ID, Task, Handover object, Receipt.

@@ -30,7 +30,7 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 | [`running-lean.md`](running-lean.md) | Which layers to switch on at all, what each one costs, and how to get the capability without the standing cost |
 | [`pipeline-variations.md`](pipeline-variations.md) | Six worked routes from epic to docs chore, and the risk-and-unknowns rule that picks between them |
 | [`architecture.md`](architecture.md) | The `.flow/` layout, the spec-first task model, and what a spec's [`## Quick commands`](architecture.md#verification-tiers-the-specs-quick-commands) block is for |
-| [`self-improving.md`](self-improving.md) | How memory, glossary, decisions, and strategy compound through work you already do |
+| [`self-improving.md`](self-improving.md) | How memory, glossary, decisions, strategy, and the feature map compound through work you already do |
 | [`teams.md`](teams.md) | Handover objects, spec-as-PR, parallel work from one spec, the adoption ladder |
 | [`platforms.md`](platforms.md) | Per-harness install and caveats for Claude Code, Codex, Droid, Cursor, Grok Build, and OpenCode |
 
@@ -38,14 +38,15 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 
 | Doc | Answers |
 |---|---|
-| [`skills.md`](skills.md) | All 31 skills in the published catalog, what triggers each one, and what it does |
+| [`skills.md`](skills.md) | All 32 skills in the published catalog, what triggers each one, and what it does |
 | [`spec-template.md`](spec-template.md) | What belongs in a spec, the R-ID rules, and how to customize the scaffold from a root `SPEC.md` |
 | [`flowctl.md`](flowctl.md) | The full CLI: every command, flag, JSON shape, and exit code |
 | [`orchestration.md`](orchestration.md) | The four model tiers, the routing block in your own instruction file, review-backend selection, and the bridge route |
 | [`reach/README.md`](reach/README.md) | What each harness can actually reach, and how it degrades when it cannot |
 | [`../skills/flow-next-pilot/SKILL.md`](../../skills/flow-next-pilot/SKILL.md) | The build loop: one ready spec, one stage per tick, one verdict line |
 | [`../skills/flow-next-land/SKILL.md`](../../skills/flow-next-land/SKILL.md) | The ship loop: CI, review convergence, the gated merge, the release tail |
-| [`../skills/flow-next-qa/SKILL.md`](../../skills/flow-next-qa/SKILL.md) | The live-app pass, and why it may never mark PASS by reading source |
+| [`../skills/flow-next-qa/SKILL.md`](../../skills/flow-next-qa/SKILL.md) | The live-app pass (consumes `.flow/features/` navigation when present), and why it may never mark PASS by reading source |
+| [`../skills/flow-next-features/SKILL.md`](../../skills/flow-next-features/SKILL.md) | Seed or maintain the committed user-POV drive map that QA and drive reuse for navigation |
 | [`ralph.md`](ralph.md) | The deprecated hardened harness, still supported and still documented |
 | [`tracker-sync.md`](tracker-sync.md) | Projecting a spec onto Linear, GitHub, GitLab, or Jira, and reconciling it back |
 | [`html-artifacts.md`](html-artifacts.md) | The opt-in HTML render lenses for spec review and PR review |
@@ -71,7 +72,7 @@ The repo's strategic intent is [`STRATEGY.md`](https://github.com/gmickel/flow-n
 
 **Quick jumps into the CLI reference:** [`flowctl brief`](flowctl.md#brief) · [`flowctl chart`](flowctl.md#chart) · [`flowctl review-backend`](flowctl.md#review-backend) · [`flowctl prime classify`](flowctl.md#prime-classify) · [`flowctl repo-map`](flowctl.md#repo-map) · [`flowctl setup-block`](flowctl.md#setup-block) · [`flowctl validate`](flowctl.md#validate) · [`flowctl spec create`](flowctl.md#spec-create) · [`flowctl show`](flowctl.md#show) · [`flowctl pilot strikes`](flowctl.md#pilot-strikes) · [the deterministic review cap](flowctl.md#deterministic-review-cap)
 
-**Deep links worth knowing:** [tiers](orchestration.md#tiers-what-kind-of-model-a-job-wants) · [review backends](orchestration.md#review-backends-cross-model-review) · [the bridge route](orchestration.md#implementation-offload-the-bridge-route) · [turning the review dial down](running-lean.md#turning-the-dial-none-and-host) · [finding identity and lineage](review-findings.md#identity-and-lineage) · [review bookkeeping authority](architecture.md#review-bookkeeping-authority-and-write-ordering) · [chart projection](tracker-sync.md#chart-lifecycle-projection) · [OpenCode install](platforms.md#opencode) · [backlog mode](../../skills/flow-next-pilot/references/backlog-mode.md) · [chart workflow](../../skills/flow-next-chart/workflow.md) · [land workflow](../../skills/flow-next-land/workflow.md) · [make-pr create and finalize](../../skills/flow-next-make-pr/create-and-finalize.md) · [prime](../../skills/flow-next-prime/SKILL.md) · [drive](../../skills/flow-next-drive/SKILL.md) · [chart resolve](flowctl.md#chart-resolve)
+**Deep links worth knowing:** [tiers](orchestration.md#tiers-what-kind-of-model-a-job-wants) · [review backends](orchestration.md#review-backends-cross-model-review) · [the bridge route](orchestration.md#implementation-offload-the-bridge-route) · [turning the review dial down](running-lean.md#turning-the-dial-none-and-host) · [finding identity and lineage](review-findings.md#identity-and-lineage) · [review bookkeeping authority](architecture.md#review-bookkeeping-authority-and-write-ordering) · [chart projection](tracker-sync.md#chart-lifecycle-projection) · [OpenCode install](platforms.md#opencode) · [backlog mode](../../skills/flow-next-pilot/references/backlog-mode.md) · [chart workflow](../../skills/flow-next-chart/workflow.md) · [land workflow](../../skills/flow-next-land/workflow.md) · [make-pr create and finalize](../../skills/flow-next-make-pr/create-and-finalize.md) · [prime](../../skills/flow-next-prime/SKILL.md) · [drive](../../skills/flow-next-drive/SKILL.md) (consumes `.flow/features/` when present) · [chart resolve](flowctl.md#chart-resolve)
 
 ## Notable updates
 

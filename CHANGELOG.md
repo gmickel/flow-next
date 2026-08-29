@@ -2,6 +2,14 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+QA and drive keep how a user reaches each screen. Navigation, preconditions, and gotchas survive the run instead of evaporating, so the next pass starts from proven routes rather than rediscovering them.
+
+### Added
+
+- **Live verification stops paying the navigation tax every time.** A committed user-POV map at `.flow/features/` records how a user reaches each feature, how an agent drives it, and which traps waste a run. `/flow-next:qa` and `flow-next-drive` read it when it exists (existence check only; absent map is today's behavior). The spec still supplies this run's ACs, and live captured evidence remains the only SHIP basis. `/flow-next:features` seeds the map (every route proven by one live drive before it lands) and keeps it honest with an audit-shaped maintain pass: `clean`, `changed` (one PR of proven map/harness corrections, never product code), or `blocked`. Never a pipeline stage.
+
 ## [flow-next 4.9.1] - 2026-08-29
 
 ### Changed

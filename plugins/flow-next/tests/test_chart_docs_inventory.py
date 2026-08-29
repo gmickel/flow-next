@@ -275,22 +275,24 @@ class ChartRegistryCounts(unittest.TestCase):
         # base flow-next is phrase-triggered too
         phrase_count = len(phrase) + (1 if "flow-next" in skill_dirs else 0)
 
-        # 32/28/27 include the experimental flow-next-work-rolling beta
-        # (fn-203.4) and the stable flow-next-prose skill (fn-207.5); the
-        # published phrases below (31 skills / 26 slash-command) exclude
-        # exactly one skill - flow-next-work-rolling - per the
-        # experimental-tier carve-out, and must equal the docs/skills.md
-        # table row count.
-        self.assertEqual(len(skill_dirs), 32, f"skills dirs: {skill_dirs}")
-        self.assertEqual(len(commands), 28, f"commands: {commands}")
+        # 33/29/28 include the experimental flow-next-work-rolling beta
+        # (fn-203.4), the stable flow-next-prose skill (fn-207.5), and
+        # flow-next-features (fn-211.4); the published phrases below
+        # (32 skills / 27 slash-command) exclude exactly one skill -
+        # flow-next-work-rolling - per the experimental-tier carve-out,
+        # and must equal the docs/skills.md table row count.
+        self.assertEqual(len(skill_dirs), 33, f"skills dirs: {skill_dirs}")
+        self.assertEqual(len(commands), 29, f"commands: {commands}")
         self.assertIn("flow-next-chart", skill_dirs)
         self.assertIn("flow-next-guide", skill_dirs)
+        self.assertIn("flow-next-features", skill_dirs)
         self.assertIn("chart", commands)
         self.assertIn("guide", commands)
-        self.assertEqual(len(slash_skills), 27, f"slash skills: {slash_skills}")
+        self.assertIn("features", commands)
+        self.assertEqual(len(slash_skills), 28, f"slash skills: {slash_skills}")
         self.assertEqual(phrase_count, 5, f"phrase skills expected 5, got {phrase_count}")
 
-        expected_snippet = "28 commands, 32 skills"
+        expected_snippet = "29 commands, 33 skills"
         for path in REGISTRY_COUNT_FILES:
             text = _read(path)
             self.assertIn(
@@ -301,11 +303,11 @@ class ChartRegistryCounts(unittest.TestCase):
 
         # Docs surfaces that publish counts
         for path, needles in (
-            (DOCS / "skills.md", ("31 skills", "26 slash-command", "5 phrase")),
-            (DOCS / "README.md", ("31 skills",)),
-            (REPO_ROOT / "README.md", ("31 skills",)),
-            (PLUGIN / "README.md", ("31 skills",)),
-            (DOCS / "teams.md", ("all 27 commands",)),
+            (DOCS / "skills.md", ("32 skills", "27 slash-command", "5 phrase")),
+            (DOCS / "README.md", ("32 skills",)),
+            (REPO_ROOT / "README.md", ("32 skills",)),
+            (PLUGIN / "README.md", ("32 skills",)),
+            (DOCS / "teams.md", ("all 28 commands",)),
         ):
             text = _read(path)
             for n in needles:

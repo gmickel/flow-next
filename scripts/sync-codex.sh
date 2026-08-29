@@ -1693,6 +1693,7 @@ generate_openai_yaml "flow-next-guide"     "Flow Guide"     "Prompt-first router
 generate_openai_yaml "flow-next-capture"   "Flow Capture"   "Synthesize conversation context into a flow-next spec" "#3B82F6" true "Capture this as a spec: "
 generate_openai_yaml "flow-next-strategy"  "Flow Strategy"  "Generate or update repo-root STRATEGY.md (problem, approach, personas, metrics, tracks)" "#3B82F6" true
 generate_openai_yaml "flow-next-audit"     "Flow Audit"     "Review .flow/memory/ entries against current code"   "#3B82F6" true
+generate_openai_yaml "flow-next-features"  "Flow Features"  "Seed or maintain the committed user-POV feature map at .flow/features/" "#3B82F6" true
 generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate legacy flat memory files to categorized YAML schema" "#3B82F6" true
 generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" true
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true
@@ -1778,6 +1779,7 @@ DIET = {
     "flow-next-guide": "Recommend the smallest sufficient flow-next workflow from the starting state. Stateless router. Use when unsure which command or stage applies next.",
     "flow-next-strategy": "Create or update repo-root STRATEGY.md (problem, approach, users, metrics, tracks). Use for strategy or roadmap doc requests.",
     "flow-next-audit": "Audit .flow/memory/ entries against current code and keep, update, consolidate, replace, delete, or harden each. Use when asked to audit memory or graduate a recurring lesson into a gate.",
+    "flow-next-features": "Seed or maintain the committed user-POV drive map at .flow/features/ so QA and drive reuse how a user reaches each feature.",
     "flow-next-memory-migrate": "Migrate legacy flat .flow/memory files to the categorized YAML schema. One-time ceremony. Use when asked to migrate flow memory.",
     "flow-next-tracker-sync": "Project a flow-next spec to a tracker issue (Linear, GitHub, GitLab, Jira) and reconcile two-way. Use when asked to sync to a tracker. NOT plan-sync.",
     "flow-next-qa": "Live-app QA pass derived from the spec. Drives the running app, files P0/P1/P2 findings with evidence, emits a YES or NO qa_verdict receipt.",
@@ -1851,6 +1853,7 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-deps"
   "flow-next-work-rolling"
   "flow-next-prose"
+  "flow-next-features"
 )
 
 openai_yaml_count=$(find "$CODEX_DIR/skills" -name "openai.yaml" | wc -l | tr -d ' ')
