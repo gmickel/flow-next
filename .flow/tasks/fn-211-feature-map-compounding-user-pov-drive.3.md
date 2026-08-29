@@ -22,9 +22,12 @@ Wire the two consumers. Greenfield: neither skill references `.flow/features/` t
 - [ ] drive carries the short pre-resolved-route pointer with detection as fallback
 - [ ] No duplicated map-contract prose in either consumer (pointers only)
 ## Done summary
-TBD
+Wired the two consumers. QA: a new existence-gated discover step reads the feature-map index and selects features by Surface identifier + sub-feature IDs, loading How-to-get-to-it/Driving-it/Gotchas for navigation; scenario derivation cites map-sourced routes when the map was loaded; a new stale-route step files knowledge-track memory tagged feature-map-drift (two-line Expected/Observed body, QA_FILED_MEMORY tracked, memory-disabled fallback to run notes) and never edits the map mid-run; the autonomous self-commit sweep includes the drift memos; the SKILL description gained the consumes-map clause. Drive: a three-line existence-gated pointer in surface detection - the map pre-resolves route/preconditions/gotchas, live detection stays the fallback - plus a Done-when line. Absent map: byte-identical behavior, one existence check. Reviewed notes: the worker also hand-updated the codex mirror copies of both files (outside its declared Touches; accepted - no collision, and task .4's sync-codex regeneration overwrites the mirror wholesale, which is the authoritative path). Grok-4.6 bridge implementation; conductor in-host review verdict SHIP; contract test (9) and qa suites (27) green.
 
+stage: plan-sync - skipped(config: planSync.enabled != true)
+stage: impl-review - ran (in-host, verdict SHIP) (model: claude-fable-5)
+stage: wave-join - ran (merge, no collision)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 6de101f8, ec6b926b
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_features_skill_contract -q  # 9 OK (integrated target), cd plugins/flow-next/tests && python3 -m unittest discover -p 'test_qa*' -q  # 27 OK (workspace)
 - PRs:
