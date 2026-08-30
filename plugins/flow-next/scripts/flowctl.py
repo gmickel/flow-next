@@ -20722,7 +20722,40 @@ def _parse_memory_frontmatter_text(text: str) -> dict[str, Any]:
         parsed = safe_load(envelope.frontmatter)
     except yaml_error:
         return {}
-    return parsed if isinstance(parsed, dict) else {}
+    if not isinstance(parsed, dict):
+        return {}
+    return _restore_coerced_scalars(parsed, envelope.frontmatter)
+
+
+def _restore_coerced_scalars(
+    parsed: dict[str, Any], frontmatter_text: str
+) -> dict[str, Any]:
+    """Undo PyYAML type coercion on legacy unquoted scalar values.
+
+    `write_memory_entry` now quotes every scalar PyYAML would coerce, but
+    entries written before that fix may carry unquoted scalars that
+    safe_load returns as datetime/date/bool/int/float. `str(value)` can
+    differ from the stored text (`2026-08-30T00:00:00Z` reads back as
+    `2026-08-30 00:00:00+00:00`), which breaks byte-equality consumers —
+    `memory upsert` title matching took the zero-match path and created a
+    suffixed sibling instead of updating. Recover the preserved textual
+    form from the inline parser (which keeps every scalar a string); fall
+    back to `str(value)` when the inline parser cannot handle the block.
+    Memory readers treat every scalar as a string, so this is lossless.
+    """
+    if all(
+        value is None or isinstance(value, (str, list, dict))
+        for value in parsed.values()
+    ):
+        return parsed
+    textual = _parse_inline_yaml(frontmatter_text)
+    restored = dict(parsed)
+    for key, value in parsed.items():
+        if value is None or isinstance(value, (str, list, dict)):
+            continue
+        fallback = textual.get(key)
+        restored[key] = fallback if isinstance(fallback, str) else str(value)
+    return restored
 
 
 def parse_memory_frontmatter(
@@ -20769,6 +20802,41 @@ _YAML_RESERVED_SCALARS: frozenset[str] = frozenset(
 )
 
 
+# Remaining PyYAML implicit-resolver forms (YAML 1.1) beyond the reserved
+# words and plain int/float checks below: timestamps/dates (coerced to
+# datetime.date / datetime.datetime — re-stringifying CHANGES the text,
+# e.g. "2026-08-30T00:00:00Z" -> "2026-08-30 00:00:00+00:00", which broke
+# `memory upsert` byte-equality title matching), base-prefixed and
+# underscored ints, sexagesimal numbers, inf/nan words, and the `=` value
+# scalar (safe_load has no constructor for it — the whole frontmatter reads
+# back as malformed). Any fullmatch reads back as non-string under PyYAML,
+# so quote. Mirrors PyYAML's Resolver defaults, frozen at YAML 1.1.
+_YAML_COERCIBLE_SCALAR_RE = re.compile(
+    r"""
+    (?:
+      [0-9]{4}-[0-9]{1,2}-[0-9]{1,2}                   # date / timestamp head
+      (?:
+        (?:[Tt]|[\ \t]+)[0-9]{1,2}
+        :[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?
+        (?:[\ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?
+      )?
+     |[-+]?0b[0-1_]+                                   # binary int
+     |[-+]?0x[0-9A-Fa-f_]+                             # hex int
+     |[-+]?0[0-7_]+                                    # octal int
+     |[-+]?[1-9][0-9_]*(?::[0-5]?[0-9])+               # sexagesimal int
+     |[-+]?(?:0|[1-9][0-9_]*)                          # underscored int
+     |[-+]?[0-9][0-9_]*\.[0-9_]*(?:[eE][-+][0-9]+)?    # float
+     |\.[0-9][0-9_]*(?:[eE][-+][0-9]+)?                # leading-dot float
+     |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*      # sexagesimal float
+     |[-+]?\.(?:inf|Inf|INF)                           # infinity
+     |\.(?:nan|NaN|NAN)                                # not-a-number
+     |=                                                # value scalar
+    )
+    """,
+    re.VERBOSE,
+)
+
+
 def _yaml_scalar_needs_quoting(text: str) -> bool:
     """Return True when the value would be mis-parsed as non-string by YAML."""
     if text in _YAML_RESERVED_SCALARS:
@@ -20777,6 +20845,11 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     if re.fullmatch(r"[+-]?\d+", text):
         return True
     if re.fullmatch(r"[+-]?\d*\.\d+([eE][+-]?\d+)?", text):
+        return True
+    # Timestamps/dates, base-prefixed/underscored/sexagesimal numbers,
+    # inf/nan, `=` — the rest of PyYAML's implicit resolvers (issue: PR #385
+    # upsert round-trip; datetime-shaped titles re-stringify differently).
+    if _YAML_COERCIBLE_SCALAR_RE.fullmatch(text):
         return True
     # Flow-list / flow-map indicators inside a list break the inline parser.
     if any(c in text for c in ",[]{}"):

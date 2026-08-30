@@ -363,5 +363,106 @@ class TestMemoryUpsert(unittest.TestCase):
         self.assertEqual(len(_entry_files(self.memory_dir)), 1)
 
 
+def _pyyaml_available() -> bool:
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+class TestUpsertTitleRoundTrip(unittest.TestCase):
+    """A stored title must survive write+read byte-for-byte (PR #385 review).
+
+    Unquoted YAML-coercible titles (e.g. `2026-08-30T00:00:00Z`) parsed to
+    datetime under PyYAML and re-stringified differently, so a repeated
+    identical upsert missed its own prior write and created a suffixed
+    sibling instead of updating.
+    """
+
+    DATETIME_TITLE = "2026-08-30T00:00:00Z"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.memory_dir = _init_repo(self.tmp)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _body(self, text: str) -> str:
+        body = self.tmp / "body.md"
+        body.write_text(text, encoding="utf-8")
+        return str(body)
+
+    def _upsert(self, title: str, body: str) -> dict[str, Any]:
+        return _run(
+            self.tmp,
+            "memory",
+            "upsert",
+            "--track",
+            "knowledge",
+            "--category",
+            "workflow",
+            "--title",
+            title,
+            "--json",
+            "--body-file",
+            self._body(body),
+        )
+
+    def test_datetime_shaped_title_is_written_quoted(self) -> None:
+        out = self._upsert(self.DATETIME_TITLE, "v1")
+        raw = Path(out["path"]).read_text(encoding="utf-8")
+        self.assertIn(f'title: "{self.DATETIME_TITLE}"', raw)
+
+    @unittest.skipUnless(_pyyaml_available(), "PyYAML not installed")
+    def test_datetime_shaped_title_repeat_is_update_not_sibling(self) -> None:
+        first = self._upsert(self.DATETIME_TITLE, "v1")
+        self.assertEqual(first["action"], "created")
+        second = self._upsert(self.DATETIME_TITLE, "v2")
+        self.assertEqual(second["action"], "updated")
+        self.assertEqual(second["entry_id"], first["entry_id"])
+        self.assertEqual(len(_entry_files(self.memory_dir)), 1)
+
+    def test_plain_string_title_still_matches(self) -> None:
+        first = self._upsert("Feature map drifts after refactors", "v1")
+        second = self._upsert("Feature map drifts after refactors", "v2")
+        self.assertEqual(second["action"], "updated")
+        self.assertEqual(second["entry_id"], first["entry_id"])
+        self.assertEqual(len(_entry_files(self.memory_dir)), 1)
+
+    def test_legacy_unquoted_datetime_title_still_matches(self) -> None:
+        # Pre-fix entries carry the coercible title unquoted; the read-side
+        # restore must recover the stored text so the upsert still updates.
+        entry = (
+            self.memory_dir
+            / "knowledge"
+            / "workflow"
+            / "legacy-dt-2026-08-01.md"
+        )
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        entry.write_text(
+            "---\n"
+            f"title: {self.DATETIME_TITLE}\n"
+            'date: "2026-08-01"\n'
+            "track: knowledge\n"
+            "category: workflow\n"
+            "module: core\n"
+            "tags: [x]\n"
+            "applies_when: always\n"
+            "status: active\n"
+            "---\n"
+            "v1\n",
+            encoding="utf-8",
+        )
+        out = self._upsert(self.DATETIME_TITLE, "v2")
+        self.assertEqual(out["action"], "updated")
+        self.assertEqual(
+            out["entry_id"], "knowledge/workflow/legacy-dt-2026-08-01"
+        )
+        self.assertEqual(len(_entry_files(self.memory_dir)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
