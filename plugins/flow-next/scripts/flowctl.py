@@ -1486,7 +1486,9 @@ def get_default_config() -> dict:
             #     other value  → use it
             # The empty-disables arm is the only real off-switch — an
             # "empty → default fallback" would make the feature
-            # un-disableable.
+            # un-disableable. A persisted value equal to a RETIRED default
+            # (init materialized the pre-fn-213 string) is aliased to this
+            # built-in at read time — see RETIRED_CLEAN_REVIEW_PATTERNS.
             "cleanReviewCommentPattern": (
                 r"(Didn'?t find any( major)? issues"
                 r"|No( major)? issues found).*Reviewed commit"
@@ -1645,6 +1647,46 @@ def _with_tracker_spec_ids_normalized(cfg: dict) -> dict:
     return new_cfg
 
 
+# fn-213 — retired built-in defaults of land.cleanReviewCommentPattern.
+# `init` materializes the current default into .flow/config.json, so a repo
+# seeded before a default rotation keeps the OLD byte-string on disk and the
+# persisted value would override the improved built-in forever (later `init`
+# runs only add missing keys). Read-time aliasing: a persisted value that is
+# byte-identical to a retired default is treated as "use the current
+# built-in" on the MERGED tree. A customized pattern and the explicit ""
+# off-switch are never touched, and the `--raw` provenance probe still shows
+# the on-disk bytes. Rotating the default again: move the outgoing string
+# into this tuple in the same change.
+RETIRED_CLEAN_REVIEW_PATTERNS: tuple[str, ...] = (
+    # pre-fn-213 default (fn-65.1): legacy clean phrase only, no
+    # summary-table shape.
+    r"(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit",
+)
+
+
+def _with_retired_clean_review_pattern_upgraded(cfg: dict) -> dict:
+    """Return cfg with a retired land.cleanReviewCommentPattern default aliased.
+
+    Applies only when the merged value is byte-identical to a retired
+    built-in default (RETIRED_CLEAN_REVIEW_PATTERNS); custom patterns and
+    the explicit ``""`` off-switch pass through untouched. Copy-on-write so
+    a shared defaults dict is never mutated.
+    """
+    land = cfg.get("land")
+    if not isinstance(land, dict):
+        return cfg
+    raw_val = land.get("cleanReviewCommentPattern")
+    if raw_val not in RETIRED_CLEAN_REVIEW_PATTERNS:
+        return cfg
+    new_cfg = dict(cfg)
+    new_land = dict(land)
+    new_land["cleanReviewCommentPattern"] = get_default_config()["land"][
+        "cleanReviewCommentPattern"
+    ]
+    new_cfg["land"] = new_land
+    return new_cfg
+
+
 def _init_persisted_defaults() -> dict:
     """Defaults `cmd_init` writes/merges into config.json.
 
@@ -1695,7 +1737,11 @@ def load_flow_config() -> dict:
     try:
         data = json.loads(config_path.read_text(encoding="utf-8"))
         if isinstance(data, dict):
-            return _with_tracker_spec_ids_normalized(deep_merge(defaults, data))
+            # fn-213: alias a retired persisted cleanReviewCommentPattern
+            # default to the current built-in (read-time; disk untouched).
+            return _with_retired_clean_review_pattern_upgraded(
+                _with_tracker_spec_ids_normalized(deep_merge(defaults, data))
+            )
         return _with_tracker_spec_ids_normalized(defaults)
     except (json.JSONDecodeError, Exception):
         return _with_tracker_spec_ids_normalized(defaults)
@@ -1806,7 +1852,14 @@ def load_config_snapshot() -> ConfigSnapshot:
         merged = defaults
     else:
         merged = deep_merge(defaults, raw)
-    return ConfigSnapshot(raw, _with_tracker_spec_ids_normalized(merged))
+    # fn-213: same retired-default aliasing as load_flow_config so the
+    # snapshot's merged view stays byte-equal to load_flow_config().
+    return ConfigSnapshot(
+        raw,
+        _with_retired_clean_review_pattern_upgraded(
+            _with_tracker_spec_ids_normalized(merged)
+        ),
+    )
 
 
 def _snapshot_raw_probe(snapshot: ConfigSnapshot, key: str):
@@ -19765,7 +19818,12 @@ def cmd_init(args: argparse.Namespace) -> None:
             # The 1.1.11 pre-merge crossEpic→crossSpec mirror was removed in
             # 2.0.0 along with the `planSync.crossEpic` alias: a leftover legacy
             # key in the file is now inert (preserved by the merge, never read).
-            merged = deep_merge(stamped_defaults, raw)
+            # fn-213: a persisted retired cleanReviewCommentPattern default is
+            # upgraded on re-init too (read-time aliasing already covers every
+            # read; this just makes the file match what reads return).
+            merged = deep_merge(
+                stamped_defaults, _with_retired_clean_review_pattern_upgraded(raw)
+            )
             if merged != raw:
                 atomic_write_json(config_path, merged)
                 actions.append("upgraded config.json (added missing keys)")

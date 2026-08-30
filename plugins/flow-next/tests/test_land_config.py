@@ -15,7 +15,10 @@ fresh repo, WITHOUT any prior `config set`:
         null/missing → workflow falls back to the built-in default;
         explicit ""  → comment scan DISABLED (the real off-switch,
                        distinct from the seeded default);
-        other value  → used verbatim.
+        other value  → used verbatim — EXCEPT a value byte-identical to a
+                       retired built-in default (RETIRED_CLEAN_REVIEW_PATTERNS,
+                       fn-213), which is aliased to the current built-in on
+                       every merged read (disk untouched; "" never aliased).
   * land.mergeVerdictCommand → ""  (fn-188) — the opt-in repo
         merge-verdict gate. CONTRACT: unset, null, AND "" all mean OFF
         (byte-for-byte today's behavior); any other value is a shell
@@ -331,6 +334,84 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
         self.assertEqual(
             self._run_config_get_cli("land.cleanReviewCommentPattern")["value"],
             self.EXPECTED_CLEAN_PATTERN,
+        )
+
+    # ── fn-213: retired-default read-time aliasing ───────────────────────
+    # Repos seeded before fn-213 have the OLD built-in ERE materialized into
+    # .flow/config.json by init; the persisted bytes would override the
+    # improved default forever. A persisted value byte-identical to a retired
+    # default (RETIRED_CLEAN_REVIEW_PATTERNS) is aliased to the current
+    # built-in on every merged read; custom patterns and the explicit ""
+    # off-switch are never touched.
+
+    RETIRED_CLEAN_PATTERN = (
+        r"(Didn'?t find any( major)? issues"
+        r"|No( major)? issues found).*Reviewed commit"
+    )
+
+    def _write_config(self, tree: dict) -> None:
+        (self.tmpdir / ".flow" / "config.json").write_text(
+            json.dumps(tree), encoding="utf-8"
+        )
+
+    def test_retired_patterns_tuple_pins_old_default(self) -> None:
+        # The retired byte-string is a named constant so a future default
+        # rotation appends to the tuple rather than re-deriving it.
+        self.assertIn(
+            self.RETIRED_CLEAN_PATTERN,
+            self.flowctl.RETIRED_CLEAN_REVIEW_PATTERNS,
+        )
+        # and the current default is NOT in the retired set
+        self.assertNotIn(
+            self.EXPECTED_CLEAN_PATTERN,
+            self.flowctl.RETIRED_CLEAN_REVIEW_PATTERNS,
+        )
+
+    def test_persisted_retired_default_reads_as_current_default(self) -> None:
+        self._write_config(
+            {"land": {"cleanReviewCommentPattern": self.RETIRED_CLEAN_PATTERN}}
+        )
+        out = self._run_config_get_cli("land.cleanReviewCommentPattern")
+        self.assertEqual(out["value"], self.EXPECTED_CLEAN_PATTERN)
+
+    def test_persisted_retired_default_aliased_in_land_subtree_read(self) -> None:
+        # The land workflow reads `config get land --json` (§2.6) — the
+        # subtree emission path must serve the aliased value too.
+        self._write_config(
+            {"land": {"cleanReviewCommentPattern": self.RETIRED_CLEAN_PATTERN}}
+        )
+        out = self._run_config_get_cli("land")
+        self.assertEqual(
+            out["value"]["cleanReviewCommentPattern"], self.EXPECTED_CLEAN_PATTERN
+        )
+
+    def test_persisted_custom_pattern_read_verbatim(self) -> None:
+        custom = r"LGTM.*Reviewed commit"
+        self._write_config({"land": {"cleanReviewCommentPattern": custom}})
+        out = self._run_config_get_cli("land.cleanReviewCommentPattern")
+        self.assertEqual(out["value"], custom)
+
+    def test_persisted_explicit_empty_off_switch_survives_aliasing(self) -> None:
+        self._write_config({"land": {"cleanReviewCommentPattern": ""}})
+        out = self._run_config_get_cli("land.cleanReviewCommentPattern")
+        self.assertEqual(out["value"], "")
+
+    def test_retired_default_aliasing_leaves_disk_untouched(self) -> None:
+        # Read-time only: the merged read upgrades; the --raw provenance
+        # probe (and the file itself) still shows the persisted bytes.
+        self._write_config(
+            {"land": {"cleanReviewCommentPattern": self.RETIRED_CLEAN_PATTERN}}
+        )
+        raw_out = self._run_config_get_cli(
+            "land.cleanReviewCommentPattern", "--raw"
+        )
+        self.assertEqual(raw_out["value"], self.RETIRED_CLEAN_PATTERN)
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            on_disk["land"]["cleanReviewCommentPattern"],
+            self.RETIRED_CLEAN_PATTERN,
         )
 
     # ── fn-188: land.mergeVerdictCommand (R1) ────────────────────────────
