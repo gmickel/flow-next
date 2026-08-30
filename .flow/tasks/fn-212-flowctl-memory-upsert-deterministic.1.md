@@ -21,3 +21,4 @@ stage: impl-review - ran [2 rounds: NEEDS_WORK (4 findings: cross-category match
 - Commits: b19be4c15cc6db8c62d603f9769b7d416cdd038d, 5c302547392fc52a7c7a04abaa01cde5ec559971
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_memory_upsert test_memory_core test_flowctl_surface test_features_skill_contract test_qa_receipt test_tracker_distribution -q (136 tests OK), uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests/test_memory_upsert.py, python3 scripts/gen_tracker_manifest.py, ./scripts/sync-codex.sh x2 (idempotent)
 - PRs:
+stage: plan-sync - skipped(config: planSync.enabled != true)

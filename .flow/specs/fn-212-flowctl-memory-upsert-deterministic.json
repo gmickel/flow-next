@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-212-flowctl-memory-upsert-deterministic",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-08-30T15:16:56.049693Z",
   "created_at": "2026-08-30T14:53:28.251940Z",
   "default_impl": null,
   "default_review": null,
@@ -176,5 +176,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-30T15:14:36.036916Z"
+  "updated_at": "2026-08-30T15:16:56.049701Z"
 }
