@@ -22363,6 +22363,64 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         print(f"{verb} {entry_id} at {target_path}")
 
 
+def cmd_memory_upsert(args: argparse.Namespace) -> None:
+    """Deterministic find-or-create for recurrence-deduped entries (fn-212).
+
+    Same field surface as `memory add` minus `--update` (owned internally)
+    and the deprecated legacy form (positional content / `--type`).
+
+    Match: categorized entries in `--track` whose stored title equals
+    `--title` byte-for-byte (no tokenization, case-sensitive). Legacy
+    flat-file entries are never matched. Zero matches -> create exactly as
+    `memory add` would. One match -> update that entry exactly as
+    `memory add --update <id>` would (stale entries are matched too;
+    status handling follows the existing update semantics unchanged).
+    Two or more matches -> exit nonzero listing the ambiguous ids; no write.
+    """
+    memory_dir = require_memory_enabled(args)
+
+    track = getattr(args, "track", None)
+    title = getattr(args, "title", None)
+    if not track or not title:
+        missing = " and ".join(
+            flag
+            for flag, value in (("--track", track), ("--title", title))
+            if not value
+        )
+        error_exit(
+            f"Required: {missing}. The title-within-track pair is the upsert "
+            f"match identity, so both are mandatory.",
+            code=2,
+            use_json=args.json,
+        )
+    if track not in MEMORY_TRACKS:
+        error_exit(
+            f"Invalid track '{track}'. Valid: {', '.join(MEMORY_TRACKS)}.",
+            code=2,
+            use_json=args.json,
+        )
+
+    # `memory add` stores at most 80 title chars; match what would be stored
+    # so repeated upserts of an over-long title stay idempotent.
+    match_title = title[:80]
+    matches = [
+        entry
+        for entry in _memory_iter_entries(memory_dir, track=track)
+        if entry.get("title") == match_title
+    ]
+    if len(matches) > 1:
+        ids = ", ".join(entry["entry_id"] for entry in matches)
+        error_exit(
+            f"Ambiguous upsert: {len(matches)} entries in track '{track}' "
+            f"share title '{match_title}': {ids}. No write performed; "
+            f"disambiguate with `memory add --update <id>`.",
+            use_json=args.json,
+        )
+
+    args.update = matches[0]["entry_id"] if matches else None
+    cmd_memory_add(args)
+
+
 _LEGACY_TYPE_FOR_FILE: dict[str, str] = {
     "pitfalls.md": "pitfall",
     "conventions.md": "convention",
@@ -49275,70 +49333,81 @@ def main() -> None:
     p_memory_init.add_argument("--json", action="store_true", help="JSON output")
     p_memory_init.set_defaults(func=cmd_memory_init)
 
+    def _add_memory_entry_field_args(parser: argparse.ArgumentParser) -> None:
+        """Field surface shared by `memory add` and `memory upsert` (fn-212)."""
+        parser.add_argument(
+            "--track",
+            choices=list(MEMORY_TRACKS),
+            help="Track: bug | knowledge",
+        )
+        parser.add_argument(
+            "--category",
+            help="Category (see `flowctl memory add --help` output for valid list per track)",
+        )
+        parser.add_argument("--title", help="One-line summary (max 80 chars)")
+        parser.add_argument("--module", help="Affected module / file / subsystem")
+        parser.add_argument(
+            "--tags", help="Comma-separated tags (e.g. 'webpack,oom')"
+        )
+        parser.add_argument(
+            "--body-file",
+            dest="body_file",
+            help="Path to body markdown ('-' for stdin)",
+        )
+        # Bug-track optional overrides.
+        parser.add_argument(
+            "--problem-type",
+            dest="problem_type",
+            choices=list(MEMORY_PROBLEM_TYPES),
+            help="Bug track: problem type (defaults derived from category)",
+        )
+        parser.add_argument("--symptoms", help="Bug track: one-line symptoms")
+        parser.add_argument(
+            "--root-cause", dest="root_cause", help="Bug track: one-line root cause"
+        )
+        parser.add_argument(
+            "--resolution-type",
+            dest="resolution_type",
+            choices=list(MEMORY_RESOLUTION_TYPES),
+            help="Bug track: resolution kind (default: fix)",
+        )
+        # Knowledge-track optional override.
+        parser.add_argument(
+            "--applies-when",
+            dest="applies_when",
+            help="Knowledge track: situations this guidance applies to",
+        )
+        # Decision-specific optional fields (knowledge / decisions category).
+        parser.add_argument(
+            "--decision-status",
+            dest="decision_status",
+            choices=list(MEMORY_DECISION_STATUSES),
+            help="Decisions category: lifecycle (proposed | accepted | superseded)",
+        )
+        parser.add_argument(
+            "--superseded-by",
+            dest="superseded_by",
+            help="Decisions category: entry id that supersedes this decision",
+        )
+        parser.add_argument(
+            "--alternatives-considered",
+            dest="alternatives_considered",
+            help="Decisions category: comma-separated list of rejected alternatives",
+        )
+        parser.add_argument(
+            "--no-overlap-check",
+            dest="no_overlap_check",
+            action="store_true",
+            help="Skip overlap scoring; emit empty matches (still creates unless --update)",
+        )
+        parser.add_argument("--json", action="store_true", help="JSON output")
+
     p_memory_add = memory_sub.add_parser(
         "add",
         help="Add memory entry (categorized schema with overlap detection)",
     )
-    # Preferred form (fn-30 task 2).
-    p_memory_add.add_argument(
-        "--track",
-        choices=list(MEMORY_TRACKS),
-        help="Track: bug | knowledge",
-    )
-    p_memory_add.add_argument(
-        "--category",
-        help="Category (see `flowctl memory add --help` output for valid list per track)",
-    )
-    p_memory_add.add_argument("--title", help="One-line summary (max 80 chars)")
-    p_memory_add.add_argument("--module", help="Affected module / file / subsystem")
-    p_memory_add.add_argument(
-        "--tags", help="Comma-separated tags (e.g. 'webpack,oom')"
-    )
-    p_memory_add.add_argument(
-        "--body-file",
-        dest="body_file",
-        help="Path to body markdown ('-' for stdin)",
-    )
-    # Bug-track optional overrides.
-    p_memory_add.add_argument(
-        "--problem-type",
-        dest="problem_type",
-        choices=list(MEMORY_PROBLEM_TYPES),
-        help="Bug track: problem type (defaults derived from category)",
-    )
-    p_memory_add.add_argument("--symptoms", help="Bug track: one-line symptoms")
-    p_memory_add.add_argument(
-        "--root-cause", dest="root_cause", help="Bug track: one-line root cause"
-    )
-    p_memory_add.add_argument(
-        "--resolution-type",
-        dest="resolution_type",
-        choices=list(MEMORY_RESOLUTION_TYPES),
-        help="Bug track: resolution kind (default: fix)",
-    )
-    # Knowledge-track optional override.
-    p_memory_add.add_argument(
-        "--applies-when",
-        dest="applies_when",
-        help="Knowledge track: situations this guidance applies to",
-    )
-    # Decision-specific optional fields (knowledge / decisions category).
-    p_memory_add.add_argument(
-        "--decision-status",
-        dest="decision_status",
-        choices=list(MEMORY_DECISION_STATUSES),
-        help="Decisions category: lifecycle (proposed | accepted | superseded)",
-    )
-    p_memory_add.add_argument(
-        "--superseded-by",
-        dest="superseded_by",
-        help="Decisions category: entry id that supersedes this decision",
-    )
-    p_memory_add.add_argument(
-        "--alternatives-considered",
-        dest="alternatives_considered",
-        help="Decisions category: comma-separated list of rejected alternatives",
-    )
+    # Preferred form (fn-30 task 2): shared field surface, then add-only flags.
+    _add_memory_entry_field_args(p_memory_add)
     # Overlap signal + explicit update (fn-113: no auto-update).
     p_memory_add.add_argument(
         "--update",
@@ -49349,12 +49418,6 @@ def main() -> None:
             "memory add never auto-mutates on high overlap)"
         ),
     )
-    p_memory_add.add_argument(
-        "--no-overlap-check",
-        dest="no_overlap_check",
-        action="store_true",
-        help="Skip overlap scoring; emit empty matches (still creates unless --update)",
-    )
     # Legacy backward-compat.
     p_memory_add.add_argument(
         "--type",
@@ -49363,8 +49426,19 @@ def main() -> None:
     p_memory_add.add_argument(
         "content", nargs="?", help="DEPRECATED: entry body (use --body-file instead)"
     )
-    p_memory_add.add_argument("--json", action="store_true", help="JSON output")
     p_memory_add.set_defaults(func=cmd_memory_add)
+
+    p_memory_upsert = memory_sub.add_parser(
+        "upsert",
+        help=(
+            "Deterministic find-or-create: exact --title match within --track "
+            "(0 matches: create; 1: update in place; 2+: fail closed). "
+            "Matches categorized entries only - legacy flat-file entries are "
+            "never matched."
+        ),
+    )
+    _add_memory_entry_field_args(p_memory_upsert)
+    p_memory_upsert.set_defaults(func=cmd_memory_upsert)
 
     p_memory_read = memory_sub.add_parser(
         "read",

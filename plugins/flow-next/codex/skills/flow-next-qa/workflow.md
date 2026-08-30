@@ -422,26 +422,15 @@ if [ "$($FLOWCTL config get memory.enabled --json | jq -r '.value')" = "true" ];
 Expected: <mapped route / command>
 Observed: <what the live app did>
 EOF
-  # fn-113.2 fold, executable (same discipline as the 5.4 skeleton): a prior
-  # entry for EXACTLY this feature+route is UPDATED, never siblinged. Tag
-  # filter + exact title equality via memory list - scored search tokenizes
-  # and can return a different route of the same feature.
-  _prior="$($FLOWCTL memory list --track knowledge --json 2>/dev/null \
-    | jq -r --arg t "drift: <surface>/<feature-slug> <sub-feature-id>" '[.entries[]? | select((.tags // []) | index("feature-map-drift")) | select(.title == $t)][0].entry_id // empty')"
-  if [ -n "$_prior" ]; then
-    _out="$($FLOWCTL memory add \
-      --track knowledge --category workflow \
-      --title "drift: <surface>/<feature-slug> <sub-feature-id>" \
-      --tags "feature-map-drift" \
-      --update "$_prior" \
-      --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
-  else
-    _out="$($FLOWCTL memory add \
-      --track knowledge --category workflow \
-      --title "drift: <surface>/<feature-slug> <sub-feature-id>" \
-      --tags "feature-map-drift" \
-      --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
-  fi
+  # Deterministic find-or-create (fn-212): exact title-within-track match, so
+  # a prior entry for EXACTLY this feature+route is UPDATED, never siblinged
+  # (scored search tokenizes and can return a different route of the same
+  # feature - upsert never guesses; 2+ same-titled entries fail closed).
+  _out="$($FLOWCTL memory upsert \
+    --track knowledge --category workflow \
+    --title "drift: <surface>/<feature-slug> <sub-feature-id>" \
+    --tags "feature-map-drift" \
+    --body-file .flow/tmp/qa-"$SPEC_ID"/drift-<sid>.md --json)"
   _p="$(printf '%s' "$_out" | jq -r '.path // empty')"
   [ -n "$_p" ] && QA_FILED_MEMORY="${QA_FILED_MEMORY:+$QA_FILED_MEMORY }$_p"
 fi
@@ -454,7 +443,7 @@ When memory is disabled, record Expected/Observed in the run notes instead.
 - Every filed finding was reproduced a second time before filing, and carries severity, persona, steps to reproduce, expected-vs-actual, and evidence pointers (screenshot path, console path, full URL, plus the persisted write side-effect on a write path).
 - **Severity rests on observed user impact.** A P0 relabelled P1 to keep the verdict green has broken this.
 - Filing ran with overlap scoring on, and a memory-disabled repo still recorded the finding in the run notes so Phase 6 counts it.
-- When a mapped route did not match the live app, it was filed as knowledge-track memory tagged `feature-map-drift` (deduped against an existing high-overlap entry via --update; or recorded in the run notes if memory is disabled), the scenario fell back to ordinary route derivation, and the map itself was not edited.
+- When a mapped route did not match the live app, it was filed as knowledge-track memory tagged `feature-map-drift` (deduped deterministically via `memory upsert` on the exact drift title; or recorded in the run notes if memory is disabled), the scenario fell back to ordinary route derivation, and the map itself was not edited.
 
 ---
 
