@@ -22303,7 +22303,7 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         )
         action = "updated"
         related_to = list(updated_fm.get("related_to", []) or [])
-        if not args.json:
+        if not args.json and not getattr(args, "_single_line", False):
             print(
                 f"Updating {entry_id} via --update. "
                 f"Overlap level: {overlap['level']} "
@@ -22330,12 +22330,16 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         if overlap["level"] == "moderate":
             related_to = [m["id"] for m in overlap["matches"]]
             frontmatter["related_to"] = related_to
-            if not args.json:
+            if not args.json and not getattr(args, "_single_line", False):
                 print(
                     f"Moderate overlap with {', '.join(related_to)}. "
                     f"Creating new entry with related_to reference."
                 )
-        elif overlap["level"] == "high" and not args.json:
+        elif (
+            overlap["level"] == "high"
+            and not args.json
+            and not getattr(args, "_single_line", False)
+        ):
             match_ids = ", ".join(m["id"] for m in matches)
             print(
                 f"High overlap with {match_ids}. Creating new entry "
@@ -22400,25 +22404,53 @@ def cmd_memory_upsert(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
-    # `memory add` stores at most 80 title chars; match what would be stored
-    # so repeated upserts of an over-long title stay idempotent.
-    match_title = title[:80]
-    matches = [
-        entry
-        for entry in _memory_iter_entries(memory_dir, track=track)
-        if entry.get("title") == match_title
-    ]
-    if len(matches) > 1:
-        ids = ", ".join(entry["entry_id"] for entry in matches)
+    # `memory add` stores at most 80 title chars, so a longer title can never
+    # be a byte-for-byte identity: two distinct titles sharing the first 80
+    # chars would collide after truncation. Reject rather than guess.
+    if len(title) > 80:
         error_exit(
-            f"Ambiguous upsert: {len(matches)} entries in track '{track}' "
-            f"share title '{match_title}': {ids}. No write performed; "
-            f"disambiguate with `memory add --update <id>`.",
+            f"--title is {len(title)} chars; memory titles are stored "
+            f"truncated to 80, so an over-80 title cannot be a deterministic "
+            f"upsert identity. Shorten the title to 80 chars or fewer.",
+            code=2,
             use_json=args.json,
         )
 
-    args.update = matches[0]["entry_id"] if matches else None
-    cmd_memory_add(args)
+    # One lock spans scan, ambiguity decision, and the delegated write, so two
+    # concurrent zero-match upserts cannot both decide "create" (sibling
+    # duplicates) or interleave scan-then-write on the same entry.
+    lock_path = memory_dir.parent / "tmp" / "memory-upsert.lock"
+    try:
+        with cross_process_lock(lock_path):
+            matches = [
+                entry
+                for entry in _memory_iter_entries(memory_dir, track=track)
+                if entry.get("title") == title
+            ]
+            if len(matches) > 1:
+                ids = ", ".join(entry["entry_id"] for entry in matches)
+                error_exit(
+                    f"Ambiguous upsert: {len(matches)} entries in track "
+                    f"'{track}' share title '{title}': {ids}. No write "
+                    f"performed; disambiguate with `memory add --update <id>`.",
+                    use_json=args.json,
+                )
+
+            if matches:
+                # The match identity is title-within-track: a unique match
+                # updates regardless of category, so delegate with the matched
+                # entry's own category or `cmd_memory_add`'s same-bucket guard
+                # would reject a cross-category update.
+                args.update = matches[0]["entry_id"]
+                args.category = matches[0]["category"]
+            else:
+                args.update = None
+            # Non-JSON output contract (R3): exactly one final line; suppress
+            # the delegated overlap/update progress prints.
+            args._single_line = True
+            cmd_memory_add(args)
+    except CrossProcessLockError as e:
+        error_exit(f"memory upsert lock unavailable: {e}", use_json=args.json)
 
 
 _LEGACY_TYPE_FOR_FILE: dict[str, str] = {

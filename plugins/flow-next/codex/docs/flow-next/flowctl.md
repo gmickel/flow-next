@@ -1243,6 +1243,9 @@ flowctl memory add --track knowledge --category conventions \
 # matched too); 2+ matches: exit nonzero listing the ambiguous ids, no write.
 # Same flags as `add` minus --update (owned internally) and the deprecated
 # legacy form. Categorized entries only — legacy flat files are never matched.
+# A unique match updates in its own category (title-within-track identity);
+# over-80-char titles are rejected (stored titles truncate at 80, so a longer
+# title cannot be a byte-for-byte identity).
 # JSON payload carries entry_id + action: created|updated.
 flowctl memory upsert --track knowledge --category workflow \
   --title "drift: web/login sub-1" --tags "feature-map-drift" \

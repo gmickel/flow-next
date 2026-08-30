@@ -11,6 +11,15 @@ Covers (spec fn-212-flowctl-memory-upsert-deterministic R7):
   - missing --title / --track -> exit 2 with a clear message
   - --json payload shape: `entry_id` + `action` (created | updated)
   - stale-entry match: an upsert on a stale entry updates it (no new sibling)
+
+Review-round additions (codex NEEDS_WORK round 1):
+  - cross-category unique match updates (title-within-track identity wins
+    over the caller-supplied category)
+  - over-80-char title rejected (stored titles truncate at 80, so a longer
+    title cannot be a byte-for-byte identity)
+  - non-JSON output is exactly one line on both create and update
+  - concurrent same-title upserts serialize under the cross-process lock
+    (no sibling duplicates)
 """
 
 from __future__ import annotations
@@ -183,6 +192,113 @@ class TestMemoryUpsert(unittest.TestCase):
         )
         err = json.loads(out["_stdout"])
         self.assertIn("--track", err["error"])
+
+    def test_cross_category_unique_match_updates(self) -> None:
+        first = self._upsert("--body-file", self._body("v1"))
+        # Same track + title, different category: the title-within-track
+        # identity wins - the matched entry is updated in its own category.
+        out = _run(
+            self.tmp,
+            "memory",
+            "upsert",
+            "--track",
+            "knowledge",
+            "--category",
+            "best-practices",
+            "--title",
+            TITLE,
+            "--body-file",
+            self._body("v2"),
+            "--json",
+        )
+        self.assertEqual(out["action"], "updated")
+        self.assertEqual(out["entry_id"], first["entry_id"])
+        self.assertEqual(len(_entry_files(self.memory_dir)), 1)
+
+    def test_overlong_title_rejected(self) -> None:
+        long_title = "x" * 81
+        out = _run(
+            self.tmp,
+            "memory",
+            "upsert",
+            "--track",
+            "knowledge",
+            "--category",
+            "workflow",
+            "--title",
+            long_title,
+            "--json",
+            expect_rc=2,
+        )
+        err = json.loads(out["_stdout"])
+        self.assertIn("80", err["error"])
+        self.assertEqual(len(_entry_files(self.memory_dir)), 0)
+
+    def test_non_json_output_is_one_line(self) -> None:
+        for expected_verb in ("Created", "Updated"):
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(FLOWCTL_PY),
+                    "memory",
+                    "upsert",
+                    "--track",
+                    "knowledge",
+                    "--category",
+                    "workflow",
+                    "--title",
+                    TITLE,
+                    "--tags",
+                    "feature-map-drift",
+                    "--body-file",
+                    self._body(expected_verb),
+                ],
+                cwd=self.tmp,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env={**os.environ, "FLOW_NO_DEPRECATION": "1"},
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+            lines = proc.stdout.decode().strip().splitlines()
+            self.assertEqual(len(lines), 1, lines)
+            self.assertTrue(lines[0].startswith(expected_verb), lines[0])
+
+    def test_concurrent_upserts_serialize(self) -> None:
+        # Two same-title upserts launched together: the scan-to-write lock
+        # serializes them, so exactly one entry exists and both succeed
+        # (one created, one updated - never sibling duplicates).
+        def _spawn() -> subprocess.Popen:
+            return subprocess.Popen(
+                [
+                    sys.executable,
+                    str(FLOWCTL_PY),
+                    "memory",
+                    "upsert",
+                    "--track",
+                    "knowledge",
+                    "--category",
+                    "workflow",
+                    "--title",
+                    TITLE,
+                    "--no-overlap-check",
+                    "--body-file",
+                    self._body("racer"),
+                    "--json",
+                ],
+                cwd=self.tmp,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        procs = [_spawn(), _spawn()]
+        payloads = []
+        for proc in procs:
+            stdout, stderr = proc.communicate(timeout=120)
+            self.assertEqual(proc.returncode, 0, stderr.decode())
+            payloads.append(json.loads(stdout.decode()))
+        self.assertEqual(len(_entry_files(self.memory_dir)), 1)
+        self.assertEqual(len({p["entry_id"] for p in payloads}), 1)
+        self.assertIn("created", [p["action"] for p in payloads])
 
     def test_stale_entry_is_matched_and_updated(self) -> None:
         first = self._upsert("--body-file", self._body("v1"))
