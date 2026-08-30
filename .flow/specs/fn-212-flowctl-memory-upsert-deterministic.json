@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-212-flowctl-memory-upsert-deterministic",
   "impl_review_rounds": {
-    "fn-212-flowctl-memory-upsert-deterministic.1": 1
+    "fn-212-flowctl-memory-upsert-deterministic.1": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -84,9 +84,79 @@
       "timestamp": "2026-08-30T15:09:45.550149Z",
       "tool_calls": 19,
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "e59d20a62f4317bb8c4eb97fda8b0e475671a1fc82d492e5496909106ee6ecfe",
+      "backend": "codex",
+      "base_sha": "b504a9c3971ac708219c02339c2f326c2f9ea0fb",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-cd5cf2ae254eb12c5547264e60546cbf",
+            "classification": "introduced",
+            "findingId": "finding-cd5cf2ae254eb12c5547264e60546cbf",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-75234a37694172193d6ad5daa7a15422",
+            "classification": "introduced",
+            "findingId": "finding-75234a37694172193d6ad5daa7a15422",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-389d9b3cb89be000f76d60beec5fb8a9",
+            "classification": "introduced",
+            "findingId": "finding-389d9b3cb89be000f76d60beec5fb8a9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-f4a3f0aa82bb981d963af313a3f55748",
+            "classification": "introduced",
+            "findingId": "finding-f4a3f0aa82bb981d963af313a3f55748",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "5c302547392fc52a7c7a04abaa01cde5ec559971",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 1099,
+      "output_sha256": "2e4b1ed77c92133e6bfbfe50e0f6ad1d715b94f4266852d0b3b12472f4738de4",
+      "reservation_id": "a87d82db8d69423dbe23aa11fc06c757",
+      "round_consumed": true,
+      "scope": "impl:fn-212-flowctl-memory-upsert-deterministic.1",
+      "superseded_by": null,
+      "task": "fn-212-flowctl-memory-upsert-deterministic.1",
+      "timestamp": "2026-08-30T15:14:36.034801Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-212-flowctl-memory-upsert-deterministic.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -106,5 +176,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-30T15:09:45.569494Z"
+  "updated_at": "2026-08-30T15:14:36.036916Z"
 }
