@@ -56,7 +56,7 @@
     "impl:fn-213-land-clean-review-pattern-learns-codex.1": 0
   },
   "spec_path": ".flow/specs/fn-213-land-clean-review-pattern-learns-codex.md",
-  "status": "open",
+  "status": "done",
   "title": "Land clean-review pattern learns Codex summary-table format",
   "tracker": {
     "baseHashFlow": null,
@@ -69,5 +69,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-30T21:18:44.079206Z"
+  "updated_at": "2026-08-30T22:17:34.689214Z"
 }
