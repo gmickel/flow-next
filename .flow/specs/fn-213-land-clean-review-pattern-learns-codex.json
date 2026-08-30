@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-213-land-clean-review-pattern-learns-codex",
+  "created_at": "2026-08-30T21:10:00.962542Z",
+  "depends_on_epics": [],
+  "id": "fn-213-land-clean-review-pattern-learns-codex",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-213-land-clean-review-pattern-learns-codex.md",
+  "status": "open",
+  "title": "Land clean-review pattern learns Codex summary-table format",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-30T21:10:00.964338Z"
+}
