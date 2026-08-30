@@ -6,7 +6,7 @@ All notable changes to the flow-next.
 
 ### Added
 
-- **Recurrence-deduped memory writes stop hand-rolling their own dedup.** `flowctl memory upsert` is a deterministic find-or-create: exact `--title` match within `--track` (byte-for-byte, no tokenization), creating on zero matches, updating in place on exactly one, and failing closed with the ids listed on two or more — never guessing. The QA feature-map-drift memo and the features maintain bug filing now use one `upsert` call each, replacing the fragile list+jq / create-then-fold-then-delete folds that drew a whole review-finding class during the feature-map work.
+- **Recurrence-deduped memory writes stop hand-rolling their own dedup.** `flowctl memory upsert` is a deterministic find-or-create: exact `--title` match within `--track` (byte-for-byte, no tokenization), creating on zero matches, updating in place on exactly one, and failing closed with the ids listed on two or more — never guessing. The QA feature-map-drift memo now uses one `upsert` call, replacing the fragile list+jq fold that drew a whole review-finding class during the feature-map work. Upsert is scoped to stable-title identities on purpose: the features maintain bug filing keeps the overlap-judged `add`-then-fold, because its free-form symptom titles carry no exact-title identity for upsert to match.
 
 ### Fixed
 

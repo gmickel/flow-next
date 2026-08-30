@@ -13,7 +13,7 @@ Split that keeps existing contracts intact: **map = how a user gets there (compo
 
 **Read [seed.md](seed.md) for seed-mode phases.** Feature file shape: [references/feature-entry-contract.md](references/feature-entry-contract.md). Doctor + proof: [references/doctor-and-proof.md](references/doctor-and-proof.md). Maintain (when `MODE=maintain`) executes [maintain.md](maintain.md).
 
-There is no flowctl features subcommand. The skill validates the four-H2 shape itself. The only flowctl calls are `memory list` / `memory upsert` for the `feature-map-drift` tag handoff and bug filing on the maintain path.
+There is no flowctl features subcommand. The skill validates the four-H2 shape itself. The only flowctl calls are `memory list` for the `feature-map-drift` tag handoff and `memory add` (overlap-judged fold) for bug filing on the maintain path.
 
 ## Preamble
 
