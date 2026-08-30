@@ -115,6 +115,8 @@ Write **one file per proven feature**. Each opens with H1 title + one paragraph 
 
 Partial seed: write the proven files; name failures in the index and in the verdict `reason`. Do not write a file for a failed route.
 
+If the repo runs a formatter over markdown (pre-commit hook, `biome`, `oxfmt`, `prettier`), run it over the written `.flow/features/` files before finishing — otherwise the first commit that touches the map ships a formatter-artifact diff on top of the seeded content (observed live: table re-alignment forcing a follow-up commit).
+
 **Zero proven features: write nothing.** When no route proved, do not create `.flow/features/` at all - no index, no directory. Mode detection treats a present directory as a map, so an empty husk would silently flip every later run into maintain against nothing. End `BLOCKED` (or `REFUSED` when the cause was a refusal condition) naming every failed route; the next invocation re-enters seed cleanly.
 
 ### Done when

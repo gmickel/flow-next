@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **The feature map no longer ships formatter-artifact commits.** In repos with a markdown formatter (pre-commit hook, `biome`, `oxfmt`, `prettier`), `/flow-next:features` seed and maintain now run it over the written `.flow/features/` files before finishing — first observed dogfooding on a real app, where table re-alignment forced two follow-up commits.
+
 ## [flow-next 4.10.0] - 2026-08-29
 
 QA and drive keep how a user reaches each screen. Navigation, preconditions, and gotchas survive the run instead of evaporating, so the next pass starts from proven routes rather than rediscovering them.
