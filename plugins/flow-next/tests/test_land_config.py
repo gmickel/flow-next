@@ -113,6 +113,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                 "cleanReviewCommentPattern": (
                     r"(Didn'?t find any( major)? issues"
                     r"|No( major)? issues found).*Reviewed commit"
+                    r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
                 ),
                 "mergeVerdictCommand": "",
                 "requestReviewers": "",
@@ -214,6 +215,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
     EXPECTED_CLEAN_PATTERN = (
         r"(Didn'?t find any( major)? issues"
         r"|No( major)? issues found).*Reviewed commit"
+        r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
     )
 
     def test_clean_review_pattern_seeded_default_present(self) -> None:
@@ -261,6 +263,29 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
         # marker but no clean phrase → no match
         self.assertIsNone(
             rx.search("Reviewed commit: 1234567 — requesting changes")
+        )
+
+    def test_clean_review_pattern_matches_codex_summary_table_row(self) -> None:
+        # Behavioral anchor (fn-213): Codex's newer clean surface is an
+        # edited-in-place summary comment whose table row carries bold
+        # `**Code Review**` … `**Completed**` plus a backticked head-SHA
+        # prefix. The seeded ERE must match that realistic single-line body
+        # (the workflow gsubs tabs/newlines to spaces before grep -Ei) and
+        # must NOT match unstructured "code review completed" prose.
+        import re
+
+        pat = self.flowctl.get_default_config()["land"]["cleanReviewCommentPattern"]
+        rx = re.compile(pat, re.IGNORECASE)
+        self.assertTrue(
+            rx.search(
+                "| \U0001F4DD **Code Review** | ✅ **Completed** "
+                '<relative-time datetime="2026-08-30T19:59:19Z">'
+                "</relative-time> | `b9ce0b6` | New commits |"
+            )
+        )
+        # plain prose without the paired bold markers → no match
+        self.assertIsNone(
+            rx.search("The code review completed without any findings.")
         )
 
     def test_fresh_get_clean_review_pattern_is_default_not_null(self) -> None:

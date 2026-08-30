@@ -1470,9 +1470,14 @@ def get_default_config() -> dict:
             # clean-review COMMENT path: a review bot (e.g. Codex) posts an
             # issue comment instead of a formal APPROVE on a no-findings
             # pass, e.g. "Didn't find any major issues. Reviewed commit:
-            # `8ff0e50f`". This pattern requires BOTH the clean phrase AND
-            # the `Reviewed commit` marker so a bare "no issues" mention
-            # never satisfies the gate; the workflow additionally extracts a
+            # `8ff0e50f`". Two accepted clean shapes (fn-213): the legacy
+            # clean phrase, which requires BOTH the phrase AND the
+            # `Reviewed commit` marker; and Codex's edited-in-place
+            # summary-table row (`<!-- codex-pull-request-review-summary -->`
+            # comment), which requires the literal bold `**Code Review**`
+            # followed by `**Completed**` in one body. A bare "no issues" or
+            # "code review completed" mention without its structure never
+            # satisfies the gate; the workflow additionally extracts a
             # head-current SHA token before counting it.
             #   Config contract (workflow.md §2.6 cfg read):
             #     null/missing (pre-seed flowctl copy) → fall back to THIS
@@ -1485,6 +1490,7 @@ def get_default_config() -> dict:
             "cleanReviewCommentPattern": (
                 r"(Didn'?t find any( major)? issues"
                 r"|No( major)? issues found).*Reviewed commit"
+                r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
             ),
             # fn-188 — OPT-IN repo merge-verdict gate (#330): a shell
             # command land runs once per merge attempt, at the decision
