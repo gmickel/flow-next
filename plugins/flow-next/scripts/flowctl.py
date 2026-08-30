@@ -22404,6 +22404,18 @@ def cmd_memory_upsert(args: argparse.Namespace) -> None:
             use_json=args.json,
         )
 
+    # Validate a supplied category up front: on the match path the matched
+    # entry's own category overwrites args.category before delegation, which
+    # would let a typo'd --category succeed or fail based on repository state.
+    category = getattr(args, "category", None)
+    if category is not None and category not in MEMORY_CATEGORIES[track]:
+        error_exit(
+            f"Invalid category '{category}' for track '{track}'. "
+            f"Valid: {', '.join(MEMORY_CATEGORIES[track])}.",
+            code=2,
+            use_json=args.json,
+        )
+
     # `memory add` stores at most 80 title chars, so a longer title can never
     # be a byte-for-byte identity: two distinct titles sharing the first 80
     # chars would collide after truncation. Reject rather than guess.

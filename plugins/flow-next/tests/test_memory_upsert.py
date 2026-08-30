@@ -215,6 +215,52 @@ class TestMemoryUpsert(unittest.TestCase):
         self.assertEqual(out["entry_id"], first["entry_id"])
         self.assertEqual(len(_entry_files(self.memory_dir)), 1)
 
+    def test_invalid_category_rejected_when_match_exists(self) -> None:
+        # Regression (PR #385 review): a match used to overwrite args.category
+        # before validation, so a typo'd --category silently succeeded when an
+        # exact-title match existed. It must fail identically on both paths.
+        first = self._upsert("--body-file", self._body("v1"))
+        before = Path(first["path"]).read_text(encoding="utf-8")
+        out = _run(
+            self.tmp,
+            "memory",
+            "upsert",
+            "--track",
+            "knowledge",
+            "--category",
+            "not-a-category",
+            "--title",
+            TITLE,
+            "--body-file",
+            self._body("v2"),
+            "--json",
+            expect_rc=2,
+        )
+        err = json.loads(out["_stdout"])
+        self.assertIn("not-a-category", err["error"])
+        # No mutation of the matched entry.
+        self.assertEqual(Path(first["path"]).read_text(encoding="utf-8"), before)
+
+    def test_invalid_category_rejected_when_no_match(self) -> None:
+        out = _run(
+            self.tmp,
+            "memory",
+            "upsert",
+            "--track",
+            "knowledge",
+            "--category",
+            "not-a-category",
+            "--title",
+            TITLE,
+            "--body-file",
+            self._body("v1"),
+            "--json",
+            expect_rc=2,
+        )
+        err = json.loads(out["_stdout"])
+        self.assertIn("not-a-category", err["error"])
+        self.assertEqual(len(_entry_files(self.memory_dir)), 0)
+
     def test_overlong_title_rejected(self) -> None:
         long_title = "x" * 81
         out = _run(
