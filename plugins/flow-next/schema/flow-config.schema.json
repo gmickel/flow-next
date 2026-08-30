@@ -598,12 +598,12 @@
           "default": 3
         },
         "cleanReviewCommentPattern": {
-          "description": "ERE for the silence-signal clean-review COMMENT path: a bot's no-findings issue comment naming the current head SHA also satisfies the gate. Requires BOTH the clean phrase AND the Reviewed commit marker. null/missing falls back to the built-in default; set to an empty string to disable the comment scan (the only real off-switch).",
+          "description": "ERE for the silence-signal clean-review COMMENT path: a bot's no-findings issue comment naming the current head SHA also satisfies the gate. The default matches either a clean phrase plus the Reviewed commit marker, or Codex's summary-table Code Review / Completed row. null/missing falls back to the built-in default; set to an empty string to disable the comment scan (the only real off-switch).",
           "type": [
             "string",
             "null"
           ],
-          "default": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit"
+          "default": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit|\\*\\*Code Review\\*\\*.*\\*\\*Completed\\*\\*"
         },
         "mergeVerdictCommand": {
           "description": "Opt-in repo merge-verdict gate: a shell command land runs once per merge attempt, after every other gate is satisfied and only when the planned action is merge. Exit 0 = green; any non-zero exit - including a missing/unexecutable command, the 600s timeout, or signal death - blocks the merge (fail-closed, never skipped). Context arrives as environment only (FLOW_HEAD_SHA, FLOW_BASE_REF, FLOW_PR_NUMBER, FLOW_SPEC_ID); it runs on the base checkout, so it must key on FLOW_HEAD_SHA and refuse when it cannot see that head. Never executed under --dry-run. Unset, null, and an empty string all mean OFF.",
