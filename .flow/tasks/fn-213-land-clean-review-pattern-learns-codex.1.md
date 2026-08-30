@@ -17,3 +17,4 @@ stage: impl-review - ran [codex, 1 round, SHIP first pass]
 - Commits: 15edfa60337f59e5e3e75f80b3ea50c663d36201
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_config -q, uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py, ./scripts/sync-codex.sh (x2, idempotent), python3 scripts/gen_tracker_manifest.py
 - PRs:
+stage: plan-sync - skipped(config: planSync.enabled != true)

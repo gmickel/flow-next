@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-213-land-clean-review-pattern-learns-codex",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-08-30T21:18:44.079198Z",
   "created_at": "2026-08-30T21:10:00.962542Z",
   "default_impl": null,
   "default_review": null,
@@ -69,5 +69,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-30T21:17:44.355763Z"
+  "updated_at": "2026-08-30T21:18:44.079206Z"
 }
