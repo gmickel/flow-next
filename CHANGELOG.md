@@ -2,7 +2,9 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.10.1] - 2026-08-31
+
+Unattended shipping and the new feature map both get sturdier: land now recognizes the clean verdict Codex actually posts today (including on repos that installed before this release), skills stop hand-rolling memory dedup, and the feature map stops fighting repo formatters.
 
 ### Added
 
@@ -10,7 +12,7 @@ All notable changes to the flow-next.
 
 ### Fixed
 
-- **Unattended land no longer dead-ends on a clean Codex verdict in the new summary-table format.** Codex's PR-review bot now delivers a clean verdict as an edited-in-place summary comment (`**Code Review** | **Completed** ... <sha>`) instead of the "Didn't find any major issues. Reviewed commit" phrase, and `/flow-next:land`'s silence-signal comment scan could not see it — a fully converged PR stalled at `NEEDS_HUMAN: no automated review arrived within the patience window` and needed a manual merge (observed on PR #385). The built-in `land.cleanReviewCommentPattern` default now accepts both forms; the head-SHA and automated-reviewer gates are unchanged, so a stale row or unstructured "code review completed" prose still never satisfies the gate.
+- **Unattended land no longer dead-ends on a clean Codex verdict in the new summary-table format.** Codex's PR-review bot now delivers a clean verdict as an edited-in-place summary comment (`**Code Review** | **Completed** ... <sha>`) instead of the "Didn't find any major issues. Reviewed commit" phrase, and `/flow-next:land`'s silence-signal comment scan could not see it — a fully converged PR stalled at `NEEDS_HUMAN: no automated review arrived within the patience window` and needed a manual merge (observed on PR #385). The built-in `land.cleanReviewCommentPattern` default now accepts both forms; the head-SHA and automated-reviewer gates are unchanged, so a stale row or unstructured "code review completed" prose still never satisfies the gate. Repos that installed earlier are covered too: the retired default materialized in `.flow/config.json` is auto-upgraded at read time (customized patterns and the explicit `""` off-switch are never touched).
 
 - **The feature map no longer ships formatter-artifact commits.** In repos with a markdown formatter (pre-commit hook, `biome`, `oxfmt`, `prettier`), `/flow-next:features` seed and maintain now run it over the written `.flow/features/` files before finishing — first observed dogfooding on a real app, where table re-alignment forced two follow-up commits.
 
