@@ -163,7 +163,7 @@
     "impl:fn-212-flowctl-memory-upsert-deterministic.1": 0
   },
   "spec_path": ".flow/specs/fn-212-flowctl-memory-upsert-deterministic.md",
-  "status": "open",
+  "status": "done",
   "title": "flowctl memory upsert - deterministic find-or-create",
   "tracker": {
     "baseHashFlow": null,
@@ -176,5 +176,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-30T15:16:56.049701Z"
+  "updated_at": "2026-08-30T20:56:17.834320Z"
 }
