@@ -15,7 +15,10 @@ fresh repo, WITHOUT any prior `config set`:
         null/missing → workflow falls back to the built-in default;
         explicit ""  → comment scan DISABLED (the real off-switch,
                        distinct from the seeded default);
-        other value  → used verbatim.
+        other value  → used verbatim — EXCEPT a value byte-identical to a
+                       retired built-in default (RETIRED_CLEAN_REVIEW_PATTERNS,
+                       fn-213), which is aliased to the current built-in on
+                       every merged read (disk untouched; "" never aliased).
   * land.mergeVerdictCommand → ""  (fn-188) — the opt-in repo
         merge-verdict gate. CONTRACT: unset, null, AND "" all mean OFF
         (byte-for-byte today's behavior); any other value is a shell
@@ -113,6 +116,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                 "cleanReviewCommentPattern": (
                     r"(Didn'?t find any( major)? issues"
                     r"|No( major)? issues found).*Reviewed commit"
+                    r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
                 ),
                 "mergeVerdictCommand": "",
                 "requestReviewers": "",
@@ -214,6 +218,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
     EXPECTED_CLEAN_PATTERN = (
         r"(Didn'?t find any( major)? issues"
         r"|No( major)? issues found).*Reviewed commit"
+        r"|\*\*Code Review\*\*.*\*\*Completed\*\*"
     )
 
     def test_clean_review_pattern_seeded_default_present(self) -> None:
@@ -263,6 +268,29 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
             rx.search("Reviewed commit: 1234567 — requesting changes")
         )
 
+    def test_clean_review_pattern_matches_codex_summary_table_row(self) -> None:
+        # Behavioral anchor (fn-213): Codex's newer clean surface is an
+        # edited-in-place summary comment whose table row carries bold
+        # `**Code Review**` … `**Completed**` plus a backticked head-SHA
+        # prefix. The seeded ERE must match that realistic single-line body
+        # (the workflow gsubs tabs/newlines to spaces before grep -Ei) and
+        # must NOT match unstructured "code review completed" prose.
+        import re
+
+        pat = self.flowctl.get_default_config()["land"]["cleanReviewCommentPattern"]
+        rx = re.compile(pat, re.IGNORECASE)
+        self.assertTrue(
+            rx.search(
+                "| \U0001F4DD **Code Review** | ✅ **Completed** "
+                '<relative-time datetime="2026-08-30T19:59:19Z">'
+                "</relative-time> | `b9ce0b6` | New commits |"
+            )
+        )
+        # plain prose without the paired bold markers → no match
+        self.assertIsNone(
+            rx.search("The code review completed without any findings.")
+        )
+
     def test_fresh_get_clean_review_pattern_is_default_not_null(self) -> None:
         out = self._run_config_get_cli("land.cleanReviewCommentPattern")
         self.assertEqual(out["value"], self.EXPECTED_CLEAN_PATTERN)
@@ -306,6 +334,84 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
         self.assertEqual(
             self._run_config_get_cli("land.cleanReviewCommentPattern")["value"],
             self.EXPECTED_CLEAN_PATTERN,
+        )
+
+    # ── fn-213: retired-default read-time aliasing ───────────────────────
+    # Repos seeded before fn-213 have the OLD built-in ERE materialized into
+    # .flow/config.json by init; the persisted bytes would override the
+    # improved default forever. A persisted value byte-identical to a retired
+    # default (RETIRED_CLEAN_REVIEW_PATTERNS) is aliased to the current
+    # built-in on every merged read; custom patterns and the explicit ""
+    # off-switch are never touched.
+
+    RETIRED_CLEAN_PATTERN = (
+        r"(Didn'?t find any( major)? issues"
+        r"|No( major)? issues found).*Reviewed commit"
+    )
+
+    def _write_config(self, tree: dict) -> None:
+        (self.tmpdir / ".flow" / "config.json").write_text(
+            json.dumps(tree), encoding="utf-8"
+        )
+
+    def test_retired_patterns_tuple_pins_old_default(self) -> None:
+        # The retired byte-string is a named constant so a future default
+        # rotation appends to the tuple rather than re-deriving it.
+        self.assertIn(
+            self.RETIRED_CLEAN_PATTERN,
+            self.flowctl.RETIRED_CLEAN_REVIEW_PATTERNS,
+        )
+        # and the current default is NOT in the retired set
+        self.assertNotIn(
+            self.EXPECTED_CLEAN_PATTERN,
+            self.flowctl.RETIRED_CLEAN_REVIEW_PATTERNS,
+        )
+
+    def test_persisted_retired_default_reads_as_current_default(self) -> None:
+        self._write_config(
+            {"land": {"cleanReviewCommentPattern": self.RETIRED_CLEAN_PATTERN}}
+        )
+        out = self._run_config_get_cli("land.cleanReviewCommentPattern")
+        self.assertEqual(out["value"], self.EXPECTED_CLEAN_PATTERN)
+
+    def test_persisted_retired_default_aliased_in_land_subtree_read(self) -> None:
+        # The land workflow reads `config get land --json` (§2.6) — the
+        # subtree emission path must serve the aliased value too.
+        self._write_config(
+            {"land": {"cleanReviewCommentPattern": self.RETIRED_CLEAN_PATTERN}}
+        )
+        out = self._run_config_get_cli("land")
+        self.assertEqual(
+            out["value"]["cleanReviewCommentPattern"], self.EXPECTED_CLEAN_PATTERN
+        )
+
+    def test_persisted_custom_pattern_read_verbatim(self) -> None:
+        custom = r"LGTM.*Reviewed commit"
+        self._write_config({"land": {"cleanReviewCommentPattern": custom}})
+        out = self._run_config_get_cli("land.cleanReviewCommentPattern")
+        self.assertEqual(out["value"], custom)
+
+    def test_persisted_explicit_empty_off_switch_survives_aliasing(self) -> None:
+        self._write_config({"land": {"cleanReviewCommentPattern": ""}})
+        out = self._run_config_get_cli("land.cleanReviewCommentPattern")
+        self.assertEqual(out["value"], "")
+
+    def test_retired_default_aliasing_leaves_disk_untouched(self) -> None:
+        # Read-time only: the merged read upgrades; the --raw provenance
+        # probe (and the file itself) still shows the persisted bytes.
+        self._write_config(
+            {"land": {"cleanReviewCommentPattern": self.RETIRED_CLEAN_PATTERN}}
+        )
+        raw_out = self._run_config_get_cli(
+            "land.cleanReviewCommentPattern", "--raw"
+        )
+        self.assertEqual(raw_out["value"], self.RETIRED_CLEAN_PATTERN)
+        on_disk = json.loads(
+            (self.tmpdir / ".flow" / "config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            on_disk["land"]["cleanReviewCommentPattern"],
+            self.RETIRED_CLEAN_PATTERN,
         )
 
     # ── fn-188: land.mergeVerdictCommand (R1) ────────────────────────────

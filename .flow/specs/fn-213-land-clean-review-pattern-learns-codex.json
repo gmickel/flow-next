@@ -1,0 +1,73 @@
+{
+  "branch_name": "fn-213-land-clean-review-pattern-learns-codex",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-08-30T21:18:44.079198Z",
+  "created_at": "2026-08-30T21:10:00.962542Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-213-land-clean-review-pattern-learns-codex",
+  "impl_review_rounds": {
+    "fn-213-land-clean-review-pattern-learns-codex.1": 0
+  },
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "bd9e06cf4e37c64396a42ce9d86b7da7a1c7aa08afe532e07436ce48a8b9df46",
+      "backend": "codex",
+      "base_sha": "eabd9c92aaf5122ebc1bc7b50096c59367718c0a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "15edfa60337f59e5e3e75f80b3ea50c663d36201",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 458989,
+      "output_sha256": "f665e36037926f79ecb81db3acaa74489ba2e86836c30fa1b13a94997a4aa21b",
+      "reservation_id": "0289ed5ec5914dbeb27af20b0469cf53",
+      "round_consumed": true,
+      "scope": "impl:fn-213-land-clean-review-pattern-learns-codex.1",
+      "superseded_by": null,
+      "task": "fn-213-land-clean-review-pattern-learns-codex.1",
+      "timestamp": "2026-08-30T21:17:44.344815Z",
+      "tool_calls": 15,
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-213-land-clean-review-pattern-learns-codex.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-213-land-clean-review-pattern-learns-codex.1": 0
+  },
+  "spec_path": ".flow/specs/fn-213-land-clean-review-pattern-learns-codex.md",
+  "status": "open",
+  "title": "Land clean-review pattern learns Codex summary-table format",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-30T21:18:44.079206Z"
+}

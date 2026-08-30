@@ -323,10 +323,13 @@ DESCRIPTIONS: dict[str, str] = {
     "land.cleanReviewCommentPattern": (
         "ERE for the silence-signal clean-review COMMENT path: a bot's "
         "no-findings issue comment naming the current head SHA also "
-        "satisfies the gate. Requires BOTH the clean phrase AND the "
-        "Reviewed commit marker. null/missing falls back to the built-in "
+        "satisfies the gate. The default matches either a clean phrase "
+        "plus the Reviewed commit marker, or Codex's summary-table "
+        "Code Review / Completed row. null/missing falls back to the built-in "
         "default; set to an empty string to disable the comment scan (the "
-        "only real off-switch)."
+        "only real off-switch). A persisted value equal to a retired "
+        "built-in default is auto-upgraded to the current built-in at read "
+        "time; custom values and the empty string are never touched."
     ),
     "land.ciFixBudget": (
         "CI-fix attempts per PR before land durably labels it "
