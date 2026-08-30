@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Added
+
+- **Recurrence-deduped memory writes stop hand-rolling their own dedup.** `flowctl memory upsert` is a deterministic find-or-create: exact `--title` match within `--track` (byte-for-byte, no tokenization), creating on zero matches, updating in place on exactly one, and failing closed with the ids listed on two or more — never guessing. The QA feature-map-drift memo now uses one `upsert` call, replacing the fragile list+jq fold that drew a whole review-finding class during the feature-map work. Upsert is scoped to stable-title identities on purpose: the features maintain bug filing keeps the overlap-judged `add`-then-fold, because its free-form symptom titles carry no exact-title identity for upsert to match.
+
 ### Fixed
 
 - **The feature map no longer ships formatter-artifact commits.** In repos with a markdown formatter (pre-commit hook, `biome`, `oxfmt`, `prettier`), `/flow-next:features` seed and maintain now run it over the written `.flow/features/` files before finishing — first observed dogfooding on a real app, where table re-alignment forced two follow-up commits.

@@ -152,6 +152,8 @@ flowctl memory add \
 
 **Overlap scoring** runs on every `add` and the JSON response always emits `matches` (with scores) as a retrieval signal. `memory add` **always creates** a new entry unless the caller passes explicit `--update <id>` (fn-113 - flowctl never auto-mutates on high overlap). Moderate overlap may set `related_to: [existing-id]` on the new entry. Callers (skills) read `matches` and either re-run with `--update <id>` or accept the create.
 
+**Deterministic find-or-create** (fn-212): when a skill writes recurrence-deduped entries under a stable title identity (e.g. the `feature-map-drift` memos), `flowctl memory upsert` replaces the hand-rolled list-then-add fold. It matches the exact `--title` byte-for-byte within `--track` (categorized entries only, stale included; legacy flat files are never matched): zero matches create, one match updates in place with the existing `--update` semantics, two or more fail closed listing the ambiguous ids. Judgment about entry content stays with the caller; only the find-or-create mechanics live in flowctl.
+
 ## Query
 
 ```bash

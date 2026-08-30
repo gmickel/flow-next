@@ -20722,7 +20722,40 @@ def _parse_memory_frontmatter_text(text: str) -> dict[str, Any]:
         parsed = safe_load(envelope.frontmatter)
     except yaml_error:
         return {}
-    return parsed if isinstance(parsed, dict) else {}
+    if not isinstance(parsed, dict):
+        return {}
+    return _restore_coerced_scalars(parsed, envelope.frontmatter)
+
+
+def _restore_coerced_scalars(
+    parsed: dict[str, Any], frontmatter_text: str
+) -> dict[str, Any]:
+    """Undo PyYAML type coercion on legacy unquoted scalar values.
+
+    `write_memory_entry` now quotes every scalar PyYAML would coerce, but
+    entries written before that fix may carry unquoted scalars that
+    safe_load returns as datetime/date/bool/int/float. `str(value)` can
+    differ from the stored text (`2026-08-30T00:00:00Z` reads back as
+    `2026-08-30 00:00:00+00:00`), which breaks byte-equality consumers —
+    `memory upsert` title matching took the zero-match path and created a
+    suffixed sibling instead of updating. Recover the preserved textual
+    form from the inline parser (which keeps every scalar a string); fall
+    back to `str(value)` when the inline parser cannot handle the block.
+    Memory readers treat every scalar as a string, so this is lossless.
+    """
+    if all(
+        value is None or isinstance(value, (str, list, dict))
+        for value in parsed.values()
+    ):
+        return parsed
+    textual = _parse_inline_yaml(frontmatter_text)
+    restored = dict(parsed)
+    for key, value in parsed.items():
+        if value is None or isinstance(value, (str, list, dict)):
+            continue
+        fallback = textual.get(key)
+        restored[key] = fallback if isinstance(fallback, str) else str(value)
+    return restored
 
 
 def parse_memory_frontmatter(
@@ -20769,6 +20802,41 @@ _YAML_RESERVED_SCALARS: frozenset[str] = frozenset(
 )
 
 
+# Remaining PyYAML implicit-resolver forms (YAML 1.1) beyond the reserved
+# words and plain int/float checks below: timestamps/dates (coerced to
+# datetime.date / datetime.datetime — re-stringifying CHANGES the text,
+# e.g. "2026-08-30T00:00:00Z" -> "2026-08-30 00:00:00+00:00", which broke
+# `memory upsert` byte-equality title matching), base-prefixed and
+# underscored ints, sexagesimal numbers, inf/nan words, and the `=` value
+# scalar (safe_load has no constructor for it — the whole frontmatter reads
+# back as malformed). Any fullmatch reads back as non-string under PyYAML,
+# so quote. Mirrors PyYAML's Resolver defaults, frozen at YAML 1.1.
+_YAML_COERCIBLE_SCALAR_RE = re.compile(
+    r"""
+    (?:
+      [0-9]{4}-[0-9]{1,2}-[0-9]{1,2}                   # date / timestamp head
+      (?:
+        (?:[Tt]|[\ \t]+)[0-9]{1,2}
+        :[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?
+        (?:[\ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?
+      )?
+     |[-+]?0b[0-1_]+                                   # binary int
+     |[-+]?0x[0-9A-Fa-f_]+                             # hex int
+     |[-+]?0[0-7_]+                                    # octal int
+     |[-+]?[1-9][0-9_]*(?::[0-5]?[0-9])+               # sexagesimal int
+     |[-+]?(?:0|[1-9][0-9_]*)                          # underscored int
+     |[-+]?[0-9][0-9_]*\.[0-9_]*(?:[eE][-+][0-9]+)?    # float
+     |\.[0-9][0-9_]*(?:[eE][-+][0-9]+)?                # leading-dot float
+     |[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*      # sexagesimal float
+     |[-+]?\.(?:inf|Inf|INF)                           # infinity
+     |\.(?:nan|NaN|NAN)                                # not-a-number
+     |=                                                # value scalar
+    )
+    """,
+    re.VERBOSE,
+)
+
+
 def _yaml_scalar_needs_quoting(text: str) -> bool:
     """Return True when the value would be mis-parsed as non-string by YAML."""
     if text in _YAML_RESERVED_SCALARS:
@@ -20777,6 +20845,11 @@ def _yaml_scalar_needs_quoting(text: str) -> bool:
     if re.fullmatch(r"[+-]?\d+", text):
         return True
     if re.fullmatch(r"[+-]?\d*\.\d+([eE][+-]?\d+)?", text):
+        return True
+    # Timestamps/dates, base-prefixed/underscored/sexagesimal numbers,
+    # inf/nan, `=` — the rest of PyYAML's implicit resolvers (issue: PR #385
+    # upsert round-trip; datetime-shaped titles re-stringify differently).
+    if _YAML_COERCIBLE_SCALAR_RE.fullmatch(text):
         return True
     # Flow-list / flow-map indicators inside a list break the inline parser.
     if any(c in text for c in ",[]{}"):
@@ -22303,7 +22376,7 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         )
         action = "updated"
         related_to = list(updated_fm.get("related_to", []) or [])
-        if not args.json:
+        if not args.json and not getattr(args, "_single_line", False):
             print(
                 f"Updating {entry_id} via --update. "
                 f"Overlap level: {overlap['level']} "
@@ -22330,12 +22403,16 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
         if overlap["level"] == "moderate":
             related_to = [m["id"] for m in overlap["matches"]]
             frontmatter["related_to"] = related_to
-            if not args.json:
+            if not args.json and not getattr(args, "_single_line", False):
                 print(
                     f"Moderate overlap with {', '.join(related_to)}. "
                     f"Creating new entry with related_to reference."
                 )
-        elif overlap["level"] == "high" and not args.json:
+        elif (
+            overlap["level"] == "high"
+            and not args.json
+            and not getattr(args, "_single_line", False)
+        ):
             match_ids = ", ".join(m["id"] for m in matches)
             print(
                 f"High overlap with {match_ids}. Creating new entry "
@@ -22361,6 +22438,104 @@ def cmd_memory_add(args: argparse.Namespace) -> None:
     else:
         verb = "Updated" if action == "updated" else "Created"
         print(f"{verb} {entry_id} at {target_path}")
+
+
+def cmd_memory_upsert(args: argparse.Namespace) -> None:
+    """Deterministic find-or-create for recurrence-deduped entries (fn-212).
+
+    Same field surface as `memory add` minus `--update` (owned internally)
+    and the deprecated legacy form (positional content / `--type`).
+
+    Match: categorized entries in `--track` whose stored title equals
+    `--title` byte-for-byte (no tokenization, case-sensitive). Legacy
+    flat-file entries are never matched. Zero matches -> create exactly as
+    `memory add` would. One match -> update that entry exactly as
+    `memory add --update <id>` would (stale entries are matched too;
+    status handling follows the existing update semantics unchanged).
+    Two or more matches -> exit nonzero listing the ambiguous ids; no write.
+    """
+    memory_dir = require_memory_enabled(args)
+
+    track = getattr(args, "track", None)
+    title = getattr(args, "title", None)
+    if not track or not title:
+        missing = " and ".join(
+            flag
+            for flag, value in (("--track", track), ("--title", title))
+            if not value
+        )
+        error_exit(
+            f"Required: {missing}. The title-within-track pair is the upsert "
+            f"match identity, so both are mandatory.",
+            code=2,
+            use_json=args.json,
+        )
+    if track not in MEMORY_TRACKS:
+        error_exit(
+            f"Invalid track '{track}'. Valid: {', '.join(MEMORY_TRACKS)}.",
+            code=2,
+            use_json=args.json,
+        )
+
+    # Validate a supplied category up front: on the match path the matched
+    # entry's own category overwrites args.category before delegation, which
+    # would let a typo'd --category succeed or fail based on repository state.
+    category = getattr(args, "category", None)
+    if category is not None and category not in MEMORY_CATEGORIES[track]:
+        error_exit(
+            f"Invalid category '{category}' for track '{track}'. "
+            f"Valid: {', '.join(MEMORY_CATEGORIES[track])}.",
+            code=2,
+            use_json=args.json,
+        )
+
+    # `memory add` stores at most 80 title chars, so a longer title can never
+    # be a byte-for-byte identity: two distinct titles sharing the first 80
+    # chars would collide after truncation. Reject rather than guess.
+    if len(title) > 80:
+        error_exit(
+            f"--title is {len(title)} chars; memory titles are stored "
+            f"truncated to 80, so an over-80 title cannot be a deterministic "
+            f"upsert identity. Shorten the title to 80 chars or fewer.",
+            code=2,
+            use_json=args.json,
+        )
+
+    # One lock spans scan, ambiguity decision, and the delegated write, so two
+    # concurrent zero-match upserts cannot both decide "create" (sibling
+    # duplicates) or interleave scan-then-write on the same entry.
+    lock_path = memory_dir.parent / "tmp" / "memory-upsert.lock"
+    try:
+        with cross_process_lock(lock_path):
+            matches = [
+                entry
+                for entry in _memory_iter_entries(memory_dir, track=track)
+                if entry.get("title") == title
+            ]
+            if len(matches) > 1:
+                ids = ", ".join(entry["entry_id"] for entry in matches)
+                error_exit(
+                    f"Ambiguous upsert: {len(matches)} entries in track "
+                    f"'{track}' share title '{title}': {ids}. No write "
+                    f"performed; disambiguate with `memory add --update <id>`.",
+                    use_json=args.json,
+                )
+
+            if matches:
+                # The match identity is title-within-track: a unique match
+                # updates regardless of category, so delegate with the matched
+                # entry's own category or `cmd_memory_add`'s same-bucket guard
+                # would reject a cross-category update.
+                args.update = matches[0]["entry_id"]
+                args.category = matches[0]["category"]
+            else:
+                args.update = None
+            # Non-JSON output contract (R3): exactly one final line; suppress
+            # the delegated overlap/update progress prints.
+            args._single_line = True
+            cmd_memory_add(args)
+    except CrossProcessLockError as e:
+        error_exit(f"memory upsert lock unavailable: {e}", use_json=args.json)
 
 
 _LEGACY_TYPE_FOR_FILE: dict[str, str] = {
@@ -49275,70 +49450,81 @@ def main() -> None:
     p_memory_init.add_argument("--json", action="store_true", help="JSON output")
     p_memory_init.set_defaults(func=cmd_memory_init)
 
+    def _add_memory_entry_field_args(parser: argparse.ArgumentParser) -> None:
+        """Field surface shared by `memory add` and `memory upsert` (fn-212)."""
+        parser.add_argument(
+            "--track",
+            choices=list(MEMORY_TRACKS),
+            help="Track: bug | knowledge",
+        )
+        parser.add_argument(
+            "--category",
+            help="Category (see `flowctl memory add --help` output for valid list per track)",
+        )
+        parser.add_argument("--title", help="One-line summary (max 80 chars)")
+        parser.add_argument("--module", help="Affected module / file / subsystem")
+        parser.add_argument(
+            "--tags", help="Comma-separated tags (e.g. 'webpack,oom')"
+        )
+        parser.add_argument(
+            "--body-file",
+            dest="body_file",
+            help="Path to body markdown ('-' for stdin)",
+        )
+        # Bug-track optional overrides.
+        parser.add_argument(
+            "--problem-type",
+            dest="problem_type",
+            choices=list(MEMORY_PROBLEM_TYPES),
+            help="Bug track: problem type (defaults derived from category)",
+        )
+        parser.add_argument("--symptoms", help="Bug track: one-line symptoms")
+        parser.add_argument(
+            "--root-cause", dest="root_cause", help="Bug track: one-line root cause"
+        )
+        parser.add_argument(
+            "--resolution-type",
+            dest="resolution_type",
+            choices=list(MEMORY_RESOLUTION_TYPES),
+            help="Bug track: resolution kind (default: fix)",
+        )
+        # Knowledge-track optional override.
+        parser.add_argument(
+            "--applies-when",
+            dest="applies_when",
+            help="Knowledge track: situations this guidance applies to",
+        )
+        # Decision-specific optional fields (knowledge / decisions category).
+        parser.add_argument(
+            "--decision-status",
+            dest="decision_status",
+            choices=list(MEMORY_DECISION_STATUSES),
+            help="Decisions category: lifecycle (proposed | accepted | superseded)",
+        )
+        parser.add_argument(
+            "--superseded-by",
+            dest="superseded_by",
+            help="Decisions category: entry id that supersedes this decision",
+        )
+        parser.add_argument(
+            "--alternatives-considered",
+            dest="alternatives_considered",
+            help="Decisions category: comma-separated list of rejected alternatives",
+        )
+        parser.add_argument(
+            "--no-overlap-check",
+            dest="no_overlap_check",
+            action="store_true",
+            help="Skip overlap scoring; emit empty matches (still creates unless --update)",
+        )
+        parser.add_argument("--json", action="store_true", help="JSON output")
+
     p_memory_add = memory_sub.add_parser(
         "add",
         help="Add memory entry (categorized schema with overlap detection)",
     )
-    # Preferred form (fn-30 task 2).
-    p_memory_add.add_argument(
-        "--track",
-        choices=list(MEMORY_TRACKS),
-        help="Track: bug | knowledge",
-    )
-    p_memory_add.add_argument(
-        "--category",
-        help="Category (see `flowctl memory add --help` output for valid list per track)",
-    )
-    p_memory_add.add_argument("--title", help="One-line summary (max 80 chars)")
-    p_memory_add.add_argument("--module", help="Affected module / file / subsystem")
-    p_memory_add.add_argument(
-        "--tags", help="Comma-separated tags (e.g. 'webpack,oom')"
-    )
-    p_memory_add.add_argument(
-        "--body-file",
-        dest="body_file",
-        help="Path to body markdown ('-' for stdin)",
-    )
-    # Bug-track optional overrides.
-    p_memory_add.add_argument(
-        "--problem-type",
-        dest="problem_type",
-        choices=list(MEMORY_PROBLEM_TYPES),
-        help="Bug track: problem type (defaults derived from category)",
-    )
-    p_memory_add.add_argument("--symptoms", help="Bug track: one-line symptoms")
-    p_memory_add.add_argument(
-        "--root-cause", dest="root_cause", help="Bug track: one-line root cause"
-    )
-    p_memory_add.add_argument(
-        "--resolution-type",
-        dest="resolution_type",
-        choices=list(MEMORY_RESOLUTION_TYPES),
-        help="Bug track: resolution kind (default: fix)",
-    )
-    # Knowledge-track optional override.
-    p_memory_add.add_argument(
-        "--applies-when",
-        dest="applies_when",
-        help="Knowledge track: situations this guidance applies to",
-    )
-    # Decision-specific optional fields (knowledge / decisions category).
-    p_memory_add.add_argument(
-        "--decision-status",
-        dest="decision_status",
-        choices=list(MEMORY_DECISION_STATUSES),
-        help="Decisions category: lifecycle (proposed | accepted | superseded)",
-    )
-    p_memory_add.add_argument(
-        "--superseded-by",
-        dest="superseded_by",
-        help="Decisions category: entry id that supersedes this decision",
-    )
-    p_memory_add.add_argument(
-        "--alternatives-considered",
-        dest="alternatives_considered",
-        help="Decisions category: comma-separated list of rejected alternatives",
-    )
+    # Preferred form (fn-30 task 2): shared field surface, then add-only flags.
+    _add_memory_entry_field_args(p_memory_add)
     # Overlap signal + explicit update (fn-113: no auto-update).
     p_memory_add.add_argument(
         "--update",
@@ -49349,12 +49535,6 @@ def main() -> None:
             "memory add never auto-mutates on high overlap)"
         ),
     )
-    p_memory_add.add_argument(
-        "--no-overlap-check",
-        dest="no_overlap_check",
-        action="store_true",
-        help="Skip overlap scoring; emit empty matches (still creates unless --update)",
-    )
     # Legacy backward-compat.
     p_memory_add.add_argument(
         "--type",
@@ -49363,8 +49543,19 @@ def main() -> None:
     p_memory_add.add_argument(
         "content", nargs="?", help="DEPRECATED: entry body (use --body-file instead)"
     )
-    p_memory_add.add_argument("--json", action="store_true", help="JSON output")
     p_memory_add.set_defaults(func=cmd_memory_add)
+
+    p_memory_upsert = memory_sub.add_parser(
+        "upsert",
+        help=(
+            "Deterministic find-or-create: exact --title match within --track "
+            "(0 matches: create; 1: update in place; 2+: fail closed). "
+            "Matches categorized entries only - legacy flat-file entries are "
+            "never matched."
+        ),
+    )
+    _add_memory_entry_field_args(p_memory_upsert)
+    p_memory_upsert.set_defaults(func=cmd_memory_upsert)
 
     p_memory_read = memory_sub.add_parser(
         "read",

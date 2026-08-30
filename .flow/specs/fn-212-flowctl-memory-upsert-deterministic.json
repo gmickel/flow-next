@@ -1,0 +1,180 @@
+{
+  "branch_name": "fn-212-flowctl-memory-upsert-deterministic",
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-08-30T15:16:56.049693Z",
+  "created_at": "2026-08-30T14:53:28.251940Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
+  "depends_on_epics": [],
+  "id": "fn-212-flowctl-memory-upsert-deterministic",
+  "impl_review_rounds": {
+    "fn-212-flowctl-memory-upsert-deterministic.1": 0
+  },
+  "next_task": 1,
+  "plan_review_rounds": 0,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "0408bad0879cfcf466ccac3f3f3761fc943f3cf9a449e6aae3996c7adf6d51bf",
+      "backend": "codex",
+      "base_sha": "b504a9c3971ac708219c02339c2f326c2f9ea0fb",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-cd5cf2ae254eb12c5547264e60546cbf",
+            "classification": "introduced",
+            "findingId": "finding-cd5cf2ae254eb12c5547264e60546cbf",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-75234a37694172193d6ad5daa7a15422",
+            "classification": "introduced",
+            "findingId": "finding-75234a37694172193d6ad5daa7a15422",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-389d9b3cb89be000f76d60beec5fb8a9",
+            "classification": "introduced",
+            "findingId": "finding-389d9b3cb89be000f76d60beec5fb8a9",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-f4a3f0aa82bb981d963af313a3f55748",
+            "classification": "introduced",
+            "findingId": "finding-f4a3f0aa82bb981d963af313a3f55748",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b19be4c15cc6db8c62d603f9769b7d416cdd038d",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 1124983,
+      "output_sha256": "741b168aa482606aeec6c113425f70f3e12f93d0083f9a3c65700752f462dbbb",
+      "reservation_id": "9ec229bd0b7b478ea765c4700ded9635",
+      "round_consumed": true,
+      "scope": "impl:fn-212-flowctl-memory-upsert-deterministic.1",
+      "superseded_by": null,
+      "task": "fn-212-flowctl-memory-upsert-deterministic.1",
+      "timestamp": "2026-08-30T15:09:45.550149Z",
+      "tool_calls": 19,
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "e59d20a62f4317bb8c4eb97fda8b0e475671a1fc82d492e5496909106ee6ecfe",
+      "backend": "codex",
+      "base_sha": "b504a9c3971ac708219c02339c2f326c2f9ea0fb",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-cd5cf2ae254eb12c5547264e60546cbf",
+            "classification": "introduced",
+            "findingId": "finding-cd5cf2ae254eb12c5547264e60546cbf",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-75234a37694172193d6ad5daa7a15422",
+            "classification": "introduced",
+            "findingId": "finding-75234a37694172193d6ad5daa7a15422",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-389d9b3cb89be000f76d60beec5fb8a9",
+            "classification": "introduced",
+            "findingId": "finding-389d9b3cb89be000f76d60beec5fb8a9",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-f4a3f0aa82bb981d963af313a3f55748",
+            "classification": "introduced",
+            "findingId": "finding-f4a3f0aa82bb981d963af313a3f55748",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "5c302547392fc52a7c7a04abaa01cde5ec559971",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 1099,
+      "output_sha256": "2e4b1ed77c92133e6bfbfe50e0f6ad1d715b94f4266852d0b3b12472f4738de4",
+      "reservation_id": "a87d82db8d69423dbe23aa11fc06c757",
+      "round_consumed": true,
+      "scope": "impl:fn-212-flowctl-memory-upsert-deterministic.1",
+      "superseded_by": null,
+      "task": "fn-212-flowctl-memory-upsert-deterministic.1",
+      "timestamp": "2026-08-30T15:14:36.034801Z",
+      "verdict": "SHIP"
+    }
+  ],
+  "review_hash_epoch": {
+    "impl:fn-212-flowctl-memory-upsert-deterministic.1": 1
+  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-212-flowctl-memory-upsert-deterministic.1": 0
+  },
+  "spec_path": ".flow/specs/fn-212-flowctl-memory-upsert-deterministic.md",
+  "status": "open",
+  "title": "flowctl memory upsert - deterministic find-or-create",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-08-30T15:16:56.049701Z"
+}

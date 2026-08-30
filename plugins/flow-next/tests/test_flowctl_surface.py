@@ -124,6 +124,7 @@ memory mark-stale
 memory migrate
 memory read
 memory search
+memory upsert
 next
 pilot strikes clear
 pilot strikes list

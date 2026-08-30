@@ -1237,6 +1237,20 @@ flowctl memory add --track knowledge --category conventions \
   --applies-when "any review-backend dispatch" \
   --body-file body.md [--json]
 
+# Deterministic find-or-create (fn-212): exact --title match within --track
+# (byte-for-byte, no tokenization). 0 matches: create (as `add` would);
+# 1 match: update in place (as `add --update <id>` would; stale entries are
+# matched too); 2+ matches: exit nonzero listing the ambiguous ids, no write.
+# Same flags as `add` minus --update (owned internally) and the deprecated
+# legacy form. Categorized entries only — legacy flat files are never matched.
+# A unique match updates in its own category (title-within-track identity);
+# over-80-char titles are rejected (stored titles truncate at 80, so a longer
+# title cannot be a byte-for-byte identity).
+# JSON payload carries entry_id + action: created|updated.
+flowctl memory upsert --track knowledge --category workflow \
+  --title "drift: web/login sub-1" --tags "feature-map-drift" \
+  --body-file body.md [--json]
+
 # Query
 flowctl memory list [--track bug] [--category runtime-errors] [--status active|stale|hardened|all] [--json]
 flowctl memory search "windows subprocess" [--track bug] [--module flowctl.py] [--tags "unicode"] [--limit 10] [--status active|stale|hardened|all] [--json]
