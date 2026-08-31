@@ -49,6 +49,15 @@ TAGS = ("[user]", "[paraphrase]", "[inferred]", "[strategy:<track>]")
 # The shared definitions. Byte-identical in capture and interview — if either
 # side rewords one, this test fails and the drift is caught at the edit.
 #
+# `[user]` is guarded per-side, not here — by DECISION TOKENS, never sentence
+# pins (the 2026-08-07 prose-freeze removal bans byte-asserting live skill
+# sentences). Capture requires findability in `## Conversation Evidence` (a
+# close restatement is `[paraphrase]`); interview keeps pass-identity semantics
+# where "close paraphrase" is deliberate — it has no evidence block to anchor
+# findability. The guards below assert the table ROW carries each side's
+# decision token and that the retired wording stays out of capture; any
+# rewording that preserves the decision passes.
+#
 # `[strategy:<track>]` is pinned by PREFIX only here because capture's own two
 # copies legitimately differ past it: workflow.md carries the long form
 # ("...H3 sub-block); track name lives literally in the tag") while phases.md
@@ -56,11 +65,25 @@ TAGS = ("[user]", "[paraphrase]", "[inferred]", "[strategy:<track>]")
 # most both can share. The long form is pinned separately, for the
 # workflow.md <-> write-back.md pair only, by STRATEGY_LONG_FORM below.
 SHARED_DEFINITIONS = (
-    "Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning)",
     "User intent restated in spec language (semantic equivalence; no new constraints introduced)",
     "Agent fill-in (most-scrutinized; user must confirm at read-back)",
     "Derived from `STRATEGY.md` content",
 )
+
+# `[user]` decision tokens (see the per-side note above): capture's row must
+# anchor to the evidence block and must not carry the retired hole; interview's
+# row must keep its deliberate close-paraphrase semantics.
+CAPTURE_USER_TOKEN = "Conversation Evidence"
+CAPTURE_USER_HOLE = "close paraphrase"
+INTERVIEW_USER_TOKEN = "close paraphrase"
+
+
+def _user_row(doc: str, label: str) -> str:
+    """The `[user]` source-tag table row of a skill doc."""
+    for line in doc.splitlines():
+        if line.lstrip().startswith("| `[user]` |"):
+            return line
+    raise AssertionError(f"{label} has no `[user]` source-tag table row")
 
 # Interview copied capture/workflow.md's long `[strategy]` form verbatim. Pin the
 # whole tail so the substantive part cannot drift alone (the SHARED_DEFINITIONS
@@ -214,7 +237,11 @@ class InterviewSourceTagsTest(unittest.TestCase):
     # --- R3: drift pin ------------------------------------------------------
 
     def test_tag_definitions_match_capture(self) -> None:
-        """Neither skill can reword a definition alone."""
+        """Neither skill can reword a shared definition alone.
+
+        `[user]` is per-side (capture findability vs interview pass-identity);
+        the remaining three tags stay byte-identical across both trees.
+        """
         sources = {
             "capture/phases.md": self.capture_phases,
             "interview/references/write-back.md": self.write_back,
@@ -230,6 +257,26 @@ class InterviewSourceTagsTest(unittest.TestCase):
                         f"{label} no longer carries the shared definition "
                         f"{definition!r} — capture and interview have drifted",
                     )
+        capture_row = _user_row(self.capture_phases, "capture/phases.md")
+        interview_row = _user_row(self.write_back, "interview write-back.md")
+        self.assertIn(
+            CAPTURE_USER_TOKEN,
+            capture_row,
+            "capture's [user] row lost its evidence-block anchor — "
+            "findability is the decision, wording is free",
+        )
+        self.assertNotIn(
+            CAPTURE_USER_HOLE,
+            capture_row,
+            "the retired 'close paraphrase' wording returned to capture's "
+            "[user] row — restatements belong to [paraphrase]",
+        )
+        self.assertIn(
+            INTERVIEW_USER_TOKEN,
+            interview_row,
+            "interview's [user] row lost its deliberate pass-identity "
+            "semantics (no evidence block anchors findability there)",
+        )
 
     def test_tag_vocabulary_matches_capture(self) -> None:
         """Neither skill can rename, drop, OR ADD a tag token alone.

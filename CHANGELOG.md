@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **Captured specs stop putting words in the user's mouth.** `[user]` now means the tagged line is findable in the `## Conversation Evidence` block. A close restatement is `[paraphrase]`, never `[user]`. Capture's own process fences (new-vs-rewrite, ready-marking, "do not implement") can no longer masquerade as user-stated boundaries.
+
 ## [flow-next 4.10.1] - 2026-08-31
 
 Unattended shipping and the new feature map both get sturdier: land now recognizes the clean verdict Codex actually posts today (including on repos that installed before this release), skills stop hand-rolling memory dedup, and the feature map stops fighting repo formatters.

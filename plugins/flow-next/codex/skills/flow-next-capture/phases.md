@@ -22,8 +22,8 @@ Every acceptance criterion line, every decision-context line, every scope-boundi
 
 | Tag | Meaning | Acceptance test |
 |-----|---------|-----------------|
-| `[user]` | Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning) | The user said this, in these or similar words. Reasonable people would agree it's the user's stated intent. |
-| `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced) | The user expressed this idea, but agent rephrased to match spec conventions. Same content, cleaner wording. |
+| `[user]` | Verbatim from conversation evidence — the tagged content is FINDABLE in the `## Conversation Evidence` block (quote-level fidelity; trimming/ellipsis fine, rewording not) | Point at a specific evidence line containing these words; a close restatement is `[paraphrase]`, never `[user]`. |
+| `[paraphrase]` | User intent restated in spec language (semantic equivalence; no new constraints introduced). A close restatement of user wording belongs here, never under `[user]`. | The user expressed this idea, but agent rephrased to match spec conventions. Same content, cleaner wording. |
 | `[inferred]` | Agent fill-in (most-scrutinized; user must confirm at read-back) | Agent decided this; user did not state it explicitly. May be a reasonable default, may be wrong. |
 | `[strategy:<track>]` | Derived from `STRATEGY.md` content (verbatim or near-verbatim quote of approach / track body) | The criterion follows directly from a populated section in `STRATEGY.md` — the track name appears literal in the tag. Activates only when Phase 0 strategy snapshot is present. |
 
@@ -35,7 +35,7 @@ The nine-category routing table and its rules live **inline at [workflow.md §2.
 
 | Conversation evidence | Acceptance line | Tag |
 |-----------------------|-----------------|-----|
-| `> user (turn 4): "rate limit must reject 3+ requests per second from a single client"` | `- **R1:** Rate limit rejects ≥3 req/sec from a single client. [user]` | `[user]` |
+| `> user (turn 4): "rate limit must reject 3+ requests per second from a single client"` | `- **R1:** Rate limit must reject 3+ requests per second from a single client. [user]` | `[user]` |
 | `> user (turn 7): "we should write the spec body atomically so partial writes don't corrupt"` | `- **R5:** Spec writes are atomic — partial-write recovery preserves prior state. [paraphrase]` | `[paraphrase]` |
 | (no user mention of error format) | `- **R7:** Errors include the request id for trace correlation. [inferred]` | `[inferred]` |
 | (STRATEGY.md `### Reliability` track says "we ship for 99.95% uptime") | `- **R9:** Service-level objective: 99.95% uptime measured monthly. [strategy:Reliability]` | `[strategy:Reliability]` |
@@ -58,7 +58,7 @@ The breakdown is informational at read-back. Phase 4's `[inferred]` tally counts
 
 ### When to use which
 
-- **`[user]`** is for content the user can read and recognize as their own words. Acceptance criteria and rejected alternatives benefit most from this tag.
+- **`[user]`** is for content the user can read and recognize as their own words AND that is findable in the evidence block. A restatement is `[paraphrase]`, never `[user]`. Acceptance criteria and rejected alternatives benefit most from this tag.
 - **`[paraphrase]`** is for spec-language restatements where the meaning is preserved but the wording is the agent's. Most decision-context and architecture-overview content lands here.
 - **`[inferred]`** is for content the user did not state but the agent decided was necessary for a complete spec. **Defaults are `[inferred]`** — error-format conventions, status code choices, retry policies, observability hooks. Surface them at read-back so the user can keep / edit / drop.
 - **`[strategy:<track>]`** is for content the agent imported from `STRATEGY.md` — verbatim or near-verbatim quote from the `approach` line or one of the `### <track-name>` H3 sub-blocks. The track name lives literally in the tag (e.g. `[strategy:Reliability]`). The criterion is treated as load-bearing for the strategy alignment surface; if the spec body contradicts a `[strategy:*]` line, capture refuses to write without `--override-strategy` (see SKILL.md).
