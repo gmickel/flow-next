@@ -30,7 +30,7 @@ Recommendation logic:
 
 If the user picks `extend`, exit 0 with: `Re-run with --rewrite <spec-id> to overwrite the existing spec, or invoke /flow-next:interview <spec-id> to refine via Q&A.`
 
-If `supersede` or `proceed-anyway`, store the choice and continue to Phase 1.
+If `supersede` or `proceed-anyway`, store the choice and continue to Phase 1. The branch outcome is process state recorded nowhere in the spec body.
 
 In **autofix mode**, when 0.2 detected ≥2 strong matches AND `REWRITE_TARGET` is empty:
 

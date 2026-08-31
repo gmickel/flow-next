@@ -116,6 +116,7 @@ The goal is automated synthesis with human oversight on judgment calls — not a
 
 - **Tech-stack mentions the user did not state.** "Needs persistence" is fine; "uses PostgreSQL" needs the user to have said PostgreSQL. Defer technology choices to `/flow-next:plan` (spec-kit convention — capture writes intent, plan writes implementation).
 - **Inventing acceptance criteria not in conversation.** Every acceptance criterion must be source-tagged; pure `[inferred]` criteria must surface at Phase 4 read-back so the user can reject them.
+- **Process fences are never spec content.** New-vs-rewrite decisions, ready-marking, "do not implement" instructions, and the Phase 0 duplicate-scan outcome are capture's own lifecycle rules; writing them into the spec body or `## Boundaries` (under any tag), or stamping them `[user]`, has broken this. Boundaries carry only product constraints a worker on this spec could get wrong.
 - **Code snippets or specific file paths in the spec body.** Those belong in `/flow-next:plan` task specs after research lands. Capture's output is a high-level spec, not an implementation guide.
 - **Silent overwrite of an existing spec.** Idempotency requires `--rewrite <spec-id>` (R8). Without it, Phase 0 conflict-detection branches into extend / supersede / proceed-anyway.
 - **Auto-splitting a spec that has 8+ acceptance criteria.** Phase 4 surfaces the option to split; the user decides. Never auto-action a split.

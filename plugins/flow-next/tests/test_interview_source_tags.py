@@ -49,6 +49,12 @@ TAGS = ("[user]", "[paraphrase]", "[inferred]", "[strategy:<track>]")
 # The shared definitions. Byte-identical in capture and interview — if either
 # side rewords one, this test fails and the drift is caught at the edit.
 #
+# `[user]` is pinned per-side, not here. Capture now requires quote-level
+# findability in `## Conversation Evidence` (a close restatement is
+# `[paraphrase]`); interview keeps pass-identity semantics on the older
+# "verbatim or close paraphrase" wording. CAPTURE_USER_DEFINITION /
+# INTERVIEW_USER_DEFINITION pin each rule so neither side can lose it.
+#
 # `[strategy:<track>]` is pinned by PREFIX only here because capture's own two
 # copies legitimately differ past it: workflow.md carries the long form
 # ("...H3 sub-block); track name lives literally in the tag") while phases.md
@@ -56,10 +62,24 @@ TAGS = ("[user]", "[paraphrase]", "[inferred]", "[strategy:<track>]")
 # most both can share. The long form is pinned separately, for the
 # workflow.md <-> write-back.md pair only, by STRATEGY_LONG_FORM below.
 SHARED_DEFINITIONS = (
-    "Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning)",
     "User intent restated in spec language (semantic equivalence; no new constraints introduced)",
     "Agent fill-in (most-scrutinized; user must confirm at read-back)",
     "Derived from `STRATEGY.md` content",
+)
+
+# Capture `[user]` after the source-tag integrity fix: findable-in-evidence,
+# quote-level fidelity. The old "close paraphrase" wording is the hole.
+CAPTURE_USER_DEFINITION = (
+    "the tagged content is FINDABLE in the `## Conversation Evidence` block"
+)
+CAPTURE_USER_ACCEPTANCE = (
+    "a close restatement is `[paraphrase]`, never `[user]`"
+)
+CAPTURE_USER_HOLE = "close paraphrase preserving meaning"
+
+# Interview `[user]` still carries pass-identity on the older wording.
+INTERVIEW_USER_DEFINITION = (
+    "Verbatim from conversation evidence (exact quote or close paraphrase preserving meaning)"
 )
 
 # Interview copied capture/workflow.md's long `[strategy]` form verbatim. Pin the
@@ -214,7 +234,11 @@ class InterviewSourceTagsTest(unittest.TestCase):
     # --- R3: drift pin ------------------------------------------------------
 
     def test_tag_definitions_match_capture(self) -> None:
-        """Neither skill can reword a definition alone."""
+        """Neither skill can reword a shared definition alone.
+
+        `[user]` is per-side (capture findability vs interview pass-identity);
+        the remaining three tags stay byte-identical across both trees.
+        """
         sources = {
             "capture/phases.md": self.capture_phases,
             "interview/references/write-back.md": self.write_back,
@@ -230,6 +254,10 @@ class InterviewSourceTagsTest(unittest.TestCase):
                         f"{label} no longer carries the shared definition "
                         f"{definition!r} — capture and interview have drifted",
                     )
+        self.assertIn(CAPTURE_USER_DEFINITION, self.capture_phases)
+        self.assertIn(CAPTURE_USER_ACCEPTANCE, self.capture_phases)
+        self.assertNotIn(CAPTURE_USER_HOLE, self.capture_phases)
+        self.assertIn(INTERVIEW_USER_DEFINITION, self.write_back)
 
     def test_tag_vocabulary_matches_capture(self) -> None:
         """Neither skill can rename, drop, OR ADD a tag token alone.

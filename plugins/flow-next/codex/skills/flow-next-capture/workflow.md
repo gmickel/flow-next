@@ -176,6 +176,7 @@ Walk recent user turns in order. For each turn that contains spec-relevant conte
 Rules:
 
 - **Verbatim only** — no rewording. If a turn is too long for one line, split into multiple `> user (turn N, part 1)` / `(turn N, part 2)` lines, each verbatim. Do not summarize.
+- **User-typed only** — every evidence line quotes something the USER actually typed. Agent narration, tool output, and capture's own process conclusions are never emitted as user turns. After Phase 0's duplicate scan, agents have fabricated a turn like "This is a NEW spec. Do not rewrite <ids>. Do NOT mark ready. Do NOT implement." — that sentence is skill process state, not conversation evidence; emitting it (or any process formula) as a `> user (turn N)` line has broken this.
 - **Skip** turns that are pure greetings, off-topic asides, tool-result interpretation by the user, or noise.
 - **Include** turns that state intent, give examples, name constraints, reject options, or reference files.
 - **Cap** at ~30 lines total. If older spec-relevant turns must be dropped, replace them with one `> [truncated: N earlier turns]` line at the top of the block.
@@ -224,7 +225,7 @@ The canonical section structure lives in [`plugins/flow-next/templates/spec.md`]
 
 Source-tag application is per-tag, not per-section — and **only on content capture newly authors**:
 
-- **`[user]`** dominates where the conversation gave verbatim content (goal framing, user-stated acceptance, named non-goals, rejected alternatives the user surfaced).
+- **`[user]`** only where the tagged content is findable in the Phase 1 evidence block (goal framing, user-stated acceptance, named non-goals, rejected alternatives the user surfaced). A close restatement is `[paraphrase]`, never `[user]`.
 - **`[paraphrase]`** is for spec-language restatements of user intent — preserving meaning, tightening wording.
 - **`[inferred]`** covers agent fill-in for completeness (default conventions: error formats, retry policies, observability hooks, file / component refs the user did NOT name). **Untouched by §2.6 biz-routing** — biz destinations only accept `[user]` / `[paraphrase]`.
 - **`[strategy:<track>]`** activates only when Phase 0 strategy snapshot was populated.
@@ -383,6 +384,8 @@ Phase 3 only fires for the three hard-error cases. Asking too many questions def
 **Path-persistence rule:** bash vars do NOT survive across prompt turns — and that applies to the draft path itself. Compose a **literal unique path in agent context** — `${TMPDIR:-/tmp}/flow-capture-draft-<working-title-slug>-<agent-chosen 4-char suffix>.md` — and use that literal path verbatim in the Write call here AND in Phase 5's `spec set-plan <id> --file <path>` call. Never carry the path in a shell variable across prompt turns; `mktemp` is reserved for paths created and consumed within a single bash block. (No spec id exists yet on the new-spec branch — the working-title slug keeps the path readable; uniqueness comes from the suffix.)
 
 Write the full draft to that path via the **Write tool** — exactly once (the file is what Phase 5 hands to `spec set-plan --file`; do NOT re-author it into a Phase-5 heredoc). The Write is plumbing, not the user-facing read-back.
+
+**`[user]` findability (before every ask, including §4.3 re-asks):** every `[user]`-tagged line in the draft is findable in the `## Conversation Evidence` block. A miss retags the line (`[paraphrase]` or `[inferred]`) and re-counts the inferred tally. A draft presented with an unverifiable `[user]` line has broken this.
 
 The **draft file** contains the spec body (what `spec set-plan` consumes — it OPENS with a single `# <title>` heading, per §5.1: set-plan replaces the whole file, so a body without one ships a heading-less spec):
 
