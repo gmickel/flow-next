@@ -77,12 +77,19 @@ fi
 
 # --no-plan (fn-214, R5: explicit opt-in to set the spec-level no_plan field
 # in §5.9b after the spec write — NEVER inferred from conversation content;
-# autofix sets the field only through this flag)
+# autofix sets the field only through this flag). EXACT-token match, not a
+# substring test: durable state must not be set by lookalikes ("--no-planning",
+# "--no-plan=false") — those stay in the freeform remainder untouched.
 NO_PLAN_OPT=0
-if [[ "$RAW_ARGS" == *"--no-plan"* ]]; then
-  NO_PLAN_OPT=1
-  RAW_ARGS="${RAW_ARGS//--no-plan/}"
-fi
+CLEANED_ARGS=""
+for TOK in $RAW_ARGS; do
+  if [ "$TOK" = "--no-plan" ]; then
+    NO_PLAN_OPT=1
+  else
+    CLEANED_ARGS="$CLEANED_ARGS $TOK"
+  fi
+done
+RAW_ARGS="$CLEANED_ARGS"
 
 if [ "$MODE" = "autofix" ]; then
   echo "GATE ACTIVE — STOP. Read references/autofix-mode.md before continuing."

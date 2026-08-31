@@ -1,11 +1,73 @@
 {
   "branch_name": "fn-214-spec-level-no-plan-field-replaces-pilot",
+  "completion_review_status": "unknown",
+  "completion_reviewed_at": null,
   "created_at": "2026-08-31T22:26:21.235207Z",
+  "default_impl": null,
+  "default_review": null,
+  "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-214-spec-level-no-plan-field-replaces-pilot",
+  "impl_review_rounds": {
+    "fn-214-spec-level-no-plan-field-replaces-pilot.1": 1
+  },
   "next_task": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "817ffddd4c55749e5549036afb18806ed2035db3530b1ce1857f38283c4bb821",
+      "backend": "codex",
+      "base_sha": "84b4e2d289d1e59be2ac0e1d9e6d91058bc17dd1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-38e280357a14643a9e723a3be976a9d9",
+            "classification": "introduced",
+            "findingId": "finding-38e280357a14643a9e723a3be976a9d9",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "07ece2e10c94f364b3e28fae349214a50b955634",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 728688,
+      "output_sha256": "5473128741218b24fe22dbd87ae4e5591f842ddd891e7f7c24b1d57c3629c406",
+      "reservation_id": "ec901a836e55479ea893c60dfcb25463",
+      "round_consumed": true,
+      "scope": "impl:fn-214-spec-level-no-plan-field-replaces-pilot.1",
+      "superseded_by": null,
+      "task": "fn-214-spec-level-no-plan-field-replaces-pilot.1",
+      "timestamp": "2026-08-31T22:48:45.473006Z",
+      "tool_calls": 23,
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-214-spec-level-no-plan-field-replaces-pilot.1": 0
+  },
   "spec_path": ".flow/specs/fn-214-spec-level-no-plan-field-replaces-pilot.md",
   "status": "open",
   "title": "Spec-level no_plan field replaces pilot --no-plan flag",
@@ -20,5 +82,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-31T22:26:21.502595Z"
+  "updated_at": "2026-08-31T22:48:45.489262Z"
 }
