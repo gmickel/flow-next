@@ -385,7 +385,7 @@ Phase 3 only fires for the three hard-error cases. Asking too many questions def
 
 Write the full draft to that path via the **Write tool** — exactly once (the file is what Phase 5 hands to `spec set-plan --file`; do NOT re-author it into a Phase-5 heredoc). The Write is plumbing, not the user-facing read-back.
 
-**`[user]` findability (before every ask, including §4.3 re-asks):** every `[user]`-tagged line in the draft is findable in the `## Conversation Evidence` block. A miss retags the line (`[paraphrase]` or `[inferred]`) and re-counts the inferred tally. A draft presented with an unverifiable `[user]` line has broken this.
+**`[user]` findability (before every ask, including §4.3 re-asks):** every **per-line** `[user]` tag in the draft — criterion, decision-context, and scope-bounding lines — is findable in the `## Conversation Evidence` block. A miss retags the line (`[paraphrase]` or `[inferred]`) and re-counts the inferred tally. Section-level breakdown notes (`<!-- Goal & Context: 70% [user], ... -->`) are exempt from the line check — they are informational sourcing summaries, never a `[user]` stamp on any sentence: a narrative claim needing user authority gets a per-line tag or stays at the authority its evidence supports. A draft presented with an unverifiable per-line `[user]` tag has broken this.
 
 The **draft file** contains the spec body (what `spec set-plan` consumes — it OPENS with a single `# <title>` heading, per §5.1: set-plan replaces the whole file, so a body without one ships a heading-less spec):
 
