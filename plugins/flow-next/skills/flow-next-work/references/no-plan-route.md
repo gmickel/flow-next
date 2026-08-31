@@ -14,10 +14,10 @@ fn-214, set at capture time or via `flowctl spec set-no-plan`) also sets `NO_PLA
 it is the same explicit human instruction, carried by the item instead of the
 invocation. If `NO_PLAN=1`: skip the ask, go straight to Direct route. Contradictory
 signals (flag or field says direct, prose says plan first) → ask instead of guessing.
-The flag on a spec that already has tasks was already ignored with a one-line notice
-back in SKILL.md — it never reaches this file (a stale `no_plan` field on a planned
-spec gets the same notice-and-ignore: this file only loads when the task count is
-zero). A run that asked under a clean `NO_PLAN=1` has broken this.
+The signal (flag or field) on a spec that already has tasks was already ignored with
+a one-line notice back at Phase 1's stale-signal bullet — it never reaches this file
+(this file only loads when the task count is zero). A run that asked under a clean
+`NO_PLAN=1` has broken this.
 
 ## Autonomous refusal
 
