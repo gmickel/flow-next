@@ -467,6 +467,7 @@ If user picks `edit`:
 
 - Ask which sections (offer multi-select if the platform supports it; otherwise serial single-select).
 - For each section, re-run Phase 2's drafting logic for that section only, with the user's correction context as additional input.
+- **Correction turns become evidence FIRST.** When the edit reply states a requirement, constraint, or rejection in the user's own words, append it verbatim to `## Conversation Evidence` as `> user (edit cycle <N>): "<verbatim text>"` before redrafting — the §4.1 findability check runs against the evidence block, and without the append it would retag the user's genuinely-stated words as `[paraphrase]`/`[inferred]`, corrupting exactly the provenance this check protects. The ~30-line cap still applies (truncate older lines, never the correction just given).
 - Apply the revisions to the §4.1 draft file via the **Edit tool** (deltas only — never rewrite the whole file via Write).
 - Re-tally `[inferred]` count.
 - **Print-then-ask again:** **Read the FULL draft file**, then **print the full revised draft as an ordinary assistant message** (one full emission per edit cycle — the Edit render shows only the delta and is NOT a full read-back). The full-file Read also satisfies the Edit tool's read-before-edit requirement for the next cycle.
