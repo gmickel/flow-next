@@ -9,7 +9,7 @@
   "depends_on_epics": [],
   "id": "fn-214-spec-level-no-plan-field-replaces-pilot",
   "impl_review_rounds": {
-    "fn-214-spec-level-no-plan-field-replaces-pilot.1": 1
+    "fn-214-spec-level-no-plan-field-replaces-pilot.1": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -60,9 +60,55 @@
       "timestamp": "2026-08-31T22:48:45.473006Z",
       "tool_calls": 23,
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "0e9a4a2ac8227d8da7d594314f504f2fbffafcfa788e678246665372a6d0531e",
+      "backend": "codex",
+      "base_sha": "84b4e2d289d1e59be2ac0e1d9e6d91058bc17dd1",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-38e280357a14643a9e723a3be976a9d9",
+            "classification": "introduced",
+            "findingId": "finding-38e280357a14643a9e723a3be976a9d9",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "b03fd7401e10a0a8c8b2a5c9f6eadb4c17004b7c",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 900,
+      "output_sha256": "81394ffecd21c5b989c39804d5eb8dd46cf31c5d74246c17783c67078c4fa464",
+      "reservation_id": "2bd39cb61be445729e52973ca83ffb6d",
+      "round_consumed": true,
+      "scope": "impl:fn-214-spec-level-no-plan-field-replaces-pilot.1",
+      "superseded_by": null,
+      "task": "fn-214-spec-level-no-plan-field-replaces-pilot.1",
+      "timestamp": "2026-08-31T22:51:03.429272Z",
+      "verdict": "SHIP"
     }
   ],
-  "review_hash_epoch": {},
+  "review_hash_epoch": {
+    "impl:fn-214-spec-level-no-plan-field-replaces-pilot.1": 1
+  },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
@@ -82,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-31T22:48:45.489262Z"
+  "updated_at": "2026-08-31T22:51:03.431085Z"
 }
