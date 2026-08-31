@@ -25,6 +25,8 @@ Autofix never offers `edit` — there's no user to ask. The Write + `--yes` patt
 
 **Autofix + glossary proposals:** the summary payload's glossary block prints as suggestions (`Suggested glossary adds — review and add via flowctl glossary add "<term>" --definition-file -`), but autofix **never writes terms** — not even with `--yes` (`--yes` consents to the spec write, not to vocabulary changes). Phase 5.8 is interactive-only.
 
+**Autofix + no-plan (fn-214, R5):** the spec-level `no_plan` field is written in autofix **only** when the invocation carried the explicit `--no-plan` flag AND the spec was written (`--yes`) — §5.9b runs identically to interactive then (it is flag-consent, not a question). Without the flag the field is never set: autofix never infers no-plan from the draft or the conversation.
+
 **Autofix + readiness:** autofix **never writes readiness** — not even with `--yes` (Phase 5.9 is interactive-only). When the §4.2 target-aware predicate yields `READY_OFFER=true` AND the spec gets written (`--yes`), Phase 6 appends a one-line suggestion: `Mark ready when blessed: flowctl spec ready <SPEC_ID>`. Without `--yes` nothing is suggested (no spec id exists). Predicate fails → silence — including non-adopters, tracker-authoritative repos, and draft rewrite targets made visible only by an unrelated ready spec.
 
 ## Autofix exit summary

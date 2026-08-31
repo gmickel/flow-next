@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **"Too small to plan" is now spec state, not an invocation flag.** A trivially small spec can be marked `no_plan` — at capture time (`/flow-next:capture ... --no-plan`) or any time later (`flowctl spec set-no-plan fn-N`) — and pilot builds it straight through the work stage's no-plan route once it's ready, alongside a backlog of normally planned specs. Before, the only signal was pilot's blanket `--no-plan` invocation flag, which applied to whatever spec the tick happened to select; that flag is gone (a stray `--no-plan` gets pilot's standard unknown-flag notice and the tick proceeds — affected zero-task specs simply route through plan, the safe default). The field is an explicit human instruction on the item, mirroring the `ready` flag's lazy contract exactly: absent reads false, every existing spec and workflow behaves identically, toggles are idempotent no-ops, and no autonomous path ever sets it. Setting is refused once a spec has tasks; a field left stale on a later-planned spec is inert by construction (pilot's zero-task classification never matches it; work ignores it with a one-line notice). `flowctl spec clear-no-plan` clears it any time, and direct `/flow-next:work fn-N --no-plan` keeps working unchanged. (fn-214)
+
 ## [flow-next 4.10.2] - 2026-08-31
 
 ### Fixed

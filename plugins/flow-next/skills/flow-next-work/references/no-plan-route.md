@@ -5,26 +5,32 @@
 > (they mint a single task unconditionally, direct-by-construction). A spec with any
 > tasks (whatever their status) never reads this file.
 
-## Pre-answer signals (flag / natural language)
+## Pre-answer signals (flag / field / natural language)
 
 SKILL.md's option parsing records `NO_PLAN=1` from `--no-plan` or natural-language
-intent ("no plan", "skip planning", "work directly"). If `NO_PLAN=1`: skip the ask, go
-straight to Direct route. Contradictory signals (flag says direct, prose says plan
-first) → ask instead of guessing. The flag on a spec that already has tasks was already
-ignored with a one-line notice back in SKILL.md — it never reaches this file. A run
-that asked under a clean `NO_PLAN=1` has broken this.
+intent ("no plan", "skip planning", "work directly"). The spec's own `no_plan` field
+(`no_plan: true` in the `$FLOWCTL show <spec-id> --json` already read at Phase 1 —
+fn-214, set at capture time or via `flowctl spec set-no-plan`) also sets `NO_PLAN=1`:
+it is the same explicit human instruction, carried by the item instead of the
+invocation. If `NO_PLAN=1`: skip the ask, go straight to Direct route. Contradictory
+signals (flag or field says direct, prose says plan first) → ask instead of guessing.
+The flag on a spec that already has tasks was already ignored with a one-line notice
+back in SKILL.md — it never reaches this file (a stale `no_plan` field on a planned
+spec gets the same notice-and-ignore: this file only loads when the task count is
+zero). A run that asked under a clean `NO_PLAN=1` has broken this.
 
 ## Autonomous refusal
 
 Under ANY autonomy marker (`FLOW_RALPH`, `FLOW_AUTONOMOUS`, `AUTONOMOUS=1` /
 `mode:autonomous`, `REVIEW_RECEIPT_PATH` — scan the marker family/namespace, never a
-fixed two-var list) WITHOUT an explicit no-plan instruction in the invocation, stop
-with the typed report: `NEEDS_HUMAN: spec has no tasks - run /flow-next:plan <spec-id>`.
-Never ask, never fall through. An explicit no-plan instruction in the dispatching
-invocation is the only thing that lets an autonomous run take the Direct route — and a
-contradicted signal (flag says direct, prose says plan) is never an explicit no-plan
-instruction. A run that asked or continued under autonomy without that instruction has
-broken this.
+fixed two-var list) WITHOUT an explicit no-plan instruction, stop with the typed
+report: `NEEDS_HUMAN: spec has no tasks - run /flow-next:plan <spec-id>`.
+Never ask, never fall through. An explicit no-plan instruction — the flag or stated
+intent in the dispatching invocation, or the spec's own `no_plan: true` field (fn-214;
+an explicit human write, which is how pilot's classification routes here) — is the
+only thing that lets an autonomous run take the Direct route; a contradicted signal
+(flag or field says direct, prose says plan) is never an explicit no-plan instruction.
+A run that asked or continued under autonomy without that instruction has broken this.
 
 ## The ask (interactive only)
 

@@ -28,6 +28,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [spec set-title](#spec-set-title)
   - [spec close](#spec-close)
   - [spec ready / spec unready](#spec-ready-spec-unready)
+  - [spec set-no-plan / spec clear-no-plan](#spec-set-no-plan-spec-clear-no-plan)
   - [spec add-dep / spec rm-dep](#spec-add-dep-spec-rm-dep)
   - [spec set-backend](#spec-set-backend)
   - [spec export-cognitive-aid](#spec-export-cognitive-aid)
@@ -150,7 +151,7 @@ Pre-1.0 layout had spec JSON sidecars at `.flow/epics/fn-N-slug.json` (the markd
 Flowctl accepts schema v1 and v2 (and v3 post-migration); new fields are optional and defaulted.
 
 New fields:
-- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics` (canonical JSON field for cross-spec deps), `branch_name`, `default_impl`, `default_review`, `default_sync`, `ready` (1.12.0+, lazy - written only after a toggle; absent reads `false`)
+- Spec JSON: `plan_review_status`, `plan_reviewed_at`, `completion_review_status`, `completion_reviewed_at`, `depends_on_epics` (canonical JSON field for cross-spec deps), `branch_name`, `default_impl`, `default_review`, `default_sync`, `ready` (1.12.0+, lazy - written only after a toggle; absent reads `false`), `no_plan` (fn-214, same lazy contract - marks a zero-task spec for work's direct route; set refused once tasks exist)
 - Task JSON: `priority`, `impl`, `review`, `sync`
 
 ## ID Format
@@ -445,6 +446,22 @@ Output:
 ```
 
 Both verbs are **idempotent no-ops** when the flag already matches (no write, no `updated_at` bump, `"changed": false`) - which is what lets unconditional callers like `capture --rewrite`'s readiness reset run without turning every spec into a readiness adopter. The on-disk flag is **lazy**: the sidecar carries `ready` only after a toggle actually changes state (absent reads `false`; `spec create` never writes it). Task ids (`fn-1.2`) are rejected - readiness is spec-level only. When `tracker.readyState` is configured, the tracker is authoritative: a local `spec ready` is overwritten by the next pull-side sync (see [`tracker-sync.md`](tracker-sync.md)).
+
+### spec set-no-plan / spec clear-no-plan
+
+Mark / clear the spec-level `no_plan` field (fn-214) — the durable "ready, and too small to plan" signal. A ready zero-task spec with `no_plan: true` is classified by pilot straight to the work stage's [no-plan route](pipeline-variations.md#no-plan-route) (one implicit task, no plan/plan-review), and work reads the field as the explicit no-plan instruction. Set it at capture time (`/flow-next:capture ... --no-plan`) or manually; no autonomous path ever sets it.
+
+```bash
+flowctl spec set-no-plan fn-1 [--json]
+flowctl spec clear-no-plan fn-1 [--json]
+```
+
+Output:
+```json
+{"id": "fn-1", "no_plan": true, "changed": true, "message": "Spec fn-1 marked no-plan"}
+```
+
+Same lazy, idempotent contract as `spec ready`/`spec unready` (sidecar carries `no_plan` only after a toggle changes state; absent reads `false`; matching toggles are byte-identical no-ops; task ids rejected). One extra rule: **setting is refused once the spec has any tasks** (nonzero exit naming why — a planned spec routes through its tasks), while **clearing is always allowed**, including on specs with tasks (stale-field cleanup). A field left set on a spec that later gained tasks is inert: pilot's zero-task classification rows never match it and work ignores it with a one-line notice. The field is flow-local — no tracker projection (`tracker.readyState` projects readiness only). Exposed as an explicit boolean on `show --json`, `specs --json`, `list --json`, and as `noPlan` on `ready --all` rows.
 
 ### spec add-dep / spec rm-dep
 

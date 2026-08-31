@@ -29838,6 +29838,8 @@ def cmd_show(args: argparse.Namespace) -> None:
         # fn-58.1 (R1): lazy on-disk, explicit in output — the spread omits an
         # absent `ready` key, so default it explicitly (absent reads false).
         result["ready"] = bool(epic_data.get("ready", False))
+        # fn-214 (R1): same explicit-boolean contract as ready.
+        result["no_plan"] = bool(epic_data.get("no_plan", False))
 
         if args.json:
             json_output(result)
@@ -29924,6 +29926,8 @@ def cmd_specs(args: argparse.Namespace) -> None:
                 "status": spec_data["status"],
                 # fn-58.1 (R1): explicit boolean — absent key reads false.
                 "ready": bool(spec_data.get("ready", False)),
+                # fn-214 (R1): same explicit-boolean contract as ready.
+                "no_plan": bool(spec_data.get("no_plan", False)),
                 "tasks": task_count,
                 "done": done_count,
             }
@@ -30079,6 +30083,8 @@ def cmd_list(args: argparse.Namespace) -> None:
                     "status": e["status"],
                     # fn-58.1 (R1): explicit boolean — absent key reads false.
                     "ready": bool(e.get("ready", False)),
+                    # fn-214 (R1): same explicit-boolean contract as ready.
+                    "no_plan": bool(e.get("no_plan", False)),
                     "tasks": len(task_list),
                     "done": done_count,
                 }
@@ -30931,6 +30937,76 @@ def cmd_spec_ready(args: argparse.Namespace) -> None:
 def cmd_spec_unready(args: argparse.Namespace) -> None:
     """Clear a spec's ready flag (fn-58.1)."""
     _cmd_spec_set_ready(args, target=False)
+
+
+def _cmd_spec_set_no_plan(args: argparse.Namespace, *, target: bool) -> None:
+    """Shared body for `spec set-no-plan` / `spec clear-no-plan` (fn-214, R1).
+
+    Same lazy on-disk contract as `_cmd_spec_set_ready`: the sidecar carries
+    the `no_plan` key only after a toggle actually CHANGES state; matching
+    toggles are idempotent no-ops (no write, no `updated_at` bump). One extra
+    rule: SETTING is refused once the spec has any tasks — `no_plan` marks a
+    zero-task spec for work's direct route, and a planned spec routes through
+    its tasks. CLEARING is always allowed (stale-field cleanup).
+    """
+    if not ensure_flow_exists():
+        error_exit(
+            ".flow/ does not exist. Run 'flowctl init' first.", use_json=args.json
+        )
+
+    flow_dir = get_flow_dir()
+    if is_task_id(casefold_handle(args.id) or ""):
+        error_exit(
+            f"Invalid spec ID: {args.id}. no_plan is a spec-level flag - "
+            "pass a spec id (fn-N or fn-N-slug), not a task id (fn-N.M)",
+            use_json=args.json,
+        )
+    args.id = resolve_spec_id_arg(flow_dir, args.id, use_json=args.json)
+    spec_json_path = find_spec_json_path(flow_dir, args.id)
+
+    if not spec_json_path.exists():
+        error_exit(f"Spec {args.id} not found", use_json=args.json)
+
+    if target and next(iter_task_json_files(flow_dir, args.id), None) is not None:
+        error_exit(
+            f"Spec {args.id} already has tasks - no_plan marks a zero-task "
+            "spec for the direct work route. A planned spec routes through "
+            "its tasks; clear-no-plan remains available.",
+            use_json=args.json,
+        )
+
+    spec_data = normalize_epic(
+        load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+    )
+    changed = bool(spec_data.get("no_plan", False)) != target
+    if changed:
+        spec_data["no_plan"] = target
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
+
+    verb = "marked no-plan" if target else "cleared no-plan"
+    suffix = "" if changed else " (no change)"
+    if args.json:
+        json_output(
+            {
+                "id": args.id,
+                "no_plan": target,
+                "changed": changed,
+                "message": f"Spec {args.id} {verb}{suffix}",
+            }
+        )
+    else:
+        print(f"Spec {args.id} {verb}{suffix}")
+
+
+def cmd_spec_set_no_plan(args: argparse.Namespace) -> None:
+    """Mark a spec as needing no plan."""
+    _cmd_spec_set_no_plan(args, target=True)
+
+
+def cmd_spec_clear_no_plan(args: argparse.Namespace) -> None:
+    """Clear a spec's no_plan flag (fn-214, R1)."""
+    _cmd_spec_set_no_plan(args, target=False)
 
 
 # Backward-compat aliases (T2 layers the deprecation warning).
@@ -34204,6 +34280,8 @@ def cmd_ready_all(args: argparse.Namespace) -> None:
             {
                 "id": spec_id,
                 "ready": is_ready,
+                # fn-214 (R1): same explicit-boolean contract as ready.
+                "noPlan": bool(spec_data.get("no_plan", False)),
                 "readySignal": "local" if is_ready else "none",
                 "blockedBy": blocked_by,
                 "hasSpec": has_spec_md,
@@ -50595,6 +50673,26 @@ def main() -> None:
         )
         p_unready.add_argument("--json", action="store_true", help="JSON output")
         p_unready.set_defaults(func=cmd_spec_unready)
+
+        # fn-214 (R1): spec-level no-plan marker — set refused once tasks exist.
+        p_set_no_plan = parent_sub.add_parser(
+            "set-no-plan",
+            help=f"Mark {noun} no-plan (direct work route; refused once tasks exist)",
+        )
+        p_set_no_plan.add_argument(
+            "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
+        )
+        p_set_no_plan.add_argument("--json", action="store_true", help="JSON output")
+        p_set_no_plan.set_defaults(func=cmd_spec_set_no_plan)
+
+        p_clear_no_plan = parent_sub.add_parser(
+            "clear-no-plan", help=f"Clear {noun} no_plan flag"
+        )
+        p_clear_no_plan.add_argument(
+            "id", help=f"{noun.capitalize()} ID (e.g., fn-1, fn-1-add-auth)"
+        )
+        p_clear_no_plan.add_argument("--json", action="store_true", help="JSON output")
+        p_clear_no_plan.set_defaults(func=cmd_spec_clear_no_plan)
 
         p_add_dep = parent_sub.add_parser(
             "add-dep", help=f"Add {noun}-level dependency"

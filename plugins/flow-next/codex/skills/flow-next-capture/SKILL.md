@@ -35,7 +35,7 @@ FLOWCTL="${CODEX_HOME:-$HOME/.codex}/scripts/flowctl"
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
+Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`, `--no-plan`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -73,6 +73,15 @@ fi
 if [[ "$RAW_ARGS" == *"--override-strategy"* ]]; then
   OVERRIDE_STRATEGY=1
   RAW_ARGS="${RAW_ARGS//--override-strategy/}"
+fi
+
+# --no-plan (fn-214, R5: explicit opt-in to set the spec-level no_plan field
+# in §5.9b after the spec write — NEVER inferred from conversation content;
+# autofix sets the field only through this flag)
+NO_PLAN_OPT=0
+if [[ "$RAW_ARGS" == *"--no-plan"* ]]; then
+  NO_PLAN_OPT=1
+  RAW_ARGS="${RAW_ARGS//--no-plan/}"
 fi
 
 if [ "$MODE" = "autofix" ]; then

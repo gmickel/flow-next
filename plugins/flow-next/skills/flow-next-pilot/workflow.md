@@ -346,7 +346,7 @@ Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 
 | Condition | Stage |
 |---|---|
-| 0 tasks exist and `PILOT_NO_PLAN=1` (explicit `--no-plan` on the invocation) | `work` — dispatched with `--no-plan` (R4: the row must sit ahead of the default zero-task row or that row consumes the case and the flag never reaches work) |
+| 0 tasks exist and `SPEC_JSON` reads `no_plan == true` (spec-level field, fn-214 — absent reads false) | `work` — dispatched with `--no-plan` (R2/R4: the row must sit ahead of the default zero-task row or that row consumes the case and the instruction never reaches work; task-count-first matching keeps a stale field on a planned spec inert — the zero-task rows never match once tasks exist) |
 | 0 tasks exist | `plan` |
 | tasks exist and `plan_review_status != "ship"` and review backend is configured | `plan-review` |
 | any task is `todo` or `blocked` (canonical task statuses are `todo`, `in_progress`, `blocked`, `done`) | `work` |
@@ -444,7 +444,7 @@ Dispatch exactly one existing stage skill (slash-command invocation), with `mode
 
 - `plan`: `/flow-next:plan <spec-id> mode:autonomous --research=<grep|rp> --depth=<level> --review=<backend>`
 - `plan-review`: `/flow-next:plan-review <spec-id> --review=<backend>`
-- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>` — when `PILOT_NO_PLAN=1`, append `--no-plan` (work treats it as the explicit no-plan instruction on a zero-task spec; on a spec that already has tasks work ignores it with a one-line notice)
+- `work`: `/flow-next:work <spec-id> mode:autonomous --branch=<current|new> --review=<backend>` — when classification matched the zero-task `no_plan` row, append `--no-plan` (work treats it as the explicit no-plan instruction on a zero-task spec; on a spec that already has tasks work ignores it with a one-line notice)
 - `qa`: `/flow-next:qa <spec-id> mode:autonomous` — the QA skill derives scenarios from the spec, reads work's evidence, drives the **local running app**, and writes the `qa_verdict` receipt. `mode:autonomous` suppresses all prompts (the QA skill's Autonomous-mode gate) so the loop can't hang on a question prompt. Pilot dispatches the existing skill and never re-implements its logic; routing on the resulting `qa_outcome` is Phase 5.
 - `make-pr`: `/flow-next:make-pr <spec-id> mode:autonomous`
 
