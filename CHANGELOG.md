@@ -2,11 +2,11 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.10.2] - 2026-08-31
 
 ### Fixed
 
-- **Captured specs stop putting words in the user's mouth.** `[user]` now means the tagged line is findable in the `## Conversation Evidence` block. A close restatement is `[paraphrase]`, never `[user]`. Capture's own process fences (new-vs-rewrite, ready-marking, "do not implement") can no longer masquerade as user-stated boundaries.
+- **Captured specs stop putting words in the user's mouth.** `[user]` now means the tagged line is findable in the `## Conversation Evidence` block. A close restatement is `[paraphrase]`, never `[user]`. Capture's own process fences (new-vs-rewrite, ready-marking, "do not implement") can no longer masquerade as user-stated boundaries — evidence lines are user-typed only, an edit-cycle correction becomes evidence before redraft, split bodies verify findability against their own evidence slice, and section-level percentage notes never mint `[user]` authority for narrative sentences. Field-reported.
 
 ## [flow-next 4.10.1] - 2026-08-31
 
