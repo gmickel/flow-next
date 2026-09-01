@@ -2204,9 +2204,20 @@ regardless of guards. Every input the decision used is echoed for audit
 `phase_lease`). Additional stop reasons: `corrupt_receipt` (an unknown
 verdict, wrong type, or unparseable file on this scope's path is never
 rotated into a fresh fan-out), `phases_in_flight` (another coordinator holds
-the optional-phase lease), and `rotation_lost_race`. A journaled reservation
-counts as in flight only while its lease is live; an expired abandonment
-journal is reported and replayed (refunded) by the next dispatch.
+the optional-phase lease), `rotation_lost_race`, `claimed` (a live standalone
+claim by another coordinator's dispatch), and `claim_lost_race`. A journaled
+reservation counts as in flight only while its lease is live; an expired
+abandonment journal is reported and replayed (refunded) by the next dispatch.
+
+Standalone scope claim: with `--rotate-stale`, a standalone route (no
+reservation to fence on) atomically creates a claim placeholder at the receipt
+path before `fanout` (`claimed: true`, plus its owner `claim_token`), so two
+coordinators reaching the same absent receipt cannot both dispatch. The
+dispatch captures the token it started under; a dispatch that dies before any
+receipt replaces the claim (all draws failed, snapshot or sidecar errors) and a
+finalize that refuses the round as stale release it, ownership-bound under the
+receipt lock - a replacement claim or a published receipt at the same path is
+never removed. A claim expires on the review liveness bound.
 
 Scope ownership through the optional phases: `impl-review-fanout-finalize
 --hold-for-phases N` (codex; acquired BEFORE the record, while the

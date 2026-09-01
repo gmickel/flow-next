@@ -1391,6 +1391,33 @@ class TestReviewFanout(unittest.TestCase):
         )
         self.assertEqual(self._payload(out)["action"], "fanout")
 
+    def test_claim_release_is_ownership_bound(self) -> None:
+        """Sol round 6: cleanup unlinks only the claim the dispatch started
+        under — a replacement claim (or receipt) at the same path survives."""
+        receipt = self.root / "claim3-receipt.json"
+        code, out, err = self._run(
+            "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        token = self._payload(out)["claim_token"]
+        self.assertTrue(token)
+
+        def all_fail_after_replace(prompt, *, session_id, repo_root, spec, resolution_out, args, resume_only=False):
+            data = json.loads(receipt.read_text(encoding="utf-8"))
+            data["claim"]["token"] = "someone-else"
+            receipt.write_text(json.dumps(data), encoding="utf-8")
+            return "no verdict", None, 1, "boom"
+
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", "--base", "HEAD~1",
+            "--receipt", str(receipt), "--json", fake=all_fail_after_replace,
+        )
+        self.assertEqual(code, 2, err)
+        self.assertTrue(receipt.exists(), "a replacement claim must survive")
+        self.assertEqual(
+            json.loads(receipt.read_text(encoding="utf-8"))["claim"]["token"], "someone-else",
+        )
+
     def test_stale_standalone_finalize_releases_claim(self) -> None:
         """A moved-head refusal kills the standalone round — its claim goes."""
         receipt = self.root / "claim2-receipt.json"

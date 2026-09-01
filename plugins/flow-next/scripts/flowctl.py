@@ -44197,11 +44197,12 @@ def _review_fanout_write_meta(
     sidecar, task_id, standalone, base_branch,
     reviewed_base_sha, reviewed_head_sha, artifact_sha256,
     reservation_id, rid, primary_axis, results, focus=None,
-    receipt_path=None,
+    receipt_path=None, claim_token=None,
 ) -> None:
     meta = {
         "type": "impl_review_fanout",
         "focus": focus,
+        "claim_token": claim_token,
         "id": task_id if task_id else "branch",
         "standalone": standalone,
         "base_branch": base_branch,
@@ -44597,41 +44598,67 @@ def _review_route_claim_live(receipt: Optional[dict]) -> bool:
     return age is None or age < get_review_exec_timeout() + 900
 
 
-def _review_route_claim(path: Path, scope_id: str) -> bool:
-    """Atomically create the claim placeholder; False when someone else won."""
+def _review_route_claim(path: Path, scope_id: str) -> Optional[str]:
+    """Atomically create the claim placeholder; returns its owner token, or
+    None when someone else won (or the write failed — a partial file is
+    removed so it cannot linger as unreadable state, sol round 6)."""
+    token = secrets.token_hex(16)
     payload = json.dumps({
         "type": "impl_review", "id": scope_id,
-        "claim": {"timestamp": now_iso(), "pid": os.getpid()},
+        "claim": {"timestamp": now_iso(), "pid": os.getpid(), "token": token},
     }, indent=2) + "\n"
     try:
         fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        return False
+        return None
     except OSError:
-        return False
+        return None
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(payload)
     except OSError:
-        return False
-    return True
+        with contextlib.suppress(OSError):
+            path.unlink()
+        return None
+    return token
 
 
-def _review_route_release_claim(receipt_path: Optional[str]) -> bool:
-    """Remove a standalone claim placeholder at ``receipt_path`` (sol round
-    5): a dispatch that died before any receipt replaced the claim must not
-    fence the scope until the claim's TTL. Never touches a real receipt (one
-    carrying a verdict). Returns True when a claim was removed."""
+def _review_route_claim_token(receipt_path: Optional[str]) -> Optional[str]:
+    """The owner token of the live claim placeholder at ``receipt_path``
+    (None when the path holds anything else) — a dispatch captures it at
+    start so its cleanup can only ever release the claim it ran under."""
     if not receipt_path:
-        return False
+        return None
     path = Path(receipt_path)
     data = _review_route_read_receipt(path) if path.exists() else None
-    if not isinstance(data, dict) or "verdict" in data or not isinstance(data.get("claim"), dict):
+    if not _review_route_claim_live(data):
+        return None
+    token = data["claim"].get("token")
+    return token if isinstance(token, str) and token else None
+
+
+def _review_route_release_claim(receipt_path: Optional[str], token: Optional[str]) -> bool:
+    """Remove the standalone claim placeholder at ``receipt_path`` that
+    ``token`` owns (sol rounds 5+6): a dispatch that died before any receipt
+    replaced its claim must not fence the scope until the claim's TTL, but
+    cleanup is ownership-bound — under the receipt lock it re-reads the file
+    and unlinks only a verdict-less claim carrying this exact token, so a
+    replacement claim or a published receipt is never touched. Returns True
+    when the claim was removed."""
+    if not receipt_path or not token:
         return False
-    try:
-        path.unlink()
-    except OSError:
-        return False
+    path = Path(receipt_path)
+    with cross_process_lock(_review_receipt_lock_path(path)):
+        data = _review_route_read_receipt(path) if path.exists() else None
+        if not isinstance(data, dict) or "verdict" in data:
+            return False
+        claim = data.get("claim")
+        if not isinstance(claim, dict) or claim.get("token") != token:
+            return False
+        try:
+            path.unlink()
+        except OSError:
+            return False
     return True
 
 
@@ -44808,7 +44835,8 @@ def compute_review_route(
             # Codex r45: standalone has no reservation — claim the scope
             # atomically (O_EXCL placeholder receipt) before dispatching so a
             # second coordinator reaching the same absent receipt stops.
-            if not _review_route_claim(receipt_file, scope_id):
+            claim_token = _review_route_claim(receipt_file, scope_id)
+            if claim_token is None:
                 return _stop(
                     "claim_lost_race",
                     "another coordinator claimed this scope's receipt first "
@@ -44817,6 +44845,7 @@ def compute_review_route(
                     "REVIEW_RECEIPT_PATH.",
                 )
             result["claimed"] = True
+            result["claim_token"] = claim_token
         result.update({"action": "fanout", "reason": reason, "message": message})
         return result
 
@@ -45020,16 +45049,22 @@ def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
     deep/validate/walkthrough passes run ONCE against the finalized merged
     set -> one fix pass.
     """
+    # Sol rounds 5+6 (R10/R12): a standalone dispatch that dies before any
+    # receipt replaces the route's claim placeholder (all draws failed,
+    # snapshot/sidecar errors, refused topology) must not strand the claim —
+    # the next route would stop as `claimed` until its TTL, contrary to the
+    # fail-open transport contract. Cleanup is bound to the claim this
+    # dispatch STARTED under (its owner token), so a replacement claim or a
+    # published receipt at the same path is never removed.
+    claim_token = None
+    if getattr(args, "task", None) is None:
+        claim_token = _review_route_claim_token(getattr(args, "receipt", None))
+    args._claim_token = claim_token
     try:
         _codex_impl_review_fanout(args)
     except SystemExit as exc:
-        # Sol round 5 (R10): a standalone dispatch that dies before any
-        # receipt replaces the route's claim placeholder (all draws failed,
-        # snapshot/sidecar errors, refused topology) must not strand the
-        # claim — the next route would stop as `claimed` until its TTL,
-        # contrary to the fail-open transport contract.
-        if getattr(args, "task", None) is None and exc.code not in (0, None):
-            _review_route_release_claim(getattr(args, "receipt", None))
+        if claim_token and exc.code not in (0, None):
+            _review_route_release_claim(getattr(args, "receipt", None), claim_token)
         raise
 
 
@@ -45239,6 +45274,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             reservation_id, rid, primary_axis, results,
             focus=getattr(args, "focus", None),
             receipt_path=getattr(args, "receipt", None),
+            claim_token=getattr(args, "_claim_token", None),
         )
     except Exception:  # noqa: BLE001
         # PR #392 r9 (P2): without meta.json phase two has nothing to
@@ -45319,7 +45355,8 @@ def _review_fanout_refund_stale_round(
     if meta.get("standalone"):
         _review_route_release_claim(
             getattr(args, "receipt", None)
-            or (meta.get("receipt_path") if isinstance(meta.get("receipt_path"), str) else None)
+            or (meta.get("receipt_path") if isinstance(meta.get("receipt_path"), str) else None),
+            meta.get("claim_token"),
         )
     reservation_id = meta.get("reservation_id")
     if (
