@@ -54,6 +54,33 @@ reservation fence below: **ONE `review-rounds increment` before the dispatch,
 one record/attach after the merge — never three cap slots per merged round.**
 A merged fan-out round counts 1:1 against the deterministic round cap.
 
+**Resume gate — run this BEFORE choosing between the two shapes.** A fresh
+coordinator resuming this scope mid-fix-loop (context lost between a
+`NEEDS_WORK` verdict and its fix pass) must not re-enter the three-draw shape:
+
+```bash
+# Same task-scoped default as Step 3 (explicit REVIEW_RECEIPT_PATH always wins;
+# concurrent standalone scopes should set one — the standalone default is shared).
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+RESUMED=0
+if [ -f "$RECEIPT_PATH" ]; then
+  case "$(jq -r '.verdict // empty' "$RECEIPT_PATH" 2>/dev/null)" in
+    NEEDS_WORK|NEEDS_HUMAN)
+      RESUMED=1
+      echo "RESUMED SCOPE — active fix loop: dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
+    *)
+      # Closed (SHIP / MAJOR_RETHINK) or unreadable receipt = a completed
+      # earlier scope left at this path — stale input for a new round, never a
+      # resume. Rotate it aside so the fresh fan-out starts clean.
+      mv "$RECEIPT_PATH" "$RECEIPT_PATH.prev" ;;
+  esac
+fi
+```
+
+With `RESUMED=1`, skip the "First round: three axis draws" section entirely and
+dispatch under "Round 2+: one fresh subagent" — the reservation fence below
+runs the same either way (one reservation per round).
+
 ### Convergence reservation and recovery fence
 
 After the exact reviewer input is composed and immediately before each ROUND's

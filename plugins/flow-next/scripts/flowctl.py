@@ -44354,6 +44354,14 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     # unparseable containers keep NEEDS_WORK on the default path (parsers
     # distinguish invalid from absent).
     needs_work_survivors = getattr(args, "needs_work_survivors", None)
+    if needs_work_survivors is not None and needs_work_survivors < 0:
+        # A malformed negative count must not silently defeat the wedge (R9):
+        # only an explicit 0 may escalate, and only >=1 may hold NEEDS_WORK.
+        error_exit(
+            "--needs-work-survivors must be a non-negative integer",
+            use_json=args.json,
+            code=2,
+        )
     if needs_work_survivors is None and (
         isinstance(findings_container, dict)
         and isinstance(findings_container.get("items"), list)

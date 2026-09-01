@@ -41,14 +41,24 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_
 
 # RESUME GATE (fan-out is first-round only): a fresh invocation resuming a
 # scope mid-fix-loop — e.g. after a lost coordinator context — arrives here
-# with a receipt that already carries findings or a resumable session. That is
-# round 2+, so skip BOTH fan-out phases and go straight to Step 4's
-# single-dispatch re-review. flowctl's first-round guard backstops this with a
-# no-cost exit-2 refusal, but the refusal is a bounced command, not a routing.
+# with a receipt whose verdict is still open (NEEDS_WORK / NEEDS_HUMAN). That
+# is round 2+: skip BOTH fan-out phases and go straight to Step 4's
+# single-dispatch re-review. A receipt whose verdict is closed (SHIP /
+# MAJOR_RETHINK) or unreadable is a COMPLETED earlier scope left at this path —
+# stale input for a new round, never a resume: rotate it aside so the fresh
+# fan-out starts clean instead of bouncing off flowctl's first-round guard or
+# injecting stale findings. (Concurrent standalone scopes should set an
+# explicit per-scope REVIEW_RECEIPT_PATH — the standalone default path is
+# shared.) flowctl's guard remains the no-cost exit-2 backstop.
 RESUMED=0
-if jq -e '(.findings? // .structured_findings? // (.session_id? // "" | select(. != ""))) != null' "$RECEIPT_PATH" >/dev/null 2>&1; then
-  RESUMED=1
-  echo "RESUMED SCOPE — receipt carries prior review state; skipping fan-out, proceed to Step 4 (re-review)"
+if [ -f "$RECEIPT_PATH" ]; then
+  case "$(jq -r '.verdict // empty' "$RECEIPT_PATH" 2>/dev/null)" in
+    NEEDS_WORK|NEEDS_HUMAN)
+      RESUMED=1
+      echo "RESUMED SCOPE — receipt carries an active fix loop; skipping fan-out, proceed to Step 4 (re-review)" ;;
+    *)
+      mv "$RECEIPT_PATH" "$RECEIPT_PATH.prev" ;;
+  esac
 fi
 
 # Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely

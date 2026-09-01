@@ -590,6 +590,25 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
+    def test_negative_survivors_rejected(self) -> None:
+        """A negative --needs-work-survivors is malformed input, not a count:
+        it must be refused (exit 2) rather than silently holding NEEDS_WORK
+        past the wedge the flag exists to enforce."""
+        by_axis = {
+            "correctness": "NEEDS_WORK",
+            "contracts": "SHIP",
+            "integration": "SHIP",
+        }
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_merged_review("One finding."))
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--needs-work-survivors", "-1",
+        )
+        self.assertEqual(fin_code, 2, fin_err)
+        combined = json.dumps(fin) + fin_err
+        self.assertIn("non-negative", combined)
+
     # 4c ----------------------------------------------------------------
 
     def test_copilot_secondary_draw_succeeds_with_minted_session(self) -> None:
