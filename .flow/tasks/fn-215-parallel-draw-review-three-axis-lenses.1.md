@@ -10,9 +10,13 @@ Two-phase fan-out surfaced as TWO coordinator-visible CLI invocations, gated to 
 ## Acceptance
 R1 (dispatch mechanics), R2, R9, R10, R12, R14, R15 satisfied at the flowctl layer; judge against the parent spec's criteria directly. Quick suites green including updated pins with rationale in the commit message; test_two_axis_audit_contract untouched and green.
 ## Done summary
-TBD
+Shipped the two-phase codex fan-out plumbing (R1 dispatch mechanics, R2, R9, R10, R12, R13, R14, R15): `flowctl codex impl-review-fanout` (phase one — ONE reservation wraps three concurrent axis draws via ThreadPoolExecutor, per-draw timeouts, side-effect-free runners catching BaseException, sidecar dir keyed by reservation id/nonce with exclusive creation + atomic publication, per-draw progress.log, write-ahead refund-intent journal so a coordinator death between phases replays as a transport failure with observed-sha provenance) and `impl-review-fanout-finalize` (phase two — worst-wins verdict from draw tags via the replay precedence, the all-findings-dropped NEEDS_WORK→NEEDS_HUMAN wedge escalation, milder-merged-tag mismatch stamped on the receipt, merged v1 findings container, merged receipt with additive draws[] array, single round consumption, re-invocable refusals via the mismatched-duplicate guard). Codex-only registry gate (`fanout_draws`); `_dispatch_backend_review` byte-untouched and source-pinned; copilot/cursor negative-tested to exactly one dispatch. Round-2 lean resume disabled after a fan-out receipt (full merged ratchet injected; every merged ordinal in the prompt — pinned). Axis placeholder in both prompt templates with parity constants + SHA pins updated same-commit with rationale; builder-signature pin and CLI-surface leaf list updated with rationale; `.flow/review-fanout/` added to the auto-managed gitignore. New 16-test behavioral suite + receipt-schema pins.
 
+Review trail (conductor-owned host reviews, fresh read-only session-family reviewers): round 1 NEEDS_WORK (9 findings: SystemExit reservation leak P1 — reproduced live; dispatch-window durability; gitignore; verdict-contradiction; 5 P3s), round 2 NEEDS_WORK (2 missed guardrail pins caught by full-suite discovery + 3 fix-delta P3s; all 9 round-1 fixes verified), round 3 SHIP (all fixed, no new findings, full suite 4608 green). Fix cycle 1 also uncovered and fixed a pre-existing double-charge in the journal-replay path (counter read before replays). Implemented via grok-4.6 bridge staged A/B/C with two continuation workers (the first worker's watcher wedged on a pgrep pattern matching an unrelated grok process — pid-scoped watchers hereafter).
+
+stage: impl-review - ran [3 rounds: NEEDS_WORK x2 -> SHIP] (model: claude-fable-5 fresh subagents, conductor-owned)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3d2a6bf5, c9a46448, f43cb232, d78a3f13, 805be1f1
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_review_fanout test_backend_spec test_flowctl_surface test_review_receipt_schema test_review_convergence_cap test_review_convergence_journal test_prompt_text_pinned test_review_prompt_template_parity -q, python3 scripts/run_tests_parallel.py (4608 OK), uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh x2 idempotent, python3 scripts/gen_tracker_manifest.py
 - PRs:
