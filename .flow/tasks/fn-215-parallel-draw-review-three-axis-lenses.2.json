@@ -8,11 +8,6 @@
   ],
   "id": "fn-215-parallel-draw-review-three-axis-lenses.2",
   "priority": null,
-  "spec": "fn-215-parallel-draw-review-three-axis-lenses",
-  "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.2.md",
-  "status": "todo",
-  "title": "impl-review skill prose: fan-out coordination, merge step, steering",
-  "updated_at": "2026-09-01T08:05:51.091183Z",
   "satisfies": [
     "R1",
     "R3",
@@ -22,5 +17,10 @@
     "R10",
     "R11",
     "R13"
-  ]
+  ],
+  "spec": "fn-215-parallel-draw-review-three-axis-lenses",
+  "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.2.md",
+  "status": "todo",
+  "title": "impl-review skill prose: fan-out coordination, merge step, steering",
+  "updated_at": "2026-09-01T08:12:48.065236Z"
 }

@@ -6,11 +6,6 @@
   "depends_on": [],
   "id": "fn-215-parallel-draw-review-three-axis-lenses.1",
   "priority": null,
-  "spec": "fn-215-parallel-draw-review-three-axis-lenses",
-  "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.1.md",
-  "status": "todo",
-  "title": "flowctl fan-out plumbing: one reservation, three draws, merged receipt",
-  "updated_at": "2026-09-01T08:05:50.828958Z",
   "satisfies": [
     "R1",
     "R2",
@@ -20,5 +15,10 @@
     "R13",
     "R14",
     "R15"
-  ]
+  ],
+  "spec": "fn-215-parallel-draw-review-three-axis-lenses",
+  "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.1.md",
+  "status": "todo",
+  "title": "flowctl fan-out plumbing: one reservation, three draws, merged receipt",
+  "updated_at": "2026-09-01T08:12:47.785954Z"
 }
