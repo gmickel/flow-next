@@ -38492,6 +38492,39 @@ def _run_deep_pass(
         prior_verdict,
     )
     new_verdict = updated_receipt.get("verdict", prior_verdict)
+    if (
+        prior_verdict == "SHIP"
+        and new_verdict == "NEEDS_WORK"
+        and updated_receipt.get("verdict_before_deep") == "SHIP"
+    ):
+        # PR #392 r30 (P1): the SHIP finalize already reset the persisted
+        # round counter — a deep pass overturning it must REOPEN the cycle,
+        # or the next re-review restarts at round 1 (cap circumvention) and
+        # a lost receipt silently drops the deep finding. Mirror image of
+        # the validator SHIP reset (r18). Best-effort, task receipts only.
+        receipt_id = updated_receipt.get("id")
+        if isinstance(receipt_id, str) and is_task_id(receipt_id):
+            try:
+                flow_dir = get_flow_dir()
+                spec_json_path = find_spec_json_path(
+                    flow_dir, spec_id_from_task(receipt_id)
+                )
+                if spec_json_path.exists():
+                    spec_data = normalize_epic(
+                        json.loads(
+                            spec_json_path.read_text(encoding="utf-8")
+                        )
+                    )
+                    if _read_review_rounds(
+                        spec_data, "impl", receipt_id
+                    ) < 1:
+                        _write_review_rounds(
+                            spec_data, "impl", receipt_id, 1
+                        )
+                        spec_data["updated_at"] = now_iso()
+                        atomic_write_json(spec_json_path, spec_data)
+            except Exception:  # noqa: BLE001
+                pass
 
     if use_json:
         json_output(
@@ -43546,11 +43579,16 @@ def _review_fanout_first_round_guard(
       counter by design — the receipt is its only continuity carrier, and
       the workflow always passes one.
     """
+    if bool(getattr(args, "force", False)):
+        # PR #392 r30: --force is the documented human lane for a fresh
+        # fan-out — it bypasses BOTH guard legs (persisted state and the
+        # receipt below), matching the --help contract; without this the
+        # lane demanded undocumented receipt surgery.
+        return
     if (
         not standalone
         and task_id
         and flow_dir is not None
-        and not bool(getattr(args, "force", False))
     ):
         spec_id = spec_id_from_task(task_id)
         try:

@@ -1573,13 +1573,30 @@ class TestReviewFanout(unittest.TestCase):
             encoding="utf-8",
         )
         calls: list = []
-        code, payload, err = self._dispatch(
-            self._ship_exec(calls), "--receipt", str(receipt)
+        # Unforced: the open receipt refuses the fan-out.
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--receipt",
+            str(receipt),
+            "--json",
+            fake=self._ship_exec(calls),
         )
         self.assertNotEqual(code, 0)
+        payload = self._payload(out) if out.strip() else {}
         combined = (payload.get("error") or "") + err
         self.assertIn("first-round only", combined)
         self.assertFalse(calls)
+        # --force is the documented human lane: it bypasses BOTH guard legs
+        # (PR #392 r30) and the fresh fan-out proceeds.
+        code, payload, err = self._dispatch(
+            self._ship_exec(calls), "--receipt", str(receipt)
+        )
+        self.assertEqual(code, 0, err)
+        self.assertTrue(calls)
 
 
 if __name__ == "__main__":
