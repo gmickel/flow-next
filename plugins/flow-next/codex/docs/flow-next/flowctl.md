@@ -849,13 +849,13 @@ Output:
 {
   "success": true,
   "specs": [
-    {"id": "fn-12-add-auth", "ready": true,  "readySignal": "local", "blockedBy": [],            "hasSpec": true},
-    {"id": "fn-13-rate-limit", "ready": false, "readySignal": "none",  "blockedBy": ["fn-12-add-auth"], "hasSpec": true}
+    {"id": "fn-12-add-auth", "ready": true,  "noPlan": false, "readySignal": "local", "blockedBy": [],            "hasSpec": true},
+    {"id": "fn-13-rate-limit", "ready": false, "noPlan": true,  "readySignal": "none",  "blockedBy": ["fn-12-add-auth"], "hasSpec": true}
   ]
 }
 ```
 
-Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
+Returns **deterministic eligibility facts only** for every open flow spec: `ready` (the **local** fn-58 `ready` boolean, exactly what flowctl sees on disk), `noPlan` (the fn-214 spec-level `no_plan` boolean — the human-set "too small to plan" marker pilot's zero-task classification consumes; absent reads `false`, never tracker-projected), `readySignal ∈ {local, none}` (whether that local flag is set; flowctl stores no readiness *provenance*, so it cannot attribute a tracker-projected ready; the skill annotates tracker-origin readiness when it unions tracker items), `blockedBy` (unsatisfied dep spec ids), and `hasSpec` (whether a spec file exists). It **never** computes a judgment `triageClass` / completeness score. *Workable / thin / ambiguous / needs-spec* is the host agent's agentic read in the `triage` stage, never a flowctl field (the agentic/deterministic line). `ready --all` itself performs no tracker request. The tracker-sync skill unions its output with `flowctl tracker wire list-open`, while flowctl owns that deterministic tracker transport. After a backlog tick's tracker pull projects `tracker.readyState` onto the local flag, a tracker-promoted spec simply reads `ready: true, readySignal: local` like any other.
 
 ### pilot strikes
 

@@ -122,10 +122,13 @@ READY_ALL_JSON="$($FLOWCTL ready --all --json)"
 ```
 
 `ready --all` returns the flow-side open specs with **deterministic eligibility
-facts only** — `{id, ready, readySignal, blockedBy, hasSpec}` (R8):
+facts only** — `{id, ready, noPlan, readySignal, blockedBy, hasSpec}` (R8):
 
 - `ready` — the local fn-58 `ready` boolean (after 1a's projection, a
   tracker-promoted spec reads `true`).
+- `noPlan` — the fn-214 spec-level `no_plan` boolean (absent-on-disk reads
+  `false`); Phase 1.6 CLASSIFY consumes it for the zero-task work row. Human-set
+  only, never tracker-projected.
 - `readySignal ∈ {local, none}` — whether the local flag is set. flowctl stores no
   readiness provenance, so it cannot attribute a *tracker-projected* ready; that is
   fine — after the 1a pull the flag is simply `local`.
