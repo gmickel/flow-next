@@ -115,7 +115,7 @@
     "impl:fn-214-spec-level-no-plan-field-replaces-pilot.1": 0
   },
   "spec_path": ".flow/specs/fn-214-spec-level-no-plan-field-replaces-pilot.md",
-  "status": "open",
+  "status": "done",
   "title": "Spec-level no_plan field replaces pilot --no-plan flag",
   "tracker": {
     "baseHashFlow": null,
@@ -128,5 +128,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-31T22:55:00.906857Z"
+  "updated_at": "2026-09-01T01:12:47.537599Z"
 }
