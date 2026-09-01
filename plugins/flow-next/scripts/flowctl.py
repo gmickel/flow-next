@@ -44216,6 +44216,12 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
                 if (
                     isinstance(res, dict)
                     and res.get("counter_scope") == counter_scope
+                    # PR #392 r27: a superseded reservation (concurrent SHIP
+                    # reset) is dead bookkeeping, not a live dispatch — the
+                    # in-lock exclusive check already skips it; this
+                    # fast-fail scan must agree or a crashed obsolete
+                    # dispatcher blocks the scope forever.
+                    and not res.get("superseded_by")
                     and not _review_journal_path(flow_dir, str(res_id)).is_file()
                 ):
                     error_exit(

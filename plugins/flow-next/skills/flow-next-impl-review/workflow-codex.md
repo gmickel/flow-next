@@ -219,8 +219,11 @@ The finalizer is deterministic and atomic — only it records or refunds:
 - Records the attempt, the single v1 findings container (ordinals re-assigned
   1..N across the union), the merged receipt, and the ONE round consumption
   atomically. Receipt top-level `session_id`/`model` are the primary
-  (correctness) draw's; `draws[]` honestly records each draw's axis, model,
-  session_id, verdict, and failed flag.
+  (correctness) draw's — or, when the primary FAILED (or returned no
+  session), the first surviving codex draw's, so round 2 and the optional
+  phases still get a resumable session; `draws[]` honestly records each
+  draw's axis, model, session_id, verdict, and failed flag either way (the
+  failed primary included).
 - Re-invocable with the same merged file (quiet replay) — recoverable after a
   coordinator crash. A run that dies between dispatch and finalize leaves a
   write-ahead refund-intent journal that the next reservation replays as a
