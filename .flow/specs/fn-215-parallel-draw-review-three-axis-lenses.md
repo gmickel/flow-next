@@ -59,9 +59,11 @@ Review findings arrive serialized today: each fix-loop round re-reviews the whol
 - Sequencing with open work: fn-191 (review-terminal extraction) touches the same flowctl region — whichever lands second rebases; fn-198's journal-wedge hardening is adjacent to the finalization leg the fan-out exercises — its invariants must hold with draws collapsing into one round; read fn-157's visibility stub before building the concurrent dispatch.
 - The ratchet/prior-finding grammar consumes the MERGED findings container from round 1 — re-checked against the stall-detection decision entry (review-stall-detection-reads-resolution-2026-08-05).
 - Memory priors honored: receipts dropped between rounds break confabulation (drop-receipt-to-break-codex-2026-05-09) — the primary-session resume carries findings via the ratchet, not accumulated raw transcripts; parsers distinguish invalid from absent (structured-review-parsers-must-2026-07-30).
+- R1 concurrency narrowed (completion review, settled): host fan-out is concurrent where the host offers one-message parallel dispatch; hosts without it run the three draws back-to-back and REPORT the degradation in the review record — the honest-degradation pattern the rolling scheduler already uses, kept over faking concurrency the host cannot deliver.
 
 ## Quick commands
 
 - `cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_template_parity test_prompt_text_pinned test_review_receipt_schema test_review_convergence_cap -q`
 - `./scripts/sync-codex.sh` twice, idempotent
 - `uvx ruff@0.16.0 check .`
+

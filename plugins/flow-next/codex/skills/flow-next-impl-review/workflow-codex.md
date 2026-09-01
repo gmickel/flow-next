@@ -108,6 +108,13 @@ document (write it to a file for the finalize):
 - **Axis provenance lives in your prose report** (e.g. "the integration draw
   surfaced #3 and #7"), never as a field on finding items — the v1 findings
   schema's closed allowlist is untouched.
+- **Count the NEEDS_WORK-draw survivors while you merge:** the number of
+  actionable findings from the NEEDS_WORK draws that survived your evidence
+  gate. Pass it to the finalize as `--needs-work-survivors N` — item fields
+  carry no draw attribution, so only your merge knows it. When every
+  NEEDS_WORK-draw finding was dropped, `--needs-work-survivors 0` triggers
+  the wedge escalation even though SHIP-draw remainder items keep the merged
+  container non-empty.
 - Keep the draws' output format (Severity / Confidence / Classification /
   File:Line / R-IDs per finding, the `## Pre-existing issues` section, coverage
   table and tally lines where present) and end with exactly one verdict tag.
@@ -142,9 +149,11 @@ The finalizer is deterministic and atomic — only it records or refunds:
 - **Verdict = mechanical worst-wins** over the draws' verdict tags
   (`NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > SHIP`); failed draws do not
   vote. No draw's verdict is judged away.
-- **Wedge escalation:** a `NEEDS_WORK` whose merged findings container is
-  explicitly empty (the evidence gate dropped every finding) escalates to
-  `NEEDS_HUMAN` rather than looping against an unchanged artifact.
+- **Wedge escalation:** a `NEEDS_WORK` round with zero actionable survivors
+  from the NEEDS_WORK draws (your `--needs-work-survivors` count; the merged
+  container's item count when you omit it) escalates to `NEEDS_HUMAN` rather
+  than looping against an unchanged artifact — per NEEDS_WORK draw, so
+  SHIP-draw remainder items never mask an all-filtered NEEDS_WORK.
 - Records the attempt, the single v1 findings container (ordinals re-assigned
   1..N across the union), the merged receipt, and the ONE round consumption
   atomically. Receipt top-level `session_id`/`model` are the primary

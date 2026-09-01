@@ -147,8 +147,11 @@ A run that dispatched one draw and waited for its report before sending the
 next has re-serialized what the fan-out parallelized. **Portable-host
 fallback:** on a host whose subagent primitive cannot batch several dispatches
 into one message (generic read-only dispatch with Edit/Write disallowed), run
-the three draws back-to-back — the contract is three independent fresh
-read-only contexts per round, not literal wall-clock concurrency.
+the three draws back-to-back and report the degradation in the review record
+(one line in the merged review document: sequential draws, host cannot batch
+dispatches) — the contract is three independent fresh read-only contexts per
+round, and the fan-out degrades honestly to sequential where the host offers
+no one-message parallel dispatch.
 
 **Unlike the quality auditor's two axis reports — which stay verbatim because
 they feed a human-shaped judgment — these three draws MERGE**: they are k
