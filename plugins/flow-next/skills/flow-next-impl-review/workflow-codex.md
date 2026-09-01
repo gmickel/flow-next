@@ -73,8 +73,10 @@ args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
 # FOCUS_AREAS = the invocation's trailing focus-areas text (Step 0 parsing);
-# it rides the draw prompts, the sidecar meta, and the receipt for re-review.
-[ -n "$FOCUS_AREAS" ] && args+=(--focus "$FOCUS_AREAS")
+# STANDALONE only - it rides the draw prompts, the sidecar meta, and the
+# receipt for re-review. Task-scoped draws take their focus from the task
+# spec (flowctl refuses --focus with a task).
+[ -z "$TASK_ID" ] && [ -n "$FOCUS_AREAS" ] && args+=(--focus "$FOCUS_AREAS")
 [ "$RESUMED" = "1" ] || $FLOWCTL codex impl-review-fanout "${args[@]}"
 ```
 
@@ -178,6 +180,13 @@ fi
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<your merged document path>" --needs-work-survivors "<coordinator count of surviving findings from NEEDS_WORK draws>" --receipt "$RECEIPT_PATH" --json)
+# Scope ownership through the optional phases (PR #392): when --deep,
+# --validate, or --interactive is enabled, hold the lease at the finalize —
+# review-route and the reservation gate refuse any other dispatch on this
+# scope until you release it after the phases (Step 4 tail below). Expires
+# on the liveness bound, so a dead coordinator never wedges the scope.
+# OPTIONAL_PHASES_ENABLED=1 when Step 0 parsed --deep, --validate, or --interactive.
+[ -n "$OPTIONAL_PHASES_ENABLED" ] && args+=(--hold-for-phases)
 $FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
 ```
 
@@ -220,12 +229,21 @@ document.
 
 See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
 
-**Scope ownership spans the optional phases (PR #392 r35):** the same-scope
+**Scope ownership spans the optional phases (PR #392):** the same-scope
 single-driver rule does not end at the finalize — this coordinator owns the
 scope until its post-finalize optional phases complete, because a deep or
-validator pass may still overturn the finalized verdict. A second dispatcher
-entering between a SHIP finalize and its deep pass is the same forbidden
-same-scope concurrency the fences exist to refuse.
+validator pass may still overturn the finalized verdict. That ownership is
+DURABLE, not prose: the finalize's `--hold-for-phases` writes a lease that
+`review-route` and the reservation gate refuse across. Release it as the
+LAST step of the optional phases, before the fix pass:
+
+```bash
+# After every enabled optional phase has run (deep, validator, walkthrough):
+$FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --json
+```
+
+A coordinator that dies mid-phase does not wedge the scope — the lease
+expires on the liveness bound.
 
 ## Step 5: Handle Verdict
 

@@ -2200,7 +2200,24 @@ it) moves a closed, foreign, or unreadable receipt aside to `<path>.prev` before
 a fresh fan-out, and `--force` is the human lane that routes to `fanout`
 regardless of guards. Every input the decision used is echoed for audit
 (`receipt_state`, `pending`, `rounds`, `last_verdict`,
-`unjournaled_reservation`).
+`unjournaled_reservation`, `live_reservation`, `expired_reservation`,
+`phase_lease`). Additional stop reasons: `corrupt_receipt` (an unknown
+verdict, wrong type, or unparseable file on this scope's path is never
+rotated into a fresh fan-out), `phases_in_flight` (another coordinator holds
+the optional-phase lease), and `rotation_lost_race`. A journaled reservation
+counts as in flight only while its lease is live; an expired abandonment
+journal is reported and replayed (refunded) by the next dispatch.
+
+Scope ownership through the optional phases: `impl-review-fanout-finalize
+--hold-for-phases` (codex) or `review-route <scope> --hold-phases` (host)
+writes a lease that `review-route` and the reservation gate refuse across;
+`review-route <scope> --release-phases` releases it once the deep / validator
+/ walkthrough passes complete. The lease expires on the liveness bound (the
+review exec timeout plus merge headroom), so a dead coordinator never wedges
+the scope. The task-scoped repair the fences prescribe is
+`flowctl spec reset-review-rounds <spec> --task <task>` — it resets ONE
+task's impl cycle (counter, pending, reservations and their journals, phase
+lease) and nothing else.
 
 The coordinator's merge (same-defect dedupe, evidence-bar drops, Act-On ranking) is
 host judgment and happens BETWEEN the two invocations; the finalizer computes the

@@ -428,6 +428,12 @@ class TestReviewFanout(unittest.TestCase):
         data = json.loads(journal.read_text(encoding="utf-8"))
         data["timestamp"] = "2020-01-01T00:00:00Z"
         journal.write_text(json.dumps(data), encoding="utf-8")
+        # PR #392 sol review: the sidecar's progress.log is the heartbeat —
+        # age it too, or the live-lease correctly refuses.
+        progress = (
+            self.root / ".flow" / "review-fanout" / first["rid"] / "progress.log"
+        )
+        os.utime(progress, (0, 0))
         code, second, err = self._dispatch(self._ship_exec(calls))
         self.assertEqual(code, 0, err)
         self.assertNotEqual(second["rid"], first["rid"])
@@ -494,9 +500,9 @@ class TestReviewFanout(unittest.TestCase):
                 self.assertEqual(fin_code, exit_code, fin_err)
                 self.assertEqual(fin.get("verdict"), expected)
 
-        # host review r1: the merged text's OWN verdict tag escalates a
-        # milder draw synthesis (post-merge deep passes can find P0s the
-        # draws did not)...
+        # PR #392 sol review: an all-SHIP synthesis stays SHIP even when the
+        # coordinator's merged tag says NEEDS_WORK (R9 pure worst-wins; the
+        # optional phases run after finalize and own their own transitions)...
         all_ship = {
             "correctness": "SHIP",
             "contracts": "SHIP",
@@ -507,22 +513,12 @@ class TestReviewFanout(unittest.TestCase):
         worse = self._write_merged(
             _merged_review("Deep pass found a P0.", verdict="NEEDS_WORK")
         )
-        # PR #392 r14: no NEEDS_WORK draw -> the survivor flag is NOT
-        # required, and a truthful 0 must not wedge the merged escalation.
+        # PR #392 sol review (R9): the merged tag NEVER moves the recorded
+        # verdict — pure worst-wins over the draws; the contradiction is
+        # stamped instead.
         fin_code, fin, fin_err = self._finalize(payload["rid"], worse)
         self.assertEqual(fin_code, 0, fin_err)
-        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
-
-        code, payload, err = self._dispatch(self._verdict_exec(all_ship))
-        self.assertEqual(code, 0, err)
-        worse2 = self._write_merged(
-            _merged_review("Deep pass found another P0.", verdict="NEEDS_WORK")
-        )
-        fin_code, fin, fin_err = self._finalize(
-            payload["rid"], worse2, "--needs-work-survivors", "0",
-        )
-        self.assertEqual(fin_code, 0, fin_err)
-        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+        self.assertEqual(fin.get("verdict"), "SHIP")
 
         # ...while a milder merged tag never downgrades the synthesis:
         # worst-wins holds across the union, and the receipt stamps the
@@ -569,17 +565,16 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, flowctl.REVIEW_CAP_EXIT_CODE, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_HUMAN")
 
-        # Counter-case: an unparseable container with an explicit nonzero
-        # survivor count keeps NEEDS_WORK (R9) — the flag, not the container,
-        # is authoritative (PR #392 r7).
+        # PR #392 sol review (R3/R14): an unparseable merge on a NEEDS_WORK
+        # round is refused — the ratchet needs a valid v1 container.
         code, payload, err = self._dispatch(self._verdict_exec(by_axis))
         self.assertEqual(code, 0, err)
         missing = self._write_merged(_unparseable_merged_review())
         fin_code, fin, fin_err = self._finalize(
             payload["rid"], missing, "--needs-work-survivors", "2",
         )
-        self.assertEqual(fin_code, 0, fin_err)
-        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+        self.assertEqual(fin_code, 2, fin_err)
+        self.assertIn("did not parse", json.dumps(fin) + fin_err)
 
     # 4b ----------------------------------------------------------------
 
@@ -618,13 +613,17 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("required", json.dumps(fin) + fin_err)
 
-        # Explicit nonzero survivors overrides an empty container. Same rid:
-        # the refused finalize consumed nothing, so the coordinator retries
-        # with the count (a fresh dispatch would sit behind the live-journal
-        # lease, correctly).
+        # PR #392 sol review: survivors are a SUBSET of the merged items — a
+        # count above the container is refused. Same rid: the refused
+        # finalize consumed nothing, so the coordinator retries.
         empty = self._write_merged(_empty_merged_review())
         fin_code, fin, fin_err = self._finalize(
             payload["rid"], empty, "--needs-work-survivors", "2",
+        )
+        self.assertEqual(fin_code, 2, fin_err)
+        self.assertIn("exceeds", json.dumps(fin) + fin_err)
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], remainder, "--needs-work-survivors", "1",
         )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
@@ -1178,6 +1177,113 @@ class TestReviewFanout(unittest.TestCase):
         receipt.unlink()
         fin_code, fin, fin_err = self._finalize(
             payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+
+    def test_task_mode_defaults_receipt_path(self) -> None:
+        """PR #392 sol review (R11/R12): task mode always has a receipt — a
+        dispatch + finalize without --receipt publishes to the route default."""
+        code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+        self.assertEqual(fin_code, 0, fin_err)
+        route = flowctl.compute_review_route(
+            self.root / ".flow", self.root, self.task_id,
+        )
+        self.assertTrue(Path(route["receipt_path"]).is_file(), route["receipt_path"])
+        data = json.loads(Path(route["receipt_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(data["id"], self.task_id)
+        self.assertEqual(data["verdict"], "SHIP")
+        Path(route["receipt_path"]).unlink()
+
+    def test_task_mode_refuses_focus(self) -> None:
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", self.task_id, "--base", "HEAD~1",
+            "--focus", "x", "--json", fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("standalone", out + err)
+
+    def test_hold_for_phases_fences_dispatch(self) -> None:
+        """PR #392 sol review (R15): finalize --hold-for-phases holds scope
+        ownership through the optional phases — a new exclusive dispatch is
+        refused until --release-phases."""
+        receipt = self.root / "hold-receipt.json"
+        code, payload, err = self._dispatch(self._ship_exec([]), "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt), "--hold-for-phases",
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        lease = self._spec_data().get("review_phase_leases", {}).get(f"impl:{self.task_id}")
+        self.assertIsInstance(lease, dict)
+        self.assertEqual(lease.get("rid"), payload["rid"])
+        # Fresh artifact so the unchanged-artifact fence is not what refuses.
+        (self.root / "app.py").write_text("x = 3\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "more")
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", self.task_id, "--base", "HEAD~1",
+            "--json", fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("optional review phases are still in flight", out + err)
+        code, out, err = self._run(
+            "review-route", self.task_id, "--release-phases", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", self.task_id, "--base", "HEAD~1",
+            "--json", fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err + out[:200])
+
+    def test_exclusive_fence_is_two_way(self) -> None:
+        """PR #392 sol review: a plain increment refuses a standing EXCLUSIVE
+        reservation (the fan-out / host round), not only the reverse."""
+        code, out, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", self.task_id,
+            "--review-type", "impl", "--exclusive", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", self.task_id,
+            "--review-type", "impl", "--json",
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("already reserved", out + err)
+
+    def test_reset_review_rounds_task_scoped(self) -> None:
+        """PR #392 sol review: the scoped repair the fences prescribe."""
+        code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self._pending(), 1)
+        code, out, err = self._run(
+            "spec", "reset-review-rounds", self.spec_id, "--task", "fn-1.1", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self._pending(), 0)
+        self.assertEqual(self._rounds(), 0)
+        journal = self.root / ".flow" / "review-runs" / f"{payload['rid']}.json"
+        self.assertFalse(journal.exists())
+        self.assertNotIn(payload["rid"], self._spec_data().get("review_reservations", {}))
+
+    def test_long_first_sentence_still_builds_container(self) -> None:
+        """PR #392 sol dogfood: a reviewer problem whose first sentence exceeds
+        the title limit caps the derived title instead of discarding the
+        container (which would now refuse the NEEDS_WORK finalize)."""
+        by_axis = {"correctness": "NEEDS_WORK", "contracts": "SHIP", "integration": "SHIP"}
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        long_problem = "This first sentence is deliberately far longer than the two hundred and forty character title limit so that the derived title would be rejected " * 3
+        merged = self._write_merged(_merged_review(long_problem))
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--needs-work-survivors", "1",
         )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")

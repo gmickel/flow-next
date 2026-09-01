@@ -5688,6 +5688,12 @@ def _review_finding_text(
         or fields.get("requirement")
         or body.split(".", 1)[0]
     ).strip()
+    if len(title) > _FINDINGS_MAX_TITLE:
+        # PR #392 sol review dogfood: the title is DERIVED (first sentence of
+        # the problem) — a long first sentence must cap the title, not reject
+        # the whole container (which silently dropped every finding of a
+        # long-sentence reviewer, the sol draws included).
+        title = title[: _FINDINGS_MAX_TITLE - 1].rstrip() + "\u2026"
     return title, body, suggestion.strip() if suggestion else None
 
 
@@ -11887,7 +11893,9 @@ def _enforce_and_increment_review_cap_locked(
                 # from under its coordinator; past the lease, replay as the
                 # crash recovery it was written for. Old journals without a
                 # parseable timestamp replay (pre-lease compatibility).
-                age = _iso_age_seconds(journal.get("timestamp"))
+                age = _review_fanout_journal_age(
+                    flow_dir, str(reservation_id), journal
+                )
                 lease = get_review_exec_timeout() + 900
                 if age is not None and age < lease:
                     error_exit(
@@ -12111,22 +12119,40 @@ def _enforce_and_increment_review_cap_locked(
     # increments keep the supported multi-pending model (out-of-order
     # finalization). The pre-lock checks in the callers are fast-fail UX;
     # this is the atomic authority.
-    if exclusive:
-        for res_id, res in _review_reservations(spec_data).items():
-            if (
-                isinstance(res, dict)
-                and res.get("counter_scope") == counter_scope
-                and not res.get("superseded_by")
-            ):
+    for res_id, res in _review_reservations(spec_data).items():
+        if (
+            isinstance(res, dict)
+            and res.get("counter_scope") == counter_scope
+            and not res.get("superseded_by")
+            and (exclusive or res.get("exclusive"))
+        ):
+            # Two-way (PR #392 sol review): an exclusive caller refuses every
+            # standing same-scope reservation, and every caller refuses a
+            # standing EXCLUSIVE one — a plain re-review can no longer slide
+            # in beside a live fan-out / host round.
+            if True:
                 error_exit(
                     f"a review round for this scope is already reserved "
                     f"(reservation {res_id}) — a concurrent dispatch is in "
                     "flight or a crashed one left an unjournaled "
                     "reservation. Wait for it to record, or repair via "
-                    f"flowctl spec reset-review-rounds {spec_id}",
+                    f"flowctl spec reset-review-rounds {spec_id}"
+                    + (f" --task {task_id}" if task_id else ""),
                     use_json=use_json,
                     code=2,
                 )
+    if review_kind == "impl" and task_id and not forced:
+        lease = _review_phase_lease_live(spec_data, counter_scope)
+        if lease:
+            error_exit(
+                f"optional review phases are still in flight for {task_id} "
+                f"(rid {lease.get('rid')}): the finalizing coordinator owns "
+                "the scope until its deep/validator/walkthrough passes "
+                "complete and releases it (flowctl review-route <task> "
+                "--release-phases). Wait, or a human releases it.",
+                use_json=use_json,
+                code=2,
+            )
     scope = task_id if (review_kind == "impl" and task_id) else spec_id
     stalled_rule = _review_stall_rule(
         spec_data, review_kind, task_id, epoch, review_type
@@ -12204,6 +12230,7 @@ def _enforce_and_increment_review_cap_locked(
         "forced": bool(forced),
         "epoch": epoch,
         "review_type": review_type or review_kind,
+        "exclusive": bool(exclusive),
     }
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_path, spec_data)
@@ -12216,7 +12243,7 @@ def reset_review_cap(
     *,
     task_id: Optional[str] = None,
     closure_marker: Optional[dict] = None,
-) -> None:
+) -> bool:
     """Reset the cumulative round counter (called on a SHIP verdict).
 
     Best-effort: a missing spec / unreadable state is silently ignored so a
@@ -12233,7 +12260,7 @@ def reset_review_cap(
         flow_dir = get_flow_dir()
         spec_json_path = find_spec_json_path(flow_dir, spec_id)
         if not spec_json_path.exists():
-            return
+            return True  # nothing to reset — not a persistence failure
         with _review_sidecar_lock(flow_dir, spec_id):
             spec_data = normalize_epic(
                 load_json_or_exit(spec_json_path, f"Spec {spec_id}", use_json=True)
@@ -12276,10 +12303,12 @@ def reset_review_cap(
             # Intentionally leave review_pending_rounds alone — see docstring.
             spec_data["updated_at"] = now_iso()
             atomic_write_json(spec_json_path, spec_data)
+        return True
     except SystemExit:
         raise
     except Exception:
-        pass
+        return False
+    return False
 
 
 def _read_prior_findings(receipt_path: Optional[str]) -> Optional[str]:
@@ -30599,6 +30628,54 @@ def cmd_spec_reset_review_rounds(args: argparse.Namespace) -> None:
         error_exit(f"Spec {args.id} not found", use_json=args.json)
 
     also_impl = getattr(args, "impl", False)
+    only_task = getattr(args, "task", None)
+    if not isinstance(only_task, str) or not only_task:
+        only_task = None
+    if only_task:
+        # PR #392 sol review: the task-scoped repair every route/fence
+        # message prescribes — resets ONE task's impl cycle (counter,
+        # pending, reservations + journals, phase lease) and nothing else.
+        only_task = resolve_task_arg(flow_dir, only_task, use_json=args.json) or only_task
+        if spec_id_from_task(only_task) != args.id:
+            error_exit(
+                f"--task {only_task} does not belong to spec {args.id}",
+                use_json=args.json,
+            )
+        scope = _review_counter_scope("impl", only_task)
+        with _review_sidecar_lock(flow_dir, args.id):
+            spec_data = normalize_epic(
+                load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
+            )
+            rounds = spec_data.get("impl_review_rounds")
+            if isinstance(rounds, dict):
+                rounds.pop(only_task, None)
+            _advance_all_review_hash_epochs(spec_data, scope)
+            pending = spec_data.get("review_pending_rounds")
+            if isinstance(pending, dict):
+                pending.pop(scope, None)
+            reservations = spec_data.get("review_reservations")
+            if isinstance(reservations, dict):
+                for res_id in list(reservations):
+                    meta = reservations[res_id]
+                    if isinstance(meta, dict) and meta.get("counter_scope") == scope:
+                        reservations.pop(res_id, None)
+                        try:
+                            _review_journal_path(flow_dir, res_id).unlink()
+                        except (FileNotFoundError, OSError, ValueError):
+                            pass
+            leases = spec_data.get(REVIEW_PHASE_LEASE_KEY)
+            if isinstance(leases, dict):
+                leases.pop(scope, None)
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_path, spec_data)
+        if args.json:
+            json_output({
+                "id": args.id, "task": only_task,
+                "message": f"Task {only_task} impl-review cycle reset",
+            })
+        else:
+            print(f"Task {only_task} impl-review cycle reset")
+        return
     with _review_sidecar_lock(flow_dir, args.id):
         spec_data = normalize_epic(
             load_json_or_exit(spec_json_path, f"Spec {args.id}", use_json=args.json)
@@ -37789,32 +37866,44 @@ def _run_validator_pass(
         return
 
     # Autonomous path: merge into receipt (may upgrade verdict to SHIP).
+    # PR #392 sol review: the durable ledger transitions FIRST; the receipt
+    # is upgraded only once the reset + closure marker are durable, so the
+    # two can never disagree about whether the cycle is closed.
+    will_upgrade = (
+        result["dispatched"] > 0
+        and result["kept"] == 0
+        and prior_verdict == "NEEDS_WORK"
+    )
+    prior_receipt_id = None
+    try:
+        prior_receipt_id = json.loads(
+            Path(receipt_path).read_text(encoding="utf-8")
+        ).get("id")
+    except (OSError, ValueError, TypeError, AttributeError):
+        prior_receipt_id = None
+    if (
+        will_upgrade
+        and isinstance(prior_receipt_id, str)
+        and is_task_id(prior_receipt_id)
+    ):
+        durable = reset_review_cap(
+            spec_id_from_task(prior_receipt_id), "impl",
+            task_id=prior_receipt_id,
+            closure_marker=_review_cycle_closure_row(prior_receipt_id, backend),
+        )
+        if not durable:
+            error_exit(
+                "validator convergence could not be persisted to spec state "
+                "(round counter reset + closure marker); the receipt is left "
+                "at its prior verdict. Repair the spec state and re-run the "
+                "validator pass.",
+                use_json=use_json,
+                code=2,
+            )
     updated_receipt = _apply_validator_to_receipt(
         receipt_path, result, prior_verdict
     )
     new_verdict = updated_receipt.get("verdict", prior_verdict)
-    if (
-        updated_receipt.get("verdict_before_validate")
-        and new_verdict == "SHIP"
-    ):
-        # PR #392 r18 (P1): a validator-issued SHIP is convergence — the same
-        # reset-on-SHIP the record path applies must reach the persisted
-        # round counter, or the fan-out first-round guard reads the stale
-        # NEEDS_WORK cycle and refuses the next scope's fresh fan-out until a
-        # manual reset. Best-effort, task receipts only (standalone keeps no
-        # counter).
-        receipt_id = updated_receipt.get("id")
-        if isinstance(receipt_id, str) and is_task_id(receipt_id):
-            try:
-                # PR #392 r34+r39: reset AND closure marker in one locked
-                # transaction (the reset alone writes no attempt row; a
-                # separate append raced concurrent rounds).
-                reset_review_cap(
-                    spec_id_from_task(receipt_id), "impl", task_id=receipt_id,
-                    closure_marker=_review_cycle_closure_row(receipt_id, backend),
-                )
-            except Exception:  # noqa: BLE001
-                pass
 
     if use_json:
         json_output(
@@ -38659,17 +38748,16 @@ def _run_deep_pass(
             try:
                 _reopen_review_cycle_after_deep(receipt_id, backend)
             except Exception as exc:  # noqa: BLE001
-                # PR #392 r35: never report the overturn as durably recorded
-                # when it is not — with the receipt lost, a silent failure
-                # here lets the guard admit a fresh fan-out that drops the
-                # deep finding.
-                print(
-                    "warning: the deep-pass overturn could NOT be persisted "
-                    f"to spec state ({exc}) — the receipt says NEEDS_WORK "
-                    "but the durable ledger still says SHIP. Do not rely on "
-                    "the guard: keep the receipt, or repair the cycle "
-                    "explicitly before the next dispatch.",
-                    file=sys.stderr,
+                # PR #392 r35 + sol review: never report the overturn as
+                # durably recorded when it is not — structured non-success,
+                # the receipt already carries NEEDS_WORK.
+                error_exit(
+                    "the deep-pass overturn could NOT be persisted to spec "
+                    f"state ({exc}) — the receipt says NEEDS_WORK but the "
+                    "durable ledger still says SHIP. Keep the receipt and "
+                    "repair the cycle before the next dispatch.",
+                    use_json=use_json,
+                    code=2,
                 )
 
     if use_json:
@@ -44106,6 +44194,7 @@ def _review_fanout_write_meta(
     sidecar, task_id, standalone, base_branch,
     reviewed_base_sha, reviewed_head_sha, artifact_sha256,
     reservation_id, rid, primary_axis, results, focus=None,
+    receipt_path=None,
 ) -> None:
     meta = {
         "type": "impl_review_fanout",
@@ -44120,6 +44209,7 @@ def _review_fanout_write_meta(
         "rid": rid,
         "primary_axis": primary_axis,
         "draws": results,
+        "receipt_path": receipt_path,
         "created_at": now_iso(),
     }
     _review_fanout_publish(
@@ -44262,6 +44352,78 @@ def _iso_age_seconds(stamp) -> Optional[float]:
     return (datetime.now(timezone.utc) - then).total_seconds()
 
 
+REVIEW_PHASE_LEASE_KEY = "review_phase_leases"
+
+
+def _review_phase_lease_live(spec_data: dict, counter_scope: str) -> Optional[dict]:
+    """The live optional-phase lease for a scope, or None (expired = None).
+
+    TTL is the same liveness bound the journal lease uses; a coordinator that
+    died mid-phase must not wedge the scope forever.
+    """
+    leases = spec_data.get(REVIEW_PHASE_LEASE_KEY)
+    if not isinstance(leases, dict):
+        return None
+    lease = leases.get(counter_scope)
+    if not isinstance(lease, dict):
+        return None
+    age = _iso_age_seconds(lease.get("timestamp"))
+    if age is not None and age >= get_review_exec_timeout() + 900:
+        return None
+    return lease
+
+
+def _review_phase_lease_write(task_id: str, lease: Optional[dict]) -> bool:
+    """Hold (lease dict) or release (None) the optional-phase lease for a task
+    scope, under the review state lock. Returns durability."""
+    try:
+        flow_dir = get_flow_dir()
+        spec_id = spec_id_from_task(task_id)
+        spec_json_path = find_spec_json_path(flow_dir, spec_id)
+        if not spec_json_path.exists():
+            return False
+        counter_scope = _review_counter_scope("impl", task_id)
+        with _review_sidecar_lock(flow_dir, spec_id):
+            spec_data = normalize_epic(
+                json.loads(spec_json_path.read_text(encoding="utf-8"))
+            )
+            leases = spec_data.get(REVIEW_PHASE_LEASE_KEY)
+            if not isinstance(leases, dict):
+                leases = {}
+                spec_data[REVIEW_PHASE_LEASE_KEY] = leases
+            if lease is None:
+                leases.pop(counter_scope, None)
+            else:
+                leases[counter_scope] = dict(lease)
+            spec_data["updated_at"] = now_iso()
+            atomic_write_json(spec_json_path, spec_data)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _review_fanout_journal_age(
+    flow_dir: Path, reservation_id: str, journal: dict,
+) -> Optional[float]:
+    """Age of a fan-out's most recent sign of life (PR #392 sol review).
+
+    The journal timestamp alone under-counts a valid run: draws can take
+    the full exec allowance and the coordinator merge is host time after
+    that. The sidecar's ``progress.log`` mtime (each draw completion appends)
+    is the heartbeat — the lease is measured from the LATER of the two, so a
+    live run is not refunded out from under its coordinator.
+    """
+    age = _iso_age_seconds(journal.get("timestamp"))
+    progress = flow_dir / "review-fanout" / reservation_id / "progress.log"
+    try:
+        activity = datetime.now(timezone.utc).timestamp() - progress.stat().st_mtime
+    except OSError:
+        activity = None
+    if activity is not None and (age is None or activity < age):
+        age = activity
+    return age
+
+
 def _review_fanout_journal_refund_intent(
     flow_dir: Path, spec_id: str, task_id: str, reservation_id: str,
     reviewed_head_sha: Optional[str], reviewed_base_sha: Optional[str],
@@ -44369,12 +44531,18 @@ def _review_route_read_receipt(path: Path) -> Optional[dict]:
     return data if isinstance(data, dict) else None
 
 
+_REVIEW_ROUTE_CLOSED = ("SHIP", "MAJOR_RETHINK")
+
+
 def _review_route_receipt_state(receipt: Optional[dict], scope_id: str) -> str:
-    """absent | unreadable | foreign | open | open_deep | needs_human | closed."""
+    """absent | unreadable | foreign | open | open_deep | needs_human | closed
+    | corrupt."""
     if receipt is None:
         return "absent"
     if receipt.get("id") != scope_id:
         return "foreign"
+    if receipt.get("type") not in (None, "impl_review"):
+        return "corrupt"
     verdict = receipt.get("verdict")
     if verdict in _REVIEW_ROUTE_OPEN:
         # A deep pass persists only pass names/counts — its finding bodies are
@@ -44384,14 +44552,20 @@ def _review_route_receipt_state(receipt: Optional[dict], scope_id: str) -> str:
         return "open"
     if verdict == "NEEDS_HUMAN":
         return "needs_human"
-    return "closed"
+    if verdict in _REVIEW_ROUTE_CLOSED:
+        return "closed"
+    # PR #392 sol review: an unknown/missing verdict on OUR scope's receipt
+    # is corrupt state, not a closed round — rotating it into a fresh fan-out
+    # could drop an unresolved container.
+    return "corrupt"
 
 
 def _review_route_ledger(flow_dir: Path, task_id: str) -> dict:
     """Task-mode fences read from the durable spec ledger."""
     out = {
         "pending": 0, "rounds": 0, "last_verdict": None,
-        "unjournaled_reservation": None,
+        "unjournaled_reservation": None, "live_reservation": None,
+        "expired_reservation": None, "phase_lease": None,
     }
     spec_id = spec_id_from_task(task_id)
     try:
@@ -44417,15 +44591,28 @@ def _review_route_ledger(flow_dir: Path, task_id: str) -> dict:
             and not row.get("superseded_by")
         ):
             out["last_verdict"] = row["verdict"]
+    lease_bound = get_review_exec_timeout() + 900
     for res_id, res in (spec_data.get("review_reservations") or {}).items():
         if (
-            isinstance(res, dict)
-            and res.get("counter_scope") == counter_scope
-            and not res.get("superseded_by")
-            and not _review_journal_path(flow_dir, str(res_id)).is_file()
+            not isinstance(res, dict)
+            or res.get("counter_scope") != counter_scope
+            or res.get("superseded_by")
         ):
+            continue
+        journal_path = _review_journal_path(flow_dir, str(res_id))
+        if not journal_path.is_file():
             out["unjournaled_reservation"] = str(res_id)
-            break
+            continue
+        journal = _review_route_read_receipt(journal_path) or {}
+        age = _review_fanout_journal_age(flow_dir, str(res_id), journal)
+        if journal.get("failure_class") == "fanout_abandoned" and (
+            age is not None and age >= lease_bound
+        ):
+            # Expired abandonment: the next increment replays + refunds it.
+            out["expired_reservation"] = str(res_id)
+        else:
+            out["live_reservation"] = str(res_id)
+    out["phase_lease"] = _review_phase_lease_live(spec_data, counter_scope)
     return out
 
 
@@ -44470,8 +44657,16 @@ def compute_review_route(
         receipt_state = _review_route_receipt_state(receipt, scope_id)
     ledger = _review_route_ledger(flow_dir, task_id) if task_id else {
         "pending": 0, "rounds": 0, "last_verdict": None,
-        "unjournaled_reservation": None,
+        "unjournaled_reservation": None, "live_reservation": None,
+        "expired_reservation": None, "phase_lease": None,
     }
+    if standalone and isinstance(receipt, dict):
+        # Standalone leases live on the receipt.
+        lease = receipt.get("phase_lease")
+        if isinstance(lease, dict):
+            age = _iso_age_seconds(lease.get("timestamp"))
+            if age is None or age < get_review_exec_timeout() + 900:
+                ledger["phase_lease"] = lease
     result = {
         "type": "review_route",
         "task_id": task_id,
@@ -44493,8 +44688,19 @@ def compute_review_route(
         return result
 
     def _fanout(reason: str, message: str) -> dict:
-        if receipt_state in ("foreign", "closed", "unreadable") and rotate_stale:
-            result["rotated_to"] = _review_route_rotate(receipt_file)
+        if receipt_state in ("foreign", "closed") and rotate_stale:
+            rotated = _review_route_rotate(receipt_file)
+            if rotated is None and receipt_file.exists():
+                # PR #392 r41 (P1): another coordinator rotated first — a
+                # lost ownership race, not a green light.
+                return _stop(
+                    "rotation_lost_race",
+                    "another coordinator rotated this scope's receipt first "
+                    "— a concurrent review of the same scope is starting. "
+                    "Do not dispatch; wait for it or set an explicit "
+                    "per-run REVIEW_RECEIPT_PATH.",
+                )
+            result["rotated_to"] = rotated
         result.update({"action": "fanout", "reason": reason, "message": message})
         return result
 
@@ -44504,21 +44710,39 @@ def compute_review_route(
             "--force: human-authorized fresh fan-out; every guard bypassed "
             "(the stale receipt is rotated aside when --rotate-stale is set).",
         )
+    if receipt_state in ("corrupt", "unreadable"):
+        return _stop(
+            "corrupt_receipt",
+            f"the receipt at {resolved_path} belongs to this scope but is "
+            f"{receipt_state} (unknown verdict, wrong type, or unparseable) — "
+            "not a closed round. Inspect it; move it aside only once you know "
+            "no unresolved findings are in it.",
+        )
+    if ledger.get("phase_lease"):
+        return _stop(
+            "phases_in_flight",
+            "optional review phases (deep/validator/walkthrough) are still in "
+            "flight for this scope — the finalizing coordinator owns it until "
+            "they complete and it runs `review-route --release-phases`.",
+        )
     if ledger["unjournaled_reservation"]:
         return _stop(
             "unjournaled_reservation",
             f"a reserved round for {task_id} has no journal (reservation "
             f"{ledger['unjournaled_reservation']} — its dispatch died before "
             "journaling). Repair explicitly: flowctl spec reset-review-rounds "
-            f"{spec_id_from_task(task_id)}.",
+            f"{spec_id_from_task(task_id)} --task {task_id}.",
         )
-    if ledger["pending"] > 0:
+    if ledger["live_reservation"] or (
+        ledger["pending"] > 0
+        and not ledger["expired_reservation"]
+        and not ledger["live_reservation"]
+    ):
         return _stop(
             "in_flight",
-            f"a review round for {task_id} is already reserved "
-            f"(pending={ledger['pending']}) — an earlier round is in flight or "
-            "died before record. Finish/record it, or repair via flowctl spec "
-            f"reset-review-rounds {spec_id_from_task(task_id)}; never dispatch "
+            f"a review round for {task_id} is already reserved and live "
+            f"(reservation {ledger['live_reservation'] or 'pending='+str(ledger['pending'])}) — an "
+            "earlier round is in flight. Wait for it to record; never dispatch "
             "a second concurrent review for the same scope.",
         )
     if receipt_state == "needs_human":
@@ -44566,10 +44790,17 @@ def compute_review_route(
                 f"{spec_id_from_task(task_id)} abandons the lost cycle and "
                 "licenses a fresh fan-out.",
             )
+    note = ""
+    if ledger.get("expired_reservation"):
+        note = (
+            " An expired abandoned fan-out reservation "
+            f"({ledger['expired_reservation']}) will be replayed and refunded "
+            "by this dispatch."
+        )
     return _fanout(
         "first_round",
         "fresh first round: fan out (stale/foreign receipt rotated aside when "
-        "--rotate-stale is set).",
+        f"--rotate-stale is set).{note}",
     )
 
 
@@ -44586,6 +44817,45 @@ def cmd_review_route(args: argparse.Namespace) -> None:
     else:
         flow_dir = get_flow_dir() if ensure_flow_exists() else Path(".flow")
     repo_root = get_repo_root()
+    hold = bool(getattr(args, "hold_phases", False))
+    release = bool(getattr(args, "release_phases", False))
+    if hold or release:
+        receipt_arg = getattr(args, "receipt", None) or os.environ.get("REVIEW_RECEIPT_PATH")
+        resolved_path = receipt_arg or _review_route_receipt_default(repo_root, task_id)
+        lease = None if release else {
+            "rid": None, "timestamp": now_iso(), "receipt_path": resolved_path,
+        }
+        if task_id:
+            ok = _review_phase_lease_write(task_id, lease)
+        else:
+            ok = False
+            try:
+                data = json.loads(Path(resolved_path).read_text(encoding="utf-8"))
+                if release:
+                    data.pop("phase_lease", None)
+                else:
+                    data["phase_lease"] = lease
+                atomic_write_json(Path(resolved_path), data)
+                ok = True
+            except (OSError, ValueError, TypeError):
+                ok = False
+        if not ok:
+            error_exit(
+                "could not " + ("release" if release else "hold")
+                + " the optional-phase lease (spec state or receipt not writable)",
+                use_json=args.json,
+                code=2,
+            )
+        payload = {
+            "type": "review_route", "task_id": task_id,
+            "phase_lease": "released" if release else "held",
+            "receipt_path": resolved_path,
+        }
+        if args.json:
+            json_output(payload)
+        else:
+            print(f"PHASE_LEASE={payload['phase_lease']}")
+        return
     result = compute_review_route(
         flow_dir, repo_root, task_id,
         receipt_path=getattr(args, "receipt", None),
@@ -44612,9 +44882,33 @@ def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
     _codex_impl_review_fanout(args)
 
 
+def _review_fanout_default_receipt(args, task_id: Optional[str]) -> None:
+    """Task mode always has a receipt (PR #392 sol review, R11/R12): a
+    NEEDS_WORK round consumed without publishing its merged container would
+    strand the next invocation on `lost_receipt`. Explicit --receipt, then
+    REVIEW_RECEIPT_PATH, then the same repo/scope-keyed default review-route
+    derives. Standalone keeps the receipt optional."""
+    if task_id and not getattr(args, "receipt", None):
+        args.receipt = (
+            os.environ.get("REVIEW_RECEIPT_PATH")
+            or _review_route_receipt_default(get_repo_root(), task_id)
+        )
+
+
 def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
     _wire_backend_review_hooks()
     task_id, standalone, flow_dir, task_spec_path = _review_fanout_resolve_scope(args)
+    _review_fanout_default_receipt(args, task_id)
+    if task_id and getattr(args, "focus", None):
+        # PR #392 sol review: --focus is a standalone-review input (task
+        # prompts carry the task spec instead) — refusing beats silently
+        # stamping a focus the draws never saw.
+        error_exit(
+            "--focus applies to standalone reviews only; task-scoped draws "
+            "take their focus from the task spec.",
+            use_json=args.json,
+            code=2,
+        )
     _review_fanout_first_round_guard(args, task_id, standalone, flow_dir)
     draws = _review_fanout_parse_draws(args, task_id)
     primary_axis = _review_fanout_primary_axis(draws)
@@ -44693,8 +44987,8 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
                         f"(reservation {res_id} — its dispatch died before "
                         "journaling its intent). Repair explicitly via "
                         f"flowctl spec reset-review-rounds "
-                        f"{spec_id_from_task(task_id)} before dispatching a "
-                        "new fan-out.",
+                        f"{spec_id_from_task(task_id)} --task {task_id} "
+                        "before dispatching a new fan-out.",
                         use_json=args.json,
                         code=2,
                     )
@@ -44793,6 +45087,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             reviewed_base_sha, reviewed_head_sha, artifact_sha256,
             reservation_id, rid, primary_axis, results,
             focus=getattr(args, "focus", None),
+            receipt_path=getattr(args, "receipt", None),
         )
     except Exception:  # noqa: BLE001
         # PR #392 r9 (P2): without meta.json phase two has nothing to
@@ -45070,10 +45365,10 @@ def _review_fanout_write_receipt(
     findings_container, args, receipt_draws, meta, reservation_id,
     receipt_target, suppressed_count, classification_counts, unaddressed_rids,
     merged_tag_mismatch, extra_fields=None,
-) -> None:
+) -> bool:
     if not receipt_path:
-        return
-    _write_backend_review_receipt(
+        return True
+    return _write_backend_review_receipt(
         receipt_path,
         review_type="impl_review",
         review_id=review_id,
@@ -45093,7 +45388,7 @@ def _review_fanout_write_receipt(
         reviewed_base_sha=meta.get("reviewed_base_sha"),
         reviewed_head_sha=meta.get("reviewed_head_sha"),
         findings_container=findings_container,
-        findings_built=True,
+        findings_built=findings_container is not None,
         journaled_reservation_id=reservation_id if receipt_target else None,
         draws=receipt_draws,
         merged_tag_mismatch=merged_tag_mismatch,
@@ -45155,14 +45450,14 @@ def _review_fanout_record_and_receipt(
             extra_fields["rid"] = meta["rid"]
         if isinstance(meta.get("reviewed_head_sha"), str):
             extra_fields["reviewed_head_sha"] = meta["reviewed_head_sha"]
-        _review_fanout_write_receipt(
+        published = _review_fanout_write_receipt(
             receipt_path, review_id, verdict, merged_text, primary,
             resolved_spec, findings_container, args, receipt_draws, meta,
             None, None, suppressed_count, classification_counts,
             unaddressed_rids, merged_tag_mismatch,
             extra_fields=extra_fields,
         )
-        return {}
+        return {"receipt_pending": True} if published is False else {}
     receipt_target = receipt_path if receipt_path and reservation_id else None
     receipt_payload = _backend_review_receipt_payload(
         review_type="impl_review",
@@ -45201,7 +45496,7 @@ def _review_fanout_record_and_receipt(
         reservation_id=reservation_id,
         findings_container=findings_container,
         findings_digest=findings_digest,
-        findings_built=True,
+        findings_built=findings_container is not None,
         receipt_target=receipt_target,
         receipt_payload=receipt_payload,
         receipt_criteria_text=merged_text,
@@ -45214,12 +45509,15 @@ def _review_fanout_record_and_receipt(
         # the phase-one receipt here would delete that evidence and could
         # revert an overturned verdict back to the original SHIP.
         return summary
-    _review_fanout_write_receipt(
+    published = _review_fanout_write_receipt(
         receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
         findings_container, args, receipt_draws, meta, reservation_id,
         receipt_target, suppressed_count, classification_counts,
         unaddressed_rids, merged_tag_mismatch,
     )
+    if published is False:
+        summary = dict(summary) if isinstance(summary, dict) else {}
+        summary["receipt_pending"] = True
     return summary
 
 
@@ -45315,34 +45613,33 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         )
     merged_tag = parse_codex_verdict(merged_text)
     merged_tag_mismatch: Optional[str] = None
-    if merged_tag in _REVIEW_REPLAY_PRECEDENCE:
-        if (
-            _REVIEW_REPLAY_PRECEDENCE.index(merged_tag)
-            < _REVIEW_REPLAY_PRECEDENCE.index(verdict)
-        ):
-            # fn-215 host review r1: the coordinator's merged text carries its
-            # own verdict tag (post-merge deep/validate passes can find P0s
-            # the draws did not). A tag strictly worse than the draws'
-            # worst-wins synthesis escalates the recorded verdict — recording
-            # the milder synthesized one would silently discard those findings
-            # and reset the round counter on a SHIP that the merged evidence
-            # contradicts.
-            verdict = merged_tag
-        elif (
-            _REVIEW_REPLAY_PRECEDENCE.index(merged_tag)
-            > _REVIEW_REPLAY_PRECEDENCE.index(verdict)
-        ):
-            # fn-215 host review r2: a milder merged tag never downgrades —
-            # worst-wins holds across the union — but the receipt would then
-            # store a verdict its own body text contradicts. Stamp the
-            # discrepancy explicitly so a reader of the stored receipt sees
-            # the contradiction instead of reverse-engineering it.
-            merged_tag_mismatch = (
-                f"merged text tag {merged_tag} is milder than the draws' "
-                f"worst-wins synthesis {verdict}; worst-wins recorded"
-            )
+    if merged_tag in _REVIEW_REPLAY_PRECEDENCE and merged_tag != verdict:
+        # R9 is mechanical worst-wins over the DRAW tags with the zero-survivor
+        # wedge as the only exception. The coordinator's merged tag never
+        # moves the recorded verdict in either direction (PR #392 sol review:
+        # the old "escalate on a worse tag" carve-out was justified by
+        # pre-finalize deep passes, and the optional phases now run AFTER the
+        # finalize — they perform their own verdict transitions). A mismatch
+        # is stamped so a reader of the receipt sees the contradiction
+        # instead of reverse-engineering it.
+        direction = (
+            "worse" if _REVIEW_REPLAY_PRECEDENCE.index(merged_tag)
+            < _REVIEW_REPLAY_PRECEDENCE.index(verdict) else "milder"
+        )
+        merged_tag_mismatch = (
+            f"merged text tag {merged_tag} is {direction} than the draws' "
+            f"worst-wins synthesis {verdict}; worst-wins recorded"
+        )
     review_id = task_id if task_id else "branch"
-    receipt_path = args.receipt if getattr(args, "receipt", None) else None
+    receipt_path = (
+        args.receipt if getattr(args, "receipt", None)
+        else (meta.get("receipt_path") if isinstance(meta.get("receipt_path"), str) else None)
+    )
+    if task_id and not receipt_path:
+        receipt_path = (
+            os.environ.get("REVIEW_RECEIPT_PATH")
+            or _review_route_receipt_default(get_repo_root(), task_id)
+        )
     findings_container, findings_digest = _build_backend_review_findings(
         merged_text,
         review_type="impl_review",
@@ -45365,6 +45662,22 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     # old approximation could silently mask the wedge). All-SHIP rounds have
     # no wedge and need no count.
     needs_work_survivors = getattr(args, "needs_work_survivors", None)
+    if verdict == "NEEDS_WORK" and findings_container is None:
+        # PR #392 sol review (R3/R14): a NEEDS_WORK round is consumed only
+        # with a schema-valid v1 container — round 2's ratchet injects every
+        # merged ordinal from it, and an unparseable merge would silently
+        # drop the deferred lineage. A legitimate zero-finding merge is a
+        # VALID empty container, not an absent one.
+        error_exit(
+            "fan-out finalize: the merged document did not parse into a v1 "
+            "findings container — a NEEDS_WORK round requires one (use the "
+            "reviewer finding format: numbered headings with the labeled "
+            "Severity / Confidence / Classification / File:Line / Problem / "
+            "Suggestion bullets, and the fenced JSON tally). Fix the merged "
+            "file and re-run this finalize.",
+            use_json=args.json,
+            code=2,
+        )
     if needs_work_survivors is not None and needs_work_survivors < 0:
         # A malformed negative count must not silently defeat the wedge (R9):
         # only an explicit 0 may escalate, and only >=1 may hold NEEDS_WORK.
@@ -45396,6 +45709,22 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             code=2,
         )
     if (
+        needs_work_survivors is not None
+        and isinstance(findings_container, dict)
+        and isinstance(findings_container.get("items"), list)
+        and needs_work_survivors > len(findings_container["items"])
+    ):
+        # Survivors are a subset of the merged items — a count above the
+        # container is a coordinator error, not evidence.
+        error_exit(
+            f"--needs-work-survivors {needs_work_survivors} exceeds the merged "
+            f"container's {len(findings_container['items'])} item(s) — the "
+            "survivor count is the subset of merged findings that came from "
+            "NEEDS_WORK draws after the evidence gate.",
+            use_json=args.json,
+            code=2,
+        )
+    if (
         verdict == "NEEDS_WORK"
         and has_needs_work_draw
         and needs_work_survivors == 0
@@ -45418,6 +45747,36 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         suppressed_count, classification_counts, unaddressed_rids,
         merged_tag_mismatch,
     )
+    if (
+        getattr(args, "hold_for_phases", False)
+        and not (isinstance(attempt_summary, dict) and attempt_summary.get("replayed"))
+    ):
+        # PR #392 sol review (R15): the finalizing coordinator keeps scope
+        # ownership through its post-finalize optional phases. Task mode
+        # holds a durable lease the reservation gate and review-route refuse
+        # across; standalone stamps the lease into the receipt (review-route
+        # reads it). Released by `review-route --release-phases`; expires on
+        # the liveness bound so a dead coordinator cannot wedge the scope.
+        lease = {"rid": rid, "timestamp": now_iso(), "receipt_path": receipt_path}
+        if task_id:
+            if not _review_phase_lease_write(task_id, lease):
+                print(
+                    "warning: could not persist the optional-phase lease; a "
+                    "concurrent dispatch is not fenced during the phases.",
+                    file=sys.stderr,
+                )
+        elif receipt_path:
+            try:
+                data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+                data["phase_lease"] = lease
+                atomic_write_json(Path(receipt_path), data)
+            except (OSError, ValueError, TypeError):
+                print(
+                    "warning: could not stamp the optional-phase lease on the "
+                    "receipt; a concurrent dispatch is not fenced during the "
+                    "phases.",
+                    file=sys.stderr,
+                )
     if (
         isinstance(attempt_summary, dict)
         and attempt_summary.get("replayed")
@@ -45457,6 +45816,20 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
                     use_json=args.json,
                     code=2,
                 )
+    if isinstance(attempt_summary, dict) and attempt_summary.get("receipt_pending"):
+        # PR #392 sol review (R4/R12): the round is recorded but the merged
+        # receipt did not publish (journal leg pending). Never emit a
+        # successful terminal verdict over an absent receipt — the next
+        # dispatch replays the journal, and this finalize is safely
+        # re-runnable to publish it.
+        error_exit(
+            "fan-out finalize: the round was recorded but the merged receipt "
+            f"did not publish yet (receipt {receipt_path}); re-run this exact "
+            "finalize to publish it — the next dispatch would otherwise "
+            "replay the journal first.",
+            use_json=args.json,
+            code=2,
+        )
     _review_fanout_emit_finalize(
         args, standalone, review_id, verdict, merged_text, receipt_draws,
         primary, resolved_spec, attempt_summary, task_id,
@@ -50785,6 +51158,16 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         "--receipt", help="Receipt file path for the merged round",
     )
     p2.add_argument(
+        "--hold-for-phases",
+        action="store_true",
+        help=(
+            "Hold scope ownership through the post-finalize optional phases "
+            "(pass when --deep/--validate/--interactive are enabled); release "
+            "with `flowctl review-route <task> --release-phases` once they "
+            "complete. Expires on the liveness bound."
+        ),
+    )
+    p2.add_argument(
         "--needs-work-survivors",
         type=int,
         metavar="N",
@@ -51899,6 +52282,14 @@ def main() -> None:
         "--force", action="store_true",
         help="Human-only: route to a fresh fan-out regardless of guards",
     )
+    p_review_route.add_argument(
+        "--hold-phases", action="store_true",
+        help="Hold optional-phase scope ownership (host path; codex finalize passes --hold-for-phases instead)",
+    )
+    p_review_route.add_argument(
+        "--release-phases", action="store_true",
+        help="Release optional-phase scope ownership once deep/validator/walkthrough passes complete",
+    )
     p_review_route.add_argument("--json", action="store_true", help="JSON output")
     p_review_route.set_defaults(func=cmd_review_route)
 
@@ -52954,6 +53345,14 @@ def main() -> None:
             "--impl",
             action="store_true",
             help="Also reset per-task impl-review round counters",
+        )
+        p_reset_rounds.add_argument(
+            "--task",
+            help=(
+                "Reset ONE task's impl-review cycle only (counter, pending, "
+                "reservations + journals, phase lease) — the scoped repair the "
+                "review fences prescribe"
+            ),
         )
         p_reset_rounds.add_argument("--json", action="store_true", help="JSON output")
         p_reset_rounds.set_defaults(func=cmd_spec_reset_review_rounds)

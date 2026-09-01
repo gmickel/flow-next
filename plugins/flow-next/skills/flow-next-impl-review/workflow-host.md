@@ -374,6 +374,12 @@ if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
   echo "ESCALATE: reviewer requested human review" >&2
   exit 4
 fi
+# Scope ownership through the optional phases (PR #392): when any optional
+# phase is enabled, hold the lease right after the record — review-route and
+# the reservation gate refuse other dispatches on this scope until Step 4
+# releases it. Expires on the liveness bound.
+# OPTIONAL_PHASES_ENABLED=1 when Step 0 parsed --deep, --validate, or --interactive.
+[ -n "$OPTIONAL_PHASES_ENABLED" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases --json
 ```
 
 The command reads the prior receipt before atomically replacing it. Unsupported
@@ -389,6 +395,13 @@ When `--deep` / `--validate` / `--interactive` flags are set, run the gated phas
 - skip with an explicit note in the receipt when the pass cannot run without a CLI backend
 
 Never silently drop a required gate without a note.
+
+When the enabled phases have all run, release the scope lease held in Step 3
+(before the fix pass):
+
+```bash
+"$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --json
+```
 
 ## Step 5: Continue through the shared fix loop
 

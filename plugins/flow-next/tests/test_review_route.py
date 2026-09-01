@@ -197,13 +197,96 @@ class TestReviewRoute(unittest.TestCase):
         self.assertEqual(r["reason"], "deep_overturn_not_resumable")
         self.assertEqual(r["receipt_state"], "open_deep")
 
-    def test_unreadable_receipt_is_stale(self) -> None:
+    def test_unreadable_receipt_stops_as_corrupt(self) -> None:
         receipt = self.root / "r.json"
         receipt.write_text("{not json")
         code, r, _ = self._route(self.task_id, "--receipt", str(receipt), "--rotate-stale")
         self.assertEqual(r["receipt_state"], "unreadable")
+        self.assertEqual(r["action"], "stop")
+        self.assertEqual(r["reason"], "corrupt_receipt")
+        self.assertTrue(receipt.exists(), "never rotated: it may hold findings")
+
+    def test_unknown_verdict_or_wrong_type_is_corrupt(self) -> None:
+        receipt = self._receipt(self.root / "r.json", verdict="MAYBE")
+        code, r, _ = self._route(self.task_id, "--receipt", str(receipt), "--rotate-stale")
+        self.assertEqual(r["receipt_state"], "corrupt")
+        self.assertEqual(r["action"], "stop")
+        self.assertTrue(receipt.exists())
+        receipt = self._receipt(self.root / "r2.json", verdict="SHIP", type="plan_review")
+        code, r, _ = self._route(self.task_id, "--receipt", str(receipt))
+        self.assertEqual(r["receipt_state"], "corrupt")
+        # MAJOR_RETHINK is a real closed terminal.
+        receipt = self._receipt(self.root / "r3.json", verdict="MAJOR_RETHINK")
+        code, r, _ = self._route(self.task_id, "--receipt", str(receipt))
+        self.assertEqual(r["receipt_state"], "closed")
         self.assertEqual(r["action"], "fanout")
-        self.assertFalse(receipt.exists())
+
+    def test_live_vs_expired_journal(self) -> None:
+        """A journaled reservation is in flight while its lease is live and an
+        expired abandonment journal is NOT a stop (the dispatch replays it)."""
+        data = self._spec()
+        rid = "ab" * 16
+        data["review_pending_rounds"] = {f"impl:{self.task_id}": 1}
+        data["review_reservations"] = {rid: {"counter_scope": f"impl:{self.task_id}"}}
+        self._write_spec(data)
+        runs = self.root / ".flow" / "review-runs"
+        runs.mkdir(parents=True, exist_ok=True)
+        journal = runs / f"{rid}.json"
+        journal.write_text(json.dumps({
+            "reservation_id": rid, "failure_class": "fanout_abandoned",
+            "timestamp": flowctl.now_iso(),
+        }))
+        code, r, _ = self._route(self.task_id)
+        self.assertEqual(r["action"], "stop")
+        self.assertEqual(r["reason"], "in_flight")
+        self.assertEqual(r["live_reservation"], rid)
+        journal.write_text(json.dumps({
+            "reservation_id": rid, "failure_class": "fanout_abandoned",
+            "timestamp": "2020-01-01T00:00:00Z",
+        }))
+        code, r, _ = self._route(self.task_id)
+        self.assertEqual(r["action"], "fanout")
+        self.assertEqual(r["expired_reservation"], rid)
+        self.assertIn("replayed and refunded", r["message"])
+
+    def test_rotation_lost_race_stops(self) -> None:
+        receipt = self._receipt(self.root / "r.json", verdict="SHIP")
+        real = flowctl._review_route_rotate
+        with mock.patch.object(flowctl, "_review_route_rotate", return_value=None):
+            code, r, _ = self._route(self.task_id, "--receipt", str(receipt), "--rotate-stale")
+        self.assertEqual(r["action"], "stop")
+        self.assertEqual(r["reason"], "rotation_lost_race")
+        self.assertIs(flowctl._review_route_rotate, real)
+
+    def test_phase_lease_hold_and_release(self) -> None:
+        code, r, err = self._route(self.task_id, "--hold-phases")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(r["phase_lease"], "held")
+        code, r, _ = self._route(self.task_id)
+        self.assertEqual(r["action"], "stop")
+        self.assertEqual(r["reason"], "phases_in_flight")
+        code, r, _ = self._route(self.task_id, "--release-phases")
+        self.assertEqual(r["phase_lease"], "released")
+        code, r, _ = self._route(self.task_id)
+        self.assertEqual(r["action"], "fanout")
+        # An expired lease (dead coordinator) never wedges the scope.
+        code, r, _ = self._route(self.task_id, "--hold-phases")
+        data = self._spec()
+        data["review_phase_leases"][f"impl:{self.task_id}"]["timestamp"] = "2020-01-01T00:00:00Z"
+        self._write_spec(data)
+        code, r, _ = self._route(self.task_id)
+        self.assertEqual(r["action"], "fanout")
+
+    def test_standalone_phase_lease_lives_on_receipt(self) -> None:
+        receipt = self._receipt(self.root / "sa.json", id="branch", verdict="SHIP")
+        code, r, err = self._route("--receipt", str(receipt), "--hold-phases")
+        self.assertEqual(code, 0, err)
+        self.assertIn("phase_lease", json.loads(receipt.read_text()))
+        code, r, _ = self._route("--receipt", str(receipt))
+        self.assertEqual(r["reason"], "phases_in_flight")
+        code, r, _ = self._route("--receipt", str(receipt), "--release-phases")
+        code, r, _ = self._route("--receipt", str(receipt))
+        self.assertEqual(r["action"], "fanout")
 
     # -- task-mode ledger fences ------------------------------------------
 
