@@ -2,7 +2,9 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.11.0] - 2026-09-01
+
+Anyone driving pilot over a mixed backlog can now mark an individual spec "too small to plan" and let the loop build it straight through — no more choosing between a blanket flag that mis-routed every spec a tick touched and hand-running the small ones yourself. The consent lives on the spec, where readiness already lives, so autonomous runs stay planned-by-default unless a human said otherwise.
 
 ### Changed
 
