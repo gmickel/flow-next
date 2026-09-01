@@ -1020,6 +1020,36 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
 
+    def test_failed_primary_falls_back_to_surviving_session(self) -> None:
+        """PR #392 r16 (P2): a partial fan-out that lost its primary draw
+        stamps the receipt from the first surviving codex session instead of
+        session_id: null, so round 2 and the optional phases stay runnable;
+        draws[] still records the failed primary honestly."""
+        def fake(
+            prompt, *, session_id, repo_root, spec, resolution_out, args,
+            resume_only=False,
+        ):
+            axis = _axis_of(prompt)
+            resolution_out["model"] = f"{axis}-model"
+            if axis == "correctness":
+                return "no verdict here", None, 1, "boom"
+            return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
+
+        receipt = self.root / "pf-receipt.json"
+        code, payload, err = self._dispatch(fake, "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(payload["failed_draws"], 1)
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertIn(data["session_id"], ("sess-contracts", "sess-integration"))
+        by_axis = {row["axis"]: row for row in data["draws"]}
+        self.assertTrue(by_axis["correctness"]["failed"])
+        self.assertIsNone(by_axis["correctness"]["session_id"])
+
     def test_traversal_rid_rejected(self) -> None:
         """PR #392 r14 (P2): a dot-segment --rid must not escape the sidecar
         parent — only the 32-hex mint format is accepted."""

@@ -44349,10 +44349,38 @@ def _review_fanout_receipt_draws(draws: list) -> list:
 
 
 def _review_fanout_primary_draw(meta: dict, draws: list) -> dict:
+    """Row whose session/model stamp the merged receipt's top level.
+
+    Prefer the primary-axis draw; when it FAILED (or carries no session), fall
+    back to the first surviving codex draw with a session (PR #392 r16) — a
+    partial fan-out that lost its primary must still hand round 2 and the
+    optional phases a resumable session rather than ``session_id: null``.
+    ``draws[]`` stays honest either way (the failed primary is recorded).
+    """
     axis = meta.get("primary_axis")
+    primary = next(
+        (
+            row for row in draws
+            if isinstance(row, dict) and row.get("axis") == axis
+        ),
+        None,
+    )
+    if (
+        isinstance(primary, dict)
+        and not primary.get("failed")
+        and primary.get("session_id")
+    ):
+        return primary
     for row in draws:
-        if isinstance(row, dict) and row.get("axis") == axis:
+        if (
+            isinstance(row, dict)
+            and not row.get("failed")
+            and row.get("session_id")
+            and (row.get("backend") or "codex") == "codex"
+        ):
             return row
+    if isinstance(primary, dict):
+        return primary
     for row in draws:
         if isinstance(row, dict):
             return row
