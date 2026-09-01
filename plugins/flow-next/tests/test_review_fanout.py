@@ -1351,6 +1351,22 @@ class TestReviewFanout(unittest.TestCase):
         leases = self._spec_data().get("review_phase_leases", {})
         self.assertNotIn(f"impl:{self.task_id}", leases)
 
+    def test_replay_with_hold_keeps_the_lease(self) -> None:
+        """Codex r46: a crashed coordinator re-running its finalize with
+        --hold-for-phases keeps the lease for the phases it is about to run."""
+        receipt = self.root / "replay-hold.json"
+        code, payload, err = self._dispatch(self._ship_exec([]), "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_empty_merged_review())
+        for _ in range(2):
+            fin_code, fin, fin_err = self._finalize(
+                payload["rid"], merged, "--receipt", str(receipt), "--hold-for-phases",
+            )
+            self.assertEqual(fin_code, 0, fin_err)
+            lease = self._spec_data().get("review_phase_leases", {}).get(f"impl:{self.task_id}")
+            self.assertIsInstance(lease, dict)
+            self.assertEqual(lease.get("rid"), payload["rid"])
+
     def test_exclusive_increment_refuses_standing_reservation(self) -> None:
         """PR #392 r22: --exclusive makes the single-dispatch fence atomic —
         inside the reservation lock, a standing same-scope reservation

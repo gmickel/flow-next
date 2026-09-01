@@ -384,6 +384,9 @@ if [[ -n "$VERDICT" ]]; then
 fi
 
 if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
+  # Terminal escalation: no optional phase runs, so release the lease held
+  # above before exiting (codex r46) — nothing is left fenced behind the TTL.
+  [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RESERVATION_ID" --json >/dev/null 2>&1
   echo "ESCALATE: reviewer requested human review" >&2
   exit 4
 fi

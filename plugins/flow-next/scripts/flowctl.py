@@ -45903,14 +45903,10 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         if task_id and phase_lease:
             _review_phase_lease_write(task_id, None, expect_rid=rid)
         raise
-    if (
-        task_id and phase_lease
-        and isinstance(attempt_summary, dict)
-        and attempt_summary.get("replayed")
-    ):
-        # A replay recorded nothing new — do not leave a fresh lease behind
-        # an already-finalized round.
-        _review_phase_lease_write(task_id, None, expect_rid=rid)
+    # Codex r46: a REPLAY with --hold-for-phases keeps (renews) the lease —
+    # replay means the record landed, not that the optional phases ran; the
+    # re-running coordinator is about to run them and needs the fence until
+    # its explicit --release-phases.
 
     if (
         isinstance(attempt_summary, dict)
