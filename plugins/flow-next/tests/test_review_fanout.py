@@ -900,6 +900,53 @@ class TestReviewFanout(unittest.TestCase):
             self.assertIn(f"{ordinal}. ", prompt)
             self.assertIn(item["title"], prompt)
 
+    def test_standalone_focus_round_trip(self) -> None:
+        """PR #392 r3: --focus persists through the sidecar meta into the
+        finalized receipt, and a resumed dispatch adopts it from there."""
+        calls: list = []
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            "--base",
+            "HEAD~1",
+            "--focus",
+            "auth, error paths",
+            "--json",
+            fake=self._ship_exec(calls),
+        )
+        self.assertEqual(code, 0, err)
+        payload = self._payload(out)
+        rid = payload["rid"]
+        meta = json.loads(
+            (self.root / ".flow" / "review-fanout" / rid / "meta.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(meta["focus"], "auth, error paths")
+        for call in calls:
+            self.assertIn("auth, error paths", call["prompt"])
+
+        receipt = self.root / "focus-receipt.json"
+        merged = self._write_merged(_merged_review("One finding."))
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout-finalize",
+            "--base",
+            "HEAD~1",
+            "--rid",
+            rid,
+            "--merged-file",
+            str(merged),
+            "--receipt",
+            str(receipt),
+            "--json",
+        )
+        self.assertEqual(code, 0, err)
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(data.get("focus"), "auth, error paths")
+        self.assertEqual(
+            flowctl._receipt_focus(str(receipt)), "auth, error paths",
+        )
+
     # 9 -----------------------------------------------------------------
 
     def test_path_collision(self) -> None:

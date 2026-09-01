@@ -12232,6 +12232,25 @@ def _read_prior_findings(receipt_path: Optional[str]) -> Optional[str]:
     return prior if isinstance(prior, str) and prior.strip() else None
 
 
+def _receipt_focus(receipt_path: Optional[str]) -> Optional[str]:
+    """Read the prior round's focus areas from the receipt (fn-215 / PR #392).
+
+    A resumed round adopts the receipt's ``focus`` when the caller passes no
+    ``--focus``, so re-reviews keep the originally requested areas instead of
+    silently rebuilding an unfocused prompt.
+    """
+    if not receipt_path:
+        return None
+    try:
+        data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    focus = data.get("focus")
+    return focus if isinstance(focus, str) and focus.strip() else None
+
+
 def _read_prior_structured_findings(receipt_path: Optional[str]) -> Optional[list[dict]]:
     """Return validated receipt items for the structured ratchet path."""
     if not receipt_path:
@@ -42162,7 +42181,9 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     reg = BACKEND_REGISTRY[backend]
     task_id = args.task
     base_branch = args.base
-    focus = getattr(args, "focus", None)
+    focus = getattr(args, "focus", None) or _receipt_focus(
+        getattr(args, "receipt", None)
+    )
     standalone = task_id is None
 
     if not standalone:
@@ -43706,10 +43727,11 @@ def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
 def _review_fanout_write_meta(
     sidecar, task_id, standalone, base_branch,
     reviewed_base_sha, reviewed_head_sha, artifact_sha256,
-    reservation_id, rid, primary_axis, results,
+    reservation_id, rid, primary_axis, results, focus=None,
 ) -> None:
     meta = {
         "type": "impl_review_fanout",
+        "focus": focus,
         "id": task_id if task_id else "branch",
         "standalone": standalone,
         "base_branch": base_branch,
@@ -44022,6 +44044,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
         sidecar, task_id, standalone, base_branch,
         reviewed_base_sha, reviewed_head_sha, artifact_sha256,
         reservation_id, rid, primary_axis, results,
+        focus=getattr(args, "focus", None),
     )
     if all(not row.get("verdict") for row in results):
         _review_fanout_refund_all_failed(
@@ -44136,7 +44159,7 @@ def _review_fanout_write_receipt(
         review_text=merged_text,
         include_effort=True,
         base_branch=args.base,
-        focus=getattr(args, "focus", None),
+        focus=meta.get("focus"),
         suppressed_count=suppressed_count,
         classification_counts=classification_counts,
         unaddressed_rids=unaddressed_rids,
@@ -44178,7 +44201,7 @@ def _review_fanout_record_and_receipt(
         review_text=merged_text,
         include_effort=True,
         base_branch=args.base,
-        focus=getattr(args, "focus", None),
+        focus=meta.get("focus"),
         suppressed_count=suppressed_count,
         classification_counts=classification_counts,
         unaddressed_rids=unaddressed_rids,
