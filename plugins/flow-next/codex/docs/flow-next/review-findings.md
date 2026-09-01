@@ -138,6 +138,21 @@ Every non-root generation is a complete snapshot of the lineage:
 omitting a previously known finding makes the chain invalid rather than
 silently resolving it.
 
+### Merged fan-out rounds
+
+On the codex and host backends the first review round of a scope fans out three
+axis draws that the coordinator merges into one finding set (fn-215). The
+finalized round records ONE valid v1 container over the union of the draws'
+surviving findings, with ordinals re-assigned 1..N across that union - draw-local
+ordinals do not survive the merge, and the container is indistinguishable in
+shape from a single-draw round. Remainder items the coordinator ranked below the
+Act-On tier enter the container alongside the acted-on items and persist as
+deferred lineage across rounds under the normal carry-forward rules - never
+silently dropped, so considered-and-deferred stays distinguishable from
+never-seen. Axis provenance lives in the coordinator's prose report and the
+receipt's `draws[]` array, never as a field on finding items: the v1 item
+allowlist is closed, and an axis field would make the container unsupported.
+
 ### The prior-finding reply grammar
 
 The ratchet prompt states one machine-read line per prior finding, at the start

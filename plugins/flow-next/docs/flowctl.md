@@ -2156,6 +2156,36 @@ flowctl codex completion-review <spec-id> [--sandbox <mode>] [--receipt <path>] 
 # Runs after all tasks done; verifies implementation matches spec requirements
 ```
 
+**First-round fan-out (fn-215) - two coordinator-visible invocations:**
+
+```bash
+# Phase one - reserve ONE round, dispatch the axis draws concurrently, finalize nothing
+flowctl codex impl-review-fanout <task-id> --base <branch> [--draw AXIS[=BACKEND[:MODEL[:EFFORT]]]]... [--receipt <path>] [--json]
+# Default draws: correctness, contracts, integration on the resolved backend spec.
+# Explicit --draw args override (1-3 draws): a single `--draw correctness` is the
+# one-reviewer economy round; three per-draw backend specs are the cross-family round.
+# Per-draw sidecars land at .flow/review-fanout/<rid>/ (review text, metadata, raw output, progress log).
+
+# Phase two - one deterministic finalizer, after the coordinator's merge
+flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> --merged-file <path> [--receipt <path>] [--json]
+```
+
+The coordinator's merge (same-defect dedupe, evidence-bar drops, Act-On ranking) is
+host judgment and happens BETWEEN the two invocations; the finalizer computes the
+verdict mechanically (worst-wins over the draws' tags), records the attempt, the
+findings container, the merged receipt (top-level fields = the primary correctness
+draw's session/model, plus a `draws[]` array), and the single round consumption
+atomically. It is re-invocable with the same merged file, so a coordinator crash
+between merge and finalize is recoverable. Optional phases (`--deep`, `--validate`,
+`--interactive`) run once against the MERGED set, after the finalize. Fail-open:
+any draw with a verdict is enough to proceed; only an all-draws-no-verdict round is
+a transport failure, with one refund. Task mode reserves exactly one round;
+standalone reserves none (nonce rid). Re-review rounds after fixes are the plain
+`impl-review` invocation - when the prior receipt carries `draws[]`, lean resume is
+disabled for that round and the full merged container is injected. The fan-out is
+gated to the codex and host backends; `copilot` and `cursor` keep exactly one
+dispatch per round.
+
 **How it works:**
 
 1. **Gather context hints** - Analyzes changed files, extracts symbols (functions, classes), finds references in unchanged files
@@ -2248,6 +2278,15 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   sandbox denial, and other no-verdict exits refund the pre-dispatch reservation
   and append an auditable attempt row to the spec sidecar. A delivered verdict
   is never refundable, even if the process also reports nonzero.
+- **Merged fan-out rounds count as one:** the cap bounds rounds, not draws. A
+  first-round fan-out sits behind exactly ONE reservation on both fan-out
+  backends - codex wraps the whole `impl-review-fanout` dispatch in one
+  reservation and `impl-review-fanout-finalize` records one consumption for the
+  merged round; host increments once before its three draw subagents and records
+  once after the merge, never three. A partial fan-out fails open from whichever
+  draws returned a verdict (one is enough, the receipt records how many draws
+  failed); only an all-draws-no-verdict round is a transport failure, refunding
+  the single reservation under the normal refund semantics.
 - **Transport bound:** consecutive no-verdict failures are tracked separately
   per review scope. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` exits `5`
   with `TRANSPORT_UNHEALTHY`; it never emits the cap's `ESCALATE`.

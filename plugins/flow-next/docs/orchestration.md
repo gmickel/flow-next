@@ -174,6 +174,26 @@ session by design, every re-review being a fresh subagent. Injecting when it was
 unnecessary costs bytes; not injecting after a silent resume failure costs a blind
 review, so injection is the default everywhere it is not provably unnecessary.
 
+**The first review round fans out three axis draws (fn-215).** On the `codex` and
+`host` backends, the first round of a review scope is three concurrent draws of the
+same reviewer - same resolved backend/model, same lean prompt, each differing by
+exactly one added axis line: correctness-and-logic of the changed code,
+contracts-and-consistency (do docs, tests, and stated promises agree with what the
+code does), and integration-with-unchanged-code. The studies behind this measured
+single-pass review recall as stochastic sampling - roughly 45% of validated
+findings per draw, with a union of three axis-differentiated draws recovering
+1.5-1.6x single-draw recall at flat validity - so one merged round harvests most of
+what previously trickled out across many serial rounds. The coordinator merges the
+draws (same-defect dedupe, evidence-bar drops with a count, ranked output with an
+Act-On tier capped at 5 non-blocking plus a published remainder) and runs ONE
+consolidated fix pass; the merged round consumes ONE review round against the cap,
+not three. Re-review rounds after fixes are a single dispatch carrying the full
+merged prior-finding container - the harvest value is the first round, and
+re-review verifies fixes, which needs continuity, not breadth. `rp` keeps its
+single stateful chat, and `copilot` / `cursor` keep single dispatch every round.
+The residual is real: roughly a third of validated findings eluded every draw in
+the studies, so round 2 shrinks rather than disappears.
+
 **Rule of thumb: the model that writes is never the model that reviews.** Route the reviewer to a different family than your session model and blind spots stop being correlated.
 
 **Ambient-instruction contamination + persona override (fn-90, extended to codex by fn-187 / #331).** A reviewer subprocess can inherit instructions that were never meant for it, and each backend has its own channel:
@@ -182,6 +202,29 @@ review, so injection is the default everywhere it is not provably unnecessary.
 - **codex** - `codex exec` auto-loads the host repo's project doc (`AGENTS.md`); in a repo whose `AGENTS.md` routes all work through the flow-next skills, the reviewer adopts that role and re-dispatches the review at itself instead of performing it (#331 route A - suppressed at the argv level with `-c project_doc_max_bytes=0` on both the fresh and resume dispatch). With the flow-next codex plugin installed, the reviewer can also read the plugin's own coordinator skills ("never self-declares a verdict") and obediently withhold the verdict tag (#331 route B - no CLI knob exists).
 
 On both backends flow-next prepends an explicit **persona-override preamble** on every review path: it declares that any ambient rubric/persona/instruction from the environment - built-in persona, auto-attached `AGENTS.md`/`CLAUDE.md`, skill catalogs, MCP blocks - is *superseded*, and the ONLY rubric + verdict contract is the flow-next one that follows. Repo-specific review invariants belong in `.flow/criteria.md` (standing G-IDs), which rides the review prompts themselves and reaches every reviewer regardless of backend - `AGENTS.md` is host-agent operating instructions, not a review-criteria channel, and a reviewer that inherits it returns no verdict at all rather than a stricter one (#331). Documented, not configurable; it rides automatically on `review.backend cursor:*` and `codex`. A review that still completes with no verdict is journaled as `missing_verdict` (not a transport failure class), and a streak of those terminates with instruction-contamination guidance instead of "repair the backend". The structured-findings ratchet and deterministic convergence terminals (unchanged-artifact refusal, early escalation when the reviewer explicitly marks the same finding `not-fixed` in two consecutive rounds, the round cap, and reviewer-emitted `NEEDS_HUMAN`) apply to every backend - see [`flowctl.md`](flowctl.md#codex-impl-review).
+
+#### Steering the fan-out: worked recipes
+
+Reviews are optional to begin with - the fan-out is a property of a layer you
+already opted into - and its topology is steered by prose, never by a flag or a
+config key. Three phrasings cover the dial:
+
+- **The default** - say nothing. Three axis draws on the resolved backend, merged
+  into one fix pass: the evidence-favored shape when agent-written diffs get
+  merged without a human reading them line by line.
+- **Single-reviewer economy** - `/flow-next:work fn-12 - use 1 reviewer instead of 3`
+  (the same phrasing works on `/flow-next:impl-review`). The round collapses to a
+  single draw - the right call on small, clean diffs, where the three-draw harvest
+  pays roughly 3x review tokens for findings one draw would surface anyway.
+- **Cross-family upgrade** - `use three different model families for the review
+  fan-out`. The three draws route to explicitly named per-draw backends/models,
+  one per family, so blind spots decorrelate across families as well as axes -
+  the strongest shape for a high-stakes merge.
+
+All three resolve through the existing routing precedence - an explicit
+instruction in the moment wins - and the coordinator owns the parse: it turns the
+phrasing into explicit per-draw specs passed to the fan-out interface as
+arguments. flowctl never reads prose.
 
 ### Implementation offload: the bridge route
 

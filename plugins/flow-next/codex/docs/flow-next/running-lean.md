@@ -52,7 +52,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 |---|---|---|---|
 | [Tracker sync](#tracker-sync) | `tracker.enabled` | off | `/flow-next:tracker-sync` |
 | [Live QA stage](#live-qa-stage) | `pipeline.qa` | off | `/flow-next:qa <spec>` |
-| [Cross-model review backend](#cross-model-review-backend) | `review.backend` | unset | `/flow-next:impl-review` |
+| [Cross-model review backend](#cross-model-review-backend) | `review.backend` | unset | `/flow-next:impl-review` (draw topology is prose-steered, not a knob) |
 | [HTML render lenses](#html-render-lenses) | `artifacts.html.enabled` | off | ask for a render in conversation |
 | [Plan-sync](#plan-sync) | `planSync.enabled` | **off** | `/flow-next:sync` |
 | [Memory](#memory-and-the-audit-sweep) | `memory.enabled` | **on** | `/flow-next:audit` |
@@ -84,7 +84,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 `review.backend` - **unset by default**; reviews run in-host. Details: [`orchestration.md`](orchestration.md#review-backends-cross-model-review).
 
 - **Automates away:** getting a verdict from a model family that did not write the diff, so the reviewer's blind spots are uncorrelated with the writer's.
-- **Costs:** an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds before escalating.
+- **Costs:** an out-of-host review pass per review round - roughly three passes on the first round of each scope, where the codex and host backends fan out three concurrent axis draws and merge them into one fix pass (one round against the cap, not three) - a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds before escalating.
 - **Earns its keep when:** the diff was written by an agent and will be merged without a human reading it line by line. That is the autonomous profile by definition; in the human-driven profile you are the cross-model reviewer.
 - **Lean invocation:** `/flow-next:impl-review` or `/flow-next:plan-review` on the changes that warrant it, or a per-task `review:` pin, leaving the standing backend unset.
 
@@ -103,6 +103,16 @@ flowctl config set review.backend host
 plus a `reviewer:` pin in your `CLAUDE.md` / `AGENTS.md` [routing block](orchestration.md#the-routing-block) naming a model from a family that did not write the diff (ask your harness for current ids rather than copying one from a document). The pin is required because a session model grading its own diff is the blind spot the reviewer exists to remove: without it, interactive runs ask, and autonomous runs stop with `NEEDS_HUMAN` rather than silently self-reviewing.
 
 Between the two: `host` trades the second CLI for zero setup while keeping the gate structure intact; `none` removes the gates themselves. Pick per profile. `none` belongs to the human-driven profile, and an autonomous run should keep at least `host`.
+
+#### Turning the dial: draw topology
+
+On the codex and host backends the first review round of a scope fans out three concurrent axis draws (correctness / contracts / integration) and merges them into one fix pass - a structural trade of parallel review passes for serial fix-and-re-review rounds. The dial is a per-invocation prose instruction, never a flag or config key, and the whole layer is optional to begin with:
+
+- **The default** - three axis draws, one merged fix pass. The right shape when agent-written diffs get merged without a human reading them line by line.
+- **Single-reviewer economy** - `/flow-next:work fn-12 - use 1 reviewer instead of 3` collapses the round to one draw: the lean setting for small, clean diffs, where a three-draw harvest costs extra review passes for findings one draw would surface anyway.
+- **Cross-family upgrade** - `use three different model families for the review fan-out` routes each draw to a different family, decorrelating blind spots across families as well as axes: the strongest setting for a high-stakes merge.
+
+The worked recipes and the evidence behind the default live in [`orchestration.md`](orchestration.md#steering-the-fan-out-worked-recipes).
 
 ### HTML render lenses
 
