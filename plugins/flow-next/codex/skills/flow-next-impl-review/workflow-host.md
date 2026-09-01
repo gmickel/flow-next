@@ -79,7 +79,10 @@ if [ -f "$RECEIPT_PATH" ]; then
   case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") == $s then (.verdict // "") else "FOREIGN" end' "$RECEIPT_PATH" 2>/dev/null)" in
     NEEDS_WORK)
       RESUMED=1
-      echo "RESUMED SCOPE — active fix loop: dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
+      # PR #392 r34: the context may have been lost BEFORE the fixes were
+      # applied — re-enter at the fix pass (parse the receipt's merged
+      # container, fix, test, commit) and only then dispatch the re-review.
+      echo "RESUMED SCOPE — active fix loop: first verify the receipt's findings are fixed and committed (apply them if not), then dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
     NEEDS_HUMAN)
       # PR #392 r28: NEEDS_HUMAN is a terminal escalation, not a resumable
       # loop — auto-resuming could overwrite an attended decision.

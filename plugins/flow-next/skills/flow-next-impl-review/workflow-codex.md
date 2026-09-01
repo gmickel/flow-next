@@ -69,7 +69,13 @@ if [ -f "$RECEIPT_PATH" ]; then
   case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") == $s then (.verdict // "") else "FOREIGN" end' "$RECEIPT_PATH" 2>/dev/null)" in
     NEEDS_WORK)
       RESUMED=1
-      echo "RESUMED SCOPE — receipt carries an active fix loop; skip Steps 2-4, go to Step 5.4 (single-dispatch re-review)" ;;
+      # PR #392 r34: the context may have been lost BEFORE the fixes were
+      # applied — resume at Step 5.1 (parse the receipt's findings, fix,
+      # test, commit), not straight at the re-review: an unchanged artifact
+      # would stall on the fence (task mode) or spend a round re-reviewing
+      # unfixed code (standalone). Proceed to 5.4 only once the fixes are
+      # verifiably committed.
+      echo "RESUMED SCOPE — receipt carries an active fix loop; skip Steps 2-4, resume at Step 5.1 (parse findings from the receipt, fix, test, commit — then the 5.4 single-dispatch re-review; if the fixes are already committed, verify and go straight to 5.4)" ;;
     NEEDS_HUMAN)
       # PR #392 r28: NEEDS_HUMAN is a terminal escalation, not a resumable
       # loop — auto-resuming could overwrite an attended decision.

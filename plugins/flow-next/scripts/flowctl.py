@@ -37794,6 +37794,10 @@ def _run_validator_pass(
                 reset_review_cap(
                     spec_id_from_task(receipt_id), "impl", task_id=receipt_id,
                 )
+                # PR #392 r34: leave a durable closure marker so the reopen
+                # scan sees this cycle boundary (the reset itself writes no
+                # attempt row).
+                _mark_review_cycle_closed(receipt_id, backend)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -38267,6 +38271,51 @@ def merge_deep_findings(
     return {"merged": merged, "promotions": promotions, "counts": counts}
 
 
+def _mark_review_cycle_closed(task_id: str, backend: str) -> None:
+    """Durable marker for a cycle closed OUTSIDE the record path (PR #392
+    r34): the validator's reset-on-SHIP leaves no attempt row, so the reopen
+    scan could not see the boundary and over-accumulated across closed
+    scopes. Appends an honestly-labeled closure row under the review state
+    lock; consumes nothing.
+    """
+    flow_dir = get_flow_dir()
+    spec_id = spec_id_from_task(task_id)
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        return
+    with _review_sidecar_lock(flow_dir, spec_id):
+        spec_data = normalize_epic(
+            json.loads(spec_json_path.read_text(encoding="utf-8"))
+        )
+        attempts = spec_data.get("review_attempts")
+        if not isinstance(attempts, list):
+            attempts = []
+            spec_data["review_attempts"] = attempts
+        attempts.append({
+            "counter_kind": "impl",
+            "kind": "impl",
+            "review_type": "impl",
+            "task": task_id,
+            "backend": backend,
+            "verdict": "SHIP",
+            "outcome": "verdict",
+            "failure_class": None,
+            "reservation_id": None,
+            "round_consumed": False,
+            "cycle_closed": True,
+            "validator_closed": True,
+            "output_sha256": None,
+            "timestamp": now_iso(),
+            "finalized": {
+                "receipt": "not_applicable",
+                "digest": "not_applicable",
+                "status": "not_applicable",
+            },
+        })
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
+
+
 def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
     """Durably reopen a task's impl review cycle after a deep pass overturns
     SHIP (PR #392 r30+r31).
@@ -38307,6 +38356,10 @@ def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
                 continue
             if row.get("deep_pass_overturn"):
                 events.append("overturn")
+            elif row.get("cycle_closed"):
+                # PR #392 r34: a validator-closed cycle is a hard boundary —
+                # later scopes never accumulate its rounds.
+                events.append("closed")
             elif row.get("round_consumed") is False:
                 continue
             else:
@@ -38317,6 +38370,9 @@ def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
         last_cycle = 0
         for index, event in enumerate(events):
             if event == "overturn":
+                continue
+            if event == "closed":
+                cycle = 0
                 continue
             cycle += 1
             if event == "SHIP":
