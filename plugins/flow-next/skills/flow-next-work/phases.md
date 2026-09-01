@@ -56,6 +56,11 @@ Detect input type in this order (first match wins):
   legacy fall-through (a zero-task run reaching Phase 3 and a completion
   review over an empty diff) is unreachable. A spec with tasks — whatever
   their status — never reads that file.
+- **Stale no-plan signal:** if the `tasks` array is NON-empty and the metadata
+  reads `no_plan: true` (or `NO_PLAN=1` was parsed), emit the one-line notice
+  here — `Note: no_plan signal ignored — spec already has tasks; running the
+  planned tasks.` — and continue normally. Never load no-plan-route.md for
+  this.
 - Get first ready task: `$FLOWCTL ready --spec <id> --json`
 
 **Spec file start (.md path that exists)**:

@@ -165,6 +165,7 @@ setup-block check
 setup-block resolve
 show
 spec add-dep
+spec clear-no-plan
 spec close
 spec create
 spec export-cognitive-aid
@@ -174,6 +175,7 @@ spec rm-dep
 spec set-backend
 spec set-branch
 spec set-completion-review-status
+spec set-no-plan
 spec set-plan
 spec set-plan-review-status
 spec set-title

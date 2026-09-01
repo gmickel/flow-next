@@ -606,6 +606,23 @@ Runs only when §4.2's `Glossary?` consent approved ≥1 term; the `flowctl glos
 
 Runs only when §4.2's `Mark ready?` consent recorded `mark-ready`; the `flowctl spec ready` call site and its best-effort contract live in `references/mark-ready.md` §5.9.
 
+### 5.9b — No-plan write (flag-gated; fn-214, R5)
+
+Runs only when SKILL.md's mode detection recorded `NO_PLAN_OPT=1` (`--no-plan` on the invocation — the explicit opt-in, in interactive AND autofix mode; capture NEVER sets the field from conversation content or its own judgment, and autofix has no other path to it). After the spec write:
+
+```bash
+# Capture raw first, rc-checked; parse separately (one normalized line either way —
+# a non-task failure keeps its real reason instead of being misreported as the
+# task refusal).
+if ! NO_PLAN_OUT="$("$FLOWCTL" spec set-no-plan "$SPEC_ID" --json 2>&1)"; then
+  NO_PLAN_REASON="$(printf '%s' "$NO_PLAN_OUT" | jq -r '.error // empty' 2>/dev/null | head -1)"
+  [ -z "$NO_PLAN_REASON" ] && NO_PLAN_REASON="$(printf '%s' "$NO_PLAN_OUT" | head -1)"
+  echo "no_plan not set: ${NO_PLAN_REASON:-unknown error} — field left unchanged"
+fi
+```
+
+Best-effort like §5.8/§5.9: a refusal (the verb refuses when the spec already has tasks — reachable only on a `--rewrite` of a planned spec) or failure prints the one-line notice and the run continues; the spec write is never rolled back. A fresh capture has no tasks yet, so a draft that merely implies multiple tasks still sets cleanly — the set-time refusal guards task presence only.
+
 ### 5.10 — HTML render lens (opt-in) — spec artifact + link line
 
 ```bash
@@ -630,6 +647,7 @@ When the sentinel prints, read [references/html-lens.md](references/html-lens.md
 - When the tracker bridge is active and `capture` is opted in, the spec body was pushed/pulled/reconciled to the linked issue (5.7); otherwise this step was a silent no-op.
 - Approved glossary term-adds written (5.8); skipped silently when none were proposed or approved.
 - Mark-ready write applied iff consented (5.9); rewrite branch reset readiness via idempotent `unready` with `READY_RESET` recorded for Phase 6 (5.3).
+- No-plan write applied iff `--no-plan` was passed (5.9b); skipped silently otherwise, with the refusal notice printed when the set was refused.
 - HTML render lens (5.10): with `artifacts.html.enabled` true, `.flow/artifacts/<SPEC_ID>/spec.html` regenerated per the disclosure reference, the spec's marker link line replaced in place (exactly one), and the pre-publish checklist passed; with the mode off/unset, 5.10 was a silent no-op beyond the single config read.
 
 ---
@@ -679,7 +697,7 @@ The `Recommended next:` line is MANDATORY every run — never silently omitted. 
 
 **Host command form:** print every copy-pasteable flow-next command here in the spelling this host invokes — the flat `/flow-next-<name>` form when the resolved plugin root carries `.flow-next-opencode-manifest` (an OpenCode install — the same signal setup's host detection uses); on any other or indeterminate host, exactly as spelled here.
 
-Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired — `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise — zero noise outside the consented / enabled path.
+Optional lines appended after `Tracker sync:`, each owned by the reference whose gate fired — `Glossary: added N term(s) (…)` (§5.8), `Readiness: marked ready` (§5.9), `No-plan: field set (pilot/work take the direct route)` (§5.9b — or the refusal notice when the set was refused), `Artifact: .flow/artifacts/<SPEC_ID>/spec.html (render lens — regenerable; markdown is the record)` (§5.10). Omit each entirely otherwise — zero noise outside the consented / enabled path.
 
 The rewrite footer variant (prefix `Spec rewritten at …`, readiness-reset announcement, re-plan hint) lives in `references/rewrite-mode.md`; the split footer (one block per created spec + shared dependency-edge line) lives in `references/split-proposal.md`.
 

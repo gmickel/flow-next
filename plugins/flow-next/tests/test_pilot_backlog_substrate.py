@@ -12,8 +12,9 @@ Three thin, judgment-free additions to flowctl — pure enumeration + storage:
 
   2. ``ready --all`` — a NEW spec-level eligibility-FACTS mode (distinct from
      the existing task-within-spec ``ready --spec``). Returns
-     ``{id, ready, readySignal, blockedBy, hasSpec}`` — ``ready`` is the LOCAL
-     fn-58 boolean, ``readySignal ∈ {local, none}``. NO ``triageClass`` /
+     ``{id, ready, noPlan, readySignal, blockedBy, hasSpec}`` — ``ready`` is
+     the LOCAL fn-58 boolean (``noPlan`` the fn-214 sibling),
+     ``readySignal ∈ {local, none}``. NO ``triageClass`` /
      completeness / judgment field (that read is the host skill's).
 
   3. ``pilot-log append`` — a FROZEN decision-log CLI writing
@@ -198,7 +199,8 @@ class ReadyAllTestCase(_FlowctlTmpRepo):
         out = self._ready_all()
         row = next(r for r in out["specs"] if r["id"] == sid)
         self.assertEqual(
-            set(row.keys()), {"id", "ready", "readySignal", "blockedBy", "hasSpec"}
+            set(row.keys()),
+            {"id", "ready", "noPlan", "readySignal", "blockedBy", "hasSpec"},
         )
         # No judgment/triage field leaks from flowctl.
         self.assertNotIn("triageClass", row)

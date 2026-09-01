@@ -1,6 +1,6 @@
 ---
 name: flow-next-capture
-description: Synthesize the current conversation context into a flow-next spec at `.flow/specs/<spec-id>.md` via `flowctl spec create + spec set-plan` — agent-native, source-tagged, with mandatory read-back before write. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to spec". Optional `mode:autofix` token runs without questions and requires `--yes` to commit. Optional `--rewrite <spec-id>` overwrites an existing spec; `--from-compacted-ok` overrides the incomplete-evidence refusal after compaction; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision).
+description: Synthesize the current conversation context into a flow-next spec at `.flow/specs/<spec-id>.md` via `flowctl spec create + spec set-plan` — agent-native, source-tagged, with mandatory read-back before write. Triggers on /flow-next:capture, "capture spec", "lock down what we discussed", "make a spec from this conversation", "convert conversation to spec". Optional `mode:autofix` token runs without questions and requires `--yes` to commit. Optional `--rewrite <spec-id>` overwrites an existing spec; `--from-compacted-ok` overrides the incomplete-evidence refusal after compaction; `--override-strategy` proceeds despite a contradiction with an active STRATEGY.md track (and prompts to record the override as a decision); `--no-plan` sets the spec-level `no_plan` field after the write (explicit opt-in — never inferred).
 user-invocable: false
 allowed-tools: AskUserQuestion, Read, Bash, Grep, Glob, Write, Edit, Task
 ---
@@ -33,7 +33,7 @@ FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"
 
 ## Mode Detection
 
-Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
+Parse `$ARGUMENTS` for the literal token `mode:autofix` and the flags `--rewrite <spec-id>`, `--from-compacted-ok`, `--yes`, `--override-strategy`, `--no-plan`. Strip recognized tokens; whatever remains is treated as freeform context (ignored — the conversation is the input, not `$ARGUMENTS`).
 
 ```bash
 RAW_ARGS="$ARGUMENTS"
@@ -72,6 +72,22 @@ if [[ "$RAW_ARGS" == *"--override-strategy"* ]]; then
   OVERRIDE_STRATEGY=1
   RAW_ARGS="${RAW_ARGS//--override-strategy/}"
 fi
+
+# --no-plan (fn-214, R5: explicit opt-in to set the spec-level no_plan field
+# in §5.9b after the spec write — NEVER inferred from conversation content;
+# autofix sets the field only through this flag). EXACT-token match, not a
+# substring test: durable state must not be set by lookalikes ("--no-planning",
+# "--no-plan=false") — those stay in the freeform remainder untouched.
+NO_PLAN_OPT=0
+CLEANED_ARGS=""
+for TOK in $RAW_ARGS; do
+  if [ "$TOK" = "--no-plan" ]; then
+    NO_PLAN_OPT=1
+  else
+    CLEANED_ARGS="$CLEANED_ARGS $TOK"
+  fi
+done
+RAW_ARGS="$CLEANED_ARGS"
 
 if [ "$MODE" = "autofix" ]; then
   echo "GATE ACTIVE — STOP. Read references/autofix-mode.md before continuing."

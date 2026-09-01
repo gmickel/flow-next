@@ -114,8 +114,9 @@ configured/overridden backend — codex, copilot, cursor, rp, or host — itself
 
 **No-plan (zero-task specs only)**:
 - `--no-plan` or "no plan" or "skip planning" or "work directly without planning" → set `NO_PLAN=1`; it pre-answers Phase 1's zero-task fork so the fork's ask never fires when intent is stated
-- Contradictory signals (the flag says direct, the prose asks to plan first) → the fork asks instead of guessing
-- The signal on a spec that already has tasks is ignored with a one-line notice and the planned tasks run
+- The spec's own `no_plan` field (`no_plan: true` in `$FLOWCTL show <spec-id> --json`, set at capture time or via `flowctl spec set-no-plan` — fn-214) counts the same as the flag: it is an explicit human instruction carried by the item, read at Phase 1's fork, never inferred
+- Contradictory signals (the flag or field says direct, the prose asks to plan first) → the fork asks instead of guessing
+- The signal (flag or field) on a spec that already has tasks is ignored with a one-line notice and the planned tasks run — the notice is emitted at phases.md Phase 1, right after the metadata read reveals a non-empty `tasks` array
 - The fork's semantics (ask, autonomous refusal, implicit-task mint) live in phases.md Phase 1's gated [references/no-plan-route.md](references/no-plan-route.md), read only when the fork fires
 
 **Autonomous mode**:
