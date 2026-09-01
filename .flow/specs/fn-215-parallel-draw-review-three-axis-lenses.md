@@ -27,6 +27,11 @@ Review findings arrive serialized today: each fix-loop round re-reviews the whol
 - **R6:** Documentation teaches the dials in positive formulation: a cookbook recipe plus the relevant reference pages cover the default, the single-reviewer economy phrasing, and the cross-family upgrade phrasing — framed within reviews being optional to begin with. [paraphrase]
 - **R7:** Completion review, the land loop, and external bot reviews are untouched; no config keys, no dual topology — the fan-out is the one shape, steered only by prose. [paraphrase]
 - **R8:** Codex mirror regenerated (sync-codex twice, idempotent), skill-contract tests cover the fan-out prose (three-axis dispatch present, merge step present, steering phrasings honored), and the repo CHANGELOG gains an Unreleased entry. [inferred]
+- **R9:** The merged round's verdict is synthesized mechanically from the draws' verdict tags under the existing precedence (NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP) — worst wins; no draw's verdict is judged away. [inferred]
+- **R10:** Partial fan-out fails open: the merged round proceeds from whichever draws returned a verdict (one is enough), the receipt records how many draws failed, and only an all-draws-no-verdict round is a transport failure with today's durable refund semantics. No error surface beyond that: a failed draw never blocks, retries, or consumes extra rounds. [inferred]
+- **R11:** Scope of the fan-out: the codex and host backends, on the FIRST review round of a scope; re-review rounds after fixes resume a single primary session (the correctness axis) carrying the merged prior-finding set through the existing ratchet grammar. rp keeps its single stateful chat; copilot and cursor keep single dispatch in this change (same pattern available later). Exactly ONE round reservation wraps the whole fan-out (standalone reviews continue to reserve none), and the artifact-identity hash is computed once per merged round. [inferred]
+- **R12:** The merged receipt lands at the existing path with the existing top-level schema (mode, verdict, session_id and model = the primary draw's) plus a draws array honestly recording each draw's model, session, verdict, and axis; per-draw raw outputs persist beside the receipt for audit. Receipt-path collisions are impossible by construction (per-draw temp paths derived from the task id + axis). [inferred]
+- **R13:** The merged round counts 1:1 against review.maxIterations — the cap bounds rounds, not draws. [inferred]
 
 ## Boundaries
 
@@ -43,8 +48,18 @@ Review findings arrive serialized today: each fix-loop round re-reviews the whol
 - Economics posture per the maintainer: teach, don't knob — the cookbook and reference pages carry the steering phrasings; the implementation adds no configuration. Reviews are optional to begin with, so the fan-out is a property of a layer the repo already opted into.
 - Triage load (~11 unique findings per merged round in the studies) is why the Act-On cap and published remainder land in this spec rather than as separate polish.
 
+## Decision Context (planning resolutions — settled)
+
+- Deterministic-vs-judgment split for the fan-out: flowctl owns concurrency (three backend dispatches inside one command invocation), per-draw receipt paths, mechanical verdict synthesis from tags (R9), and the merged receipt write; the host coordinator owns the FINDING merge — same-defect dedupe, evidence-bar drops, Act-On ranking — which is judgment. Mirrors the sanctioned subprocess-LLM carve-out.
+- First-round-only fan-out (R11) is the cost architecture: the studies show the harvest value is the first merged round; re-review verifies fixes and needs continuity, not breadth. This also dissolves the three-session resume problem — one primary session resumes.
+- Axis lines enter the rendered prompt through the template layer, so the template-parity and hash-pin suites update in the same commit with rationale (test_prompt_text_pinned contract).
+- The quality-auditor two-axis contract (test_two_axis_audit_contract) is a tripwire, not a target — its verbatim-two-reports rule is untouched.
+- Sequencing with open work: fn-191 (review-terminal extraction) touches the same flowctl region — whichever lands second rebases; fn-198's journal-wedge hardening is adjacent to the finalization leg the fan-out exercises — its invariants must hold with draws collapsing into one round; read fn-157's visibility stub before building the concurrent dispatch.
+- The ratchet/prior-finding grammar consumes the MERGED findings container from round 1 — re-checked against the stall-detection decision entry (review-stall-detection-reads-resolution-2026-08-05).
+- Memory priors honored: receipts dropped between rounds break confabulation (drop-receipt-to-break-codex-2026-05-09) — the primary-session resume carries findings via the ratchet, not accumulated raw transcripts; parsers distinguish invalid from absent (structured-review-parsers-must-2026-07-30).
+
 ## Quick commands
 
-- `cd plugins/flow-next/tests && python3 -m unittest test_impl_review_contract -q` (or the nearest existing impl-review skill-contract suite; plan resolves the exact name)
+- `cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_template_parity test_prompt_text_pinned test_review_receipt_schema test_review_convergence_cap -q`
 - `./scripts/sync-codex.sh` twice, idempotent
 - `uvx ruff@0.16.0 check .`

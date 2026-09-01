@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-01T07:42:10.695769Z",
+  "depends_on": [
+    "fn-215-parallel-draw-review-three-axis-lenses.1"
+  ],
+  "id": "fn-215-parallel-draw-review-three-axis-lenses.2",
+  "priority": null,
+  "spec": "fn-215-parallel-draw-review-three-axis-lenses",
+  "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.2.md",
+  "status": "todo",
+  "title": "impl-review skill prose: fan-out coordination, merge step, steering",
+  "updated_at": "2026-09-01T07:42:10.695769Z"
+}

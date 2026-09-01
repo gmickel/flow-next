@@ -1,0 +1,17 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-01T07:42:10.695826Z",
+  "depends_on": [
+    "fn-215-parallel-draw-review-three-axis-lenses.1",
+    "fn-215-parallel-draw-review-three-axis-lenses.2"
+  ],
+  "id": "fn-215-parallel-draw-review-three-axis-lenses.3",
+  "priority": null,
+  "spec": "fn-215-parallel-draw-review-three-axis-lenses",
+  "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.3.md",
+  "status": "todo",
+  "title": "Docs sweep + CHANGELOG: teach the dials, positive formulation",
+  "updated_at": "2026-09-01T07:42:10.695826Z"
+}
