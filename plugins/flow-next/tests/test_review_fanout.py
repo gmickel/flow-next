@@ -963,6 +963,32 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
 
+    def test_finalize_head_recheck_at_record(self) -> None:
+        """PR #392 r6 (P1): the head assertion runs again immediately before
+        the record mutation — a head that moves AFTER the early meta check
+        passed must still refuse."""
+        code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        real = flowctl._resolve_review_sha
+        calls = {"n": 0}
+
+        def moving_head(ref):
+            value = real(ref)
+            if ref == "HEAD":
+                calls["n"] += 1
+                if calls["n"] > 1:
+                    return "f" * 40  # head moves after the early check
+            return value
+
+        merged = self._write_merged(_merged_review("One finding."))
+        with unittest.mock.patch.object(
+            flowctl, "_resolve_review_sha", side_effect=moving_head,
+        ):
+            fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+        self.assertGreaterEqual(calls["n"], 2, "record path must recheck")
+        self.assertEqual(fin_code, 2, fin_err)
+        self.assertIn("no longer matches", json.dumps(fin) + fin_err)
+
     def test_standalone_sidecar_reconciles_gitignore(self) -> None:
         """PR #392 r4 (P2): standalone fan-outs reserve no round and so never
         pass the review-lock gitignore reconcile — sidecar creation itself

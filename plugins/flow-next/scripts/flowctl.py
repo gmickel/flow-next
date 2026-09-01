@@ -44185,11 +44185,18 @@ def _review_fanout_check_finalize_meta(meta, task_id, standalone, args) -> None:
             use_json=args.json,
             code=2,
         )
-    # PR #392 r5 (P1): the merged verdict is only honest for the head the
-    # draws actually saw. A commit landing between dispatch and finalize
-    # would otherwise record SHIP for code no draw reviewed. Absent snapshot
-    # (older meta) stays fail-open; a mismatch fails closed — the abandoned
-    # reservation refunds through the journal lease.
+    _review_fanout_assert_head_unmoved(meta, args)
+
+
+def _review_fanout_assert_head_unmoved(meta, args) -> None:
+    """PR #392 r5+r6 (P1): the merged verdict is only honest for the head the
+    draws actually saw — a commit landing between dispatch and finalize would
+    otherwise record SHIP for code no draw reviewed. Called both early (fast
+    refusal before payload construction) and again immediately before the
+    state mutation in the record path, so the time-of-check window shrinks to
+    the recheck-to-write gap. Absent snapshot (older meta) stays fail-open; a
+    mismatch fails closed — the abandoned reservation refunds through the
+    journal lease."""
     dispatched_head = meta.get("reviewed_head_sha")
     if isinstance(dispatched_head, str) and dispatched_head:
         current_head = _resolve_review_sha("HEAD")
@@ -44287,6 +44294,11 @@ def _review_fanout_record_and_receipt(
     suppressed_count, classification_counts, unaddressed_rids,
     merged_tag_mismatch,
 ) -> dict:
+    # Recheck at consumption (PR #392 r6): the early check in
+    # _review_fanout_check_finalize_meta runs several steps before this
+    # mutation; re-assert here so a commit racing the merge cannot slip a
+    # stale verdict into the record.
+    _review_fanout_assert_head_unmoved(meta, args)
     if standalone:
         _review_fanout_write_receipt(
             receipt_path, review_id, verdict, merged_text, primary,
