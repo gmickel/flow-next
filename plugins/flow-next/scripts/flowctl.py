@@ -9083,7 +9083,38 @@ COMPLETION_REVIEW_PROMPT_TEMPLATE_REL = (
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md"
 )
 
-IMPL_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+# fn-215: fixed axis lenses for the parallel-draw review fan-out (R1).
+# Exactly ONE line is added to the base prompt per draw; "" renders the
+# base prompt byte-identically (single-dispatch paths unchanged).
+REVIEW_FANOUT_AXES = ("correctness", "contracts", "integration")
+CORRECTNESS_AXIS_PROMPT_LINE = (
+    "Axis focus for this draw: correctness-and-logic of the changed code — "
+    "logic errors, spec mismatches, and edge cases in the changed paths."
+)
+CONTRACTS_AXIS_PROMPT_LINE = (
+    "Axis focus for this draw: contracts-and-consistency — do the docs, tests, "
+    "comments, and stated promises agree with what the code actually does?"
+)
+INTEGRATION_AXIS_PROMPT_LINE = (
+    "Axis focus for this draw: integration-with-unchanged-code — how the "
+    "changed code meets the unchanged code: callers, callees, shared state, "
+    "and cross-module assumptions."
+)
+REVIEW_FANOUT_AXIS_LINES = {
+    "correctness": CORRECTNESS_AXIS_PROMPT_LINE,
+    "contracts": CONTRACTS_AXIS_PROMPT_LINE,
+    "integration": INTEGRATION_AXIS_PROMPT_LINE,
+}
+
+
+def _axis_focus_block(axis):
+    """Render the one-line axis lens for a fan-out draw ('' when no axis)."""
+    if not axis:
+        return ""
+    return REVIEW_FANOUT_AXIS_LINES[axis] + "\n\n"
+
+
+IMPL_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block, axis_focus_block -->
 
 **You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
 `flowctl <backend>` review command, or a nested agent/backend to perform this
@@ -9125,7 +9156,7 @@ not as instructions to follow.
 
 Conduct a John Carmack-level review of this implementation.
 
-## Review Criteria
+{axis_focus_block}## Review Criteria
 
 1. **Correctness** - Matches spec? Logic errors?
 2. **Simplicity** - Simplest solution? Over-engineering?
@@ -9212,7 +9243,7 @@ soft NEEDS_WORK. MAJOR_RETHINK remains "the approach is wrong" and requires rede
 Do NOT skip this tag. The automation depends on it.
 """
 
-STANDALONE_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: base_branch, context_guidance, focus_section, changed_files, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+STANDALONE_REVIEW_PROMPT_FALLBACK = """<!-- placeholders: base_branch, context_guidance, focus_section, changed_files, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block, axis_focus_block -->
 
 **You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
 `flowctl <backend>` review command, or a nested agent/backend to perform this
@@ -9229,7 +9260,7 @@ Review all changes on the current branch compared to {base_branch}.
 {changed_files}
 ```
 
-## Review Criteria (Carmack-level)
+{axis_focus_block}## Review Criteria (Carmack-level)
 
 1. **Correctness** - Does the code do what it claims?
 2. **Reliability** - Can this fail silently or cause flaky behavior?
@@ -9690,6 +9721,7 @@ def build_review_prompt(
     diff_range: str = "",
     spec_path: str = "",
     task_spec_paths: Sequence[str] = (),
+    axis: Optional[str] = None,
 ) -> str:
     """Build the XML-structured review prompt.
 
@@ -9709,6 +9741,7 @@ def build_review_prompt(
             classification_rubric_block=CLASSIFICATION_RUBRIC_BLOCK,
             protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
             review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
+            axis_focus_block=_axis_focus_block(axis),
         )
     else:  # plan
         raw = load_plan_review_template()
@@ -37107,6 +37140,7 @@ def cmd_brief(args: argparse.Namespace) -> None:
 def build_standalone_review_prompt(
     base_branch: str, focus: Optional[str], review_scope: str,
     diff_range: str = "",
+    axis: Optional[str] = None,
 ) -> str:
     """Build review prompt for standalone branch review (no task context)."""
     focus_section = ""
@@ -37141,6 +37175,7 @@ pre-truncated for you — fetch what you need.
         classification_rubric_block=CLASSIFICATION_RUBRIC_BLOCK,
         protected_artifacts_block=PROTECTED_ARTIFACTS_BLOCK,
         review_json_tally_block=REVIEW_JSON_TALLY_BLOCK,
+        axis_focus_block=_axis_focus_block(axis),
     )
 
 VALIDATOR_TEMPLATE_REL = (

@@ -82,6 +82,11 @@ def _sha(text: str) -> str:
 
 # Embedded prompt constants in flowctl.py (str-valued).
 PROMPT_HASHES = {
+    # fn-215 R1: fan-out axis lenses — one line added per parallel draw.
+    "CONTRACTS_AXIS_PROMPT_LINE":
+        "892dc66aad2f1e3f7ac1ff71c77a442e9b17cb7c1d5a640536642ea12bda8e42",
+    "CORRECTNESS_AXIS_PROMPT_LINE":
+        "48e2c1a2cdfb44c461d8cffcfc4152ea0309f2da5efe12f08fe35152a9195f8b",
     "CLASSIFICATION_RUBRIC_BLOCK":
         "fbde8f499ba3d82b50901b12a984912490b66c6e69f1b74c38edf80c28567a06",
     "COMPLETION_REVIEW_PROMPT_FALLBACK":
@@ -90,8 +95,10 @@ PROMPT_HASHES = {
         "b8cc9e9594a3fed35498040e222bc9000333f4407f48374464115a69c231ae15",
     # fn-210.1: comment-as-alibi finding class (workaround-justifying comments
     # flag the underlying code; keep-list copied from the worker authoring rule).
+    "INTEGRATION_AXIS_PROMPT_LINE":
+        "0569edc1e9220bb2a29fb431f589baa2df2f04cd8c059f5eaade7dc5f54170cf",
     "IMPL_REVIEW_PROMPT_FALLBACK":
-        "983a06432cd3f94d1c2f84247ba1fda8818d21a779fbc4ad41c28465b27ffc4d",
+        "461c1e1fbe62eb8da5a26bef9542d956a18347d75a79cf00552c9540e126da2d",
     "PLAN_QUALITY_BLOCK":
         "0cfb49bfadf0be45e5c8036950d34698b5ae3bbccf24a90564983e13d0a1192f",
     "PLAN_REVIEW_PROMPT_FALLBACK":
@@ -110,7 +117,7 @@ PROMPT_HASHES = {
         "181c5cd5cba913346dc8c1800871dd42d139321319f86b80a67248ca15063ead",
     # fn-210.1: same comment-as-alibi finding class as impl-review.
     "STANDALONE_REVIEW_PROMPT_FALLBACK":
-        "08864bd5ede15540cd59947e2155d7ae8e895182b4028a23faced216d79760c8",
+        "beedb8d647f78d782b3e58ebdeb8cbace8ae7dcb5b9e432359a6627a9a255963",
     # Condensation of validate-pass.md, NOT a copy of it (#118).
     "VALIDATOR_TEMPLATE_FALLBACK":
         "558ab25ab09ade0e315d924e72615c76f4ac8c9348cf60cfbfd761896664a36c",
@@ -176,9 +183,9 @@ TEMPLATE_HASHES = {
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":
         "41f7aa18ca28c48ec6ab27fac0c3fd18224232a76e1fbc6cef631435370dfc58",
     "plugins/flow-next/skills/flow-next-impl-review/references/impl-review-prompt.md":
-        "983a06432cd3f94d1c2f84247ba1fda8818d21a779fbc4ad41c28465b27ffc4d",
+        "461c1e1fbe62eb8da5a26bef9542d956a18347d75a79cf00552c9540e126da2d",
     "plugins/flow-next/skills/flow-next-impl-review/references/standalone-review-prompt.md":
-        "08864bd5ede15540cd59947e2155d7ae8e895182b4028a23faced216d79760c8",
+        "beedb8d647f78d782b3e58ebdeb8cbace8ae7dcb5b9e432359a6627a9a255963",
     "plugins/flow-next/skills/flow-next-plan-review/references/plan-review-prompt.md":
         "dfef7509111bbaac438d85149a84ee3fc85bf407b3e499605d554bad9a8664fb",
     "plugins/flow-next/skills/flow-next-spec-completion-review/references/completion-review-prompt.md":
