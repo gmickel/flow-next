@@ -43924,13 +43924,21 @@ def _review_fanout_refund_all_failed(
     )
 
 
-def _review_fanout_next_cmd(task_id, base_branch, rid, receipt) -> str:
+def _review_fanout_next_cmd(
+    task_id, base_branch, rid, receipt, needs_survivors=False,
+) -> str:
     task_part = f" {task_id}" if task_id else ""
     receipt_part = f" --receipt {receipt}" if receipt else ""
+    # PR #392 r12: the finalizer REQUIRES the coordinator count when any draw
+    # returned NEEDS_WORK — the advertised next step must carry it.
+    survivors_part = (
+        " --needs-work-survivors <N surviving NEEDS_WORK-draw findings>"
+        if needs_survivors else ""
+    )
     return (
         f"flowctl codex impl-review-fanout-finalize{task_part} "
         f"--base {base_branch} --rid {rid} --merged-file <merged.md>"
-        f"{receipt_part}"
+        f"{survivors_part}{receipt_part}"
     )
 
 
@@ -43942,6 +43950,9 @@ def _review_fanout_emit_dispatch(
         "merge the surviving draws' findings, then run: "
         + _review_fanout_next_cmd(
             task_id, base_branch, rid, getattr(args, "receipt", None),
+            needs_survivors=any(
+                row.get("verdict") == "NEEDS_WORK" for row in results
+            ),
         )
     )
     draws_out = [
@@ -44131,10 +44142,36 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             return
         _, reservation_id = cap_result
         rid = reservation_id
-        _review_fanout_journal_refund_intent(
-            flow_dir, spec_id_from_task(task_id), task_id, reservation_id,
-            reviewed_head_sha, reviewed_base_sha,
-        )
+        try:
+            _review_fanout_journal_refund_intent(
+                flow_dir, spec_id_from_task(task_id), task_id, reservation_id,
+                reviewed_head_sha, reviewed_base_sha,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # PR #392 r12 (P2): an unjournaled reservation is invisible to
+            # every recovery path (no verdict, no replayable journal) — a
+            # write failure here would strand the cap slot until a manual
+            # reset. No draw was dispatched, so refund in-process, same shape
+            # as the sidecar-collision refund below.
+            record_review_attempt(
+                spec_id_from_task(task_id),
+                "impl",
+                backend="codex",
+                output=f"refund-intent journal write failed: {exc}",
+                failure_class="journal_publish_failed",
+                task_id=task_id,
+                review_type="impl",
+                use_json=args.json,
+                reviewed_head_sha=reviewed_head_sha,
+                reviewed_base_sha=reviewed_base_sha,
+                reservation_id=reservation_id,
+            )
+            error_exit(
+                f"fan-out: cannot journal the refund intent ({exc}); the "
+                "reserved round was refunded and nothing was dispatched",
+                use_json=args.json,
+                code=2,
+            )
     else:
         rid = secrets.token_hex(16)
     try:
