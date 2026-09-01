@@ -256,6 +256,13 @@ document.
 
 See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
 
+**Scope ownership spans the optional phases (PR #392 r35):** the same-scope
+single-driver rule does not end at the finalize — this coordinator owns the
+scope until its post-finalize optional phases complete, because a deep or
+validator pass may still overturn the finalized verdict. A second dispatcher
+entering between a SHIP finalize and its deep pass is the same forbidden
+same-scope concurrency the fences exist to refuse.
+
 ## Step 5: Handle Verdict
 
 If `VERDICT=NEEDS_WORK`:

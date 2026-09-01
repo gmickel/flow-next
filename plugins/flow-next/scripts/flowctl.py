@@ -38655,8 +38655,19 @@ def _run_deep_pass(
         if isinstance(receipt_id, str) and is_task_id(receipt_id):
             try:
                 _reopen_review_cycle_after_deep(receipt_id, backend)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                # PR #392 r35: never report the overturn as durably recorded
+                # when it is not — with the receipt lost, a silent failure
+                # here lets the guard admit a fresh fan-out that drops the
+                # deep finding.
+                print(
+                    "warning: the deep-pass overturn could NOT be persisted "
+                    f"to spec state ({exc}) — the receipt says NEEDS_WORK "
+                    "but the durable ledger still says SHIP. Do not rely on "
+                    "the guard: keep the receipt, or repair the cycle "
+                    "explicitly before the next dispatch.",
+                    file=sys.stderr,
+                )
 
     if use_json:
         json_output(
