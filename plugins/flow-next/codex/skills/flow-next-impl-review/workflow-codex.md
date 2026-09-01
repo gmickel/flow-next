@@ -37,6 +37,14 @@ invocations with your merge between them; this is the first.
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+# Canonicalize the task handle FIRST (PR #392 r11): flowctl resolves short
+# handles (fn-N.M -> fn-N-slug.M) and writes the canonical id into receipts
+# and state — a raw alias here would mis-key the receipt path, the identity
+# check, and the pending counter.
+if [ -n "$TASK_ID" ]; then
+  CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
+  [ -n "$CANON" ] && TASK_ID="$CANON"
+fi
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # RESUME GATE (fan-out is first-round only): a fresh invocation resuming a

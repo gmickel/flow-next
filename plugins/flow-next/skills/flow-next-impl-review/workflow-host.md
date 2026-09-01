@@ -60,6 +60,14 @@ coordinator resuming this scope mid-fix-loop (context lost between a
 `NEEDS_WORK` verdict and its fix pass) must not re-enter the three-draw shape:
 
 ```bash
+# Canonicalize the task handle FIRST (PR #392 r11): flowctl resolves short
+# handles (fn-N.M -> fn-N-slug.M) and keys receipts, spec files, and the
+# pending counter by the canonical id — a raw alias would silently read the
+# wrong file (and a suppressed lookup falls through to 0).
+if [ -n "$TASK_ID" ]; then
+  CANON="$("$FLOWCTL" show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
+  [ -n "$CANON" ] && TASK_ID="$CANON"
+fi
 # Same task-scoped default as Step 3 (explicit REVIEW_RECEIPT_PATH always wins;
 # concurrent standalone scopes should set one — the standalone default is shared).
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
