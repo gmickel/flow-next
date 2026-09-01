@@ -10,6 +10,7 @@ Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`)
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
 3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default. **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
+5. No fan-out on this backend: every round is a single dispatch (the three-draw fan-out is codex/host-only)
 
 ## Step 1: Identify Task and Diff Base
 

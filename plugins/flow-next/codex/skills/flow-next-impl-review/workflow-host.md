@@ -41,9 +41,18 @@ subagent prompt — it has the same repository you do.
 - **Interactive:** ask the user explicitly (plain-text numbered prompt) which reviewer model/family to use — do not silently self-review
 - **Autonomous** (`mode:autonomous` / `FLOW_AUTONOMOUS=1` / Ralph / `REVIEW_RECEIPT_PATH` set): stop with `NEEDS_HUMAN: host review needs a cross-family model pin in AGENTS.md model-routing` — never same-family self-review
 
-## Step 2: Dispatch read-only reviewer subagent
+## Step 2: Dispatch read-only reviewer subagents
 
 The reviewer subagent is the **reviewer** tier — a verdict from the writer's own family is not an independent one. **Routing precedence, highest first: an explicit argument in the invocation, then the project routing block in the instruction file, then the agent definition's own default, then the session model.**
+
+**First round of a scope = three-draw fan-out (fn-215).** The first review round
+dispatches **three** fresh read-only reviewer subagents — one per fixed axis
+lens — and you merge their findings into one consolidated set for one fix pass.
+Re-review rounds after fixes dispatch exactly **one** fresh subagent carrying
+the full merged prior-finding container. Both shapes sit behind the SAME
+reservation fence below: **ONE `review-rounds increment` before the dispatch,
+one record/attach after the merge — never three cap slots per merged round.**
+A merged fan-out round counts 1:1 against the deterministic round cap.
 
 ### Convergence reservation and recovery fence
 
@@ -121,10 +130,48 @@ After the reviewer returns, construct the receipt input and target in Step 3.
 Only then record the captured reservation and attach its journaled payload;
 receipt findings must never be constructed after `record`.
 
-Dispatch a **fresh** read-only reviewer subagent with the resolved pin. The
-`REVIEW_HEAD_SHA` / `REVIEW_BASE_SHA` anchors bound in the fence above are the
-reviewed range; retain them (re-`source "$REVIEW_SNAPSHOT_FILE"` in any later
-block) through receipt writing.
+### First round: three axis draws in ONE message
+
+Dispatch three **fresh** read-only reviewer subagents with the resolved pin,
+**all named in ONE message** — mirror the quality-auditor dispatch shape
+(flow-next-work Phase 4): the same read-only agent dispatched three times, each
+prompt differing from the base reviewer input by exactly one added axis line:
+
+- correctness draw: "Axis focus for this draw: correctness-and-logic of the changed code — logic errors, spec mismatches, and edge cases in the changed paths."
+- contracts draw: "Axis focus for this draw: contracts-and-consistency — do the docs, tests, comments, and stated promises agree with what the code actually does?"
+- integration draw: "Axis focus for this draw: integration-with-unchanged-code — how the changed code meets the unchanged code: callers, callees, shared state, and cross-module assumptions."
+
+A run that dispatched one draw and waited for its report before sending the
+next has re-serialized what the fan-out parallelized. **Portable-host
+fallback:** on a host whose subagent primitive cannot batch several dispatches
+into one message (generic read-only dispatch with Edit/Write disallowed), run
+the three draws back-to-back — the contract is three independent fresh
+read-only contexts per round, not literal wall-clock concurrency.
+
+**Unlike the quality auditor's two axis reports — which stay verbatim because
+they feed a human-shaped judgment — these three draws MERGE**: they are k
+samples of one finding distribution feeding one fix pass (the spec's Decision
+Context records this deliberate difference in consumption contract). Same
+dispatch pattern, different consumption.
+
+**Steering (prose, no flags):** "use 1 reviewer instead of 3" collapses the
+round to a single draw (the correctness lens). "use three different model
+families for the review fan-out" names a different reviewer pin in each of the
+three dispatches — each still cross-family from the writer. Ambiguous phrasing
+defaults to the standard three same-pin draws.
+
+### Round 2+: one fresh subagent, merged container injected
+
+Every re-review dispatches exactly **one** fresh read-only subagent — host
+sessions are never resumed (fn-123): no context reuse, no fabricated resume
+ids. Inject the FULL merged prior-finding container from the previous round's
+receipt into its prompt (every merged ordinal present, rendered as structured
+`findings.items` per the list below) — the fresh subagent holds nothing from
+the draws that authored those findings.
+
+The `REVIEW_HEAD_SHA` / `REVIEW_BASE_SHA` anchors bound in the fence above are
+the reviewed range; retain them (re-`source "$REVIEW_SNAPSHOT_FILE"` in any
+later block) through receipt writing.
 
 The reviewer runs on the **reviewer tier**. Resolution order: an explicit
 instruction in the invocation, then the project routing block in the
@@ -145,7 +192,7 @@ host-dependent. The dispatch prompt additionally states working-tree conduct: th
 Receipt in every case: `mode: "host"`, the actual reviewer model,
 `session_id: null`.
 
-Give the subagent:
+Give each reviewer subagent:
 - The impl-review rubric ([references/impl-review-prompt.md](references/impl-review-prompt.md))
 - The rubric's verification-budget rail travels with it (focused suites only; the full suite belongs to the run's final gate) — carried by pointer, never restated or widened in the dispatch prompt
 - Diff scope (`--base` / branch vs main as resolved in Phase 0)
@@ -173,7 +220,43 @@ Give the subagent:
   coverage and does **not** vouch for prior findings.
 - Required verdict tags: `SHIP` / `NEEDS_WORK` / `MAJOR_RETHINK` / `NEEDS_HUMAN`
 
-Wait for the subagent result (blocking — do not background).
+Wait for the subagent result(s) (blocking — do not background).
+
+## Step 2.5: Merge the draws (first round — judgment, yours)
+
+Merge the surviving draws' findings into ONE consolidated review document:
+
+- **Same-defect dedupe** is judgment: findings describing the same defect from
+  different draws collapse to one entry, keeping the strongest evidence.
+- **Evidence bar:** drop findings that fail it and state the dropped count
+  (`Suppressed findings: N`).
+- **Ranked output with an Act-On tier capped at 5 — non-blocking tiers only** —
+  plus a published remainder: considered-and-deferred stays distinguishable
+  from never-seen, and remainder items persist in the merged document (deferred
+  lineage across rounds), never silently dropped. **Every surviving introduced
+  blocking finding is fixed regardless of count.**
+- **Axis provenance lives in your merge prose** ("the integration draw surfaced
+  #3 and #7"), never as a field on finding items.
+- Re-assign ordinals 1..N across the union and keep the draws' output format
+  (severity, classification, file:line, the verdict-scope sections) — the
+  merged document is what the receipt's `review` field carries and what the
+  next round's ratchet renders.
+
+**Verdict synthesis is mechanical worst-wins** over the draws' verdict tags
+(`NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > all-SHIP`) — no draw's verdict is
+judged away. One defined exception (the wedge): a `NEEDS_WORK` where the
+evidence gate dropped EVERY finding of every NEEDS_WORK draw escalates to
+`NEEDS_HUMAN` rather than looping against an unchanged artifact.
+
+**Partial fan-out fails open:** merge whichever draws returned a verdict — one
+is enough — and record how many draws failed in the receipt. A failed draw
+never blocks, retries, or consumes extra rounds. Only an all-draws-no-verdict
+round is a transport failure with today's durable refund semantics (the
+record fence below refunds the one reservation; nothing is attached).
+
+When `--deep` / `--validate` / `--interactive` fired, run those optional
+phases ONCE against the MERGED set — after the merge, before the receipt —
+never per draw (Step 4's host-native rules apply).
 
 ## Step 3: Receipt
 
@@ -195,16 +278,28 @@ Write a receipt compatible with existing consumers:
   "spec": "host",
   "session_id": null,
   "review": "<full reviewer output text - findings + verdict>",
+  "draws": [{"axis": "<axis>", "model": "<slug>", "session_id": null, "verdict": "<tag or null>", "failed": false}],
   "timestamp": "<ISO-8601>"
 }
 ```
 
+`draws[]` appears on the first (fan-out) round only — one entry per dispatched
+draw, honestly recording each draw's axis, model, `session_id` (always null on
+host), verdict, and failed flag, including the draws that returned nothing
+(`"failed": true`, `"verdict": null`). `review` carries the MERGED document.
+This is the host path's equivalent of the codex fan-out receipt: the same
+top-level shape plus the same honesty about what actually ran. Re-review
+receipts (single fresh subagent) carry no `draws[]`.
+
 `session_id` is literal `null` — deliberate: host re-reviews are always fresh subagents, and `null` distinguishes "no resumable session by design" from an accidentally incomplete receipt. `review` carries the reviewer's full output — the re-review ratchet reads it to inject prior findings into the next fresh subagent (convergence), so a host receipt that omits `review` has broken the convergence ratchet.
 
 Write that base JSON to a temporary input file and persist the full reviewer
-output to a second temporary file. Finalize the captured reservation first,
-then attach from that journaled payload so host receipts follow the same
-lineage/currentness contract as subprocess backends:
+output (first round: the MERGED document, `$REVIEW_OUTPUT_FILE`) to a second
+temporary file. Finalize the captured reservation first, then attach from that
+journaled payload so host receipts follow the same lineage/currentness
+contract as subprocess backends. **On a fan-out round this runs ONCE, after
+the merge, against the one reservation from Step 2's fence — never once per
+draw (three cap slots for one merged round would triple-charge the cap):**
 
 ```bash
 RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
@@ -252,8 +347,9 @@ run.
   terminal; do not patch the design.
 - `NEEDS_WORK`: parse every valid finding, fix the code, run the relevant
   tests/lints, and commit the fixes before re-review. Then repeat Steps 1–4
-  with a **new** read-only subagent, the same cross-family rules, and the prior
-  findings in its prompt. Continue until `SHIP` or the deterministic round cap.
+  with **one new** read-only subagent (never a second fan-out — the fan-out is
+  first-round only), the same cross-family rules, and the full merged
+  prior findings in its prompt. Continue until `SHIP` or the deterministic round cap.
 - Dispatch, malformed-verdict, or receipt failure: output
   `<promise>RETRY</promise>` and stop. Never self-issue a verdict or switch
   backends.
@@ -266,3 +362,7 @@ run.
 - **Putting a model on the backend string** (`host:<model>`) — rejected by flowctl; the model is named on the `reviewer` tier of the AGENTS.md routing block
 - **Calling a non-existent `flowctl host` command**
 - **Fabricating resume/session ids** for host receipts
+- **Three cap slots for one merged round** — one increment before the draws, one record/attach after the merge
+- **Presenting the draws verbatim instead of merging** — that is the quality-auditor's contract, not this one; the draws feed one fix pass
+- **Fanning out on round 2+** — re-reviews are one fresh subagent with the merged container injected
+- **Judging away a draw's verdict** — synthesis is mechanical worst-wins; only the empty-merged-findings wedge escalates

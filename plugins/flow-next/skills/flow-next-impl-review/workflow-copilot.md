@@ -8,6 +8,7 @@ Use when `BACKEND="copilot"`. Prerequisite: Phase 0 backend detection in [workfl
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
 3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
 4. Parse verdict from command output
+5. No fan-out on this backend: every round is a single dispatch (the three-draw fan-out is codex/host-only)
 
 ## Step 1: Identify Task and Diff Base
 

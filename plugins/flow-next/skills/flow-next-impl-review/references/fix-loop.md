@@ -32,12 +32,14 @@ Loop internally until SHIP or the iteration cap:
 3. **Parse issues** from reviewer feedback (Critical → Major → Minor)
 4. **Fix code** and run tests/lints
 5. **Commit fixes** (mandatory before re-review; RP backend uses the snapshot-scoped staging in [../workflow-rp.md](../workflow-rp.md) § Fix Loop (RP) — never blanket-stage with `git add --all`). Then, when step 4's green run included one of the repo's full-gate commands (the same `(gate_id, exact command string)` identity the worker's Phase 5 maps — e.g. the repo's parallel full-suite entrypoint), nothing changed between that run and this commit, and the tree is clean at the committed fix HEAD: write the receipt — `<FLOWCTL> gate receipt --gate <gate_id> --command "<cmd>"` — so the later Verify honors it instead of re-running the identical command. Focused/partial test commands NEVER mint a full-gate receipt (identity is the exact full command string). A dirty tree, edits after the run, or any doubt about identity → mint nothing (fail closed; the later gate simply re-runs).
-6. **Re-review**:
-   - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context)
+6. **Re-review** (always a SINGLE dispatch — the first-round fan-out never re-runs):
+   - **Codex**: Re-run `flowctl codex impl-review` (receipt enables context). When the receipt carries `draws[]` (a fan-out round preceded this), flowctl resumes the primary session with lean resume disabled for that one round: the FULL merged prior-finding container is injected with every merged ordinal — automatic, no flag.
    - **Copilot**: Re-run `flowctl copilot impl-review` (receipt enables context; must be `mode == "copilot"` to resume)
    - **Cursor**: Re-run `flowctl cursor impl-review` (receipt enables context; must be `mode == "cursor"` to resume)
    - **Host**: Continue through [../workflow-host.md](../workflow-host.md)'s selected
-     re-review path.
+     re-review path — one FRESH read-only subagent (host sessions are never
+     resumed) with the full merged prior-finding container injected into its
+     prompt.
    - **RP Classic**: `$FLOWCTL rp chat-send --window "$W" --tab "$T" --message-file <literal re-review path from workflow-rp.md's fix loop>` (NO `--new-chat`; stdout redirected to the same literal response file, Read once)
    - **RepoPrompt CE**: `$FLOWCTL rp chat-send --window "$W" --context-id "$T" --chat-id "$CHAT_ID" --mode review --message-file <literal re-review path>` (`T` is the canonical context binding, not visible-tab projection; NO `--tab`; same response-file rule)
 7. **Repeat** until `<verdict>SHIP</verdict>` — or the MAX ITERATIONS cap breaks the loop (escalate with surviving findings)
