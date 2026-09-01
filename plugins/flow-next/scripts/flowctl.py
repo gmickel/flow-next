@@ -11872,6 +11872,29 @@ def _enforce_and_increment_review_cap_locked(
             and reservation_id in reservations
             and not already_consumed
         ):
+            if (
+                journal.get("failure_class") == "fanout_abandoned"
+                and journal.get("verdict") is None
+            ):
+                # PR #392 r4 (P1): the refund-intent journal of a LIVE fan-out
+                # (dispatched, coordinator still merging) is indistinguishable
+                # from a crashed one by shape — only by age. Within the lease
+                # (the per-draw liveness bound plus merge headroom), refuse a
+                # new dispatch instead of refunding the live reservation out
+                # from under its coordinator; past the lease, replay as the
+                # crash recovery it was written for. Old journals without a
+                # parseable timestamp replay (pre-lease compatibility).
+                age = _iso_age_seconds(journal.get("timestamp"))
+                lease = get_review_exec_timeout() + 900
+                if age is not None and age < lease:
+                    error_exit(
+                        "a fan-out for this scope appears to be in flight "
+                        f"(dispatched {int(age)}s ago; lease {lease}s): run "
+                        "its impl-review-fanout-finalize, or wait for the "
+                        "lease to lapse before dispatching a new review",
+                        use_json=use_json,
+                        code=2,
+                    )
             _record_review_attempt_locked(
                 spec_id,
                 review_kind,
@@ -43580,6 +43603,16 @@ def _review_fanout_sidecar_dir(flow_dir: Path, rid: str) -> Path:
     reservation before surfacing the error (fn-215 host review r1).
     """
     parent = flow_dir / "review-fanout"
+    # Standalone fan-outs reserve no round and therefore never pass the
+    # review-lock write-time gitignore reconcile — ensure the managed ignore
+    # block here, at sidecar creation, for BOTH modes (best-effort, same
+    # contract as the lock path: a stray unignored sidecar is a mess, not a
+    # correctness break, but raw reviewer output must not ride `git add -A`
+    # in repos whose .flow/.gitignore predates the review-fanout/ pattern).
+    try:
+        _ensure_flow_gitignore(flow_dir)
+    except (OSError, UnicodeDecodeError):
+        pass
     parent.mkdir(parents=True, exist_ok=True)
     sidecar = parent / rid
     try:
@@ -43858,6 +43891,19 @@ def _review_fanout_emit_dispatch(
             f"{str(bool(row.get('failed'))):<8} {row.get('model') or '-'}"
         )
     print(f"next: {next_line}")
+
+
+def _iso_age_seconds(stamp) -> Optional[float]:
+    """Age of an ISO-8601 timestamp in seconds; None when unparseable."""
+    if not isinstance(stamp, str):
+        return None
+    try:
+        then = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - then).total_seconds()
 
 
 def _review_fanout_journal_refund_intent(

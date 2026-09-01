@@ -413,7 +413,21 @@ class TestReviewFanout(unittest.TestCase):
             self.root / ".flow" / "review-runs" / f"{first['rid']}.json"
         )
         self.assertTrue(journal.is_file(), "dispatch must journal its intent")
+        # PR #392 r4 (P1): while the journal is FRESH the fan-out may still be
+        # live (coordinator merging) — a concurrent dispatch must be refused,
+        # not replay the live reservation as abandoned.
+        code, blocked, err = self._dispatch(self._ship_exec(calls))
+        self.assertEqual(code, 2, err)
+        combined = json.dumps(blocked) + err
+        self.assertIn("in flight", combined)
+        self.assertEqual(self._pending(), 1)
+        self.assertTrue(journal.is_file(), "live journal must survive refusal")
         # Coordinator dies here: no finalize ever lands for first["rid"].
+        # Age the journal past the lease so the next increment treats it as
+        # the crash it now provably is.
+        data = json.loads(journal.read_text(encoding="utf-8"))
+        data["timestamp"] = "2020-01-01T00:00:00Z"
+        journal.write_text(json.dumps(data), encoding="utf-8")
         code, second, err = self._dispatch(self._ship_exec(calls))
         self.assertEqual(code, 0, err)
         self.assertNotEqual(second["rid"], first["rid"])
@@ -899,6 +913,29 @@ class TestReviewFanout(unittest.TestCase):
             self.assertIn(f"Prior finding #{ordinal}", prompt)
             self.assertIn(f"{ordinal}. ", prompt)
             self.assertIn(item["title"], prompt)
+
+    def test_standalone_sidecar_reconciles_gitignore(self) -> None:
+        """PR #392 r4 (P2): standalone fan-outs reserve no round and so never
+        pass the review-lock gitignore reconcile — sidecar creation itself
+        must restore the managed review-fanout/ pattern in old repos."""
+        gi = self.root / ".flow" / ".gitignore"
+        if gi.is_file():
+            stripped = "\n".join(
+                line for line in gi.read_text(encoding="utf-8").splitlines()
+                if "review-fanout" not in line
+            ) + "\n"
+            gi.write_text(stripped, encoding="utf-8")
+        # (the fixture repo has no .flow/.gitignore at all — the oldest shape)
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            "--base",
+            "HEAD~1",
+            "--json",
+            fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err)
+        self.assertIn("review-fanout/", gi.read_text(encoding="utf-8"))
 
     def test_standalone_focus_round_trip(self) -> None:
         """PR #392 r3: --focus persists through the sidecar meta into the
