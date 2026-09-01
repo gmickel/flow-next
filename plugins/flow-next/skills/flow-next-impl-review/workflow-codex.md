@@ -42,8 +42,9 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_
 # RESUME GATE (fan-out is first-round only): a fresh invocation resuming a
 # scope mid-fix-loop — e.g. after a lost coordinator context — arrives here
 # with a receipt whose verdict is still open (NEEDS_WORK / NEEDS_HUMAN). That
-# is round 2+: skip BOTH fan-out phases and go straight to Step 4's
-# single-dispatch re-review. A receipt whose verdict is closed (SHIP /
+# is round 2+: skip Steps 2-4 entirely (dispatch, merge, finalize — they need
+# a rid and merged file no skipped phase produced) and go straight to Step
+# 5.4's single-dispatch re-review. A receipt whose verdict is closed (SHIP /
 # MAJOR_RETHINK) or unreadable is a COMPLETED earlier scope left at this path —
 # stale input for a new round, never a resume: rotate it aside so the fresh
 # fan-out starts clean instead of bouncing off flowctl's first-round guard or
@@ -55,7 +56,7 @@ if [ -f "$RECEIPT_PATH" ]; then
   case "$(jq -r '.verdict // empty' "$RECEIPT_PATH" 2>/dev/null)" in
     NEEDS_WORK|NEEDS_HUMAN)
       RESUMED=1
-      echo "RESUMED SCOPE — receipt carries an active fix loop; skipping fan-out, proceed to Step 4 (re-review)" ;;
+      echo "RESUMED SCOPE — receipt carries an active fix loop; skip Steps 2-4, go to Step 5.4 (single-dispatch re-review)" ;;
     *)
       mv "$RECEIPT_PATH" "$RECEIPT_PATH.prev" ;;
   esac
@@ -214,6 +215,16 @@ If `VERDICT=NEEDS_WORK`:
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
+# Bash state does NOT survive across tool calls (the fix/test/commit steps ran
+# between) — re-derive the Step-1 values in THIS block rather than reading
+# stale variables; TASK_ID is a literal from the invocation context.
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+if [[ -z "$BASE_COMMIT" ]]; then
+  DIFF_BASE="main"
+  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+else
+  DIFF_BASE="$BASE_COMMIT"
+fi
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH")

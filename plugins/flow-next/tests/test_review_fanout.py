@@ -1009,6 +1009,49 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
 
+    def test_symlinked_sidecar_parent_refused(self) -> None:
+        """PR #392 r8 (P2): a symlinked .flow/review-fanout would land raw
+        reviewer output outside the repository — refuse, never follow."""
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: outside.rmdir() if not any(outside.iterdir()) else None)
+        (self.root / ".flow" / "review-fanout").symlink_to(outside)
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            "--base",
+            "HEAD~1",
+            "--json",
+            fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("symlink", out + err)
+        self.assertFalse(any(outside.iterdir()), "nothing may cross the link")
+
+    def test_publish_failure_contained_as_failed_draw(self) -> None:
+        """PR #392 r8 (P2): a sidecar publication failure is a failed draw,
+        not an aggregate-killing exception — siblings still finalize."""
+        real = flowctl._review_fanout_publish
+
+        def flaky(path, text):
+            if Path(path).name.startswith("contracts"):
+                raise OSError("disk full")
+            return real(path, text)
+
+        with unittest.mock.patch.object(
+            flowctl, "_review_fanout_publish", side_effect=flaky,
+        ):
+            code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(payload["failed_draws"], 1)
+        by_axis = {row["axis"]: row for row in payload["draws"]}
+        self.assertTrue(by_axis["contracts"]["failed"])
+        self.assertEqual(
+            by_axis["contracts"]["failure_class"], "sidecar_publish_failed",
+        )
+        self.assertEqual(by_axis["correctness"]["verdict"], "SHIP")
+        sidecar = self.root / ".flow" / "review-fanout" / payload["rid"]
+        self.assertTrue((sidecar / "meta.json").is_file())
+
     def test_standalone_sidecar_reconciles_gitignore(self) -> None:
         """PR #392 r4 (P2): standalone fan-outs reserve no round and so never
         pass the review-lock gitignore reconcile — sidecar creation itself

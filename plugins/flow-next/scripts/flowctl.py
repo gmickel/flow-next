@@ -43646,6 +43646,14 @@ def _review_fanout_sidecar_dir(flow_dir: Path, rid: str) -> Path:
     reservation before surfacing the error (fn-215 host review r1).
     """
     parent = flow_dir / "review-fanout"
+    # PR #392 r8 (P2): mkdir(exist_ok=True) follows a symlinked parent, which
+    # would land raw reviewer output outside the repository. Refuse rather
+    # than follow.
+    if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+        raise _FanoutSidecarError(
+            f"refusing fan-out sidecar parent {parent}: symlink or "
+            "non-directory"
+        )
     # Standalone fan-outs reserve no round and therefore never pass the
     # review-lock write-time gitignore reconcile — ensure the managed ignore
     # block here, at sidecar creation, for BOTH modes (best-effort, same
@@ -43774,15 +43782,35 @@ def _review_fanout_run_draw(
         "review_path": str(review_path),
         "output_path": str(output_path),
     }
-    _review_fanout_publish(output_path, output if isinstance(output, str) else "")
-    _review_fanout_publish(review_path, review_text)
-    _review_fanout_publish(
-        sidecar_dir / f"{axis}.json", json.dumps(meta, indent=2) + "\n",
+    try:
+        _review_fanout_publish(
+            output_path, output if isinstance(output, str) else "",
+        )
+        _review_fanout_publish(review_path, review_text)
+        _review_fanout_publish(
+            sidecar_dir / f"{axis}.json", json.dumps(meta, indent=2) + "\n",
+        )
+    except Exception:  # noqa: BLE001
+        # PR #392 r8 (P2): a publication failure (full disk, permissions,
+        # os.replace error) outside the dispatch try-block would propagate
+        # through fut.result() and kill the aggregate controller before
+        # meta.json or any record/refund — aborting sibling draws that
+        # returned valid verdicts while the journal lease blocks a retry.
+        # Contain it as a failed draw instead: no vote, no surviving review.
+        meta["verdict"] = None
+        meta["failed"] = True
+        meta["failure_class"] = "sidecar_publish_failed"
+        failed = True
+        failure_class = "sidecar_publish_failed"
+    status = (meta["verdict"] or verdict) if not failed else (
+        f"FAILED ({failure_class})"
     )
-    status = verdict if not failed else f"FAILED ({failure_class})"
-    _review_fanout_append_progress(
-        sidecar_dir, f"draw {axis}: {status} in {elapsed:.1f}s",
-    )
+    try:
+        _review_fanout_append_progress(
+            sidecar_dir, f"draw {axis}: {status} in {elapsed:.1f}s",
+        )
+    except Exception:  # noqa: BLE001
+        pass  # progress is observability, never worth killing the draw
     return meta
 
 
