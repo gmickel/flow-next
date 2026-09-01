@@ -44730,9 +44730,11 @@ def compute_review_route(
     def _fanout(reason: str, message: str) -> dict:
         if receipt_state in ("foreign", "closed") and rotate_stale:
             rotated = _review_route_rotate(receipt_file)
-            if rotated is None and receipt_file.exists():
-                # PR #392 r41 (P1): another coordinator rotated first — a
-                # lost ownership race, not a green light.
+            if rotated is None:
+                # PR #392 r41+r43 (P1): this invocation READ the receipt, so
+                # a failed rotation — most often the file already gone
+                # because another coordinator rotated it first — is a lost
+                # ownership race, not a green light.
                 return _stop(
                     "rotation_lost_race",
                     "another coordinator rotated this scope's receipt first "
@@ -44827,8 +44829,8 @@ def compute_review_route(
                 "container is not recoverable from the ledger, so a resume would "
                 "ship blind and a fresh fan-out would drop unresolved findings. "
                 "A human decides: flowctl spec reset-review-rounds "
-                f"{spec_id_from_task(task_id)} abandons the lost cycle and "
-                "licenses a fresh fan-out.",
+                f"{spec_id_from_task(task_id)} --task {task_id} abandons the "
+                "lost cycle and licenses a fresh fan-out.",
             )
     note = ""
     if ledger.get("expired_reservation"):
@@ -45714,18 +45716,20 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     # old approximation could silently mask the wedge). All-SHIP rounds have
     # no wedge and need no count.
     needs_work_survivors = getattr(args, "needs_work_survivors", None)
-    if verdict == "NEEDS_WORK" and findings_container is None:
-        # PR #392 sol review (R3/R14): a NEEDS_WORK round is consumed only
-        # with a schema-valid v1 container — round 2's ratchet injects every
-        # merged ordinal from it, and an unparseable merge would silently
-        # drop the deferred lineage. A legitimate zero-finding merge is a
-        # VALID empty container, not an absent one.
+    if findings_container is None:
+        # PR #392 sol review (R3/R14): EVERY finalized merged round carries a
+        # schema-valid v1 container — round 2's ratchet injects every merged
+        # ordinal from it, and a malformed merge (any verdict) would silently
+        # drop merged evidence. A legitimate zero-finding merge is a VALID
+        # empty container: say "No findings." (or "No blocking findings.")
+        # with the SHIP tag and it parses as one.
         error_exit(
             "fan-out finalize: the merged document did not parse into a v1 "
-            "findings container — a NEEDS_WORK round requires one (use the "
-            "reviewer finding format: numbered headings with the labeled "
+            "findings container — every finalized round requires one. Use "
+            "the reviewer finding format (numbered headings with the labeled "
             "Severity / Confidence / Classification / File:Line / Problem / "
-            "Suggestion bullets, and the fenced JSON tally). Fix the merged "
+            "Suggestion bullets and the fenced JSON tally); a finding-free "
+            "round states 'No findings.' with its verdict tag. Fix the merged "
             "file and re-run this finalize.",
             use_json=args.json,
             code=2,

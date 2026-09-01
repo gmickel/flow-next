@@ -1318,6 +1318,22 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
+    def test_every_finalize_requires_a_container(self) -> None:
+        """Sol round 2: a malformed merge is refused for ANY verdict (an
+        all-clear round says 'No findings.' and parses as a valid empty
+        container)."""
+        code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        malformed = self._write_merged("Looks fine to me.\n<verdict>SHIP</verdict>\n")
+        fin_code, fin, fin_err = self._finalize(payload["rid"], malformed)
+        self.assertEqual(fin_code, 2, fin_err)
+        self.assertIn("did not parse", json.dumps(fin) + fin_err)
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], self._write_merged(_empty_merged_review()),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "SHIP")
+
     def test_exclusive_increment_refuses_standing_reservation(self) -> None:
         """PR #392 r22: --exclusive makes the single-dispatch fence atomic —
         inside the reservation lock, a standing same-scope reservation

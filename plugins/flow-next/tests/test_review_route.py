@@ -250,13 +250,20 @@ class TestReviewRoute(unittest.TestCase):
         self.assertIn("replayed and refunded", r["message"])
 
     def test_rotation_lost_race_stops(self) -> None:
+        """The real race: the receipt this invocation read is GONE by the
+        time it rotates (the other coordinator moved it first)."""
         receipt = self._receipt(self.root / "r.json", verdict="SHIP")
         real = flowctl._review_route_rotate
-        with mock.patch.object(flowctl, "_review_route_rotate", return_value=None):
+
+        def other_coordinator_won(path):
+            Path(path).unlink()          # the winner's os.replace already ran
+            return real(path)            # -> None (FileNotFoundError)
+
+        with mock.patch.object(flowctl, "_review_route_rotate", side_effect=other_coordinator_won):
             code, r, _ = self._route(self.task_id, "--receipt", str(receipt), "--rotate-stale")
         self.assertEqual(r["action"], "stop")
         self.assertEqual(r["reason"], "rotation_lost_race")
-        self.assertIs(flowctl._review_route_rotate, real)
+        self.assertFalse(receipt.exists())
 
     def test_phase_lease_hold_and_release(self) -> None:
         rid = "ab" * 16
@@ -334,6 +341,7 @@ class TestReviewRoute(unittest.TestCase):
         self.assertEqual(r["action"], "stop")
         self.assertEqual(r["reason"], "lost_receipt")
         self.assertEqual(r["last_verdict"], "NEEDS_WORK")
+        self.assertIn(f"--task {self.task_id}", r["message"])
         # A closed cycle (MAJOR_RETHINK) admits a fresh fan-out.
         data["review_attempts"].append(
             {"counter_kind": "impl", "task": self.task_id, "verdict": "MAJOR_RETHINK",
