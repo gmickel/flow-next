@@ -38380,7 +38380,11 @@ def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
                     continue  # reopened — the cycle keeps counting
                 last_cycle = cycle
                 cycle = 0
-        restore = max(last_cycle, 1)
+        # PR #392 r36: when the ledger already ends in an overturn marker,
+        # the ACTIVE cycle's count sits in `cycle` (its SHIP took the
+        # reopened continue branch) — restore that; `last_cycle` is right
+        # only when the walk ended exactly at the closing SHIP.
+        restore = max(cycle if cycle > 0 else last_cycle, 1)
         if _read_review_rounds(spec_data, "impl", task_id) < restore:
             _write_review_rounds(spec_data, "impl", task_id, restore)
         attempts = spec_data.get("review_attempts")
