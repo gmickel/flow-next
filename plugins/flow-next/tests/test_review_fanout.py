@@ -1113,6 +1113,9 @@ class TestReviewFanout(unittest.TestCase):
         after = json.loads(receipt.read_text(encoding="utf-8"))
         self.assertEqual(after.get("deep_passes"), ["adversarial"])
         self.assertEqual(after.get("verdict"), "NEEDS_WORK")
+        # PR #392 r38: the replay EMITS the preserved verdict too — a stale
+        # phase-one SHIP here would make the coordinator skip required fixes.
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
     def test_exclusive_increment_refuses_standing_reservation(self) -> None:
         """PR #392 r22: --exclusive makes the single-dispatch fence atomic —

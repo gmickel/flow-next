@@ -51,10 +51,11 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOP
 
 # RESUME GATE (fan-out is first-round only): a fresh invocation resuming a
 # scope mid-fix-loop — e.g. after a lost coordinator context — arrives here
-# with a receipt whose verdict is still open (NEEDS_WORK / NEEDS_HUMAN). That
-# is round 2+: skip Steps 2-4 entirely (dispatch, merge, finalize — they need
-# a rid and merged file no skipped phase produced) and go straight to Step
-# 5.4's single-dispatch re-review. A receipt whose verdict is closed (SHIP /
+# with a receipt whose verdict is still open (NEEDS_WORK). That is round 2+:
+# skip Steps 2-4 entirely (dispatch, merge, finalize — they need a rid and
+# merged file no skipped phase produced) and resume at Step 5.1 — the fix
+# pass — reaching the 5.4 single-dispatch re-review only once the fixes are
+# committed (NEEDS_HUMAN stops instead). A receipt whose verdict is closed (SHIP /
 # MAJOR_RETHINK) or unreadable is a COMPLETED earlier scope left at this path —
 # stale input for a new round, never a resume: rotate it aside so the fresh
 # fan-out starts clean instead of bouncing off flowctl's first-round guard or

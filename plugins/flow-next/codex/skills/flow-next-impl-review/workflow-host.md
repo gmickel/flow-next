@@ -133,9 +133,13 @@ if [ "$RESUMED" = "0" ] && [ -n "$TASK_ID" ]; then
 fi
 ```
 
-With `RESUMED=1`, skip the "First round: three axis draws" section entirely and
-dispatch under "Round 2+: one fresh subagent" — the reservation fence below
-runs the same either way (one reservation per round).
+With `RESUMED=1`, skip the "First round: three axis draws" section entirely —
+but do NOT dispatch yet: first run the fix pass against the receipt's merged
+container (Step 5 NEEDS_WORK handling: parse, fix, test, commit; verify
+instead when the fixes are already committed), THEN dispatch under "Round 2+:
+one fresh subagent". The reservation fence below runs the same either way
+(one reservation per round). A re-review of unfixed code spends a round and
+can replace unresolved findings with a stochastic verdict.
 
 ### Convergence reservation and recovery fence
 

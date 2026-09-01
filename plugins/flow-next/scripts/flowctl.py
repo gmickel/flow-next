@@ -45155,6 +45155,24 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         suppressed_count, classification_counts, unaddressed_rids,
         merged_tag_mismatch,
     )
+    if (
+        isinstance(attempt_summary, dict)
+        and attempt_summary.get("replayed")
+        and receipt_path
+    ):
+        # PR #392 r38 (P1): on a replay the preserved receipt is the truth —
+        # emit ITS verdict and review (a deep/validator phase may have moved
+        # them since the phase-one finalize), never the stale phase-one
+        # values, or the coordinator skips required fixes / loops needlessly.
+        try:
+            preserved = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            preserved = None
+        if isinstance(preserved, dict):
+            if isinstance(preserved.get("verdict"), str):
+                verdict = preserved["verdict"]
+            if isinstance(preserved.get("review"), str) and preserved["review"].strip():
+                merged_text = preserved["review"]
     _review_fanout_emit_finalize(
         args, standalone, review_id, verdict, merged_text, receipt_draws,
         primary, resolved_spec, attempt_summary, task_id,
