@@ -507,8 +507,19 @@ class TestReviewFanout(unittest.TestCase):
         worse = self._write_merged(
             _merged_review("Deep pass found a P0.", verdict="NEEDS_WORK")
         )
+        # PR #392 r14: no NEEDS_WORK draw -> the survivor flag is NOT
+        # required, and a truthful 0 must not wedge the merged escalation.
+        fin_code, fin, fin_err = self._finalize(payload["rid"], worse)
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+
+        code, payload, err = self._dispatch(self._verdict_exec(all_ship))
+        self.assertEqual(code, 0, err)
+        worse2 = self._write_merged(
+            _merged_review("Deep pass found another P0.", verdict="NEEDS_WORK")
+        )
         fin_code, fin, fin_err = self._finalize(
-            payload["rid"], worse, "--needs-work-survivors", "1",
+            payload["rid"], worse2, "--needs-work-survivors", "0",
         )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
@@ -1008,6 +1019,15 @@ class TestReviewFanout(unittest.TestCase):
         self.assertGreaterEqual(calls["n"], 2, "record path must recheck")
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
+
+    def test_traversal_rid_rejected(self) -> None:
+        """PR #392 r14 (P2): a dot-segment --rid must not escape the sidecar
+        parent — only the 32-hex mint format is accepted."""
+        merged = self._write_merged(_merged_review("x"))
+        for bad in ("..", "../evil", "AB" * 16, "a" * 31):
+            fin_code, fin, fin_err = self._finalize(bad, merged)
+            self.assertEqual(fin_code, 2, f"{bad!r}: {fin_err}")
+            self.assertIn("invalid --rid", json.dumps(fin) + fin_err)
 
     def test_closed_receipt_permits_fresh_fanout(self) -> None:
         """PR #392 r13 (P2): a CLOSED receipt (SHIP) at --receipt is a

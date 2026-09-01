@@ -44532,7 +44532,11 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     _wire_backend_review_hooks()
     task_id, standalone, flow_dir, _spec_path = _review_fanout_resolve_scope(args)
     rid = args.rid
-    if not rid or Path(rid).name != rid:
+    # PR #392 r14 (P2): both rid mints are 32 lowercase hex (uuid4().hex /
+    # token_hex(16)) — a strict format match rejects dot segments and any
+    # other traversal-shaped input (Path("..").name == ".." passed a bare
+    # basename check).
+    if not rid or not re.fullmatch(r"[0-9a-f]{32}", rid):
         error_exit("invalid --rid", use_json=args.json, code=2)
     meta = _review_fanout_load_meta(flow_dir, rid, args)
     _review_fanout_check_finalize_meta(meta, task_id, standalone, args)
@@ -44612,7 +44616,20 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
-    if needs_work_survivors is None and verdict == "NEEDS_WORK":
+    # PR #392 r14: the flag and the wedge key on the DRAW verdicts, not the
+    # post-merge verdict — a merged tag that escalates an all-SHIP round
+    # (deep passes finding what no draw did) has no NEEDS_WORK draws, so
+    # there is nothing for the survivor count to distinguish and a truthful
+    # 0 must not wedge the brand-new finding into NEEDS_HUMAN.
+    has_needs_work_draw = any(
+        isinstance(row, dict) and row.get("verdict") == "NEEDS_WORK"
+        for row in meta_draws
+    )
+    if (
+        needs_work_survivors is None
+        and verdict == "NEEDS_WORK"
+        and has_needs_work_draw
+    ):
         error_exit(
             "--needs-work-survivors is required when any draw returned "
             "NEEDS_WORK: pass the coordinator-counted actionable findings "
@@ -44621,7 +44638,11 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
-    if verdict == "NEEDS_WORK" and needs_work_survivors == 0:
+    if (
+        verdict == "NEEDS_WORK"
+        and has_needs_work_draw
+        and needs_work_survivors == 0
+    ):
         verdict = "NEEDS_HUMAN"
     suppressed_count = parse_suppressed_count(merged_text)
     classification_counts = parse_classification_counts(merged_text)
