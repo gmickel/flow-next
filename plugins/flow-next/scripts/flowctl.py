@@ -38267,7 +38267,7 @@ def merge_deep_findings(
     return {"merged": merged, "promotions": promotions, "counts": counts}
 
 
-def _reopen_review_cycle_after_deep(task_id: str) -> None:
+def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
     """Durably reopen a task's impl review cycle after a deep pass overturns
     SHIP (PR #392 r30+r31).
 
@@ -38286,8 +38286,31 @@ def _reopen_review_cycle_after_deep(task_id: str) -> None:
         spec_data = normalize_epic(
             json.loads(spec_json_path.read_text(encoding="utf-8"))
         )
-        if _read_review_rounds(spec_data, "impl", task_id) < 1:
-            _write_review_rounds(spec_data, "impl", task_id, 1)
+        # PR #392 r32: restore the CONSUMED round count of the cycle the
+        # SHIP just closed, not a flat 1 — a SHIP on round 8 overturned by a
+        # deep finding must not grant seven fresh rounds past
+        # MAX_REVIEW_ITERATIONS. The durable attempt rows delimit cycles by
+        # their SHIP rows; the count is recovered from the rows of the cycle
+        # ending in the overturned SHIP.
+        cycle = 0
+        last_cycle = 0
+        for row in spec_data.get("review_attempts") or []:
+            if (
+                not isinstance(row, dict)
+                or row.get("counter_kind") != "impl"
+                or row.get("task") != task_id
+                or not isinstance(row.get("verdict"), str)
+                or row.get("superseded_by")
+                or row.get("round_consumed") is False
+            ):
+                continue
+            cycle += 1
+            if row.get("verdict") == "SHIP":
+                last_cycle = cycle
+                cycle = 0
+        restore = max(last_cycle, 1)
+        if _read_review_rounds(spec_data, "impl", task_id) < restore:
+            _write_review_rounds(spec_data, "impl", task_id, restore)
         attempts = spec_data.get("review_attempts")
         if not isinstance(attempts, list):
             attempts = []
@@ -38297,7 +38320,7 @@ def _reopen_review_cycle_after_deep(task_id: str) -> None:
             "kind": "impl",
             "review_type": "impl",
             "task": task_id,
-            "backend": "codex",
+            "backend": backend,
             "verdict": "NEEDS_WORK",
             "outcome": "verdict",
             "failure_class": None,
@@ -38559,7 +38582,7 @@ def _run_deep_pass(
         receipt_id = updated_receipt.get("id")
         if isinstance(receipt_id, str) and is_task_id(receipt_id):
             try:
-                _reopen_review_cycle_after_deep(receipt_id)
+                _reopen_review_cycle_after_deep(receipt_id, backend)
             except Exception:  # noqa: BLE001
                 pass
 
