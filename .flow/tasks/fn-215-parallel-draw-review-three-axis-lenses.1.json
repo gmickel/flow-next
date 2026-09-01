@@ -10,5 +10,15 @@
   "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.1.md",
   "status": "todo",
   "title": "flowctl fan-out plumbing: one reservation, three draws, merged receipt",
-  "updated_at": "2026-09-01T07:42:10.695139Z"
+  "updated_at": "2026-09-01T08:05:50.828958Z",
+  "satisfies": [
+    "R1",
+    "R2",
+    "R9",
+    "R10",
+    "R12",
+    "R13",
+    "R14",
+    "R15"
+  ]
 }

@@ -12,5 +12,15 @@
   "spec_path": ".flow/tasks/fn-215-parallel-draw-review-three-axis-lenses.2.md",
   "status": "todo",
   "title": "impl-review skill prose: fan-out coordination, merge step, steering",
-  "updated_at": "2026-09-01T07:42:10.695769Z"
+  "updated_at": "2026-09-01T08:05:51.091183Z",
+  "satisfies": [
+    "R1",
+    "R3",
+    "R5",
+    "R7",
+    "R9",
+    "R10",
+    "R11",
+    "R13"
+  ]
 }
