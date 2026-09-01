@@ -43463,8 +43463,51 @@ def _review_fanout_classify_failure(
     return "missing_verdict"
 
 
-def _review_fanout_first_round_guard(args: argparse.Namespace) -> None:
-    """Fan-out is first-round only (fn-215 R11)."""
+def _review_fanout_first_round_guard(
+    args: argparse.Namespace,
+    task_id: Optional[str] = None,
+    standalone: bool = True,
+    flow_dir: Optional[Path] = None,
+) -> None:
+    """Fan-out is first-round only (fn-215 R11).
+
+    Two independent signals, either refuses (PR #392 r5: the receipt alone
+    was silently bypassable by omitting ``--receipt``):
+
+    - the receipt carries prior findings or a resumable session;
+    - task mode only: the task's persisted impl round counter is non-zero
+      (a delivered verdict this cycle — the counter resets on SHIP), so a
+      receipt-less invocation cannot masquerade as round one. ``--force``
+      bypasses this leg the way it bypasses the artifact fence: a
+      human-authorized re-review. Standalone reserves no round and keeps no
+      counter by design — the receipt is its only continuity carrier, and
+      the workflow always passes one.
+    """
+    if (
+        not standalone
+        and task_id
+        and flow_dir is not None
+        and not bool(getattr(args, "force", False))
+    ):
+        spec_id = spec_id_from_task(task_id)
+        try:
+            spec_json_path = find_spec_json_path(flow_dir, spec_id)
+            spec_data = json.loads(
+                spec_json_path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError, TypeError):
+            spec_data = None
+        if isinstance(spec_data, dict) and _read_review_rounds(
+            normalize_epic(spec_data), "impl", task_id
+        ) > 0:
+            error_exit(
+                "fan-out is first-round only; this task already consumed a "
+                "review round this cycle (the counter resets on SHIP) — "
+                "re-review rounds use impl-review (single dispatch with the "
+                "merged prior-finding container)",
+                use_json=args.json,
+                code=2,
+            )
     receipt_path = getattr(args, "receipt", None)
     if not receipt_path:
         return
@@ -43979,7 +44022,7 @@ def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
 def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
     _wire_backend_review_hooks()
     task_id, standalone, flow_dir, task_spec_path = _review_fanout_resolve_scope(args)
-    _review_fanout_first_round_guard(args)
+    _review_fanout_first_round_guard(args, task_id, standalone, flow_dir)
     draws = _review_fanout_parse_draws(args, task_id)
     primary_axis = _review_fanout_primary_axis(draws)
     primary_spec = next(
@@ -44142,6 +44185,24 @@ def _review_fanout_check_finalize_meta(meta, task_id, standalone, args) -> None:
             use_json=args.json,
             code=2,
         )
+    # PR #392 r5 (P1): the merged verdict is only honest for the head the
+    # draws actually saw. A commit landing between dispatch and finalize
+    # would otherwise record SHIP for code no draw reviewed. Absent snapshot
+    # (older meta) stays fail-open; a mismatch fails closed — the abandoned
+    # reservation refunds through the journal lease.
+    dispatched_head = meta.get("reviewed_head_sha")
+    if isinstance(dispatched_head, str) and dispatched_head:
+        current_head = _resolve_review_sha("HEAD")
+        if current_head and current_head != dispatched_head:
+            error_exit(
+                f"fan-out finalize refused: HEAD ({current_head[:12]}) no "
+                f"longer matches the dispatched reviewed head "
+                f"({dispatched_head[:12]}) — the draws never saw the newer "
+                "commits. Re-dispatch the fan-out for the new head; the "
+                "abandoned reservation refunds via the journal lease.",
+                use_json=args.json,
+                code=2,
+            )
 
 
 def _review_fanout_worst_verdict(draws: list) -> Optional[str]:

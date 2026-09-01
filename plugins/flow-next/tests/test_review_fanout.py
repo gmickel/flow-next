@@ -914,6 +914,55 @@ class TestReviewFanout(unittest.TestCase):
             self.assertIn(f"{ordinal}. ", prompt)
             self.assertIn(item["title"], prompt)
 
+    def test_round_state_blocks_receiptless_second_fanout(self) -> None:
+        """PR #392 r5 (P1): omitting --receipt must not disable the
+        first-round guard — task mode consults the persisted round counter
+        (non-zero = a delivered verdict this cycle), --force bypasses as the
+        human-authorized re-review it is."""
+        by_axis = {
+            "correctness": "NEEDS_WORK",
+            "contracts": "SHIP",
+            "integration": "SHIP",
+        }
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_merged_review("One finding."))
+        fin_code, _fin, fin_err = self._finalize(payload["rid"], merged)
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(self._rounds(), 1)
+        # No --force, no --receipt: the counter alone must refuse round 2.
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--json",
+            fake=self._verdict_exec(by_axis),
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("first-round only", out + err)
+
+    def test_finalize_refuses_moved_head(self) -> None:
+        """PR #392 r5 (P1): a commit landing between dispatch and finalize
+        means no draw saw the new head — finalize must refuse rather than
+        record a verdict for unreviewed code."""
+        code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        (self.root / "late.txt").write_text("late\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "add", "late.txt"], cwd=self.root, check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-q", "-m", "late commit"], cwd=self.root,
+            check=True, capture_output=True,
+        )
+        merged = self._write_merged(_merged_review("One finding."))
+        fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+        self.assertEqual(fin_code, 2, fin_err)
+        self.assertIn("no longer matches", json.dumps(fin) + fin_err)
+
     def test_standalone_sidecar_reconciles_gitignore(self) -> None:
         """PR #392 r4 (P2): standalone fan-outs reserve no round and so never
         pass the review-lock gitignore reconcile — sidecar creation itself
