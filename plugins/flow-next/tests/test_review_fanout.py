@@ -991,6 +991,24 @@ class TestReviewFanout(unittest.TestCase):
         fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
+        # PR #392 r19: the provably-stale reservation refunds immediately —
+        # no journal-lease wait before the advertised re-dispatch.
+        self.assertEqual(self._pending(), 0)
+        refunds = [
+            row for row in self._attempts()
+            if row.get("failure_class") == "head_moved"
+        ]
+        self.assertEqual(len(refunds), 1)
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--json",
+            fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err + out[:300])
 
     def test_finalize_head_recheck_at_record(self) -> None:
         """PR #392 r6 (P1): the head assertion runs again immediately before

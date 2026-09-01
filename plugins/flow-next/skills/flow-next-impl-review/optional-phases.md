@@ -155,7 +155,7 @@ if [ -n "$TASK_ID" ]; then
   [ -n "$CANON" ] && TASK_ID="$CANON"
 fi
 REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
+SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || git rev-parse HEAD) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19): feature/foo vs feature-foo stay distinct; a detached checkout keys on its commit
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
 
@@ -301,7 +301,7 @@ if [ -n "$TASK_ID" ]; then
   [ -n "$CANON" ] && TASK_ID="$CANON"
 fi
 REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
+SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || git rev-parse HEAD) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19): feature/foo vs feature-foo stay distinct; a detached checkout keys on its commit
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 FINDINGS_FILE="/tmp/review-findings.jsonl"
 

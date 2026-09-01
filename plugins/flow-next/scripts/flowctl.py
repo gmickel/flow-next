@@ -44332,12 +44332,43 @@ def _review_fanout_assert_head_unmoved(meta, args) -> None:
     if isinstance(dispatched_head, str) and dispatched_head:
         current_head = _resolve_review_sha("HEAD")
         if current_head and current_head != dispatched_head:
+            # PR #392 r19 (P2): the stale reservation is provably dead here —
+            # waiting out the journal lease (~exec timeout + 900s) would
+            # stall the advertised immediate re-dispatch. Refund it now
+            # (task mode; standalone reserved nothing), superseding the
+            # refund-intent journal, so the next dispatch runs promptly.
+            reservation_id = meta.get("reservation_id")
+            refunded = ""
+            if (
+                isinstance(reservation_id, str)
+                and reservation_id
+                and not meta.get("standalone")
+                and isinstance(meta.get("id"), str)
+            ):
+                record_review_attempt(
+                    spec_id_from_task(meta["id"]),
+                    "impl",
+                    backend="codex",
+                    output=(
+                        f"fan-out finalize refused: head moved "
+                        f"{dispatched_head[:12]} -> {current_head[:12]}"
+                    ),
+                    failure_class="head_moved",
+                    task_id=meta["id"],
+                    review_type="impl",
+                    use_json=args.json,
+                    reviewed_head_sha=dispatched_head,
+                    reviewed_base_sha=meta.get("reviewed_base_sha"),
+                    reservation_id=reservation_id,
+                )
+                refunded = (
+                    " The reserved round was refunded — re-dispatch now."
+                )
             error_exit(
                 f"fan-out finalize refused: HEAD ({current_head[:12]}) no "
                 f"longer matches the dispatched reviewed head "
                 f"({dispatched_head[:12]}) — the draws never saw the newer "
-                "commits. Re-dispatch the fan-out for the new head; the "
-                "abandoned reservation refunds via the journal lease.",
+                f"commits. Re-dispatch the fan-out for the new head.{refunded}",
                 use_json=args.json,
                 code=2,
             )
@@ -50049,7 +50080,12 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
     p.add_argument(
         "--force",
         action="store_true",
-        help="Human-only override for an unchanged-artifact refusal",
+        help=(
+            "Human-only override: bypasses the unchanged-artifact refusal "
+            "AND the first-round state guard (the deliberate human lane for "
+            "re-running a fan-out on an open cycle; autonomous coordinators "
+            "never pass it — the workflow routes round 2+ to impl-review)"
+        ),
     )
     p.add_argument("--json", action="store_true", help="JSON output")
     _add_sandbox_arg(p)
