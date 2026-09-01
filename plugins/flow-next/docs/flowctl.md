@@ -2182,7 +2182,10 @@ host judgment and happens BETWEEN the two invocations; the finalizer computes th
 verdict mechanically (worst-wins over the draws' tags), records the attempt, the
 findings container, the merged receipt (top-level fields = the primary draw's
 session/model - the correctness draw, or the first draw when correctness is not
-drawn - plus a `draws[]` array), and the single round consumption
+drawn; when the primary draw FAILED, the first surviving codex draw with a
+session stamps them instead, so round 2 and the optional phases still get a
+resumable session - plus a `draws[]` array recording every draw, the failed
+primary included), and the single round consumption
 atomically. It is re-invocable with the same merged file, so a coordinator crash
 between merge and finalize is recoverable. The review skill's optional phases
 (`--deep`, `--validate`, `--interactive` - skill flags, not flowctl flags) run
