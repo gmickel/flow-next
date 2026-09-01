@@ -2167,6 +2167,9 @@ flowctl codex impl-review-fanout <task-id> --base <branch> [--draw AXIS[=BACKEND
 # Default draws: correctness, contracts, integration on the resolved backend spec.
 # Explicit --draw args override (1-3 draws): a single `--draw correctness` is the
 # one-reviewer economy round; three per-draw backend specs are the cross-family round.
+# Cross-family constraint: the primary draw (correctness, or the first draw when
+# correctness is not drawn) must run on the codex backend (exit 2 otherwise);
+# secondary draws may name codex, copilot, or cursor.
 # Per-draw sidecars land at .flow/review-fanout/<rid>/ (review text, metadata, raw output, progress log).
 
 # Phase two - one deterministic finalizer, after the coordinator's merge
@@ -2176,11 +2179,13 @@ flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> 
 The coordinator's merge (same-defect dedupe, evidence-bar drops, Act-On ranking) is
 host judgment and happens BETWEEN the two invocations; the finalizer computes the
 verdict mechanically (worst-wins over the draws' tags), records the attempt, the
-findings container, the merged receipt (top-level fields = the primary correctness
-draw's session/model, plus a `draws[]` array), and the single round consumption
+findings container, the merged receipt (top-level fields = the primary draw's
+session/model - the correctness draw, or the first draw when correctness is not
+drawn - plus a `draws[]` array), and the single round consumption
 atomically. It is re-invocable with the same merged file, so a coordinator crash
-between merge and finalize is recoverable. Optional phases (`--deep`, `--validate`,
-`--interactive`) run once against the MERGED set, after the finalize. Fail-open:
+between merge and finalize is recoverable. The review skill's optional phases
+(`--deep`, `--validate`, `--interactive` - skill flags, not flowctl flags) run
+once against the MERGED set, after the finalize. Fail-open:
 any draw with a verdict is enough to proceed; only an all-draws-no-verdict round is
 a transport failure, with one refund. Task mode reserves exactly one round;
 standalone reserves none (nonce rid). Re-review rounds after fixes are the plain

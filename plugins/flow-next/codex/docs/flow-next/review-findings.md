@@ -151,7 +151,7 @@ deferred lineage across rounds under the normal carry-forward rules - never
 silently dropped, so considered-and-deferred stays distinguishable from
 never-seen. Axis provenance lives in the coordinator's prose report and the
 receipt's `draws[]` array, never as a field on finding items: the v1 item
-allowlist is closed, and an axis field would make the container unsupported.
+allowlist is closed, and an axis field would make the container invalid.
 
 ### The prior-finding reply grammar
 

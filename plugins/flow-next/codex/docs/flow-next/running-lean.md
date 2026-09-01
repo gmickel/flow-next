@@ -110,7 +110,7 @@ On the codex and host backends the first review round of a scope fans out three 
 
 - **The default** - three axis draws, one merged fix pass. The right shape when agent-written diffs get merged without a human reading them line by line.
 - **Single-reviewer economy** - `/flow-next:work fn-12 - use 1 reviewer instead of 3` collapses the round to one draw: the lean setting for small, clean diffs, where a three-draw harvest costs extra review passes for findings one draw would surface anyway.
-- **Cross-family upgrade** - `use three different model families for the review fan-out` routes each draw to a different family, decorrelating blind spots across families as well as axes: the strongest setting for a high-stakes merge.
+- **Cross-family upgrade** - `use three different model families for the review fan-out` routes each draw to a different family, decorrelating blind spots across families as well as axes: the strongest setting for a high-stakes merge. On the codex backend the primary draw (correctness, or the first draw when correctness is not drawn) stays on codex; secondary draws may name codex, copilot, or cursor. On the host backend the per-draw model pins are unconstrained.
 
 The worked recipes and the evidence behind the default live in [`orchestration.md`](orchestration.md#steering-the-fan-out-worked-recipes).
 

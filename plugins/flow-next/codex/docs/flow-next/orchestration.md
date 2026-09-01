@@ -179,13 +179,14 @@ review, so injection is the default everywhere it is not provably unnecessary.
 
 **The first review round fans out three axis draws (fn-215).** On the `codex` and
 `host` backends, the first round of a review scope is three concurrent draws of the
-same reviewer - same resolved backend/model, same lean prompt, each differing by
+same reviewer - same resolved backend/model, same base prompt, each differing by
 exactly one added axis line: correctness-and-logic of the changed code,
 contracts-and-consistency (do docs, tests, and stated promises agree with what the
 code does), and integration-with-unchanged-code. The studies behind this measured
 single-pass review recall as stochastic sampling - roughly 45% of validated
 findings per draw, with a union of three axis-differentiated draws recovering
-1.5-1.6x single-draw recall at flat validity - so one merged round harvests most of
+1.56x single-draw recall (against a pre-registered 1.5x bar) at flat validity - so
+one merged round harvests most of
 what previously trickled out across many serial rounds. The coordinator merges the
 draws (same-defect dedupe, evidence-bar drops with a count, ranked output with an
 Act-On tier capped at 5 non-blocking plus a published remainder) and runs ONE
@@ -222,7 +223,12 @@ config key. Three phrasings cover the dial:
 - **Cross-family upgrade** - `use three different model families for the review
   fan-out`. The three draws route to explicitly named per-draw backends/models,
   one per family, so blind spots decorrelate across families as well as axes -
-  the strongest shape for a high-stakes merge.
+  the strongest shape for a high-stakes merge. One structural constraint on the
+  codex backend: the primary draw - correctness, or the first draw when
+  correctness is not drawn - stays on codex (round 2+ resumes its session, and
+  the merged receipt's top-level fields come from it); secondary draws may name
+  `codex`, `copilot`, or `cursor`. On the host backend the per-draw model pins
+  are unconstrained.
 
 All three resolve through the existing routing precedence - an explicit
 instruction in the moment wins - and the coordinator owns the parse: it turns the
