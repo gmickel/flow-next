@@ -71,7 +71,7 @@ fi
 # Same task-scoped default as Step 3 (explicit REVIEW_RECEIPT_PATH always wins;
 # concurrent standalone scopes should set one — the standalone default is shared).
 REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || git rev-parse HEAD) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19): feature/foo vs feature-foo stay distinct; a detached checkout keys on its commit
+SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || echo detached) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19+r25): feature/foo vs feature-foo stay distinct; detached checkouts use a STABLE token (the repo tag already keys the checkout - a commit-keyed tag would change mid-fix-loop and orphan the receipt)
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 RESUMED=0
 if [ -f "$RECEIPT_PATH" ]; then
@@ -359,7 +359,7 @@ if [ -n "$TASK_ID" ]; then
   [ -n "$CANON" ] && TASK_ID="$CANON"
 fi
 REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || git rev-parse HEAD) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19): feature/foo vs feature-foo stay distinct; a detached checkout keys on its commit
+SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || echo detached) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19+r25): feature/foo vs feature-foo stay distinct; detached checkouts use a STABLE token (the repo tag already keys the checkout - a commit-keyed tag would change mid-fix-loop and orphan the receipt)
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 ```
 

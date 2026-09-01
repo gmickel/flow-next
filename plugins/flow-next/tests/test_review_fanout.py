@@ -990,13 +990,20 @@ class TestReviewFanout(unittest.TestCase):
         merged = self._write_merged(_merged_review("One finding."))
         fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
         self.assertEqual(fin_code, 2, fin_err)
-        self.assertIn("no longer matches", json.dumps(fin) + fin_err)
+        combined = json.dumps(fin) + fin_err
+        # A relative --base spelling moves with the new commit, so either
+        # snapshot check may fire first — both are valid stale-round refusals
+        # (PR #392 r25 added the merge-base recheck).
+        self.assertTrue(
+            "no longer matches" in combined or "merge base" in combined,
+            combined,
+        )
         # PR #392 r19: the provably-stale reservation refunds immediately —
         # no journal-lease wait before the advertised re-dispatch.
         self.assertEqual(self._pending(), 0)
         refunds = [
             row for row in self._attempts()
-            if row.get("failure_class") == "head_moved"
+            if row.get("failure_class") in ("head_moved", "base_moved")
         ]
         self.assertEqual(len(refunds), 1)
         code, out, err = self._run(

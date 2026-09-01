@@ -44384,6 +44384,38 @@ def _review_fanout_check_finalize_meta(meta, task_id, standalone, args) -> None:
     _review_fanout_assert_head_unmoved(meta, args)
 
 
+def _review_fanout_refund_stale_round(
+    meta, args, reason: str, failure_class: str,
+) -> str:
+    """Refund a provably-stale fan-out reservation (task mode) in-place.
+
+    Supersedes the refund-intent journal so the next dispatch is not stuck
+    behind the lease. Standalone reserved nothing — returns "" untouched.
+    """
+    reservation_id = meta.get("reservation_id")
+    if (
+        isinstance(reservation_id, str)
+        and reservation_id
+        and not meta.get("standalone")
+        and isinstance(meta.get("id"), str)
+    ):
+        record_review_attempt(
+            spec_id_from_task(meta["id"]),
+            "impl",
+            backend="codex",
+            output=reason,
+            failure_class=failure_class,
+            task_id=meta["id"],
+            review_type="impl",
+            use_json=args.json,
+            reviewed_head_sha=meta.get("reviewed_head_sha"),
+            reviewed_base_sha=meta.get("reviewed_base_sha"),
+            reservation_id=reservation_id,
+        )
+        return " The reserved round was refunded — re-dispatch now."
+    return ""
+
+
 def _review_fanout_assert_head_unmoved(meta, args) -> None:
     """PR #392 r5+r6 (P1): the merged verdict is only honest for the head the
     draws actually saw — a commit landing between dispatch and finalize would
@@ -44395,6 +44427,40 @@ def _review_fanout_assert_head_unmoved(meta, args) -> None:
     journal lease."""
     dispatched_head = meta.get("reviewed_head_sha")
     if isinstance(dispatched_head, str) and dispatched_head:
+        # PR #392 r25 (P2): the base ref can be rebased/force-moved between
+        # dispatch and finalize while HEAD stays put — the ref SPELLING then
+        # matches meta while its merge base differs, and the branch diff
+        # includes commits no draw saw. Re-resolve and compare, same
+        # fail-open-on-absent / fail-closed-on-mismatch contract as HEAD.
+        dispatched_base = meta.get("reviewed_base_sha")
+        if isinstance(dispatched_base, str) and dispatched_base:
+            current_base = None
+            try:
+                proc = subprocess.run(
+                    ["git", "merge-base", str(args.base), dispatched_head],
+                    capture_output=True, text=True, encoding="utf-8",
+                    timeout=30,
+                )
+                if proc.returncode == 0:
+                    current_base = proc.stdout.strip() or None
+            except (OSError, subprocess.SubprocessError):
+                current_base = None
+            if current_base and current_base != dispatched_base:
+                refunded = _review_fanout_refund_stale_round(
+                    meta, args,
+                    f"base ref {args.base!r} moved: merge base is now "
+                    f"{current_base[:12]}, dispatched {dispatched_base[:12]}",
+                    "base_moved",
+                )
+                error_exit(
+                    f"fan-out finalize refused: the merge base of "
+                    f"{args.base!r} moved ({dispatched_base[:12]} -> "
+                    f"{current_base[:12]}) — the branch diff now includes "
+                    "commits no draw reviewed. Re-dispatch the fan-out "
+                    f"against the current base.{refunded}",
+                    use_json=args.json,
+                    code=2,
+                )
         current_head = _resolve_review_sha("HEAD")
         if current_head and current_head != dispatched_head:
             # PR #392 r19 (P2): the stale reservation is provably dead here —
@@ -44402,33 +44468,12 @@ def _review_fanout_assert_head_unmoved(meta, args) -> None:
             # stall the advertised immediate re-dispatch. Refund it now
             # (task mode; standalone reserved nothing), superseding the
             # refund-intent journal, so the next dispatch runs promptly.
-            reservation_id = meta.get("reservation_id")
-            refunded = ""
-            if (
-                isinstance(reservation_id, str)
-                and reservation_id
-                and not meta.get("standalone")
-                and isinstance(meta.get("id"), str)
-            ):
-                record_review_attempt(
-                    spec_id_from_task(meta["id"]),
-                    "impl",
-                    backend="codex",
-                    output=(
-                        f"fan-out finalize refused: head moved "
-                        f"{dispatched_head[:12]} -> {current_head[:12]}"
-                    ),
-                    failure_class="head_moved",
-                    task_id=meta["id"],
-                    review_type="impl",
-                    use_json=args.json,
-                    reviewed_head_sha=dispatched_head,
-                    reviewed_base_sha=meta.get("reviewed_base_sha"),
-                    reservation_id=reservation_id,
-                )
-                refunded = (
-                    " The reserved round was refunded — re-dispatch now."
-                )
+            refunded = _review_fanout_refund_stale_round(
+                meta, args,
+                f"fan-out finalize refused: head moved "
+                f"{dispatched_head[:12]} -> {current_head[:12]}",
+                "head_moved",
+            )
             error_exit(
                 f"fan-out finalize refused: HEAD ({current_head[:12]}) no "
                 f"longer matches the dispatched reviewed head "
