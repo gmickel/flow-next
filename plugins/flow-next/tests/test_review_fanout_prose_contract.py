@@ -1,11 +1,12 @@
 """fn-215 fan-out prose-contract pins (completion review R8/R15).
 
-Grep-shaped assertions on the load-bearing decision tokens of the fan-out
-workflow surfaces — steering phrasings, the merge/Act-On contract, the
-one-increment/three-draws/one-record host shape, and the sequential-fallback
-degradation disclosure. Tokens, not sentence freezes (2026-08-07 rule);
-prose quality is judged via .flow/criteria.md, not grep. Canonical files and
-the generated Codex mirror are both pinned (content + reachability).
+Grep-shaped assertions on minimal STRUCTURAL tokens of the fan-out workflow
+surfaces: command names, flag names, heading presence, the two quoted
+user-facing steering phrasings (command-like tokens), and executable-line
+greps for the round lifecycle. No sentence-level prose assertions
+(2026-08-07 rule) - prose quality is judged via .flow/criteria.md, and
+deliberate-prose-change detection is test_prompt_text_pinned's job.
+Canonical files and the generated Codex mirror are both pinned.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ def _read(path: pathlib.Path) -> str:
 
 
 class CodexWorkflowFanoutContract(unittest.TestCase):
-    """workflow-codex.md: steering phrasings + merge/Act-On/finalize contract."""
+    """workflow-codex.md: command/flag tokens + quoted steering phrasings."""
 
     def _texts(self) -> list[str]:
         return [
@@ -34,27 +35,42 @@ class CodexWorkflowFanoutContract(unittest.TestCase):
         ]
 
     def test_steering_phrasings_present(self) -> None:
+        # Quoted user-facing phrasings the coordinator matches against - these
+        # are command-like tokens, not prose.
         for text in self._texts():
-            self.assertIn("use 1 reviewer instead of 3", text)
+            self.assertIn('"use 1 reviewer instead of 3"', text)
             self.assertIn(
-                "use three different model families for the review fan-out",
+                '"use three different model families for the review fan-out"',
                 text,
             )
 
-    def test_merge_and_act_on_contract(self) -> None:
+    def test_fanout_commands_and_flags_present(self) -> None:
         for text in self._texts():
-            self.assertIn("Same-defect dedupe", text)
-            self.assertIn("Act-On tier capped at 5", text)
+            self.assertIn("impl-review-fanout ", text)
             self.assertIn("impl-review-fanout-finalize", text)
+            self.assertIn("--draw ", text)
+            self.assertIn("--merged-file", text)
+            self.assertIn("--rid", text)
+            self.assertIn("--receipt", text)
 
-    def test_needs_work_survivors_documented(self) -> None:
+    def test_needs_work_survivors_flag_in_executable_block(self) -> None:
+        # The finalize's executable argument array must carry the flag - not
+        # just prose mentioning it.
         for text in self._texts():
-            self.assertIn("--needs-work-survivors", text)
+            exec_lines = [
+                line
+                for line in text.splitlines()
+                if line.lstrip().startswith("args+=(")
+                and "--needs-work-survivors" in line
+            ]
+            self.assertTrue(
+                exec_lines,
+                "--needs-work-survivors missing from an args+=( executable line",
+            )
 
 
 class HostWorkflowFanoutContract(unittest.TestCase):
-    """workflow-host.md: one increment / three draws / one record, plus the
-    sequential-fallback degradation disclosure (fn-215 R1 narrowing)."""
+    """workflow-host.md: round-lifecycle executable lines + heading presence."""
 
     def _texts(self) -> list[str]:
         return [
@@ -62,20 +78,32 @@ class HostWorkflowFanoutContract(unittest.TestCase):
             _read(MIRROR / "workflow-host.md"),
         ]
 
-    def test_one_increment_one_record(self) -> None:
+    def test_one_increment_one_record_executable_lines(self) -> None:
+        # Exactly one executable increment line and one executable record line
+        # (FLOWCTL invocations), pinning the one-increment/one-record shape.
+        for text in self._texts():
+            increment_lines = [
+                line
+                for line in text.splitlines()
+                if "review-rounds increment" in line and "FLOWCTL" in line
+            ]
+            record_lines = [
+                line
+                for line in text.splitlines()
+                if "review-rounds record" in line and "FLOWCTL" in line
+            ]
+            self.assertEqual(len(increment_lines), 1)
+            self.assertEqual(len(record_lines), 1)
+
+    def test_first_round_three_draws_heading(self) -> None:
         for text in self._texts():
             self.assertIn(
-                "ONE `review-rounds increment` before the dispatch", text
+                "### First round: three axis draws in ONE message", text
             )
-            self.assertIn("never three cap slots per merged round", text)
 
-    def test_three_draws_one_message(self) -> None:
+    def test_sequential_fallback_degradation_token(self) -> None:
         for text in self._texts():
-            self.assertIn("three axis draws in ONE message", text)
-
-    def test_sequential_fallback_reports_degradation(self) -> None:
-        for text in self._texts():
-            self.assertIn("report the degradation in the review record", text)
+            self.assertIn("degradation", text)
 
 
 if __name__ == "__main__":

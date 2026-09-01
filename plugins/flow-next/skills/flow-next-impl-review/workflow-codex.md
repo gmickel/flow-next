@@ -108,8 +108,9 @@ document (write it to a file for the finalize):
 - **Axis provenance lives in your prose report** (e.g. "the integration draw
   surfaced #3 and #7"), never as a field on finding items — the v1 findings
   schema's closed allowlist is untouched.
-- **Count the NEEDS_WORK-draw survivors while you merge:** the number of
-  actionable findings from the NEEDS_WORK draws that survived your evidence
+- **Count the NEEDS_WORK-draw survivors while you merge:** you compute this
+  count during the same-defect dedupe — the number of actionable findings from
+  the NEEDS_WORK draws that survived your evidence
   gate. Pass it to the finalize as `--needs-work-survivors N` — item fields
   carry no draw attribution, so only your merge knows it. When every
   NEEDS_WORK-draw finding was dropped, `--needs-work-survivors 0` triggers
@@ -140,7 +141,7 @@ else
 fi
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
-args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<your merged document path>" --receipt "$RECEIPT_PATH" --json)
+args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<your merged document path>" --needs-work-survivors "<coordinator count of surviving findings from NEEDS_WORK draws>" --receipt "$RECEIPT_PATH" --json)
 $FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
 ```
 
