@@ -488,7 +488,9 @@ class TestReviewFanout(unittest.TestCase):
             with self.subTest(expected=expected):
                 code, payload, err = self._dispatch(self._verdict_exec(by_axis))
                 self.assertEqual(code, 0, err)
-                fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+                fin_code, fin, fin_err = self._finalize(
+                    payload["rid"], merged, "--needs-work-survivors", "1",
+                )
                 self.assertEqual(fin_code, exit_code, fin_err)
                 self.assertEqual(fin.get("verdict"), expected)
 
@@ -505,7 +507,9 @@ class TestReviewFanout(unittest.TestCase):
         worse = self._write_merged(
             _merged_review("Deep pass found a P0.", verdict="NEEDS_WORK")
         )
-        fin_code, fin, fin_err = self._finalize(payload["rid"], worse)
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], worse, "--needs-work-survivors", "1",
+        )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
@@ -523,7 +527,8 @@ class TestReviewFanout(unittest.TestCase):
             _merged_review("Residual finding.", verdict="SHIP")
         )
         fin_code, fin, fin_err = self._finalize(
-            payload["rid"], milder, "--receipt", str(receipt)
+            payload["rid"], milder, "--receipt", str(receipt),
+            "--needs-work-survivors", "1",
         )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
@@ -547,15 +552,21 @@ class TestReviewFanout(unittest.TestCase):
         rid = payload["rid"]
 
         empty = self._write_merged(_empty_merged_review())
-        fin_code, fin, fin_err = self._finalize(rid, empty)
+        fin_code, fin, fin_err = self._finalize(
+            rid, empty, "--needs-work-survivors", "0",
+        )
         self.assertEqual(fin_code, flowctl.REVIEW_CAP_EXIT_CODE, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_HUMAN")
 
-        # Counter-case: absent/unparseable container keeps NEEDS_WORK (R9).
+        # Counter-case: an unparseable container with an explicit nonzero
+        # survivor count keeps NEEDS_WORK (R9) — the flag, not the container,
+        # is authoritative (PR #392 r7).
         code, payload, err = self._dispatch(self._verdict_exec(by_axis))
         self.assertEqual(code, 0, err)
         missing = self._write_merged(_unparseable_merged_review())
-        fin_code, fin, fin_err = self._finalize(payload["rid"], missing)
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], missing, "--needs-work-survivors", "2",
+        )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
@@ -587,16 +598,19 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, flowctl.REVIEW_CAP_EXIT_CODE, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_HUMAN")
 
-        # No flag: container item count governs — non-empty stays NEEDS_WORK.
+        # No flag on a NEEDS_WORK round: refused — the container count cannot
+        # distinguish NEEDS_WORK-draw survivors from SHIP-draw remainder
+        # (PR #392 r7).
         code, payload, err = self._dispatch(self._verdict_exec(by_axis))
         self.assertEqual(code, 0, err)
         fin_code, fin, fin_err = self._finalize(payload["rid"], remainder)
-        self.assertEqual(fin_code, 0, fin_err)
-        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+        self.assertEqual(fin_code, 2, fin_err)
+        self.assertIn("required", json.dumps(fin) + fin_err)
 
-        # Explicit nonzero survivors overrides an empty container.
-        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
-        self.assertEqual(code, 0, err)
+        # Explicit nonzero survivors overrides an empty container. Same rid:
+        # the refused finalize consumed nothing, so the coordinator retries
+        # with the count (a fresh dispatch would sit behind the live-journal
+        # lease, correctly).
         empty = self._write_merged(_empty_merged_review())
         fin_code, fin, fin_err = self._finalize(
             payload["rid"], empty, "--needs-work-survivors", "2",
@@ -789,6 +803,8 @@ class TestReviewFanout(unittest.TestCase):
             ),
             "--receipt",
             str(receipt),
+            "--needs-work-survivors",
+            "1",
         )
         self.assertEqual(fin_code, 0, fin_err)
         data = json.loads(receipt.read_text(encoding="utf-8"))
@@ -927,7 +943,9 @@ class TestReviewFanout(unittest.TestCase):
         code, payload, err = self._dispatch(self._verdict_exec(by_axis))
         self.assertEqual(code, 0, err)
         merged = self._write_merged(_merged_review("One finding."))
-        fin_code, _fin, fin_err = self._finalize(payload["rid"], merged)
+        fin_code, _fin, fin_err = self._finalize(
+            payload["rid"], merged, "--needs-work-survivors", "1",
+        )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(self._rounds(), 1)
         # No --force, no --receipt: the counter alone must refuse round 2.
@@ -984,7 +1002,9 @@ class TestReviewFanout(unittest.TestCase):
         with unittest.mock.patch.object(
             flowctl, "_resolve_review_sha", side_effect=moving_head,
         ):
-            fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+            fin_code, fin, fin_err = self._finalize(
+                payload["rid"], merged, "--needs-work-survivors", "1",
+            )
         self.assertGreaterEqual(calls["n"], 2, "record path must recheck")
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
@@ -1050,6 +1070,8 @@ class TestReviewFanout(unittest.TestCase):
             str(merged),
             "--receipt",
             str(receipt),
+            "--needs-work-survivors",
+            "1",
             "--json",
         )
         self.assertEqual(code, 0, err)

@@ -44490,11 +44490,12 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     # remainder items can keep the merged container non-empty while the
     # NEEDS_WORK draws have nothing actionable left, and looping the fix
     # pass against an unchanged artifact is the wedge. Draw attribution
-    # never lives on finding items (closed v1 allowlist), so the coordinator
-    # supplies the count via --needs-work-survivors; absent that, the
-    # container item count is the compatible approximation. Absent or
-    # unparseable containers keep NEEDS_WORK on the default path (parsers
-    # distinguish invalid from absent).
+    # never lives on finding items (closed v1 allowlist), so ONLY the
+    # coordinator can supply the count — PR #392 r7: when any draw returned
+    # NEEDS_WORK the flag is REQUIRED (the container count cannot
+    # distinguish NEEDS_WORK-draw survivors from SHIP-draw remainder, so the
+    # old approximation could silently mask the wedge). All-SHIP rounds have
+    # no wedge and need no count.
     needs_work_survivors = getattr(args, "needs_work_survivors", None)
     if needs_work_survivors is not None and needs_work_survivors < 0:
         # A malformed negative count must not silently defeat the wedge (R9):
@@ -44504,11 +44505,15 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
-    if needs_work_survivors is None and (
-        isinstance(findings_container, dict)
-        and isinstance(findings_container.get("items"), list)
-    ):
-        needs_work_survivors = len(findings_container["items"])
+    if needs_work_survivors is None and verdict == "NEEDS_WORK":
+        error_exit(
+            "--needs-work-survivors is required when any draw returned "
+            "NEEDS_WORK: pass the coordinator-counted actionable findings "
+            "surviving from the NEEDS_WORK draws after the evidence gate "
+            "(0 escalates the round to NEEDS_HUMAN — the R9 wedge)",
+            use_json=args.json,
+            code=2,
+        )
     if verdict == "NEEDS_WORK" and needs_work_survivors == 0:
         verdict = "NEEDS_HUMAN"
     suppressed_count = parse_suppressed_count(merged_text)
@@ -49859,7 +49864,8 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
             "NEEDS_WORK draws after the evidence gate (fn-215 R9). 0 "
             "escalates a NEEDS_WORK round to NEEDS_HUMAN even when "
             "SHIP-draw remainder items keep the merged container "
-            "non-empty. Default: the merged container's item count."
+            "non-empty. REQUIRED when any draw returned NEEDS_WORK; "
+            "all-SHIP rounds need no count."
         ),
     )
     p2.add_argument("--json", action="store_true", help="JSON output")

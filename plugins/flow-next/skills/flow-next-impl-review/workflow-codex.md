@@ -173,8 +173,8 @@ The finalizer is deterministic and atomic — only it records or refunds:
   (`NEEDS_HUMAN > MAJOR_RETHINK > NEEDS_WORK > SHIP`); failed draws do not
   vote. No draw's verdict is judged away.
 - **Wedge escalation:** a `NEEDS_WORK` round with zero actionable survivors
-  from the NEEDS_WORK draws (your `--needs-work-survivors` count; the merged
-  container's item count when you omit it) escalates to `NEEDS_HUMAN` rather
+  from the NEEDS_WORK draws (your `--needs-work-survivors` count — required
+  whenever any draw returned `NEEDS_WORK`) escalates to `NEEDS_HUMAN` rather
   than looping against an unchanged artifact — per NEEDS_WORK draw, so
   SHIP-draw remainder items never mask an all-filtered NEEDS_WORK.
 - Records the attempt, the single v1 findings container (ordinals re-assigned
