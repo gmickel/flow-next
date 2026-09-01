@@ -1009,6 +1009,63 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
 
+    def test_major_rethink_permits_fresh_fanout(self) -> None:
+        """PR #392 r9 (P1): MAJOR_RETHINK is a completed terminal, not an
+        active fix loop — after rework (new artifact) a fresh unforced
+        fan-out must be admitted; only open verdicts refuse."""
+        by_axis = {
+            "correctness": "MAJOR_RETHINK",
+            "contracts": "SHIP",
+            "integration": "SHIP",
+        }
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(
+            _merged_review("Design conflict.", verdict="MAJOR_RETHINK")
+        )
+        fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+        self.assertEqual(fin.get("verdict"), "MAJOR_RETHINK", fin_err)
+        # Rework lands as a new commit (changed artifact).
+        (self.root / "app.py").write_text("x = 3\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "rework")
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--json",
+            fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err + out[:300])
+
+    def test_meta_publish_failure_refunds(self) -> None:
+        """PR #392 r9 (P2): an aggregate meta.json publication failure drives
+        the all-failed single-refund path instead of escaping with the
+        reservation charged behind the journal lease."""
+        real = flowctl._review_fanout_publish
+
+        def flaky(path, text):
+            if Path(path).name == "meta.json":
+                raise OSError("disk full")
+            return real(path, text)
+
+        with unittest.mock.patch.object(
+            flowctl, "_review_fanout_publish", side_effect=flaky,
+        ):
+            code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 2, err)
+        self.assertEqual(self._pending(), 0, "reservation must be refunded")
+        refunds = [
+            row for row in self._attempts()
+            if row.get("outcome") == "transport_failure"
+        ]
+        self.assertEqual(len(refunds), 1)
+        self.assertEqual(
+            refunds[0].get("failure_class"), "sidecar_publish_failed",
+        )
+
     def test_symlinked_sidecar_parent_refused(self) -> None:
         """PR #392 r8 (P2): a symlinked .flow/review-fanout would land raw
         reviewer output outside the repository — refuse, never follow."""

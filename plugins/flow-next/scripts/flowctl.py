@@ -43497,17 +43497,34 @@ def _review_fanout_first_round_guard(
             )
         except (OSError, ValueError, TypeError):
             spec_data = None
-        if isinstance(spec_data, dict) and _read_review_rounds(
-            normalize_epic(spec_data), "impl", task_id
-        ) > 0:
-            error_exit(
-                "fan-out is first-round only; this task already consumed a "
-                "review round this cycle (the counter resets on SHIP) — "
-                "re-review rounds use impl-review (single dispatch with the "
-                "merged prior-finding container)",
-                use_json=args.json,
-                code=2,
-            )
+        if isinstance(spec_data, dict):
+            data = normalize_epic(spec_data)
+            last_verdict = None
+            if _read_review_rounds(data, "impl", task_id) > 0:
+                for row in data.get("review_attempts") or []:
+                    if (
+                        isinstance(row, dict)
+                        and row.get("counter_kind") == "impl"
+                        and row.get("task") == task_id
+                        and isinstance(row.get("verdict"), str)
+                        and not row.get("superseded_by")
+                    ):
+                        last_verdict = row["verdict"]
+            # PR #392 r9: only an OPEN verdict marks an active fix loop.
+            # MAJOR_RETHINK is a completed design-conflict terminal — the
+            # workflow rotates its receipt and begins a NEW scope after the
+            # rework, and the changed-artifact fence still governs unchanged
+            # re-dispatches.
+            if last_verdict in ("NEEDS_WORK", "NEEDS_HUMAN"):
+                error_exit(
+                    "fan-out is first-round only; this task's last review "
+                    f"verdict is still open ({last_verdict}; the counter "
+                    "resets on SHIP) — re-review rounds use impl-review "
+                    "(single dispatch with the merged prior-finding "
+                    "container)",
+                    use_json=args.json,
+                    code=2,
+                )
     receipt_path = getattr(args, "receipt", None)
     if not receipt_path:
         return
@@ -44157,12 +44174,27 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
                 )
         error_exit(str(exc), use_json=args.json, code=2)
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
-    _review_fanout_write_meta(
-        sidecar, task_id, standalone, base_branch,
-        reviewed_base_sha, reviewed_head_sha, artifact_sha256,
-        reservation_id, rid, primary_axis, results,
-        focus=getattr(args, "focus", None),
-    )
+    try:
+        _review_fanout_write_meta(
+            sidecar, task_id, standalone, base_branch,
+            reviewed_base_sha, reviewed_head_sha, artifact_sha256,
+            reservation_id, rid, primary_axis, results,
+            focus=getattr(args, "focus", None),
+        )
+    except Exception:  # noqa: BLE001
+        # PR #392 r9 (P2): without meta.json phase two has nothing to
+        # finalize, and an escaping exception would leave the reservation
+        # charged behind the live-journal lease. Drive the same single-refund
+        # path an all-failed dispatch uses (standalone: plain error).
+        for row in results:
+            row["failure_class"] = (
+                row.get("failure_class") or "sidecar_publish_failed"
+            )
+        _review_fanout_refund_all_failed(
+            args, task_id, standalone, results, primary_axis,
+            reservation_id, reviewed_head_sha, reviewed_base_sha,
+        )
+        return
     if all(not row.get("verdict") for row in results):
         _review_fanout_refund_all_failed(
             args, task_id, standalone, results, primary_axis,
