@@ -59,83 +59,28 @@ coordinator resuming this scope mid-fix-loop (context lost between a
 `NEEDS_WORK` verdict and its fix pass) must not re-enter the three-draw shape:
 
 ```bash
-# Canonicalize the task handle FIRST (PR #392 r11): flowctl resolves short
-# handles (fn-N.M -> fn-N-slug.M) and keys receipts, spec files, and the
-# pending counter by the canonical id — a raw alias would silently read the
-# wrong file (and a suppressed lookup falls through to 0).
-if [ -n "$TASK_ID" ]; then
-  CANON="$("$FLOWCTL" show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
-  [ -n "$CANON" ] && TASK_ID="$CANON"
-fi
-# Same task-scoped default as Step 3 (explicit REVIEW_RECEIPT_PATH always wins;
-# concurrent standalone scopes should set one — the standalone default is shared).
-REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || echo detached) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19+r25): feature/foo vs feature-foo stay distinct; detached checkouts use a STABLE token (the repo tag already keys the checkout - a commit-keyed tag would change mid-fix-loop and orphan the receipt)
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+# ROUTE (PR #392): ONE deterministic verb owns canonicalization, the
+# repo/scope-keyed receipt path (the same default Step 3 uses; explicit
+# REVIEW_RECEIPT_PATH always wins), receipt identity + verdict routing,
+# stale-receipt rotation, and the task-mode ledger fences (in-flight round,
+# unjournaled reservation, lost receipt on an open cycle, deep-overturned
+# receipt, NEEDS_HUMAN). Branch on its action — never re-derive any of that
+# in shell.
+ROUTE="$("$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --rotate-stale --json)" || { printf '%s\n' "$ROUTE" >&2; exit 1; }
+ACTION="$(jq -r '.action' <<<"$ROUTE")"
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 RESUMED=0
-if [ -f "$RECEIPT_PATH" ]; then
-  # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
-  # another scope's receipt at a shared path must never inject its findings.
-  case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") != $s then "FOREIGN" elif (.verdict // "") == "NEEDS_WORK" and ((.verdict_before_deep // "") != "") then "NEEDS_WORK_DEEP" else (.verdict // "") end' "$RECEIPT_PATH" 2>/dev/null)" in
-    NEEDS_WORK)
-      RESUMED=1
-      # PR #392 r34: the context may have been lost BEFORE the fixes were
-      # applied — re-enter at the fix pass (parse the receipt's merged
-      # container, fix, test, commit) and only then dispatch the re-review.
-      echo "RESUMED SCOPE — active fix loop: first verify the receipt's findings are fixed and committed (apply them if not), then dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
-    NEEDS_WORK_DEEP)
-      # PR #392 r39: the open verdict came from a deep pass whose finding
-      # bodies are NOT persisted in the receipt — not resumable from state.
-      echo "NEEDS_HUMAN: this scope's NEEDS_WORK was issued by a deep pass and its finding bodies are not in the receipt — not resumable from state. Re-run the review with --deep on the current head (or a human decides)." >&2
-      exit 1 ;;
-    NEEDS_HUMAN)
-      # PR #392 r28: NEEDS_HUMAN is a terminal escalation, not a resumable
-      # loop — auto-resuming could overwrite an attended decision.
-      echo "NEEDS_HUMAN: this scope's last review escalated to a human decision — stopping; a human resolves it before any further review dispatch." >&2
-      exit 1 ;;
-    *)
-      # Closed (SHIP / MAJOR_RETHINK), unreadable, or another scope's receipt
-      # = stale input for a new round, never a resume. Rotate it aside so the
-      # fresh fan-out starts clean.
-      # (python os.replace, not a shell move: dynamic-path moves are
-      # refused by common agent command guards; this is the guard-clean
-      # form other flow-next skills already use)
-      RP="$RECEIPT_PATH" python3 -c 'import os; p = os.environ["RP"]; os.replace(p, p + ".prev")' ;;
-  esac
-fi
-
-# In-flight fence (task mode; PR #392 r10): the host path has no fan-out
-# journal, so an interrupted or concurrent invocation is visible only through
-# the spec's pending-reservation counter. A non-zero pending means a prior
-# round is reserved but unrecorded — dispatching another fan-out would strand
-# that reservation or double-consume the cap. Fail closed; never dispatch a
-# second concurrent review for the same scope.
-if [ -n "$TASK_ID" ]; then
-  PENDING="$(jq -r --arg k "impl:${TASK_ID}" '(.review_pending_rounds[$k] // 0)' ".flow/specs/${TASK_ID%.*}.json" 2>/dev/null || echo 0)"
-  if [ "${PENDING:-0}" != "0" ]; then
-    echo "NEEDS_HUMAN: a review round for ${TASK_ID} is already reserved (pending=${PENDING}) — an earlier host round is in flight or died before record. Finish/record that round, or repair via flowctl spec reset-review-rounds ${TASK_ID%.*}; never dispatch a second concurrent review." >&2
-    exit 1
-  fi
-fi
-
-# Delivered-state fence (task mode; PR #392 r20+r21): a recorded NEEDS_WORK
-# with a LOST /tmp receipt (reboot, tmp sweep) leaves pending at zero while
-# the round counter and last attempt still mark an open cycle — the same
-# state the codex backend's flowctl guard reads. A fresh fan-out here would
-# drop the merged prior-finding container and consume another round — and the
-# container is NOT recoverable from the durable ledger (attempt rows persist
-# only the output hash and a bounded digest, never the merged document), so
-# there is nothing honest to resume with either. Fail closed: a human decides
-# whether to reset the cycle (flowctl spec reset-review-rounds) and start a
-# fresh fan-out, accepting that the prior round's findings are gone.
-if [ "$RESUMED" = "0" ] && [ -n "$TASK_ID" ]; then
-  OPEN="$(jq -r --arg t "$TASK_ID" 'if ((.impl_review_rounds[$t] // 0) > 0) then ([.review_attempts[]? | select(.counter_kind == "impl" and .task == $t and (.verdict | type == "string") and (.superseded_by == null))] | (last // {}) | (.verdict // "")) else "" end' ".flow/specs/${TASK_ID%.*}.json" 2>/dev/null)"
-  case "$OPEN" in
-    NEEDS_WORK|NEEDS_HUMAN)
-      echo "NEEDS_HUMAN: ${TASK_ID} has an open ${OPEN} review cycle but its receipt (the merged prior-finding container) is gone — the container is not recoverable from the ledger, so a resume would ship blind and a fresh fan-out would silently drop unresolved findings. A human decides: flowctl spec reset-review-rounds ${TASK_ID%.*} abandons the lost cycle and licenses a fresh fan-out." >&2
-      exit 1 ;;
-  esac
-fi
+case "$ACTION" in
+  stop)
+    # The message names the condition and the repair (NEEDS_HUMAN-prefixed).
+    jq -r '.message' <<<"$ROUTE" >&2; exit 1 ;;
+  fix-then-rereview)
+    RESUMED=1
+    # Context may have been lost BEFORE the fixes were applied — re-enter at
+    # the fix pass and only then dispatch the re-review.
+    echo "RESUMED SCOPE — active fix loop: first verify the receipt's findings are fixed and committed (apply them if not), then dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
+esac
 ```
 
 With `RESUMED=1`, skip the "First round: three axis draws" section entirely —
@@ -365,18 +310,12 @@ feed the fix pass, never a rewrite of the already-recorded merged document.
 
 ## Step 3: Receipt
 
-Receipt path (same contract as the subprocess backends — fn-90 task-scoped default; explicit `REVIEW_RECEIPT_PATH` always wins):
+Receipt path (the same route-derived default every backend uses; explicit `REVIEW_RECEIPT_PATH` always wins):
 
 ```bash
-# Canonicalize the task handle in THIS fresh shell too (PR #392 r15) — every
-# block must key state on the same canonical id.
-if [ -n "$TASK_ID" ]; then
-  CANON="$("$FLOWCTL" show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
-  [ -n "$CANON" ] && TASK_ID="$CANON"
-fi
-REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || echo detached) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19+r25): feature/foo vs feature-foo stay distinct; detached checkouts use a STABLE token (the repo tag already keys the checkout - a commit-keyed tag would change mid-fix-loop and orphan the receipt)
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+ROUTE="$("$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 ```
 
 Write a receipt compatible with existing consumers:

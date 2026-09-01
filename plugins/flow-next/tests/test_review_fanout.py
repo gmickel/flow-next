@@ -1117,6 +1117,71 @@ class TestReviewFanout(unittest.TestCase):
         # phase-one SHIP here would make the coordinator skip required fixes.
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
+    def test_standalone_replay_emits_preserved_verdict(self) -> None:
+        """PR #392 r40 (P1): a standalone finalize retried for the same rid
+        is a no-op that EMITS the preserved (phase-changed) verdict."""
+        receipt = self.root / "sa-receipt.json"
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", "--base", "HEAD~1",
+            "--receipt", str(receipt), "--json", fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err)
+        rid = self._payload(out)["rid"]
+        merged = self._write_merged(_empty_merged_review())
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--base", "HEAD~1",
+            "--rid", rid, "--merged-file", str(merged),
+            "--receipt", str(receipt), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self._payload(out)["verdict"], "SHIP")
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(data.get("rid"), rid)
+        data["deep_passes"] = ["adversarial"]
+        data["verdict_before_deep"] = "SHIP"
+        data["verdict"] = "NEEDS_WORK"
+        receipt.write_text(json.dumps(data), encoding="utf-8")
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--base", "HEAD~1",
+            "--rid", rid, "--merged-file", str(merged),
+            "--receipt", str(receipt), "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self._payload(out)["verdict"], "NEEDS_WORK")
+        after = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(after.get("deep_passes"), ["adversarial"])
+
+    def test_task_replay_with_lost_receipt_uses_ledger(self) -> None:
+        """PR #392 r40 (P1): a task replay whose receipt vanished derives the
+        effective verdict from the durable ledger, never the stale SHIP."""
+        receipt = self.root / "lost-receipt.json"
+        code, payload, err = self._dispatch(
+            self._ship_exec([]), "--receipt", str(receipt)
+        )
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        # A deep pass durably reopened the cycle, then the receipt was lost.
+        spec = self._spec_data()
+        spec.setdefault("review_attempts", []).append({
+            "counter_kind": "impl", "kind": "impl", "review_type": "impl",
+            "task": self.task_id, "backend": "codex", "verdict": "NEEDS_WORK",
+            "outcome": "verdict", "round_consumed": False,
+            "deep_pass_overturn": True, "reservation_id": None,
+        })
+        (self.root / ".flow" / "specs" / f"{self.spec_id}.json").write_text(
+            json.dumps(spec), encoding="utf-8"
+        )
+        receipt.unlink()
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+
     def test_exclusive_increment_refuses_standing_reservation(self) -> None:
         """PR #392 r22: --exclusive makes the single-dispatch fence atomic —
         inside the reservation lock, a standing same-scope reservation

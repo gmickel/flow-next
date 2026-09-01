@@ -146,6 +146,7 @@ review-backend
 review-deep-auto
 review-findings attach
 review-rounds attempts
+review-route
 review-rounds increment
 review-rounds record
 review-rounds reset

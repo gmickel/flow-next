@@ -37,67 +37,29 @@ invocations with your merge between them; this is the first.
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-# Canonicalize the task handle FIRST (PR #392 r11): flowctl resolves short
-# handles (fn-N.M -> fn-N-slug.M) and writes the canonical id into receipts
-# and state — a raw alias here would mis-key the receipt path, the identity
-# check, and the pending counter.
-if [ -n "$TASK_ID" ]; then
-  CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
-  [ -n "$CANON" ] && TASK_ID="$CANON"
-fi
-REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || echo detached) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19+r25): feature/foo vs feature-foo stay distinct; detached checkouts use a STABLE token (the repo tag already keys the checkout - a commit-keyed tag would change mid-fix-loop and orphan the receipt)
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
-
-# RESUME GATE (fan-out is first-round only): a fresh invocation resuming a
-# scope mid-fix-loop — e.g. after a lost coordinator context — arrives here
-# with a receipt whose verdict is still open (NEEDS_WORK). That is round 2+:
-# skip Steps 2-4 entirely (dispatch, merge, finalize — they need a rid and
-# merged file no skipped phase produced) and resume at Step 5.1 — the fix
-# pass — reaching the 5.4 single-dispatch re-review only once the fixes are
-# committed (NEEDS_HUMAN stops instead). A receipt whose verdict is closed (SHIP /
-# MAJOR_RETHINK) or unreadable is a COMPLETED earlier scope left at this path —
-# stale input for a new round, never a resume: rotate it aside so the fresh
-# fan-out starts clean instead of bouncing off flowctl's first-round guard or
-# injecting stale findings. (The default path is repo- and branch-scoped;
-# concurrent reviews of the SAME scope still need an explicit per-run
-# REVIEW_RECEIPT_PATH.) flowctl's guard remains the no-cost exit-2 backstop.
+# ROUTE (PR #392): ONE deterministic verb owns canonicalization (fn-N.M ->
+# fn-N-slug.M), the repo/scope-keyed receipt path (explicit REVIEW_RECEIPT_PATH
+# always wins), receipt identity + verdict routing, stale-receipt rotation, and
+# the task-mode ledger fences (in-flight round, unjournaled reservation, lost
+# receipt on an open cycle, deep-overturned receipt, NEEDS_HUMAN). Branch on its
+# action — never re-derive any of that in shell. flowctl's first-round guard
+# stays the no-cost exit-2 backstop behind it.
+ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --rotate-stale --json)" || { printf '%s\n' "$ROUTE" >&2; exit 1; }
+ACTION="$(jq -r '.action' <<<"$ROUTE")"
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 RESUMED=0
-if [ -f "$RECEIPT_PATH" ]; then
-  # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
-  # another scope's receipt at a shared path must never inject its session or
-  # findings into this review.
-  case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") != $s then "FOREIGN" elif (.verdict // "") == "NEEDS_WORK" and ((.verdict_before_deep // "") != "") then "NEEDS_WORK_DEEP" else (.verdict // "") end' "$RECEIPT_PATH" 2>/dev/null)" in
-    NEEDS_WORK)
-      RESUMED=1
-      # PR #392 r34: the context may have been lost BEFORE the fixes were
-      # applied — resume at Step 5.1 (parse the receipt's findings, fix,
-      # test, commit), not straight at the re-review: an unchanged artifact
-      # would stall on the fence (task mode) or spend a round re-reviewing
-      # unfixed code (standalone). Proceed to 5.4 only once the fixes are
-      # verifiably committed.
-      echo "RESUMED SCOPE — receipt carries an active fix loop; skip Steps 2-4, resume at Step 5.1 (parse findings from the receipt, fix, test, commit — then the 5.4 single-dispatch re-review; if the fixes are already committed, verify and go straight to 5.4)" ;;
-    NEEDS_WORK_DEEP)
-      # PR #392 r39: the open verdict came from a deep pass, whose finding
-      # bodies are NOT persisted in the receipt (only pass names/counts are)
-      # — the fix pass cannot recover the blocker, so this state is not
-      # resumable. Fail closed.
-      echo "NEEDS_HUMAN: this scope's NEEDS_WORK was issued by a deep pass and its finding bodies are not in the receipt — not resumable from state. Re-run the review with --deep on the current head (or a human decides)." >&2
-      exit 1 ;;
-    NEEDS_HUMAN)
-      # PR #392 r28: NEEDS_HUMAN is a terminal escalation, not a resumable
-      # loop — auto-resuming could overwrite an attended decision.
-      echo "NEEDS_HUMAN: this scope's last review escalated to a human decision — stopping. A human resolves it (address the escalation, then re-review explicitly; --force is the human lane for a fresh fan-out)." >&2
-      exit 1 ;;
-    *)
-      # Closed, unreadable, or another scope's receipt: stale input for this
-      # round — rotate aside, start clean.
-      # (python os.replace, not a shell move: dynamic-path moves are
-      # refused by common agent command guards; this is the guard-clean
-      # form other flow-next skills already use)
-      RP="$RECEIPT_PATH" python3 -c 'import os; p = os.environ["RP"]; os.replace(p, p + ".prev")' ;;
-  esac
-fi
+case "$ACTION" in
+  stop)
+    # The message names the condition and the repair (NEEDS_HUMAN-prefixed).
+    jq -r '.message' <<<"$ROUTE" >&2; exit 1 ;;
+  fix-then-rereview)
+    RESUMED=1
+    # Context may have been lost BEFORE the fixes were applied: resume at
+    # Step 5.1 (parse the receipt's findings, fix, test, commit) and reach the
+    # 5.4 single-dispatch re-review only once the fixes are committed.
+    echo "RESUMED SCOPE — receipt carries an active fix loop; skip Steps 2-4, resume at Step 5.1 (parse findings from the receipt, fix, test, commit — then the 5.4 single-dispatch re-review; if the fixes are already committed, verify and go straight to 5.4)" ;;
+esac
 
 # Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely
 # (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).
@@ -201,18 +163,12 @@ document (write it to a file for the finalize):
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 # Bash state does NOT survive across prompt turns — re-derive the Step-1/Step-2
 # values in THIS block rather than reading stale variables.
-# Canonicalize the task handle in THIS fresh shell too (PR #392 r15) — every
-# block must key state on the same canonical id.
-if [ -n "$TASK_ID" ]; then
-  CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
-  [ -n "$CANON" ] && TASK_ID="$CANON"
-fi
 # RID and MERGED_FILE are typed as LITERALS: the rid from the phase-one JSON
 # output, the merged-file path from your Step-3 merge — never carried shell
 # variables.
-REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || echo detached) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19+r25): feature/foo vs feature-foo stay distinct; detached checkouts use a STABLE token (the repo tag already keys the checkout - a commit-keyed tag would change mid-fix-loop and orphan the receipt)
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 if [[ -z "$BASE_COMMIT" ]]; then
   DIFF_BASE="main"
   git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
@@ -285,15 +241,9 @@ If `VERDICT=NEEDS_WORK`:
 # Bash state does NOT survive across prompt turns (the fix/test/commit steps ran
 # between) — re-derive the Step-1 values in THIS block rather than reading
 # stale variables; TASK_ID is a literal from the invocation context.
-# Canonicalize the task handle in THIS fresh shell too (PR #392 r15) — every
-# block must key state on the same canonical id.
-if [ -n "$TASK_ID" ]; then
-  CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
-  [ -n "$CANON" ] && TASK_ID="$CANON"
-fi
-REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
-SCOPE_TAG="${TASK_ID:-branch-$( (git symbolic-ref -q HEAD || echo detached) 2>/dev/null | cksum | tr -d ' ')}"  # exact-ref hash (PR #392 r19+r25): feature/foo vs feature-foo stay distinct; detached checkouts use a STABLE token (the repo tag already keys the checkout - a commit-keyed tag would change mid-fix-loop and orphan the receipt)
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 if [[ -z "$BASE_COMMIT" ]]; then
   DIFF_BASE="main"
   git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"

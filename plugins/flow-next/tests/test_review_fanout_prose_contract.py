@@ -47,6 +47,8 @@ class CodexWorkflowFanoutContract(unittest.TestCase):
     def test_fanout_commands_and_flags_present(self) -> None:
         for text in self._texts():
             self.assertIn("impl-review-fanout ", text)
+            self.assertIn("review-route ", text)
+            self.assertIn("--rotate-stale", text)
             self.assertIn("impl-review-fanout-finalize", text)
             self.assertIn("--draw ", text)
             self.assertIn("--merged-file", text)
@@ -104,6 +106,7 @@ class HostWorkflowFanoutContract(unittest.TestCase):
     def test_sequential_fallback_degradation_token(self) -> None:
         for text in self._texts():
             self.assertIn("degradation", text)
+            self.assertIn("review-route ", text)
 
 
 if __name__ == "__main__":

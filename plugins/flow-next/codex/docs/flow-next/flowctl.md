@@ -2180,6 +2180,28 @@ flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> 
 # omit it only on a round with no NEEDS_WORK draw.
 ```
 
+```bash
+# Routing - the ONE verb the review workflows call before any dispatch
+flowctl review-route [<task-id>] [--receipt <path>] [--rotate-stale] [--force] [--json]
+```
+
+`review-route` decides the next review shape for a scope and derives its
+receipt path, so the workflow prose never re-derives either in shell. Output
+(`--json`): `action` is `fanout` (fresh first round), `fix-then-rereview` (an
+open NEEDS_WORK receipt for this scope: run the fix pass, then the
+single-dispatch re-review), or `stop` (a `NEEDS_HUMAN:`-prefixed `message` and a
+`reason` code: `needs_human`, `deep_overturn_not_resumable`, `in_flight`,
+`unjournaled_reservation`, `lost_receipt`). `receipt_path` is the explicit
+`REVIEW_RECEIPT_PATH` when set, else the repo- and scope-keyed default
+(`/tmp/impl-review-receipt-<repo-hash>-<task-id | branch-<ref-hash> |
+branch-detached>.json`), and `task_id` is the canonical id for any accepted
+handle. The call is pure by default; `--rotate-stale` (the dispatch gate passes
+it) moves a closed, foreign, or unreadable receipt aside to `<path>.prev` before
+a fresh fan-out, and `--force` is the human lane that routes to `fanout`
+regardless of guards. Every input the decision used is echoed for audit
+(`receipt_state`, `pending`, `rounds`, `last_verdict`,
+`unjournaled_reservation`).
+
 The coordinator's merge (same-defect dedupe, evidence-bar drops, Act-On ranking) is
 host judgment and happens BETWEEN the two invocations; the finalizer computes the
 verdict mechanically (worst-wins over the draws' tags), records the attempt, the

@@ -44322,6 +44322,286 @@ def _review_fanout_journal_refund_intent(
     atomic_write_json(_review_journal_path(flow_dir, reservation_id), journal)
 
 
+# ---------------------------------------------------------------------------
+# review-route (PR #392): one deterministic verb owns everything the review
+# workflows used to re-derive in agent-executed bash before a dispatch —
+# canonical task id, the repo/scope-keyed receipt path, receipt identity +
+# verdict routing, stale-receipt rotation, and the task-mode fences. The prose
+# calls it once and branches on `action`; the invariants live here, tested.
+# ---------------------------------------------------------------------------
+
+REVIEW_ROUTE_ACTIONS = ("fanout", "fix-then-rereview", "stop")
+_REVIEW_ROUTE_OPEN = ("NEEDS_WORK",)
+
+
+def _review_route_receipt_default(repo_root: Path, task_id: Optional[str]) -> str:
+    """Repo- and scope-keyed default receipt path (fn-90 R5 + PR #392).
+
+    The repo discriminator hashes the checkout root (two repos with the same
+    task id never collide); the scope is the canonical task id, or for a
+    standalone review a hash of the EXACT symbolic ref (``feature/foo`` and
+    ``feature-foo`` stay distinct) with a stable token for detached checkouts
+    (a commit-keyed tag would change on every fix commit and orphan the
+    receipt mid-loop). ``REVIEW_RECEIPT_PATH`` always wins at the caller.
+    """
+    repo_tag = hashlib.sha256(str(repo_root).encode("utf-8")).hexdigest()[:12]
+    if task_id:
+        scope = task_id
+    else:
+        try:
+            ref = _run_review_git(
+                ["git", "symbolic-ref", "-q", "HEAD"], what="current ref",
+            ).strip()
+        except ReviewEvidenceError:
+            ref = ""
+        scope = (
+            f"branch-{hashlib.sha256(ref.encode('utf-8')).hexdigest()[:12]}"
+            if ref else "branch-detached"
+        )
+    return f"/tmp/impl-review-receipt-{repo_tag}-{scope}.json"
+
+
+def _review_route_read_receipt(path: Path) -> Optional[dict]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _review_route_receipt_state(receipt: Optional[dict], scope_id: str) -> str:
+    """absent | unreadable | foreign | open | open_deep | needs_human | closed."""
+    if receipt is None:
+        return "absent"
+    if receipt.get("id") != scope_id:
+        return "foreign"
+    verdict = receipt.get("verdict")
+    if verdict in _REVIEW_ROUTE_OPEN:
+        # A deep pass persists only pass names/counts — its finding bodies are
+        # not in the receipt, so an overturned NEEDS_WORK is not resumable.
+        if isinstance(receipt.get("verdict_before_deep"), str):
+            return "open_deep"
+        return "open"
+    if verdict == "NEEDS_HUMAN":
+        return "needs_human"
+    return "closed"
+
+
+def _review_route_ledger(flow_dir: Path, task_id: str) -> dict:
+    """Task-mode fences read from the durable spec ledger."""
+    out = {
+        "pending": 0, "rounds": 0, "last_verdict": None,
+        "unjournaled_reservation": None,
+    }
+    spec_id = spec_id_from_task(task_id)
+    try:
+        spec_data = json.loads(
+            find_spec_json_path(flow_dir, spec_id).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError, TypeError):
+        return out
+    if not isinstance(spec_data, dict):
+        return out
+    spec_data = normalize_epic(spec_data)
+    counter_scope = _review_counter_scope("impl", task_id)
+    pending = spec_data.get("review_pending_rounds")
+    if isinstance(pending, dict):
+        out["pending"] = int(pending.get(counter_scope, 0) or 0)
+    out["rounds"] = _read_review_rounds(spec_data, "impl", task_id)
+    for row in spec_data.get("review_attempts") or []:
+        if (
+            isinstance(row, dict)
+            and row.get("counter_kind") == "impl"
+            and row.get("task") == task_id
+            and isinstance(row.get("verdict"), str)
+            and not row.get("superseded_by")
+        ):
+            out["last_verdict"] = row["verdict"]
+    for res_id, res in (spec_data.get("review_reservations") or {}).items():
+        if (
+            isinstance(res, dict)
+            and res.get("counter_scope") == counter_scope
+            and not res.get("superseded_by")
+            and not _review_journal_path(flow_dir, str(res_id)).is_file()
+        ):
+            out["unjournaled_reservation"] = str(res_id)
+            break
+    return out
+
+
+def _review_route_rotate(path: Path) -> Optional[str]:
+    """Rotate a stale receipt aside (``<path>.prev``); None when nothing moved."""
+    if not path.exists():
+        return None
+    target = Path(str(path) + ".prev")
+    try:
+        os.replace(path, target)
+    except OSError:
+        return None
+    return str(target)
+
+
+def compute_review_route(
+    flow_dir: Path,
+    repo_root: Path,
+    task_id: Optional[str],
+    *,
+    receipt_path: Optional[str] = None,
+    rotate_stale: bool = False,
+    force: bool = False,
+) -> dict:
+    """Decide the next review shape for a scope. Pure unless ``rotate_stale``.
+
+    Returns ``action`` in REVIEW_ROUTE_ACTIONS with a ``reason`` code and a
+    human ``message``; every input the decision used is echoed for audit.
+    """
+    standalone = task_id is None
+    scope_id = task_id if task_id else "branch"
+    env_path = os.environ.get("REVIEW_RECEIPT_PATH")
+    resolved_path = (
+        receipt_path or env_path
+        or _review_route_receipt_default(repo_root, task_id)
+    )
+    receipt_file = Path(resolved_path)
+    receipt = _review_route_read_receipt(receipt_file) if receipt_file.exists() else None
+    if receipt_file.exists() and receipt is None:
+        receipt_state = "unreadable"
+    else:
+        receipt_state = _review_route_receipt_state(receipt, scope_id)
+    ledger = _review_route_ledger(flow_dir, task_id) if task_id else {
+        "pending": 0, "rounds": 0, "last_verdict": None,
+        "unjournaled_reservation": None,
+    }
+    result = {
+        "type": "review_route",
+        "task_id": task_id,
+        "standalone": standalone,
+        "scope_id": scope_id,
+        "receipt_path": resolved_path,
+        "receipt_state": receipt_state,
+        "receipt_verdict": receipt.get("verdict") if receipt else None,
+        "rotated_to": None,
+        "force": bool(force),
+        **ledger,
+    }
+
+    def _stop(reason: str, message: str) -> dict:
+        result.update({
+            "action": "stop", "reason": reason,
+            "message": f"NEEDS_HUMAN: {message}",
+        })
+        return result
+
+    def _fanout(reason: str, message: str) -> dict:
+        if receipt_state in ("foreign", "closed", "unreadable") and rotate_stale:
+            result["rotated_to"] = _review_route_rotate(receipt_file)
+        result.update({"action": "fanout", "reason": reason, "message": message})
+        return result
+
+    if force:
+        return _fanout(
+            "force",
+            "--force: human-authorized fresh fan-out; every guard bypassed "
+            "(the stale receipt is rotated aside when --rotate-stale is set).",
+        )
+    if ledger["unjournaled_reservation"]:
+        return _stop(
+            "unjournaled_reservation",
+            f"a reserved round for {task_id} has no journal (reservation "
+            f"{ledger['unjournaled_reservation']} — its dispatch died before "
+            "journaling). Repair explicitly: flowctl spec reset-review-rounds "
+            f"{spec_id_from_task(task_id)}.",
+        )
+    if ledger["pending"] > 0:
+        return _stop(
+            "in_flight",
+            f"a review round for {task_id} is already reserved "
+            f"(pending={ledger['pending']}) — an earlier round is in flight or "
+            "died before record. Finish/record it, or repair via flowctl spec "
+            f"reset-review-rounds {spec_id_from_task(task_id)}; never dispatch "
+            "a second concurrent review for the same scope.",
+        )
+    if receipt_state == "needs_human":
+        return _stop(
+            "needs_human",
+            "this scope's last review escalated to a human decision — a human "
+            "resolves it before any further dispatch (--force is the human lane "
+            "for a fresh fan-out).",
+        )
+    if receipt_state == "open_deep":
+        return _stop(
+            "deep_overturn_not_resumable",
+            "this scope's NEEDS_WORK was issued by a deep pass and its finding "
+            "bodies are not in the receipt — not resumable from state. Re-run "
+            "the review with --deep on the current head, or a human decides.",
+        )
+    if receipt_state == "open":
+        result.update({
+            "action": "fix-then-rereview",
+            "reason": "open_receipt",
+            "message": (
+                "receipt carries an active fix loop: parse its findings, fix, "
+                "test, commit (verify instead when already committed), then "
+                "the single-dispatch re-review with --receipt — never a fan-out."
+            ),
+        })
+        return result
+    # Receipt absent / foreign / closed / unreadable: consult the ledger before
+    # calling this a fresh first round.
+    if task_id and ledger["rounds"] > 0:
+        if ledger["last_verdict"] == "NEEDS_HUMAN":
+            return _stop(
+                "needs_human",
+                f"{task_id}'s last recorded verdict is NEEDS_HUMAN — a human "
+                "resolves it before any further dispatch.",
+            )
+        if ledger["last_verdict"] in _REVIEW_ROUTE_OPEN:
+            return _stop(
+                "lost_receipt",
+                f"{task_id} has an open {ledger['last_verdict']} cycle but its "
+                "receipt (the merged prior-finding container) is gone — the "
+                "container is not recoverable from the ledger, so a resume would "
+                "ship blind and a fresh fan-out would drop unresolved findings. "
+                "A human decides: flowctl spec reset-review-rounds "
+                f"{spec_id_from_task(task_id)} abandons the lost cycle and "
+                "licenses a fresh fan-out.",
+            )
+    return _fanout(
+        "first_round",
+        "fresh first round: fan out (stale/foreign receipt rotated aside when "
+        "--rotate-stale is set).",
+    )
+
+
+def cmd_review_route(args: argparse.Namespace) -> None:
+    """`flowctl review-route [TASK] [--receipt P] [--rotate-stale] [--force]`."""
+    task_id = getattr(args, "task", None)
+    if task_id:
+        if not ensure_flow_exists():
+            error_exit(".flow/ does not exist", use_json=args.json)
+        flow_dir = get_flow_dir()
+        if not is_task_id(task_id):
+            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
+        task_id = resolve_task_arg(flow_dir, task_id, use_json=args.json) or task_id
+    else:
+        flow_dir = get_flow_dir() if ensure_flow_exists() else Path(".flow")
+    repo_root = get_repo_root()
+    result = compute_review_route(
+        flow_dir, repo_root, task_id,
+        receipt_path=getattr(args, "receipt", None),
+        rotate_stale=bool(getattr(args, "rotate_stale", False)),
+        force=bool(getattr(args, "force", False)),
+    )
+    if args.json:
+        json_output(result)
+        return
+    print(f"ACTION={result['action']} ({result['reason']})")
+    print(f"RECEIPT_PATH={result['receipt_path']}")
+    if result["task_id"]:
+        print(f"TASK_ID={result['task_id']}")
+    print(result["message"], file=sys.stderr if result["action"] == "stop" else sys.stdout)
+
+
 def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
     """Phase-one fan-out dispatch (fn-215 R14).
 
@@ -44838,7 +45118,7 @@ def _review_fanout_record_and_receipt(
         # delete already-recorded optional-phase evidence — when the existing
         # receipt belongs to this same round (same id, same draw sessions),
         # carry its deep/validator/walkthrough fields into the rebuild.
-        preserved = {}
+        same_round = False
         if receipt_path:
             try:
                 existing = json.loads(
@@ -44859,31 +45139,15 @@ def _review_fanout_record_and_receipt(
                     and bool(dispatched_rid)
                     and existing.get("rid") == dispatched_rid
                 )
-                if same_round:
-                    # PR #392 r18: preserve the FULL enabled-phase state, not
-                    # a three-key whitelist — the phase writers also stamp
-                    # counts, promotions, timestamps, and verdict_before_*
-                    # markers, and deep/validator can change the top-level
-                    # verdict itself.
-                    preserved = {
-                        key: existing[key]
-                        for key in existing
-                        if key in (
-                            "deep_passes", "validator", "walkthrough",
-                            "deep_findings_count", "cross_pass_promotions",
-                        )
-                        or key.startswith("verdict_before_")
-                        or key.endswith("_timestamp")
-                    }
-                    if any(
-                        key.startswith("verdict_before_") for key in preserved
-                    ):
-                        # A phase changed the verdict after finalize; the
-                        # replayed rebuild must not silently revert it.
-                        preserved["verdict"] = existing.get("verdict")
             except (OSError, ValueError, TypeError):
-                preserved = {}
-        extra_fields = dict(preserved)
+                same_round = False
+        if same_round:
+            # PR #392 r40 (P1): a standalone finalize retried for the SAME rid
+            # is a true no-op — the published receipt (phase-enriched,
+            # possibly overturned) is the truth, and reporting `replayed`
+            # lets the emit path surface ITS verdict, exactly like task mode.
+            return {"replayed": True, "standalone": True}
+        extra_fields = {}
         # Stamp the round identity the same-round predicate keys on (PR #392
         # r23+r29: the per-dispatch rid) plus the reviewed head for audit —
         # additive, merged into the ONE atomic publication (r26).
@@ -45172,6 +45436,27 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
                 verdict = preserved["verdict"]
             if isinstance(preserved.get("review"), str) and preserved["review"].strip():
                 merged_text = preserved["review"]
+        else:
+            # PR #392 r40 (P1): the receipt is gone or unreadable — never emit
+            # the stale phase-one verdict over it. Task mode derives the
+            # effective verdict from the durable ledger (a deep-overturn
+            # marker lives there); standalone has no ledger and fails closed.
+            ledger_verdict = None
+            if task_id:
+                ledger_verdict = _review_route_ledger(
+                    flow_dir, task_id
+                ).get("last_verdict")
+            if isinstance(ledger_verdict, str):
+                verdict = ledger_verdict
+            else:
+                error_exit(
+                    f"fan-out finalize replay: the receipt at {receipt_path} is "
+                    "missing or unreadable and no durable verdict is available "
+                    "— refusing to emit the stale phase-one verdict. Restore "
+                    "the receipt or re-dispatch the review.",
+                    use_json=args.json,
+                    code=2,
+                )
     _review_fanout_emit_finalize(
         args, standalone, review_id, verdict, merged_text, receipt_draws,
         primary, resolved_spec, attempt_summary, task_id,
@@ -51588,6 +51873,34 @@ def main() -> None:
     )
     p_rr_attempts.add_argument("--json", action="store_true", help="JSON output")
     p_rr_attempts.set_defaults(func=cmd_review_rounds_attempts)
+
+    # review-route (PR #392): deterministic dispatch routing for the
+    # impl-review workflows — replaces the agent-executed bash gates.
+    p_review_route = subparsers.add_parser(
+        "review-route",
+        help=(
+            "Decide the next impl-review shape for a scope (fanout | "
+            "fix-then-rereview | stop) and derive its receipt path"
+        ),
+    )
+    p_review_route.add_argument(
+        "task", nargs="?", default=None,
+        help="Task ID (any accepted handle); omit for a standalone branch review",
+    )
+    p_review_route.add_argument(
+        "--receipt",
+        help="Explicit receipt path (default: REVIEW_RECEIPT_PATH, else the repo/scope-keyed /tmp default)",
+    )
+    p_review_route.add_argument(
+        "--rotate-stale", action="store_true",
+        help="Rotate a closed/foreign/unreadable receipt aside to <path>.prev before a fresh fan-out (the dispatch gate passes this; pure otherwise)",
+    )
+    p_review_route.add_argument(
+        "--force", action="store_true",
+        help="Human-only: route to a fresh fan-out regardless of guards",
+    )
+    p_review_route.add_argument("--json", action="store_true", help="JSON output")
+    p_review_route.set_defaults(func=cmd_review_route)
 
     p_review_artifact = subparsers.add_parser(
         "review-artifact",
