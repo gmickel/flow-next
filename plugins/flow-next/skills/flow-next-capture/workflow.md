@@ -611,7 +611,14 @@ Runs only when §4.2's `Mark ready?` consent recorded `mark-ready`; the `flowctl
 Runs only when SKILL.md's mode detection recorded `NO_PLAN_OPT=1` (`--no-plan` on the invocation — the explicit opt-in, in interactive AND autofix mode; capture NEVER sets the field from conversation content or its own judgment, and autofix has no other path to it). After the spec write:
 
 ```bash
-"$FLOWCTL" spec set-no-plan "$SPEC_ID" --json >/dev/null 2>&1 || echo "no_plan not set: $SPEC_ID has tasks (rewrite target already planned) — field left unchanged"
+# Capture raw first, rc-checked; parse separately (one normalized line either way —
+# a non-task failure keeps its real reason instead of being misreported as the
+# task refusal).
+if ! NO_PLAN_OUT="$("$FLOWCTL" spec set-no-plan "$SPEC_ID" --json 2>&1)"; then
+  NO_PLAN_REASON="$(printf '%s' "$NO_PLAN_OUT" | jq -r '.error // empty' 2>/dev/null | head -1)"
+  [ -z "$NO_PLAN_REASON" ] && NO_PLAN_REASON="$(printf '%s' "$NO_PLAN_OUT" | head -1)"
+  echo "no_plan not set: ${NO_PLAN_REASON:-unknown error} — field left unchanged"
+fi
 ```
 
 Best-effort like §5.8/§5.9: a refusal (the verb refuses when the spec already has tasks — reachable only on a `--rewrite` of a planned spec) or failure prints the one-line notice and the run continues; the spec write is never rolled back. A fresh capture has no tasks yet, so a draft that merely implies multiple tasks still sets cleanly — the set-time refusal guards task presence only.
