@@ -1,4 +1,4 @@
-<!-- placeholders: base_branch, context_guidance, focus_section, changed_files, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+<!-- placeholders: base_branch, context_guidance, focus_section, changed_files, smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block, axis_focus_block -->
 
 **You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
 `flowctl <backend>` review command, or a nested agent/backend to perform this
@@ -15,7 +15,7 @@ Review all changes on the current branch compared to {base_branch}.
 {changed_files}
 ```
 
-## Review Criteria (Carmack-level)
+{axis_focus_block}## Review Criteria (Carmack-level)
 
 1. **Correctness** - Does the code do what it claims?
 2. **Reliability** - Can this fail silently or cause flaky behavior?
