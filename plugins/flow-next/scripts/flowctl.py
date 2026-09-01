@@ -44660,28 +44660,20 @@ def _review_fanout_record_and_receipt(
                 existing = json.loads(
                     Path(receipt_path).read_text(encoding="utf-8")
                 )
-                # PR #392 r23: the draw-session sequence alone is not a round
-                # identity (economy-mode draws can be [null] every round, and
-                # every standalone receipt shares id "branch") — the reviewed
-                # head is the snapshot that actually distinguishes rounds.
-                # Receipts written before the stamp existed never match
+                # PR #392 r23+r29: neither the draw-session sequence nor the
+                # reviewed head is a round identity (economy draws can be
+                # [null] every round, and a second fan-out on an UNCHANGED
+                # head is explicitly permitted after a closed receipt). The
+                # fan-out RID is minted per dispatch and is the identity —
+                # receipts written before the stamp existed never match
                 # (fail-safe: no preservation).
-                dispatched_head = meta.get("reviewed_head_sha")
+                dispatched_rid = meta.get("rid")
                 same_round = (
                     isinstance(existing, dict)
                     and existing.get("id") == review_id
-                    and isinstance(dispatched_head, str)
-                    and bool(dispatched_head)
-                    and existing.get("reviewed_head_sha") == dispatched_head
-                    and [
-                        d.get("session_id")
-                        for d in (existing.get("draws") or [])
-                        if isinstance(d, dict)
-                    ] == [
-                        d.get("session_id")
-                        for d in (receipt_draws or [])
-                        if isinstance(d, dict)
-                    ]
+                    and isinstance(dispatched_rid, str)
+                    and bool(dispatched_rid)
+                    and existing.get("rid") == dispatched_rid
                 )
                 if same_round:
                     # PR #392 r18: preserve the FULL enabled-phase state, not
@@ -44708,9 +44700,11 @@ def _review_fanout_record_and_receipt(
             except (OSError, ValueError, TypeError):
                 preserved = {}
         extra_fields = dict(preserved)
-        # Stamp the snapshot identity the same-round predicate keys on
-        # (PR #392 r23) — additive, honest: the head the merged verdict
-        # covers. Merged into the ONE atomic publication (r26).
+        # Stamp the round identity the same-round predicate keys on (PR #392
+        # r23+r29: the per-dispatch rid) plus the reviewed head for audit —
+        # additive, merged into the ONE atomic publication (r26).
+        if isinstance(meta.get("rid"), str):
+            extra_fields["rid"] = meta["rid"]
         if isinstance(meta.get("reviewed_head_sha"), str):
             extra_fields["reviewed_head_sha"] = meta["reviewed_head_sha"]
         _review_fanout_write_receipt(
