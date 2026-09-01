@@ -9,7 +9,8 @@
   "depends_on_epics": [],
   "id": "fn-215-parallel-draw-review-three-axis-lenses",
   "impl_review_rounds": {
-    "fn-215-parallel-draw-review-three-axis-lenses.1": 0
+    "fn-215-parallel-draw-review-three-axis-lenses.1": 0,
+    "fn-215-parallel-draw-review-three-axis-lenses.2": 0
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -902,10 +903,89 @@
       "task": "fn-215-parallel-draw-review-three-axis-lenses.1",
       "timestamp": "2026-09-01T10:14:25.641235Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "a2abb1936f04103309e8b28231abfe010e53d934b4b2777243b54ac29edb5b0f",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f260a7ecc02884bf0acb94293548e02ab337dc92",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 1857,
+      "output_sha256": "5f02c584e5e64646e8855274c9b493fbc053cacd8af2aa3f7064cb75d8d5e916",
+      "reservation_id": "b64b3e06c730439b84a019934d71defc",
+      "round_consumed": false,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.2",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.2",
+      "timestamp": "2026-09-01T10:32:10.411350Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "38b2c0b084ede40dc1113c09d5056cb099b3d094e25cd53cc4d4e0ed8161fc16",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "03110fbe912cec3fa24046b2bafaffdf02400507",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 654,
+      "output_sha256": "1e9112486891618063961135aada094693d5b93b8d214911ed15b1c1ead8304c",
+      "reservation_id": "cfe198a53ffe4e9bad0b718e2fedcdf4",
+      "round_consumed": false,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.2",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.2",
+      "timestamp": "2026-09-01T10:39:20.447667Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "3035fc566cd1308cdc67dbc18efb1ae9aa245382236189d331e7b6ae9873dd4c",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3f3f4088d65930d591eb3cc30b398855858454ac",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 545,
+      "output_sha256": "165010c16236c7356ca1ad82f188d1a818df2579f2c3443cb9674a22c697e8eb",
+      "reservation_id": "541c9f1d6eaf40708c554da16be27870",
+      "round_consumed": true,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.2",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.2",
+      "timestamp": "2026-09-01T10:42:43.545720Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
     "impl:fn-215-parallel-draw-review-three-axis-lenses.1": 1,
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.2": 1,
     "plan": 3,
     "plan#completion": 0
   },
@@ -913,6 +993,7 @@
   "review_reservations": {},
   "review_transport_failures": {
     "impl:fn-215-parallel-draw-review-three-axis-lenses.1": 0,
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.2": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-215-parallel-draw-review-three-axis-lenses.md",
@@ -929,5 +1010,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-01T10:14:25.643003Z"
+  "updated_at": "2026-09-01T10:42:43.547482Z"
 }

@@ -10,9 +10,13 @@ workflow-codex.md: the fan-out is TWO blocking foreground flowctl calls — the 
 ## Acceptance
 R1 (coordination prose), R3, R5, R7, and R9-R13 for the host path satisfied; judge against the parent spec's criteria directly. Skill-contract/prose suites green; mirror diff committed and idempotent.
 ## Done summary
-TBD
+Shipped the fan-out coordination prose (R1 coordination, R3, R5, R7, plus R9-R13 host-path ownership): workflow-codex.md documents the two-invocation flow (phase-one dispatch → per-draw sidecars → coordinator merge → phase-two finalize, each call under the foreground rule) with the merge step (same-defect dedupe judgment, evidence-bar drops with the real per-anchor tally grammar, Act-On ≤5 for non-blocking tiers + published remainder, axis provenance in prose only, every surviving introduced blocking finding fixed) and optional phases ordered AFTER finalize against the merged container (once per round, never per draw, before the fix pass — reordered from the spec's original wording after review proved pre-finalize unexecutable on codex; flowctl docstrings/help aligned). workflow-host.md: host fan-out — one per-ROUND reservation, three read-only subagents in one message (quality-auditor dispatch shape, merge-vs-verbatim consumption distinction stated), one record/attach; round 2+ fresh subagent, session_id null, full merged container injected. Steering prose with worked phrasings incl. the codex-primary constraint and axes[0] fallback; rp/copilot/cursor single-dispatch lines; conduct rows; portable-host fallbacks; mirror synced.
 
+Review trail (conductor-owned host reviews, fresh session-family reviewers): round 1 NEEDS_WORK (6 — the High: pre-finalize optional-phase ordering unexecutable; steering constraint gap; 4 smaller), round 2 NEEDS_WORK (ordering fix half-carried: four stale flowctl help/docstring strings + fallback clause), round 3 SHIP (all resolved, no new findings).
+
+stage: impl-review - ran [3 rounds: NEEDS_WORK x2 -> SHIP] (model: claude-fable-5 fresh subagents, conductor-owned)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: f260a7ec, 03110fbe, 3f3f4088
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_skill_prose_diet test_skill_prose_flowctl_surface test_review_fanout test_prompt_text_pinned test_review_prompt_template_parity -q, python3 scripts/run_tests_parallel.py (4608 OK at f260a7ec), uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh x2 idempotent
 - PRs:
