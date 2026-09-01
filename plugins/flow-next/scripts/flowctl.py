@@ -37746,6 +37746,24 @@ def _run_validator_pass(
         receipt_path, result, prior_verdict
     )
     new_verdict = updated_receipt.get("verdict", prior_verdict)
+    if (
+        updated_receipt.get("verdict_before_validate")
+        and new_verdict == "SHIP"
+    ):
+        # PR #392 r18 (P1): a validator-issued SHIP is convergence — the same
+        # reset-on-SHIP the record path applies must reach the persisted
+        # round counter, or the fan-out first-round guard reads the stale
+        # NEEDS_WORK cycle and refuses the next scope's fresh fan-out until a
+        # manual reset. Best-effort, task receipts only (standalone keeps no
+        # counter).
+        receipt_id = updated_receipt.get("id")
+        if isinstance(receipt_id, str) and is_task_id(receipt_id):
+            try:
+                reset_review_cap(
+                    spec_id_from_task(receipt_id), "impl", task_id=receipt_id,
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     if use_json:
         json_output(
@@ -44465,11 +44483,27 @@ def _review_fanout_record_and_receipt(
                     ]
                 )
                 if same_round:
+                    # PR #392 r18: preserve the FULL enabled-phase state, not
+                    # a three-key whitelist — the phase writers also stamp
+                    # counts, promotions, timestamps, and verdict_before_*
+                    # markers, and deep/validator can change the top-level
+                    # verdict itself.
                     preserved = {
                         key: existing[key]
-                        for key in ("deep_passes", "validator", "walkthrough")
-                        if key in existing
+                        for key in existing
+                        if key in (
+                            "deep_passes", "validator", "walkthrough",
+                            "deep_findings_count", "cross_pass_promotions",
+                        )
+                        or key.startswith("verdict_before_")
+                        or key.endswith("_timestamp")
                     }
+                    if any(
+                        key.startswith("verdict_before_") for key in preserved
+                    ):
+                        # A phase changed the verdict after finalize; the
+                        # replayed rebuild must not silently revert it.
+                        preserved["verdict"] = existing.get("verdict")
             except (OSError, ValueError, TypeError):
                 preserved = {}
         _review_fanout_write_receipt(
