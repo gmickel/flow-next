@@ -1077,6 +1077,30 @@ class TestReviewFanout(unittest.TestCase):
             self.assertEqual(fin_code, 2, f"{bad!r}: {fin_err}")
             self.assertIn("invalid --rid", json.dumps(fin) + fin_err)
 
+    def test_unjournaled_reservation_blocks_dispatch(self) -> None:
+        """PR #392 r21 (P2): a reservation with no journal (owner died between
+        the cap commit and the intent write) must block a new dispatch with
+        explicit repair guidance, never stack a second reservation."""
+        code, payload, err = self._dispatch(self._ship_exec([]))
+        self.assertEqual(code, 0, err)
+        journal = (
+            self.root / ".flow" / "review-runs" / f"{payload['rid']}.json"
+        )
+        self.assertTrue(journal.is_file())
+        journal.unlink()  # the crashed-before-journal state
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--json",
+            fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("has no journal", out + err)
+        self.assertIn("reset-review-rounds", out + err)
+
     def test_closed_receipt_permits_fresh_fanout(self) -> None:
         """PR #392 r13 (P2): a CLOSED receipt (SHIP) at --receipt is a
         completed earlier scope — flowctl's guard itself must admit the

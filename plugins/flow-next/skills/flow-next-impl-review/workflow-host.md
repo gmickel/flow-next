@@ -106,18 +106,22 @@ if [ -n "$TASK_ID" ]; then
   fi
 fi
 
-# Delivered-state fence (task mode; PR #392 r20): a recorded NEEDS_WORK with a
-# LOST /tmp receipt (reboot, tmp sweep) leaves pending at zero while the round
-# counter and last attempt still mark an open cycle — the same state the codex
-# backend's flowctl guard reads. A fresh fan-out here would drop the merged
-# prior-finding container and consume another round; resume as round 2+
-# instead, rebuilding the container from the recorded attempt.
+# Delivered-state fence (task mode; PR #392 r20+r21): a recorded NEEDS_WORK
+# with a LOST /tmp receipt (reboot, tmp sweep) leaves pending at zero while
+# the round counter and last attempt still mark an open cycle — the same
+# state the codex backend's flowctl guard reads. A fresh fan-out here would
+# drop the merged prior-finding container and consume another round — and the
+# container is NOT recoverable from the durable ledger (attempt rows persist
+# only the output hash and a bounded digest, never the merged document), so
+# there is nothing honest to resume with either. Fail closed: a human decides
+# whether to reset the cycle (flowctl spec reset-review-rounds) and start a
+# fresh fan-out, accepting that the prior round's findings are gone.
 if [ "$RESUMED" = "0" ] && [ -n "$TASK_ID" ]; then
   OPEN="$(jq -r --arg t "$TASK_ID" 'if ((.impl_review_rounds[$t] // 0) > 0) then ([.review_attempts[]? | select(.counter_kind == "impl" and .task == $t and (.verdict | type == "string") and (.superseded_by == null))] | (last // {}) | (.verdict // "")) else "" end' ".flow/specs/${TASK_ID%.*}.json" 2>/dev/null)"
   case "$OPEN" in
     NEEDS_WORK|NEEDS_HUMAN)
-      RESUMED=1
-      echo "RESUMED SCOPE — persisted state marks an open ${OPEN} cycle (the receipt was lost): dispatch ONE fresh re-review subagent (Round 2+ shape); recover the merged prior findings from the recorded attempt (\"$FLOWCTL\" review-rounds attempts ${TASK_ID%.*} --kind impl --task ${TASK_ID} --review-type impl --json — the last attempt's recorded output is the merged document)" ;;
+      echo "NEEDS_HUMAN: ${TASK_ID} has an open ${OPEN} review cycle but its receipt (the merged prior-finding container) is gone — the container is not recoverable from the ledger, so a resume would ship blind and a fresh fan-out would silently drop unresolved findings. A human decides: flowctl spec reset-review-rounds ${TASK_ID%.*} abandons the lost cycle and licenses a fresh fan-out." >&2
+      exit 1 ;;
   esac
 fi
 ```

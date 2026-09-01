@@ -44157,6 +44157,38 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
         )
     )
     if not standalone:
+        # PR #392 r21 (P2): a reservation whose owner died between the cap
+        # commit and the refund-intent write has no journal and no attempt
+        # row — invisible to every replay path. Refuse to stack a second
+        # reservation on top of it; the repair is explicit and human.
+        counter_scope = _review_counter_scope("impl", task_id)
+        try:
+            stale_spec = json.loads(
+                find_spec_json_path(
+                    flow_dir, spec_id_from_task(task_id)
+                ).read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError, TypeError):
+            stale_spec = None
+        if isinstance(stale_spec, dict):
+            for res_id, res in (
+                stale_spec.get("review_reservations") or {}
+            ).items():
+                if (
+                    isinstance(res, dict)
+                    and res.get("counter_scope") == counter_scope
+                    and not _review_journal_path(flow_dir, str(res_id)).is_file()
+                ):
+                    error_exit(
+                        f"a reserved round for {task_id} has no journal "
+                        f"(reservation {res_id} — its dispatch died before "
+                        "journaling its intent). Repair explicitly via "
+                        f"flowctl spec reset-review-rounds "
+                        f"{spec_id_from_task(task_id)} before dispatching a "
+                        "new fan-out.",
+                        use_json=args.json,
+                        code=2,
+                    )
         cap_result = enforce_and_increment_review_cap(
             spec_id_from_task(task_id), "impl", task_id=task_id,
             use_json=args.json, artifact_sha256=artifact_sha256,
