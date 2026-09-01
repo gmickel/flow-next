@@ -37646,7 +37646,10 @@ def _run_validator_pass(
 
     if not prior_session_id:
         error_exit(
-            f"No session_id in receipt at {receipt_path} — run impl-review first",
+            f"No session_id in receipt at {receipt_path} — run impl-review "
+            "first. (A fan-out round whose codex draws all failed records "
+            "session_id: null; the optional phases need a resumable codex "
+            "session — skip them for this round or re-dispatch the review.)",
             use_json=use_json,
             code=2,
         )
@@ -38358,7 +38361,10 @@ def _run_deep_pass(
 
     if not prior_session_id:
         error_exit(
-            f"No session_id in receipt at {receipt_path} — run impl-review first",
+            f"No session_id in receipt at {receipt_path} — run impl-review "
+            "first. (A fan-out round whose codex draws all failed records "
+            "session_id: null; the optional phases need a resumable codex "
+            "session — skip them for this round or re-dispatch the review.)",
             use_json=use_json,
             code=2,
         )

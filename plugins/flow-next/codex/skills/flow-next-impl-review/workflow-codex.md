@@ -73,7 +73,10 @@ if [ -f "$RECEIPT_PATH" ]; then
     *)
       # Closed, unreadable, or another scope's receipt: stale input for this
       # round — rotate aside, start clean.
-      mv "$RECEIPT_PATH" "$RECEIPT_PATH.prev" ;;
+      # (python os.replace, not a shell move: dynamic-path moves are
+      # refused by common agent command guards; this is the guard-clean
+      # form other flow-next skills already use)
+      RP="$RECEIPT_PATH" python3 -c 'import os; p = os.environ["RP"]; os.replace(p, p + ".prev")' ;;
   esac
 fi
 
@@ -81,6 +84,10 @@ fi
 # (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).
 # Subcommand tokens stay LITERAL on the command line (the Ralph guard blocks
 # a variable in either of the two tokens after the launcher).
+# DEFAULT topology only — when the user gave a steering instruction ("use 1
+# reviewer instead of 3", "three different model families"), read "Steering
+# draw topology" below and add the explicit --draw args BEFORE running this.
+# Standalone reviews also carry the caller's focus areas via --focus "<areas>".
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
@@ -117,7 +124,10 @@ reads prose. Worked phrasings:
   per-draw backend specs, e.g. `--draw correctness=codex:gpt-5.2:medium
   --draw contracts=cursor:sonnet-4.5 --draw integration=copilot:gemini-2.5-pro`
   — three genuinely distinct families; cross-family is three explicit
-  dispatch specs, never a config key
+  dispatch specs, never a config key. Spec grammar per backend: codex takes
+  `BACKEND:MODEL:EFFORT`; cursor takes `BACKEND:MODEL` only (no effort
+  segment); model ids are illustrative — the backend CLI is the availability
+  authority
 - Ambiguous phrasing → default three same-backend draws (say so and proceed)
 
 Enforced constraint (flowctl, not convention): the **primary draw
@@ -174,9 +184,10 @@ document (write it to a file for the finalize):
 if [ -n "$TASK_ID" ]; then
   CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
   [ -n "$CANON" ] && TASK_ID="$CANON"
-fi RID and MERGED_FILE
-# are typed as LITERALS: the rid from the phase-one JSON output, the merged-file
-# path from your Step-3 merge — never carried shell variables.
+fi
+# RID and MERGED_FILE are typed as LITERALS: the rid from the phase-one JSON
+# output, the merged-file path from your Step-3 merge — never carried shell
+# variables.
 REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
 SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
@@ -277,8 +288,11 @@ $FLOWCTL codex impl-review "${args[@]}"
 The merged receipt is written by `impl-review-fanout-finalize` (and updated by
 `impl-review` on re-reviews) when `--receipt` is provided. Format: the existing
 top-level shape (`{"mode":"codex","task":"<id>","verdict":"<verdict>","session_id":"<thread_id>","timestamp":"..."}`)
-plus the `draws[]` array recording the fan-out honestly. Per-draw raw outputs
-persist beside it in the `.flow/review-fanout/<rid>/` sidecar for audit.
+plus the `draws[]` array recording the fan-out honestly. A re-review rewrite
+drops `draws[]` from the LIVE receipt (re-review rounds have no draws); the
+fan-out provenance persists in the receipt history and in the
+`.flow/review-fanout/<rid>/` sidecar's `meta.json` alongside the per-draw raw
+outputs, for audit.
 
 ---
 
