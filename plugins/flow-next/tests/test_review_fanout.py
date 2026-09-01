@@ -354,6 +354,95 @@ class TestReviewFanout(unittest.TestCase):
         self.assertFalse(self._attempts())
         self.assertEqual(payload.get("failed_draws"), 1)
 
+    # 2b ----------------------------------------------------------------
+
+    def test_draw_system_exit_is_contained(self) -> None:
+        """host review r1 P1: error_exit inside a run_exec hook raises
+        SystemExit (a BaseException). The draw runner must contain it as a
+        failed draw — reservation intact, no attempt row, meta.json written —
+        instead of letting it strand the rid with a charged, unrefundable
+        round."""
+
+        def fake(
+            prompt,
+            *,
+            session_id,
+            repo_root,
+            spec,
+            resolution_out,
+            args,
+            resume_only=False,
+        ):
+            axis = _axis_of(prompt)
+            if axis == "integration":
+                flowctl.error_exit("hook exploded", use_json=False)
+            resolution_out["model"] = f"{axis}-model"
+            return "<verdict>SHIP</verdict>", f"sess-{axis}", 0, ""
+
+        code, payload, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(payload.get("failed_draws"), 1)
+        self.assertEqual(self._pending(), 1)
+        self.assertFalse(self._attempts())
+        meta = json.loads(
+            (self.root / ".flow" / "review-fanout" / payload["rid"] / "meta.json")
+            .read_text(encoding="utf-8")
+        )
+        failed = [row for row in meta["draws"] if row.get("failed")]
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(failed[0]["axis"], "integration")
+        self.assertEqual(failed[0]["failure_class"], "dispatch_exception")
+        captured = Path(failed[0]["output_path"]).read_text(encoding="utf-8")
+        self.assertIn("SystemExit", captured)
+
+    # 2c ----------------------------------------------------------------
+
+    def test_abandoned_dispatch_refunds_on_next_increment(self) -> None:
+        """host review r1 P2: a dispatched-but-never-finalized fan-out must
+        not stay a charged round forever. The dispatch writes a refund-intent
+        journal; the next increment on the counter replays it as a transport
+        failure (round refunded, fresh reservation granted), and the
+        abandoned rid's finalize then refuses actionably."""
+        calls: list = []
+        code, first, err = self._dispatch(self._ship_exec(calls))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self._pending(), 1)
+        self.assertEqual(self._rounds(), 1)
+        journal = (
+            self.root / ".flow" / "review-runs" / f"{first['rid']}.json"
+        )
+        self.assertTrue(journal.is_file(), "dispatch must journal its intent")
+        # Coordinator dies here: no finalize ever lands for first["rid"].
+        code, second, err = self._dispatch(self._ship_exec(calls))
+        self.assertEqual(code, 0, err)
+        self.assertNotEqual(second["rid"], first["rid"])
+        self.assertEqual(self._pending(), 1)
+        self.assertEqual(self._rounds(), 1)
+        refunds = [
+            row for row in self._attempts()
+            if row.get("outcome") == "transport_failure"
+        ]
+        self.assertEqual(len(refunds), 1)
+        self.assertEqual(refunds[0].get("failure_class"), "fanout_abandoned")
+        self.assertEqual(refunds[0].get("reservation_id"), first["rid"])
+        self.assertFalse(journal.exists(), "replayed journal must be cleaned")
+        fin_code, fin, fin_err = self._finalize(
+            first["rid"], self._write_merged(_empty_merged_review())
+        )
+        self.assertNotEqual(fin_code, 0)
+        # The refund replay left an attempt row for the abandoned reservation,
+        # so its late finalize hits the mismatched-duplicate guard.
+        self.assertIn(
+            "already finalized", (fin.get("error") or "") + fin_err
+        )
+        # The live dispatch still finalizes normally.
+        fin_code, fin, fin_err = self._finalize(
+            second["rid"], self._write_merged(_empty_merged_review())
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "SHIP")
+        self.assertEqual(self._pending(), 0)
+
     # 3 -----------------------------------------------------------------
 
     def test_worst_wins(self) -> None:
@@ -387,6 +476,35 @@ class TestReviewFanout(unittest.TestCase):
                 fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
                 self.assertEqual(fin_code, exit_code, fin_err)
                 self.assertEqual(fin.get("verdict"), expected)
+
+        # host review r1: the merged text's OWN verdict tag escalates a
+        # milder draw synthesis (post-merge deep passes can find P0s the
+        # draws did not)...
+        all_ship = {
+            "correctness": "SHIP",
+            "contracts": "SHIP",
+            "integration": "SHIP",
+        }
+        code, payload, err = self._dispatch(self._verdict_exec(all_ship))
+        self.assertEqual(code, 0, err)
+        worse = self._write_merged(
+            _merged_review("Deep pass found a P0.", verdict="NEEDS_WORK")
+        )
+        fin_code, fin, fin_err = self._finalize(payload["rid"], worse)
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+
+        # ...while a milder merged tag never downgrades the synthesis:
+        # worst-wins holds across the union.
+        one_bad = dict(all_ship, contracts="NEEDS_WORK")
+        code, payload, err = self._dispatch(self._verdict_exec(one_bad))
+        self.assertEqual(code, 0, err)
+        milder = self._write_merged(
+            _merged_review("Residual finding.", verdict="SHIP")
+        )
+        fin_code, fin, fin_err = self._finalize(payload["rid"], milder)
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
     # 4 -----------------------------------------------------------------
 
@@ -444,6 +562,20 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(len(failed), 1)
         self.assertEqual(failed[0]["axis"], "contracts")
         self.assertEqual(failed[0]["failure_class"], "timeout")
+        progress = (
+            self.root / ".flow" / "review-fanout" / payload["rid"]
+            / "progress.log"
+        ).read_text(encoding="utf-8")
+        lines = [line for line in progress.splitlines() if line.strip()]
+        self.assertEqual(len(lines), 3, progress)
+        for axis in flowctl.REVIEW_FANOUT_AXES:
+            self.assertTrue(
+                any(line.startswith(f"draw {axis}: ") for line in lines),
+                progress,
+            )
+        self.assertTrue(
+            any("FAILED (timeout)" in line for line in lines), progress
+        )
 
         fin_code, fin, fin_err = self._finalize(
             payload["rid"],
@@ -628,6 +760,11 @@ class TestReviewFanout(unittest.TestCase):
     # 9 -----------------------------------------------------------------
 
     def test_path_collision(self) -> None:
+        """Sequential (not concurrent) exercise of the collision surfaces:
+        distinct rids for a task and a standalone dispatch on the same repo,
+        then a forced standalone rid collision. True concurrency is covered
+        by exclusive mkdir + O_EXCL publication at the OS layer; this test
+        pins the visible refusal semantics (host review r1: honest scope)."""
         calls: list = []
         code, task_payload, err = self._dispatch(self._ship_exec(calls))
         self.assertEqual(code, 0, err)
@@ -668,6 +805,47 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(marker.read_text(encoding="utf-8"), "untouched\n")
         self.assertFalse((collide_dir / "meta.json").exists())
 
+    def test_task_collision_refunds_round(self) -> None:
+        """host review r1: a task-scoped sidecar collision happens AFTER the
+        round is reserved (the directory is named by the reservation id), so
+        the dispatch must refund that round in-process instead of burning it."""
+        collision_rid = "cd" * 16
+        fanout = self.root / ".flow" / "review-fanout"
+        collide_dir = fanout / collision_rid
+        collide_dir.mkdir(parents=True)
+        calls: list = []
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--force",
+            "--json",
+            fake=self._ship_exec(calls),
+            extra_patches=(
+                mock.patch.object(
+                    flowctl.uuid,
+                    "uuid4",
+                    return_value=mock.Mock(hex=collision_rid),
+                ),
+            ),
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("already exists", out + err)
+        self.assertFalse(calls, "no draw may run after a collision")
+        self.assertEqual(self._pending(), 0)
+        self.assertEqual(self._rounds(), 0)
+        attempts = self._attempts()
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0].get("outcome"), "transport_failure")
+        self.assertEqual(attempts[0].get("failure_class"), "sidecar_collision")
+        # The dispatch-phase refund-intent journal was superseded and cleaned
+        # by the in-process refund.
+        self.assertFalse(
+            list((self.root / ".flow" / "review-runs").glob("*.json"))
+        )
+
     # 10 ----------------------------------------------------------------
 
     def test_axis_prompt(self) -> None:
@@ -703,13 +881,19 @@ class TestReviewFanout(unittest.TestCase):
     # 11 ----------------------------------------------------------------
 
     def test_negative_gate(self) -> None:
+        # The R15 gate IS the argument parser: the fanout subcommands are
+        # registered under `codex` only, so copilot/cursor invocations die as
+        # an argparse invalid-choice error before any handler runs (the old
+        # in-handler registry re-check was unreachable and has been removed —
+        # host review r1).
         for backend in ("copilot", "cursor"):
             with self.subTest(backend=backend):
                 code, out, err = self._run(
                     backend, "impl-review-fanout", "--base", "HEAD~1", "--json"
                 )
-                self.assertNotEqual(code, 0)
-                self.assertTrue(out or err)
+                self.assertEqual(code, 2)
+                self.assertIn("invalid choice", err)
+                self.assertIn("impl-review-fanout", err)
 
         flowctl._wire_backend_review_hooks()
         self.assertTrue(flowctl.BACKEND_REGISTRY["codex"].get("fanout_draws"))
@@ -751,6 +935,28 @@ class TestReviewFanout(unittest.TestCase):
 
         source = inspect.getsource(flowctl._dispatch_backend_review)
         self.assertNotIn("fanout", source)
+
+    def test_non_codex_primary_rejected(self) -> None:
+        """host review r1: the primary draw drives the merged receipt's
+        top-level backend/session/model and the round-2 codex resume, so a
+        cross-backend spec is allowed on secondary draws only."""
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--json",
+            "--draw",
+            "correctness=cursor",
+            "--draw",
+            "contracts",
+        )
+        self.assertEqual(code, 2)
+        combined = out + err
+        self.assertIn("primary draw", combined)
+        self.assertEqual(self._pending(), 0)
+        self.assertEqual(self._rounds(), 0)
 
     # 12 ----------------------------------------------------------------
 

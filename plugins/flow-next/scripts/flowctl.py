@@ -11969,6 +11969,12 @@ def _enforce_and_increment_review_cap_locked(
         atomic_write_json(spec_json_path, spec_data)
     for completed_path, completed_journal in completed_journals:
         _cleanup_review_journal(completed_path, completed_journal)
+    # The replay loop above can REFUND rounds (a no-verdict journal — e.g. the
+    # fan-out dispatch's refund intent — decrements the counter and reloads
+    # spec_data). The increment below must build on the CURRENT counter, not
+    # the pre-replay read: the stale value double-charged the round the replay
+    # had just refunded (fn-215 host review r1).
+    current = _read_review_rounds(spec_data, review_kind, task_id)
     attempts = spec_data.get("review_attempts")
     if isinstance(attempts, list):
         incomplete = [
@@ -19753,6 +19759,10 @@ FLOW_GITIGNORE_AUTO_PATTERNS = [
     # linking to SOMEONE ELSE'S issue instead of creating their own. Runtime
     # artifact, same class as sync-runs/.
     "create-first/",
+    # fn-215 impl-review fan-out per-draw sidecars (raw codex event streams,
+    # per-axis review text, dispatch meta) — per-run runtime artifacts, same
+    # class as receipts/; a `git add -A` must never commit them.
+    "review-fanout/",
 ]
 
 
@@ -43341,15 +43351,12 @@ def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     cmd_backend_review(args, backend="codex", kind="impl")
 
 
-def _review_fanout_gate(args: argparse.Namespace) -> None:
-    """Wire hooks and refuse unless the codex registry enables fan-out (R15)."""
-    _wire_backend_review_hooks()
-    if not BACKEND_REGISTRY["codex"].get("fanout_draws"):
-        error_exit(
-            "impl-review-fanout is gated to the codex backend",
-            use_json=args.json,
-            code=2,
-        )
+# R15 backend gating lives in the argument parser: the fanout subcommands are
+# registered under `flowctl codex` ONLY, so a copilot/cursor invocation is an
+# argparse "invalid choice" error before any handler runs (pinned by
+# test_negative_gate). The registry's `fanout_draws` flag stays codex-only as
+# the machine-readable statement of the same rule (pinned there too); a
+# runtime re-check here was dead code — fn-215 host review r1.
 
 
 def _review_fanout_publish(path: Path, content: str) -> None:
@@ -43518,10 +43525,9 @@ def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str])
                     code=2,
                 )
         draws.append({"axis": axis, "spec": spec})
-    if not 1 <= len(draws) <= 3:
-        error_exit(
-            "fan-out requires 1..3 --draw axes", use_json=args.json, code=2,
-        )
+    # 1..3 holds by construction: raw_draws is non-empty here, every axis
+    # comes from the 3-element REVIEW_FANOUT_AXES set, and duplicates were
+    # rejected above — no separate range validation (fn-215 host review r1).
     return draws
 
 
@@ -43532,27 +43538,31 @@ def _review_fanout_primary_axis(draws: list) -> str:
     return axes[0]
 
 
-def _review_fanout_sidecar_dir(
-    flow_dir: Path, rid: str, *, use_json: bool,
-) -> Path:
-    """Exclusive mkdir of .flow/review-fanout/<rid> (fn-215 R12)."""
+class _FanoutSidecarError(Exception):
+    """Sidecar directory could not be created (collision or OS failure)."""
+
+
+def _review_fanout_sidecar_dir(flow_dir: Path, rid: str) -> Path:
+    """Exclusive mkdir of .flow/review-fanout/<rid> (fn-215 R12).
+
+    Raises instead of exiting: for task-scoped dispatches a round is already
+    reserved by the time this runs (the directory is NAMED by the reservation
+    id, so it cannot be created first), and the caller must refund that
+    reservation before surfacing the error (fn-215 host review r1).
+    """
     parent = flow_dir / "review-fanout"
     parent.mkdir(parents=True, exist_ok=True)
     sidecar = parent / rid
     try:
         sidecar.mkdir(mode=0o700, exist_ok=False)
     except FileExistsError:
-        error_exit(
-            f"fan-out sidecar directory already exists: {sidecar}",
-            use_json=use_json,
-            code=2,
-        )
+        raise _FanoutSidecarError(
+            f"fan-out sidecar directory already exists: {sidecar}"
+        ) from None
     except OSError as exc:
-        error_exit(
-            f"cannot create fan-out sidecar directory: {exc}",
-            use_json=use_json,
-            code=2,
-        )
+        raise _FanoutSidecarError(
+            f"cannot create fan-out sidecar directory: {exc}"
+        ) from exc
     return sidecar
 
 
@@ -43609,7 +43619,13 @@ def _review_fanout_run_draw(
             resolution_out=resolution_out,
             args=args,
         )
-    except Exception as exc:
+    except BaseException as exc:  # noqa: BLE001
+        # BaseException on purpose (fn-215 host review r1 P1): error_exit
+        # inside a run_exec hook raises SystemExit, which `except Exception`
+        # let escape the draw thread — leaking the reservation with no
+        # attempt row, no meta.json, and no refund path. Every draw failure,
+        # SystemExit included, must be contained and classified so the
+        # aggregate controller keeps sole ownership of record/refund.
         failure_detail = f"{type(exc).__name__}: {exc}"
         output = failure_detail
         stderr = failure_detail
@@ -43628,8 +43644,7 @@ def _review_fanout_run_draw(
         failure_class = "dispatch_exception"
     else:
         failure_class = _review_fanout_classify_failure(reg, output, stderr, rc)
-    model = resolution_out["model"] if "model" in resolution_out else spec.model
-    effort = None if resolution_out.get("floor") else spec.effort
+    model, effort = _receipt_model_effort(spec, resolution_out)
     review_path = sidecar_dir / f"{axis}.review.md"
     output_path = sidecar_dir / f"{axis}.out.txt"
     meta = {
@@ -43808,6 +43823,60 @@ def _review_fanout_emit_dispatch(
     print(f"next: {next_line}")
 
 
+def _review_fanout_journal_refund_intent(
+    flow_dir: Path, spec_id: str, task_id: str, reservation_id: str,
+) -> None:
+    """Write-ahead refund intent for the dispatched-but-never-finalized case.
+
+    fn-215 host review r1 (P2): the fan-out charges its round at dispatch but
+    finalizes in a LATER invocation — a coordinator that dies between the two
+    left a charged round with no journal, no attempt row, and a pending count
+    that wedged reservation-id-less finalizers. This journal makes the gap
+    durable: the next ``enforce_and_increment_review_cap`` on this counter
+    replays it through ``_record_review_attempt_locked`` as a no-verdict
+    transport failure (round refunded, fresh reservation granted). The live
+    paths supersede it naturally — both the all-failed refund and phase-two
+    finalize call ``record_review_attempt`` with this reservation id, which
+    overwrites this file with its own write-ahead journal at the same path
+    and cleans it up on completion.
+    """
+    response = (
+        "fan-out dispatched; no finalize landed before this refund-intent "
+        "journal was replayed"
+    )
+    journal = {
+        "reservation_id": reservation_id,
+        "response": response,
+        "response_sha256": hashlib.sha256(
+            response.encode("utf-8")
+        ).hexdigest(),
+        "receipt_payload": None,
+        "receipt_target": None,
+        "status_target": None,
+        "spec_id": spec_id,
+        "counter_scope": _review_counter_scope("impl", task_id),
+        "scope": _review_attempt_scope("impl", task_id, "impl"),
+        "review_kind": "impl",
+        "review_type": "impl",
+        "task_id": task_id,
+        "backend": "codex",
+        "verdict": None,
+        "failure_class": "fanout_abandoned",
+        "outcome": "transport_failure",
+        "reset_rounds_on_ship": False,
+        "superseded_by": None,
+        "metadata": None,
+        "finalized": {
+            "receipt": "not_applicable",
+            "digest": "not_applicable",
+            "status": "not_applicable",
+        },
+        "timestamp": now_iso(),
+    }
+    _review_runs_dir(flow_dir).mkdir(parents=True, exist_ok=True)
+    atomic_write_json(_review_journal_path(flow_dir, reservation_id), journal)
+
+
 def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
     """Phase-one fan-out dispatch (fn-215 R14).
 
@@ -43818,11 +43887,26 @@ def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
 
 
 def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
-    _review_fanout_gate(args)
+    _wire_backend_review_hooks()
     task_id, standalone, flow_dir, task_spec_path = _review_fanout_resolve_scope(args)
     _review_fanout_first_round_guard(args)
     draws = _review_fanout_parse_draws(args, task_id)
     primary_axis = _review_fanout_primary_axis(draws)
+    primary_spec = next(
+        draw["spec"] for draw in draws if draw["axis"] == primary_axis
+    )
+    if primary_spec.backend != "codex":
+        # fn-215 host review r1: finalize stamps the merged receipt's
+        # top-level backend/session/model from the primary draw and round 2+
+        # resumes the primary session via codex — a non-codex primary would
+        # record a codex receipt for a foreign session. Secondary draws may
+        # still be cross-backend.
+        error_exit(
+            f"fan-out primary draw ({primary_axis}) must run on the codex "
+            "backend; cross-backend specs are allowed on secondary draws only",
+            use_json=args.json,
+            code=2,
+        )
     base_branch = args.base
     try:
         reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
@@ -43869,9 +43953,32 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             return
         _, reservation_id = cap_result
         rid = reservation_id
+        _review_fanout_journal_refund_intent(
+            flow_dir, spec_id_from_task(task_id), task_id, reservation_id,
+        )
     else:
         rid = secrets.token_hex(16)
-    sidecar = _review_fanout_sidecar_dir(flow_dir, rid, use_json=args.json)
+    try:
+        sidecar = _review_fanout_sidecar_dir(flow_dir, rid)
+    except _FanoutSidecarError as exc:
+        if reservation_id is not None:
+            # fn-215 host review r1: no draw was dispatched, so the reserved
+            # round must not stay charged — refund it in-process (this also
+            # supersedes and cleans up the refund-intent journal above).
+            record_review_attempt(
+                spec_id_from_task(task_id),
+                "impl",
+                backend="codex",
+                output=str(exc),
+                failure_class="sidecar_collision",
+                task_id=task_id,
+                review_type="impl",
+                use_json=args.json,
+                reviewed_head_sha=reviewed_head_sha,
+                reviewed_base_sha=reviewed_base_sha,
+                reservation_id=reservation_id,
+            )
+        error_exit(str(exc), use_json=args.json, code=2)
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     _review_fanout_write_meta(
         sidecar, task_id, standalone, base_branch,
@@ -44130,7 +44237,7 @@ def cmd_codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
 
 
 def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
-    _review_fanout_gate(args)
+    _wire_backend_review_hooks()
     task_id, standalone, flow_dir, _spec_path = _review_fanout_resolve_scope(args)
     rid = args.rid
     if not rid or Path(rid).name != rid:
@@ -44153,6 +44260,20 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             use_json=args.json,
             code=2,
         )
+    merged_tag = parse_codex_verdict(merged_text)
+    if (
+        merged_tag in _REVIEW_REPLAY_PRECEDENCE
+        and _REVIEW_REPLAY_PRECEDENCE.index(merged_tag)
+        < _REVIEW_REPLAY_PRECEDENCE.index(verdict)
+    ):
+        # fn-215 host review r1: the coordinator's merged text carries its own
+        # verdict tag (post-merge deep/validate passes can find P0s the draws
+        # did not). A tag strictly worse than the draws' worst-wins synthesis
+        # escalates the recorded verdict — recording the milder synthesized
+        # one would silently discard those findings and reset the round
+        # counter on a SHIP that the merged evidence contradicts. A milder
+        # tag never downgrades: worst-wins holds across the union.
+        verdict = merged_tag
     review_id = task_id if task_id else "branch"
     receipt_path = args.receipt if getattr(args, "receipt", None) else None
     findings_container, findings_digest = _build_backend_review_findings(
