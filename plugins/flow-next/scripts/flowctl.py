@@ -11379,6 +11379,7 @@ def enforce_and_increment_review_cap(
     review_type: Optional[str] = None,
     forced: bool = False,
     return_reservation: bool = False,
+    exclusive: bool = False,
 ) -> Any:
     """Enforce the cumulative review-round cap and increment the counter.
 
@@ -11430,6 +11431,7 @@ def enforce_and_increment_review_cap(
                 artifact_sha256=artifact_sha256, review_type=review_type,
                 forced=forced, return_reservation=return_reservation,
                 locked_receipt_targets=locked,
+                exclusive=exclusive,
             )
     raise AssertionError("rescan loop must return")
 
@@ -11780,6 +11782,7 @@ def _enforce_and_increment_review_cap_locked(
     forced: bool,
     return_reservation: bool,
     locked_receipt_targets: Optional[set] = None,
+    exclusive: bool = False,
 ) -> Any:
     cap = get_max_review_iterations()
     flow_dir = get_flow_dir()
@@ -12159,6 +12162,32 @@ def _enforce_and_increment_review_cap_locked(
         else:
             print(marker, file=sys.stderr)
         sys.exit(REVIEW_CAP_EXIT_CODE)
+    # PR #392 r22: EXCLUSIVE reservations (the fan-out and host round
+    # dispatches) refuse INSIDE the lock while any non-superseded same-scope
+    # reservation stands — it survived the replay sweep above, so it is
+    # either a concurrent dispatch that has not recorded yet or a crashed
+    # one that never journaled, and a second reservation would stack on the
+    # same scope (two first rounds, or a stranded slot). Non-exclusive
+    # increments keep the supported multi-pending model (out-of-order
+    # finalization). The pre-lock checks in the callers are fast-fail UX;
+    # this is the atomic authority.
+    for res_id, res in (
+        _review_reservations(spec_data).items() if exclusive else ()
+    ):
+        if (
+            isinstance(res, dict)
+            and res.get("counter_scope") == counter_scope
+            and not res.get("superseded_by")
+        ):
+            error_exit(
+                f"a review round for this scope is already reserved "
+                f"(reservation {res_id}) — a concurrent dispatch is in "
+                "flight or a crashed one left an unjournaled reservation. "
+                "Wait for it to record, or repair via flowctl spec "
+                f"reset-review-rounds {spec_id}",
+                use_json=use_json,
+                code=2,
+            )
     new_val = current + 1
     _write_review_rounds(spec_data, review_kind, task_id, new_val)
     pending = spec_data.get("review_pending_rounds")
@@ -30674,6 +30703,7 @@ def cmd_review_rounds_increment(args: argparse.Namespace) -> None:
         artifact_sha256=artifact_sha256,
         review_type=getattr(args, "review_type", None),
         forced=bool(getattr(args, "force", False)), return_reservation=True,
+        exclusive=bool(getattr(args, "exclusive", False)),
     )
     if isinstance(result, dict) and result.get("replayed"):
         # Typed recovery result (fn-159 rounds 7-8): delivered verdict(s)
@@ -44194,6 +44224,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             use_json=args.json, artifact_sha256=artifact_sha256,
             review_type="impl", forced=bool(getattr(args, "force", False)),
             return_reservation=True,
+            exclusive=True,
         )
         if handle_replayed_review_cap(
             cap_result,
@@ -51130,6 +51161,16 @@ def main() -> None:
     )
     p_rr_inc.add_argument(
         "--force", action="store_true", help="Record a human-forced dispatch"
+    )
+    p_rr_inc.add_argument(
+        "--exclusive",
+        action="store_true",
+        help=(
+            "Refuse (exit 2) while any non-superseded reservation stands for "
+            "this scope — atomic single-dispatch fence for round dispatches "
+            "(the host fan-out uses it); default keeps the multi-pending "
+            "reservation model"
+        ),
     )
     p_rr_inc.add_argument("--json", action="store_true", help="JSON output")
     p_rr_inc.set_defaults(func=cmd_review_rounds_increment)

@@ -177,8 +177,11 @@ git diff "$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA" > "$DIFF_FILE" \
 ARTIFACT_FILE="${TMPDIR:-/tmp}/flow-impl-review-host-${TASK_ID:-branch}.blob"
 "$FLOWCTL" review-artifact impl "${TASK_ID%.*}" --diff-file "$DIFF_FILE" \
   --output "$ARTIFACT_FILE" --json
+# --exclusive (PR #392 r22): the no-pending pre-check above is fast-fail UX
+# only — this flag makes the refusal ATOMIC inside the reservation lock, so
+# two concurrent coordinators cannot both reserve between the check and here.
 ROUND_JSON="$("$FLOWCTL" review-rounds increment "${TASK_ID%.*}" --kind impl \
-  --task "$TASK_ID" --review-type impl --artifact-file "$ARTIFACT_FILE" --json)"
+  --task "$TASK_ID" --review-type impl --artifact-file "$ARTIFACT_FILE" --exclusive --json)"
 ROUND_EXIT=$?
 if [[ "$ROUND_EXIT" -ne 0 ]]; then
   printf '%s\n' "$ROUND_JSON"

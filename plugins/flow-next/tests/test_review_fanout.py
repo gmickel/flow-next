@@ -1077,6 +1077,31 @@ class TestReviewFanout(unittest.TestCase):
             self.assertEqual(fin_code, 2, f"{bad!r}: {fin_err}")
             self.assertIn("invalid --rid", json.dumps(fin) + fin_err)
 
+    def test_exclusive_increment_refuses_standing_reservation(self) -> None:
+        """PR #392 r22: --exclusive makes the single-dispatch fence atomic —
+        inside the reservation lock, a standing same-scope reservation
+        refuses; the default keeps the multi-pending model."""
+        code, out, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", self.task_id,
+            "--review-type", "impl", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", self.task_id,
+            "--review-type", "impl", "--exclusive", "--json",
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("already reserved", out + err)
+        # Default (non-exclusive) still permits the multi-pending model.
+        code, out, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", self.task_id,
+            "--review-type", "impl", "--json",
+        )
+        self.assertEqual(code, 0, err)
+
     def test_unjournaled_reservation_blocks_dispatch(self) -> None:
         """PR #392 r21 (P2): a reservation with no journal (owner died between
         the cap commit and the intent write) must block a new dispatch with
