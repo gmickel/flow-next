@@ -64,16 +64,32 @@ coordinator resuming this scope mid-fix-loop (context lost between a
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
 RESUMED=0
 if [ -f "$RECEIPT_PATH" ]; then
-  case "$(jq -r '.verdict // empty' "$RECEIPT_PATH" 2>/dev/null)" in
+  # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
+  # another scope's receipt at a shared path must never inject its findings.
+  case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") == $s then (.verdict // "") else "FOREIGN" end' "$RECEIPT_PATH" 2>/dev/null)" in
     NEEDS_WORK|NEEDS_HUMAN)
       RESUMED=1
       echo "RESUMED SCOPE — active fix loop: dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
     *)
-      # Closed (SHIP / MAJOR_RETHINK) or unreadable receipt = a completed
-      # earlier scope left at this path — stale input for a new round, never a
-      # resume. Rotate it aside so the fresh fan-out starts clean.
+      # Closed (SHIP / MAJOR_RETHINK), unreadable, or another scope's receipt
+      # = stale input for a new round, never a resume. Rotate it aside so the
+      # fresh fan-out starts clean.
       mv "$RECEIPT_PATH" "$RECEIPT_PATH.prev" ;;
   esac
+fi
+
+# In-flight fence (task mode; PR #392 r10): the host path has no fan-out
+# journal, so an interrupted or concurrent invocation is visible only through
+# the spec's pending-reservation counter. A non-zero pending means a prior
+# round is reserved but unrecorded — dispatching another fan-out would strand
+# that reservation or double-consume the cap. Fail closed; never dispatch a
+# second concurrent review for the same scope.
+if [ -n "$TASK_ID" ]; then
+  PENDING="$(jq -r --arg k "impl:${TASK_ID}" '(.review_pending_rounds[$k] // 0)' ".flow/specs/${TASK_ID%.*}.json" 2>/dev/null || echo 0)"
+  if [ "${PENDING:-0}" != "0" ]; then
+    echo "NEEDS_HUMAN: a review round for ${TASK_ID} is already reserved (pending=${PENDING}) — an earlier host round is in flight or died before record. Finish/record that round, or repair via flowctl spec reset-review-rounds ${TASK_ID%.*}; never dispatch a second concurrent review." >&2
+    exit 1
+  fi
 fi
 ```
 

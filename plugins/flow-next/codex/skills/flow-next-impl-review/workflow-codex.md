@@ -53,11 +53,16 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_
 # shared.) flowctl's guard remains the no-cost exit-2 backstop.
 RESUMED=0
 if [ -f "$RECEIPT_PATH" ]; then
-  case "$(jq -r '.verdict // empty' "$RECEIPT_PATH" 2>/dev/null)" in
+  # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
+  # another scope's receipt at a shared path must never inject its session or
+  # findings into this review.
+  case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") == $s then (.verdict // "") else "FOREIGN" end' "$RECEIPT_PATH" 2>/dev/null)" in
     NEEDS_WORK|NEEDS_HUMAN)
       RESUMED=1
       echo "RESUMED SCOPE — receipt carries an active fix loop; skip Steps 2-4, go to Step 5.4 (single-dispatch re-review)" ;;
     *)
+      # Closed, unreadable, or another scope's receipt: stale input for this
+      # round — rotate aside, start clean.
       mv "$RECEIPT_PATH" "$RECEIPT_PATH.prev" ;;
   esac
 fi
