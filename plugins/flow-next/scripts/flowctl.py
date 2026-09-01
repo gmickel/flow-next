@@ -44862,6 +44862,15 @@ def cmd_review_route(args: argparse.Namespace) -> None:
     hold = getattr(args, "hold_phases", None)
     release = bool(getattr(args, "release_phases", False))
     lease_rid = getattr(args, "rid", None)
+    if (hold or release) and not (isinstance(lease_rid, str) and lease_rid.strip()):
+        # Sol round 3: the rid-bound invariant is enforced by the CLI — an
+        # omitted rid would release (or overwrite) whichever lease stands.
+        error_exit(
+            "--hold-phases / --release-phases require --rid <owning round id> "
+            "(the fan-out rid, or the host reservation id)",
+            use_json=args.json,
+            code=2,
+        )
     if hold or release:
         receipt_arg = getattr(args, "receipt", None) or os.environ.get("REVIEW_RECEIPT_PATH")
         resolved_path = receipt_arg or _review_route_receipt_default(repo_root, task_id)

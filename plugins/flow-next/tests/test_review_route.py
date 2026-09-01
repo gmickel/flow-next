@@ -288,7 +288,7 @@ class TestReviewRoute(unittest.TestCase):
         code, r, _ = self._route(self.task_id)
         self.assertEqual(r["action"], "fanout")
         # An expired lease (dead coordinator) never wedges the scope.
-        code, r, _ = self._route(self.task_id, "--hold-phases")
+        code, r, _ = self._route(self.task_id, "--hold-phases", "--rid", rid)
         data = self._spec()
         data["review_phase_leases"][f"impl:{self.task_id}"]["timestamp"] = "2020-01-01T00:00:00Z"
         self._write_spec(data)
@@ -297,12 +297,20 @@ class TestReviewRoute(unittest.TestCase):
 
     def test_standalone_phase_lease_lives_on_receipt(self) -> None:
         receipt = self._receipt(self.root / "sa.json", id="branch", verdict="SHIP")
+        rid = "ef" * 16
+        # Sol round 3: --rid is mandatory for hold/release.
         code, r, err = self._route("--receipt", str(receipt), "--hold-phases")
+        self.assertEqual(code, 2, err)
+        code, r, err = self._route("--receipt", str(receipt), "--hold-phases", "--rid", rid)
         self.assertEqual(code, 0, err)
         self.assertIn("phase_lease", json.loads(receipt.read_text()))
         code, r, _ = self._route("--receipt", str(receipt))
         self.assertEqual(r["reason"], "phases_in_flight")
-        code, r, _ = self._route("--receipt", str(receipt), "--release-phases")
+        code, r, err = self._route("--receipt", str(receipt), "--release-phases")
+        self.assertEqual(code, 2, err)
+        code, r, err = self._route("--receipt", str(receipt), "--release-phases", "--rid", "01" * 16)
+        self.assertEqual(code, 2, err)
+        code, r, _ = self._route("--receipt", str(receipt), "--release-phases", "--rid", rid)
         code, r, _ = self._route("--receipt", str(receipt))
         self.assertEqual(r["action"], "fanout")
 

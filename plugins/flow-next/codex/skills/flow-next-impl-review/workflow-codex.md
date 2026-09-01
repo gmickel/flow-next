@@ -246,8 +246,9 @@ release is bound to the owning rid:
 
 ```bash
 # After every enabled optional phase has run (deep, validator, walkthrough).
-# RID is the literal rid from the phase-one JSON.
-$FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RID" --json
+# The rid is typed as a LITERAL from the phase-one JSON (shell state does not
+# survive across prompt turns) — release is bound to it.
+$FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "<rid from phase-one JSON>" --json
 ```
 
 A coordinator that dies mid-phase does not wedge the scope — the lease

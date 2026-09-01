@@ -355,13 +355,25 @@ the merge, against the one reservation from Step 2's fence — never once per
 draw (three cap slots for one merged round would triple-charge the cap):**
 
 ```bash
+# Scope ownership through the optional phases (PR #392, sol round 3): hold
+# the lease BEFORE the record — while the exclusive reservation still stands,
+# so no other dispatch can enter between consumption and lease. Acquisition
+# failure is terminal; Step 4 releases it after the phases.
+# OPTIONAL_PHASES_COUNT = the number of enabled optional passes Step 0 parsed.
+if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
+  "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases "$OPTIONAL_PHASES_COUNT" --rid "$RESERVATION_ID" --json || exit 1
+fi
 RECORD_JSON="$("$FLOWCTL" review-rounds record "${TASK_ID%.*}" --kind impl \
   --task "$TASK_ID" --review-type impl --backend host \
   --output-file "$REVIEW_OUTPUT_FILE" --reservation-id "$RESERVATION_ID" \
   --receipt-target "$RECEIPT_PATH" --receipt-payload-file "$RECEIPT_INPUT" --json)"
 RECORD_EXIT=$?
 printf '%s\n' "$RECORD_JSON"
-[[ "$RECORD_EXIT" -eq 0 ]] || exit "$RECORD_EXIT"
+if [[ "$RECORD_EXIT" -ne 0 ]]; then
+  # Release the lease we hold if the record did not land (nothing to fence).
+  [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RESERVATION_ID" --json >/dev/null 2>&1
+  exit "$RECORD_EXIT"
+fi
 # A refunded (no-verdict) record journals nothing attachable — record already
 # completed its own bookkeeping; attach only a delivered verdict.
 if [[ -n "$VERDICT" ]]; then
@@ -374,13 +386,6 @@ if [[ "$VERDICT" == "NEEDS_HUMAN" ]]; then
   echo "ESCALATE: reviewer requested human review" >&2
   exit 4
 fi
-# Scope ownership through the optional phases (PR #392): when any optional
-# phase is enabled, hold the lease right after the record — review-route and
-# the reservation gate refuse other dispatches on this scope until Step 4
-# releases it. Expires on the liveness bound.
-# OPTIONAL_PHASES_COUNT = the number of enabled optional passes Step 0 parsed;
-# it sizes the lease TTL. The lease is bound to this round's reservation id.
-[ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases "$OPTIONAL_PHASES_COUNT" --rid "$RESERVATION_ID" --json
 ```
 
 The command reads the prior receipt before atomically replacing it. Unsupported
