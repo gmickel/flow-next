@@ -175,9 +175,11 @@ unnecessary costs bytes; not injecting after a silent resume failure costs a bli
 review, so injection is the default everywhere it is not provably unnecessary.
 
 **The first review round fans out three axis draws (fn-215).** On the `codex` and
-`host` backends, the first round of a review scope is three concurrent draws of the
+`host` backends, the first round of a review scope is three draws of the
 same reviewer - same resolved backend/model, same base prompt, each differing by
-exactly one added axis line: correctness-and-logic of the changed code,
+exactly one added axis line - dispatched concurrently where the host offers
+one-message parallel dispatch, back-to-back with the degradation disclosed in the
+review record otherwise: correctness-and-logic of the changed code,
 contracts-and-consistency (do docs, tests, and stated promises agree with what the
 code does), and integration-with-unchanged-code. The studies behind this measured
 single-pass review recall as stochastic sampling - roughly 45% of validated

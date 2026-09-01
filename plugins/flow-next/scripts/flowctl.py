@@ -43618,10 +43618,17 @@ def _review_fanout_run_draw(
     rc = 0
     stderr = ""
     failure_detail = None
+    # fn-215 completion review R5: backends whose run_exec composes a session
+    # marker path from the session id (copilot) crash on None — mint a
+    # per-draw UUID exactly the way the single-dispatch path does. First-round
+    # draws never resume, so a fresh id per draw is always correct.
+    draw_session_id = (
+        str(uuid.uuid4()) if reg.get("mint_session_id") else None
+    )
     try:
         output, sid, rc, stderr = reg["run_exec"](
             prompt,
-            session_id=None,
+            session_id=draw_session_id,
             repo_root=repo_root,
             spec=spec,
             resolution_out=resolution_out,
@@ -44336,15 +44343,23 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         reviewed_base_sha=meta.get("reviewed_base_sha"),
         base_branch=args.base,
     )
-    if (
-        verdict == "NEEDS_WORK"
-        and isinstance(findings_container, dict)
+    # fn-215 R9: escalate when the evidence gate dropped EVERY finding of
+    # every NEEDS_WORK draw — per-draw, not whole-container: SHIP-draw
+    # remainder items can keep the merged container non-empty while the
+    # NEEDS_WORK draws have nothing actionable left, and looping the fix
+    # pass against an unchanged artifact is the wedge. Draw attribution
+    # never lives on finding items (closed v1 allowlist), so the coordinator
+    # supplies the count via --needs-work-survivors; absent that, the
+    # container item count is the compatible approximation. Absent or
+    # unparseable containers keep NEEDS_WORK on the default path (parsers
+    # distinguish invalid from absent).
+    needs_work_survivors = getattr(args, "needs_work_survivors", None)
+    if needs_work_survivors is None and (
+        isinstance(findings_container, dict)
         and isinstance(findings_container.get("items"), list)
-        and len(findings_container["items"]) == 0
     ):
-        # fn-215 R9: evidence gate dropped every finding — escalate rather
-        # than looping against an unchanged artifact. Absent/unparseable
-        # containers keep NEEDS_WORK (parsers distinguish invalid from absent).
+        needs_work_survivors = len(findings_container["items"])
+    if verdict == "NEEDS_WORK" and needs_work_survivors == 0:
         verdict = "NEEDS_HUMAN"
     suppressed_count = parse_suppressed_count(merged_text)
     classification_counts = parse_classification_counts(merged_text)
@@ -49684,6 +49699,18 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
     )
     p2.add_argument(
         "--receipt", help="Receipt file path for the merged round",
+    )
+    p2.add_argument(
+        "--needs-work-survivors",
+        type=int,
+        metavar="N",
+        help=(
+            "Coordinator-counted actionable findings surviving from the "
+            "NEEDS_WORK draws after the evidence gate (fn-215 R9). 0 "
+            "escalates a NEEDS_WORK round to NEEDS_HUMAN even when "
+            "SHIP-draw remainder items keep the merged container "
+            "non-empty. Default: the merged container's item count."
+        ),
     )
     p2.add_argument("--json", action="store_true", help="JSON output")
     p2.set_defaults(func=cmd_codex_impl_review_fanout_finalize)

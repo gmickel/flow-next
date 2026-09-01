@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 from unittest import mock
@@ -543,6 +544,116 @@ class TestReviewFanout(unittest.TestCase):
         fin_code, fin, fin_err = self._finalize(payload["rid"], missing)
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+
+    # 4b ----------------------------------------------------------------
+
+    def test_wedge_escalation_per_needs_work_draw(self) -> None:
+        """Completion review R9: the wedge is per-NEEDS_WORK-draw.
+
+        SHIP-draw remainder items keep the merged container non-empty while
+        every NEEDS_WORK-draw finding was filtered — the coordinator-counted
+        ``--needs-work-survivors 0`` escalates anyway; omitting the flag
+        keeps the container-count default (compatibility), and an explicit
+        nonzero count is authoritative over the container.
+        """
+        by_axis = {
+            "correctness": "NEEDS_WORK",
+            "contracts": "SHIP",
+            "integration": "SHIP",
+        }
+        remainder = self._write_merged(
+            _merged_review("SHIP-draw remainder item kept as deferred lineage.")
+        )
+
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], remainder, "--needs-work-survivors", "0",
+        )
+        self.assertEqual(fin_code, flowctl.REVIEW_CAP_EXIT_CODE, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_HUMAN")
+
+        # No flag: container item count governs — non-empty stays NEEDS_WORK.
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        fin_code, fin, fin_err = self._finalize(payload["rid"], remainder)
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+
+        # Explicit nonzero survivors overrides an empty container.
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        empty = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], empty, "--needs-work-survivors", "2",
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+
+    # 4c ----------------------------------------------------------------
+
+    def test_copilot_secondary_draw_succeeds_with_minted_session(self) -> None:
+        """Completion review R5: a cross-family copilot secondary draw gets a
+        client-minted UUID session id (copilot composes a session-marker path
+        from it — None crashed the draw thread pre-fix) and succeeds."""
+        copilot_sessions: list = []
+
+        def copilot_fake(
+            prompt,
+            *,
+            session_id,
+            repo_root,
+            spec,
+            resolution_out,
+            args,
+            resume_only=False,
+        ):
+            self.assertEqual(_axis_of(prompt), "contracts")
+            copilot_sessions.append(session_id)
+            resolution_out["model"] = "copilot-model"
+            return "<verdict>SHIP</verdict>", session_id, 0, ""
+
+        codex_calls: list = []
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--force",
+            "--json",
+            "--draw",
+            "correctness",
+            "--draw",
+            "contracts=copilot:gpt-5.2",
+            fake=self._ship_exec(codex_calls),
+            extra_patches=(
+                mock.patch.dict(
+                    flowctl.BACKEND_REGISTRY["copilot"],
+                    {"run_exec": copilot_fake},
+                ),
+            ),
+        )
+        self.assertEqual(code, 0, err)
+        payload = self._payload(out)
+        self.assertEqual(payload.get("failed_draws"), 0)
+        self.assertEqual(len(copilot_sessions), 1)
+        # Minted per draw: a real UUID, never None.
+        uuid.UUID(copilot_sessions[0])
+        # The codex primary draw keeps its no-mint contract (session None).
+        self.assertEqual(len(codex_calls), 1)
+        self.assertIsNone(codex_calls[0]["session_id"])
+        meta = json.loads(
+            (self.root / ".flow" / "review-fanout" / payload["rid"] / "meta.json")
+            .read_text(encoding="utf-8")
+        )
+        contracts = [
+            row for row in meta["draws"] if row.get("axis") == "contracts"
+        ]
+        self.assertEqual(len(contracts), 1)
+        self.assertEqual(contracts[0]["backend"], "copilot")
+        self.assertFalse(contracts[0]["failed"])
+        self.assertEqual(contracts[0]["session_id"], copilot_sessions[0])
 
     # 5 -----------------------------------------------------------------
 
