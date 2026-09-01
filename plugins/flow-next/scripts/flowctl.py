@@ -38292,8 +38292,10 @@ def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
         # MAX_REVIEW_ITERATIONS. The durable attempt rows delimit cycles by
         # their SHIP rows; the count is recovered from the rows of the cycle
         # ending in the overturned SHIP.
-        cycle = 0
-        last_cycle = 0
+        # PR #392 r33: a SHIP immediately followed by a deep_pass_overturn
+        # marker was REOPENED — it is not a cycle boundary, or repeated
+        # overturns would each look like one-round cycles and evade the cap.
+        events = []
         for row in spec_data.get("review_attempts") or []:
             if (
                 not isinstance(row, dict)
@@ -38301,11 +38303,25 @@ def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
                 or row.get("task") != task_id
                 or not isinstance(row.get("verdict"), str)
                 or row.get("superseded_by")
-                or row.get("round_consumed") is False
             ):
                 continue
+            if row.get("deep_pass_overturn"):
+                events.append("overturn")
+            elif row.get("round_consumed") is False:
+                continue
+            else:
+                events.append(
+                    "SHIP" if row.get("verdict") == "SHIP" else "ROUND"
+                )
+        cycle = 0
+        last_cycle = 0
+        for index, event in enumerate(events):
+            if event == "overturn":
+                continue
             cycle += 1
-            if row.get("verdict") == "SHIP":
+            if event == "SHIP":
+                if index + 1 < len(events) and events[index + 1] == "overturn":
+                    continue  # reopened — the cycle keeps counting
                 last_cycle = cycle
                 cycle = 0
         restore = max(last_cycle, 1)
