@@ -1084,6 +1084,36 @@ class TestReviewFanout(unittest.TestCase):
             self.assertEqual(fin_code, 2, f"{bad!r}: {fin_err}")
             self.assertIn("invalid --rid", json.dumps(fin) + fin_err)
 
+    def test_task_finalize_replay_is_noop(self) -> None:
+        """PR #392 r37 (P1): a task-scoped finalize retried after the round
+        was recorded must not rebuild the receipt — optional-phase evidence
+        and a phase-overturned verdict survive the replay."""
+        receipt = self.root / "replay-receipt.json"
+        code, payload, err = self._dispatch(
+            self._ship_exec([]), "--receipt", str(receipt)
+        )
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertEqual(fin.get("verdict"), "SHIP")
+        # A deep pass enriched and overturned the published receipt.
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        data["deep_passes"] = ["adversarial"]
+        data["verdict_before_deep"] = "SHIP"
+        data["verdict"] = "NEEDS_WORK"
+        receipt.write_text(json.dumps(data), encoding="utf-8")
+        # Coordinator retries the same finalize (crash recovery).
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt),
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        after = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(after.get("deep_passes"), ["adversarial"])
+        self.assertEqual(after.get("verdict"), "NEEDS_WORK")
+
     def test_exclusive_increment_refuses_standing_reservation(self) -> None:
         """PR #392 r22: --exclusive makes the single-dispatch fence atomic —
         inside the reservation lock, a standing same-scope reservation

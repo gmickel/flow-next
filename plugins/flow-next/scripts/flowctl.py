@@ -44943,6 +44943,14 @@ def _review_fanout_record_and_receipt(
         receipt_payload=receipt_payload,
         receipt_criteria_text=merged_text,
     )
+    if isinstance(summary, dict) and summary.get("replayed"):
+        # PR #392 r37 (P1): a task-scoped finalize retried after the round
+        # was already recorded is a true no-op — the durable ledger and the
+        # published receipt (possibly enriched by deep/validator/walkthrough
+        # phases, possibly overturned to NEEDS_WORK) are the truth. Rebuilding
+        # the phase-one receipt here would delete that evidence and could
+        # revert an overturned verdict back to the original SHIP.
+        return summary
     _review_fanout_write_receipt(
         receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
         findings_container, args, receipt_draws, meta, reservation_id,
