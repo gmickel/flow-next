@@ -495,16 +495,29 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
 
         # ...while a milder merged tag never downgrades the synthesis:
-        # worst-wins holds across the union.
+        # worst-wins holds across the union, and the receipt stamps the
+        # discrepancy so the stored contradiction (recorded NEEDS_WORK, body
+        # tag SHIP) is visible rather than reverse-engineered (r2).
         one_bad = dict(all_ship, contracts="NEEDS_WORK")
-        code, payload, err = self._dispatch(self._verdict_exec(one_bad))
+        receipt = self.root / "milder-receipt.json"
+        code, payload, err = self._dispatch(
+            self._verdict_exec(one_bad), "--receipt", str(receipt)
+        )
         self.assertEqual(code, 0, err)
         milder = self._write_merged(
             _merged_review("Residual finding.", verdict="SHIP")
         )
-        fin_code, fin, fin_err = self._finalize(payload["rid"], milder)
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], milder, "--receipt", str(receipt)
+        )
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "NEEDS_WORK")
+        stored = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(stored["verdict"], "NEEDS_WORK")
+        mismatch = stored.get("merged_tag_mismatch")
+        self.assertIsInstance(mismatch, str)
+        self.assertIn("SHIP", mismatch)
+        self.assertIn("NEEDS_WORK", mismatch)
 
     # 4 -----------------------------------------------------------------
 

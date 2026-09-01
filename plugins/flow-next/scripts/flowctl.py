@@ -41480,6 +41480,7 @@ def _backend_review_receipt_payload(
     unaddressed_rids=None,
     pre_consumption: bool = False,
     draws: Optional[list] = None,
+    merged_tag_mismatch: Optional[str] = None,
 ) -> dict:
     """Build the receipt body (no findings/criteria) with stable key order.
 
@@ -41541,6 +41542,11 @@ def _backend_review_receipt_payload(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
+    if merged_tag_mismatch is not None:
+        # fn-215 host review r2: the fan-out finalize's stored verdict can
+        # contradict the merged text's own milder tag — stamp the discrepancy
+        # so the receipt is self-explaining.
+        receipt_data["merged_tag_mismatch"] = merged_tag_mismatch
     if draws is not None:
         receipt_data["draws"] = draws
     return receipt_data
@@ -41635,6 +41641,7 @@ def _write_backend_review_receipt(
     journaled_reservation_id: Optional[str] = None,
     publish_out: Optional[dict] = None,
     draws: Optional[list] = None,
+    merged_tag_mismatch: Optional[str] = None,
 ) -> bool:
     """Write a review receipt with stable key order (Ralph / pilot / land).
 
@@ -41687,6 +41694,7 @@ def _write_backend_review_receipt(
         classification_counts=classification_counts,
         unaddressed_rids=unaddressed_rids,
         draws=draws,
+        merged_tag_mismatch=merged_tag_mismatch,
     )
     receipt_file = Path(receipt_path)
     with cross_process_lock(_review_receipt_lock_path(receipt_file)):
@@ -43825,6 +43833,7 @@ def _review_fanout_emit_dispatch(
 
 def _review_fanout_journal_refund_intent(
     flow_dir: Path, spec_id: str, task_id: str, reservation_id: str,
+    reviewed_head_sha: Optional[str], reviewed_base_sha: Optional[str],
 ) -> None:
     """Write-ahead refund intent for the dispatched-but-never-finalized case.
 
@@ -43850,6 +43859,11 @@ def _review_fanout_journal_refund_intent(
         "response_sha256": hashlib.sha256(
             response.encode("utf-8")
         ).hexdigest(),
+        # fn-215 host review r2 (fn-183/#312): the snapshot provenance is in
+        # hand at dispatch time - carry it so the replayed refund row keeps
+        # the observed shas instead of degrading to fallback/unknown.
+        "reviewed_head_sha": reviewed_head_sha,
+        "reviewed_base_sha": reviewed_base_sha,
         "receipt_payload": None,
         "receipt_target": None,
         "status_target": None,
@@ -43955,6 +43969,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
         rid = reservation_id
         _review_fanout_journal_refund_intent(
             flow_dir, spec_id_from_task(task_id), task_id, reservation_id,
+            reviewed_head_sha, reviewed_base_sha,
         )
     else:
         rid = secrets.token_hex(16)
@@ -43965,7 +43980,7 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
             # fn-215 host review r1: no draw was dispatched, so the reserved
             # round must not stay charged — refund it in-process (this also
             # supersedes and cleans up the refund-intent journal above).
-            record_review_attempt(
+            attempt = record_review_attempt(
                 spec_id_from_task(task_id),
                 "impl",
                 backend="codex",
@@ -43978,6 +43993,21 @@ def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
                 reviewed_base_sha=reviewed_base_sha,
                 reservation_id=reservation_id,
             )
+            # fn-215 host review r2: same transport-health check the
+            # all-failed refund applies — repeated collisions count toward
+            # the consecutive transport-failure cap and must escalate.
+            if attempt.get("transport_unhealthy"):
+                error_exit(
+                    build_transport_unhealthy_message(
+                        "codex",
+                        "impl",
+                        attempt["consecutive_transport_failures"],
+                        attempt["transport_failure_cap"],
+                        attempt.get("consecutive_failure_classes"),
+                    ),
+                    use_json=args.json,
+                    code=REVIEW_TRANSPORT_EXIT_CODE,
+                )
         error_exit(str(exc), use_json=args.json, code=2)
     results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
     _review_fanout_write_meta(
@@ -44081,6 +44111,7 @@ def _review_fanout_write_receipt(
     receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
     findings_container, args, receipt_draws, meta, reservation_id,
     receipt_target, suppressed_count, classification_counts, unaddressed_rids,
+    merged_tag_mismatch,
 ) -> None:
     if not receipt_path:
         return
@@ -44107,6 +44138,7 @@ def _review_fanout_write_receipt(
         findings_built=True,
         journaled_reservation_id=reservation_id if receipt_target else None,
         draws=receipt_draws,
+        merged_tag_mismatch=merged_tag_mismatch,
     )
 
 
@@ -44115,13 +44147,14 @@ def _review_fanout_record_and_receipt(
     findings_container, findings_digest, receipt_path, receipt_draws,
     primary, resolved_spec, reservation_id, meta,
     suppressed_count, classification_counts, unaddressed_rids,
+    merged_tag_mismatch,
 ) -> dict:
     if standalone:
         _review_fanout_write_receipt(
             receipt_path, review_id, verdict, merged_text, primary,
             resolved_spec, findings_container, args, receipt_draws, meta,
             None, None, suppressed_count, classification_counts,
-            unaddressed_rids,
+            unaddressed_rids, merged_tag_mismatch,
         )
         return {}
     receipt_target = receipt_path if receipt_path and reservation_id else None
@@ -44143,6 +44176,7 @@ def _review_fanout_record_and_receipt(
         unaddressed_rids=unaddressed_rids,
         pre_consumption=True,
         draws=receipt_draws,
+        merged_tag_mismatch=merged_tag_mismatch,
     ) if receipt_target else None
     summary = record_review_attempt(
         spec_id_from_task(task_id),
@@ -44170,7 +44204,7 @@ def _review_fanout_record_and_receipt(
         receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
         findings_container, args, receipt_draws, meta, reservation_id,
         receipt_target, suppressed_count, classification_counts,
-        unaddressed_rids,
+        unaddressed_rids, merged_tag_mismatch,
     )
     return summary
 
@@ -44261,19 +44295,33 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
             code=2,
         )
     merged_tag = parse_codex_verdict(merged_text)
-    if (
-        merged_tag in _REVIEW_REPLAY_PRECEDENCE
-        and _REVIEW_REPLAY_PRECEDENCE.index(merged_tag)
-        < _REVIEW_REPLAY_PRECEDENCE.index(verdict)
-    ):
-        # fn-215 host review r1: the coordinator's merged text carries its own
-        # verdict tag (post-merge deep/validate passes can find P0s the draws
-        # did not). A tag strictly worse than the draws' worst-wins synthesis
-        # escalates the recorded verdict — recording the milder synthesized
-        # one would silently discard those findings and reset the round
-        # counter on a SHIP that the merged evidence contradicts. A milder
-        # tag never downgrades: worst-wins holds across the union.
-        verdict = merged_tag
+    merged_tag_mismatch: Optional[str] = None
+    if merged_tag in _REVIEW_REPLAY_PRECEDENCE:
+        if (
+            _REVIEW_REPLAY_PRECEDENCE.index(merged_tag)
+            < _REVIEW_REPLAY_PRECEDENCE.index(verdict)
+        ):
+            # fn-215 host review r1: the coordinator's merged text carries its
+            # own verdict tag (post-merge deep/validate passes can find P0s
+            # the draws did not). A tag strictly worse than the draws'
+            # worst-wins synthesis escalates the recorded verdict — recording
+            # the milder synthesized one would silently discard those findings
+            # and reset the round counter on a SHIP that the merged evidence
+            # contradicts.
+            verdict = merged_tag
+        elif (
+            _REVIEW_REPLAY_PRECEDENCE.index(merged_tag)
+            > _REVIEW_REPLAY_PRECEDENCE.index(verdict)
+        ):
+            # fn-215 host review r2: a milder merged tag never downgrades —
+            # worst-wins holds across the union — but the receipt would then
+            # store a verdict its own body text contradicts. Stamp the
+            # discrepancy explicitly so a reader of the stored receipt sees
+            # the contradiction instead of reverse-engineering it.
+            merged_tag_mismatch = (
+                f"merged text tag {merged_tag} is milder than the draws' "
+                f"worst-wins synthesis {verdict}; worst-wins recorded"
+            )
     review_id = task_id if task_id else "branch"
     receipt_path = args.receipt if getattr(args, "receipt", None) else None
     findings_container, findings_digest = _build_backend_review_findings(
@@ -44311,6 +44359,7 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         findings_container, findings_digest, receipt_path, receipt_draws,
         primary, resolved_spec, meta.get("reservation_id"), meta,
         suppressed_count, classification_counts, unaddressed_rids,
+        merged_tag_mismatch,
     )
     _review_fanout_emit_finalize(
         args, standalone, review_id, verdict, merged_text, receipt_draws,

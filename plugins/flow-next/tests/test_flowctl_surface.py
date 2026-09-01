@@ -86,6 +86,8 @@ checkpoint save
 codex completion-review
 codex deep-pass
 codex impl-review
+codex impl-review-fanout
+codex impl-review-fanout-finalize
 codex plan-review
 codex validate
 config get
