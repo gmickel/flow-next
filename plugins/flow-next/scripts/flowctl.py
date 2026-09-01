@@ -38267,6 +38267,55 @@ def merge_deep_findings(
     return {"merged": merged, "promotions": promotions, "counts": counts}
 
 
+def _reopen_review_cycle_after_deep(task_id: str) -> None:
+    """Durably reopen a task's impl review cycle after a deep pass overturns
+    SHIP (PR #392 r30+r31).
+
+    Under the review sidecar lock: reload fresh spec state (never clobber a
+    concurrent reservation), restore the round counter to at least 1, and
+    append an honestly-labeled open attempt row so the delivered-state
+    fences (flowctl first-round guard, host workflow) read NEEDS_WORK even
+    when the /tmp receipt is lost.
+    """
+    flow_dir = get_flow_dir()
+    spec_id = spec_id_from_task(task_id)
+    spec_json_path = find_spec_json_path(flow_dir, spec_id)
+    if not spec_json_path.exists():
+        return
+    with _review_sidecar_lock(flow_dir, spec_id):
+        spec_data = normalize_epic(
+            json.loads(spec_json_path.read_text(encoding="utf-8"))
+        )
+        if _read_review_rounds(spec_data, "impl", task_id) < 1:
+            _write_review_rounds(spec_data, "impl", task_id, 1)
+        attempts = spec_data.get("review_attempts")
+        if not isinstance(attempts, list):
+            attempts = []
+            spec_data["review_attempts"] = attempts
+        attempts.append({
+            "counter_kind": "impl",
+            "kind": "impl",
+            "review_type": "impl",
+            "task": task_id,
+            "backend": "codex",
+            "verdict": "NEEDS_WORK",
+            "outcome": "verdict",
+            "failure_class": None,
+            "reservation_id": None,
+            "round_consumed": False,
+            "deep_pass_overturn": True,
+            "output_sha256": None,
+            "timestamp": now_iso(),
+            "finalized": {
+                "receipt": "not_applicable",
+                "digest": "not_applicable",
+                "status": "not_applicable",
+            },
+        })
+        spec_data["updated_at"] = now_iso()
+        atomic_write_json(spec_json_path, spec_data)
+
+
 def _apply_deep_passes_to_receipt(
     receipt_path: str,
     passes_run: list[str],
@@ -38497,32 +38546,20 @@ def _run_deep_pass(
         and new_verdict == "NEEDS_WORK"
         and updated_receipt.get("verdict_before_deep") == "SHIP"
     ):
-        # PR #392 r30 (P1): the SHIP finalize already reset the persisted
-        # round counter — a deep pass overturning it must REOPEN the cycle,
-        # or the next re-review restarts at round 1 (cap circumvention) and
-        # a lost receipt silently drops the deep finding. Mirror image of
-        # the validator SHIP reset (r18). Best-effort, task receipts only.
+        # PR #392 r30+r31 (P1): the SHIP finalize already reset the persisted
+        # round counter — a deep pass overturning it must REOPEN the cycle
+        # DURABLY, or the next re-review restarts at round 1 (cap
+        # circumvention) and a lost receipt admits a fresh fan-out that
+        # drops the deep finding (the openness fences read the last durable
+        # attempt, not just the counter). Runs under the same review state
+        # lock the reserve/record machinery uses (r31: a concurrent reserve
+        # between an unlocked read and write would be clobbered). Mirror
+        # image of the validator SHIP reset (r18). Best-effort, task
+        # receipts only.
         receipt_id = updated_receipt.get("id")
         if isinstance(receipt_id, str) and is_task_id(receipt_id):
             try:
-                flow_dir = get_flow_dir()
-                spec_json_path = find_spec_json_path(
-                    flow_dir, spec_id_from_task(receipt_id)
-                )
-                if spec_json_path.exists():
-                    spec_data = normalize_epic(
-                        json.loads(
-                            spec_json_path.read_text(encoding="utf-8")
-                        )
-                    )
-                    if _read_review_rounds(
-                        spec_data, "impl", receipt_id
-                    ) < 1:
-                        _write_review_rounds(
-                            spec_data, "impl", receipt_id, 1
-                        )
-                        spec_data["updated_at"] = now_iso()
-                        atomic_write_json(spec_json_path, spec_data)
+                _reopen_review_cycle_after_deep(receipt_id)
             except Exception:  # noqa: BLE001
                 pass
 
