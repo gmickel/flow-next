@@ -41469,6 +41469,7 @@ def _backend_review_receipt_payload(
     classification_counts=None,
     unaddressed_rids=None,
     pre_consumption: bool = False,
+    draws: Optional[list] = None,
 ) -> dict:
     """Build the receipt body (no findings/criteria) with stable key order.
 
@@ -41530,6 +41531,8 @@ def _backend_review_receipt_payload(
         receipt_data["pre_existing_count"] = classification_counts["pre_existing"]
     if unaddressed_rids is not None:
         receipt_data["unaddressed"] = unaddressed_rids
+    if draws is not None:
+        receipt_data["draws"] = draws
     return receipt_data
 
 
@@ -41621,6 +41624,7 @@ def _write_backend_review_receipt(
     findings_built: bool = False,
     journaled_reservation_id: Optional[str] = None,
     publish_out: Optional[dict] = None,
+    draws: Optional[list] = None,
 ) -> bool:
     """Write a review receipt with stable key order (Ralph / pilot / land).
 
@@ -41672,6 +41676,7 @@ def _write_backend_review_receipt(
         suppressed_count=suppressed_count,
         classification_counts=classification_counts,
         unaddressed_rids=unaddressed_rids,
+        draws=draws,
     )
     receipt_file = Path(receipt_path)
     with cross_process_lock(_review_receipt_lock_path(receipt_file)):
@@ -41900,6 +41905,9 @@ def _wire_backend_review_hooks() -> None:
         # re-dispatch instead of declaring a verdict (#331). Delivery is stdin
         # with prompt_fit "none", so the preamble costs no argv budget.
         "needs_persona_override": True,
+        # fn-215 R15: fan-out is a registry gate on the impl pipeline, never
+        # inside _dispatch_backend_review (plan/completion share that helper).
+        "fanout_draws": True,
     })
     BACKEND_REGISTRY["copilot"].update({
         # Spawn shape: session marker under .flow/tmp/copilot-sessions/.
@@ -42117,6 +42125,20 @@ def _dispatch_backend_review(
 
 
 
+def _receipt_records_fanout(receipt_path: Optional[str]) -> bool:
+    """True when a receipt honestly records a fan-out round (fn-215 R11)."""
+    if not receipt_path:
+        return False
+    try:
+        data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    draws = data.get("draws")
+    return isinstance(draws, list) and bool(draws)
+
+
 def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
     """Shared impl-review pipeline; per-backend variance via registry hooks."""
     reg = BACKEND_REGISTRY[backend]
@@ -42157,6 +42179,10 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
         error_exit(str(exc), use_json=args.json, code=2)
 
     receipt_path = args.receipt if hasattr(args, "receipt") and args.receipt else None
+    # fn-215 R11: a fan-out receipt's draws[] means the resumed primary
+    # session did not author the other axes' findings — lean resume is
+    # disabled for this one round so the FULL merged container is injected.
+    fanout_receipt = _receipt_records_fanout(receipt_path)
     # Stays None for backends that always inject (cursor, copilot, host); only a
     # two_phase_resume backend builds a second, findings-bearing prompt.
     injected_prompt: Optional[str] = None
@@ -42202,7 +42228,11 @@ def _backend_impl_review(args: argparse.Namespace, backend: str) -> None:
             review_type="implementation",
             prior_findings=prior_findings,
             prior_items=prior_items,
-            two_phase=bool(session_id) and bool(reg.get("two_phase_resume")),
+            two_phase=(
+                bool(session_id)
+                and bool(reg.get("two_phase_resume"))
+                and not fanout_receipt
+            ),
         )
 
     # fn-90 R7 / fn-187 R1: backends whose reviewer inherits ambient instructions
@@ -43309,6 +43339,864 @@ def _backend_completion_review(args: argparse.Namespace, backend: str) -> None:
 def cmd_codex_impl_review(args: argparse.Namespace) -> None:
     """Run implementation review via codex exec."""
     cmd_backend_review(args, backend="codex", kind="impl")
+
+
+def _review_fanout_gate(args: argparse.Namespace) -> None:
+    """Wire hooks and refuse unless the codex registry enables fan-out (R15)."""
+    _wire_backend_review_hooks()
+    if not BACKEND_REGISTRY["codex"].get("fanout_draws"):
+        error_exit(
+            "impl-review-fanout is gated to the codex backend",
+            use_json=args.json,
+            code=2,
+        )
+
+
+def _review_fanout_publish(path: Path, content: str) -> None:
+    """Exclusive-create tmp + os.replace publication (fn-215 R12)."""
+    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    fd = os.open(
+        str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600,
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(str(tmp), str(path))
+    except Exception:
+        try:
+            os.unlink(str(tmp))
+        except OSError:
+            pass
+        raise
+
+
+def _review_fanout_append_progress(sidecar_dir: Path, line: str) -> None:
+    """O_APPEND one progress line and mirror it to stderr (fn-215 R14)."""
+    text = line if line.endswith("\n") else f"{line}\n"
+    path = sidecar_dir / "progress.log"
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        os.write(fd, text.encode("utf-8"))
+    finally:
+        os.close(fd)
+    print(line, file=sys.stderr)
+
+
+def _review_fanout_classify_failure(
+    reg: dict, output: str, stderr: str, exit_code: int,
+) -> str:
+    """Same classes as _finish_backend_exec; a verdict-bearing draw is never failed."""
+    sandbox_failure = (
+        bool(reg.get("has_sandbox"))
+        and is_sandbox_failure(exit_code, output, stderr)
+    )
+    stderr_text = (stderr or "").lower()
+    if sandbox_failure:
+        return "sandbox"
+    if "timed out" in stderr_text or "timeout" in stderr_text:
+        return "timeout"
+    if exit_code != 0:
+        return "nonzero_exit"
+    if not (output or "").strip():
+        return "empty_output"
+    return "missing_verdict"
+
+
+def _review_fanout_first_round_guard(args: argparse.Namespace) -> None:
+    """Fan-out is first-round only (fn-215 R11)."""
+    receipt_path = getattr(args, "receipt", None)
+    if not receipt_path:
+        return
+    path = Path(receipt_path)
+    if not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+    session_id = data.get("session_id")
+    mode = data.get("mode")
+    has_session = (
+        isinstance(session_id, str)
+        and bool(session_id.strip())
+        and mode in (None, "codex")
+    )
+    if (
+        _read_prior_findings(receipt_path) is not None
+        or _read_prior_structured_findings(receipt_path) is not None
+        or has_session
+    ):
+        error_exit(
+            "fan-out is first-round only; re-review rounds use impl-review "
+            "(single dispatch with the merged prior-finding container)",
+            use_json=args.json,
+            code=2,
+        )
+
+
+def _review_fanout_resolve_scope(args: argparse.Namespace):
+    """Validate task/standalone scope; sidecars always require .flow/."""
+    task_id = args.task
+    standalone = task_id is None
+    if not ensure_flow_exists():
+        if standalone:
+            error_exit(
+                "fan-out sidecars live under .flow/; .flow/ does not exist",
+                use_json=args.json,
+            )
+        error_exit(".flow/ does not exist", use_json=args.json)
+    flow_dir = get_flow_dir()
+    task_spec_path = None
+    if not standalone:
+        if not is_task_id(task_id):
+            error_exit(f"Invalid task ID: {task_id}", use_json=args.json)
+        task_id = resolve_task_arg(flow_dir, task_id) or task_id
+        task_spec_path = flow_dir / TASKS_DIR / f"{task_id}.md"
+        if not task_spec_path.exists():
+            error_exit(
+                f"Task spec not found: {task_spec_path}", use_json=args.json,
+            )
+    return task_id, standalone, flow_dir, task_spec_path
+
+
+def _review_fanout_parse_draws(args: argparse.Namespace, task_id: Optional[str]):
+    """Parse repeated --draw AXIS[=SPEC]; default is all three axes (R1/R5)."""
+    default_spec = BACKEND_REGISTRY["codex"]["resolve_spec"](args, task_id)
+    raw_draws = getattr(args, "draw", None) or []
+    if not raw_draws:
+        return [{"axis": axis, "spec": default_spec} for axis in REVIEW_FANOUT_AXES]
+    seen: list[str] = []
+    draws: list[dict] = []
+    for raw in raw_draws:
+        token = (raw or "").strip()
+        if "=" in token:
+            axis, spec_str = token.split("=", 1)
+        else:
+            axis, spec_str = token, None
+        axis = axis.strip()
+        if axis not in REVIEW_FANOUT_AXES:
+            error_exit(
+                f"unknown draw axis {axis!r}; expected one of {REVIEW_FANOUT_AXES}",
+                use_json=args.json,
+                code=2,
+            )
+        if axis in seen:
+            error_exit(
+                f"duplicate --draw axis: {axis}", use_json=args.json, code=2,
+            )
+        seen.append(axis)
+        if spec_str is None:
+            spec = default_spec
+        else:
+            spec_str = spec_str.strip()
+            if not spec_str:
+                error_exit(
+                    f"invalid --draw spec for {axis}: empty",
+                    use_json=args.json,
+                    code=2,
+                )
+            try:
+                spec = BackendSpec.parse(spec_str).resolve()
+            except ValueError as exc:
+                error_exit(
+                    f"invalid --draw spec for {axis}: {exc}",
+                    use_json=args.json,
+                    code=2,
+                )
+            backend = spec.backend
+            if backend not in ("codex", "copilot", "cursor") or not (
+                BACKEND_REGISTRY.get(backend) or {}
+            ).get("run_exec"):
+                error_exit(
+                    f"draw {axis}: backend {backend!r} does not support "
+                    "fan-out dispatch",
+                    use_json=args.json,
+                    code=2,
+                )
+        draws.append({"axis": axis, "spec": spec})
+    if not 1 <= len(draws) <= 3:
+        error_exit(
+            "fan-out requires 1..3 --draw axes", use_json=args.json, code=2,
+        )
+    return draws
+
+
+def _review_fanout_primary_axis(draws: list) -> str:
+    axes = [draw["axis"] for draw in draws]
+    if "correctness" in axes:
+        return "correctness"
+    return axes[0]
+
+
+def _review_fanout_sidecar_dir(
+    flow_dir: Path, rid: str, *, use_json: bool,
+) -> Path:
+    """Exclusive mkdir of .flow/review-fanout/<rid> (fn-215 R12)."""
+    parent = flow_dir / "review-fanout"
+    parent.mkdir(parents=True, exist_ok=True)
+    sidecar = parent / rid
+    try:
+        sidecar.mkdir(mode=0o700, exist_ok=False)
+    except FileExistsError:
+        error_exit(
+            f"fan-out sidecar directory already exists: {sidecar}",
+            use_json=use_json,
+            code=2,
+        )
+    except OSError as exc:
+        error_exit(
+            f"cannot create fan-out sidecar directory: {exc}",
+            use_json=use_json,
+            code=2,
+        )
+    return sidecar
+
+
+def _review_fanout_build_prompts(
+    draws, standalone, base_branch, focus, review_scope,
+    reviewed_base_sha, reviewed_head_sha, repo_root, task_spec_path,
+) -> dict:
+    diff_range = f"{reviewed_base_sha}..{reviewed_head_sha}"
+    context_hints = "" if standalone else gather_context_hints(base_branch)
+    prompts = {}
+    for draw in draws:
+        axis = draw["axis"]
+        if standalone:
+            prompt = build_standalone_review_prompt(
+                base_branch, focus, review_scope, diff_range, axis=axis,
+            )
+        else:
+            prompt = build_review_prompt(
+                "impl",
+                context_hints=context_hints,
+                review_scope=review_scope,
+                diff_range=diff_range,
+                spec_path=task_spec_path.relative_to(repo_root).as_posix(),
+                axis=axis,
+            )
+        if BACKEND_REGISTRY[draw["spec"].backend].get("needs_persona_override"):
+            prompt = build_review_persona_override() + prompt
+        prompts[axis] = prompt
+    return prompts
+
+
+def _review_fanout_run_draw(
+    draw, prompt, repo_root, args, sidecar_dir: Path,
+) -> dict:
+    """One draw runner: no record/refund/receipt writes (fn-215 R14)."""
+    axis = draw["axis"]
+    spec = draw["spec"]
+    backend = spec.backend
+    reg = BACKEND_REGISTRY[backend]
+    started_at = now_iso()
+    started = datetime.now(timezone.utc)
+    resolution_out: dict = {}
+    output = ""
+    sid = None
+    rc = 0
+    stderr = ""
+    failure_detail = None
+    try:
+        output, sid, rc, stderr = reg["run_exec"](
+            prompt,
+            session_id=None,
+            repo_root=repo_root,
+            spec=spec,
+            resolution_out=resolution_out,
+            args=args,
+        )
+    except Exception as exc:
+        failure_detail = f"{type(exc).__name__}: {exc}"
+        output = failure_detail
+        stderr = failure_detail
+        rc = 1
+    finished_at = now_iso()
+    elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+    review_text = ""
+    verdict = None
+    if failure_detail is None:
+        review_text = reg["extract_review"](output) or ""
+        verdict = parse_codex_verdict(output)
+    failed = verdict is None
+    if not failed:
+        failure_class = None
+    elif failure_detail is not None:
+        failure_class = "dispatch_exception"
+    else:
+        failure_class = _review_fanout_classify_failure(reg, output, stderr, rc)
+    model = resolution_out["model"] if "model" in resolution_out else spec.model
+    effort = None if resolution_out.get("floor") else spec.effort
+    review_path = sidecar_dir / f"{axis}.review.md"
+    output_path = sidecar_dir / f"{axis}.out.txt"
+    meta = {
+        "axis": axis,
+        "backend": backend,
+        "model": model,
+        "effort": effort,
+        "session_id": sid,
+        "verdict": verdict,
+        "failed": failed,
+        "failure_class": failure_class,
+        "exit_code": rc,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "review_path": str(review_path),
+        "output_path": str(output_path),
+    }
+    _review_fanout_publish(output_path, output if isinstance(output, str) else "")
+    _review_fanout_publish(review_path, review_text)
+    _review_fanout_publish(
+        sidecar_dir / f"{axis}.json", json.dumps(meta, indent=2) + "\n",
+    )
+    status = verdict if not failed else f"FAILED ({failure_class})"
+    _review_fanout_append_progress(
+        sidecar_dir, f"draw {axis}: {status} in {elapsed:.1f}s",
+    )
+    return meta
+
+
+def _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar_dir):
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=len(draws)) as pool:
+        futs = [
+            pool.submit(
+                _review_fanout_run_draw,
+                draw, prompts[draw["axis"]], repo_root, args, sidecar_dir,
+            )
+            for draw in draws
+        ]
+        return [fut.result() for fut in futs]
+
+
+def _review_fanout_write_meta(
+    sidecar, task_id, standalone, base_branch,
+    reviewed_base_sha, reviewed_head_sha, artifact_sha256,
+    reservation_id, rid, primary_axis, results,
+) -> None:
+    meta = {
+        "type": "impl_review_fanout",
+        "id": task_id if task_id else "branch",
+        "standalone": standalone,
+        "base_branch": base_branch,
+        "reviewed_base_sha": reviewed_base_sha,
+        "reviewed_head_sha": reviewed_head_sha,
+        "artifact_sha256": artifact_sha256,
+        "reservation_id": reservation_id,
+        "rid": rid,
+        "primary_axis": primary_axis,
+        "draws": results,
+        "created_at": now_iso(),
+    }
+    _review_fanout_publish(
+        sidecar / "meta.json", json.dumps(meta, indent=2) + "\n",
+    )
+
+
+def _review_fanout_refund_all_failed(
+    args, task_id, standalone, results, primary_axis,
+    reservation_id, reviewed_head_sha, reviewed_base_sha,
+) -> None:
+    by_axis = {row["axis"]: row for row in results}
+    primary = by_axis.get(primary_axis) or results[0]
+    failure_class = (
+        primary.get("failure_class")
+        or results[0].get("failure_class")
+        or "missing_verdict"
+    )
+    joined = "\n".join(
+        f"{row['axis']}: {row.get('failure_class') or 'missing_verdict'}"
+        for row in results
+    )
+    if standalone:
+        error_exit(
+            f"fan-out: every draw failed ({failure_class}). {joined}",
+            use_json=args.json,
+            code=2,
+        )
+    attempt = record_review_attempt(
+        spec_id_from_task(task_id),
+        "impl",
+        backend="codex",
+        output=joined,
+        failure_class=failure_class,
+        task_id=task_id,
+        review_type="impl",
+        use_json=args.json,
+        reviewed_head_sha=reviewed_head_sha,
+        reviewed_base_sha=reviewed_base_sha,
+        reservation_id=reservation_id,
+    )
+    if attempt.get("transport_unhealthy"):
+        error_exit(
+            build_transport_unhealthy_message(
+                "codex",
+                "impl",
+                attempt["consecutive_transport_failures"],
+                attempt["transport_failure_cap"],
+                attempt.get("consecutive_failure_classes"),
+            ),
+            use_json=args.json,
+            code=REVIEW_TRANSPORT_EXIT_CODE,
+        )
+    error_exit(
+        f"fan-out: every draw failed ({failure_class}); the reserved review "
+        f"round was refunded and the transport attempt recorded. {joined}",
+        use_json=args.json,
+        code=2,
+    )
+
+
+def _review_fanout_next_cmd(task_id, base_branch, rid, receipt) -> str:
+    task_part = f" {task_id}" if task_id else ""
+    receipt_part = f" --receipt {receipt}" if receipt else ""
+    return (
+        f"flowctl codex impl-review-fanout-finalize{task_part} "
+        f"--base {base_branch} --rid {rid} --merged-file <merged.md>"
+        f"{receipt_part}"
+    )
+
+
+def _review_fanout_emit_dispatch(
+    args, task_id, standalone, rid, reservation_id, sidecar, results, base_branch,
+) -> None:
+    review_id = task_id if task_id else "branch"
+    next_line = (
+        "merge the surviving draws' findings, then run: "
+        + _review_fanout_next_cmd(
+            task_id, base_branch, rid, getattr(args, "receipt", None),
+        )
+    )
+    draws_out = [
+        {
+            "axis": row["axis"],
+            "verdict": row.get("verdict"),
+            "failed": row.get("failed"),
+            "failure_class": row.get("failure_class"),
+            "session_id": row.get("session_id"),
+            "model": row.get("model"),
+            "review_path": row.get("review_path"),
+            "output_path": row.get("output_path"),
+        }
+        for row in results
+    ]
+    if args.json:
+        json_output({
+            "type": "impl_review_fanout",
+            "phase": "dispatch",
+            "id": review_id,
+            "rid": rid,
+            "reservation_id": reservation_id,
+            "standalone": standalone,
+            "dir": str(sidecar),
+            "draws": draws_out,
+            "failed_draws": sum(1 for row in results if row.get("failed")),
+            "merged": False,
+            "next": next_line,
+        })
+        return
+    print(f"{'axis':<14} {'verdict':<16} {'failed':<8} model")
+    for row in results:
+        print(
+            f"{row['axis']:<14} {str(row.get('verdict') or '-'):<16} "
+            f"{str(bool(row.get('failed'))):<8} {row.get('model') or '-'}"
+        )
+    print(f"next: {next_line}")
+
+
+def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
+    """Phase-one fan-out dispatch (fn-215 R14).
+
+    Pipeline: dispatch -> coordinator merge -> optional deep/validate/walkthrough
+    passes run ONCE against the MERGED set -> finalize -> one fix pass.
+    """
+    _codex_impl_review_fanout(args)
+
+
+def _codex_impl_review_fanout(args: argparse.Namespace) -> None:
+    _review_fanout_gate(args)
+    task_id, standalone, flow_dir, task_spec_path = _review_fanout_resolve_scope(args)
+    _review_fanout_first_round_guard(args)
+    draws = _review_fanout_parse_draws(args, task_id)
+    primary_axis = _review_fanout_primary_axis(draws)
+    base_branch = args.base
+    try:
+        reviewed_base_sha, reviewed_head_sha = _capture_review_snapshot(base_branch)
+    except ValueError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    try:
+        review_scope = _gather_review_scope(reviewed_base_sha, reviewed_head_sha)
+        identity_diff = (
+            "" if standalone
+            else _gather_review_identity_diff(reviewed_base_sha, reviewed_head_sha)
+        )
+    except ReviewEvidenceError as exc:
+        error_exit(str(exc), use_json=args.json, code=2)
+    repo_root = get_repo_root()
+    prompts = _review_fanout_build_prompts(
+        draws, standalone, base_branch, getattr(args, "focus", None),
+        review_scope, reviewed_base_sha, reviewed_head_sha, repo_root,
+        task_spec_path,
+    )
+    reservation_id: Optional[str] = None
+    artifact_sha256 = (
+        None if standalone
+        else _review_artifact_hash_or_warn(
+            build_impl_review_artifact_blob, identity_diff,
+        )
+    )
+    if not standalone:
+        cap_result = enforce_and_increment_review_cap(
+            spec_id_from_task(task_id), "impl", task_id=task_id,
+            use_json=args.json, artifact_sha256=artifact_sha256,
+            review_type="impl", forced=bool(getattr(args, "force", False)),
+            return_reservation=True,
+        )
+        if handle_replayed_review_cap(
+            cap_result,
+            review_type="impl_review",
+            review_id=task_id if task_id else "branch",
+            use_json=args.json,
+        ):
+            _exit_needs_human_after_persistence(
+                review_replay_terminal_verdict(cap_result.get("replays", [])),
+                use_json=args.json,
+            )
+            return
+        _, reservation_id = cap_result
+        rid = reservation_id
+    else:
+        rid = secrets.token_hex(16)
+    sidecar = _review_fanout_sidecar_dir(flow_dir, rid, use_json=args.json)
+    results = _review_fanout_dispatch(draws, prompts, repo_root, args, sidecar)
+    _review_fanout_write_meta(
+        sidecar, task_id, standalone, base_branch,
+        reviewed_base_sha, reviewed_head_sha, artifact_sha256,
+        reservation_id, rid, primary_axis, results,
+    )
+    if all(not row.get("verdict") for row in results):
+        _review_fanout_refund_all_failed(
+            args, task_id, standalone, results, primary_axis,
+            reservation_id, reviewed_head_sha, reviewed_base_sha,
+        )
+        return
+    _review_fanout_emit_dispatch(
+        args, task_id, standalone, rid, reservation_id, sidecar, results,
+        base_branch,
+    )
+
+
+def _review_fanout_load_meta(flow_dir: Path, rid: str, args) -> dict:
+    path = flow_dir / "review-fanout" / rid / "meta.json"
+    if not path.is_file():
+        error_exit(f"fan-out meta not found: {path}", use_json=args.json, code=2)
+    try:
+        meta = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        error_exit(
+            f"fan-out meta unparseable: {path}: {exc}",
+            use_json=args.json,
+            code=2,
+        )
+    if not isinstance(meta, dict) or meta.get("type") != "impl_review_fanout":
+        error_exit(f"fan-out meta invalid: {path}", use_json=args.json, code=2)
+    return meta
+
+
+def _review_fanout_check_finalize_meta(meta, task_id, standalone, args) -> None:
+    if bool(meta.get("standalone")) != standalone:
+        error_exit(
+            "fan-out finalize task/standalone does not match dispatch meta",
+            use_json=args.json,
+            code=2,
+        )
+    if not standalone and meta.get("id") != task_id:
+        error_exit(
+            f"fan-out finalize task {task_id} does not match meta id "
+            f"{meta.get('id')}",
+            use_json=args.json,
+            code=2,
+        )
+    if meta.get("base_branch") != args.base:
+        error_exit(
+            f"fan-out finalize --base {args.base!r} does not match meta "
+            f"{meta.get('base_branch')!r}",
+            use_json=args.json,
+            code=2,
+        )
+
+
+def _review_fanout_worst_verdict(draws: list) -> Optional[str]:
+    """Worst-wins over draw verdict tags (fn-215 R9). Failed draws do not vote."""
+    delivered = {
+        row.get("verdict")
+        for row in draws
+        if isinstance(row, dict)
+        and isinstance(row.get("verdict"), str)
+        and not row.get("failed")
+    }
+    for verdict in _REVIEW_REPLAY_PRECEDENCE:
+        if verdict in delivered:
+            return verdict
+    return None
+
+
+def _review_fanout_receipt_draws(draws: list) -> list:
+    return [
+        {
+            "axis": row.get("axis"),
+            "model": row.get("model"),
+            "session_id": row.get("session_id"),
+            "verdict": row.get("verdict"),
+            "failed": bool(row.get("failed")),
+        }
+        for row in draws
+        if isinstance(row, dict)
+    ]
+
+
+def _review_fanout_primary_draw(meta: dict, draws: list) -> dict:
+    axis = meta.get("primary_axis")
+    for row in draws:
+        if isinstance(row, dict) and row.get("axis") == axis:
+            return row
+    for row in draws:
+        if isinstance(row, dict):
+            return row
+    return {}
+
+
+def _review_fanout_write_receipt(
+    receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
+    findings_container, args, receipt_draws, meta, reservation_id,
+    receipt_target, suppressed_count, classification_counts, unaddressed_rids,
+) -> None:
+    if not receipt_path:
+        return
+    _write_backend_review_receipt(
+        receipt_path,
+        review_type="impl_review",
+        review_id=review_id,
+        backend="codex",
+        verdict=verdict,
+        session_id=primary.get("session_id"),
+        effective_model=primary.get("model"),
+        effective_effort=primary.get("effort"),
+        resolved_spec=resolved_spec,
+        review_text=merged_text,
+        include_effort=True,
+        base_branch=args.base,
+        focus=getattr(args, "focus", None),
+        suppressed_count=suppressed_count,
+        classification_counts=classification_counts,
+        unaddressed_rids=unaddressed_rids,
+        reviewed_base_sha=meta.get("reviewed_base_sha"),
+        reviewed_head_sha=meta.get("reviewed_head_sha"),
+        findings_container=findings_container,
+        findings_built=True,
+        journaled_reservation_id=reservation_id if receipt_target else None,
+        draws=receipt_draws,
+    )
+
+
+def _review_fanout_record_and_receipt(
+    args, task_id, standalone, review_id, verdict, merged_text,
+    findings_container, findings_digest, receipt_path, receipt_draws,
+    primary, resolved_spec, reservation_id, meta,
+    suppressed_count, classification_counts, unaddressed_rids,
+) -> dict:
+    if standalone:
+        _review_fanout_write_receipt(
+            receipt_path, review_id, verdict, merged_text, primary,
+            resolved_spec, findings_container, args, receipt_draws, meta,
+            None, None, suppressed_count, classification_counts,
+            unaddressed_rids,
+        )
+        return {}
+    receipt_target = receipt_path if receipt_path and reservation_id else None
+    receipt_payload = _backend_review_receipt_payload(
+        review_type="impl_review",
+        review_id=review_id,
+        backend="codex",
+        verdict=verdict,
+        session_id=primary.get("session_id"),
+        effective_model=primary.get("model"),
+        effective_effort=primary.get("effort"),
+        resolved_spec=resolved_spec,
+        review_text=merged_text,
+        include_effort=True,
+        base_branch=args.base,
+        focus=getattr(args, "focus", None),
+        suppressed_count=suppressed_count,
+        classification_counts=classification_counts,
+        unaddressed_rids=unaddressed_rids,
+        pre_consumption=True,
+        draws=receipt_draws,
+    ) if receipt_target else None
+    summary = record_review_attempt(
+        spec_id_from_task(task_id),
+        "impl",
+        backend="codex",
+        output=merged_text,
+        verdict=verdict,
+        task_id=task_id,
+        review_type="impl",
+        use_json=args.json,
+        reset_rounds_on_ship=True,
+        reviewed_head_sha=meta.get("reviewed_head_sha"),
+        reviewed_base_sha=meta.get("reviewed_base_sha"),
+        reviewed_model=primary.get("model"),
+        reviewed_effort=primary.get("effort"),
+        reservation_id=reservation_id,
+        findings_container=findings_container,
+        findings_digest=findings_digest,
+        findings_built=True,
+        receipt_target=receipt_target,
+        receipt_payload=receipt_payload,
+        receipt_criteria_text=merged_text,
+    )
+    _review_fanout_write_receipt(
+        receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
+        findings_container, args, receipt_draws, meta, reservation_id,
+        receipt_target, suppressed_count, classification_counts,
+        unaddressed_rids,
+    )
+    return summary
+
+
+def _review_fanout_emit_finalize(
+    args, standalone, review_id, verdict, merged_text, receipt_draws,
+    primary, resolved_spec, attempt_summary, task_id,
+    suppressed_count, classification_counts, unaddressed_rids,
+) -> None:
+    if args.json:
+        json_payload: dict = {
+            "type": "impl_review",
+            "id": review_id,
+            "verdict": verdict,
+            "session_id": primary.get("session_id"),
+            "mode": "codex",
+            "model": primary.get("model"),
+            "effort": primary.get("effort"),
+            "spec": str(resolved_spec),
+            "standalone": standalone,
+            "review": merged_text,
+            "draws": receipt_draws,
+        }
+        if suppressed_count:
+            json_payload["suppressed_count"] = suppressed_count
+        if classification_counts is not None:
+            json_payload["introduced_count"] = classification_counts["introduced"]
+            json_payload["pre_existing_count"] = classification_counts["pre_existing"]
+        if unaddressed_rids is not None:
+            json_payload["unaddressed"] = unaddressed_rids
+        if not standalone:
+            sid = spec_id_from_task(task_id)
+            json_payload["review_rounds"] = _current_review_rounds(
+                sid, "impl", task_id=task_id, use_json=args.json,
+            )
+            json_payload["review_rounds_cap"] = get_max_review_iterations()
+        if apply_superseded_review_outcome(json_payload, attempt_summary):
+            print(SUPERSEDED_REVIEW_NOTICE, file=sys.stderr)
+            json_output(json_payload)
+            return
+        escalated = apply_needs_human_escalation(json_payload, verdict)
+        json_output(json_payload, success=not escalated)
+    else:
+        print(merged_text)
+        if review_attempt_superseded(attempt_summary):
+            print("\nVERDICT=SUPERSEDED")
+            print(
+                f"{SUPERSEDED_REVIEW_NOTICE} (recorded verdict: "
+                f"{verdict or 'UNKNOWN'}; effective status: "
+                f"{attempt_summary.get('effective_status') or 'ship'})"
+            )
+            return
+        print(f"\nVERDICT={verdict or 'UNKNOWN'}")
+    _exit_needs_human_after_persistence(verdict, use_json=args.json)
+
+
+def cmd_codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
+    """Phase-two fan-out finalize (fn-215 R14).
+
+    Pipeline: dispatch -> coordinator merge -> optional deep/validate/walkthrough
+    passes run ONCE against the MERGED set -> finalize -> one fix pass.
+    """
+    _codex_impl_review_fanout_finalize(args)
+
+
+def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
+    _review_fanout_gate(args)
+    task_id, standalone, flow_dir, _spec_path = _review_fanout_resolve_scope(args)
+    rid = args.rid
+    if not rid or Path(rid).name != rid:
+        error_exit("invalid --rid", use_json=args.json, code=2)
+    meta = _review_fanout_load_meta(flow_dir, rid, args)
+    _review_fanout_check_finalize_meta(meta, task_id, standalone, args)
+    try:
+        merged_text = Path(args.merged_file).read_text(encoding="utf-8")
+    except OSError as exc:
+        error_exit(
+            f"cannot read --merged-file: {exc}", use_json=args.json, code=2,
+        )
+    if not merged_text.strip():
+        error_exit("--merged-file is empty", use_json=args.json, code=2)
+    meta_draws = meta.get("draws") if isinstance(meta.get("draws"), list) else []
+    verdict = _review_fanout_worst_verdict(meta_draws)
+    if not verdict:
+        error_exit(
+            "fan-out finalize: no draw verdicts to merge",
+            use_json=args.json,
+            code=2,
+        )
+    review_id = task_id if task_id else "branch"
+    receipt_path = args.receipt if getattr(args, "receipt", None) else None
+    findings_container, findings_digest = _build_backend_review_findings(
+        merged_text,
+        review_type="impl_review",
+        review_id=review_id,
+        backend="codex",
+        receipt_path=receipt_path,
+        reviewed_head_sha=meta.get("reviewed_head_sha"),
+        reviewed_base_sha=meta.get("reviewed_base_sha"),
+        base_branch=args.base,
+    )
+    if (
+        verdict == "NEEDS_WORK"
+        and isinstance(findings_container, dict)
+        and isinstance(findings_container.get("items"), list)
+        and len(findings_container["items"]) == 0
+    ):
+        # fn-215 R9: evidence gate dropped every finding — escalate rather
+        # than looping against an unchanged artifact. Absent/unparseable
+        # containers keep NEEDS_WORK (parsers distinguish invalid from absent).
+        verdict = "NEEDS_HUMAN"
+    suppressed_count = parse_suppressed_count(merged_text)
+    classification_counts = parse_classification_counts(merged_text)
+    unaddressed_rids = parse_unaddressed_rids(merged_text)
+    receipt_draws = _review_fanout_receipt_draws(meta_draws)
+    primary = _review_fanout_primary_draw(meta, meta_draws)
+    resolved_spec = BackendSpec(
+        backend=primary.get("backend") or "codex",
+        model=primary.get("model"),
+        effort=primary.get("effort"),
+    )
+    attempt_summary = _review_fanout_record_and_receipt(
+        args, task_id, standalone, review_id, verdict, merged_text,
+        findings_container, findings_digest, receipt_path, receipt_draws,
+        primary, resolved_spec, meta.get("reservation_id"), meta,
+        suppressed_count, classification_counts, unaddressed_rids,
+    )
+    _review_fanout_emit_finalize(
+        args, standalone, review_id, verdict, merged_text, receipt_draws,
+        primary, resolved_spec, attempt_summary, task_id,
+        suppressed_count, classification_counts, unaddressed_rids,
+    )
+
 
 def _resolve_codex_review_spec(
     args: argparse.Namespace,
@@ -48538,6 +49426,95 @@ def _add_impl_review_parser(sub, backend: str):
     p.set_defaults(func=func, review_backend=backend, review_kind="impl")
     return p
 
+
+def _add_impl_review_fanout_parsers(codex_sub) -> None:
+    """Register the two-phase fan-out CLI under the codex parser (fn-215 R14/R15).
+
+    Pipeline: dispatch -> coordinator merge -> optional deep/validate/walkthrough
+    passes run ONCE against the MERGED set -> finalize -> one fix pass.
+    Codex-only; copilot/cursor keep single dispatch.
+    """
+    p = codex_sub.add_parser(
+        "impl-review-fanout",
+        help=(
+            "Phase one: reserve once, dispatch concurrent axis-lens draws, "
+            "persist sidecars without finalizing (fn-215). Optional "
+            "deep/validate/walkthrough passes run once against the MERGED "
+            "set between merge and finalize."
+        ),
+    )
+    p.add_argument(
+        "task",
+        nargs="?",
+        default=None,
+        help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
+    )
+    p.add_argument("--base", required=True, help="Base branch for diff")
+    p.add_argument(
+        "--focus", help="Focus areas for standalone review (comma-separated)",
+    )
+    p.add_argument(
+        "--receipt", help="Receipt file path for session continuity",
+    )
+    p.add_argument(
+        "--draw",
+        action="append",
+        metavar="AXIS[=SPEC]",
+        help=(
+            "Axis lens to dispatch (correctness|contracts|integration), "
+            "optionally with a backend spec "
+            "(e.g. correctness=codex:gpt-5.2:medium). Repeat up to 3 times; "
+            "default is all three axes on the resolved spec."
+        ),
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Human-only override for an unchanged-artifact refusal",
+    )
+    p.add_argument("--json", action="store_true", help="JSON output")
+    _add_sandbox_arg(p)
+    p.add_argument(
+        "--spec",
+        help=(
+            "Backend spec override (e.g. 'codex:gpt-5.2:medium'). "
+            "Overrides task/epic/env/config resolution. Strict parse."
+        ),
+    )
+    p.set_defaults(func=cmd_codex_impl_review_fanout)
+
+    p2 = codex_sub.add_parser(
+        "impl-review-fanout-finalize",
+        help=(
+            "Phase two: record the merged verdict, findings container, and "
+            "receipt after coordinator merge (fn-215). Optional "
+            "deep/validate/walkthrough passes run once against the MERGED "
+            "set between merge and this command."
+        ),
+    )
+    p2.add_argument(
+        "task",
+        nargs="?",
+        default=None,
+        help="Task ID (e.g., fn-1.2, fn-1-add-auth.2), optional for standalone",
+    )
+    p2.add_argument("--base", required=True, help="Base branch for diff")
+    p2.add_argument(
+        "--rid",
+        required=True,
+        help="Fan-out reservation id (or standalone nonce from phase one)",
+    )
+    p2.add_argument(
+        "--merged-file",
+        required=True,
+        help="Path to coordinator-merged review text",
+    )
+    p2.add_argument(
+        "--receipt", help="Receipt file path for the merged round",
+    )
+    p2.add_argument("--json", action="store_true", help="JSON output")
+    p2.set_defaults(func=cmd_codex_impl_review_fanout_finalize)
+
 def _backend_spec_help(backend: str, *, for_pass: bool = False) -> str:
     """Help text for ``--spec`` on review / validate / deep-pass parsers."""
     examples = {
@@ -51446,6 +52423,7 @@ def main() -> None:
     codex_sub = p_codex.add_subparsers(dest="codex_cmd", required=True)
 
     _add_impl_review_parser(codex_sub, "codex")
+    _add_impl_review_fanout_parsers(codex_sub)
 
     _add_plan_review_parser(codex_sub, "codex")
     _add_completion_review_parser(codex_sub, "codex")
