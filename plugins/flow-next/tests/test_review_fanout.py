@@ -1009,6 +1009,54 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no longer matches", json.dumps(fin) + fin_err)
 
+    def test_closed_receipt_permits_fresh_fanout(self) -> None:
+        """PR #392 r13 (P2): a CLOSED receipt (SHIP) at --receipt is a
+        completed earlier scope — flowctl's guard itself must admit the
+        fresh fan-out without manual receipt surgery; an OPEN receipt still
+        refuses."""
+        receipt = self.root / "closed-receipt.json"
+        base = {
+            "type": "impl_review",
+            "id": self.task_id,
+            "mode": "codex",
+            "model": "gpt-5.2",
+            "session_id": "sess-old",
+            "review": "Prior round text.",
+            "timestamp": "2026-01-01T00:00:00Z",
+        }
+        receipt.write_text(
+            json.dumps(dict(base, verdict="SHIP")), encoding="utf-8",
+        )
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--receipt",
+            str(receipt),
+            "--json",
+            fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err + out[:300])
+
+        receipt.write_text(
+            json.dumps(dict(base, verdict="NEEDS_WORK")), encoding="utf-8",
+        )
+        code, out, err = self._run(
+            "codex",
+            "impl-review-fanout",
+            self.task_id,
+            "--base",
+            "HEAD~1",
+            "--receipt",
+            str(receipt),
+            "--json",
+            fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("first-round only", out + err)
+
     def test_major_rethink_permits_fresh_fanout(self) -> None:
         """PR #392 r9 (P1): MAJOR_RETHINK is a completed terminal, not an
         active fix loop — after rework (new artifact) a fresh unforced

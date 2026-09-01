@@ -2170,7 +2170,11 @@ flowctl codex impl-review-fanout <task-id> --base <branch> [--draw AXIS[=BACKEND
 # Per-draw sidecars land at .flow/review-fanout/<rid>/ (review text, metadata, raw output, progress log).
 
 # Phase two - one deterministic finalizer, after the coordinator's merge
-flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> --merged-file <path> [--receipt <path>] [--json]
+flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> --merged-file <path> --needs-work-survivors <n> [--receipt <path>] [--json]
+# --needs-work-survivors is the coordinator-counted actionable findings surviving
+# from the NEEDS_WORK draws after the evidence gate. REQUIRED when any draw
+# returned NEEDS_WORK (0 escalates the round to NEEDS_HUMAN - the wedge);
+# omit it only on a round with no NEEDS_WORK draw.
 ```
 
 The coordinator's merge (same-defect dedupe, evidence-bar drops, Act-On ranking) is

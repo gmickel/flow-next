@@ -43544,6 +43544,16 @@ def _review_fanout_first_round_guard(
         and bool(session_id.strip())
         and mode in (None, "codex")
     )
+    receipt_verdict = data.get("verdict")
+    if isinstance(receipt_verdict, str) and receipt_verdict not in (
+        "NEEDS_WORK", "NEEDS_HUMAN",
+    ):
+        # PR #392 r13: a CLOSED receipt (SHIP / MAJOR_RETHINK) is a completed
+        # earlier scope, not an active fix loop — a fresh fan-out for new
+        # changes proceeds without manual receipt surgery (the skill wrapper
+        # rotates the file aside; the changed-artifact fence still refuses
+        # unchanged re-dispatches).
+        return
     if (
         _read_prior_findings(receipt_path) is not None
         or _read_prior_structured_findings(receipt_path) is not None
