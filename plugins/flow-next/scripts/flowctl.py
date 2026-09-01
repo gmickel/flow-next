@@ -43894,8 +43894,9 @@ def _review_fanout_journal_refund_intent(
 def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
     """Phase-one fan-out dispatch (fn-215 R14).
 
-    Pipeline: dispatch -> coordinator merge -> optional deep/validate/walkthrough
-    passes run ONCE against the MERGED set -> finalize -> one fix pass.
+    Pipeline: dispatch -> coordinator merge -> finalize -> optional
+    deep/validate/walkthrough passes run ONCE against the finalized merged
+    set -> one fix pass.
     """
     _codex_impl_review_fanout(args)
 

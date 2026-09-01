@@ -57,9 +57,10 @@ A merged fan-out round counts 1:1 against the deterministic round cap.
 
 ### Convergence reservation and recovery fence
 
-After the exact reviewer input is composed and immediately before every host
-dispatch, bind the reviewed range, build the artifact blob, and reserve one
-task-scoped round. The full diff is materialized **for the artifact hash only** —
+After the exact reviewer input is composed and immediately before each ROUND's
+dispatch — the whole three-draw fan-out on round 1, the single fresh subagent
+on round 2+ — bind the reviewed range, build the artifact blob, and reserve one
+task-scoped round (one reservation per round, never per draw). The full diff is materialized **for the artifact hash only** —
 it is the identity that must move when the code moves. It does not go into the
 subagent prompt: give the subagent `$REVIEW_BASE_SHA..$REVIEW_HEAD_SHA`, the
 `git diff --numstat --no-renames` path list for that range, and the task-spec
@@ -127,7 +128,8 @@ fi
 RESERVATION_ID="$(jq -er '.reservation_id' <<<"$ROUND_JSON")"
 ```
 
-After the reviewer returns, construct the receipt input and target in Step 3.
+After the reviewer subagents return (all draws of the round, or the single
+re-review subagent), construct the receipt input and target in Step 3.
 Only then record the captured reservation and attach its journaled payload;
 receipt findings must never be constructed after `record`.
 
@@ -229,8 +231,10 @@ Merge the surviving draws' findings into ONE consolidated review document:
 
 - **Same-defect dedupe** is judgment: findings describing the same defect from
   different draws collapse to one entry, keeping the strongest evidence.
-- **Evidence bar:** drop findings that fail it and state the dropped count
-  (`Suppressed findings: N`).
+- **Evidence bar:** drop findings that fail it and state the dropped counts in
+  the standard per-anchor tally grammar — e.g.
+  `Suppressed findings: 3 at anchor 50, 2 at anchor 0.` — summing the draws'
+  tallies per anchor.
 - **Ranked output with an Act-On tier capped at 5 — non-blocking tiers only** —
   plus a published remainder: considered-and-deferred stays distinguishable
   from never-seen, and remainder items persist in the merged document (deferred
@@ -256,8 +260,11 @@ round is a transport failure with today's durable refund semantics (the
 record fence below refunds the one reservation; nothing is attached).
 
 When `--deep` / `--validate` / `--interactive` fired, run those optional
-phases ONCE against the MERGED set — after the merge, before the receipt —
-never per draw (Step 4's host-native rules apply).
+phases AFTER Step 3's record/attach, against the merged container it stamped —
+still exactly ONCE per round, never per draw, and always before the fix pass
+(Step 4's host-native rules apply). Same ordering as the codex fan-out: the
+gated phases consume a finalized merged round, and their surviving findings
+feed the fix pass, never a rewrite of the already-recorded merged document.
 
 ## Step 3: Receipt
 

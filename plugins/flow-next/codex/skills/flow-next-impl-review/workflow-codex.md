@@ -81,6 +81,12 @@ reads prose. Worked phrasings:
   cross-family is three explicit dispatch specs, never a config key
 - Ambiguous phrasing → default three same-backend draws (say so and proceed)
 
+Enforced constraint (flowctl, not convention): the **primary (`correctness`)
+draw must run on `codex`** — the finalize stamps the merged receipt's top-level
+session/model from it and round 2+ resumes that session via codex, so a
+non-codex primary is refused with exit 2. Secondary draws may name `codex`,
+`copilot`, or `cursor` only; no other backend is dispatchable as a draw.
+
 ## Step 3: Coordinator merge (judgment — yours)
 
 Read each surviving draw's `<axis>.review.md` and merge them into ONE review
@@ -88,8 +94,10 @@ document (write it to a file for the finalize):
 
 - **Same-defect dedupe** is judgment: findings describing the same defect from
   different draws collapse to one entry, keeping the strongest evidence.
-- **Evidence bar:** drop findings that fail it and state the dropped count
-  (the standard `Suppressed findings: N` tally line).
+- **Evidence bar:** drop findings that fail it and state the dropped counts in
+  the standard per-anchor tally grammar — e.g.
+  `Suppressed findings: 3 at anchor 50, 2 at anchor 0.` — summing the draws'
+  tallies per anchor (or carry the draws' JSON tally blocks through verbatim).
 - **Ranked output with an Act-On tier capped at 5 — non-blocking tiers only** —
   plus a published remainder: considered-and-deferred must be distinguishable
   from never-seen, so remainder items stay in the merged document (they enter
@@ -106,21 +114,25 @@ document (write it to a file for the finalize):
   so your tag can only escalate it (a strictly worse tag wins; a milder tag
   never downgrades and is stamped as a recorded mismatch on the receipt).
 
-**Optional phases run once against the MERGED set.** When `--deep` /
-`--validate` / `--interactive` fired, run them from
-[optional-phases.md](optional-phases.md) here — after the merge, before the
-finalize, feeding the merged findings — never per draw and never again after
-finalize. Fold what survives into the merged document.
-
 ## Step 4: Finalize (phase two)
 
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-# RID comes from the phase-one JSON output; MERGED_FILE is your merged document.
+# Bash state does NOT survive across prompt turns — re-derive the Step-1/Step-2
+# values in THIS block rather than reading stale variables. RID and MERGED_FILE
+# are typed as LITERALS: the rid from the phase-one JSON output, the merged-file
+# path from your Step-3 merge — never carried shell variables.
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+if [[ -z "$BASE_COMMIT" ]]; then
+  DIFF_BASE="main"
+  git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
+else
+  DIFF_BASE="$BASE_COMMIT"
+fi
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
-args+=(--base "$DIFF_BASE" --rid "$RID" --merged-file "$MERGED_FILE" --receipt "$RECEIPT_PATH" --json)
+args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<your merged document path>" --receipt "$RECEIPT_PATH" --json)
 $FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
 ```
 
@@ -141,6 +153,22 @@ The finalizer is deterministic and atomic — only it records or refunds:
   coordinator crash. A run that dies between dispatch and finalize leaves a
   write-ahead refund-intent journal that the next reservation replays as a
   refunded transport failure — never hand-repair it.
+
+## Optional phases (gated by flags)
+
+When `--deep` / `--validate` / `--interactive` fired, run the gated phases from
+[optional-phases.md](optional-phases.md) — the dispatch matches the `codex`
+case in each phase — **AFTER `impl-review-fanout-finalize`, against the merged
+findings it recorded: still exactly ONCE per round, never per draw, and always
+before the fix pass.** The ordering is load-bearing, not stylistic: the
+deep-pass and validator dispatches resume from the merged receipt, and only the
+finalize writes it — run between merge and finalize they hit an absent or
+session-less receipt and error out; and the walkthrough's receipt updates must
+land after the finalize's rebuild, which would otherwise clobber them. Fold
+what survives into the fix pass, never back into the already-finalized merged
+document.
+
+See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination matrix" for the order when multiple flags are set.
 
 ## Step 5: Handle Verdict
 
