@@ -29,7 +29,7 @@ import uuid
 from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Iterator
-from contextlib import ExitStack, contextmanager, redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stdout, suppress
 from dataclasses import dataclass, field, replace as dataclass_replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -44617,7 +44617,7 @@ def _review_route_claim(path: Path, scope_id: str) -> Optional[str]:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(payload)
     except OSError:
-        with contextlib.suppress(OSError):
+        with suppress(OSError):
             path.unlink()
         return None
     return token
