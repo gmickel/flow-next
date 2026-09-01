@@ -75,7 +75,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 - `related_to` points at a stale entry that itself was updated to a new id → re-point.
 - Code snippet in body uses an outdated import path → fix the snippet.
 
-**Retrieval-fix variant.** The entry is correct, recurrence-qualified (§0.75.1), and fails the Harden mechanizability condition: the lesson keeps being re-learned because the entry does not surface, not because it is wrong. Repair the retrieval surface only — `title`, `tags`, `module`, and `applies_when` (knowledge track) — so the query the next agent will actually type matches. Cite the recurrence artifacts in the report line as `retrieval fix: <fields>; <N> Update headings / <M> commits`. A body or solution edit under this variant is a Replace in disguise: stop and reclassify.
+**Retrieval-fix variant.** The entry is correct, recurrence-qualified (§0.75.1), and fails the Harden mechanizability condition: the lesson keeps being re-learned because the entry does not surface, not because it is wrong. Repair the retrieval surface only — `title`, `tags`, `module`, `applies_when` (knowledge track), and placement (a `git mv` into the category the lesson belongs to, since category-scoped search and scope narrowing never reach a misfiled entry) — so the query the next agent will actually type matches. A placement move changes the entry id (it embeds the category): re-point every `related_to` that named the old id, in the same edit. Cite the recurrence artifacts in the report line as `retrieval fix: <fields>; <N> Update headings / <M> commits`. A body or solution edit under this variant is a Replace in disguise: stop and reclassify.
 
 **When NOT to use:**
 
@@ -282,7 +282,7 @@ Thresholds gate **proposing** only; the human gates **applying**. They are overr
 - The lesson is wrong, misleading, or its code is gone → Replace / Delete win outright (precedence). Never graduate a wrong lesson.
 - The entry is one of several overlapping entries → Consolidate first; the merged entry is the Harden unit.
 - One-off lesson, no recurrence signal → Keep.
-- Judgment-only lesson ("prefer X style when ambiguous", "escalate when the review disagrees") → Keep. A gate that cannot decide mechanically becomes a false-positive generator.
+- Judgment-only lesson ("prefer X style when ambiguous", "escalate when the review disagrees") → not Harden. A gate that cannot decide mechanically becomes a false-positive generator. With a recurrence signal the entry is an Update (retrieval-fix variant); without one, Keep.
 - The repo has no surface to host the gate — see the degradation rule below; the instruction file is the universal floor, and if even that does not exist, Keep.
 - **Autofix mode.** Harden never auto-applies. Candidates are reported under Recommended only — no artifact write, no demotion. Gate surfaces are shared repo infrastructure; an autonomous sweep must not edit lint config, CI, or CLAUDE.md unattended.
 
@@ -477,7 +477,9 @@ a related_to cluster >= 3 only corroborates — it proposes nothing on its own)
               inactive match → broken gate: entry stays active, report the finding
               no match       → Harden (pick gate type a→b→c, draft artifact,
                                ask, write, VERIFY the gate fires, then mark-hardened)
-        no  → Keep (judgment-only lessons stay context, not gates)
+        no  → Update, retrieval-fix variant (the lesson recurs while a correct entry
+              sits unread: repair title / tags / module / applies_when / placement,
+              never the body — see §Update)
   no  → continue
 
 Are there reference drifts (paths, modules, links, snippets)?
