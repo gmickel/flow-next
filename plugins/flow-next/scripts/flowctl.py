@@ -41740,6 +41740,7 @@ def _write_backend_review_receipt(
     publish_out: Optional[dict] = None,
     draws: Optional[list] = None,
     merged_tag_mismatch: Optional[str] = None,
+    extra_fields: Optional[dict] = None,
 ) -> bool:
     """Write a review receipt with stable key order (Ralph / pilot / land).
 
@@ -41794,6 +41795,12 @@ def _write_backend_review_receipt(
         draws=draws,
         merged_tag_mismatch=merged_tag_mismatch,
     )
+    if extra_fields:
+        # PR #392 r26: preserved phase state and snapshot stamps ride the ONE
+        # atomic publication — a second best-effort patch write could fail
+        # after the base rebuild already replaced the file, silently deleting
+        # enabled-phase evidence.
+        receipt_data.update(extra_fields)
     receipt_file = Path(receipt_path)
     with cross_process_lock(_review_receipt_lock_path(receipt_file)):
         if findings_built:
@@ -44445,6 +44452,25 @@ def _review_fanout_assert_head_unmoved(meta, args) -> None:
                     current_base = proc.stdout.strip() or None
             except (OSError, subprocess.SubprocessError):
                 current_base = None
+            if current_base is None:
+                # PR #392 r26: an unresolvable probe (base ref deleted, git
+                # failure) means the reviewed base snapshot cannot be
+                # verified — fail closed with the same stale-round refund
+                # rather than recording a verdict over an unverifiable diff.
+                refunded = _review_fanout_refund_stale_round(
+                    meta, args,
+                    f"cannot re-resolve the merge base of {args.base!r} "
+                    f"against {dispatched_head[:12]}",
+                    "base_unresolvable",
+                )
+                error_exit(
+                    f"fan-out finalize refused: cannot re-resolve the merge "
+                    f"base of {args.base!r} (deleted or unresolvable?) — the "
+                    "reviewed base snapshot cannot be verified. Restore the "
+                    f"base ref or re-dispatch.{refunded}",
+                    use_json=args.json,
+                    code=2,
+                )
             if current_base and current_base != dispatched_base:
                 refunded = _review_fanout_refund_stale_round(
                     meta, args,
@@ -44556,7 +44582,7 @@ def _review_fanout_write_receipt(
     receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
     findings_container, args, receipt_draws, meta, reservation_id,
     receipt_target, suppressed_count, classification_counts, unaddressed_rids,
-    merged_tag_mismatch,
+    merged_tag_mismatch, extra_fields=None,
 ) -> None:
     if not receipt_path:
         return
@@ -44584,6 +44610,7 @@ def _review_fanout_write_receipt(
         journaled_reservation_id=reservation_id if receipt_target else None,
         draws=receipt_draws,
         merged_tag_mismatch=merged_tag_mismatch,
+        extra_fields=extra_fields,
     )
 
 
@@ -44657,26 +44684,19 @@ def _review_fanout_record_and_receipt(
                         preserved["verdict"] = existing.get("verdict")
             except (OSError, ValueError, TypeError):
                 preserved = {}
+        extra_fields = dict(preserved)
+        # Stamp the snapshot identity the same-round predicate keys on
+        # (PR #392 r23) — additive, honest: the head the merged verdict
+        # covers. Merged into the ONE atomic publication (r26).
+        if isinstance(meta.get("reviewed_head_sha"), str):
+            extra_fields["reviewed_head_sha"] = meta["reviewed_head_sha"]
         _review_fanout_write_receipt(
             receipt_path, review_id, verdict, merged_text, primary,
             resolved_spec, findings_container, args, receipt_draws, meta,
             None, None, suppressed_count, classification_counts,
             unaddressed_rids, merged_tag_mismatch,
+            extra_fields=extra_fields,
         )
-        if receipt_path:
-            try:
-                rebuilt = json.loads(
-                    Path(receipt_path).read_text(encoding="utf-8")
-                )
-                # Stamp the snapshot identity the same-round predicate keys
-                # on (PR #392 r23) — additive, honest: the head the merged
-                # verdict covers.
-                if isinstance(meta.get("reviewed_head_sha"), str):
-                    rebuilt["reviewed_head_sha"] = meta["reviewed_head_sha"]
-                rebuilt.update(preserved)
-                atomic_write_json(Path(receipt_path), rebuilt)
-            except (OSError, ValueError, TypeError):
-                pass  # best-effort: the base receipt is already correct
         return {}
     receipt_target = receipt_path if receipt_path and reservation_id else None
     receipt_payload = _backend_review_receipt_payload(
