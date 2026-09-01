@@ -44265,8 +44265,9 @@ def _review_fanout_emit_finalize(
 def cmd_codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     """Phase-two fan-out finalize (fn-215 R14).
 
-    Pipeline: dispatch -> coordinator merge -> optional deep/validate/walkthrough
-    passes run ONCE against the MERGED set -> finalize -> one fix pass.
+    Pipeline: dispatch -> coordinator merge -> finalize -> optional
+    deep/validate/walkthrough passes run ONCE against the MERGED container ->
+    one fix pass.
     """
     _codex_impl_review_fanout_finalize(args)
 
@@ -49601,8 +49602,9 @@ def _add_impl_review_parser(sub, backend: str):
 def _add_impl_review_fanout_parsers(codex_sub) -> None:
     """Register the two-phase fan-out CLI under the codex parser (fn-215 R14/R15).
 
-    Pipeline: dispatch -> coordinator merge -> optional deep/validate/walkthrough
-    passes run ONCE against the MERGED set -> finalize -> one fix pass.
+    Pipeline: dispatch -> coordinator merge -> finalize -> optional
+    deep/validate/walkthrough passes run ONCE against the MERGED container ->
+    one fix pass.
     Codex-only; copilot/cursor keep single dispatch.
     """
     p = codex_sub.add_parser(
@@ -49611,7 +49613,7 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
             "Phase one: reserve once, dispatch concurrent axis-lens draws, "
             "persist sidecars without finalizing (fn-215). Optional "
             "deep/validate/walkthrough passes run once against the MERGED "
-            "set between merge and finalize."
+            "container after finalize, before the fix pass."
         ),
     )
     p.add_argument(
@@ -49660,7 +49662,7 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
             "Phase two: record the merged verdict, findings container, and "
             "receipt after coordinator merge (fn-215). Optional "
             "deep/validate/walkthrough passes run once against the MERGED "
-            "set between merge and this command."
+            "container after this command, before the fix pass."
         ),
     )
     p2.add_argument(

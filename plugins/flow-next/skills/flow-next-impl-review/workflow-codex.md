@@ -81,8 +81,9 @@ reads prose. Worked phrasings:
   cross-family is three explicit dispatch specs, never a config key
 - Ambiguous phrasing → default three same-backend draws (say so and proceed)
 
-Enforced constraint (flowctl, not convention): the **primary (`correctness`)
-draw must run on `codex`** — the finalize stamps the merged receipt's top-level
+Enforced constraint (flowctl, not convention): the **primary draw
+(`correctness` — or, when `correctness` isn't drawn, the first draw) must run
+on `codex`** — the finalize stamps the merged receipt's top-level
 session/model from it and round 2+ resumes that session via codex, so a
 non-codex primary is refused with exit 2. Secondary draws may name `codex`,
 `copilot`, or `cursor` only; no other backend is dispatchable as a draw.
