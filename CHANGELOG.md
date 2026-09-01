@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- **`/flow-next:features` activates again on hosts with strict frontmatter parsing.** The skill's unquoted `description` contained a colon-space, which spec-compliant YAML parsers reject — the whole frontmatter block then silently dropped, leaving the skill installed but unmatchable (no description, no `allowed-tools`, no `user-invocable`). The description is now single-quoted, byte-identical otherwise; `claude plugin validate` passes. The only skill with the pattern. Thanks @acebytes for the report and the fix (#389, #390).
+
 ## [flow-next 4.11.0] - 2026-09-01
 
 Anyone driving pilot over a mixed backlog can now mark an individual spec "too small to plan" and let the loop build it straight through — no more choosing between a blanket flag that mis-routed every spec a tick touched and hand-running the small ones yourself. The consent lives on the spec, where readiness already lives, so autonomous runs stay planned-by-default unless a human said otherwise.
