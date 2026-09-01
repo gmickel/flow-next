@@ -39,6 +39,18 @@ invocations with your merge between them; this is the first.
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
+# RESUME GATE (fan-out is first-round only): a fresh invocation resuming a
+# scope mid-fix-loop — e.g. after a lost coordinator context — arrives here
+# with a receipt that already carries findings or a resumable session. That is
+# round 2+, so skip BOTH fan-out phases and go straight to Step 4's
+# single-dispatch re-review. flowctl's first-round guard backstops this with a
+# no-cost exit-2 refusal, but the refusal is a bounced command, not a routing.
+RESUMED=0
+if jq -e '(.findings? // .structured_findings? // (.session_id? // "" | select(. != ""))) != null' "$RECEIPT_PATH" >/dev/null 2>&1; then
+  RESUMED=1
+  echo "RESUMED SCOPE — receipt carries prior review state; skipping fan-out, proceed to Step 4 (re-review)"
+fi
+
 # Standalone branch reviews leave TASK_ID empty — OMIT the positional entirely
 # (a quoted "" is rejected as an invalid task id; standalone mode needs no task arg).
 # Subcommand tokens stay LITERAL on the command line (the Ralph guard blocks
@@ -46,7 +58,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
-$FLOWCTL codex impl-review-fanout "${args[@]}"
+[ "$RESUMED" = "1" ] || $FLOWCTL codex impl-review-fanout "${args[@]}"
 ```
 
 What the dispatch does (facts you rely on, not steps you take):
