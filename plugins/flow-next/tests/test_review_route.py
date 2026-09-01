@@ -259,13 +259,24 @@ class TestReviewRoute(unittest.TestCase):
         self.assertIs(flowctl._review_route_rotate, real)
 
     def test_phase_lease_hold_and_release(self) -> None:
-        code, r, err = self._route(self.task_id, "--hold-phases")
+        rid = "ab" * 16
+        code, r, err = self._route(self.task_id, "--hold-phases", "2", "--rid", rid)
         self.assertEqual(code, 0, err)
         self.assertEqual(r["phase_lease"], "held")
+        lease = self._spec()["review_phase_leases"][f"impl:{self.task_id}"]
+        self.assertEqual(lease["rid"], rid)
+        self.assertEqual(
+            lease["ttl_seconds"], 2 * flowctl.get_review_exec_timeout() + 900,
+        )
         code, r, _ = self._route(self.task_id)
         self.assertEqual(r["action"], "stop")
         self.assertEqual(r["reason"], "phases_in_flight")
-        code, r, _ = self._route(self.task_id, "--release-phases")
+        # Release is rid-bound (codex r42): a foreign rid cannot release it.
+        code, r, err = self._route(self.task_id, "--release-phases", "--rid", "cd" * 16)
+        self.assertEqual(code, 2, err)
+        code, r, _ = self._route(self.task_id)
+        self.assertEqual(r["reason"], "phases_in_flight")
+        code, r, _ = self._route(self.task_id, "--release-phases", "--rid", rid)
         self.assertEqual(r["phase_lease"], "released")
         code, r, _ = self._route(self.task_id)
         self.assertEqual(r["action"], "fanout")

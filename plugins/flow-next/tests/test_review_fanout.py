@@ -1232,7 +1232,8 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(code, 2, err)
         self.assertIn("optional review phases are still in flight", out + err)
         code, out, err = self._run(
-            "review-route", self.task_id, "--release-phases", "--json",
+            "review-route", self.task_id, "--release-phases",
+            "--rid", payload["rid"], "--json",
         )
         self.assertEqual(code, 0, err)
         code, out, err = self._run(
@@ -1240,6 +1241,35 @@ class TestReviewFanout(unittest.TestCase):
             "--json", fake=self._ship_exec([]),
         )
         self.assertEqual(code, 0, err + out[:200])
+
+    def test_hold_for_phases_is_acquired_before_the_record(self) -> None:
+        """codex r42: the lease exists BEFORE the record consumes the
+        reservation — a record failure leaves no post-consumption gap."""
+        receipt = self.root / "hold2-receipt.json"
+        code, payload, err = self._dispatch(self._ship_exec([]), "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_empty_merged_review())
+        seen = {}
+        real = flowctl.record_review_attempt
+
+        def spy(*a, **k):
+            seen["lease_at_record"] = (
+                self._spec_data().get("review_phase_leases", {})
+                .get(f"impl:{self.task_id}")
+            )
+            return real(*a, **k)
+
+        with unittest.mock.patch.object(flowctl, "record_review_attempt", side_effect=spy):
+            fin_code, fin, fin_err = self._finalize(
+                payload["rid"], merged, "--receipt", str(receipt), "--hold-for-phases", "2",
+            )
+        self.assertEqual(fin_code, 0, fin_err)
+        self.assertIsInstance(seen.get("lease_at_record"), dict)
+        self.assertEqual(seen["lease_at_record"]["rid"], payload["rid"])
+        self.assertEqual(
+            seen["lease_at_record"]["ttl_seconds"],
+            2 * flowctl.get_review_exec_timeout() + 900,
+        )
 
     def test_exclusive_fence_is_two_way(self) -> None:
         """PR #392 sol review: a plain increment refuses a standing EXCLUSIVE

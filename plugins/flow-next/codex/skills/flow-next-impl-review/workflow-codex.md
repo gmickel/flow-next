@@ -154,9 +154,12 @@ document (write it to a file for the finalize):
 - Keep the draws' output format (Severity / Confidence / Classification /
   File:Line / R-IDs per finding, the `## Pre-existing issues` section, coverage
   table and tally lines where present) and end with exactly one verdict tag.
-  The finalize computes the verdict mechanically — worst-wins over the draws —
-  so your tag can only escalate it (a strictly worse tag wins; a milder tag
-  never downgrades and is stamped as a recorded mismatch on the receipt).
+  The finalize computes the verdict mechanically — worst-wins over the draws'
+  tags, with the zero-survivor wedge as the only exception — and your tag
+  NEVER changes it in either direction: a mismatch (worse or milder) is
+  stamped on the receipt as `merged_tag_mismatch`. Escalation beyond the draws
+  belongs to the post-finalize optional phases, which own their own verdict
+  transitions.
 
 ## Step 4: Finalize (phase two)
 
@@ -185,8 +188,10 @@ args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<you
 # review-route and the reservation gate refuse any other dispatch on this
 # scope until you release it after the phases (Step 4 tail below). Expires
 # on the liveness bound, so a dead coordinator never wedges the scope.
-# OPTIONAL_PHASES_ENABLED=1 when Step 0 parsed --deep, --validate, or --interactive.
-[ -n "$OPTIONAL_PHASES_ENABLED" ] && args+=(--hold-for-phases)
+# OPTIONAL_PHASES_COUNT = the number of enabled optional passes Step 0 parsed
+# (--deep counts one per selected pass, --validate one, --interactive one);
+# it sizes the lease TTL. Empty/0 when none is enabled.
+[ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && args+=(--hold-for-phases "$OPTIONAL_PHASES_COUNT")
 $FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
 ```
 
@@ -233,13 +238,16 @@ See [optional-phases.md](optional-phases.md) "Phase ordering & flag-combination 
 single-driver rule does not end at the finalize — this coordinator owns the
 scope until its post-finalize optional phases complete, because a deep or
 validator pass may still overturn the finalized verdict. That ownership is
-DURABLE, not prose: the finalize's `--hold-for-phases` writes a lease that
-`review-route` and the reservation gate refuse across. Release it as the
-LAST step of the optional phases, before the fix pass:
+DURABLE, not prose: the finalize's `--hold-for-phases N` writes a lease
+(acquired BEFORE the record, while the reservation still stands; TTL sized
+for N passes) that `review-route` and the reservation gate refuse across.
+Release it as the LAST step of the optional phases, before the fix pass —
+release is bound to the owning rid:
 
 ```bash
-# After every enabled optional phase has run (deep, validator, walkthrough):
-$FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --json
+# After every enabled optional phase has run (deep, validator, walkthrough).
+# RID is the literal rid from the phase-one JSON.
+$FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RID" --json
 ```
 
 A coordinator that dies mid-phase does not wedge the scope — the lease

@@ -2209,12 +2209,15 @@ counts as in flight only while its lease is live; an expired abandonment
 journal is reported and replayed (refunded) by the next dispatch.
 
 Scope ownership through the optional phases: `impl-review-fanout-finalize
---hold-for-phases` (codex) or `review-route <scope> --hold-phases` (host)
-writes a lease that `review-route` and the reservation gate refuse across;
-`review-route <scope> --release-phases` releases it once the deep / validator
-/ walkthrough passes complete. The lease expires on the liveness bound (the
-review exec timeout plus merge headroom), so a dead coordinator never wedges
-the scope. The task-scoped repair the fences prescribe is
+--hold-for-phases N` (codex; acquired BEFORE the record, while the
+reservation still stands) or `review-route <scope> --hold-phases N --rid
+<reservation-id>` (host) writes a lease that `review-route` and the
+reservation gate refuse across; `review-route <scope> --release-phases --rid
+<owning rid>` releases it once the deep / validator / walkthrough passes
+complete - release is rid-bound, so a stale coordinator cannot delete a newer
+one's lease. The TTL is sized for the N enabled passes (N times the review
+exec timeout plus merge headroom), so a dead coordinator never wedges the
+scope; re-issue `--hold-phases` to renew. The task-scoped repair the fences prescribe is
 `flowctl spec reset-review-rounds <spec> --task <task>` — it resets ONE
 task's impl cycle (counter, pending, reservations and their journals, phase
 lease) and nothing else.

@@ -44358,27 +44358,59 @@ def _iso_age_seconds(stamp) -> Optional[float]:
 REVIEW_PHASE_LEASE_KEY = "review_phase_leases"
 
 
+def _review_phase_lease_ttl(phases: int) -> int:
+    """Lease TTL for ``phases`` sequential optional passes (codex r42): each
+    pass may take the full backend allowance, so the bound scales with the
+    enabled sequence instead of expiring under a legitimately long tail."""
+    try:
+        count = max(1, int(phases))
+    except (TypeError, ValueError):
+        count = 1
+    return count * get_review_exec_timeout() + 900
+
+
+def _review_phase_lease_is_live(lease: Optional[dict]) -> bool:
+    if not isinstance(lease, dict):
+        return False
+    age = _iso_age_seconds(lease.get("timestamp"))
+    ttl = lease.get("ttl_seconds")
+    if not isinstance(ttl, int) or isinstance(ttl, bool) or ttl <= 0:
+        ttl = _review_phase_lease_ttl(1)
+    return age is None or age < ttl
+
+
 def _review_phase_lease_live(spec_data: dict, counter_scope: str) -> Optional[dict]:
     """The live optional-phase lease for a scope, or None (expired = None).
 
-    TTL is the same liveness bound the journal lease uses; a coordinator that
-    died mid-phase must not wedge the scope forever.
+    A coordinator that died mid-phase must not wedge the scope forever: the
+    lease carries its own TTL (sized for the enabled phase sequence).
     """
     leases = spec_data.get(REVIEW_PHASE_LEASE_KEY)
     if not isinstance(leases, dict):
         return None
     lease = leases.get(counter_scope)
-    if not isinstance(lease, dict):
-        return None
-    age = _iso_age_seconds(lease.get("timestamp"))
-    if age is not None and age >= get_review_exec_timeout() + 900:
-        return None
-    return lease
+    return lease if _review_phase_lease_is_live(lease) else None
 
 
-def _review_phase_lease_write(task_id: str, lease: Optional[dict]) -> bool:
+def _review_phase_lease_new(rid: Optional[str], receipt_path: Optional[str], phases: int) -> dict:
+    return {
+        "rid": rid,
+        "timestamp": now_iso(),
+        "receipt_path": receipt_path,
+        "ttl_seconds": _review_phase_lease_ttl(phases),
+    }
+
+
+def _review_phase_lease_write(
+    task_id: str, lease: Optional[dict], *, expect_rid: Optional[str] = None,
+) -> bool:
     """Hold (lease dict) or release (None) the optional-phase lease for a task
-    scope, under the review state lock. Returns durability."""
+    scope, under the review state lock. Returns durability.
+
+    Release is rid-bound (codex r42): with ``expect_rid`` set, only a lease
+    carrying that rid (or no live lease) is removed — a stale coordinator
+    resuming after its own lease expired cannot delete a newer coordinator's.
+    """
     try:
         flow_dir = get_flow_dir()
         spec_id = spec_id_from_task(task_id)
@@ -44395,6 +44427,13 @@ def _review_phase_lease_write(task_id: str, lease: Optional[dict]) -> bool:
                 leases = {}
                 spec_data[REVIEW_PHASE_LEASE_KEY] = leases
             if lease is None:
+                current = leases.get(counter_scope)
+                if (
+                    expect_rid is not None
+                    and _review_phase_lease_is_live(current)
+                    and current.get("rid") not in (None, expect_rid)
+                ):
+                    return False  # someone else's live lease — leave it
                 leases.pop(counter_scope, None)
             else:
                 leases[counter_scope] = dict(lease)
@@ -44666,10 +44705,8 @@ def compute_review_route(
     if standalone and isinstance(receipt, dict):
         # Standalone leases live on the receipt.
         lease = receipt.get("phase_lease")
-        if isinstance(lease, dict):
-            age = _iso_age_seconds(lease.get("timestamp"))
-            if age is None or age < get_review_exec_timeout() + 900:
-                ledger["phase_lease"] = lease
+        if _review_phase_lease_is_live(lease):
+            ledger["phase_lease"] = lease
     result = {
         "type": "review_route",
         "task_id": task_id,
@@ -44820,21 +44857,28 @@ def cmd_review_route(args: argparse.Namespace) -> None:
     else:
         flow_dir = get_flow_dir() if ensure_flow_exists() else Path(".flow")
     repo_root = get_repo_root()
-    hold = bool(getattr(args, "hold_phases", False))
+    hold = getattr(args, "hold_phases", None)
     release = bool(getattr(args, "release_phases", False))
+    lease_rid = getattr(args, "rid", None)
     if hold or release:
         receipt_arg = getattr(args, "receipt", None) or os.environ.get("REVIEW_RECEIPT_PATH")
         resolved_path = receipt_arg or _review_route_receipt_default(repo_root, task_id)
-        lease = None if release else {
-            "rid": None, "timestamp": now_iso(), "receipt_path": resolved_path,
-        }
+        lease = None if release else _review_phase_lease_new(lease_rid, resolved_path, hold)
         if task_id:
-            ok = _review_phase_lease_write(task_id, lease)
+            ok = _review_phase_lease_write(task_id, lease, expect_rid=lease_rid)
         else:
             ok = False
             try:
                 data = json.loads(Path(resolved_path).read_text(encoding="utf-8"))
                 if release:
+                    current = data.get("phase_lease")
+                    if (
+                        lease_rid is not None
+                        and _review_phase_lease_is_live(current)
+                        and current.get("rid") not in (None, lease_rid)
+                    ):
+                        ok = False
+                        raise ValueError("another coordinator's live lease")
                     data.pop("phase_lease", None)
                 else:
                     data["phase_lease"] = lease
@@ -44845,7 +44889,9 @@ def cmd_review_route(args: argparse.Namespace) -> None:
         if not ok:
             error_exit(
                 "could not " + ("release" if release else "hold")
-                + " the optional-phase lease (spec state or receipt not writable)",
+                + " the optional-phase lease (spec state or receipt not "
+                "writable, or a different coordinator's live lease holds the "
+                "scope — pass the owning --rid)",
                 use_json=args.json,
                 code=2,
             )
@@ -45404,7 +45450,7 @@ def _review_fanout_record_and_receipt(
     findings_container, findings_digest, receipt_path, receipt_draws,
     primary, resolved_spec, reservation_id, meta,
     suppressed_count, classification_counts, unaddressed_rids,
-    merged_tag_mismatch,
+    merged_tag_mismatch, phase_lease=None,
 ) -> dict:
     # Recheck at consumption (PR #392 r6): the early check in
     # _review_fanout_check_finalize_meta runs several steps before this
@@ -45446,6 +45492,9 @@ def _review_fanout_record_and_receipt(
             # lets the emit path surface ITS verdict, exactly like task mode.
             return {"replayed": True, "standalone": True}
         extra_fields = {}
+        if phase_lease:
+            # Standalone ownership lease rides the same atomic publication.
+            extra_fields["phase_lease"] = dict(phase_lease)
         # Stamp the round identity the same-round predicate keys on (PR #392
         # r23+r29: the per-dispatch rid) plus the reviewed head for audit —
         # additive, merged into the ONE atomic publication (r26).
@@ -45743,43 +45792,42 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         model=primary.get("model"),
         effort=primary.get("effort"),
     )
+    hold_phases = getattr(args, "hold_for_phases", None)
+    phase_lease = None
+    if hold_phases:
+        # PR #392 sol review (R15) + codex r42: the finalizing coordinator
+        # keeps scope ownership through its post-finalize optional phases.
+        # Task mode writes the durable lease BEFORE the record — while the
+        # exclusive reservation still stands, so no other dispatch can slip
+        # into the interval between consumption and lease. Standalone stamps
+        # it into the same atomic receipt publication. Released by
+        # `review-route --release-phases --rid <rid>`; the TTL is sized for
+        # the enabled phase sequence.
+        phase_lease = _review_phase_lease_new(rid, receipt_path, hold_phases)
+        if task_id and not _review_phase_lease_write(task_id, phase_lease):
+            error_exit(
+                "fan-out finalize: could not persist the optional-phase lease "
+                "before recording; nothing was recorded — repair the spec "
+                "state and re-run this finalize.",
+                use_json=args.json,
+                code=2,
+            )
     attempt_summary = _review_fanout_record_and_receipt(
         args, task_id, standalone, review_id, verdict, merged_text,
         findings_container, findings_digest, receipt_path, receipt_draws,
         primary, resolved_spec, meta.get("reservation_id"), meta,
         suppressed_count, classification_counts, unaddressed_rids,
-        merged_tag_mismatch,
+        merged_tag_mismatch, phase_lease=phase_lease,
     )
     if (
-        getattr(args, "hold_for_phases", False)
-        and not (isinstance(attempt_summary, dict) and attempt_summary.get("replayed"))
+        task_id and phase_lease
+        and isinstance(attempt_summary, dict)
+        and attempt_summary.get("replayed")
     ):
-        # PR #392 sol review (R15): the finalizing coordinator keeps scope
-        # ownership through its post-finalize optional phases. Task mode
-        # holds a durable lease the reservation gate and review-route refuse
-        # across; standalone stamps the lease into the receipt (review-route
-        # reads it). Released by `review-route --release-phases`; expires on
-        # the liveness bound so a dead coordinator cannot wedge the scope.
-        lease = {"rid": rid, "timestamp": now_iso(), "receipt_path": receipt_path}
-        if task_id:
-            if not _review_phase_lease_write(task_id, lease):
-                print(
-                    "warning: could not persist the optional-phase lease; a "
-                    "concurrent dispatch is not fenced during the phases.",
-                    file=sys.stderr,
-                )
-        elif receipt_path:
-            try:
-                data = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
-                data["phase_lease"] = lease
-                atomic_write_json(Path(receipt_path), data)
-            except (OSError, ValueError, TypeError):
-                print(
-                    "warning: could not stamp the optional-phase lease on the "
-                    "receipt; a concurrent dispatch is not fenced during the "
-                    "phases.",
-                    file=sys.stderr,
-                )
+        # A replay recorded nothing new — do not leave a fresh lease behind
+        # an already-finalized round.
+        _review_phase_lease_write(task_id, None, expect_rid=rid)
+
     if (
         isinstance(attempt_summary, dict)
         and attempt_summary.get("replayed")
@@ -51162,12 +51210,16 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
     )
     p2.add_argument(
         "--hold-for-phases",
-        action="store_true",
+        nargs="?",
+        const=1,
+        type=int,
+        metavar="N",
         help=(
             "Hold scope ownership through the post-finalize optional phases "
-            "(pass when --deep/--validate/--interactive are enabled); release "
-            "with `flowctl review-route <task> --release-phases` once they "
-            "complete. Expires on the liveness bound."
+            "(pass when --deep/--validate/--interactive are enabled; N = the "
+            "number of enabled passes, sizing the lease TTL); acquired BEFORE "
+            "the record. Release with `flowctl review-route <task> "
+            "--release-phases --rid <rid>` once they complete."
         ),
     )
     p2.add_argument(
@@ -52286,12 +52338,16 @@ def main() -> None:
         help="Human-only: route to a fresh fan-out regardless of guards",
     )
     p_review_route.add_argument(
-        "--hold-phases", action="store_true",
-        help="Hold optional-phase scope ownership (host path; codex finalize passes --hold-for-phases instead)",
+        "--hold-phases", nargs="?", const=1, type=int, metavar="N",
+        help="Hold optional-phase scope ownership for N enabled passes (host path; codex finalize passes --hold-for-phases instead); re-issue to renew",
     )
     p_review_route.add_argument(
         "--release-phases", action="store_true",
-        help="Release optional-phase scope ownership once deep/validator/walkthrough passes complete",
+        help="Release optional-phase scope ownership once deep/validator/walkthrough passes complete (pass the owning --rid)",
+    )
+    p_review_route.add_argument(
+        "--rid",
+        help="Owning round id for --hold-phases/--release-phases (the fan-out rid, or the host reservation id) — release is rid-bound",
     )
     p_review_route.add_argument("--json", action="store_true", help="JSON output")
     p_review_route.set_defaults(func=cmd_review_route)

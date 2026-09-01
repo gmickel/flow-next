@@ -377,8 +377,9 @@ fi
 # phase is enabled, hold the lease right after the record — review-route and
 # the reservation gate refuse other dispatches on this scope until Step 4
 # releases it. Expires on the liveness bound.
-# OPTIONAL_PHASES_ENABLED=1 when Step 0 parsed --deep, --validate, or --interactive.
-[ -n "$OPTIONAL_PHASES_ENABLED" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases --json
+# OPTIONAL_PHASES_COUNT = the number of enabled optional passes Step 0 parsed;
+# it sizes the lease TTL. The lease is bound to this round's reservation id.
+[ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases "$OPTIONAL_PHASES_COUNT" --rid "$RESERVATION_ID" --json
 ```
 
 The command reads the prior receipt before atomically replacing it. Unsupported
@@ -399,7 +400,7 @@ When the enabled phases have all run, release the scope lease held in Step 3
 (before the fix pass):
 
 ```bash
-"$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --json
+"$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$RESERVATION_ID" --json
 ```
 
 ## Step 5: Continue through the shared fix loop
