@@ -5683,17 +5683,20 @@ def _review_finding_text(
             prose.append(_review_finding_clean_markdown(stripped))
         body = " ".join(prose)
     body = body.strip()
-    title = (
-        fields.get("title")
-        or fields.get("requirement")
-        or body.split(".", 1)[0]
-    ).strip()
-    if len(title) > _FINDINGS_MAX_TITLE:
-        # PR #392 sol review dogfood: the title is DERIVED (first sentence of
-        # the problem) — a long first sentence must cap the title, not reject
-        # the whole container (which silently dropped every finding of a
-        # long-sentence reviewer, the sol draws included).
-        title = title[: _FINDINGS_MAX_TITLE - 1].rstrip() + "\u2026"
+    explicit_title = fields.get("title") or fields.get("requirement")
+    if explicit_title:
+        # An EXPLICIT title over the bound rejects without truncation (the
+        # parser's bounds contract, pinned by test_review_findings_parser).
+        title = explicit_title.strip()
+    else:
+        # PR #392 sol review dogfood: a DERIVED title (the problem's first
+        # sentence) is not reviewer data — a long first sentence caps the
+        # derivation instead of discarding the whole container, which
+        # silently dropped every finding of a long-sentence reviewer (the
+        # sol draws included).
+        title = body.split(".", 1)[0].strip()
+        if len(title) > _FINDINGS_MAX_TITLE:
+            title = title[: _FINDINGS_MAX_TITLE - 1].rstrip() + "\u2026"
     return title, body, suggestion.strip() if suggestion else None
 
 
