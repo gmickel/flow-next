@@ -75,6 +75,8 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 - `related_to` points at a stale entry that itself was updated to a new id → re-point.
 - Code snippet in body uses an outdated import path → fix the snippet.
 
+**Retrieval-fix variant.** The entry is correct, recurrence-qualified (§0.75.1), and fails the Harden mechanizability condition: the lesson keeps being re-learned because the entry does not surface, not because it is wrong. Repair the retrieval surface only — `title`, `tags`, `module`, and `applies_when` (knowledge track) — so the query the next agent will actually type matches. Cite the recurrence artifacts in the report line as `retrieval fix: <fields>; <N> Update headings / <M> commits`. A body or solution edit under this variant is a Replace in disguise: stop and reclassify.
+
 **When NOT to use:**
 
 - The body's recommended solution conflicts with current code — that's Replace.

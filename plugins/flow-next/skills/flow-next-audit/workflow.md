@@ -392,7 +392,7 @@ Default to consolidate when none apply.
 For each entry, the recommendation from Phase 1 + cross-doc context from Phase 1.75 produces:
 
 - **Keep** — accurate, no edit needed
-- **Update** — references drifted; solution still correct
+- **Update** — references drifted; solution still correct. Includes the **retrieval fix**: recurring (§0.75.1) but not mechanizable, so the entry's findability is repaired, never its body
 - **Consolidate** — overlaps heavily with another entry (canonical doc identified)
 - **Replace** — guidance now misleading; successor needs writing
 - **Delete** — code gone AND problem domain gone
@@ -404,7 +404,7 @@ Apply [phases.md](phases.md) §Outcome precedence: **correctness (Replace / Dele
 
 ### Harden gate (both conditions required)
 
-**A Harden classification rests on two independent conditions.** A Harden proposed on one of them alone has broken this: it needs both a recurrence signal from §0.75.1 (`>= 2` `## Update` headings or `>= 4` entry-file commits; `related_to >= 3` corroborates only) and an LLM judgment that the lesson is mechanizable. Missing either → Keep. The duplication guard runs before the candidate reaches Phase 3: an already-enforced-and-active class becomes a pointer-demotion proposal with no new artifact; a matched-but-inactive rule is a broken gate, so the entry stays `active` and the finding is reported. **In autofix mode, Harden candidates are never applied** — they are classified and reported under Recommended only.
+**A Harden classification rests on two independent conditions.** A Harden proposed on one of them alone has broken this: it needs both a recurrence signal from §0.75.1 (`>= 2` `## Update` headings or `>= 4` entry-file commits; `related_to >= 3` corroborates only) and an LLM judgment that the lesson is mechanizable. Missing recurrence → Keep. **Recurrence present but not mechanizable → Update (retrieval fix):** the lesson was re-learned while a correct entry sat in the store, so the defect is in how the entry is found, not what it says. Evidence bullets cite the write-side artifacts (the `## Update` headings, the entry-file commits), never a usage count; the fix is scoped by [phases.md](phases.md) §Update, retrieval-fix variant. The duplication guard runs before the candidate reaches Phase 3: an already-enforced-and-active class becomes a pointer-demotion proposal with no new artifact; a matched-but-inactive rule is a broken gate, so the entry stays `active` and the finding is reported. **In autofix mode, Harden candidates are never applied** — they are classified and reported under Recommended only.
 
 ### Replace evidence sufficiency check
 
@@ -540,7 +540,7 @@ Scanned: <TOTAL> entries
 Skipped legacy: <LEGACY_ENTRY_COUNT> (run `/flow-next:memory-migrate` first to make these auditable)
 
 Kept: <X>
-Updated: <Y>
+Updated: <Y> (of which retrieval fixes: <RF>)
 Consolidated: <C>  (clusters: <K>)
 Replaced: <Z>
 Deleted: <W>
@@ -661,6 +661,7 @@ Descriptive, concise, follows repo conventions (check `git log -5 --oneline` for
 audit(memory): update 3 entries, consolidate 2, mark 1 stale
 
 - Updated: bug/runtime-errors/oauth-callback (path rename)
+- Updated: knowledge/conventions/atomic-writes (retrieval fix: tags + `applies_when`; re-learned twice, not mechanizable)
 - Consolidated: bug/integration/{a, b} → b
 - Marked stale: knowledge/conventions/legacy-deploy (insufficient successor evidence)
 ```
