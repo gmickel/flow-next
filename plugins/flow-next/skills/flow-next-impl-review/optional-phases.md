@@ -360,7 +360,13 @@ KEPT="$(jq -r '.validator.kept // 0' "$RECEIPT_PATH" 2>/dev/null || echo 0)"
 echo "Validator: dropped=$DROPPED kept=$KEPT verdict=$NEW_VERDICT"
 
 if [[ "$NEW_VERDICT" == "SHIP" ]]; then
-  # All findings dropped — verdict upgraded. Done, no fix loop.
+  # All findings dropped — verdict upgraded. Done, no fix loop. This exit
+  # never reaches the backend workflow's final release step, so release the
+  # optional-phase lease here (PR #392): OWNING_RID is restated as a LITERAL
+  # — the fan-out rid from the codex phase-one JSON, or the host reservation
+  # id. 0 phases means nothing was held.
+  OWNING_RID="<owning rid>"
+  [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$OWNING_RID" --json >/dev/null 2>&1
   exit 0
 fi
 

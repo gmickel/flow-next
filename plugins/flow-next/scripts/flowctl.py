@@ -42011,8 +42011,14 @@ def _write_backend_review_receipt(
     draws: Optional[list] = None,
     merged_tag_mismatch: Optional[str] = None,
     extra_fields: Optional[dict] = None,
+    precondition=None,
 ) -> bool:
     """Write a review receipt with stable key order (Ralph / pilot / land).
+
+    ``precondition`` (codex r49) is a zero-arg callable evaluated INSIDE the
+    publication lock, after the current file state is observable and before
+    anything is written; a False result refuses the publication (returns
+    False, nothing written) — the standalone claim-ownership fence.
 
     Returns True once the receipt evidence is durable. False means publication
     failed and the journal's `receipt` leg is still pending: callers MUST NOT
@@ -42073,6 +42079,8 @@ def _write_backend_review_receipt(
         receipt_data.update(extra_fields)
     receipt_file = Path(receipt_path)
     with cross_process_lock(_review_receipt_lock_path(receipt_file)):
+        if precondition is not None and not precondition():
+            return False
         if findings_built:
             if findings_container is not None:
                 receipt_data["findings"] = findings_container
@@ -45558,7 +45566,7 @@ def _review_fanout_write_receipt(
     receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
     findings_container, args, receipt_draws, meta, reservation_id,
     receipt_target, suppressed_count, classification_counts, unaddressed_rids,
-    merged_tag_mismatch, extra_fields=None,
+    merged_tag_mismatch, extra_fields=None, precondition=None,
 ) -> bool:
     if not receipt_path:
         return True
@@ -45587,6 +45595,7 @@ def _review_fanout_write_receipt(
         draws=receipt_draws,
         merged_tag_mismatch=merged_tag_mismatch,
         extra_fields=extra_fields,
+        precondition=precondition,
     )
 
 
@@ -45647,13 +45656,41 @@ def _review_fanout_record_and_receipt(
             extra_fields["rid"] = meta["rid"]
         if isinstance(meta.get("reviewed_head_sha"), str):
             extra_fields["reviewed_head_sha"] = meta["reviewed_head_sha"]
+        # Codex r49: a standalone finalize whose dispatch ran under a scope
+        # claim publishes only while the receipt path still holds THAT claim
+        # (same owner token), checked inside the publication lock — an
+        # expired claim another coordinator rotated and re-claimed is never
+        # overwritten, so two fan-outs cannot finalize over each other.
+        claim_token = meta.get("claim_token")
+        lost = {"claim": False}
+        precondition = None
+        if isinstance(claim_token, str) and claim_token:
+            def precondition() -> bool:
+                data = _review_route_read_receipt(Path(receipt_path)) if Path(receipt_path).exists() else None
+                owned = (
+                    isinstance(data, dict)
+                    and "verdict" not in data
+                    and isinstance(data.get("claim"), dict)
+                    and data["claim"].get("token") == claim_token
+                )
+                lost["claim"] = not owned
+                return owned
         published = _review_fanout_write_receipt(
             receipt_path, review_id, verdict, merged_text, primary,
             resolved_spec, findings_container, args, receipt_draws, meta,
             None, None, suppressed_count, classification_counts,
             unaddressed_rids, merged_tag_mismatch,
-            extra_fields=extra_fields,
+            extra_fields=extra_fields, precondition=precondition,
         )
+        if lost["claim"]:
+            error_exit(
+                "fan-out finalize: this scope's claim is no longer owned by "
+                "this dispatch (another coordinator rotated and re-claimed "
+                f"the receipt at {receipt_path}); nothing was published — do "
+                "not finalize, that coordinator's review owns the scope now.",
+                use_json=args.json,
+                code=2,
+            )
         return {"receipt_pending": True} if published is False else {}
     receipt_target = receipt_path if receipt_path and reservation_id else None
     receipt_payload = _backend_review_receipt_payload(
@@ -45941,6 +45978,11 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
     )
     hold_phases = getattr(args, "hold_for_phases", None)
     phase_lease = None
+    if hold_phases and verdict == "NEEDS_HUMAN":
+        # Codex r49: NEEDS_HUMAN is a terminal escalation — no optional
+        # phase runs after it, so a lease would only fence the scope until
+        # its multi-pass TTL.
+        hold_phases = None
     if hold_phases:
         # PR #392 sol review (R15) + codex r42: the finalizing coordinator
         # keeps scope ownership through its post-finalize optional phases.

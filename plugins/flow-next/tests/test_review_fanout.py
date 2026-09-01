@@ -1418,6 +1418,55 @@ class TestReviewFanout(unittest.TestCase):
             json.loads(receipt.read_text(encoding="utf-8"))["claim"]["token"], "someone-else",
         )
 
+    def test_needs_human_finalize_holds_no_lease(self) -> None:
+        """Codex r49: NEEDS_HUMAN is terminal — no optional phase follows, so
+        --hold-for-phases must not leave a lease fencing the scope."""
+        by_axis = {
+            "correctness": "SHIP",
+            "contracts": "NEEDS_WORK",
+            "integration": "NEEDS_HUMAN",
+        }
+        code, payload, err = self._dispatch(self._verdict_exec(by_axis))
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(
+            _merged_review("The change mishandles the empty path.")
+        )
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--needs-work-survivors", "1",
+            "--hold-for-phases", "2",
+        )
+        self.assertEqual(fin_code, flowctl.REVIEW_CAP_EXIT_CODE, fin_err)
+        leases = self._spec_data().get("review_phase_leases", {})
+        self.assertNotIn(f"impl:{self.task_id}", leases)
+
+    def test_standalone_finalize_is_fenced_on_claim_ownership(self) -> None:
+        """Codex r49: a standalone finalize whose claim was rotated and
+        re-claimed by another coordinator refuses to publish over it."""
+        receipt = self.root / "claim4-receipt.json"
+        code, out, err = self._run(
+            "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", "--base", "HEAD~1",
+            "--receipt", str(receipt), "--json", fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err)
+        rid = self._payload(out)["rid"]
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        data["claim"]["token"] = "someone-else"
+        receipt.write_text(json.dumps(data), encoding="utf-8")
+        merged = self._write_merged(_empty_merged_review())
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--base", "HEAD~1",
+            "--rid", rid, "--merged-file", str(merged), "--receipt", str(receipt), "--json",
+        )
+        self.assertEqual(code, 2, err)
+        self.assertIn("no longer owned", err + out)
+        self.assertEqual(
+            json.loads(receipt.read_text(encoding="utf-8"))["claim"]["token"], "someone-else",
+        )
+
     def test_stale_standalone_finalize_releases_claim(self) -> None:
         """A moved-head refusal kills the standalone round — its claim goes."""
         receipt = self.root / "claim2-receipt.json"
