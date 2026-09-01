@@ -44617,6 +44617,24 @@ def _review_route_claim(path: Path, scope_id: str) -> bool:
     return True
 
 
+def _review_route_release_claim(receipt_path: Optional[str]) -> bool:
+    """Remove a standalone claim placeholder at ``receipt_path`` (sol round
+    5): a dispatch that died before any receipt replaced the claim must not
+    fence the scope until the claim's TTL. Never touches a real receipt (one
+    carrying a verdict). Returns True when a claim was removed."""
+    if not receipt_path:
+        return False
+    path = Path(receipt_path)
+    data = _review_route_read_receipt(path) if path.exists() else None
+    if not isinstance(data, dict) or "verdict" in data or not isinstance(data.get("claim"), dict):
+        return False
+    try:
+        path.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def _review_route_receipt_state(receipt: Optional[dict], scope_id: str) -> str:
     """absent | unreadable | foreign | open | open_deep | needs_human | closed
     | corrupt | claimed."""
@@ -45002,7 +45020,17 @@ def cmd_codex_impl_review_fanout(args: argparse.Namespace) -> None:
     deep/validate/walkthrough passes run ONCE against the finalized merged
     set -> one fix pass.
     """
-    _codex_impl_review_fanout(args)
+    try:
+        _codex_impl_review_fanout(args)
+    except SystemExit as exc:
+        # Sol round 5 (R10): a standalone dispatch that dies before any
+        # receipt replaces the route's claim placeholder (all draws failed,
+        # snapshot/sidecar errors, refused topology) must not strand the
+        # claim — the next route would stop as `claimed` until its TTL,
+        # contrary to the fail-open transport contract.
+        if getattr(args, "task", None) is None and exc.code not in (0, None):
+            _review_route_release_claim(getattr(args, "receipt", None))
+        raise
 
 
 def _review_fanout_default_receipt(args, task_id: Optional[str]) -> None:
@@ -45285,8 +45313,14 @@ def _review_fanout_refund_stale_round(
     """Refund a provably-stale fan-out reservation (task mode) in-place.
 
     Supersedes the refund-intent journal so the next dispatch is not stuck
-    behind the lease. Standalone reserved nothing — returns "" untouched.
+    behind the lease. Standalone reserved nothing — its claim placeholder is
+    released instead (sol round 5) so the advertised re-dispatch can route.
     """
+    if meta.get("standalone"):
+        _review_route_release_claim(
+            getattr(args, "receipt", None)
+            or (meta.get("receipt_path") if isinstance(meta.get("receipt_path"), str) else None)
+        )
     reservation_id = meta.get("reservation_id")
     if (
         isinstance(reservation_id, str)

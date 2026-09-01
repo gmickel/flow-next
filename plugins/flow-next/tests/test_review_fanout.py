@@ -1367,6 +1367,54 @@ class TestReviewFanout(unittest.TestCase):
             self.assertIsInstance(lease, dict)
             self.assertEqual(lease.get("rid"), payload["rid"])
 
+    def test_failed_standalone_dispatch_releases_claim(self) -> None:
+        """Sol round 5 (R10): all-draws-failed on a standalone dispatch must
+        not strand the route's claim — the next route fans out again."""
+        receipt = self.root / "claim-receipt.json"
+        code, out, err = self._run(
+            "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertTrue(self._payload(out).get("claimed"))
+
+        def all_fail(prompt, *, session_id, repo_root, spec, resolution_out, args, resume_only=False):
+            return "no verdict", None, 1, "boom"
+
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", "--base", "HEAD~1",
+            "--receipt", str(receipt), "--json", fake=all_fail,
+        )
+        self.assertEqual(code, 2, err)
+        self.assertFalse(receipt.exists(), "claim placeholder must be released")
+        code, out, err = self._run(
+            "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+        )
+        self.assertEqual(self._payload(out)["action"], "fanout")
+
+    def test_stale_standalone_finalize_releases_claim(self) -> None:
+        """A moved-head refusal kills the standalone round — its claim goes."""
+        receipt = self.root / "claim2-receipt.json"
+        code, out, err = self._run(
+            "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", "--base", "HEAD~1",
+            "--receipt", str(receipt), "--json", fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err)
+        rid = self._payload(out)["rid"]
+        (self.root / "late.txt").write_text("late\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "late")
+        merged = self._write_merged(_empty_merged_review())
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--base", "HEAD~1",
+            "--rid", rid, "--merged-file", str(merged), "--receipt", str(receipt), "--json",
+        )
+        self.assertEqual(code, 2, err)
+        self.assertFalse(receipt.exists())
+
     def test_exclusive_increment_refuses_standing_reservation(self) -> None:
         """PR #392 r22: --exclusive makes the single-dispatch fence atomic —
         inside the reservation lock, a standing same-scope reservation
