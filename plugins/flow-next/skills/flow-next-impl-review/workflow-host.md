@@ -77,13 +77,18 @@ RESUMED=0
 if [ -f "$RECEIPT_PATH" ]; then
   # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
   # another scope's receipt at a shared path must never inject its findings.
-  case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") == $s then (.verdict // "") else "FOREIGN" end' "$RECEIPT_PATH" 2>/dev/null)" in
+  case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") != $s then "FOREIGN" elif (.verdict // "") == "NEEDS_WORK" and ((.verdict_before_deep // "") != "") then "NEEDS_WORK_DEEP" else (.verdict // "") end' "$RECEIPT_PATH" 2>/dev/null)" in
     NEEDS_WORK)
       RESUMED=1
       # PR #392 r34: the context may have been lost BEFORE the fixes were
       # applied — re-enter at the fix pass (parse the receipt's merged
       # container, fix, test, commit) and only then dispatch the re-review.
       echo "RESUMED SCOPE — active fix loop: first verify the receipt's findings are fixed and committed (apply them if not), then dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
+    NEEDS_WORK_DEEP)
+      # PR #392 r39: the open verdict came from a deep pass whose finding
+      # bodies are NOT persisted in the receipt — not resumable from state.
+      echo "NEEDS_HUMAN: this scope's NEEDS_WORK was issued by a deep pass and its finding bodies are not in the receipt — not resumable from state. Re-run the review with --deep on the current head (or a human decides)." >&2
+      exit 1 ;;
     NEEDS_HUMAN)
       # PR #392 r28: NEEDS_HUMAN is a terminal escalation, not a resumable
       # loop — auto-resuming could overwrite an attended decision.

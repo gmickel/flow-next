@@ -12211,7 +12211,11 @@ def _enforce_and_increment_review_cap_locked(
 
 
 def reset_review_cap(
-    spec_id: str, review_kind: str, *, task_id: Optional[str] = None
+    spec_id: str,
+    review_kind: str,
+    *,
+    task_id: Optional[str] = None,
+    closure_marker: Optional[dict] = None,
 ) -> None:
     """Reset the cumulative round counter (called on a SHIP verdict).
 
@@ -12258,6 +12262,17 @@ def reset_review_cap(
                     reservation_type = _counter_default_review_type(counter_scope)
                 reservation["superseded_by"] = "reset"
                 reservation["superseded_epoch"] = epochs[reservation_type]
+            if closure_marker is not None:
+                # PR #392 r39: a closure marker (validator-issued SHIP) lands
+                # in the SAME locked transaction as the reset — a separate
+                # append let a concurrent round reserve and record between
+                # the two, mis-placing the cycle boundary the reopen scan
+                # keys on.
+                rows = spec_data.get("review_attempts")
+                if not isinstance(rows, list):
+                    rows = []
+                    spec_data["review_attempts"] = rows
+                rows.append(dict(closure_marker))
             # Intentionally leave review_pending_rounds alone — see docstring.
             spec_data["updated_at"] = now_iso()
             atomic_write_json(spec_json_path, spec_data)
@@ -37791,13 +37806,13 @@ def _run_validator_pass(
         receipt_id = updated_receipt.get("id")
         if isinstance(receipt_id, str) and is_task_id(receipt_id):
             try:
+                # PR #392 r34+r39: reset AND closure marker in one locked
+                # transaction (the reset alone writes no attempt row; a
+                # separate append raced concurrent rounds).
                 reset_review_cap(
                     spec_id_from_task(receipt_id), "impl", task_id=receipt_id,
+                    closure_marker=_review_cycle_closure_row(receipt_id, backend),
                 )
-                # PR #392 r34: leave a durable closure marker so the reopen
-                # scan sees this cycle boundary (the reset itself writes no
-                # attempt row).
-                _mark_review_cycle_closed(receipt_id, backend)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -38271,49 +38286,33 @@ def merge_deep_findings(
     return {"merged": merged, "promotions": promotions, "counts": counts}
 
 
-def _mark_review_cycle_closed(task_id: str, backend: str) -> None:
+def _review_cycle_closure_row(task_id: str, backend: str) -> dict:
     """Durable marker for a cycle closed OUTSIDE the record path (PR #392
-    r34): the validator's reset-on-SHIP leaves no attempt row, so the reopen
-    scan could not see the boundary and over-accumulated across closed
-    scopes. Appends an honestly-labeled closure row under the review state
-    lock; consumes nothing.
+    r34+r39): the validator's reset-on-SHIP leaves no attempt row, so the
+    reopen scan could not see the boundary. Appended by ``reset_review_cap``
+    inside its own locked transaction; consumes nothing.
     """
-    flow_dir = get_flow_dir()
-    spec_id = spec_id_from_task(task_id)
-    spec_json_path = find_spec_json_path(flow_dir, spec_id)
-    if not spec_json_path.exists():
-        return
-    with _review_sidecar_lock(flow_dir, spec_id):
-        spec_data = normalize_epic(
-            json.loads(spec_json_path.read_text(encoding="utf-8"))
-        )
-        attempts = spec_data.get("review_attempts")
-        if not isinstance(attempts, list):
-            attempts = []
-            spec_data["review_attempts"] = attempts
-        attempts.append({
-            "counter_kind": "impl",
-            "kind": "impl",
-            "review_type": "impl",
-            "task": task_id,
-            "backend": backend,
-            "verdict": "SHIP",
-            "outcome": "verdict",
-            "failure_class": None,
-            "reservation_id": None,
-            "round_consumed": False,
-            "cycle_closed": True,
-            "validator_closed": True,
-            "output_sha256": None,
-            "timestamp": now_iso(),
-            "finalized": {
-                "receipt": "not_applicable",
-                "digest": "not_applicable",
-                "status": "not_applicable",
-            },
-        })
-        spec_data["updated_at"] = now_iso()
-        atomic_write_json(spec_json_path, spec_data)
+    return {
+        "counter_kind": "impl",
+        "kind": "impl",
+        "review_type": "impl",
+        "task": task_id,
+        "backend": backend,
+        "verdict": "SHIP",
+        "outcome": "verdict",
+        "failure_class": None,
+        "reservation_id": None,
+        "round_consumed": False,
+        "cycle_closed": True,
+        "validator_closed": True,
+        "output_sha256": None,
+        "timestamp": now_iso(),
+        "finalized": {
+            "receipt": "not_applicable",
+            "digest": "not_applicable",
+            "status": "not_applicable",
+        },
+    }
 
 
 def _reopen_review_cycle_after_deep(task_id: str, backend: str) -> None:
