@@ -12099,6 +12099,34 @@ def _enforce_and_increment_review_cap_locked(
             else:
                 print(marker, file=sys.stderr)
             sys.exit(1)
+    # PR #392 r22+r23: EXCLUSIVE reservations (the fan-out and host round
+    # dispatches) refuse INSIDE the lock while any non-superseded same-scope
+    # reservation stands — it survived the replay sweep above, so it is
+    # either a concurrent dispatch that has not recorded yet or a crashed
+    # one that never journaled, and a second reservation would stack on the
+    # same scope (two first rounds, or a stranded slot). This runs BEFORE
+    # the stall/cap terminals (r23): a concurrent caller while the FINAL
+    # allowed round is merely in flight must fail as in-flight (retryable
+    # truth), never as a false non-convergence terminal. Non-exclusive
+    # increments keep the supported multi-pending model (out-of-order
+    # finalization). The pre-lock checks in the callers are fast-fail UX;
+    # this is the atomic authority.
+    if exclusive:
+        for res_id, res in _review_reservations(spec_data).items():
+            if (
+                isinstance(res, dict)
+                and res.get("counter_scope") == counter_scope
+                and not res.get("superseded_by")
+            ):
+                error_exit(
+                    f"a review round for this scope is already reserved "
+                    f"(reservation {res_id}) — a concurrent dispatch is in "
+                    "flight or a crashed one left an unjournaled "
+                    "reservation. Wait for it to record, or repair via "
+                    f"flowctl spec reset-review-rounds {spec_id}",
+                    use_json=use_json,
+                    code=2,
+                )
     scope = task_id if (review_kind == "impl" and task_id) else spec_id
     stalled_rule = _review_stall_rule(
         spec_data, review_kind, task_id, epoch, review_type
@@ -12162,32 +12190,6 @@ def _enforce_and_increment_review_cap_locked(
         else:
             print(marker, file=sys.stderr)
         sys.exit(REVIEW_CAP_EXIT_CODE)
-    # PR #392 r22: EXCLUSIVE reservations (the fan-out and host round
-    # dispatches) refuse INSIDE the lock while any non-superseded same-scope
-    # reservation stands — it survived the replay sweep above, so it is
-    # either a concurrent dispatch that has not recorded yet or a crashed
-    # one that never journaled, and a second reservation would stack on the
-    # same scope (two first rounds, or a stranded slot). Non-exclusive
-    # increments keep the supported multi-pending model (out-of-order
-    # finalization). The pre-lock checks in the callers are fast-fail UX;
-    # this is the atomic authority.
-    for res_id, res in (
-        _review_reservations(spec_data).items() if exclusive else ()
-    ):
-        if (
-            isinstance(res, dict)
-            and res.get("counter_scope") == counter_scope
-            and not res.get("superseded_by")
-        ):
-            error_exit(
-                f"a review round for this scope is already reserved "
-                f"(reservation {res_id}) — a concurrent dispatch is in "
-                "flight or a crashed one left an unjournaled reservation. "
-                "Wait for it to record, or repair via flowctl spec "
-                f"reset-review-rounds {spec_id}",
-                use_json=use_json,
-                code=2,
-            )
     new_val = current + 1
     _write_review_rounds(spec_data, review_kind, task_id, new_val)
     pending = spec_data.get("review_pending_rounds")
@@ -44563,9 +44565,19 @@ def _review_fanout_record_and_receipt(
                 existing = json.loads(
                     Path(receipt_path).read_text(encoding="utf-8")
                 )
+                # PR #392 r23: the draw-session sequence alone is not a round
+                # identity (economy-mode draws can be [null] every round, and
+                # every standalone receipt shares id "branch") — the reviewed
+                # head is the snapshot that actually distinguishes rounds.
+                # Receipts written before the stamp existed never match
+                # (fail-safe: no preservation).
+                dispatched_head = meta.get("reviewed_head_sha")
                 same_round = (
                     isinstance(existing, dict)
                     and existing.get("id") == review_id
+                    and isinstance(dispatched_head, str)
+                    and bool(dispatched_head)
+                    and existing.get("reviewed_head_sha") == dispatched_head
                     and [
                         d.get("session_id")
                         for d in (existing.get("draws") or [])
@@ -44606,11 +44618,16 @@ def _review_fanout_record_and_receipt(
             None, None, suppressed_count, classification_counts,
             unaddressed_rids, merged_tag_mismatch,
         )
-        if preserved and receipt_path:
+        if receipt_path:
             try:
                 rebuilt = json.loads(
                     Path(receipt_path).read_text(encoding="utf-8")
                 )
+                # Stamp the snapshot identity the same-round predicate keys
+                # on (PR #392 r23) — additive, honest: the head the merged
+                # verdict covers.
+                if isinstance(meta.get("reviewed_head_sha"), str):
+                    rebuilt["reviewed_head_sha"] = meta["reviewed_head_sha"]
                 rebuilt.update(preserved)
                 atomic_write_json(Path(receipt_path), rebuilt)
             except (OSError, ValueError, TypeError):
