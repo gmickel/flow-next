@@ -45,7 +45,9 @@ if [ -n "$TASK_ID" ]; then
   CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
   [ -n "$CANON" ] && TASK_ID="$CANON"
 fi
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
+SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 
 # RESUME GATE (fan-out is first-round only): a fresh invocation resuming a
 # scope mid-fix-loop — e.g. after a lost coordinator context — arrives here
@@ -56,9 +58,9 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_
 # MAJOR_RETHINK) or unreadable is a COMPLETED earlier scope left at this path —
 # stale input for a new round, never a resume: rotate it aside so the fresh
 # fan-out starts clean instead of bouncing off flowctl's first-round guard or
-# injecting stale findings. (Concurrent standalone scopes should set an
-# explicit per-scope REVIEW_RECEIPT_PATH — the standalone default path is
-# shared.) flowctl's guard remains the no-cost exit-2 backstop.
+# injecting stale findings. (The default path is repo- and branch-scoped;
+# concurrent reviews of the SAME scope still need an explicit per-run
+# REVIEW_RECEIPT_PATH.) flowctl's guard remains the no-cost exit-2 backstop.
 RESUMED=0
 if [ -f "$RECEIPT_PATH" ]; then
   # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
@@ -166,10 +168,18 @@ document (write it to a file for the finalize):
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
 # Bash state does NOT survive across tool calls — re-derive the Step-1/Step-2
-# values in THIS block rather than reading stale variables. RID and MERGED_FILE
+# values in THIS block rather than reading stale variables.
+# Canonicalize the task handle in THIS fresh shell too (PR #392 r15) — every
+# block must key state on the same canonical id.
+if [ -n "$TASK_ID" ]; then
+  CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
+  [ -n "$CANON" ] && TASK_ID="$CANON"
+fi RID and MERGED_FILE
 # are typed as LITERALS: the rid from the phase-one JSON output, the merged-file
 # path from your Step-3 merge — never carried shell variables.
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
+SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 if [[ -z "$BASE_COMMIT" ]]; then
   DIFF_BASE="main"
   git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"
@@ -232,7 +242,15 @@ If `VERDICT=NEEDS_WORK`:
 # Bash state does NOT survive across tool calls (the fix/test/commit steps ran
 # between) — re-derive the Step-1 values in THIS block rather than reading
 # stale variables; TASK_ID is a literal from the invocation context.
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+# Canonicalize the task handle in THIS fresh shell too (PR #392 r15) — every
+# block must key state on the same canonical id.
+if [ -n "$TASK_ID" ]; then
+  CANON="$($FLOWCTL show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
+  [ -n "$CANON" ] && TASK_ID="$CANON"
+fi
+REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
+SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 if [[ -z "$BASE_COMMIT" ]]; then
   DIFF_BASE="main"
   git rev-parse main >/dev/null 2>&1 || DIFF_BASE="master"

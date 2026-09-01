@@ -44407,12 +44407,52 @@ def _review_fanout_record_and_receipt(
     # stale verdict into the record.
     _review_fanout_assert_head_unmoved(meta, args)
     if standalone:
+        # PR #392 r15 (P2): a quiet standalone finalize replay must not
+        # delete already-recorded optional-phase evidence — when the existing
+        # receipt belongs to this same round (same id, same draw sessions),
+        # carry its deep/validator/walkthrough fields into the rebuild.
+        preserved = {}
+        if receipt_path:
+            try:
+                existing = json.loads(
+                    Path(receipt_path).read_text(encoding="utf-8")
+                )
+                same_round = (
+                    isinstance(existing, dict)
+                    and existing.get("id") == review_id
+                    and [
+                        d.get("session_id")
+                        for d in (existing.get("draws") or [])
+                        if isinstance(d, dict)
+                    ] == [
+                        d.get("session_id")
+                        for d in (receipt_draws or [])
+                        if isinstance(d, dict)
+                    ]
+                )
+                if same_round:
+                    preserved = {
+                        key: existing[key]
+                        for key in ("deep_passes", "validator", "walkthrough")
+                        if key in existing
+                    }
+            except (OSError, ValueError, TypeError):
+                preserved = {}
         _review_fanout_write_receipt(
             receipt_path, review_id, verdict, merged_text, primary,
             resolved_spec, findings_container, args, receipt_draws, meta,
             None, None, suppressed_count, classification_counts,
             unaddressed_rids, merged_tag_mismatch,
         )
+        if preserved and receipt_path:
+            try:
+                rebuilt = json.loads(
+                    Path(receipt_path).read_text(encoding="utf-8")
+                )
+                rebuilt.update(preserved)
+                atomic_write_json(Path(receipt_path), rebuilt)
+            except (OSError, ValueError, TypeError):
+                pass  # best-effort: the base receipt is already correct
         return {}
     receipt_target = receipt_path if receipt_path and reservation_id else None
     receipt_payload = _backend_review_receipt_payload(

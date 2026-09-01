@@ -69,7 +69,9 @@ if [ -n "$TASK_ID" ]; then
 fi
 # Same task-scoped default as Step 3 (explicit REVIEW_RECEIPT_PATH always wins;
 # concurrent standalone scopes should set one — the standalone default is shared).
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
+SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 RESUMED=0
 if [ -f "$RECEIPT_PATH" ]; then
   # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
@@ -324,7 +326,15 @@ feed the fix pass, never a rewrite of the already-recorded merged document.
 Receipt path (same contract as the subprocess backends — fn-90 task-scoped default; explicit `REVIEW_RECEIPT_PATH` always wins):
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"
+# Canonicalize the task handle in THIS fresh shell too (PR #392 r15) — every
+# block must key state on the same canonical id.
+if [ -n "$TASK_ID" ]; then
+  CANON="$("$FLOWCTL" show "$TASK_ID" --json 2>/dev/null | jq -r '.id // empty')"
+  [ -n "$CANON" ] && TASK_ID="$CANON"
+fi
+REPO_TAG="$(git rev-parse --show-toplevel 2>/dev/null | cksum | tr -d ' ')"  # repo discriminator (PR #392 r15: the old default was machine-global)
+SCOPE_TAG="${TASK_ID:-branch-$(git branch --show-current 2>/dev/null | tr '/' '-')}"
+RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt-${REPO_TAG}-${SCOPE_TAG}.json}"  # fn-90 R5 + PR #392 r15: repo- and scope-keyed default (concurrent tasks, repos, and branches no longer collide); explicit REVIEW_RECEIPT_PATH still wins
 ```
 
 Write a receipt compatible with existing consumers:
