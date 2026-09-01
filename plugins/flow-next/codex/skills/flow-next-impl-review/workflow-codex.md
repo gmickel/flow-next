@@ -91,6 +91,9 @@ fi
 args=()
 [ -n "$TASK_ID" ] && args+=("$TASK_ID")
 args+=(--base "$DIFF_BASE" --receipt "$RECEIPT_PATH" --json)
+# FOCUS_AREAS = the invocation's trailing focus-areas text (Step 0 parsing);
+# it rides the draw prompts, the sidecar meta, and the receipt for re-review.
+[ -n "$FOCUS_AREAS" ] && args+=(--focus "$FOCUS_AREAS")
 [ "$RESUMED" = "1" ] || $FLOWCTL codex impl-review-fanout "${args[@]}"
 ```
 
