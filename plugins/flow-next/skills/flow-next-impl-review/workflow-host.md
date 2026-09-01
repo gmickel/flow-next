@@ -78,9 +78,14 @@ if [ -f "$RECEIPT_PATH" ]; then
   # Identity first (PR #392 r10): only OUR scope's open receipt is a resume —
   # another scope's receipt at a shared path must never inject its findings.
   case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") == $s then (.verdict // "") else "FOREIGN" end' "$RECEIPT_PATH" 2>/dev/null)" in
-    NEEDS_WORK|NEEDS_HUMAN)
+    NEEDS_WORK)
       RESUMED=1
       echo "RESUMED SCOPE — active fix loop: dispatch ONE fresh re-review subagent (Round 2+ shape) carrying this receipt's merged container; no fan-out" ;;
+    NEEDS_HUMAN)
+      # PR #392 r28: NEEDS_HUMAN is a terminal escalation, not a resumable
+      # loop — auto-resuming could overwrite an attended decision.
+      echo "NEEDS_HUMAN: this scope's last review escalated to a human decision — stopping; a human resolves it before any further review dispatch." >&2
+      exit 1 ;;
     *)
       # Closed (SHIP / MAJOR_RETHINK), unreadable, or another scope's receipt
       # = stale input for a new round, never a resume. Rotate it aside so the

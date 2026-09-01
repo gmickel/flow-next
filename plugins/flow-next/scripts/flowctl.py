@@ -44494,6 +44494,23 @@ def _review_fanout_assert_head_unmoved(meta, args) -> None:
                     code=2,
                 )
         current_head = _resolve_review_sha("HEAD")
+        if current_head is None:
+            # PR #392 r28: an unresolvable HEAD (deleted ref, git failure)
+            # means the reviewed snapshot cannot be verified — same
+            # fail-closed contract as the base probe.
+            refunded = _review_fanout_refund_stale_round(
+                meta, args,
+                f"cannot resolve HEAD to verify the dispatched reviewed "
+                f"head {dispatched_head[:12]}",
+                "head_unresolvable",
+            )
+            error_exit(
+                "fan-out finalize refused: cannot resolve HEAD — the "
+                "reviewed snapshot cannot be verified. Repair the checkout "
+                f"or re-dispatch.{refunded}",
+                use_json=args.json,
+                code=2,
+            )
         if current_head and current_head != dispatched_head:
             # PR #392 r19 (P2): the stale reservation is provably dead here —
             # waiting out the journal lease (~exec timeout + 900s) would

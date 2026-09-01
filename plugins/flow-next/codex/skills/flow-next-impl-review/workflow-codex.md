@@ -67,9 +67,14 @@ if [ -f "$RECEIPT_PATH" ]; then
   # another scope's receipt at a shared path must never inject its session or
   # findings into this review.
   case "$(jq -r --arg s "${TASK_ID:-branch}" 'if (.id // "") == $s then (.verdict // "") else "FOREIGN" end' "$RECEIPT_PATH" 2>/dev/null)" in
-    NEEDS_WORK|NEEDS_HUMAN)
+    NEEDS_WORK)
       RESUMED=1
       echo "RESUMED SCOPE — receipt carries an active fix loop; skip Steps 2-4, go to Step 5.4 (single-dispatch re-review)" ;;
+    NEEDS_HUMAN)
+      # PR #392 r28: NEEDS_HUMAN is a terminal escalation, not a resumable
+      # loop — auto-resuming could overwrite an attended decision.
+      echo "NEEDS_HUMAN: this scope's last review escalated to a human decision — stopping. A human resolves it (address the escalation, then re-review explicitly; --force is the human lane for a fresh fan-out)." >&2
+      exit 1 ;;
     *)
       # Closed, unreadable, or another scope's receipt: stale input for this
       # round — rotate aside, start clean.
