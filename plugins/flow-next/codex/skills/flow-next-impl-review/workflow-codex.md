@@ -188,9 +188,9 @@ args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<you
 # review-route and the reservation gate refuse any other dispatch on this
 # scope until you release it after the phases (Step 4 tail below). Expires
 # on the liveness bound, so a dead coordinator never wedges the scope.
-# OPTIONAL_PHASES_COUNT = the number of enabled optional passes Step 0 parsed
-# (--deep counts one per selected pass, --validate one, --interactive one);
-# it sizes the lease TTL. Empty/0 when none is enabled.
+# Step 0 printed OPTIONAL_PHASES_COUNT; restate it here as a LITERAL (shell
+# state does not survive across prompt turns). 0 when no optional flag is set.
+OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
 [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && args+=(--hold-for-phases "$OPTIONAL_PHASES_COUNT")
 $FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
 ```

@@ -1334,6 +1334,23 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(fin_code, 0, fin_err)
         self.assertEqual(fin.get("verdict"), "SHIP")
 
+    def test_aborted_finalize_releases_its_lease(self) -> None:
+        """Codex r45: a finalize that acquired the lease and then aborted
+        (moved head) releases it — the immediate re-dispatch is not fenced."""
+        receipt = self.root / "abort-receipt.json"
+        code, payload, err = self._dispatch(self._ship_exec([]), "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        (self.root / "late.txt").write_text("late\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "late")
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--receipt", str(receipt), "--hold-for-phases",
+        )
+        self.assertEqual(fin_code, 2, fin_err)
+        leases = self._spec_data().get("review_phase_leases", {})
+        self.assertNotIn(f"impl:{self.task_id}", leases)
+
     def test_exclusive_increment_refuses_standing_reservation(self) -> None:
         """PR #392 r22: --exclusive makes the single-dispatch fence atomic —
         inside the reservation lock, a standing same-scope reservation

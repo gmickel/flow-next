@@ -149,6 +149,24 @@ if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
   DEEP=true
 fi
 
+# Optional-phase COUNT (PR #392): sizes the scope-ownership lease the backend
+# workflows hold through the post-finalize phases (one exec allowance per
+# pass). --deep counts one per selected pass (3 when unrestricted: adversarial
+# + the auto-gated security/performance passes), --validate one,
+# --interactive one. Carry this number into the finalize / host record blocks
+# as a LITERAL - shell state does not survive across prompt turns.
+OPTIONAL_PHASES_COUNT=0
+if [[ "$DEEP" == "true" ]]; then
+  if [[ -n "$DEEP_PASSES" ]]; then
+    OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + $(printf '%s' "$DEEP_PASSES" | tr ',' '\n' | grep -c .)))
+  else
+    OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 3))
+  fi
+fi
+[[ "$VALIDATE" == "true" ]] && OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 1))
+[[ "$INTERACTIVE" == "true" ]] && OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 1))
+echo "OPTIONAL_PHASES_COUNT=$OPTIONAL_PHASES_COUNT"
+
 # Ralph-block (fn-32.3): Ralph must never engage interactive.
 if [[ "$INTERACTIVE" == "true" ]]; then
   if [[ -n "${REVIEW_RECEIPT_PATH:-}" || "${FLOW_RALPH:-}" == "1" ]]; then

@@ -359,7 +359,9 @@ draw (three cap slots for one merged round would triple-charge the cap):**
 # the lease BEFORE the record — while the exclusive reservation still stands,
 # so no other dispatch can enter between consumption and lease. Acquisition
 # failure is terminal; Step 4 releases it after the phases.
-# OPTIONAL_PHASES_COUNT = the number of enabled optional passes Step 0 parsed.
+# Step 0 printed OPTIONAL_PHASES_COUNT; restate it here as a LITERAL (shell
+# state does not survive across tool calls). 0 when no optional flag is set.
+OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
 if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
   "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases "$OPTIONAL_PHASES_COUNT" --rid "$RESERVATION_ID" --json || exit 1
 fi

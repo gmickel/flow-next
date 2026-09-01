@@ -44426,8 +44426,8 @@ def _review_phase_lease_write(
             if not isinstance(leases, dict):
                 leases = {}
                 spec_data[REVIEW_PHASE_LEASE_KEY] = leases
+            current = leases.get(counter_scope)
             if lease is None:
-                current = leases.get(counter_scope)
                 if (
                     expect_rid is not None
                     and _review_phase_lease_is_live(current)
@@ -44436,6 +44436,13 @@ def _review_phase_lease_write(
                     return False  # someone else's live lease — leave it
                 leases.pop(counter_scope, None)
             else:
+                # Codex r45: acquisition is rid-bound too — a stale same-rid
+                # replay must not overwrite a newer coordinator's live lease.
+                if (
+                    _review_phase_lease_is_live(current)
+                    and current.get("rid") not in (None, lease.get("rid"))
+                ):
+                    return False
                 leases[counter_scope] = dict(lease)
             spec_data["updated_at"] = now_iso()
             atomic_write_json(spec_json_path, spec_data)
@@ -44576,15 +44583,51 @@ def _review_route_read_receipt(path: Path) -> Optional[dict]:
 _REVIEW_ROUTE_CLOSED = ("SHIP", "MAJOR_RETHINK")
 
 
+def _review_route_claim_live(receipt: Optional[dict]) -> bool:
+    """A standalone scope claim (codex r45): a placeholder receipt an
+    invocation created atomically before dispatching, so two coordinators
+    reaching an absent receipt cannot both fan out. Live until the review
+    liveness bound; a dead claimant never wedges the scope."""
+    if not isinstance(receipt, dict) or "verdict" in receipt:
+        return False
+    claim = receipt.get("claim")
+    if not isinstance(claim, dict):
+        return False
+    age = _iso_age_seconds(claim.get("timestamp"))
+    return age is None or age < get_review_exec_timeout() + 900
+
+
+def _review_route_claim(path: Path, scope_id: str) -> bool:
+    """Atomically create the claim placeholder; False when someone else won."""
+    payload = json.dumps({
+        "type": "impl_review", "id": scope_id,
+        "claim": {"timestamp": now_iso(), "pid": os.getpid()},
+    }, indent=2) + "\n"
+    try:
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+    except OSError:
+        return False
+    return True
+
+
 def _review_route_receipt_state(receipt: Optional[dict], scope_id: str) -> str:
     """absent | unreadable | foreign | open | open_deep | needs_human | closed
-    | corrupt."""
+    | corrupt | claimed."""
     if receipt is None:
         return "absent"
     if receipt.get("id") != scope_id:
         return "foreign"
     if receipt.get("type") not in (None, "impl_review"):
         return "corrupt"
+    if "verdict" not in receipt and isinstance(receipt.get("claim"), dict):
+        return "claimed" if _review_route_claim_live(receipt) else "closed"
     verdict = receipt.get("verdict")
     if verdict in _REVIEW_ROUTE_OPEN:
         # A deep pass persists only pass names/counts — its finding bodies are
@@ -44743,6 +44786,19 @@ def compute_review_route(
                     "per-run REVIEW_RECEIPT_PATH.",
                 )
             result["rotated_to"] = rotated
+        if standalone and rotate_stale and not force:
+            # Codex r45: standalone has no reservation — claim the scope
+            # atomically (O_EXCL placeholder receipt) before dispatching so a
+            # second coordinator reaching the same absent receipt stops.
+            if not _review_route_claim(receipt_file, scope_id):
+                return _stop(
+                    "claim_lost_race",
+                    "another coordinator claimed this scope's receipt first "
+                    "— a concurrent review of the same scope is starting. Do "
+                    "not dispatch; wait for it or set an explicit per-run "
+                    "REVIEW_RECEIPT_PATH.",
+                )
+            result["claimed"] = True
         result.update({"action": "fanout", "reason": reason, "message": message})
         return result
 
@@ -44751,6 +44807,14 @@ def compute_review_route(
             "force",
             "--force: human-authorized fresh fan-out; every guard bypassed "
             "(the stale receipt is rotated aside when --rotate-stale is set).",
+        )
+    if receipt_state == "claimed":
+        return _stop(
+            "claimed",
+            f"the receipt at {resolved_path} is a live claim by another "
+            "coordinator's dispatch (its review is running) — do not "
+            "dispatch; wait for its finalize, or set an explicit per-run "
+            "REVIEW_RECEIPT_PATH.",
         )
     if receipt_state in ("corrupt", "unreadable"):
         return _stop(
@@ -44881,15 +44945,14 @@ def cmd_review_route(args: argparse.Namespace) -> None:
             ok = False
             try:
                 data = json.loads(Path(resolved_path).read_text(encoding="utf-8"))
+                current = data.get("phase_lease")
+                if (
+                    _review_phase_lease_is_live(current)
+                    and current.get("rid") not in (None, lease_rid)
+                ):
+                    ok = False
+                    raise ValueError("another coordinator's live lease")
                 if release:
-                    current = data.get("phase_lease")
-                    if (
-                        lease_rid is not None
-                        and _review_phase_lease_is_live(current)
-                        and current.get("rid") not in (None, lease_rid)
-                    ):
-                        ok = False
-                        raise ValueError("another coordinator's live lease")
                     data.pop("phase_lease", None)
                 else:
                     data["phase_lease"] = lease
@@ -45825,13 +45888,21 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
                 use_json=args.json,
                 code=2,
             )
-    attempt_summary = _review_fanout_record_and_receipt(
-        args, task_id, standalone, review_id, verdict, merged_text,
-        findings_container, findings_digest, receipt_path, receipt_draws,
-        primary, resolved_spec, meta.get("reservation_id"), meta,
-        suppressed_count, classification_counts, unaddressed_rids,
-        merged_tag_mismatch, phase_lease=phase_lease,
-    )
+    try:
+        attempt_summary = _review_fanout_record_and_receipt(
+            args, task_id, standalone, review_id, verdict, merged_text,
+            findings_container, findings_digest, receipt_path, receipt_draws,
+            primary, resolved_spec, meta.get("reservation_id"), meta,
+            suppressed_count, classification_counts, unaddressed_rids,
+            merged_tag_mismatch, phase_lease=phase_lease,
+        )
+    except BaseException:
+        # Codex r45: an aborted record (moved head, refused publication,
+        # anything) must not leave the just-acquired lease fencing the
+        # advertised immediate re-dispatch behind a multi-pass TTL.
+        if task_id and phase_lease:
+            _review_phase_lease_write(task_id, None, expect_rid=rid)
+        raise
     if (
         task_id and phase_lease
         and isinstance(attempt_summary, dict)

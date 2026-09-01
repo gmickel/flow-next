@@ -249,6 +249,39 @@ class TestReviewRoute(unittest.TestCase):
         self.assertEqual(r["expired_reservation"], rid)
         self.assertIn("replayed and refunded", r["message"])
 
+    def test_standalone_claim_is_atomic(self) -> None:
+        """Codex r45: the first standalone dispatch claims the scope
+        atomically; a second coordinator on the same absent receipt stops."""
+        receipt = self.root / "claim.json"
+        code, r, err = self._route("--receipt", str(receipt), "--rotate-stale")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(r["action"], "fanout")
+        self.assertTrue(r.get("claimed"))
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(data["id"], "branch")
+        self.assertIn("claim", data)
+        code, r, _ = self._route("--receipt", str(receipt), "--rotate-stale")
+        self.assertEqual(r["action"], "stop")
+        self.assertEqual(r["reason"], "claimed")
+        # A pure call (no --rotate-stale) never claims.
+        other = self.root / "pure.json"
+        code, r, _ = self._route("--receipt", str(other))
+        self.assertEqual(r["action"], "fanout")
+        self.assertFalse(other.exists())
+        # An expired claim is stale, not a stop.
+        data["claim"]["timestamp"] = "2020-01-01T00:00:00Z"
+        receipt.write_text(json.dumps(data), encoding="utf-8")
+        code, r, _ = self._route("--receipt", str(receipt), "--rotate-stale")
+        self.assertEqual(r["action"], "fanout")
+
+    def test_hold_refuses_to_overwrite_a_live_foreign_lease(self) -> None:
+        code, r, err = self._route(self.task_id, "--hold-phases", "--rid", "ab" * 16)
+        self.assertEqual(code, 0, err)
+        code, r, err = self._route(self.task_id, "--hold-phases", "--rid", "cd" * 16)
+        self.assertEqual(code, 2, err)
+        lease = self._spec()["review_phase_leases"][f"impl:{self.task_id}"]
+        self.assertEqual(lease["rid"], "ab" * 16)
+
     def test_rotation_lost_race_stops(self) -> None:
         """The real race: the receipt this invocation read is GONE by the
         time it rotates (the other coordinator moved it first)."""
