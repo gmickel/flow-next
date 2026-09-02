@@ -366,7 +366,14 @@ if [[ "$NEW_VERDICT" == "SHIP" ]]; then
   # — the fan-out rid from the codex phase-one JSON, or the host reservation
   # id. 0 phases means nothing was held.
   OWNING_RID="<owning rid>"
-  [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$OWNING_RID" --json >/dev/null 2>&1
+  if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
+    # A failed release (rid mismatch, persistence failure) is not success:
+    # the scope would stay fenced until the lease TTL. Escalate instead.
+    "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$OWNING_RID" --json || {
+      echo "NEEDS_HUMAN: optional-phase lease release failed (rid $OWNING_RID, receipt $RECEIPT_PATH) — the verdict is SHIP but the scope stays fenced until the lease TTL; repair with review-route --release-phases --rid <owning rid>" >&2
+      exit 4
+    }
+  fi
   exit 0
 fi
 

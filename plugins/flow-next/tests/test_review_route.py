@@ -282,6 +282,33 @@ class TestReviewRoute(unittest.TestCase):
         lease = self._spec()["review_phase_leases"][f"impl:{self.task_id}"]
         self.assertEqual(lease["rid"], "ab" * 16)
 
+    def test_rotation_rechecks_the_receipt_under_the_lock(self) -> None:
+        """Sol round 8 (R12): rotation + claim run under the receipt lock and
+        re-read the file there — a receipt that changed since the route
+        decision (a finalizer published, a coordinator re-claimed) is a lost
+        race, never rotated."""
+        receipt = self._receipt(self.root / "race.json", id="branch", verdict="SHIP")
+        real_lock = flowctl.cross_process_lock
+
+        @contextlib.contextmanager
+        def racing_lock(path, **kw):
+            with real_lock(path, **kw):
+                # Another coordinator's claim lands while we wait for the lock.
+                receipt.write_text(json.dumps({
+                    "type": "impl_review", "id": "branch",
+                    "claim": {"timestamp": flowctl.now_iso(), "token": "theirs"},
+                }), encoding="utf-8")
+                yield
+
+        with mock.patch.object(flowctl, "cross_process_lock", racing_lock):
+            code, r, err = self._route("--receipt", str(receipt), "--rotate-stale")
+        self.assertEqual(r["action"], "stop", err)
+        self.assertEqual(r["reason"], "rotation_lost_race")
+        self.assertFalse((self.root / "race.json.prev").exists())
+        self.assertEqual(
+            json.loads(receipt.read_text(encoding="utf-8"))["claim"]["token"], "theirs",
+        )
+
     def test_rotation_lost_race_stops(self) -> None:
         """The real race: the receipt this invocation read is GONE by the
         time it rotates (the other coordinator moved it first)."""

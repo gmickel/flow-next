@@ -44824,36 +44824,60 @@ def compute_review_route(
         return result
 
     def _fanout(reason: str, message: str) -> dict:
-        if receipt_state in ("foreign", "closed") and rotate_stale:
-            rotated = _review_route_rotate(receipt_file)
-            if rotated is None:
-                # PR #392 r41+r43 (P1): this invocation READ the receipt, so
-                # a failed rotation — most often the file already gone
-                # because another coordinator rotated it first — is a lost
-                # ownership race, not a green light.
+        if not rotate_stale:
+            result.update({"action": "fanout", "reason": reason, "message": message})
+            return result
+        # Sol round 8 (R12): rotation and claiming are one transaction under
+        # the SAME receipt lock the finalize publishes under. Inside it the
+        # receipt is re-read and must still be exactly what this decision
+        # was made on — a finalizer that published (or a coordinator that
+        # rotated / claimed) in the meantime makes this a lost race, never
+        # a rotation of somebody else's live state.
+        with cross_process_lock(_review_receipt_lock_path(receipt_file)):
+            current = (
+                _review_route_read_receipt(receipt_file)
+                if receipt_file.exists() else None
+            )
+            if current != receipt:
                 return _stop(
                     "rotation_lost_race",
-                    "another coordinator rotated this scope's receipt first "
-                    "— a concurrent review of the same scope is starting. "
-                    "Do not dispatch; wait for it or set an explicit "
-                    "per-run REVIEW_RECEIPT_PATH.",
+                    "this scope's receipt changed under another coordinator "
+                    "between the route decision and its rotation — a "
+                    "concurrent review of the same scope is starting or has "
+                    "just published. Do not dispatch; re-run review-route, "
+                    "or set an explicit per-run REVIEW_RECEIPT_PATH.",
                 )
-            result["rotated_to"] = rotated
-        if standalone and rotate_stale and not force:
-            # Codex r45: standalone has no reservation — claim the scope
-            # atomically (O_EXCL placeholder receipt) before dispatching so a
-            # second coordinator reaching the same absent receipt stops.
-            claim_token = _review_route_claim(receipt_file, scope_id)
-            if claim_token is None:
-                return _stop(
-                    "claim_lost_race",
-                    "another coordinator claimed this scope's receipt first "
-                    "— a concurrent review of the same scope is starting. Do "
-                    "not dispatch; wait for it or set an explicit per-run "
-                    "REVIEW_RECEIPT_PATH.",
-                )
-            result["claimed"] = True
-            result["claim_token"] = claim_token
+            if receipt_state in ("foreign", "closed"):
+                rotated = _review_route_rotate(receipt_file)
+                if rotated is None:
+                    # PR #392 r41+r43 (P1): this invocation READ the receipt,
+                    # so a failed rotation — most often the file already gone
+                    # because another coordinator rotated it first — is a
+                    # lost ownership race, not a green light.
+                    return _stop(
+                        "rotation_lost_race",
+                        "another coordinator rotated this scope's receipt "
+                        "first — a concurrent review of the same scope is "
+                        "starting. Do not dispatch; wait for it or set an "
+                        "explicit per-run REVIEW_RECEIPT_PATH.",
+                    )
+                result["rotated_to"] = rotated
+            if standalone and not force:
+                # Codex r45: standalone has no reservation — claim the scope
+                # atomically (O_EXCL placeholder receipt) before dispatching
+                # so a second coordinator reaching the same absent receipt
+                # stops.
+                claim_token = _review_route_claim(receipt_file, scope_id)
+                if claim_token is None:
+                    return _stop(
+                        "claim_lost_race",
+                        "another coordinator claimed this scope's receipt "
+                        "first — a concurrent review of the same scope is "
+                        "starting. Do not dispatch; wait for it or set an "
+                        "explicit per-run REVIEW_RECEIPT_PATH.",
+                    )
+                result["claimed"] = True
+                result["claim_token"] = claim_token
         result.update({"action": "fanout", "reason": reason, "message": message})
         return result
 
