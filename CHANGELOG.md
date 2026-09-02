@@ -2,7 +2,9 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.12.0] - 2026-09-02
+
+Anyone running implementation review on the codex or host backend now gets most of a scope's findings in the first round instead of across a slow serial trickle. The first round draws three reviewers at once, each reading for a different defect class, and the coordinator hands back one merged list for a single fix pass. The round still counts once against the cap, the receipt records every draw honestly, and the topology is steerable in a sentence when a clean diff does not warrant the harvest.
 
 ### Added
 
@@ -10,6 +12,7 @@ All notable changes to the flow-next.
 
 ### Fixed
 
+- **Implementation-review flags no longer vanish on zsh hosts.** The skill's argument parse used an unquoted shell loop that does not word-split under zsh, so `--validate`, `--deep`, and `--interactive` were silently dropped: the run completed as a plain review and reported success. Found by the release dogfood; the parse now splits under bash and zsh alike, verified with both. Other skills' parse fences are being audited separately.
 - **`/flow-next:features` activates again on hosts with strict frontmatter parsing.** The skill's unquoted `description` contained a colon-space, which spec-compliant YAML parsers reject — the whole frontmatter block then silently dropped, leaving the skill installed but unmatchable (no description, no `allowed-tools`, no `user-invocable`). The description is now single-quoted, byte-identical otherwise; `claude plugin validate` passes. The only skill with the pattern. Thanks @acebytes for the report and the fix (#389, #390).
 
 ## [flow-next 4.11.0] - 2026-09-01
