@@ -1290,7 +1290,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-215-parallel-draw-review-three-axis-lenses.md",
-  "status": "open",
+  "status": "done",
   "title": "Parallel-draw review: three axis lenses, merge, fix once",
   "tracker": {
     "baseHashFlow": null,
@@ -1303,5 +1303,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-01T11:33:29.287127Z"
+  "updated_at": "2026-09-02T20:58:08.757675Z"
 }
