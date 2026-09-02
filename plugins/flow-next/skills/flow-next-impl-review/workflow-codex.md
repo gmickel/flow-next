@@ -195,6 +195,11 @@ OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
 $FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
 ```
 
+If the finalize refuses with `no resumable primary session` (the primary
+draw failed and no surviving draw carries a codex session), re-run it WITHOUT
+`--hold-for-phases` and skip the optional phases for this round — they resume
+the primary session and cannot run; say so in the output.
+
 The finalizer is deterministic and atomic — only it records or refunds:
 
 - **Verdict = mechanical worst-wins** over the draws' verdict tags

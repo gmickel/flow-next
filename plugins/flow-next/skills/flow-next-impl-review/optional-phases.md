@@ -462,6 +462,26 @@ Write per-bucket JSONL files for downstream helpers:
 "LFG the rest" auto-classifies: P0/P1 @ confidence ≥ 75 → Apply;
 otherwise → Defer.
 
+**Lease renewal while waiting on a human (PR #392).** A walkthrough has no
+time bound — it blocks once per finding on a reply — but the optional-phase
+lease expires on the liveness bound. When the lease is held (an optional flag
+is enabled), renew it before EACH blocking question; a hold for the same
+owning rid is a renewal. A refused renewal means another coordinator's live
+lease or reservation owns the scope now: stop the walkthrough and re-route
+instead of writing over the newer review. Restate the count and the rid as
+literals (shell state does not survive across tool calls).
+
+```bash
+OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
+OWNING_RID="<owning rid>"
+if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
+  "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases "$OPTIONAL_PHASES_COUNT" --rid "$OWNING_RID" --json || {
+    echo "NEEDS_HUMAN: optional-phase lease renewal refused (rid $OWNING_RID) — another coordinator owns this scope; walkthrough stopped" >&2
+    exit 4
+  }
+fi
+```
+
 ### Step W.3: Append deferred findings to sink
 
 ```bash

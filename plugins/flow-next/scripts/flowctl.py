@@ -46116,6 +46116,22 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         # phase runs after it, so a lease would only fence the scope until
         # its multi-pass TTL.
         hold_phases = None
+    if hold_phases and not primary.get("session_id"):
+        # Codex r54: the optional phases resume the primary session. With no
+        # surviving resumable draw (the primary failed and only non-codex or
+        # session-less draws survived) a held finalize would consume the
+        # round and fence the scope for phases that can never run. Refuse
+        # BEFORE the record — re-run without --hold-for-phases and skip the
+        # optional phases for this round.
+        error_exit(
+            "fan-out finalize: no resumable primary session (the primary "
+            "draw failed and no surviving draw carries a codex session), so "
+            "the optional phases cannot run — re-run this finalize WITHOUT "
+            "--hold-for-phases and skip the optional phases for this round. "
+            "Nothing was recorded.",
+            use_json=args.json,
+            code=2,
+        )
     if hold_phases:
         # PR #392 sol review (R15) + codex r42: the finalizing coordinator
         # keeps scope ownership through its post-finalize optional phases.

@@ -1447,6 +1447,53 @@ class TestReviewFanout(unittest.TestCase):
         leases = self._spec_data().get("review_phase_leases", {})
         self.assertNotIn(f"impl:{self.task_id}", leases)
 
+    def test_held_finalize_requires_a_resumable_primary_session(self) -> None:
+        """Codex r54: a finalize holding phases refuses (before the record)
+        when no surviving draw carries a resumable codex session; without
+        the hold it records normally."""
+        def fake(prompt, *, session_id, repo_root, spec, resolution_out, args, resume_only=False):
+            axis = _axis_of(prompt)
+            resolution_out["model"] = f"{axis}-model"
+            if axis == "correctness":
+                return "", None, 1, "primary died"
+            return "<verdict>SHIP</verdict>", None, 0, ""
+
+        code, payload, err = self._dispatch(fake)
+        self.assertEqual(code, 0, err)
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--hold-for-phases", "2",
+        )
+        self.assertEqual(fin_code, 2, fin_err)
+        self.assertIn("no resumable primary session", fin_err + json.dumps(fin))
+        leases = self._spec_data().get("review_phase_leases", {})
+        self.assertNotIn(f"impl:{self.task_id}", leases)
+        fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+        self.assertEqual(fin_code, 0, fin_err)
+
+    def test_lease_renewal_after_record(self) -> None:
+        """Codex r54: the walkthrough renews the held lease via review-route
+        --hold-phases with the same rid — permitted after the record (the
+        round's own consumed reservation is not a foreign live one)."""
+        receipt = self.root / "renew.json"
+        code, payload, err = self._dispatch(self._ship_exec([]), "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        rid = payload["rid"]
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            rid, merged, "--receipt", str(receipt), "--hold-for-phases", "2",
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        before = self._spec_data()["review_phase_leases"][f"impl:{self.task_id}"]
+        code, out, err = self._run(
+            "review-route", self.task_id, "--receipt", str(receipt),
+            "--hold-phases", "2", "--rid", rid, "--json",
+        )
+        self.assertEqual(code, 0, err)
+        after = self._spec_data()["review_phase_leases"][f"impl:{self.task_id}"]
+        self.assertEqual(after["rid"], rid)
+        self.assertGreaterEqual(after["timestamp"], before["timestamp"])
+
     def test_failed_standalone_dispatch_releases_claim(self) -> None:
         """Sol round 5 (R10): all-draws-failed on a standalone dispatch must
         not strand the route's claim — the next route fans out again."""
