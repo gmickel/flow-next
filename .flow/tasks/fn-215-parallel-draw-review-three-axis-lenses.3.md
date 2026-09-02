@@ -11,9 +11,13 @@ Repo docs per the docs-gap map: orchestration.md review-backends section (three-
 R4 (documented round semantics), R6, R8 satisfied; judge against the parent spec's criteria directly. Full gate green.
 
 ## Done summary
-TBD
+Shipped the repo-side docs for the parallel-draw fan-out (R4, R6, R8): orchestration.md review-backends section (three-draw default, worked steering recipes for both dials — single-reviewer economy and cross-family upgrade with the codex-primary constraint and rationale), running-lean.md cross-model dial (cost bullet, prose-steered-not-a-knob), flowctl.md deterministic-review-cap (merged round = one reservation, both backends) + the fan-out CLI block, review-findings.md merge subsection (union re-ordinaled 1..N, deferred remainder lineage, no axis field on items), skills.md row, docs/README.md Notable updates entry, CHANGELOG Unreleased entry — user-outcome-first, round-density claim (1.56x against the pre-registered 1.5x bar), both accepted costs stated as the reason the dial exists (3x tokens on clean diffs; round 2 shrinks not disappears), site cookbook named as pending downstream. All framed inside reviews-being-optional, positive formulation. Codex docs mirror synced.
 
+Review trail (conductor-owned host reviews): round 1 NEEDS_WORK (8 — CHANGELOG honesty gap, cross-family constraint missing at three sites, 6 precision items), round 2 SHIP (all fixed; one non-blocking LOW recorded on host-pin wording). Full suite 4608 green at 3b182f5a; doc-pin suites + anchors green at 1e2b9265.
+
+stage: impl-review - ran [2 rounds: NEEDS_WORK -> SHIP] (model: claude-fable-5 fresh subagents, conductor-owned)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 3b182f5a, 1e2b9265
+- Tests: python3 scripts/run_tests_parallel.py (4608 OK at 3b182f5a), cd plugins/flow-next/tests && python3 -m unittest test_ralph_docs_truth test_review_findings_docs -q, python3 scripts/check_doc_anchors.py, uvx ruff@0.16.0 check ., ./scripts/sync-codex.sh x2 idempotent
 - PRs:

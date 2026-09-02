@@ -10,6 +10,7 @@ Cursor shells out to the `cursor-agent` CLI (headless `-p --output-format json`)
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "cursor"`)
 3. Model resolved via (first match wins): `--spec cursor:<model>` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_CURSOR_MODEL` env var, registry default. **No effort** — Cursor bakes effort into the model name; `cursor:<model>:<effort>` is rejected
 4. Parse verdict from command output
+5. No fan-out on this backend: every round is a single dispatch (the three-draw fan-out is codex/host-only)
 
 ## Step 1: Identify Task and Diff Base
 
@@ -33,7 +34,9 @@ git log ${DIFF_BASE}..HEAD --oneline
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 
 # Runtime config:
 #   --spec <spec>           full spec (cursor:<model>), highest priority

@@ -1,14 +1,18 @@
 {
   "branch_name": "fn-215-parallel-draw-review-three-axis-lenses",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-09-01T11:33:29.286198Z",
   "created_at": "2026-09-01T07:34:03.950723Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-215-parallel-draw-review-three-axis-lenses",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-215-parallel-draw-review-three-axis-lenses.1": 0,
+    "fn-215-parallel-draw-review-three-axis-lenses.2": 0,
+    "fn-215-parallel-draw-review-three-axis-lenses.3": 0
+  },
   "next_task": 1,
   "plan_review_rounds": 0,
   "plan_review_status": "ship",
@@ -822,15 +826,467 @@
       "task": null,
       "timestamp": "2026-09-01T08:15:01.610424Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "650f386198404d10e47cb14a2e473ca19d8bd3c2cf5bea1453be4ba1109ae24d",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f43cb232fd3cbd1a86f1fc84d543874b7ebb4d45",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 2761,
+      "output_sha256": "3008ca98738c9e3c89d8ee1721c3248c0090ce2d6b397adebb084e16425d9303",
+      "reservation_id": "3d87cec4ed5c4123b20d72087196e310",
+      "round_consumed": false,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.1",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.1",
+      "timestamp": "2026-09-01T09:26:06.628977Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "72bfb96a41d53f5021ac6caea4652dd028e9f13df14b84a05a9c3fd9eef93e20",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "d78a3f1390f3abd4226a1e336cd22cc24cf3e904",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 1441,
+      "output_sha256": "343420d7be330c8ecb590df0464900514f7719facb67e7aa56d1b0b7c29cabe5",
+      "reservation_id": "f712acc79a0646d0a7d72bdd3d42cfa2",
+      "round_consumed": false,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.1",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.1",
+      "timestamp": "2026-09-01T10:05:49.258135Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "fcd0b4ef65a66dbbc95c9535137595ebcb72efa393d1f1db6b9e3ac1b2faf65c",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "805be1f1053e3097232c88b248b6b441670ff154",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 421,
+      "output_sha256": "0427e4c02dd667278613d7d98e0ace7090ff4e08fb4703101ced3887e4dc23fa",
+      "reservation_id": "ab3a92a401ab4af790cda3a2b6e6645a",
+      "round_consumed": true,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.1",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.1",
+      "timestamp": "2026-09-01T10:14:25.641235Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "a2abb1936f04103309e8b28231abfe010e53d934b4b2777243b54ac29edb5b0f",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "f260a7ecc02884bf0acb94293548e02ab337dc92",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 1857,
+      "output_sha256": "5f02c584e5e64646e8855274c9b493fbc053cacd8af2aa3f7064cb75d8d5e916",
+      "reservation_id": "b64b3e06c730439b84a019934d71defc",
+      "round_consumed": false,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.2",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.2",
+      "timestamp": "2026-09-01T10:32:10.411350Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "38b2c0b084ede40dc1113c09d5056cb099b3d094e25cd53cc4d4e0ed8161fc16",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "03110fbe912cec3fa24046b2bafaffdf02400507",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 654,
+      "output_sha256": "1e9112486891618063961135aada094693d5b93b8d214911ed15b1c1ead8304c",
+      "reservation_id": "cfe198a53ffe4e9bad0b718e2fedcdf4",
+      "round_consumed": false,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.2",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.2",
+      "timestamp": "2026-09-01T10:39:20.447667Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "3035fc566cd1308cdc67dbc18efb1ae9aa245382236189d331e7b6ae9873dd4c",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3f3f4088d65930d591eb3cc30b398855858454ac",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 545,
+      "output_sha256": "165010c16236c7356ca1ad82f188d1a818df2579f2c3443cb9674a22c697e8eb",
+      "reservation_id": "541c9f1d6eaf40708c554da16be27870",
+      "round_consumed": true,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.2",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.2",
+      "timestamp": "2026-09-01T10:42:43.545720Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "49256cdd63f539a5eff4d60ad0b6e4de1ab26ddea9b1cfe02f3f346aa54b6036",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": "missing_verdict",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "3b182f5a0cb2871ec60e7273f50351a5e273599a",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 1580,
+      "output_sha256": "b4c174e9ed39fea65c86cd0e6abb139cf4bde4238acecf9bf252ec7dddc2fe5c",
+      "reservation_id": "767a27b3b0024770b66e7f523194ec96",
+      "round_consumed": false,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.3",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.3",
+      "timestamp": "2026-09-01T10:58:51.168987Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "d51da2be82507611db3921602a6c3ab0b9f24cc3bc86e7b254c613cad6e3f594",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "1e2b9265b15c8664b1336d51a60c9dacf6acf66b",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 683,
+      "output_sha256": "ece232031b46fc9cb992db003839cbbff6186d3423d2dfde4444b79a45359492",
+      "reservation_id": "b13e981d18914027b21161d49aeff76b",
+      "round_consumed": true,
+      "scope": "impl:fn-215-parallel-draw-review-three-axis-lenses.3",
+      "superseded_by": null,
+      "task": "fn-215-parallel-draw-review-three-axis-lenses.3",
+      "timestamp": "2026-09-01T11:05:30.850564Z",
+      "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "b0663a048541752b996dd7b07b8f528db019ecc660469b11e6048c3a06d1fbee",
+      "backend": "codex",
+      "base_sha": "b7cb6804406e25c29755c08b316d4be3df56acd4",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-389e6941a14e23e7c1ff61753de21332",
+            "classification": "introduced",
+            "findingId": "finding-389e6941a14e23e7c1ff61753de21332",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-62aa68fae7b6433a581f95055cfcd428",
+            "classification": "introduced",
+            "findingId": "finding-62aa68fae7b6433a581f95055cfcd428",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-1a2f0da1b78bd249f56eb77ce6453e75",
+            "classification": "introduced",
+            "findingId": "finding-1a2f0da1b78bd249f56eb77ce6453e75",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b41dbb93289f893036c94ae442c54459",
+            "classification": "introduced",
+            "findingId": "finding-b41dbb93289f893036c94ae442c54459",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "d32af4f0378b271e057418b0c666365d0b652c5c",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 1565566,
+      "output_sha256": "89179b8e00df486999120386805ec8abe535e121ef71a932cbe23f7bdc86b74b",
+      "reservation_id": "01fe96f9159c47f582c9d838b4ac2347",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-09-01T11:14:29.502213Z",
+      "tool_calls": 71,
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "b0e26a7b083297277e948ff884a5b46a697f659d36a65bae386dd69a1b0ac714",
+      "backend": "codex",
+      "base_sha": "b7cb6804406e25c29755c08b316d4be3df56acd4",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-389e6941a14e23e7c1ff61753de21332",
+            "classification": "introduced",
+            "findingId": "finding-389e6941a14e23e7c1ff61753de21332",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-62aa68fae7b6433a581f95055cfcd428",
+            "classification": "introduced",
+            "findingId": "finding-62aa68fae7b6433a581f95055cfcd428",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "not_fixed"
+          },
+          {
+            "chainRoot": "finding-1a2f0da1b78bd249f56eb77ce6453e75",
+            "classification": "introduced",
+            "findingId": "finding-1a2f0da1b78bd249f56eb77ce6453e75",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "withdrawn"
+          },
+          {
+            "chainRoot": "finding-3a7ce30397a13bf87c5c5fc931238bd1",
+            "classification": "introduced",
+            "findingId": "finding-3a7ce30397a13bf87c5c5fc931238bd1",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b41dbb93289f893036c94ae442c54459",
+            "classification": "introduced",
+            "findingId": "finding-b41dbb93289f893036c94ae442c54459",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-dd8edcab5ce99a26dba8ff0e978b0a46",
+            "classification": "introduced",
+            "findingId": "finding-dd8edcab5ce99a26dba8ff0e978b0a46",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "4df376de7e8158b5652af8d1d06f339fff541bc6",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 8063,
+      "output_sha256": "34e32eee2db67a9fcdac8da4f2334e6878c4578fa1047f9ae7eba74e60e3cd9d",
+      "reservation_id": "eb18d585ca134bd286d9dcab05915e6a",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-09-01T11:28:51.891407Z",
+      "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "540048c9c1da38d279b2ca11d8415f8633149074c1051f195bee9103b052f4ab",
+      "backend": "codex",
+      "base_sha": "b7cb6804406e25c29755c08b316d4be3df56acd4",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-389e6941a14e23e7c1ff61753de21332",
+            "classification": "introduced",
+            "findingId": "finding-389e6941a14e23e7c1ff61753de21332",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-62aa68fae7b6433a581f95055cfcd428",
+            "classification": "introduced",
+            "findingId": "finding-62aa68fae7b6433a581f95055cfcd428",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-1a2f0da1b78bd249f56eb77ce6453e75",
+            "classification": "introduced",
+            "findingId": "finding-1a2f0da1b78bd249f56eb77ce6453e75",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "withdrawn"
+          },
+          {
+            "chainRoot": "finding-3a7ce30397a13bf87c5c5fc931238bd1",
+            "classification": "introduced",
+            "findingId": "finding-3a7ce30397a13bf87c5c5fc931238bd1",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "open"
+          },
+          {
+            "chainRoot": "finding-b41dbb93289f893036c94ae442c54459",
+            "classification": "introduced",
+            "findingId": "finding-b41dbb93289f893036c94ae442c54459",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-dd8edcab5ce99a26dba8ff0e978b0a46",
+            "classification": "introduced",
+            "findingId": "finding-dd8edcab5ce99a26dba8ff0e978b0a46",
+            "firstSeenThisRound": false,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "aa79ccf3de52314ed9daa50cf357b12cdb31b6dc",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 6006,
+      "output_sha256": "91660966070d63bd134122b2e61d340cf352f57a233f12c529b6e65d84e05335",
+      "reservation_id": "c8aeaaae47b8419ab07286160a6ffee7",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-09-01T11:33:29.282997Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.1": 1,
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.2": 1,
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.3": 1,
     "plan": 3,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.1": 0,
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.2": 0,
+    "impl:fn-215-parallel-draw-review-three-axis-lenses.3": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-215-parallel-draw-review-three-axis-lenses.md",
@@ -847,5 +1303,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-01T08:15:01.614001Z"
+  "updated_at": "2026-09-01T11:33:29.287127Z"
 }

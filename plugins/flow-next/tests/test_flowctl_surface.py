@@ -86,6 +86,8 @@ checkpoint save
 codex completion-review
 codex deep-pass
 codex impl-review
+codex impl-review-fanout
+codex impl-review-fanout-finalize
 codex plan-review
 codex validate
 config get
@@ -144,6 +146,7 @@ review-backend
 review-deep-auto
 review-findings attach
 review-rounds attempts
+review-route
 review-rounds increment
 review-rounds record
 review-rounds reset

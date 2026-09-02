@@ -132,7 +132,7 @@ VALIDATE=false
 DEEP=false
 DEEP_PASSES=""  # optional CSV: "adversarial,security"
 INTERACTIVE=false
-for arg in $ARGUMENTS; do
+for arg in $(printf '%s\n' "$ARGUMENTS"); do   # command substitution word-splits under bash AND zsh; an unquoted $ARGUMENTS does not split under zsh (dogfood E1: --validate silently dropped)
   case "$arg" in
     --validate) VALIDATE=true ;;
     --deep) DEEP=true ;;
@@ -148,6 +148,29 @@ fi
 if [[ "${FLOW_REVIEW_DEEP:-}" == "1" ]]; then
   DEEP=true
 fi
+
+# Optional-phase COUNT (PR #392): sizes the scope-ownership lease the backend
+# workflows hold through the post-finalize phases (one exec allowance per
+# pass). --deep counts one per selected pass (3 when unrestricted: adversarial
+# + the auto-gated security/performance passes), --validate one,
+# --interactive one. Carry this number into the finalize / host record blocks
+# as a LITERAL - shell state does not survive across tool calls.
+OPTIONAL_PHASES_COUNT=0
+if [[ "$DEEP" == "true" ]]; then
+  if [[ -n "$DEEP_PASSES" ]]; then
+    OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + $(printf '%s' "$DEEP_PASSES" | tr ',' '\n' | grep -c .)))
+  else
+    OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 3))
+  fi
+fi
+[[ "$VALIDATE" == "true" ]] && OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 1))
+[[ "$INTERACTIVE" == "true" ]] && OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 1))
+echo "OPTIONAL_PHASES_COUNT=$OPTIONAL_PHASES_COUNT"
+# 1 when a held phase resumes the primary reviewer session (--deep /
+# --validate); the interactive walkthrough alone never needs one.
+PHASES_RESUME_SESSION=0
+[[ "$DEEP" == "true" || "$VALIDATE" == "true" ]] && PHASES_RESUME_SESSION=1
+echo "PHASES_RESUME_SESSION=$PHASES_RESUME_SESSION"
 
 # Ralph-block (fn-32.3): Ralph must never engage interactive.
 if [[ "$INTERACTIVE" == "true" ]]; then
@@ -175,7 +198,9 @@ Opt-out: `--no-triage` argument or `FLOW_RALPH_NO_TRIAGE=1` env var.
 
 ```bash
 if [[ -z "${TRIAGE_DISABLED:-}" && -z "${FLOW_RALPH_NO_TRIAGE:-}" ]]; then
-  RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+  ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+  TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+  RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
   # Subcommand + one literal flag stay on the command line (the Ralph guard
   # blocks a variable in either of the two tokens after the launcher).
   TRIAGE_ARGS=(--receipt "$RECEIPT_PATH")
@@ -226,7 +251,9 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 **MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
 flowctl reserves a per-task round before every task-scoped dispatch. A delivered
 SHIP / NEEDS_WORK / MAJOR_RETHINK / NEEDS_HUMAN consumes it; a no-verdict transport failure
-is durably recorded and refunded. At `${MAX_REVIEW_ITERATIONS:-8}` verdict
+is durably recorded and refunded. A first-round three-draw fan-out (codex/host)
+sits behind exactly ONE reservation and counts as ONE round — the cap bounds
+rounds, not draws. At `${MAX_REVIEW_ITERATIONS:-8}` verdict
 rounds it refuses with `ESCALATE:` + exit 4. More than
 `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` consecutive no-verdict failures stop
 separately with `TRANSPORT_UNHEALTHY` + exit 5: repair the backend, never reset

@@ -148,7 +148,12 @@ re-flagging issues the primary already caught.
 ### Step D.3: Dispatch each pass
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+# Consumes .task_id and .receipt_path ONLY. While you hold the phase lease this
+# reports action=stop / reason=phases_in_flight — that is YOUR lease fencing
+# other coordinators; never branch on it inside your own optional phases.
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
 
 for pass in $SELECTED_PASSES; do
@@ -286,7 +291,12 @@ parse error; fall through to normal fix loop.
 ### Step V.2: Dispatch the validator pass
 
 ```bash
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+# Consumes .task_id and .receipt_path ONLY. While you hold the phase lease this
+# reports action=stop / reason=phases_in_flight — that is YOUR lease fencing
+# other coordinators; never branch on it inside your own optional phases.
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 FINDINGS_FILE="/tmp/review-findings.jsonl"
 
 case "$BACKEND" in
@@ -356,7 +366,20 @@ KEPT="$(jq -r '.validator.kept // 0' "$RECEIPT_PATH" 2>/dev/null || echo 0)"
 echo "Validator: dropped=$DROPPED kept=$KEPT verdict=$NEW_VERDICT"
 
 if [[ "$NEW_VERDICT" == "SHIP" ]]; then
-  # All findings dropped — verdict upgraded. Done, no fix loop.
+  # All findings dropped — verdict upgraded. Done, no fix loop. This exit
+  # never reaches the backend workflow's final release step, so release the
+  # optional-phase lease here (PR #392): OWNING_RID is restated as a LITERAL
+  # — the fan-out rid from the codex phase-one JSON, or the host reservation
+  # id. 0 phases means nothing was held.
+  OWNING_RID="<owning rid>"
+  if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
+    # A failed release (rid mismatch, persistence failure) is not success:
+    # the scope would stay fenced until the lease TTL. Escalate instead.
+    "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --release-phases --rid "$OWNING_RID" --json || {
+      echo "NEEDS_HUMAN: optional-phase lease release failed (rid $OWNING_RID, receipt $RECEIPT_PATH) — the verdict is SHIP but the scope stays fenced until the lease TTL; repair with review-route --release-phases --rid <owning rid>" >&2
+      exit 4
+    }
+  fi
   exit 0
 fi
 
@@ -445,7 +468,32 @@ Write per-bucket JSONL files for downstream helpers:
 "LFG the rest" auto-classifies: P0/P1 @ confidence ≥ 75 → Apply;
 otherwise → Defer.
 
+**Lease renewal while waiting on a human (PR #392).** A walkthrough has no
+time bound — it blocks once per finding on a reply — but the optional-phase
+lease expires on the liveness bound, and a reply can arrive after it did.
+When the lease is held (an optional flag is enabled), run the RENEW block
+below before EACH blocking question AND immediately after EACH reply, and
+again before Step W.3, W.4, and W.5; a hold for the same owning rid is a
+renewal. A refused renewal means another coordinator's live lease or
+reservation owns the scope now: stop the walkthrough and re-route instead of
+writing over the newer review. W.4's receipt stamp is additionally
+ownership-bound (`--rid`). Restate the count and the rid as literals (shell
+state does not survive across tool calls).
+
+```bash
+OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
+OWNING_RID="<owning rid>"
+if [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ]; then
+  "$FLOWCTL" review-route ${TASK_ID:+"$TASK_ID"} --receipt "$RECEIPT_PATH" --hold-phases "$OPTIONAL_PHASES_COUNT" --rid "$OWNING_RID" --json || {
+    echo "NEEDS_HUMAN: optional-phase lease renewal refused (rid $OWNING_RID) — another coordinator owns this scope; walkthrough stopped" >&2
+    exit 4
+  }
+fi
+```
+
 ### Step W.3: Append deferred findings to sink
+
+Run the W.2 RENEW block first (the last reply may have outlived the lease).
 
 ```bash
 DEFER_COUNT=$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)
@@ -463,9 +511,16 @@ section to `.flow/review-deferred/<branch-slug>.md`.
 
 ### Step W.4: Record walkthrough counts in receipt
 
+Run the W.2 RENEW block first. The stamp is ownership-bound: with `--rid`
+it runs under the receipt lock and refuses (exit 2, nothing written) when the
+receipt is another round's or another coordinator holds the live lease —
+treat that refusal like a refused renewal (stop, re-route).
+
 ```bash
+OWNING_RID="<owning rid>"
 $FLOWCTL review-walkthrough-record \
   --receipt "$RECEIPT_PATH" \
+  --rid "$OWNING_RID" \
   --applied  "$(wc -l < /tmp/walkthrough-apply.jsonl 2>/dev/null || echo 0)" \
   --deferred "$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)" \
   --skipped  "$(wc -l < /tmp/walkthrough-skip.jsonl  2>/dev/null || echo 0)" \
@@ -493,6 +548,8 @@ Additive — existing consumers ignore the new key. Walkthrough never
 flips the verdict; it only sorts findings.
 
 ### Step W.5: Fixer dispatch (Apply list only)
+
+Run the W.2 RENEW block first — fixes must never land over a newer review.
 
 If `/tmp/walkthrough-apply.jsonl` is non-empty, dispatch the worker
 agent (or an inline fixer) restricted to those findings. Do **not**

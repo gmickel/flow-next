@@ -8,6 +8,7 @@ Use when `BACKEND="copilot"`. Prerequisite: Phase 0 backend detection in [workfl
 2. Pass `--receipt` for session continuity on re-reviews (session only resumes when prior receipt has `mode == "copilot"`)
 3. Model + effort resolved via (first match wins): `--spec backend:model:effort` flag, per-task `review`, `FLOW_REVIEW_BACKEND` spec, `FLOW_COPILOT_MODEL` / `FLOW_COPILOT_EFFORT` env vars, registry defaults
 4. Parse verdict from command output
+5. No fan-out on this backend: every round is a single dispatch (the three-draw fan-out is codex/host-only)
 
 ## Step 1: Identify Task and Diff Base
 
@@ -31,7 +32,9 @@ git log ${DIFF_BASE}..HEAD --oneline
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/impl-review-receipt${TASK_ID:+-${TASK_ID}}.json}"  # fn-90 R5: task-scoped default (concurrent tasks no longer collide); explicit REVIEW_RECEIPT_PATH still wins
+ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
+RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 
 # Runtime config:
 #   --spec <spec>           full spec (backend:model:effort), highest priority

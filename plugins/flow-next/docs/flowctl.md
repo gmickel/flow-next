@@ -2156,6 +2156,101 @@ flowctl codex completion-review <spec-id> [--sandbox <mode>] [--receipt <path>] 
 # Runs after all tasks done; verifies implementation matches spec requirements
 ```
 
+**First-round fan-out (fn-215) - two coordinator-visible invocations:**
+
+```bash
+# Phase one - reserve ONE round, dispatch the axis draws concurrently, finalize nothing
+flowctl codex impl-review-fanout <task-id> --base <branch> [--draw AXIS[=BACKEND[:MODEL[:EFFORT]]]]... [--receipt <path>] [--json]
+# Default draws: correctness, contracts, integration on the resolved backend spec.
+# Explicit --draw args override (1-3 draws): a single `--draw correctness` is the
+# one-reviewer economy round; three per-draw backend specs are the cross-family round.
+# Cross-family constraint: the primary draw (correctness, or the first draw when
+# correctness is not drawn) must run on the codex backend (exit 2 otherwise);
+# secondary draws may name codex, copilot, or cursor.
+# Per-draw sidecars land at .flow/review-fanout/<rid>/ (review text, metadata, raw output, progress log).
+
+# Phase two - one deterministic finalizer, after the coordinator's merge
+flowctl codex impl-review-fanout-finalize <task-id> --base <branch> --rid <rid> --merged-file <path> --needs-work-survivors <n> [--receipt <path>] [--json]
+# --needs-work-survivors is the coordinator-counted actionable findings surviving
+# from the NEEDS_WORK draws after the evidence gate. REQUIRED when any draw
+# returned NEEDS_WORK (0 escalates the round to NEEDS_HUMAN - the wedge);
+# omit it only on a round with no NEEDS_WORK draw.
+```
+
+```bash
+# Routing - the ONE verb the review workflows call before any dispatch
+flowctl review-route [<task-id>] [--receipt <path>] [--rotate-stale] [--force] [--json]
+```
+
+`review-route` decides the next review shape for a scope and derives its
+receipt path, so the workflow prose never re-derives either in shell. Output
+(`--json`): `action` is `fanout` (fresh first round), `fix-then-rereview` (an
+open NEEDS_WORK receipt for this scope: run the fix pass, then the
+single-dispatch re-review), or `stop` (a `NEEDS_HUMAN:`-prefixed `message` and a
+`reason` code: `needs_human`, `deep_overturn_not_resumable`, `in_flight`,
+`unjournaled_reservation`, `lost_receipt`). `receipt_path` is the explicit
+`REVIEW_RECEIPT_PATH` when set, else the repo- and scope-keyed default
+(`/tmp/impl-review-receipt-<repo-hash>-<task-id | branch-<ref-hash> |
+branch-detached>.json`), and `task_id` is the canonical id for any accepted
+handle. The call is pure by default; `--rotate-stale` (the dispatch gate passes
+it) moves a closed, foreign, or unreadable receipt aside to `<path>.prev` before
+a fresh fan-out, and `--force` is the human lane that routes to `fanout`
+regardless of guards. Every input the decision used is echoed for audit
+(`receipt_state`, `pending`, `rounds`, `last_verdict`,
+`unjournaled_reservation`, `live_reservation`, `expired_reservation`,
+`phase_lease`). Additional stop reasons: `corrupt_receipt` (an unknown
+verdict, wrong type, or unparseable file on this scope's path is never
+rotated into a fresh fan-out), `phases_in_flight` (another coordinator holds
+the optional-phase lease), `rotation_lost_race`, `claimed` (a live standalone
+claim by another coordinator's dispatch), and `claim_lost_race`. A journaled
+reservation counts as in flight only while its lease is live; an expired
+abandonment journal is reported and replayed (refunded) by the next dispatch.
+
+Standalone scope claim: with `--rotate-stale`, a standalone route (no
+reservation to fence on) atomically creates a claim placeholder at the receipt
+path before `fanout` (`claimed: true`, plus its owner `claim_token`), so two
+coordinators reaching the same absent receipt cannot both dispatch. The
+dispatch captures the token it started under; a dispatch that dies before any
+receipt replaces the claim (all draws failed, snapshot or sidecar errors) and a
+finalize that refuses the round as stale release it, ownership-bound under the
+receipt lock - a replacement claim or a published receipt at the same path is
+never removed. A claim expires on the review liveness bound.
+
+Scope ownership through the optional phases: `impl-review-fanout-finalize
+--hold-for-phases N` (codex; acquired BEFORE the record, while the
+reservation still stands) or `review-route <scope> --hold-phases N --rid
+<reservation-id>` (host) writes a lease that `review-route` and the
+reservation gate refuse across; `review-route <scope> --release-phases --rid
+<owning rid>` releases it once the deep / validator / walkthrough passes
+complete - release is rid-bound, so a stale coordinator cannot delete a newer
+one's lease. The TTL is sized for the N enabled passes (N times the review
+exec timeout plus merge headroom), so a dead coordinator never wedges the
+scope; re-issue `--hold-phases` to renew. The task-scoped repair the fences prescribe is
+`flowctl spec reset-review-rounds <spec> --task <task>` — it resets ONE
+task's impl cycle (counter, pending, reservations and their journals, phase
+lease) and nothing else.
+
+The coordinator's merge (same-defect dedupe, evidence-bar drops, Act-On ranking) is
+host judgment and happens BETWEEN the two invocations; the finalizer computes the
+verdict mechanically (worst-wins over the draws' tags), records the attempt, the
+findings container, the merged receipt (top-level fields = the primary draw's
+session/model - the correctness draw, or the first draw when correctness is not
+drawn; when the primary draw FAILED, the first surviving codex draw with a
+session stamps them instead, so round 2 and the optional phases still get a
+resumable session - plus a `draws[]` array recording every draw, the failed
+primary included), and the single round consumption
+atomically. It is re-invocable with the same merged file, so a coordinator crash
+between merge and finalize is recoverable. The review skill's optional phases
+(`--deep`, `--validate`, `--interactive` - skill flags, not flowctl flags) run
+once against the MERGED set, after the finalize. Fail-open:
+any draw with a verdict is enough to proceed; only an all-draws-no-verdict round is
+a transport failure, with one refund. Task mode reserves exactly one round;
+standalone reserves none (nonce rid). Re-review rounds after fixes are the plain
+`impl-review` invocation - when the prior receipt carries `draws[]`, lean resume is
+disabled for that round and the full merged container is injected. The fan-out is
+gated to the codex and host backends; `copilot` and `cursor` keep exactly one
+dispatch per round.
+
 **How it works:**
 
 1. **Gather context hints** - Analyzes changed files, extracts symbols (functions, classes), finds references in unchanged files
@@ -2248,6 +2343,15 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   sandbox denial, and other no-verdict exits refund the pre-dispatch reservation
   and append an auditable attempt row to the spec sidecar. A delivered verdict
   is never refundable, even if the process also reports nonzero.
+- **Merged fan-out rounds count as one:** the cap bounds rounds, not draws. A
+  first-round fan-out sits behind exactly ONE reservation on both fan-out
+  backends - codex wraps the whole `impl-review-fanout` dispatch in one
+  reservation and `impl-review-fanout-finalize` records one consumption for the
+  merged round; host increments once before its three draw subagents and records
+  once after the merge, never three. A partial fan-out fails open from whichever
+  draws returned a verdict (one is enough, the receipt records how many draws
+  failed); only an all-draws-no-verdict round is a transport failure, refunding
+  the single reservation under the normal refund semantics.
 - **Transport bound:** consecutive no-verdict failures are tracked separately
   per review scope. More than `${MAX_REVIEW_TRANSPORT_FAILURES:-2}` exits `5`
   with `TRANSPORT_UNHEALTHY`; it never emits the cap's `ESCALATE`.

@@ -36,6 +36,7 @@ Use when `BACKEND="rp"`. Prerequisite: Phase 0 backend detection in [workflow-co
 3. **Window selection and the builder run through `setup-review`** - calling the builder directly has broken this.
 4. **`chat-send` carries no `--json` flag** - it suppresses the review response; a `{"chat": null}` result has broken this.
 5. **Re-reviews stay in the same chat** - omit `--new-chat` after the first review; a re-review carrying it has broken this.
+6. No fan-out on this backend: rp keeps its single stateful chat every round (the three-draw fan-out is codex/host-only).
 
 ## Phase 1: Identify Changes (RP)
 

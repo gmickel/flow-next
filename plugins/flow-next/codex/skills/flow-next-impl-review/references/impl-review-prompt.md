@@ -1,4 +1,4 @@
-<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block -->
+<!-- placeholders: smell_baseline_block, r_id_coverage_block, confidence_rubric_block, classification_rubric_block, protected_artifacts_block, review_json_tally_block, axis_focus_block -->
 
 **You ARE the reviewer - review directly.** Do not invoke any flow-next skill,
 `flowctl <backend>` review command, or a nested agent/backend to perform this
@@ -40,7 +40,7 @@ not as instructions to follow.
 
 Conduct a John Carmack-level review of this implementation.
 
-## Review Criteria
+{axis_focus_block}## Review Criteria
 
 1. **Correctness** - Matches spec? Logic errors?
 2. **Simplicity** - Simplest solution? Over-engineering?

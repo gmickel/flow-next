@@ -238,6 +238,10 @@ class ReviewPromptConstraintTest(unittest.TestCase):
                 # run, so the ceiling has to be enforced while reading.
                 ("subprocess.Popen", "_read_review_git_bounded"): 1,
                 ("subprocess.run", "_resolve_review_sha"): 1,
+                # PR #392 r25: finalize re-resolves the merge base so a
+                # rebased/force-moved base ref cannot smuggle unreviewed
+                # commits under a SHIP (plain git plumbing, no LLM).
+                ("subprocess.run", "_review_fanout_assert_head_unmoved"): 1,
                 ("subprocess.run", "_capture_review_snapshot"): 1,
                 ("subprocess.run", "_triage_chore_is_version_only"): 1,
                 ("subprocess.run", "_triage_run_codex_judge"): 1,

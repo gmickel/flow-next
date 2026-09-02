@@ -59,9 +59,14 @@ Review findings arrive serialized today: each fix-loop round re-reviews the whol
 - Sequencing with open work: fn-191 (review-terminal extraction) touches the same flowctl region — whichever lands second rebases; fn-198's journal-wedge hardening is adjacent to the finalization leg the fan-out exercises — its invariants must hold with draws collapsing into one round; read fn-157's visibility stub before building the concurrent dispatch.
 - The ratchet/prior-finding grammar consumes the MERGED findings container from round 1 — re-checked against the stall-detection decision entry (review-stall-detection-reads-resolution-2026-08-05).
 - Memory priors honored: receipts dropped between rounds break confabulation (drop-receipt-to-break-codex-2026-05-09) — the primary-session resume carries findings via the ratchet, not accumulated raw transcripts; parsers distinguish invalid from absent (structured-review-parsers-must-2026-07-30).
+- R9 is pure worst-wins (PR #392 cross-model review, settled): the coordinator's merged-document verdict tag never moves the recorded verdict in either direction; a mismatch is stamped on the receipt (`merged_tag_mismatch`). The earlier host-review carve-out that let a worse merged tag escalate was justified by pre-finalize deep passes; the optional phases now run after the finalize and own their own verdict transitions, so the carve-out was retired. The zero-survivor wedge remains the single exception.
+- R12 primary-draw fallback (PR #392 cross-model review, settled): the merged receipt's top-level `session_id`/`model` come from the primary draw; when the primary FAILED or returned no session, the first surviving codex draw with a session stamps them instead so round 2 and the optional phases keep a resumable session. `draws[]` records the failed primary honestly either way.
+- Scope ownership through the optional phases is durable (PR #392 cross-model review, settled): the finalizing coordinator holds a lease (`--hold-for-phases` / `review-route --hold-phases`) that `review-route` and the reservation gate refuse across until `--release-phases`; it expires on the liveness bound.
+- R1 concurrency narrowed (completion review, settled): host fan-out is concurrent where the host offers one-message parallel dispatch; hosts without it run the three draws back-to-back and REPORT the degradation in the review record — the honest-degradation pattern the rolling scheduler already uses, kept over faking concurrency the host cannot deliver.
 
 ## Quick commands
 
 - `cd plugins/flow-next/tests && python3 -m unittest test_review_prompt_template_parity test_prompt_text_pinned test_review_receipt_schema test_review_convergence_cap -q`
 - `./scripts/sync-codex.sh` twice, idempotent
 - `uvx ruff@0.16.0 check .`
+

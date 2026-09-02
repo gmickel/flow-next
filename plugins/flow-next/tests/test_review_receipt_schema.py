@@ -925,5 +925,78 @@ class TestSplitByMode(unittest.TestCase):
             self.assertIn("validator", receipt)
 
 
+class TestFanoutDrawsBlock(unittest.TestCase):
+    """fn-215 R12: draws[] is ADDITIVE — appended after every existing optional
+    key when supplied, absent otherwise. Ralph's gate keys stay untouched."""
+
+    def _payload(self, **kwargs) -> dict:
+        return flowctl._backend_review_receipt_payload(
+            review_type="impl_review",
+            review_id="fn-215.1",
+            backend="codex",
+            verdict="NEEDS_WORK",
+            session_id="sid-correctness",
+            effective_model="gpt-5.2",
+            effective_effort="high",
+            resolved_spec=flowctl.BackendSpec("codex", model="gpt-5.2"),
+            review_text="text",
+            include_effort=True,
+            base_branch="main",
+            **kwargs,
+        )
+
+    def test_absent_by_default(self) -> None:
+        self.assertNotIn("draws", self._payload())
+        self.assertNotIn("draws", self._payload(draws=None))
+
+    def test_appended_last_with_base_keys_untouched(self) -> None:
+        draws = [{"axis": "correctness", "model": "gpt-5.2",
+                  "session_id": "sid-correctness", "verdict": "NEEDS_WORK",
+                  "failed": False}]
+        payload = self._payload(draws=draws)
+        self.assertEqual(payload["draws"], draws)
+        self.assertEqual(list(payload)[-1], "draws")
+        # Ralph gate keys (AC6) are unchanged by the additive block.
+        self.assertLessEqual(
+            BASE_RECEIPT_KEYS - {"timestamp"}, set(payload)
+        )
+
+    def test_written_receipt_keeps_base_keys_beside_draws(self) -> None:
+        """On-disk fan-out receipt still carries Ralph's base keys plus draws[]."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rp = Path(tmp) / "receipt.json"
+            draws = [
+                {
+                    "axis": "correctness",
+                    "model": "gpt-5.2",
+                    "session_id": "sid-correctness",
+                    "verdict": "NEEDS_WORK",
+                    "failed": False,
+                }
+            ]
+            written = flowctl._write_backend_review_receipt(
+                str(rp),
+                review_type="impl_review",
+                review_id="fn-215.1",
+                backend="codex",
+                verdict="NEEDS_WORK",
+                session_id="sid-correctness",
+                effective_model="gpt-5.2",
+                effective_effort="high",
+                resolved_spec=flowctl.BackendSpec("codex", model="gpt-5.2"),
+                review_text="text",
+                include_effort=True,
+                base_branch="main",
+                findings_built=True,
+                draws=draws,
+            )
+            self.assertTrue(written)
+            receipt = json.loads(rp.read_text(encoding="utf-8"))
+            self.assertTrue(BASE_RECEIPT_KEYS <= set(receipt))
+            self.assertEqual(receipt["draws"], draws)
+            for key in VALIDATOR_KEYS | DEEP_KEYS | WALKTHROUGH_KEYS:
+                self.assertNotIn(key, receipt)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1731,13 +1731,16 @@ class NoEmbedRegression(unittest.TestCase):
     # set makes ANY new parameter fail, which is the property that cannot be
     # outrun. Adding an identity argument on purpose means updating this set in the
     # same commit and saying why.
+    # fn-215: "axis" is a fan-out lens selector (correctness / contracts /
+    # integration) - an identity choosing WHICH review to run, not payload
+    # content the reviewer could fetch itself.
     PINNED_BUILDER_SIGNATURES = {
         "build_review_prompt": {
             "review_type", "context_hints", "review_scope", "diff_range",
-            "spec_path", "task_spec_paths",
+            "spec_path", "task_spec_paths", "axis",
         },
         "build_standalone_review_prompt": {
-            "base_branch", "focus", "review_scope", "diff_range",
+            "base_branch", "focus", "review_scope", "diff_range", "axis",
         },
         "build_completion_review_prompt": {
             "spec_path", "task_spec_paths", "review_scope", "diff_range",
