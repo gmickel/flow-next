@@ -18,7 +18,7 @@
     "release": true,
     "requestReviewers": "",
     "reviewSignal": "silence",
-    "reviewTrigger": "@codex review \u2014 focus on integration effects, the diff as narrative, and cross-task regressions. Spec/doc-prose findings and process-compliance findings are welcome as FYI, not merge-gating; decisions recorded in the spec are settled."
+    "reviewTrigger": ""
   },
   "memory": {
     "enabled": true
