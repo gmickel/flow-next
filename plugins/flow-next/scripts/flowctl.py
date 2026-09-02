@@ -45023,21 +45023,37 @@ def cmd_review_route(args: argparse.Namespace) -> None:
         else:
             ok = False
             try:
-                data = json.loads(Path(resolved_path).read_text(encoding="utf-8"))
-                current = data.get("phase_lease")
-                if (
-                    _review_phase_lease_is_live(current)
-                    and current.get("rid") not in (None, lease_rid)
-                ):
-                    ok = False
-                    raise ValueError("another coordinator's live lease")
-                if release:
-                    data.pop("phase_lease", None)
-                else:
-                    data["phase_lease"] = lease
-                atomic_write_json(Path(resolved_path), data)
+                # Codex r51 (P1): the standalone lease lives on the receipt,
+                # so its read-modify-write runs under the SAME receipt lock
+                # the finalize publishes under, and re-validates what it
+                # read there — a stale release must never restore an old
+                # claim (or lease) over a verdict a newer coordinator just
+                # published.
+                receipt_file = Path(resolved_path)
+                with cross_process_lock(_review_receipt_lock_path(receipt_file)):
+                    data = json.loads(receipt_file.read_text(encoding="utf-8"))
+                    if not isinstance(data, dict) or "verdict" not in data:
+                        # A claim placeholder (or junk) is not a finalized
+                        # receipt: nothing to hold on, nothing to release.
+                        raise ValueError("no finalized receipt at this path")
+                    receipt_rid = data.get("rid")
+                    if isinstance(receipt_rid, str) and receipt_rid != lease_rid:
+                        # The receipt belongs to a different round now.
+                        raise ValueError("receipt published by another round")
+                    current = data.get("phase_lease")
+                    if (
+                        _review_phase_lease_is_live(current)
+                        and current.get("rid") not in (None, lease_rid)
+                    ):
+                        ok = False
+                        raise ValueError("another coordinator's live lease")
+                    if release:
+                        data.pop("phase_lease", None)
+                    else:
+                        data["phase_lease"] = lease
+                    atomic_write_json(receipt_file, data)
                 ok = True
-            except (OSError, ValueError, TypeError):
+            except (OSError, ValueError, TypeError, CrossProcessLockError):
                 ok = False
         if not ok:
             error_exit(

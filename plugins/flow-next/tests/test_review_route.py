@@ -309,6 +309,35 @@ class TestReviewRoute(unittest.TestCase):
             json.loads(receipt.read_text(encoding="utf-8"))["claim"]["token"], "theirs",
         )
 
+    def test_standalone_lease_write_revalidates_the_receipt(self) -> None:
+        """Codex r51 (P1): the standalone lease update runs under the receipt
+        lock and re-validates the file there — a claim placeholder is not a
+        receipt to hold on, and a receipt another round published is never
+        rewritten (a stale release must not restore old state over it)."""
+        rid = "ab" * 16
+        # A claim placeholder at the path: nothing to hold on / release.
+        claim = self.root / "claim-only.json"
+        claim.write_text(json.dumps({
+            "type": "impl_review", "id": "branch",
+            "claim": {"timestamp": flowctl.now_iso(), "token": "t"},
+        }), encoding="utf-8")
+        code, r, err = self._route("--receipt", str(claim), "--hold-phases", "1", "--rid", rid)
+        self.assertEqual(code, 2, err)
+        self.assertIn("claim", json.loads(claim.read_text(encoding="utf-8")))
+        # A receipt published by a different round is left alone.
+        other = self._receipt(self.root / "other-round.json", id="branch", verdict="SHIP")
+        data = json.loads(other.read_text(encoding="utf-8"))
+        data["rid"] = "cd" * 16
+        data["phase_lease"] = {"rid": "cd" * 16, "timestamp": "2020-01-01T00:00:00Z", "ttl_seconds": 1}
+        other.write_text(json.dumps(data), encoding="utf-8")
+        code, r, err = self._route("--receipt", str(other), "--release-phases", "--rid", rid)
+        self.assertEqual(code, 2, err)
+        self.assertEqual(json.loads(other.read_text(encoding="utf-8"))["phase_lease"]["rid"], "cd" * 16)
+        # The owning round still holds and releases normally.
+        code, r, err = self._route("--receipt", str(other), "--release-phases", "--rid", "cd" * 16)
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("phase_lease", json.loads(other.read_text(encoding="utf-8")))
+
     def test_rotation_lost_race_stops(self) -> None:
         """The real race: the receipt this invocation read is GONE by the
         time it rotates (the other coordinator moved it first)."""
