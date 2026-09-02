@@ -12,7 +12,8 @@ Pins the round-trip diet so future edits cannot silently regress it:
     references/backlog-mode.md, located in SKILL.md; the other two files
     (and references/qa-stage.md) carry ZERO flowctl config calls (R5).
   * make-pr workflow Phase 0: exactly THREE bash fences (R6).
-  * impl-review SKILL.md: exactly ONE `for arg in $ARGUMENTS` fence (R6).
+  * impl-review SKILL.md: exactly ONE `for arg in $(printf ...)` parse fence (R6;
+    the portable form — an unquoted `$ARGUMENTS` does not word-split under zsh).
   * plan-review: common orchestration + exactly one selected backend workflow;
     none/export stay backend-cold; the Foreground rule and the fn-90
     deterministic-cap paragraph remain present (token pins); no agent-side
@@ -278,7 +279,7 @@ class ImplReviewArgFenceTestCase(unittest.TestCase):
         for path in both_copies("flow-next-impl-review/SKILL.md"):
             text = read(path)
             self.assertEqual(
-                text.count("for arg in $ARGUMENTS"), 1,
+                text.count("for arg in $(printf "), 1,
                 f"{path}: impl-review must parse $ARGUMENTS in exactly ONE fence",
             )
             # The merged fence still covers all three opt-in flags + Ralph block.

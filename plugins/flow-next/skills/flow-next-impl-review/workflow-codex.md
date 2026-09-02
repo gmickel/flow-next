@@ -132,8 +132,10 @@ document (write it to a file for the finalize):
   different draws collapse to one entry, keeping the strongest evidence.
 - **Evidence bar:** drop findings that fail it and state the dropped counts in
   the standard per-anchor tally grammar — e.g.
-  `Suppressed findings: 3 at anchor 50, 2 at anchor 0.` — summing the draws'
-  tallies per anchor (or carry the draws' JSON tally blocks through verbatim).
+  `Suppressed findings: 3 at anchor 50, 2 at anchor 0.` — counting each
+  suppressed finding ONCE per anchor even when several draws suppressed the
+  same one (same-defect dedupe applies to the tally too), or carry the draws'
+  JSON tally blocks through verbatim.
 - **Ranked output with an Act-On tier capped at 5 — non-blocking tiers only** —
   plus a published remainder: considered-and-deferred must be distinguishable
   from never-seen, so remainder items stay in the merged document (they enter

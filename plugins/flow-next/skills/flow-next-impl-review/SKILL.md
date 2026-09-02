@@ -132,7 +132,7 @@ VALIDATE=false
 DEEP=false
 DEEP_PASSES=""  # optional CSV: "adversarial,security"
 INTERACTIVE=false
-for arg in $ARGUMENTS; do
+for arg in $(printf '%s\n' "$ARGUMENTS"); do   # command substitution word-splits under bash AND zsh; an unquoted $ARGUMENTS does not split under zsh (dogfood E1: --validate silently dropped)
   case "$arg" in
     --validate) VALIDATE=true ;;
     --deep) DEEP=true ;;

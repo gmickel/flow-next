@@ -149,6 +149,9 @@ re-flagging issues the primary already caught.
 
 ```bash
 ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+# Consumes .task_id and .receipt_path ONLY. While you hold the phase lease this
+# reports action=stop / reason=phases_in_flight — that is YOUR lease fencing
+# other coordinators; never branch on it inside your own optional phases.
 TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
 RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 PRIMARY_FINDINGS="/tmp/primary-findings.jsonl"
@@ -289,6 +292,9 @@ parse error; fall through to normal fix loop.
 
 ```bash
 ROUTE="$($FLOWCTL review-route ${TASK_ID:+"$TASK_ID"} --json)"   # pure: canonical TASK_ID + receipt path (no rotation, no state change)
+# Consumes .task_id and .receipt_path ONLY. While you hold the phase lease this
+# reports action=stop / reason=phases_in_flight — that is YOUR lease fencing
+# other coordinators; never branch on it inside your own optional phases.
 TASK_ID="$(jq -r '.task_id // empty' <<<"$ROUTE")"
 RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 FINDINGS_FILE="/tmp/review-findings.jsonl"
