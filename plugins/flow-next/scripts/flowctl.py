@@ -39321,13 +39321,64 @@ def cmd_review_walkthrough_record(args: argparse.Namespace) -> None:
     caller always has a complete record (useful in tests / dry-runs).
     """
     path = Path(args.receipt)
+    owning_rid = getattr(args, "rid", None)
+    if isinstance(owning_rid, str) and owning_rid.strip():
+        # Sol round 13 (R12/R15): the walkthrough may have outlived its
+        # lease while waiting on a human. With --rid the stamp is
+        # ownership-bound and runs under the receipt lock: the receipt must
+        # still be this round's (same rid) and no other coordinator may
+        # hold a live phase lease on the scope — otherwise nothing is
+        # written and the walkthrough must stop.
+        with cross_process_lock(_review_receipt_lock_path(path)):
+            current = _review_route_read_receipt(path) if path.exists() else None
+            owned = isinstance(current, dict) and owning_rid in (
+                current.get("rid"), current.get("review_reservation_id"),
+            )
+            if not owned:
+                error_exit(
+                    f"review-walkthrough-record: the receipt at {path} is no "
+                    f"longer round {owning_rid}'s (another coordinator "
+                    "published over this scope) — nothing written; stop the "
+                    "walkthrough and re-route.",
+                    use_json=args.json,
+                    code=2,
+                )
+            lease = current.get("phase_lease")
+            scope_id = current.get("id")
+            if isinstance(scope_id, str) and is_task_id(scope_id) and ensure_flow_exists():
+                try:
+                    spec_json = find_spec_json_path(
+                        get_flow_dir(), spec_id_from_task(scope_id),
+                    )
+                    spec_data = json.loads(spec_json.read_text(encoding="utf-8"))
+                    lease = _review_phase_lease_live(
+                        spec_data, _review_counter_scope("impl", scope_id),
+                    )
+                except (OSError, ValueError, TypeError):
+                    lease = None
+            if (
+                _review_phase_lease_is_live(lease)
+                and lease.get("rid") not in (None, owning_rid)
+            ):
+                error_exit(
+                    "review-walkthrough-record: another coordinator holds "
+                    "the live optional-phase lease on this scope — nothing "
+                    "written; stop the walkthrough and re-route.",
+                    use_json=args.json,
+                    code=2,
+                )
+            _review_walkthrough_record_write(args, path, current)
+        return
     try:
         receipt = (
             json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         )
     except (json.JSONDecodeError, OSError):
         receipt = {}
+    _review_walkthrough_record_write(args, path, receipt)
 
+
+def _review_walkthrough_record_write(args, path: Path, receipt: dict) -> None:
     applied = max(0, int(args.applied or 0))
     deferred = max(0, int(args.deferred or 0))
     skipped = max(0, int(args.skipped or 0))
@@ -45846,6 +45897,11 @@ def _review_fanout_record_and_receipt(
         draws=receipt_draws,
         merged_tag_mismatch=merged_tag_mismatch,
     ) if receipt_target else None
+    if receipt_payload is not None and isinstance(meta.get("rid"), str):
+        # Sol r13: task-mode receipts carry the fan-out rid too, so the
+        # ownership-bound walkthrough stamp can key on it (the host path
+        # keys on review_reservation_id).
+        receipt_payload["rid"] = meta["rid"]
     summary = record_review_attempt(
         spec_id_from_task(task_id),
         "impl",
@@ -46116,19 +46172,24 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         # phase runs after it, so a lease would only fence the scope until
         # its multi-pass TTL.
         hold_phases = None
-    if hold_phases and not primary.get("session_id"):
-        # Codex r54: the optional phases resume the primary session. With no
-        # surviving resumable draw (the primary failed and only non-codex or
-        # session-less draws survived) a held finalize would consume the
-        # round and fence the scope for phases that can never run. Refuse
-        # BEFORE the record — re-run without --hold-for-phases and skip the
-        # optional phases for this round.
+    if (
+        hold_phases
+        and getattr(args, "phases_resume_session", False)
+        and not primary.get("session_id")
+    ):
+        # Codex r54 + sol r13: the deep / validator passes resume the
+        # primary session (the interactive walkthrough does not — it never
+        # trips this gate). With no surviving resumable draw (the primary
+        # failed and only non-codex or session-less draws survived) a held
+        # finalize would consume the round and fence the scope for passes
+        # that can never run. Refuse BEFORE the record.
         error_exit(
             "fan-out finalize: no resumable primary session (the primary "
             "draw failed and no surviving draw carries a codex session), so "
-            "the optional phases cannot run — re-run this finalize WITHOUT "
-            "--hold-for-phases and skip the optional phases for this round. "
-            "Nothing was recorded.",
+            "the deep / validator passes cannot run — re-run this finalize "
+            "WITHOUT --phases-resume-session, keeping --hold-for-phases only "
+            "when --interactive is enabled, and skip the deep / validator "
+            "passes for this round. Nothing was recorded.",
             use_json=args.json,
             code=2,
         )
@@ -51567,6 +51628,16 @@ def _add_impl_review_fanout_parsers(codex_sub) -> None:
         ),
     )
     p2.add_argument(
+        "--phases-resume-session",
+        action="store_true",
+        help=(
+            "The held optional phases include a pass that resumes the primary "
+            "reviewer session (--deep / --validate): refuse the finalize "
+            "before the record when no surviving draw carries one. An "
+            "interactive-only hold never needs it."
+        ),
+    )
+    p2.add_argument(
         "--needs-work-survivors",
         type=int,
         metavar="N",
@@ -54647,6 +54718,15 @@ def main() -> None:
         "--receipt",
         required=True,
         help="Path to the review receipt (will be created if missing).",
+    )
+    p_walk_record.add_argument(
+        "--rid",
+        default=None,
+        help=(
+            "Owning round id: the stamp then runs under the receipt lock and "
+            "refuses (exit 2, nothing written) when the receipt is another "
+            "round's or another coordinator holds the live phase lease."
+        ),
     )
     p_walk_record.add_argument(
         "--applied",

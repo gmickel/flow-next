@@ -463,12 +463,15 @@ otherwise → Defer.
 
 **Lease renewal while waiting on a human (PR #392).** A walkthrough has no
 time bound — it blocks once per finding on a reply — but the optional-phase
-lease expires on the liveness bound. When the lease is held (an optional flag
-is enabled), renew it before EACH plain-text numbered prompt; a hold for the same
-owning rid is a renewal. A refused renewal means another coordinator's live
-lease or reservation owns the scope now: stop the walkthrough and re-route
-instead of writing over the newer review. Restate the count and the rid as
-literals (shell state does not survive across prompt turns).
+lease expires on the liveness bound, and a reply can arrive after it did.
+When the lease is held (an optional flag is enabled), run the RENEW block
+below before EACH plain-text numbered prompt AND immediately after EACH reply, and
+again before Step W.3, W.4, and W.5; a hold for the same owning rid is a
+renewal. A refused renewal means another coordinator's live lease or
+reservation owns the scope now: stop the walkthrough and re-route instead of
+writing over the newer review. W.4's receipt stamp is additionally
+ownership-bound (`--rid`). Restate the count and the rid as literals (shell
+state does not survive across prompt turns).
 
 ```bash
 OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
@@ -482,6 +485,8 @@ fi
 ```
 
 ### Step W.3: Append deferred findings to sink
+
+Run the W.2 RENEW block first (the last reply may have outlived the lease).
 
 ```bash
 DEFER_COUNT=$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)
@@ -499,9 +504,16 @@ section to `.flow/review-deferred/<branch-slug>.md`.
 
 ### Step W.4: Record walkthrough counts in receipt
 
+Run the W.2 RENEW block first. The stamp is ownership-bound: with `--rid`
+it runs under the receipt lock and refuses (exit 2, nothing written) when the
+receipt is another round's or another coordinator holds the live lease —
+treat that refusal like a refused renewal (stop, re-route).
+
 ```bash
+OWNING_RID="<owning rid>"
 $FLOWCTL review-walkthrough-record \
   --receipt "$RECEIPT_PATH" \
+  --rid "$OWNING_RID" \
   --applied  "$(wc -l < /tmp/walkthrough-apply.jsonl 2>/dev/null || echo 0)" \
   --deferred "$(wc -l < /tmp/walkthrough-defer.jsonl 2>/dev/null || echo 0)" \
   --skipped  "$(wc -l < /tmp/walkthrough-skip.jsonl  2>/dev/null || echo 0)" \
@@ -529,6 +541,8 @@ Additive — existing consumers ignore the new key. Walkthrough never
 flips the verdict; it only sorts findings.
 
 ### Step W.5: Fixer dispatch (Apply list only)
+
+Run the W.2 RENEW block first — fixes must never land over a newer review.
 
 If `/tmp/walkthrough-apply.jsonl` is non-empty, dispatch the worker
 agent (or an inline fixer) restricted to those findings. Do **not**

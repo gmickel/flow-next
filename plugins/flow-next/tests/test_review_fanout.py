@@ -1462,14 +1462,62 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(code, 0, err)
         merged = self._write_merged(_empty_merged_review())
         fin_code, fin, fin_err = self._finalize(
-            payload["rid"], merged, "--hold-for-phases", "2",
+            payload["rid"], merged, "--hold-for-phases", "2", "--phases-resume-session",
         )
         self.assertEqual(fin_code, 2, fin_err)
         self.assertIn("no resumable primary session", fin_err + json.dumps(fin))
         leases = self._spec_data().get("review_phase_leases", {})
         self.assertNotIn(f"impl:{self.task_id}", leases)
-        fin_code, fin, fin_err = self._finalize(payload["rid"], merged)
+        # Sol r13: an interactive-only hold resumes no session — it proceeds.
+        fin_code, fin, fin_err = self._finalize(
+            payload["rid"], merged, "--hold-for-phases", "1",
+        )
         self.assertEqual(fin_code, 0, fin_err)
+        leases = self._spec_data().get("review_phase_leases", {})
+        self.assertEqual(leases[f"impl:{self.task_id}"]["rid"], payload["rid"])
+
+    def test_walkthrough_record_is_rid_bound(self) -> None:
+        """Sol r13: with --rid the walkthrough stamp refuses a receipt that
+        another round published, and a foreign live lease; the owning round
+        stamps normally."""
+        receipt = self.root / "walk.json"
+        code, payload, err = self._dispatch(self._ship_exec([]), "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        rid = payload["rid"]
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            rid, merged, "--receipt", str(receipt), "--hold-for-phases", "1",
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        code, out, err = self._run(
+            "review-walkthrough-record", "--receipt", str(receipt),
+            "--rid", "ff" * 16, "--applied", "1", "--json",
+        )
+        self.assertEqual(code, 2, err)
+        self.assertNotIn("walkthrough", json.loads(receipt.read_text(encoding="utf-8")))
+        # Another coordinator's live lease on the task scope refuses too.
+        spec = self._spec_data()
+        spec["review_phase_leases"][f"impl:{self.task_id}"] = {
+            "rid": "ee" * 16, "timestamp": flowctl.now_iso(), "ttl_seconds": 3600,
+        }
+        (self.root / ".flow" / "specs" / f"{self.spec_id}.json").write_text(
+            json.dumps(spec), encoding="utf-8",
+        )
+        code, out, err = self._run(
+            "review-walkthrough-record", "--receipt", str(receipt),
+            "--rid", rid, "--applied", "1", "--json",
+        )
+        self.assertEqual(code, 2, err)
+        spec["review_phase_leases"][f"impl:{self.task_id}"]["rid"] = rid
+        (self.root / ".flow" / "specs" / f"{self.spec_id}.json").write_text(
+            json.dumps(spec), encoding="utf-8",
+        )
+        code, out, err = self._run(
+            "review-walkthrough-record", "--receipt", str(receipt),
+            "--rid", rid, "--applied", "1", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(receipt.read_text(encoding="utf-8"))["walkthrough"]["applied"], 1)
 
     def test_lease_renewal_after_record(self) -> None:
         """Codex r54: the walkthrough renews the held lease via review-route

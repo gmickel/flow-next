@@ -191,14 +191,18 @@ args+=(--base "$DIFF_BASE" --rid "<rid from phase-one JSON>" --merged-file "<you
 # Step 0 printed OPTIONAL_PHASES_COUNT; restate it here as a LITERAL (shell
 # state does not survive across prompt turns). 0 when no optional flag is set.
 OPTIONAL_PHASES_COUNT="<count printed by Step 0>"
+PHASES_RESUME_SESSION="<1 or 0 printed by Step 0>"
 [ -n "$OPTIONAL_PHASES_COUNT" ] && [ "$OPTIONAL_PHASES_COUNT" != "0" ] && args+=(--hold-for-phases "$OPTIONAL_PHASES_COUNT")
+[ "$PHASES_RESUME_SESSION" = "1" ] && args+=(--phases-resume-session)
 $FLOWCTL codex impl-review-fanout-finalize "${args[@]}"
 ```
 
 If the finalize refuses with `no resumable primary session` (the primary
-draw failed and no surviving draw carries a codex session), re-run it WITHOUT
-`--hold-for-phases` and skip the optional phases for this round — they resume
-the primary session and cannot run; say so in the output.
+draw failed and no surviving draw carries a codex session), the deep /
+validator passes cannot run this round: re-run it WITHOUT
+`--phases-resume-session`, keeping `--hold-for-phases` only when
+`--interactive` is enabled (count 1), skip the deep / validator passes, and
+say so in the output. The interactive walkthrough still runs.
 
 The finalizer is deterministic and atomic — only it records or refunds:
 

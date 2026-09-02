@@ -166,6 +166,11 @@ fi
 [[ "$VALIDATE" == "true" ]] && OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 1))
 [[ "$INTERACTIVE" == "true" ]] && OPTIONAL_PHASES_COUNT=$((OPTIONAL_PHASES_COUNT + 1))
 echo "OPTIONAL_PHASES_COUNT=$OPTIONAL_PHASES_COUNT"
+# 1 when a held phase resumes the primary reviewer session (--deep /
+# --validate); the interactive walkthrough alone never needs one.
+PHASES_RESUME_SESSION=0
+[[ "$DEEP" == "true" || "$VALIDATE" == "true" ]] && PHASES_RESUME_SESSION=1
+echo "PHASES_RESUME_SESSION=$PHASES_RESUME_SESSION"
 
 # Ralph-block (fn-32.3): Ralph must never engage interactive.
 if [[ "$INTERACTIVE" == "true" ]]; then
