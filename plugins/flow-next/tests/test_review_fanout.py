@@ -1367,6 +1367,54 @@ class TestReviewFanout(unittest.TestCase):
             self.assertIsInstance(lease, dict)
             self.assertEqual(lease.get("rid"), payload["rid"])
 
+    def test_standalone_replay_with_hold_renews_the_lease(self) -> None:
+        """Codex r52 (P1): a standalone finalize replayed for the same rid
+        with --hold-for-phases renews the receipt's lease (the original may
+        have expired while the coordinator was down)."""
+        receipt = self.root / "sa-replay-hold.json"
+        code, out, err = self._run(
+            "review-route", "--receipt", str(receipt), "--rotate-stale", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        code, out, err = self._run(
+            "codex", "impl-review-fanout", "--base", "HEAD~1",
+            "--receipt", str(receipt), "--json", fake=self._ship_exec([]),
+        )
+        self.assertEqual(code, 0, err)
+        rid = self._payload(out)["rid"]
+        merged = self._write_merged(_empty_merged_review())
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--base", "HEAD~1",
+            "--rid", rid, "--merged-file", str(merged), "--receipt", str(receipt),
+            "--hold-for-phases", "2", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(data["phase_lease"]["rid"], rid)
+        # The lease expired while the coordinator was down.
+        data["phase_lease"]["timestamp"] = "2020-01-01T00:00:00Z"
+        receipt.write_text(json.dumps(data), encoding="utf-8")
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--base", "HEAD~1",
+            "--rid", rid, "--merged-file", str(merged), "--receipt", str(receipt),
+            "--hold-for-phases", "2", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        renewed = json.loads(receipt.read_text(encoding="utf-8"))["phase_lease"]
+        self.assertEqual(renewed["rid"], rid)
+        self.assertNotEqual(renewed["timestamp"], "2020-01-01T00:00:00Z")
+        # Another coordinator's live lease refuses the renewal.
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        data["phase_lease"] = {"rid": "ff" * 16, "timestamp": flowctl.now_iso(), "ttl_seconds": 3600}
+        receipt.write_text(json.dumps(data), encoding="utf-8")
+        code, out, err = self._run(
+            "codex", "impl-review-fanout-finalize", "--base", "HEAD~1",
+            "--rid", rid, "--merged-file", str(merged), "--receipt", str(receipt),
+            "--hold-for-phases", "2", "--json",
+        )
+        self.assertEqual(code, 2, err)
+        self.assertEqual(json.loads(receipt.read_text(encoding="utf-8"))["phase_lease"]["rid"], "ff" * 16)
+
     def test_failed_standalone_dispatch_releases_claim(self) -> None:
         """Sol round 5 (R10): all-draws-failed on a standalone dispatch must
         not strand the route's claim — the next route fans out again."""

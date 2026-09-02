@@ -45602,6 +45602,38 @@ def _review_fanout_primary_draw(meta: dict, draws: list) -> dict:
     return {}
 
 
+def _review_fanout_renew_standalone_lease(
+    receipt_path, review_id: str, rid, lease: dict,
+) -> bool:
+    """Renew ``lease`` on the standalone receipt at ``receipt_path`` under
+    the receipt lock (codex r52). True only when the file still is this
+    round's receipt (same id and rid) and no other coordinator holds a live
+    lease on it."""
+    receipt_file = Path(receipt_path)
+    try:
+        with cross_process_lock(_review_receipt_lock_path(receipt_file)):
+            data = json.loads(receipt_file.read_text(encoding="utf-8"))
+            if (
+                not isinstance(data, dict)
+                or "verdict" not in data
+                or data.get("id") != review_id
+                or not isinstance(rid, str)
+                or data.get("rid") != rid
+            ):
+                return False
+            current = data.get("phase_lease")
+            if (
+                _review_phase_lease_is_live(current)
+                and current.get("rid") not in (None, lease.get("rid"))
+            ):
+                return False
+            data["phase_lease"] = dict(lease)
+            atomic_write_json(receipt_file, data)
+    except (OSError, ValueError, TypeError, CrossProcessLockError):
+        return False
+    return True
+
+
 def _review_fanout_write_receipt(
     receipt_path, review_id, verdict, merged_text, primary, resolved_spec,
     findings_container, args, receipt_draws, meta, reservation_id,
@@ -45684,6 +45716,24 @@ def _review_fanout_record_and_receipt(
             # is a true no-op — the published receipt (phase-enriched,
             # possibly overturned) is the truth, and reporting `replayed`
             # lets the emit path surface ITS verdict, exactly like task mode.
+            if phase_lease:
+                # Codex r52 (P1): like task mode (r46), a replay that holds
+                # phases RENEWS the lease — the coordinator is about to run
+                # them, and its original lease may have expired while it
+                # was down. Under the receipt lock, on the same-round
+                # receipt only; another coordinator's live lease refuses.
+                if not _review_fanout_renew_standalone_lease(
+                    receipt_path, review_id, meta.get("rid"), phase_lease,
+                ):
+                    error_exit(
+                        "fan-out finalize replay: could not renew the "
+                        "optional-phase lease on the standalone receipt "
+                        "(another coordinator's live lease, or the receipt "
+                        "is no longer this round's) — do not run the "
+                        "optional phases; re-run review-route.",
+                        use_json=args.json,
+                        code=2,
+                    )
             return {"replayed": True, "standalone": True}
         extra_fields = {}
         if phase_lease:
