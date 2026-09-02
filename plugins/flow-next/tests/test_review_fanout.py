@@ -1415,6 +1415,38 @@ class TestReviewFanout(unittest.TestCase):
         self.assertEqual(code, 2, err)
         self.assertEqual(json.loads(receipt.read_text(encoding="utf-8"))["phase_lease"]["rid"], "ff" * 16)
 
+    def test_replay_lease_refuses_a_newer_live_reservation(self) -> None:
+        """Codex r53 (P1): a stale task-scoped finalizer replaying after its
+        lease was released must not acquire a lease while a newer round
+        already holds a live reservation on the scope."""
+        receipt = self.root / "replay-vs-reservation.json"
+        code, payload, err = self._dispatch(self._ship_exec([]), "--receipt", str(receipt))
+        self.assertEqual(code, 0, err)
+        rid = payload["rid"]
+        merged = self._write_merged(_empty_merged_review())
+        fin_code, fin, fin_err = self._finalize(
+            rid, merged, "--receipt", str(receipt), "--hold-for-phases", "2",
+        )
+        self.assertEqual(fin_code, 0, fin_err)
+        code, out, err = self._run(
+            "review-route", self.task_id, "--receipt", str(receipt),
+            "--release-phases", "--rid", rid, "--json",
+        )
+        self.assertEqual(code, 0, err)
+        # A newer round reserves the scope (dispatch in flight, no lease yet).
+        code, out, err = self._run(
+            "review-rounds", "increment", self.spec_id,
+            "--kind", "impl", "--task", self.task_id,
+            "--review-type", "impl", "--json",
+        )
+        self.assertEqual(code, 0, err)
+        fin_code, fin, fin_err = self._finalize(
+            rid, merged, "--receipt", str(receipt), "--hold-for-phases", "2",
+        )
+        self.assertEqual(fin_code, 2, fin_err)
+        leases = self._spec_data().get("review_phase_leases", {})
+        self.assertNotIn(f"impl:{self.task_id}", leases)
+
     def test_failed_standalone_dispatch_releases_claim(self) -> None:
         """Sol round 5 (R10): all-draws-failed on a standalone dispatch must
         not strand the route's claim — the next route fans out again."""

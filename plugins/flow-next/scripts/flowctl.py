@@ -44410,8 +44410,40 @@ def _review_phase_lease_new(rid: Optional[str], receipt_path: Optional[str], pha
     }
 
 
+def _review_live_foreign_reservations(
+    flow_dir: Path, spec_data: dict, counter_scope: str, own_reservation_id,
+) -> list:
+    """Ids of LIVE reservations on ``counter_scope`` other than
+    ``own_reservation_id`` (codex r53): unjournaled (dispatch in flight) or
+    journaled and not an expired abandonment — the same liveness the route
+    ledger applies."""
+    lease_bound = get_review_exec_timeout() + 900
+    live = []
+    for res_id, res in (spec_data.get("review_reservations") or {}).items():
+        if (
+            not isinstance(res, dict)
+            or res.get("counter_scope") != counter_scope
+            or res.get("superseded_by")
+            or str(res_id) == str(own_reservation_id or "")
+        ):
+            continue
+        journal_path = _review_journal_path(flow_dir, str(res_id))
+        if not journal_path.is_file():
+            live.append(str(res_id))
+            continue
+        journal = _review_route_read_receipt(journal_path) or {}
+        age = _review_fanout_journal_age(flow_dir, str(res_id), journal)
+        if journal.get("failure_class") == "fanout_abandoned" and (
+            age is not None and age >= lease_bound
+        ):
+            continue
+        live.append(str(res_id))
+    return live
+
+
 def _review_phase_lease_write(
     task_id: str, lease: Optional[dict], *, expect_rid: Optional[str] = None,
+    own_reservation_id=None,
 ) -> bool:
     """Hold (lease dict) or release (None) the optional-phase lease for a task
     scope, under the review state lock. Returns durability.
@@ -44419,6 +44451,12 @@ def _review_phase_lease_write(
     Release is rid-bound (codex r42): with ``expect_rid`` set, only a lease
     carrying that rid (or no live lease) is removed — a stale coordinator
     resuming after its own lease expired cannot delete a newer coordinator's.
+
+    Acquisition refuses while another LIVE reservation owns the scope (codex
+    r53): a stale finalizer replaying after its lease expired must not fence
+    a newer round that has reserved but not yet leased. ``own_reservation_id``
+    (default: the lease rid, which is the reservation id on the host path)
+    names the round's own reservation.
     """
     try:
         flow_dir = get_flow_dir()
@@ -44452,6 +44490,11 @@ def _review_phase_lease_write(
                     and current.get("rid") not in (None, lease.get("rid"))
                 ):
                     return False
+                if _review_live_foreign_reservations(
+                    flow_dir, spec_data, counter_scope,
+                    own_reservation_id or lease.get("rid"),
+                ):
+                    return False  # a newer round owns the scope — codex r53
                 leases[counter_scope] = dict(lease)
             spec_data["updated_at"] = now_iso()
             atomic_write_json(spec_json_path, spec_data)
@@ -46083,7 +46126,9 @@ def _codex_impl_review_fanout_finalize(args: argparse.Namespace) -> None:
         # `review-route --release-phases --rid <rid>`; the TTL is sized for
         # the enabled phase sequence.
         phase_lease = _review_phase_lease_new(rid, receipt_path, hold_phases)
-        if task_id and not _review_phase_lease_write(task_id, phase_lease):
+        if task_id and not _review_phase_lease_write(
+            task_id, phase_lease, own_reservation_id=meta.get("reservation_id"),
+        ):
             error_exit(
                 "fan-out finalize: could not persist the optional-phase lease "
                 "before recording; nothing was recorded — repair the spec "
