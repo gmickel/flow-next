@@ -24,6 +24,7 @@ import shlex
 import shutil
 import sys
 import tempfile
+import threading
 import unicodedata
 import uuid
 from abc import ABC, abstractmethod
@@ -43823,15 +43824,26 @@ def _review_fanout_publish(path: Path, content: str) -> None:
         raise
 
 
+_REVIEW_FANOUT_PROGRESS_LOCK = threading.Lock()
+
+
 def _review_fanout_append_progress(sidecar_dir: Path, line: str) -> None:
-    """O_APPEND one progress line and mirror it to stderr (fn-215 R14)."""
+    """Append one progress line and mirror it to stderr (fn-215 R14).
+
+    The three draws append from threads of ONE process; the appends are
+    serialised with a process lock because O_APPEND is not an atomic
+    append on Windows (the CRT seeks then writes, so two threads can
+    overwrite each other's line — a CI-observed lost write on the
+    windows-latest units job).
+    """
     text = line if line.endswith("\n") else f"{line}\n"
     path = sidecar_dir / "progress.log"
-    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-    try:
-        os.write(fd, text.encode("utf-8"))
-    finally:
-        os.close(fd)
+    with _REVIEW_FANOUT_PROGRESS_LOCK:
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, text.encode("utf-8"))
+        finally:
+            os.close(fd)
     print(line, file=sys.stderr)
 
 
