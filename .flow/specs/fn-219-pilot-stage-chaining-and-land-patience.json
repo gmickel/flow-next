@@ -9,7 +9,8 @@
   "depends_on_epics": [],
   "id": "fn-219-pilot-stage-chaining-and-land-patience",
   "impl_review_rounds": {
-    "fn-219-pilot-stage-chaining-and-land-patience.1": 0
+    "fn-219-pilot-stage-chaining-and-land-patience.1": 0,
+    "fn-219-pilot-stage-chaining-and-land-patience.2": 1
   },
   "next_task": 1,
   "plan_review_rounds": 0,
@@ -263,8 +264,19 @@
     "plan": 1,
     "plan#completion": 0
   },
-  "review_pending_rounds": {},
-  "review_reservations": {},
+  "review_pending_rounds": {
+    "impl:fn-219-pilot-stage-chaining-and-land-patience.2": 1
+  },
+  "review_reservations": {
+    "703e38c3c2634230a861f9081a240ac1": {
+      "artifact_sha256": "ea643e744fc0ee2c367e0e4e8e927689651b036b3e036099050fc5a236c12683",
+      "counter_scope": "impl:fn-219-pilot-stage-chaining-and-land-patience.2",
+      "epoch": 0,
+      "exclusive": true,
+      "forced": false,
+      "review_type": "impl"
+    }
+  },
   "review_transport_failures": {
     "impl:fn-219-pilot-stage-chaining-and-land-patience.1": 0,
     "plan": 0
@@ -283,5 +295,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-03T08:39:33.948269Z"
+  "updated_at": "2026-09-03T08:48:34.552937Z"
 }

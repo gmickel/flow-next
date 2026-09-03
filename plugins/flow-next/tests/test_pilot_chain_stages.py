@@ -115,6 +115,25 @@ class VerdictGrammarTestCase(unittest.TestCase):
         wf = read(WORKFLOW)
         self.assertIn("one row per dispatched stage", wf)
         self.assertNotIn("exactly one row per acting backlog tick", wf)
+        # The chained tick has a concrete two-append template: the qa row is
+        # always `advanced` with no cost; the make-pr row carries the terminal
+        # action and the whole-tick cost once.
+        self.assertIn('--action advanced --stage qa', wf)
+        self.assertIn('--action "$ACTION" --stage make-pr ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}', wf)
+
+    def test_make_pr_verify_probe_captures_gh_status(self):
+        # A bare `gh | jq | head` pipeline swallows a gh failure into an empty
+        # URL (a false strike). The probe must capture gh's status separately
+        # and route failure to crash-class NEEDS_HUMAN.
+        wf = read(WORKFLOW)
+        start = wf.find("For `make-pr`, advancement means")
+        end = wf.find("Echo the URL when present", start)
+        self.assertTrue(start != -1 and end != -1, "make-pr verify block not found")
+        block = wf[start:end]
+        self.assertIn("PR_VERIFY_FAILED=0", block)
+        self.assertIn(") || PR_VERIFY_FAILED=1", block)
+        self.assertIn('stage=make-pr reason="gh probe failed at make-pr verify"', block)
+        self.assertNotIn("OPEN_PR_URL=$(gh pr list", block)
 
 
 class DryRunReportTestCase(unittest.TestCase):
@@ -148,6 +167,9 @@ class SingleStageSurfacesTestCase(unittest.TestCase):
             self.assertEqual(len(desc), 1, ln)
             self.assertIn("chainStages", desc[0], ln)
             self.assertLessEqual(len(desc[0]), CATALOG_DESCRIPTION_CAP, ln)
+            # The mirror writes these as UNQUOTED YAML scalars: a `: ` inside
+            # the value is a mapping separator and breaks frontmatter parsing.
+            self.assertNotIn(": ", desc[0], ln)
 
 
 if __name__ == "__main__":

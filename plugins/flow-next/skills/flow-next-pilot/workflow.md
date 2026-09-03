@@ -560,13 +560,15 @@ Routing on the **fresh** `qa_outcome` (`QA_ADVANCED=true`):
 
 A missing/stale receipt (`QA_ADVANCED=false`) is the healthy-no-advance path (Phase 6 strike), NOT a crash — the QA skill ran but produced no fresh verdict (e.g. it errored before writing). **Don't-thrash + non-fatal:** pilot is single-tick and the freshness gate prevents re-classifying `qa` once a fresh receipt exists, so the same spec is bounded to one qa pass per branch-head; the interactive work↔qa re-pass (out of scope here — autonomous surfaces + proceeds) is bounded by the existing strike/auto-block reflexes (2 strikes → unready). `BLOCKED` from a missing app is a fresh terminal outcome (it advances), never a failed loop.
 
-For `make-pr`, advancement means a gh-confirmed OPEN PR URL for the branch. There is no flowctl transition for make-pr, and a successful PR tick must never record a strike:
+For `make-pr`, advancement means a gh-confirmed OPEN PR URL for the branch. There is no flowctl transition for make-pr, and a successful PR tick must never record a strike. Capture the probe's exit status separately from the parse — a bare `gh | jq | head` pipeline returns `head`'s zero status and an empty URL when `gh` itself fails, which would turn an outage or auth failure into a healthy-no-advance strike:
 
 ```bash
-OPEN_PR_URL=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number --limit 10 2>/dev/null \
-  | jq -r '.[] | select(.state == "OPEN") | .url' \
-  | head -1)
+PR_VERIFY_FAILED=0
+PR_VERIFY_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number --limit 10 2>/dev/null) || PR_VERIFY_FAILED=1
+OPEN_PR_URL=$(printf '%s\n' "${PR_VERIFY_JSON:-[]}" | jq -r '.[] | select(.state == "OPEN") | .url' 2>/dev/null | head -1) || PR_VERIFY_FAILED=1
 ```
+
+`PR_VERIFY_FAILED=1` (gh missing, unauthenticated, API error, or unparseable output) is crash-class: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at make-pr verify"`, no strike. Only a clean probe with no OPEN row is the healthy-no-advance path.
 
 Echo the URL when present:
 
@@ -598,7 +600,7 @@ When the row is entered, run the chained `make-pr` exactly as the standalone sta
 2. Phase 4 pre-dispatch evidence for `make-pr`: no OPEN PR, already proven by this tick's all-done probe. In backlog mode guard the dispatch first — `DISPATCH_TARGET="/flow-next:make-pr"; assert_allowed_dispatch "$DISPATCH_TARGET"` (`/flow-next:make-pr` is on the allowlist; the assert still runs before every dispatch).
 3. The Phase 4 dispatch line: `/flow-next:make-pr <spec-id> mode:autonomous`. The PR stays draft under autonomy; pilot still never invokes land or merges.
 4. The Phase 5 `make-pr` verify above: the same gh open-PR probe, a second `Evidence:` block (`stage=make-pr`), and its own `stage:` outcome line. The qa stage's evidence block and outcome line stay in the transcript as already echoed — one evidence block and one `stage:` line per dispatched stage.
-5. Phase 6 under `stage=qa+make-pr`: the qa `ADVANCED` ledger clear first, then make-pr's own clear or strike with `STAGE=make-pr`. A dirty non-`.flow/` tree or a gh probe failure after the chained dispatch is crash-class `NEEDS_HUMAN`, no strike, as for any stage.
+5. Phase 6 under `stage=qa+make-pr`: the qa `ADVANCED` ledger clear first, then make-pr's own clear or strike with `STAGE=make-pr`. A dirty non-`.flow/` tree or a verify-probe failure (`PR_VERIFY_FAILED=1`) after the chained dispatch is crash-class `NEEDS_HUMAN`, no strike, as for any stage.
 
 Nothing else chains. `CHAIN_ENABLED=0` (the default) leaves this subsection unentered and the tick byte-for-byte today's.
 
@@ -714,7 +716,7 @@ PILOT_VERDICT=BLOCKED spec=<id> stage=<stage> reason="dep wait — blocked by <d
 
 (A circular/unsatisfiable dep does NOT reach here — Phase 1e routes it to `ASKED` instead. This terminal is for the plain acyclic dep wait only.)
 
-Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch, branch inconsistency, closed-without-merge PR (with no merged PR on the branch), merged-PR-with-nothing-new-beyond-its-head, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
+Crash-class outcomes are `NEEDS_HUMAN`: sub-skill crash, dirty non-`.flow/` tree after dispatch, gh probe failure in the all-done branch or at the make-pr verify (`PR_VERIFY_FAILED=1`), branch inconsistency, closed-without-merge PR (with no merged PR on the branch), merged-PR-with-nothing-new-beyond-its-head, stale in-progress-only claim, or autonomy ambiguity. Leave state untouched and record no strike:
 
 ```text
 PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=<stage> reason="<one line>"
@@ -748,6 +750,14 @@ Terminal verdict when no spec was dispatched, split by why. **The two cases stay
 # STAGE is the pipeline stage advanced/blocked-at, or 'ask' for ASKED, or '-' when none.
 # COST_TOKENS is host-reported (this tick's token cost); omit the flag when unavailable.
 $FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE:--}" ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}
+
+# Chained qa+make-pr tick (Phase 5, Chained stage): two appends, in dispatch order.
+# The qa row is always `advanced` (the chain is entered only from QA_ADVANCED=true)
+# and carries NO cost; the make-pr row carries the tick's terminal action and the
+# whole-tick cost ONCE. Each append mints its own row id, so a chained invocation
+# reads as two rows in the log — never as a doubled cost.
+# $FLOWCTL pilot-log append --id "$SUBJECT_ID" --action advanced --stage qa
+# $FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage make-pr ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}
 ```
 
 - **`--id`** takes the spec id (spec-backed) OR the bare tracker key (tracker-only) — flowctl safe-filename-normalizes it.
