@@ -75,6 +75,8 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 - `related_to` points at a stale entry that itself was updated to a new id → re-point.
 - Code snippet in body uses an outdated import path → fix the snippet.
 
+**Retrieval-fix variant.** The entry is correct, recurrence-qualified (§0.75.1), fails the Harden mechanizability condition, and has a **nameable retrieval defect**: the lesson keeps being re-learned because the entry does not surface, not because it is wrong. Recurrence qualifies the entry for the question; it does not answer it. State the defect before editing — which of `title` / `tags` / `module` / `applies_when` / placement would miss the query this topic actually gets searched by. When the surface already carries them, there is **no retrieval fix** — the entry falls through to the ordinary reference-drift check and is Keep (reviewed without edits) absent drift of its own — not a cosmetic re-tag: §0.75.1's counters are all-history and never decrease, and the repair commit is itself substantive there, so an unconditional branch would re-fire on this entry at every later audit — repeated metadata churn and commits in autofix, forever. Repair the retrieval surface only — `title`, `tags`, `module`, `applies_when` (knowledge track), and placement (a `git mv` into the category the lesson belongs to, since category-scoped search and scope narrowing never reach a misfiled entry) — so the query the next agent will actually type matches. One field is off-limits: an entry whose **title is an upsert identity** — a deterministic title another skill re-derives and hands to `flowctl memory upsert`, which matches the stored title byte-for-byte within the track (the QA skill's `drift: <surface>/<feature-slug> <sub-feature-id>` `feature-map-drift` memos are the shipped case) — is never retitled. The rename stops matching, so the next observation files a sibling and the recurrence dedup the memo exists for is gone. Repair its other retrieval fields instead and say in the report line that the title was held as an upsert identity. Placement is unaffected: upsert matches on track and title, never on category. A placement move changes the entry id (it embeds the category): set the frontmatter `category` to the new bucket and re-point every `related_to` that named the old id, in the same edit, so path and metadata never disagree. Cite the recurrence artifacts in the report line as `retrieval fix: <fields>; <N> Update headings / <M> commits`. A body or solution edit *justified by the retrieval rationale* is a Replace in disguise: stop and reclassify. The "never the body" rule scopes what the retrieval defect licenses — it does not exempt the entry from the ordinary Update above: an entry that also carries plain reference drift (a renamed path in its body, a dead link, a stale snippet) still gets those repaired, on the ordinary Update's own evidence, in the same write. Both repairs land as one Update, reported as `retrieval fix: <fields>` plus the drift fixed.
+
 **When NOT to use:**
 
 - The body's recommended solution conflicts with current code — that's Replace.
@@ -86,7 +88,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 **Action steps:**
 
 1. Read the file (already loaded in Phase 1).
-2. Mutate only the specific frontmatter fields that need updating. **Preserve all other fields** — `title`, `date`, `track`, `category`, plus any track-specific fields (`problem_type`, `symptoms`, `root_cause`, `resolution_type` for bug; `applies_when` for knowledge) and any unknown fields someone else added.
+2. Mutate only the specific frontmatter fields that need updating. **Preserve all other fields** — `title`, `date`, `track`, `category`, plus any track-specific fields (`problem_type`, `symptoms`, `root_cause`, `resolution_type` for bug; `applies_when` for knowledge) and any unknown fields someone else added. The retrieval-fix variant above is the one exception, and only for the field it named as the defect: it may rewrite `title` (never an upsert identity), `tags`, `module`, `applies_when`, and — on a placement move — `category`, which is then set to the new bucket. Everything it did not name stays preserved.
 3. Mutate the body for code-ref / link / snippet fixes.
 4. Write the file back via the Write tool.
 5. **Round-trip safety:** if frontmatter has quirky YAML (anchors, nested structures, multi-line values) the agent isn't confident parsing, prefer `flowctl memory mark-stale` for stale-flagging — that helper handles round-trip correctly via existing `write_memory_entry`.
@@ -280,7 +282,7 @@ Thresholds gate **proposing** only; the human gates **applying**. They are overr
 - The lesson is wrong, misleading, or its code is gone → Replace / Delete win outright (precedence). Never graduate a wrong lesson.
 - The entry is one of several overlapping entries → Consolidate first; the merged entry is the Harden unit.
 - One-off lesson, no recurrence signal → Keep.
-- Judgment-only lesson ("prefer X style when ambiguous", "escalate when the review disagrees") → Keep. A gate that cannot decide mechanically becomes a false-positive generator.
+- Judgment-only lesson ("prefer X style when ambiguous", "escalate when the review disagrees") → not Harden. A gate that cannot decide mechanically becomes a false-positive generator. With a recurrence signal **and a nameable retrieval defect** the entry is an Update (retrieval-fix variant); with recurrence but no nameable defect — as without recurrence at all — it falls through to the ordinary reference-drift check, so Keep absent drift of its own. Recurrence alone never licenses a metadata edit: §0.75.1's counters never decrease, so an ungated branch re-fires on the same entry every run.
 - The repo has no surface to host the gate — see the degradation rule below; the instruction file is the universal floor, and if even that does not exist, Keep.
 - **Autofix mode.** Harden never auto-applies. Candidates are reported under Recommended only — no artifact write, no demotion. Gate surfaces are shared repo infrastructure; an autonomous sweep must not edit lint config, CI, or CLAUDE.md unattended.
 
@@ -475,12 +477,19 @@ a related_to cluster >= 3 only corroborates — it proposes nothing on its own)
               inactive match → broken gate: entry stays active, report the finding
               no match       → Harden (pick gate type a→b→c, draft artifact,
                                ask, write, VERIFY the gate fires, then mark-hardened)
-        no  → Keep (judgment-only lessons stay context, not gates)
+        no  → nameable retrieval defect in title / tags / module / applies_when /
+              placement (the surface would miss the query this topic gets searched by)?
+              yes → Update, retrieval-fix variant (repair the surface, never the
+                    body — see §Update), then continue to the drift check below
+                    and fold any ordinary reference repairs into the SAME Update
+              no  → continue (recurrence alone never re-fires a repaired entry)
   no  → continue
 
 Are there reference drifts (paths, modules, links, snippets)?
-  yes → Update (write tool; preserve unknown frontmatter)
-  no  → Keep (no edit; report under "Reviewed without edits")
+  yes → Update (write tool; preserve unknown frontmatter) — one Update per entry,
+        carrying the retrieval-surface repair too if one was named above
+  no  → Keep (no edit; report under "Reviewed without edits"), unless a retrieval
+        fix was named above — then it is that Update alone
 ```
 
 An entry needing both an Update and a Harden gets the Update applied first — fix the lesson before retiring it — then hardened in the same run.

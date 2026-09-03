@@ -15,6 +15,14 @@ Anyone running `/flow-next:pilot` and `/flow-next:land` unattended under a host 
 
 - **A GitHub outage during pilot's make-pr verification no longer counts as a failed stage.** The post-dispatch open-PR probe piped `gh` through `jq | head`, so a `gh` error or malformed response read as "no PR" and recorded a strike — two of them unready the spec. The probe now captures the `gh` exit status and makes `jq` the status-bearing command, so a probe failure is the crash-class `NEEDS_HUMAN` (no strike) that pilot already uses for its classification probe; a clean probe with no open PR is still the healthy-no-advance path. Applies to every make-pr tick, chained or not. (fn-219)
 
+## [flow-next 4.13.0] - 2026-09-03
+
+Anyone whose `.flow/memory/` keeps re-teaching the same lesson gets a third answer from `/flow-next:audit`: fix how the lesson is found, not what it says. Until now an entry that kept recurring but stated a rule no lint or CI step could check had nowhere to go - Harden needs a mechanizable rule, so the entry fell through to Keep and the next run re-learned it again. The audit now repairs that entry's retrieval surface instead of its wording, so the search that should have surfaced it does.
+
+### Changed
+
+- **`/flow-next:audit` now fixes how a lesson is found, not just what it says.** A memory entry that keeps being re-learned but states a rule no lint or CI step can check used to fall through to Keep, so the same lesson got re-taught every run. The audit now classifies it as an Update with a retrieval fix: it repairs the entry's title, tags, module, and `applies_when` — and moves a misfiled entry into the category it belongs to, since a category-scoped search never reaches it where it sits — so the next search actually surfaces it. The retrieval rationale never licenses a body rewrite — but an entry that also carries plain reference drift still gets that repaired, on its own evidence, in the same Update. The report counts retrieval fixes inside Updated. No new status or field; the signal is the same write-side recurrence scan Harden already uses (fn-217).
+
 ## [flow-next 4.12.0] - 2026-09-02
 
 Anyone running implementation review on the codex or host backend now gets most of a scope's findings in the first round instead of across a slow serial trickle. The first round draws three reviewers at once, each reading for a different defect class, and the coordinator hands back one merged list for a single fix pass. The round still counts once against the cap, the receipt records every draw honestly, and the topology is steerable in a sentence when a clean diff does not warrant the harvest.
