@@ -38,9 +38,10 @@ Add the two config keys as seeded defaults (R1, R6), publish them in the JSON sc
 - [ ] TBD
 
 ## Done summary
-TBD
+Seeded `pipeline.chainStages` (string-enum, default `"off"`, strict-literal `on`) beside `pipeline.qa` and `land.patienceMinutesAfterReview` (default `null`; null/""/0/non-numeric = off) beside `land.patienceMinutes` in `get_default_config()`; published both in `gen_flow_config_schema.py` (DESCRIPTIONS + TABLE) and regenerated `flow-config.schema.json`; regenerated the tracker MANIFEST. Tests (R1, R6): fresh-get defaults, set/get round-trips (`on`; int 15; `null`/""/0 persisted verbatim), a strict-literal predicate table (bool `true`, `null`, `On`, `yes` all read off), sibling-default preservation both ways, and an upgrade init that adds the `chainStages` leaf without clobbering a user-set `pipeline.qa` (tests: test_pipeline_qa_config `test_*chain_stages*`, test_land_config `test_*patience_after_review*`). Baseline green; codex mirror untouched by design (no scripts mirrored; the .4 docs task owns the single regen).
 
+stage: impl-review - ran [round 1 fan-out (correctness SHIP, contracts NEEDS_WORK P3 comment contradiction, integration SHIP) .. round 2 re-review SHIP]
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 8cd8b0bba2c54e126ccc82de113b24aa8b572bb3, c21d21ca7464705ca0264366d13dbbaa28a1166a
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_pipeline_qa_config test_land_config test_flow_config_schema test_flow_config_schema_drift test_skill_prose_diet -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution -q, python3 scripts/gen_flow_config_schema.py --check, ./scripts/sync-codex.sh (twice, idempotent, no mirror diff), uvx ruff@0.16.0 check ., baseline: green (unittest 171 OK, schema check, ruff)
 - PRs:
