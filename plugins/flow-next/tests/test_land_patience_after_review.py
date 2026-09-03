@@ -83,7 +83,25 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
         self.assertEqual(self.text.count("config get land --json"), 1)
 
     def test_off_states_are_anything_but_a_positive_integer(self) -> None:
-        self.assertIn('=~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""', self.phase0)
+        self.assertIn('=~ ^[1-9][0-9]{0,5}$ ]] || PATIENCE_AFTER_REVIEW=""', self.phase0)
+
+    def test_phase0_read_executes_off_states_and_bounds_overflow(self) -> None:
+        # Executable: run the Phase 0 read line with a stubbed lcfg for each
+        # off state, a bounded on value, and an overflow value that would wrap
+        # bash arithmetic negative (and read as already elapsed).
+        import subprocess
+        line = next(
+            l for l in self.phase0.splitlines()
+            if l.startswith('PATIENCE_AFTER_REVIEW="$(lcfg patienceMinutesAfterReview)"')
+        )
+        cases = {
+            "null": "", "": "", "0": "", "abc": "", "-5": "", "15": "15",
+            "999999": "999999", "9223372036854775808": "", "1000000": "",
+        }
+        for raw, want in cases.items():
+            script = f"lcfg() {{ printf '%s\\n' {raw!r}; }}\n{line}\nprintf '%s' \"$PATIENCE_AFTER_REVIEW\""
+            out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+            self.assertEqual(out, want, f"raw={raw!r}")
 
     # ── R7: review-event max across reviews + qualifying comments ────────
 
@@ -106,6 +124,9 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
     # ── R7/R8: the four-condition re-anchor rebinds only the silence conjunct ──
 
     def test_anchor_block_binds_under_the_four_conditions(self) -> None:
+        # silence-only: approve/<login> gates consume the push window, so the
+        # binding-anchor report must never claim `review` under them
+        self.assertIn('"$REVIEW_SIGNAL" == "silence" && -n "$PATIENCE_AFTER_REVIEW"', self.anchor)
         self.assertIn('-n "$PATIENCE_AFTER_REVIEW"', self.anchor)
         self.assertIn('AUTO_REVIEW_CURRENT" == 1', self.anchor)
         self.assertIn('"$UNRESOLVED" -eq 0', self.anchor)
@@ -116,6 +137,36 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
             "SILENCE_WINDOW_ELAPSED=$(( REVIEW_AGE_MIN >= PATIENCE_AFTER_REVIEW ? 1 : 0 ))",
             self.anchor,
         )
+
+    def test_anchor_block_executes_signal_and_condition_matrix(self) -> None:
+        # Executable: run the re-anchor fence with stubbed inputs. Only the
+        # silence signal with every condition met rebinds; approve/<login>,
+        # open threads, a stale review, and an unparseable timestamp stay push.
+        import subprocess
+        start = self.anchor.find("SILENCE_WINDOW_ELAPSED=$WINDOW_ELAPSED")
+        end = self.anchor.find("```", start)
+        fence = self.anchor[start:end]
+        base = dict(REVIEW_SIGNAL="silence", PATIENCE_AFTER_REVIEW="10", AUTO_REVIEW_CURRENT="1",
+                    UNRESOLVED="0", REVIEW_EVENT_AT="2026-01-01T00:00:00Z",
+                    NOW_EPOCH=str(1767225600 + 20 * 60), WINDOW_ELAPSED="0", WINDOW_ANCHOR="push")
+        cases = [
+            ({}, "review|1"),
+            ({"NOW_EPOCH": str(1767225600 + 5 * 60)}, "review|0"),
+            ({"REVIEW_SIGNAL": "approve"}, "push|0"),
+            ({"REVIEW_SIGNAL": "somelogin"}, "push|0"),
+            ({"PATIENCE_AFTER_REVIEW": ""}, "push|0"),
+            ({"AUTO_REVIEW_CURRENT": "0"}, "push|0"),
+            ({"UNRESOLVED": "2"}, "push|0"),
+            ({"REVIEW_EVENT_AT": "not-a-date"}, "push|0"),
+            ({"REVIEW_EVENT_AT": ""}, "push|0"),
+        ]
+        for override, want in cases:
+            env = {**base, **override}
+            prelude = "".join(f"{k}={v!r}\n" for k, v in env.items())
+            script = prelude + fence + '\nprintf "%s|%s" "$WINDOW_ANCHOR" "$SILENCE_WINDOW_ELAPSED"'
+            res = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, f"{override}: {res.stderr}")
+            self.assertEqual(res.stdout, want, f"{override}")
 
     def test_anchor_block_never_rebinds_the_push_window(self) -> None:
         # WINDOW_ELAPSED is READ (the default) but never assigned here.
@@ -135,7 +186,11 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
 
     def test_only_the_silence_bullet_reads_the_rebound_window(self) -> None:
         self.assertIn("SILENCE_WINDOW_ELAPSED == 1", self.silence_bullet)
-        self.assertIn("anchor=review", self.silence_bullet)
+        # reason names the binding anchor when the key is configured (both
+        # forms), and keeps today's bare reason when unset
+        self.assertIn("<AGE_MIN>/<PATIENCE_MIN>m, anchor=push)", self.silence_bullet)
+        self.assertIn("<REVIEW_AGE_MIN>/<PATIENCE_AFTER_REVIEW>m, anchor=review)", self.silence_bullet)
+        self.assertIn("patience window open (<AGE_MIN>/<PATIENCE_MIN>m)`", self.silence_bullet)
         self.assertNotIn("SILENCE_WINDOW_ELAPSED", self.approve_bullet)
         self.assertIn("WINDOW_ELAPSED == 1", self.approve_bullet)
         self.assertIn('[[ "$WINDOW_ELAPSED" == 1 ]]', self.s26b)
