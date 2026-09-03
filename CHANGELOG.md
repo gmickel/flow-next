@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.13.1] - 2026-09-03
 
 Anyone running `/flow-next:pilot` and `/flow-next:land` unattended under a host loop gets two new controls over where the loop idles: pilot can open the draft PR in the same tick as a live QA verdict instead of paying an interval for a stage it was always going to run, and land can measure its merge wait from the bot's clean review instead of from the last push. Both are opt-in keys, off by default, and toggle independently; with either on, every gate, verdict, and merge license behaves exactly as before.
 
