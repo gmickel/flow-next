@@ -1,13 +1,13 @@
 ---
 name: flow-next-pilot
-description: Single-tick autonomous build-loop conductor. Advances one ready spec one stage per tick, emits PILOT_VERDICT. Use when asked to pilot a spec or backlog.
+description: Single-tick autonomous build-loop conductor. One spec or the backlog, one stage per tick (pipeline.chainStages chains qa into make-pr), emits PILOT_VERDICT. Use when asked to pilot a spec or backlog.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 ---
 
 # /flow-next:pilot — single-tick autonomous build-loop conductor
 
-A tick is one invocation of `/flow-next:pilot`: select one ready spec, classify its current stage (`plan`, `plan-review`, `work`, the opt-in `qa`, `make-pr`), dispatch exactly one existing stage skill, verify state advanced, and end with one terminal `PILOT_VERDICT` line. It is intentionally not a runner; `/loop` in Claude Code or `/goal` in Claude Code / Codex owns repeated invocation.
+A tick is one invocation of `/flow-next:pilot`: select one ready spec, classify its current stage (`plan`, `plan-review`, `work`, the opt-in `qa`, `make-pr`), dispatch exactly one existing stage skill (with `pipeline.chainStages` on, `make-pr` after a fresh `qa` verdict is the only admissible second dispatch in the same tick), verify state advanced, and end with one terminal `PILOT_VERDICT` line. It is intentionally not a runner; `/loop` in Claude Code or `/goal` in Claude Code / Codex owns repeated invocation.
 
 Pilot and Ralph are alternative autonomous drivers. Ralph is an external shell loop with receipt plumbing; pilot is an in-session conductor for host loop primitives. Never nest them, and never reuse Ralph harness state inside pilot.
 
@@ -138,7 +138,9 @@ PILOT_VERDICT=<ADVANCED|NO_WORK|DEFERRED_TO_LAND|BLOCKED|NEEDS_HUMAN> spec=<id> 
 
 Use `spec=-` and `stage=-` when no spec was selected. Stage values are exactly
 `plan`, `plan-review`, `work`, `qa` (opt-in — only when `pipeline.qa==on`),
-`make-pr`, `land`, or `-`.
+`make-pr`, `land`, or `-`. A chained tick (`pipeline.chainStages==on`) names every
+dispatched stage in order joined by `+` — exactly `qa+make-pr` — and carries the
+last dispatched stage's verdict.
 
 **Dry-run snapshot cleanup.** Under `--dry-run` (`PILOT_DRY_RUN=1`), at EVERY terminal `PILOT_VERDICT` emission — the classification stop, the diagnostic `TRIAGED` exit, every `NO_WORK` / `DEFERRED_TO_LAND` / hard-guard exit — remove the root config snapshot BEFORE printing the verdict, so a dry-run leaves no persistent scratch state:
 
@@ -161,6 +163,7 @@ Driver condition examples:
 
 - Asking the user anything in the tick path. Pilot is autonomous; ambiguity maps to `NEEDS_HUMAN`. In backlog mode, ambiguity that needs a person is surfaced **async** via the `ask` stage (`ASKED`) — never an interactive `plain-text numbered prompt`.
 - Dispatching any skill outside the stage set `{plan, plan-review, work, make-pr}` - plus `qa` **only when `pipeline.qa==on`** (fn-72: an opt-in, gate-reversed stage at the all-done juncture before make-pr; with the gate off, `qa` is forbidden and the stage set is byte-for-byte unchanged). **Backlog mode (`PILOT_AUTONOMY=backlog`) additionally invokes `/flow-next:tracker-sync` for the `reconcile` / `list-open` / `list-comments` / `list-relations` / `question` ops** - these are read/surface-only tracker calls (`list-comments` reads parked question rounds; `list-relations` reads dependency relations for dep-ordering), not a pipeline stage, and run only on the backlog path. Capture, interview, chart, resolve-pr, merge, and release are **never** pilot stages - they stay forbidden for their distinct reasons (capture/interview/chart are human authoring and discovery upstream of the consent boundary; resolve-pr/merge/release are land's territory downstream of the PR). **Opening `qa` under its gate, or `tracker-sync` under backlog mode, sets no precedent for any of those** — a tick that dispatched one of them by analogy has broken this.
+- Dispatching a second stage in one tick — except, under `pipeline.chainStages==on`, `make-pr` after this tick's `qa` verified a fresh terminal verdict (the closed one-row chain table in `workflow.md` Phase 5, Chained stage); any other second dispatch breaks the single-tick contract.
 - Re-implementing sub-skill logic. Pilot owns selection, dispatch, verification, verdicts, and the strikes ledger only. The backlog-mode SELECT/TRIAGE/ASK workflow lives in `references/backlog-mode.md` (loaded only when `PILOT_AUTONOMY=backlog`); the question-anchor authoring + answer round-trip live in tracker-sync — backlog mode invokes them, never re-implements them.
 - **Never merging / never invoking land** (R6) — in either mode, the terminus is `make-pr` (draft). Merge stays human-gated. Backlog mode never calls `/flow-next:land`, `gh pr merge`, or any merge path.
 - **Never authoring a spec** (backlog mode) — `capture`/`interview` are human-gated upstream. A missing/too-thin spec is surfaced as a "needs capture/interview" gap and parked (`ASKED`), never auto-written. The only writing the `ask` stage may do is fill an obvious blank in an *existing* spec — never create a spec stub from a bare ticket.
@@ -176,11 +179,11 @@ Execute [workflow.md](workflow.md) in order:
 2. **select** — two-pass ready-spec selection with dependency, claim, and re-bless checks. *Done when: exactly one spec is selected, or the pool is empty and the terminal split has been chosen.*
 3. **classify** — derive one stage from flowctl state; probe gh only in the all-done branch. *Done when: exactly one stage from the allowed set is named, with the consulted status fields echoed.*
 4. **branch** — resolve the spec branch matrix before work or make-pr. *Done when: the worktree sits on the branch the matrix row names, or the tick has stopped `NEEDS_HUMAN` on a failed checkout.*
-5. **dispatch** — invoke exactly one stage skill with `mode:autonomous` plus review/research/depth passthroughs. *Done when: one stage skill has been invoked and returned.*
-6. **verify** — re-read flowctl state, or gh for make-pr, and echo before/after evidence. *Done when: the before/after evidence block plus the stage-outcome line are in the transcript and `advanced` is decided from observed state.*
+5. **dispatch** — invoke exactly one stage skill with `mode:autonomous` plus review/research/depth passthroughs (plus the gated `qa`→`make-pr` chain when `pipeline.chainStages` is on). *Done when: the classified stage skill has been invoked and returned — and, on a chained tick, so has `make-pr`; no other second dispatch happened.*
+6. **verify** — re-read flowctl state, or gh for make-pr, and echo before/after evidence. *Done when: every dispatched stage has its own before/after evidence block plus stage-outcome line in the transcript and each `advanced` is decided from observed state.*
 7. **report** — clear or record strikes, optionally unready on the second healthy no-advance tick, and print the terminal verdict. *Done when: the ledger reflects this tick and the terminal `PILOT_VERDICT` line is the last line of the response.*
 
-**Backlog mode (`PILOT_AUTONOMY=backlog`).** When the autonomy gate resolved to `backlog`, the SELECT and TRIAGE/ASK behavior follows [references/backlog-mode.md](references/backlog-mode.md) — the agentic floor scheduler (loaded **only** in this mode). It widens SELECT (pull-before-scan, union tracker-only items, dep-order, skip parked) and adds the `triage`/`ask` stages **in front of** CLASSIFY; a **workable** item flows into the existing `classify → branch → dispatch → verify` path unchanged. `workflow.md` Phase 0.5 resolves the mode and routes; `workflow.md` Phase 1.5/Phase 3.5 carry the backlog SELECT + TRIAGE/ASK hooks and the safety invariants. The single-tick contract is unchanged: one item, one stage or one durable park, one terminal verdict.
+**Backlog mode (`PILOT_AUTONOMY=backlog`).** When the autonomy gate resolved to `backlog`, the SELECT and TRIAGE/ASK behavior follows [references/backlog-mode.md](references/backlog-mode.md) — the agentic floor scheduler (loaded **only** in this mode). It widens SELECT (pull-before-scan, union tracker-only items, dep-order, skip parked) and adds the `triage`/`ask` stages **in front of** CLASSIFY; a **workable** item flows into the existing `classify → branch → dispatch → verify` path unchanged. `workflow.md` Phase 0.5 resolves the mode and routes; `workflow.md` Phase 1.5/Phase 3.5 carry the backlog SELECT + TRIAGE/ASK hooks and the safety invariants. The single-tick contract is unchanged: one item, one stage (or the gated `qa`→`make-pr` chain under `pipeline.chainStages`) or one durable park, one terminal verdict.
 
 ## Unattended runs — rp caveat
 

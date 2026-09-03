@@ -1,8 +1,10 @@
 """Unit tests for the /flow-next:land config surface (fn-60.2 R15, fn-65.1 R5).
 
 `get_default_config()` carries a top-level `land` block so
-`flowctl config get land.*` returns the spec defaults (NOT `null`) on a
-fresh repo, WITHOUT any prior `config set`:
+`flowctl config get land.*` returns the seeded spec default (never a missing
+key) on a fresh repo, WITHOUT any prior `config set`. Every leaf is non-null
+EXCEPT `patienceMinutesAfterReview`, whose seeded default is an explicit
+`null` (its documented off state):
 
   * land.release                  → True
   * land.patienceMinutes          → 30
@@ -28,6 +30,12 @@ fresh repo, WITHOUT any prior `config set`:
         request: csv of GitHub logins / `org/team` slugs and/or the
         literal `codeowners`. CONTRACT: unset, null, AND "" all mean OFF;
         one-shot per PR per head SHA; never gates a merge.
+  * land.patienceMinutesAfterReview → None  (fn-219) — opt-in silence-signal
+        refinement: minutes measured from the latest head-current automated
+        review (zero unresolved threads) instead of the last push. CONTRACT:
+        active only as a positive integer; unset, null, "", 0, AND
+        non-numeric all mean OFF (today's push-anchored wait); a fix push
+        reverts to the push anchor until a new head-current review exists.
 
 Plus: `config set` round-trips for the string enum and the integer knob
 (set_config auto-coerces digits), the explicit-empty-disables case, the
@@ -120,6 +128,7 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
                 ),
                 "mergeVerdictCommand": "",
                 "requestReviewers": "",
+                "patienceMinutesAfterReview": None,
             },
         )
 
@@ -537,6 +546,63 @@ class LandConfigDefaultsTestCase(unittest.TestCase):
         module_doc = _sys.modules[__name__].__doc__ or ""
         self.assertIn("cleanReviewCommentPattern", module_doc)
         self.assertIn("DISABLED", module_doc)
+
+    # ── fn-219: land.patienceMinutesAfterReview (R6) ─────────────────────
+
+    def test_patience_after_review_seeded_default_is_null(self) -> None:
+        # Seeded None (OFF) so the default land tick is byte-for-byte
+        # unchanged; the key surfaces via the defaults merge as null.
+        defaults = self.flowctl.get_default_config()
+        self.assertIn("patienceMinutesAfterReview", defaults["land"])
+        self.assertIsNone(defaults["land"]["patienceMinutesAfterReview"])
+
+    def test_fresh_get_patience_after_review_is_null(self) -> None:
+        out = self._run_config_get_cli("land.patienceMinutesAfterReview")
+        self.assertEqual(out["key"], "land.patienceMinutesAfterReview")
+        self.assertIsNone(out["value"])
+
+    def test_set_patience_after_review_coerces_to_int(self) -> None:
+        set_out = self._run_config_set_cli("land.patienceMinutesAfterReview", "15")
+        self.assertEqual(set_out["value"], 15)
+        get_out = self._run_config_get_cli("land.patienceMinutesAfterReview")
+        self.assertEqual(get_out["value"], 15)
+        self.assertIsInstance(get_out["value"], int)
+
+    def test_set_patience_after_review_off_states_persist_verbatim(self) -> None:
+        # The land read treats null / "" / 0 as OFF; flowctl stores each
+        # verbatim (no write-time validator) so the skill's read decides.
+        for raw, expected in (("null", None), ("", ""), ("0", 0)):
+            with self.subTest(raw=raw):
+                self._run_config_set_cli("land.patienceMinutesAfterReview", "15")
+                self._run_config_set_cli("land.patienceMinutesAfterReview", raw)
+                self.assertEqual(
+                    self._run_config_get_cli("land.patienceMinutesAfterReview")[
+                        "value"
+                    ],
+                    expected,
+                )
+
+    def test_set_patience_after_review_keeps_sibling_land_defaults(self) -> None:
+        self._run_config_set_cli("land.patienceMinutesAfterReview", "15")
+        self.assertEqual(
+            self._run_config_get_cli("land.patienceMinutes")["value"], 30
+        )
+        self.assertEqual(
+            self._run_config_get_cli("land.reviewSignal")["value"], "silence"
+        )
+
+    def test_set_sibling_keeps_patience_after_review_null(self) -> None:
+        self._run_config_set_cli("land.patienceMinutes", "45")
+        self.assertIsNone(
+            self._run_config_get_cli("land.patienceMinutesAfterReview")["value"]
+        )
+
+    def test_docstring_lists_patience_after_review_key(self) -> None:
+        import sys as _sys
+
+        module_doc = _sys.modules[__name__].__doc__ or ""
+        self.assertIn("patienceMinutesAfterReview", module_doc)
+        self.assertIn("non-numeric", module_doc)
 
 
 class CommentScanWorkflowStaticTestCase(unittest.TestCase):

@@ -2,6 +2,19 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Anyone running `/flow-next:pilot` and `/flow-next:land` unattended under a host loop gets two new controls over where the loop idles: pilot can open the draft PR in the same tick as a live QA verdict instead of paying an interval for a stage it was always going to run, and land can measure its merge wait from the bot's clean review instead of from the last push. Both are opt-in keys, off by default, and toggle independently; with either on, every gate, verdict, and merge license behaves exactly as before.
+
+### Added
+
+- **Pilot opens the draft PR in the same tick as the QA verdict instead of waiting for the next loop interval.** With `pipeline.chainStages` on (`flowctl config set pipeline.chainStages on`; a string-enum - only the literal `on` activates), a tick whose `qa` stage produced a fresh terminal verdict runs `make-pr` before it exits, so the driver no longer pays an interval plus a full re-anchor for a stage it was always going to run. The chain table is closed to that one row: `plan → plan-review` was found redundant at plan review, because pilot's plan dispatch already embeds its review loop and a successful plan tick already classifies `work` next; no transition that can fail into human territory chains. The terminal line reads `stage=qa+make-pr` with make-pr's verdict, `--dry-run` reports `chain=` and a precondition-checked `would-chain=`, a chained backlog tick writes one decision-log row per dispatched stage, and the PR stays a draft - pilot still never merges. Off (default), the tick is byte-for-byte unchanged; with `pipeline.qa` off there is nothing to chain.
+- **Land's wait after a clean bot review becomes the repo's own review-anchored objection window.** With `land.patienceMinutesAfterReview` set (`flowctl config set land.patienceMinutesAfterReview 15`; any positive integer - `null` and `0` are off), the default `silence` gate measures its patience window from the head-current automated review event instead of from the last push, once that review has zero unresolved threads. The window is grace after the reviewer spoke, and it replaces the push window rather than taking the shorter of the two - so relative to today's wait an early review shortens it (a 30m push window, a review at push+1m, and a 15m after-review window merge at push+16m) and a late review lengthens it (a review at push+25m waits until push+45m); a fix push falls back to the push anchor until the bot re-reviews; the `approve`/`<login>` signals, every other window consumer, and the merge call are untouched. When configured, the report's `window=` field names the binding anchor (`anchor=<push|review>`); unset keeps today's report line byte-for-byte. (fn-219)
+
+### Fixed
+
+- **A GitHub outage during pilot's make-pr verification no longer counts as a failed stage.** The post-dispatch open-PR probe piped `gh` through `jq | head`, so a `gh` error or malformed response read as "no PR" and recorded a strike — two of them unready the spec. The probe now captures the `gh` exit status and makes `jq` the status-bearing command, so a probe failure is the crash-class `NEEDS_HUMAN` (no strike) that pilot already uses for its classification probe; a clean probe with no open PR is still the healthy-no-advance path. Applies to every make-pr tick, chained or not. (fn-219)
+
 ## [flow-next 4.13.0] - 2026-09-03
 
 Anyone whose `.flow/memory/` keeps re-teaching the same lesson gets a third answer from `/flow-next:audit`: fix how the lesson is found, not what it says. Until now an entry that kept recurring but stated a rule no lint or CI step could check had nowhere to go - Harden needs a mechanizable rule, so the entry fell through to Keep and the next run re-learned it again. The audit now repairs that entry's retrieval surface instead of its wording, so the search that should have surfaced it does.

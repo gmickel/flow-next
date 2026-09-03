@@ -209,7 +209,7 @@ Resolution at every dispatch site, highest first: an explicit instruction in the
 How to apply — defaults, not limits. Unless prompted otherwise, route work as you judge best; no permission needed, and an explicit user instruction always overrides this block. Standing permission to escalate: if a cheaper model misses the bar, rerun on a smarter one without asking. Judge the output, not the price tag.
 
 - Unset is the doctrine, not an omission: planning, capture, interview, requirement analysis, every verdict, and the worker run on the session model. Never delegate judgment.
-- The session model here is opus-5 at MEDIUM effort for conducting and implementing; escalate to fable-5 when a problem is genuinely frontier-hard rather than raising opus-5's effort.
+- The session model here is fable-5.1 (the default orchestrator in this repo since 2026-09-03): it conducts, plans, judges, and implements. Opus-5 remains a fine cheaper session choice for routine ticks; when it misses the bar, switch the session to fable-5.1 rather than raising opus-5's effort.
 - Anything user-facing (UI, copy, API design) stays on the session model even when it looks mechanical.
 - Reviews prefer a different family than the writer — uncorrelated blind spots. Advice, not enforcement: the receipt records what actually ran.
 - Autonomous loops never call a bridge CLI raw — wrap it in a thin fast-tier subagent that runs the bridge in the FOREGROUND and self-heals environment failures only, never judgment. Recipes: `flowctl usage` § Orchestration & model steering.

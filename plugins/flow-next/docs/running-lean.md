@@ -54,7 +54,7 @@ Defaults below are read from the published schema ([`../schema/flow-config.schem
 | [Plan-sync](#plan-sync) | `planSync.enabled` | **off** | `/flow-next:sync` |
 | [Memory](#memory-and-the-audit-sweep) | `memory.enabled` | **on** | `/flow-next:audit` |
 | [Pre-capture discovery](#pre-capture-discovery) | none | manual | `/flow-next:chart`, `/flow-next:prospect` |
-| [Autonomous loops](#autonomous-loops) | none | manual | `/flow-next:pilot`, `/flow-next:land` |
+| [Autonomous loops](#autonomous-loops) | none to enable; `pipeline.chainStages`, `land.patienceMinutesAfterReview` tune the loops | manual (both tuners off) | `/flow-next:pilot`, `/flow-next:land` |
 | [GitHub scouts](#github-scouts) | `scouts.github` | off | ask a scout in conversation |
 | [Ralph](#ralph-deprecated) | none | off, **deprecated** | see below |
 
@@ -155,6 +155,7 @@ No config key to enable; `pilot.autonomy` (`ready` by default) only widens what 
 - **Costs:** this is the autonomous profile itself, so it inherits the profile's gates: the layers above stop being optional in the way they are optional for you at a keyboard, because they are what replace you.
 - **Earns its keep when:** there is a queue of blessed, fully specified work and nobody who wants to sit through it.
 - **Lean invocation:** `/flow-next:work` is the human-driven equivalent and needs no loop primitive at all.
+- **Optional idle removal (both off by default, both independent):** `pipeline.chainStages` runs `make-pr` in the same pilot tick as a fresh terminal `qa` verdict - it trades one driver re-anchor (a loop interval plus a cold classify) for one longer tick, and only does anything on repos with `pipeline.qa` on; every other transition stays one stage per tick. `land.patienceMinutesAfterReview` measures land's `silence` window from the head-current review event instead of the last push - it trades push-anchored grace for review-anchored grace, replacing the push window rather than taking the shorter of the two, so an early review shortens today's wait and a late review lengthens it. Neither changes a gate, a verdict, or the merge license. Patience-after-review stays opt-in because the push window is the human-objection grace period: how much of that grace a repo keeps after the reviewer has spoken is its call, not a default.
 
 ### GitHub scouts
 

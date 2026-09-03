@@ -1698,7 +1698,7 @@ generate_openai_yaml "flow-next-memory-migrate" "Flow Memory Migrate" "Migrate l
 generate_openai_yaml "flow-next-make-pr" "Flow Make PR" "Render a cognitive-aid PR body from flow-next state and open via gh" "#3B82F6" true
 generate_openai_yaml "flow-next-tracker-sync" "Flow Tracker Sync" "Project a spec to a tracker (Linear/GitHub/GitLab/Jira) and reconcile two-way — NOT plan-sync" "#3B82F6" true
 generate_openai_yaml "flow-next-qa" "Flow QA" "Live-app real-user QA pass derived from the spec — drives the running app, files P0/P1/P2 findings, emits a YES/NO verdict" "#3B82F6" true
-generate_openai_yaml "flow-next-pilot" "Flow Pilot" "Single-tick autonomous build-loop conductor — one ready spec, one stage per tick, terminal PILOT_VERDICT line" "#3B82F6" true
+generate_openai_yaml "flow-next-pilot" "Flow Pilot" "Single-tick autonomous build-loop conductor — one ready spec (or --backlog/--auto triage), one stage per tick (pipeline.chainStages on chains qa into make-pr), terminal PILOT_VERDICT line" "#3B82F6" true
 generate_openai_yaml "flow-next-land" "Flow Land" "Cadence-tick autonomous PR babysitter — CI-fix, resolve, converge, merge, close, release; terminal LAND_VERDICT line" "#3B82F6" true
 
 # Review skills (red, implicit)
@@ -1767,7 +1767,7 @@ codex_dir = pathlib.Path(sys.argv[1])
 DIET = {
     "flow-next-plan": "Plan a feature into a flow-next spec with tasks in .flow/. Use when asked to plan, spec out, or break down work (fn-N ids).",
     "flow-next-work": "Execute a flow-next spec or task end-to-end with worker subagents, gates, and commits. Use when asked to work on, implement, or execute fn-N.",
-    "flow-next-pilot": "Single-tick autonomous build-loop conductor. Advances one ready spec one stage per tick, emits PILOT_VERDICT. Use when asked to pilot a spec or backlog.",
+    "flow-next-pilot": "Single-tick autonomous build-loop conductor. One spec or the backlog, one stage per tick (pipeline.chainStages chains qa into make-pr), emits PILOT_VERDICT. Use when asked to pilot a spec or backlog.",
     "flow-next-land": "Autonomous PR babysitter tick. Fixes CI, resolves feedback, merges when converged, closes the spec, releases. Emits LAND_VERDICT. Use when asked to land PRs.",
     "flow-next-make-pr": "Open a PR with a cognitive-aid body rendered from flow-next spec state via gh. Use whenever asked to make or open a PR in a flow-next repo.",
     "flow-next-resolve-pr": "Resolve PR review feedback. Fetches unresolved threads, triages, fixes, replies and resolves via GraphQL. Use when asked to address review comments.",

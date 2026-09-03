@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-03T08:15:27.352621Z",
+  "depends_on": [
+    "fn-219-pilot-stage-chaining-and-land-patience.1"
+  ],
+  "id": "fn-219-pilot-stage-chaining-and-land-patience.2",
+  "priority": null,
+  "spec": "fn-219-pilot-stage-chaining-and-land-patience",
+  "spec_path": ".flow/tasks/fn-219-pilot-stage-chaining-and-land-patience.2.md",
+  "status": "todo",
+  "title": "Pilot in-tick stage chaining under pipeline.chainStages (skill prose + conduct + contract tests)",
+  "updated_at": "2026-09-03T08:26:53.486555Z"
+}
