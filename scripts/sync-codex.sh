@@ -425,7 +425,6 @@ for nf in \
   "$CODEX_DIR/skills/flow-next-audit/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-audit/workflow.md" \
   "$CODEX_DIR/skills/flow-next-guide/SKILL.md" \
-  "$CODEX_DIR/skills/flow-next-work-rolling/SKILL.md" \
   "$CODEX_DIR/skills/flow-next-work/references/no-plan-route.md"; do
   [ -f "$nf" ] || continue
   sed -i.bak \
@@ -474,7 +473,6 @@ for nf in \
     -e 's|(or `/flow-next:work fn-N --no-plan` when the refined spec|(or `$flow-next-work fn-N --no-plan` when the refined spec|g' \
     -e 's;| `/flow-next:work <spec-id> --no-plan` (or answer;| `$flow-next-work <spec-id> --no-plan` (or answer;g' \
     -e 's|Prefer `/flow-next:plan` when independent surfaces|Prefer `$flow-next-plan` when independent surfaces|g' \
-    -e 's|and `/flow-next:work-rolling` refuses the route|and `$flow-next-work-rolling` refuses the route|g' \
     -e 's|leans `/flow-next:work <SPEC_ID> --no-plan`|leans `$flow-next-work <SPEC_ID> --no-plan`|g' \
     -e 's|`/flow-next:work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|`$flow-next-work <SPEC_ID> --no-plan` (near-zero-risk fully-known specs only)|g' \
     -e 's|spec has no tasks - run /flow-next:plan <spec-id>|spec has no tasks - run $flow-next-plan <spec-id>|g' \
@@ -490,10 +488,9 @@ done
 # --- STRUCTURAL: Task tool → agent invocation ---
 
 # flow-next-work: phases.md + its reached-path references (wave-join.md,
-# host-deferred-review.md carry the same actionable invocations post branch-disclosure).
-# The work-rolling beta's scheduler reference carries the same actionable
-# per-task impl-review invocation (fn-203 Phase B), so it rides the same pass.
-for wf in "$CODEX_DIR/skills/flow-next-work/phases.md" "$CODEX_DIR"/skills/flow-next-work/references/*.md "$CODEX_DIR"/skills/flow-next-work-rolling/references/*.md; do
+# host-deferred-review.md, rolling-scheduler.md carry the same actionable
+# invocations post branch-disclosure).
+for wf in "$CODEX_DIR/skills/flow-next-work/phases.md" "$CODEX_DIR"/skills/flow-next-work/references/*.md; do
   [ -f "$wf" ] || continue
   # Actionable impl-review invocations must use the Codex skill name. Passive
   # /flow-next: mentions elsewhere stay.
@@ -1716,11 +1713,6 @@ generate_openai_yaml "flow-next-map"   "Flow Map"   "Wrap clawpatch map for a se
 # text into every session's shared skills budget is exactly the cost the
 # digest exists to save. Reachable by /flow-next:visual and by $name.
 generate_openai_yaml "flow-next-visual" "Flow Visual" "Restate a spec, task, diff, or the current topic as a compact markdown digest" "#F59E0B" false
-# Work-rolling is an EXPERIMENTAL beta (fn-203 Phase B): user-invoked only,
-# explicit false so it never enters the implicit skill catalog - the pipeline
-# (pilot/land) stays on canonical flow-next-work. Reachable by
-# $flow-next-work-rolling. It graduates or is deleted (fn-203 R10).
-generate_openai_yaml "flow-next-work-rolling" "Flow Work Rolling [experimental]" "Rolling-frontier work variant - per-task admission, isolated workspaces, conductor-owned review (experimental - can change or disappear)" "#3B82F6" false
 # Prose is IN the implicit catalog (true): the entry is dieted (below 200
 # chars), the measured global catalog sits under half the 8000-char budget,
 # and the skill's whole point is ambient self-application while the agent
@@ -1851,7 +1843,6 @@ REQUIRED_OPENAI_YAML_SKILLS=(
   "flow-next-export-context"
   "flow-next-worktree-kit"
   "flow-next-deps"
-  "flow-next-work-rolling"
   "flow-next-prose"
   "flow-next-features"
 )
@@ -2381,8 +2372,6 @@ flow-next-capture/workflow.md	`/flow-next:work <SPEC_ID> --no-plan` (near-zero-r
 flow-next-interview/SKILL.md	(or `/flow-next:work fn-N --no-plan`	(or `$flow-next-work fn-N --no-plan`
 flow-next-guide/SKILL.md	| `/flow-next:work <spec-id> --no-plan` (or answer	| `$flow-next-work <spec-id> --no-plan` (or answer
 flow-next-guide/SKILL.md	Prefer `/flow-next:plan` when independent surfaces	Prefer `$flow-next-plan` when independent surfaces
-flow-next-guide/SKILL.md	and `/flow-next:work-rolling` refuses the route	and `$flow-next-work-rolling` refuses the route
-flow-next-work-rolling/SKILL.md	redirect to plain `/flow-next:work <spec-id> --no-plan`	redirect to plain `$flow-next-work <spec-id> --no-plan`
 flow-next-work/references/no-plan-route.md	spec has no tasks - run /flow-next:plan <spec-id>	spec has no tasks - run $flow-next-plan <spec-id>
 flow-next-work/references/no-plan-route.md	stop; run /flow-next:plan (reviewed task breakdown	stop; run $flow-next-plan (reviewed task breakdown
 flow-next-work/references/no-plan-route.md	pointer: run `/flow-next:plan <spec-id>`, then re-run `/flow-next:work <spec-id>`	pointer: run `$flow-next-plan <spec-id>`, then re-run `$flow-next-work <spec-id>`

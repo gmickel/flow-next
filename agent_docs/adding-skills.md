@@ -44,7 +44,7 @@ A skill may ship **before** it has earned the full checklist above. An experimen
 
 **Failure signature.** A skill carrying the experimental suffix that also appears in a README table or a published count is not experimental - it is an undocumented promise. Either finish the checklist or take it out of the tables.
 
-Currently in this tier: `flow-next-work-rolling` (fn-203 Phase B — graduates or sunsets per fn-203 R10). Existing stable skills are not demoted into the tier.
+Currently in this tier: none (`flow-next-work-rolling` graduated into `/flow-next:work` as its default scheduler, fn-218). Existing stable skills are not demoted into the tier.
 
 ## Backend-split workflow.md (heuristic)
 
