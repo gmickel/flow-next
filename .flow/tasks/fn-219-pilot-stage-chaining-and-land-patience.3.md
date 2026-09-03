@@ -39,9 +39,16 @@ Read `land.patienceMinutesAfterReview` through the existing single `lcfg` captur
 - [ ] Merge flags byte-for-byte unchanged; existing land static tests green; no `sync-codex.sh` run in this task
 - [ ] Quick: `cd plugins/flow-next/tests && python3 -m unittest test_land_patience_after_review test_land_config test_skill_prose_diet -q`
 ## Done summary
-TBD
+Land's `silence` gate can now measure its patience window from the head-current automated review event instead of the last push when `land.patienceMinutesAfterReview` is set (R7, R8, R9): Phase 0 reads the key through the single `lcfg` capture (any positive integer is on; null/""/0/non-numeric are off), §2.6 records `REVIEW_EVENT_AT` as the running max across head-current reviews and qualifying clean-review comments (the comment jq projection now carries `.updated_at` as its second field), and a new re-anchor block after the comment scan sets `WINDOW_ANCHOR=review` + `SILENCE_WINDOW_ELAPSED` only under the silence signal AND key-active AND `AUTO_REVIEW_CURRENT == 1` AND `UNRESOLVED -eq 0` AND a `fromdateiso8601`-parseable timestamp, comparing overflow-safely (a limit beyond bash's signed range is never elapsed) — every other case, parse failure included, keeps the push anchor. `WINDOW_ELAPSED` is untouched, so `approve`/`<login>`, §2.4, §2.6b, and §2.7 keep the push window; no ledger field, `triggerSha` and the merge flags are byte-for-byte. `WINDOW_ANCHOR=push` is initialized at the PR_STATE capture (fn-200 initializer discipline); Phase 4 / dry-run append `anchor=<push|review>` to `window=` and the `AWAITING_REVIEW` reason names the binding anchor, both only when the key is configured. SKILL.md (gate bullet + Unattended runs), `agent_docs/conduct/land.md` (one item), and new `plugins/flow-next/tests/test_land_patience_after_review.py` (sliced token pins plus executable fence tests for the Phase 0 read and the re-anchor condition matrix, on the canonical files) — R11. Codex mirror untouched by design (task .4 owns the single regen and extends the pins to the mirror).
 
+Integrated onto the target branch by cherry-pick (worker commit 63eea22c → 9c25ed79), then two conductor-owned review-fix commits (553a327b, 47f25976).
+
+baseline: green via handoff (verified at c21d21ca by fn-219.1); ruff green pre-edit.
+Verify: `gate classify` → FULL (skills/ force-full prefix). Integrated-target verify at 47f25976: spec Quick + task Quick + pin suites (9 modules) OK; `gen_flow_config_schema.py --check` current; `uvx ruff@0.16.0 check .` clean. No full-suite receipt: the canonical full-suite command runs at the conductor's final gate.
+
+stage: impl-review - ran (codex; round 1 three-axis fan-out NEEDS_WORK ×3 → merged 3 findings fixed; round 2 NEEDS_WORK 1 finding fixed; round 3 SHIP) (model: codex backend, model as reported in the review receipt)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 9c25ed79, 553a327b, 47f25976
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_land_patience_after_review test_land_config test_skill_prose_diet -q, cd plugins/flow-next/tests && python3 -m unittest test_pipeline_qa_config test_land_config test_flow_config_schema test_flow_config_schema_drift test_skill_prose_diet test_pilot_chain_stages test_land_patience_after_review test_pilot_strikes_prose test_prompt_text_pinned -q (integrated target 47f25976), python3 scripts/gen_flow_config_schema.py --check, uvx ruff@0.16.0 check .
 - PRs:

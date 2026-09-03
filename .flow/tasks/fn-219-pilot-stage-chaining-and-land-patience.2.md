@@ -39,9 +39,16 @@ Wire the one-row chain table (`qa`→`make-pr`) into pilot's shared dispatch/ver
 - [ ] Conduct checklist updated; new contract tests pass on the canonical files; no `sync-codex.sh` run in this task
 - [ ] Quick: `cd plugins/flow-next/tests && python3 -m unittest test_pilot_chain_stages test_skill_prose_diet test_pilot_strikes_prose -q`
 ## Done summary
-TBD
+Wired pilot's in-tick `qa → make-pr` chaining behind `pipeline.chainStages` (R2–R5): a fail-closed jq read of the root snapshot in workflow.md Phase 2 (no new `config get`; an `if` fence so the default-off path exits 0), a Phase 5 "Chained stage" subsection with the closed one-row table that references the standalone make-pr phases (entered only on `CHAIN_ENABLED=1` and `QA_ADVANCED=true`; `plan → plan-review` recorded as not a pair because the plan dispatch embeds its review loop), dry-run `chain=` / precondition-checked `would-chain=`, Phase 6 `stage=qa+make-pr` verdict grammar with sequential ledger writes, and a concrete two-row backlog decision-log template (qa row `advanced` without cost, make-pr row with the terminal action and the whole-tick cost once). The make-pr verify probe now captures gh's status separately and makes jq the status-bearing command, so an outage or malformed output is crash-class `NEEDS_HUMAN` instead of a false strike. Every single-stage surface (SKILL.md, workflow.md, backlog-mode.md, commands/pilot.md, both colon-free sync-codex.sh description strings ≤200 chars) carries the gated clause; the conduct checklist gained the closed-table item; `tests/test_pilot_chain_stages.py` pins the contract on canonical files (token pins plus executable fence tests for the gate read and the verify parse) — R11; mirror pins land with fn-219.4's single regen (sync-codex.sh was NOT run in this task).
 
+Integrated onto the target branch by cherry-pick (worker commit bce6e4ee → 5f9091d9), then two conductor-owned review-fix commits (c45ebfce, 95c8e537).
+
+baseline: green via handoff (verified at c21d21ca by fn-219-pilot-stage-chaining-and-land-patience.1)
+gate classify: FULL (force-full prefix plugins/flow-next/commands/). Integrated-target verify at 47f25976: spec Quick + task Quick + pin suites (9 modules) OK; `gen_flow_config_schema.py --check` current; `uvx ruff@0.16.0 check .` clean. No full-suite receipt: the canonical full-suite command runs at the conductor's final gate.
+
+stage: impl-review - ran (codex; round 1 three-axis fan-out NEEDS_WORK ×3 → merged 3 findings fixed; round 2 NEEDS_WORK 2 findings fixed; round 3 SHIP) (model: codex backend, model as reported in the review receipt)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 5f9091d9, c45ebfce, 95c8e537
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_pilot_chain_stages test_skill_prose_diet test_pilot_strikes_prose -q, cd plugins/flow-next/tests && python3 -m unittest test_pipeline_qa_config test_land_config test_flow_config_schema test_flow_config_schema_drift test_skill_prose_diet test_pilot_chain_stages test_land_patience_after_review test_pilot_strikes_prose test_prompt_text_pinned -q (integrated target 47f25976), python3 scripts/gen_flow_config_schema.py --check, uvx ruff@0.16.0 check .
 - PRs:
