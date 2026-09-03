@@ -806,7 +806,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-219-pilot-stage-chaining-and-land-patience.md",
-  "status": "open",
+  "status": "done",
   "title": "Pilot stage chaining and land patience-after-review, opt-in idle removal",
   "tracker": {
     "baseHashFlow": null,
@@ -819,5 +819,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-03T09:46:59.965071Z"
+  "updated_at": "2026-09-03T13:00:26.550280Z"
 }
