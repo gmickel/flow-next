@@ -10,6 +10,7 @@
   "id": "fn-218-rolling-frontier-becomes-the-work",
   "impl_review_rounds": {},
   "next_task": 1,
+  "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
@@ -27,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-03T22:39:38.041847Z"
+  "updated_at": "2026-09-03T23:09:06.439454Z"
 }
