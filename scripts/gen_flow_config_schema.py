@@ -365,9 +365,12 @@ DESCRIPTIONS: dict[str, str] = {
         "moves the head and the push-anchored patienceMinutes window "
         "governs again until the bot re-reviews. approve and <login> "
         "signals, the no-checks guard, and the merge command are untouched. "
-        "Active only as a positive integer: unset, null, an empty string, 0, "
-        "and non-numeric values all mean OFF (today's push-anchored wait, "
-        "byte-for-byte). Opt-in because the window is the human-objection "
+        "Active only as a positive integer: unset, null, and 0 mean OFF "
+        "(today's push-anchored wait, byte-for-byte; 0 is off on purpose - "
+        "a zero grace period is the strict-silence anti-pattern the window "
+        "exists to prevent). Any other value is schema-invalid; the land "
+        "read treats a hand-edited or pre-schema string as off rather than "
+        "failing the tick. Opt-in because the window is the human-objection "
         "grace period. See docs/running-lean.md."
     ),
     "makePr": "/flow-next:make-pr export settings.",

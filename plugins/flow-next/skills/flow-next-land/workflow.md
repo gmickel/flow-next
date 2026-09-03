@@ -89,7 +89,7 @@ fi   # explicit "" stays "" → §2.6 treats empty as DISABLED (no default fallb
 MERGE_VERDICT_CMD="$(lcfg mergeVerdictCommand)"; [[ "$MERGE_VERDICT_CMD" == "null" ]] && MERGE_VERDICT_CMD=""
 # fn-200 — opt-in human reviewer request (§2.6b / §3.4b). unset / null / "" ALL mean OFF.
 REQUEST_REVIEWERS="$(lcfg requestReviewers)"; [[ "$REQUEST_REVIEWERS" == "null" ]] && REQUEST_REVIEWERS=""
-# fn-219 — opt-in silence-window re-anchor (§2.6). Active ONLY as a positive integer: unset / null / "" / 0 / non-numeric ALL mean OFF (0 is off because a zero grace period is the strict-silence anti-pattern the window exists to prevent).
+# fn-219 — opt-in silence-window re-anchor (§2.6). Active ONLY as a positive integer: unset / null / 0 mean OFF (0 is off because a zero grace period is the strict-silence anti-pattern the window exists to prevent). The schema is integer|null; a hand-edited or pre-schema string ("" / non-numeric) reads as off here rather than failing the tick — defensive, not a documented value.
 PATIENCE_AFTER_REVIEW="$(lcfg patienceMinutesAfterReview)"; [[ "$PATIENCE_AFTER_REVIEW" =~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""   # any positive integer is on (the schema is unbounded); §2.6 compares overflow-safely
 ```
 

@@ -1457,8 +1457,10 @@ def get_default_config() -> dict:
             # while the latest automated review is head-current with zero
             # unresolved threads, the silence gate's window is re-anchored
             # to that review event (this many minutes measured from it)
-            # instead of the last push. null / "" / 0 / non-numeric = OFF
-            # (today's push-anchored wait, byte-for-byte). A fix push moves
+            # instead of the last push. null / 0 = OFF (today's push-anchored
+            # wait, byte-for-byte); the schema is integer|null, and the land
+            # read treats a hand-edited or pre-schema string as off rather
+            # than failing the tick. A fix push moves
             # the head, so the review stops being head-current and the push
             # anchor governs again until the bot re-reviews.
             "patienceMinutesAfterReview": None,
