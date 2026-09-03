@@ -45,3 +45,4 @@ stage: impl-review - ran [round 1 fan-out (correctness SHIP, contracts NEEDS_WOR
 - Commits: 8cd8b0bba2c54e126ccc82de113b24aa8b572bb3, c21d21ca7464705ca0264366d13dbbaa28a1166a
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_pipeline_qa_config test_land_config test_flow_config_schema test_flow_config_schema_drift test_skill_prose_diet -q, cd plugins/flow-next/tests && python3 -m unittest test_tracker_distribution -q, python3 scripts/gen_flow_config_schema.py --check, ./scripts/sync-codex.sh (twice, idempotent, no mirror diff), uvx ruff@0.16.0 check ., baseline: green (unittest 171 OK, schema check, ruff)
 - PRs:
+stage: plan-sync - skipped(config: planSync.enabled != true)
