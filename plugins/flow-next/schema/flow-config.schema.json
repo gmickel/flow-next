@@ -620,6 +620,14 @@
             "null"
           ],
           "default": ""
+        },
+        "patienceMinutesAfterReview": {
+          "description": "Opt-in patience window (minutes) measured from the latest head-current automated review instead of the last push (fn-219). Applies only under the silence reviewSignal and only while that review is head-current with zero unresolved threads; a fix push moves the head and the push-anchored patienceMinutes window governs again until the bot re-reviews. approve and <login> signals, the no-checks guard, and the merge command are untouched. Active only as a positive integer: unset, null, an empty string, 0, and non-numeric values all mean OFF (today's push-anchored wait, byte-for-byte). Opt-in because the window is the human-objection grace period. See docs/running-lean.md.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "default": null
         }
       }
     },
@@ -669,6 +677,14 @@
       "properties": {
         "qa": {
           "description": "Optional QA pipeline stage (fn-72). String-enum, NOT a bool: only the literal on activates; any other value, including bool true, is OFF. With it on, pilot inserts one live /flow-next:qa pass at the all-tasks-done juncture before make-pr. Optional: flow-next runs fully without it. It costs a live-app drive pass per spec plus a running deploy and a configured driver; enable it when nobody will exercise the app before merge, or invoke /flow-next:qa manually on the changes that deserve it. See docs/running-lean.md.",
+          "enum": [
+            "off",
+            "on"
+          ],
+          "default": "off"
+        },
+        "chainStages": {
+          "description": "Opt-in pilot stage chaining (fn-219). String-enum, NOT a bool: only the literal on activates; any other value, including bool true, is OFF. With it on, a pilot tick that completed the qa stage with a fresh terminal verdict runs make-pr in the same tick instead of waiting for the next driver tick - the one closed chain pair (qa -> make-pr); no other transition chains. OFF keeps the one-stage-per-tick contract byte-for-byte. It removes one idle loop interval per spec and only earns its keep with pipeline.qa on. See docs/running-lean.md.",
           "enum": [
             "off",
             "on"

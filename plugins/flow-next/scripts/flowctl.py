@@ -1450,6 +1450,15 @@ def get_default_config() -> dict:
             # Patience window (minutes) for automated reviewers, anchored
             # to the LAST push — a land-authored CI-fix push restarts it.
             "patienceMinutes": 30,
+            # fn-219 — opt-in silence-signal refinement: when set, and only
+            # while the latest automated review is head-current with zero
+            # unresolved threads, the silence gate's window is re-anchored
+            # to that review event (this many minutes measured from it)
+            # instead of the last push. null / "" / 0 / non-numeric = OFF
+            # (today's push-anchored wait, byte-for-byte). A fix push moves
+            # the head, so the review stops being head-current and the push
+            # anchor governs again until the bot re-reviews.
+            "patienceMinutesAfterReview": None,
             # Merge review signal: silence (default) | approve | <github-login>.
             #   silence  — ≥1 automated review + zero unresolved threads +
             #              no new threads within the patience window.
@@ -1548,7 +1557,16 @@ def get_default_config() -> dict:
         # `--raw` null probe, so it materializes on init like work.*/land.*.
         # flowctl only stores/serves the knob; the QA stage is host-agent
         # skill wiring (no new subcommand/engine).
-        "pipeline": {"qa": "off"},
+        # fn-219 — pipeline.chainStages: same STRING-ENUM (off|on) and same
+        # STRICT positive read (ONLY the literal "on" activates; "off" /
+        # null / bool `true` / a typo = OFF). With it on, a pilot tick that
+        # completed `qa` runs `make-pr` in the same tick — the one closed
+        # chain pair; OFF keeps the one-stage-per-tick contract byte-for-byte.
+        # Read once per tick from pilot's root config snapshot; a snapshot
+        # read error resolves to off (fail-closed). Materializes on init
+        # beside `qa`; an upgrade init adds the leaf without touching a
+        # user-set sibling (defaults MERGE).
+        "pipeline": {"qa": "off", "chainStages": "off"},
         # fn-135.9 — chart discovery size ceiling and stale-claim threshold.
         # Seeded so `config get chart.maxDecisions` / `chart.claimStaleAfter`
         # return defaults (NOT null) on a fresh repo via the defaults MERGE.

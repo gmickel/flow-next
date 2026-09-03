@@ -357,6 +357,19 @@ DESCRIPTIONS: dict[str, str] = {
         "SHA in the land ledger. Never gates a merge (reviewSignal does). "
         "Unset, null, and an empty string all mean OFF."
     ),
+    "land.patienceMinutesAfterReview": (
+        "Opt-in patience window (minutes) measured from the latest "
+        "head-current automated review instead of the last push (fn-219). "
+        "Applies only under the silence reviewSignal and only while that "
+        "review is head-current with zero unresolved threads; a fix push "
+        "moves the head and the push-anchored patienceMinutes window "
+        "governs again until the bot re-reviews. approve and <login> "
+        "signals, the no-checks guard, and the merge command are untouched. "
+        "Active only as a positive integer: unset, null, an empty string, 0, "
+        "and non-numeric values all mean OFF (today's push-anchored wait, "
+        "byte-for-byte). Opt-in because the window is the human-objection "
+        "grace period. See docs/running-lean.md."
+    ),
     "makePr": "/flow-next:make-pr export settings.",
     "makePr.derivedPaths": (
         "Optional derived-file classification rules for the make-pr export: "
@@ -386,6 +399,17 @@ DESCRIPTIONS: dict[str, str] = {
         "running deploy and a configured driver; enable it when nobody "
         "will exercise the app before merge, or invoke /flow-next:qa "
         "manually on the changes that deserve it. See "
+        "docs/running-lean.md."
+    ),
+    "pipeline.chainStages": (
+        "Opt-in pilot stage chaining (fn-219). String-enum, NOT a bool: only "
+        "the literal on activates; any other value, including bool true, is "
+        "OFF. With it on, a pilot tick that completed the qa stage with a "
+        "fresh terminal verdict runs make-pr in the same tick instead of "
+        "waiting for the next driver tick - the one closed chain pair "
+        "(qa -> make-pr); no other transition chains. OFF keeps the "
+        "one-stage-per-tick contract byte-for-byte. It removes one idle loop "
+        "interval per spec and only earns its keep with pipeline.qa on. See "
         "docs/running-lean.md."
     ),
     "chart": (
@@ -648,6 +672,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("land.cleanReviewCommentPattern", {"type": ["string", "null"]}),
         ("land.mergeVerdictCommand", {"type": ["string", "null"]}),
         ("land.requestReviewers", {"type": ["string", "null"]}),
+        ("land.patienceMinutesAfterReview", {"type": ["integer", "null"]}),
         ("makePr", {"kind": "object", "open": False}),
         (
             "makePr.derivedPaths",
@@ -667,6 +692,7 @@ def _build_table() -> list[tuple[str, dict]]:
         ("artifacts.html.enabled", {"type": "boolean"}),
         ("pipeline", {"kind": "object", "open": False}),
         ("pipeline.qa", {"enum": ["off", "on"]}),
+        ("pipeline.chainStages", {"enum": ["off", "on"]}),
         ("chart", {"kind": "object", "open": False}),
         ("chart.maxDecisions", {"type": "integer"}),
         ("chart.claimStaleAfter", {"type": "number"}),
