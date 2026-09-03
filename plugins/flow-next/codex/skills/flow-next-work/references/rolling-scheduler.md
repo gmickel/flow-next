@@ -5,8 +5,9 @@
 > preamble. Phases 1, 2, 4, and 5 run unchanged around this file; every
 > pointer below into phases.md or a sibling reference means READ that file and
 > execute the named section verbatim - never restate or fork it. The route
-> decision already excluded plan-sync-on runs and specs with fewer than two
-> dep-independent open tasks; those run the wave route (phases.md 3a-3g).
+> decision already sent task-id runs, plan-sync-on runs, specs with fewer
+> than two open tasks, and fully sequential dependency chains to the wave
+> route (phases.md 3a-3g); this file runs only when none of those held.
 
 Contents:
 
@@ -261,7 +262,10 @@ unchanged; only the rolling overlap is lost, exactly as the platforms note
 states. Record the degradation wherever the run reports its shape - the run
 report and any receipt line describing scheduling carries
 `Scheduling: degraded to wave (host lacks non-blocking dispatch)` - so a field
-receipt can never claim rolling for a run that actually exercised waves.
+receipt can never claim rolling for a run that actually exercised waves. This
+is also where the route's ONE `Scheduling:` line is printed (phases.md Phase 3
+defers it to this probe): `Scheduling: rolling` when dispatch measured
+non-blocking, the degraded form otherwise, before the first claim.
 
 ## 3d Per-Return Integrate, Review, Complete
 

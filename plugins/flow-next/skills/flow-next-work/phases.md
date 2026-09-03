@@ -141,18 +141,20 @@ Otherwise take the **rolling route**: read
 it as this run's Phase 3 (it re-enters 3b.1, 3c, 3d.1, 3e's stage-line
 contract, and 3g by pointer). Do not execute 3a-3g directly on that route.
 
-Echo the decision once, before anything else in Phase 3, in the run report:
+Echo the decision exactly once in the run report, before the first claim:
 
 ```text
 Scheduling: rolling
+Scheduling: degraded to wave (host lacks non-blocking dispatch)
 Scheduling: wave (<task-id run | planSync.enabled=true | single task | sequential dependency chain>)
 ```
 
-The rolling scheduler's own `Scheduling: degraded to wave (host lacks
-non-blocking dispatch)` is the only other value this line takes; it replaces
-`rolling` when the host is measured to block. A run that printed no
-`Scheduling:` line, or took the rolling route with plan-sync on, has broken
-this.
+The wave route prints its line here, at Phase 3 entry. The rolling route
+prints its line from inside the scheduler, after its dispatch-behaviour probe
+(rolling-scheduler.md 3c) and before the first claim - so a host measured to
+block prints the `degraded` form instead of `rolling`, never both. A run that
+printed no `Scheduling:` line, printed two, or took the rolling route with
+plan-sync on, has broken this.
 
 **Wave route.** In SPEC_MODE, inspect the whole ready frontier and prefer a
 concurrent safe subset. In SINGLE_TASK_MODE, the selected wave is always the
