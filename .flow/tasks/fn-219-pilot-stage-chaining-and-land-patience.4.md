@@ -40,9 +40,14 @@ Document the two keys where users read them (R10): the flowctl config table, the
 - [ ] CHANGELOG `## Unreleased` entry passes the releasing.md hard rejection test; no version bump
 - [ ] Full suite green: `python3 scripts/run_tests_parallel.py` and `uvx ruff@0.16.0 check .`
 ## Done summary
-TBD
+Documented `pipeline.chainStages` and `land.patienceMinutesAfterReview` where users read them (R10): flowctl.md config-table rows beside `pipeline.qa` / `land.patienceMinutes` (strict string-enum, closed one-row chain table with plan→plan-review recorded as dissolved; silence-only re-anchor, four conditions, replace-not-min with the early/late examples, off states incl. `0`, head-current incl. submitted-after-last-push, `anchor=` token), an orchestration.md "Within one pilot invocation vs across driver invocations" subsection plus the opt-in rationale for patience-after-review, running-lean.md structural pricing (layers-table row + autonomous-loops bullet, no timings), two setup Notes lines, and a CHANGELOG `## Unreleased` entry (user-outcome paragraph, two Added bullets, `(fn-219)`, no version bump). Ran the ONE `./scripts/sync-codex.sh` regen for the spec (twice; second run clean) and switched `test_pilot_chain_stages.py` / `test_land_patience_after_review.py` to the `both_copies` pattern (canonical + mirror; mutation-checked red on a mutated mirror, green restored; no assertion weakened). The review's last surviving finding (pilot SKILL.md workflow-summary "Done when" clauses still promising one dispatch / one evidence block) was fixed by the conductor in e9f72901 with a further mirror regen, since it sat on task .2's surface.
 
+baseline: green via handoff (verified at 47f25976 by fn-219.3); ruff green pre-edit.
+Verify at f9b863a2: `gate classify` → FULL (force-full prefix plugins/flow-next/codex/); full suite `python3 scripts/run_tests_parallel.py` files=201 ran=4723 failures=0 errors=0 (green receipt minted: .flow/tmp/green-receipts/f9b863a2-unittest.json); `uvx ruff@0.16.0 check .` clean; `gen_flow_config_schema.py --check` current. At e9f72901: focused pin suites (test_pilot_chain_stages, test_land_patience_after_review, test_skill_prose_diet, test_prompt_text_pinned) OK; ruff clean; the full suite re-runs at the conductor's final gate.
+
+stage: impl-review - ran (codex gpt-5.6-sol high; round 1 three-axis fan-out NEEDS_WORK ×3 → merged 4 findings, 3 fixed in 77d39b7a; round 2 NEEDS_WORK, 1 finding fixed by the conductor in e9f72901; round 3 SHIP) (model: codex gpt-5.6-sol at high)
+stage: plan-sync - skipped(config: planSync.enabled != true)
 ## Evidence
-- Commits:
-- Tests:
+- Commits: fb52519672828f6f5a15a15e3aa091e5e514b91e, 77d39b7a20aff7990d8b66abc8c02c783f3e216b, f9b863a2418c494725f0441e8ff56b5e5fabc060, e9f72901
+- Tests: cd plugins/flow-next/tests && python3 -m unittest test_pilot_chain_stages test_land_patience_after_review test_skill_prose_diet test_pipeline_qa_config test_land_config test_flow_config_schema test_flow_config_schema_drift test_chart_docs_inventory test_ralph_docs_truth -q, python3 scripts/gen_flow_config_schema.py --check, ./scripts/sync-codex.sh (run twice, second run clean), python3 scripts/run_tests_parallel.py (at f9b863a2: files=201 ran=4723 failures=0), uvx ruff@0.16.0 check .
 - PRs:
