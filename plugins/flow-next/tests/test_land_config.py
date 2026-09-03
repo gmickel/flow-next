@@ -1,8 +1,10 @@
 """Unit tests for the /flow-next:land config surface (fn-60.2 R15, fn-65.1 R5).
 
 `get_default_config()` carries a top-level `land` block so
-`flowctl config get land.*` returns the spec defaults (NOT `null`) on a
-fresh repo, WITHOUT any prior `config set`:
+`flowctl config get land.*` returns the seeded spec default (never a missing
+key) on a fresh repo, WITHOUT any prior `config set`. Every leaf is non-null
+EXCEPT `patienceMinutesAfterReview`, whose seeded default is an explicit
+`null` (its documented off state):
 
   * land.release                  → True
   * land.patienceMinutes          → 30

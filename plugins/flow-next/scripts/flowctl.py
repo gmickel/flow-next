@@ -1440,7 +1440,10 @@ def get_default_config() -> dict:
         # tracker bridge's `tracker.perEvent.work.*` lifecycle keys are a
         # DISTINCT namespace and are untouched.
         # fn-60.2 — /flow-next:land babysit-loop defaults, seeded so
-        # `config get land.*` returns values (NOT null) on a fresh repo.
+        # `config get land.*` returns the seeded default (never a missing
+        # key) on a fresh repo; every leaf is non-null EXCEPT
+        # patienceMinutesAfterReview, whose seeded default is an explicit
+        # null (its documented off state).
         # Consumed by the opt-in flow-next-land skill (fn-60.1); flowctl
         # itself only stores/serves them.
         "land": {
