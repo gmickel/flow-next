@@ -75,7 +75,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 - `related_to` points at a stale entry that itself was updated to a new id → re-point.
 - Code snippet in body uses an outdated import path → fix the snippet.
 
-**Retrieval-fix variant.** The entry is correct, recurrence-qualified (§0.75.1), and fails the Harden mechanizability condition: the lesson keeps being re-learned because the entry does not surface, not because it is wrong. Repair the retrieval surface only — `title`, `tags`, `module`, `applies_when` (knowledge track), and placement (a `git mv` into the category the lesson belongs to, since category-scoped search and scope narrowing never reach a misfiled entry) — so the query the next agent will actually type matches. A placement move changes the entry id (it embeds the category): set the frontmatter `category` to the new bucket and re-point every `related_to` that named the old id, in the same edit, so path and metadata never disagree. Cite the recurrence artifacts in the report line as `retrieval fix: <fields>; <N> Update headings / <M> commits`. A body or solution edit under this variant is a Replace in disguise: stop and reclassify.
+**Retrieval-fix variant.** The entry is correct, recurrence-qualified (§0.75.1), fails the Harden mechanizability condition, and has a **nameable retrieval defect**: the lesson keeps being re-learned because the entry does not surface, not because it is wrong. Recurrence qualifies the entry for the question; it does not answer it. State the defect before editing — which of `title` / `tags` / `module` / `applies_when` / placement would miss the query this topic actually gets searched by. When the surface already carries them, there is **no retrieval fix** — the entry falls through to the ordinary reference-drift check and is Keep (reviewed without edits) absent drift of its own — not a cosmetic re-tag: §0.75.1's counters are all-history and never decrease, and the repair commit is itself substantive there, so an unconditional branch would re-fire on this entry at every later audit — repeated metadata churn and commits in autofix, forever. Repair the retrieval surface only — `title`, `tags`, `module`, `applies_when` (knowledge track), and placement (a `git mv` into the category the lesson belongs to, since category-scoped search and scope narrowing never reach a misfiled entry) — so the query the next agent will actually type matches. A placement move changes the entry id (it embeds the category): set the frontmatter `category` to the new bucket and re-point every `related_to` that named the old id, in the same edit, so path and metadata never disagree. Cite the recurrence artifacts in the report line as `retrieval fix: <fields>; <N> Update headings / <M> commits`. A body or solution edit *justified by the retrieval rationale* is a Replace in disguise: stop and reclassify. The "never the body" rule scopes what the retrieval defect licenses — it does not exempt the entry from the ordinary Update above: an entry that also carries plain reference drift (a renamed path in its body, a dead link, a stale snippet) still gets those repaired, on the ordinary Update's own evidence, in the same write. Both repairs land as one Update, reported as `retrieval fix: <fields>` plus the drift fixed.
 
 **When NOT to use:**
 
@@ -88,7 +88,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 **Action steps:**
 
 1. Read the file (already loaded in Phase 1).
-2. Mutate only the specific frontmatter fields that need updating. **Preserve all other fields** — `title`, `date`, `track`, `category`, plus any track-specific fields (`problem_type`, `symptoms`, `root_cause`, `resolution_type` for bug; `applies_when` for knowledge) and any unknown fields someone else added.
+2. Mutate only the specific frontmatter fields that need updating. **Preserve all other fields** — `title`, `date`, `track`, `category` (sole exception: a retrieval-fix placement move sets `category` to the new bucket, per the retrieval-fix variant above), plus any track-specific fields (`problem_type`, `symptoms`, `root_cause`, `resolution_type` for bug; `applies_when` for knowledge) and any unknown fields someone else added.
 3. Mutate the body for code-ref / link / snippet fixes.
 4. Write the file back via the Write tool.
 5. **Round-trip safety:** if frontmatter has quirky YAML (anchors, nested structures, multi-line values) the agent isn't confident parsing, prefer `flowctl memory mark-stale` for stale-flagging — that helper handles round-trip correctly via existing `write_memory_entry`.
@@ -477,14 +477,19 @@ a related_to cluster >= 3 only corroborates — it proposes nothing on its own)
               inactive match → broken gate: entry stays active, report the finding
               no match       → Harden (pick gate type a→b→c, draft artifact,
                                ask, write, VERIFY the gate fires, then mark-hardened)
-        no  → Update, retrieval-fix variant (the lesson recurs while a correct entry
-              sits unread: repair title / tags / module / applies_when / placement,
-              never the body — see §Update)
+        no  → nameable retrieval defect in title / tags / module / applies_when /
+              placement (the surface would miss the query this topic gets searched by)?
+              yes → Update, retrieval-fix variant (repair the surface, never the
+                    body — see §Update), then continue to the drift check below
+                    and fold any ordinary reference repairs into the SAME Update
+              no  → continue (recurrence alone never re-fires a repaired entry)
   no  → continue
 
 Are there reference drifts (paths, modules, links, snippets)?
-  yes → Update (write tool; preserve unknown frontmatter)
-  no  → Keep (no edit; report under "Reviewed without edits")
+  yes → Update (write tool; preserve unknown frontmatter) — one Update per entry,
+        carrying the retrieval-surface repair too if one was named above
+  no  → Keep (no edit; report under "Reviewed without edits"), unless a retrieval
+        fix was named above — then it is that Update alone
 ```
 
 An entry needing both an Update and a Harden gets the Update applied first — fix the lesson before retiring it — then hardened in the same run.

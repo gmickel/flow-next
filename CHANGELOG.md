@@ -6,7 +6,7 @@ All notable changes to the flow-next.
 
 ### Changed
 
-- **`/flow-next:audit` now fixes how a lesson is found, not just what it says.** A memory entry that keeps being re-learned but states a rule no lint or CI step can check used to fall through to Keep, so the same lesson got re-taught every run. The audit now classifies it as an Update with a retrieval fix: it repairs the entry's title, tags, module, and `applies_when` so the next search actually surfaces it, and never touches the body. The report counts retrieval fixes inside Updated. No new status or field; the signal is the same write-side recurrence scan Harden already uses (fn-217).
+- **`/flow-next:audit` now fixes how a lesson is found, not just what it says.** A memory entry that keeps being re-learned but states a rule no lint or CI step can check used to fall through to Keep, so the same lesson got re-taught every run. The audit now classifies it as an Update with a retrieval fix: it repairs the entry's title, tags, module, and `applies_when` — and moves a misfiled entry into the category it belongs to, since a category-scoped search never reaches it where it sits — so the next search actually surfaces it, and never touches the body. The report counts retrieval fixes inside Updated. No new status or field; the signal is the same write-side recurrence scan Harden already uses (fn-217).
 
 ## [flow-next 4.12.0] - 2026-09-02
 
