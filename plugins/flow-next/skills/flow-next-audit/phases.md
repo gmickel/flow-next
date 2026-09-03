@@ -88,7 +88,7 @@ Keep and Update are unaffected by this ordering: an entry that needs a reference
 **Action steps:**
 
 1. Read the file (already loaded in Phase 1).
-2. Mutate only the specific frontmatter fields that need updating. **Preserve all other fields** — `title`, `date`, `track`, `category` (sole exception: a retrieval-fix placement move sets `category` to the new bucket, per the retrieval-fix variant above), plus any track-specific fields (`problem_type`, `symptoms`, `root_cause`, `resolution_type` for bug; `applies_when` for knowledge) and any unknown fields someone else added.
+2. Mutate only the specific frontmatter fields that need updating. **Preserve all other fields** — `title`, `date`, `track`, `category`, plus any track-specific fields (`problem_type`, `symptoms`, `root_cause`, `resolution_type` for bug; `applies_when` for knowledge) and any unknown fields someone else added. The retrieval-fix variant above is the one exception, and only for the field it named as the defect: it may rewrite `title` (never an upsert identity), `tags`, `module`, `applies_when`, and — on a placement move — `category`, which is then set to the new bucket. Everything it did not name stays preserved.
 3. Mutate the body for code-ref / link / snippet fixes.
 4. Write the file back via the Write tool.
 5. **Round-trip safety:** if frontmatter has quirky YAML (anchors, nested structures, multi-line values) the agent isn't confident parsing, prefer `flowctl memory mark-stale` for stale-flagging — that helper handles round-trip correctly via existing `write_memory_entry`.

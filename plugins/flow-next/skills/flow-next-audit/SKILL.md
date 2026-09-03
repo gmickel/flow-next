@@ -123,7 +123,7 @@ Scanned: N entries
 Skipped legacy: M (run `/flow-next:memory-migrate` first to make these auditable)
 
 Kept: X
-Updated: Y
+Updated: Y  (of which retrieval fixes: RF)
 Consolidated: C
 Replaced: Z
 Deleted: W
