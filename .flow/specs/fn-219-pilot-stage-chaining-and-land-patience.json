@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-219-pilot-stage-chaining-and-land-patience",
-  "completion_review_status": "needs_work",
-  "completion_reviewed_at": "2026-09-03T09:44:27.514584Z",
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-09-03T09:46:59.960762Z",
   "created_at": "2026-09-03T08:09:05.913783Z",
   "default_impl": null,
   "default_review": null,
@@ -15,7 +15,7 @@
     "fn-219-pilot-stage-chaining-and-land-patience.4": 0
   },
   "next_task": 1,
-  "plan_review_rounds": 1,
+  "plan_review_rounds": 0,
   "plan_review_status": "ship",
   "plan_reviewed_at": "2026-09-03T08:28:08.514981Z",
   "review_attempts": [
@@ -733,6 +733,58 @@
       "timestamp": "2026-09-03T09:44:27.494402Z",
       "tool_calls": 25,
       "verdict": "NEEDS_WORK"
+    },
+    {
+      "artifact_sha256": "010c869251c8b59b8314f3bfa47ec95c05370920320d671c86e2fbcf8943131b",
+      "backend": "codex",
+      "base_sha": "81d6f55f0cb6e4aba681e6c660071d57e18fffda",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-8e7d3e23fd620f51812e3f7ee1b4b0eb",
+            "classification": "introduced",
+            "findingId": "finding-8e7d3e23fd620f51812e3f7ee1b4b0eb",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          },
+          {
+            "chainRoot": "finding-d3319eb8fc737d86510486b6cdb0e172",
+            "classification": "introduced",
+            "findingId": "finding-d3319eb8fc737d86510486b6cdb0e172",
+            "firstSeenThisRound": false,
+            "severity": "P1",
+            "status": "fixed"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "535edf657ebd4f5f9aa89405d3777e9ec0617794",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 4574,
+      "output_sha256": "424223eee89852d307d8591c8e0f871d14449a23693d09106614be7fc98055a2",
+      "reservation_id": "7f11783ba94a49b985465a95fdc81d03",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-09-03T09:46:59.951498Z",
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
@@ -741,7 +793,7 @@
     "impl:fn-219-pilot-stage-chaining-and-land-patience.3": 1,
     "impl:fn-219-pilot-stage-chaining-and-land-patience.4": 1,
     "plan": 1,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
@@ -767,5 +819,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-03T09:45:44.029547Z"
+  "updated_at": "2026-09-03T09:46:59.965071Z"
 }
