@@ -2,6 +2,15 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Anyone running `/flow-next:pilot` and `/flow-next:land` unattended under a host loop stops paying idle loop intervals on two transitions whose outcome is already decided: the draft PR after a live QA pass, and the merge wait after a clean bot review. Both are opt-in keys, off by default, and toggle independently; with either on, every gate, verdict, and merge license behaves exactly as before.
+
+### Added
+
+- **Pilot opens the draft PR in the same tick as the QA verdict instead of waiting for the next loop interval.** With `pipeline.chainStages` on (`flowctl config set pipeline.chainStages on`; a string-enum - only the literal `on` activates), a tick whose `qa` stage produced a fresh terminal verdict runs `make-pr` before it exits, so the driver no longer pays an interval plus a full re-anchor for a stage it was always going to run. The chain table is closed to that one row: `plan → plan-review` was found redundant at plan review, because pilot's plan dispatch already embeds its review loop and a successful plan tick already classifies `work` next; no transition that can fail into human territory chains. The terminal line reads `stage=qa+make-pr` with make-pr's verdict, `--dry-run` reports `chain=` and a precondition-checked `would-chain=`, a chained backlog tick writes one decision-log row per dispatched stage, and the PR stays a draft - pilot still never merges. Off (default), the tick is byte-for-byte unchanged; with `pipeline.qa` off there is nothing to chain.
+- **Land merges sooner after a clean bot review without shortening anyone's chance to object.** With `land.patienceMinutesAfterReview` set (`flowctl config set land.patienceMinutesAfterReview 15`; any positive integer - `null`, `""`, and `0` are off), the default `silence` gate measures its patience window from the head-current automated review event instead of from the last push, once that review has zero unresolved threads. The window is grace after the reviewer spoke, so a late review lengthens the wait rather than shortening it; a fix push falls back to the push anchor until the bot re-reviews; the `approve`/`<login>` signals, every other window consumer, and the merge call are untouched. When configured, the report's `window=` field names the binding anchor (`anchor=<push|review>`); unset keeps today's report line byte-for-byte. (fn-219)
+
 ## [flow-next 4.12.0] - 2026-09-02
 
 Anyone running implementation review on the codex or host backend now gets most of a scope's findings in the first round instead of across a slow serial trickle. The first round draws three reviewers at once, each reading for a different defect class, and the coordinator hands back one merged list for a single fix pass. The round still counts once against the cap, the receipt records every draw honestly, and the topology is steerable in a sentence when a clean diff does not warrant the harvest.

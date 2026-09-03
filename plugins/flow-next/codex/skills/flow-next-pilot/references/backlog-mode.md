@@ -26,7 +26,8 @@ exactly one state-changing terminal. It is **NOT** a daemon, a polling loop, a
 trigger handler, a webhook, a cron, or a parallel-worktree fan-out — that standing
 control-plane role is mergefoundry / flow-swarm's (fn-94/99), not flow-next's. The
 host `/loop` (Claude Code) or `/goal` (Claude Code / Codex) owns repetition; one
-invocation advances one item by one stage. The autonomous span runs only from a
+invocation advances one item by one stage (with `pipeline.chainStages` on, `make-pr` after a
+fresh `qa` verdict is the only admissible second dispatch in that invocation). The autonomous span runs only from a
 **workable spec → draft PR (`make-pr`)** — never authoring upstream, never merging
 downstream (land owns the merge — R6).
 
@@ -323,7 +324,7 @@ For a **signalled** item, route it to exactly one class. **First match wins — 
 |---|---|---|
 | **needs-spec** | a **tracker-only** promoted item — no flow spec exists at all | **`ask` via the tracker comment ALONE** (Phase 3) — surface "run capture/interview"; **never a spec stub** |
 | **dep-unsatisfied** | signal present, but a blocker (flow or tracker) is not yet done | **`BLOCKED <id> by <dep>`** — a state-changing terminal that **surfaces the dep wait** (never `NO_WORK` — the item was selectable in 1f); the topo-sort offers the blocker first on a later tick. A circular/unsatisfiable dep routes to `ASKED` instead (1e) |
-| **workable** | signal present, **deps satisfied**, AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance** — hand to pilot's existing CLASSIFY (`workflow.md` Phase 2); it advances exactly one stage (`plan → plan-review → work → [qa] → make-pr`) |
+| **workable** | signal present, **deps satisfied**, AND the spec is complete enough to act on (clear AC / R-IDs, an actionable next stage) | **advance** — hand to pilot's existing CLASSIFY (`workflow.md` Phase 2); it advances exactly one stage (`plan → plan-review → work → [qa] → make-pr`; with `pipeline.chainStages` on, a fresh `qa` verdict chains `make-pr` in the same tick — the only admissible second dispatch) |
 | **ready-but-thin / ambiguous** | signal present, deps satisfied, but the spec is missing, a stub, or too thin/ambiguous to act on safely | **`ask`** (Phase 3) — kick back the gap; **never build, never auto-author** |
 | **needs-human** | signal present, deps satisfied, spec exists, but a genuine decision needs a person (conflicting AC, a real design fork) | **`ask`** (Phase 3) |
 

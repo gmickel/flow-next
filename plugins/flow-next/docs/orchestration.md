@@ -376,6 +376,12 @@ Pilot and land end every tick with machine-readable verdict lines precisely so a
   or on any NEEDS_HUMAN.
 ```
 
+### Within a tick vs across ticks
+
+The driver composition above chains *across* ticks: every pilot invocation still advances one stage, and the loop interval is the seam between stages. `pipeline.chainStages` (`off` by default) chains *within* a tick, for the one transition whose outcome is already decided when the stage ends: a `qa` stage that verified a fresh terminal `qa_outcome` runs `make-pr` in the same tick, so the driver no longer pays an interval plus a full re-anchor to open a draft PR it was always going to open. The table is closed - `qa → make-pr` only. `plan → plan-review` is not a row because the plan dispatch already embeds its review loop (a successful plan tick already classifies `work` next); `plan-review → work` and `work → qa`/`make-pr` are not rows because those transitions cross a stage that can fail into human territory. The verdict grammar stays driver-readable: `stage=qa+make-pr`, the verdict is make-pr's, and a driver grepping `PILOT_VERDICT=ADVANCED` keeps working. With `pipeline.qa` off there is nothing to chain, so the switch matters only on repos running the QA stage. Config-table entry: [`flowctl.md`](flowctl.md#config).
+
+On the land side, `land.patienceMinutesAfterReview` (`null` by default) removes the wait the driver keeps paying after a clean review: under the default `silence` signal, once the latest automated review is head-current with zero unresolved threads, the patience window is measured from that review event instead of from the last push. It stays opt-in because the push-anchored window is the human-objection grace period - time for a person to read what the bot said and object - and each repo decides how much of that grace it wants once the reviewer has spoken. It refines only the silence gate: the `approve`/`<login>` signals, every other window consumer, and the merge license are unchanged, and a fix push falls back to the push anchor until the bot re-reviews.
+
 Loop internals: [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md), [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md), [`ralph.md`](ralph.md) for the hardened harness.
 
 ## Unattended chart driving (outside the build loop)
