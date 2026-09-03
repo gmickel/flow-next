@@ -1,6 +1,6 @@
 ---
 name: flow-next-pilot
-description: Single-tick autonomous build-loop conductor. Advances one ready spec one stage per tick (pipeline.chainStages on chains qa into make-pr), emits PILOT_VERDICT. Use when asked to pilot a spec.
+description: Single-tick autonomous build-loop conductor. One spec or the backlog, one stage per tick (pipeline.chainStages chains qa into make-pr), emits PILOT_VERDICT. Use when asked to pilot a spec or backlog.
 user-invocable: false
 allowed-tools: Read, Bash, Grep, Glob, Write, Edit, Skill
 ---
