@@ -622,11 +622,12 @@
           "default": ""
         },
         "patienceMinutesAfterReview": {
-          "description": "Opt-in patience window (minutes) measured from the latest head-current automated review instead of the last push (fn-219). Applies only under the silence reviewSignal and only while that review is head-current with zero unresolved threads; a fix push moves the head and the push-anchored patienceMinutes window governs again until the bot re-reviews. approve and <login> signals, the no-checks guard, and the merge command are untouched. Active only as a positive integer: unset, null, and 0 mean OFF (today's push-anchored wait, byte-for-byte; 0 is off on purpose - a zero grace period is the strict-silence anti-pattern the window exists to prevent). Any other value is schema-invalid; the land read treats a hand-edited or pre-schema string as off rather than failing the tick. Opt-in because the window is the human-objection grace period. See docs/running-lean.md.",
+          "description": "Opt-in patience window (minutes) measured from the latest head-current automated review instead of the last push (fn-219). Applies only under the silence reviewSignal and only while that review is head-current with zero unresolved threads; a fix push moves the head and the push-anchored patienceMinutes window governs again until the bot re-reviews. approve and <login> signals, the no-checks guard, and the merge command are untouched. Active only as a positive integer: unset, null, and 0 mean OFF (today's push-anchored wait, byte-for-byte; 0 is off on purpose - a zero grace period is the strict-silence anti-pattern the window exists to prevent). Negative integers and non-integer values are schema-invalid (minimum 0); the land read treats any non-positive or hand-edited non-integer value as off rather than failing the tick. Opt-in because the window is the human-objection grace period. See docs/running-lean.md.",
           "type": [
             "integer",
             "null"
           ],
+          "minimum": 0,
           "default": null
         }
       }

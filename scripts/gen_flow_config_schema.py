@@ -368,9 +368,10 @@ DESCRIPTIONS: dict[str, str] = {
         "Active only as a positive integer: unset, null, and 0 mean OFF "
         "(today's push-anchored wait, byte-for-byte; 0 is off on purpose - "
         "a zero grace period is the strict-silence anti-pattern the window "
-        "exists to prevent). Any other value is schema-invalid; the land "
-        "read treats a hand-edited or pre-schema string as off rather than "
-        "failing the tick. Opt-in because the window is the human-objection "
+        "exists to prevent). Negative integers and non-integer values are "
+        "schema-invalid (minimum 0); the land read treats any non-positive "
+        "or hand-edited non-integer value as off rather than failing the "
+        "tick. Opt-in because the window is the human-objection "
         "grace period. See docs/running-lean.md."
     ),
     "makePr": "/flow-next:make-pr export settings.",
@@ -675,7 +676,8 @@ def _build_table() -> list[tuple[str, dict]]:
         ("land.cleanReviewCommentPattern", {"type": ["string", "null"]}),
         ("land.mergeVerdictCommand", {"type": ["string", "null"]}),
         ("land.requestReviewers", {"type": ["string", "null"]}),
-        ("land.patienceMinutesAfterReview", {"type": ["integer", "null"]}),
+        # minimum 0: 0 is the documented OFF state, negatives are invalid.
+        ("land.patienceMinutesAfterReview", {"type": ["integer", "null"], "minimum": 0}),
         ("makePr", {"kind": "object", "open": False}),
         (
             "makePr.derivedPaths",
