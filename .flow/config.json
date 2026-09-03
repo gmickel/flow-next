@@ -10,7 +10,7 @@
     "maxDecisions": 12
   },
   "land": {
-    "automatedReviewers": "chatgpt-codex-connector",
+    "automatedReviewers": "copilot-pull-request-reviewer",
     "ciFixBudget": 3,
     "cleanReviewCommentPattern": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit|\\*\\*Code Review\\*\\*.*\\*\\*Completed\\*\\*",
     "mergeVerdictCommand": "",
@@ -35,7 +35,7 @@
     "enabled": false
   },
   "review": {
-    "backend": "codex",
+    "backend": "copilot",
     "maxIterations": 8
   },
   "scouts": {
