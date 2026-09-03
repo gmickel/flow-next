@@ -1,6 +1,6 @@
 # /flow-next:pilot workflow
 
-Execute these phases in order. One invocation advances at most one selected spec by one pipeline stage and ends with the terminal verdict line.
+Execute these phases in order. One invocation advances at most one selected spec by one pipeline stage and ends with the terminal verdict line. With `pipeline.chainStages` on, `make-pr` after a fresh `qa` verdict is the only admissible second dispatch in the same tick (Phase 5, Chained stage); any other second stage still breaks the contract.
 
 ## Review no-repeat terminal
 
@@ -342,6 +342,17 @@ fi   # default branch: bare no-op — NO link, NO read path
 
 When the sentinel prints, read [references/qa-stage.md](references/qa-stage.md), execute its QA-stage freshness probe (R1b) to compute `QA_FRESH` (and resolve `BRANCH_NAME`), then continue with the Phase 2 classification below. The classification rows and the all-done PR probe's no-PR branch consume `QA_STAGE_ENABLED` / `QA_FRESH` unchanged; on a default tick the gate is silent, the flow continues as written, and the reference is never read.
 
+Resolve the optional stage-chain gate (fn-219). Same strict literal-`on` discipline as `pipeline.qa`, derived from the same root snapshot — **no** new `config get`. Unlike the QA probe this read is **fail-closed**: a snapshot/parse error resolves to off, because chaining is an accelerator and the safe degradation is today's one-stage tick (the QA gate fails open only because its error branch merely reads a receipt before deciding).
+
+```bash
+CHAIN_ENABLED=0
+PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
+CHAIN_STAGES="$(jq -r '.value.pipeline.chainStages' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || CHAIN_STAGES=""   # snapshot/parse ERROR ⇒ off (fail closed)
+[ "${CHAIN_STAGES:-}" = "on" ] && CHAIN_ENABLED=1   # ONLY the literal `on` chains — never bool true / typos / null
+```
+
+`CHAIN_ENABLED` is consumed by the dry-run report below and by Phase 5's Chained stage. With `pipeline.qa` off there is never a fresh `qa` stage to chain from, so the switch is inert and the tick is byte-for-byte today's.
+
 Classify from `SPEC_JSON` plus `TASKS_JSON`; first match wins:
 
 | Condition | Stage |
@@ -382,7 +393,7 @@ Classification outcomes for the all-done branch (evaluate in order, first match 
 - MERGED PR(s) exist, spec still open, and no OPEN PR (any CLOSED PRs on the branch are irrelevant here — merged work outranks a historical closed PR, so this bullet is evaluated whenever a merged PR exists): compare heads — `git rev-parse <branch_name>` against `MERGED_HEAD` (the `headRefOid` of the merged PR with the greatest `mergedAt`, captured by the probe above). Heads differ: not an inconsistency - merged gate PRs on a reused branch with commits beyond them; classify `make-pr`, subject to the same `qa`-before-`make-pr` gate as the no-PR bullet (this matches make-pr's Forbidden rule that closed/merged PRs on a reused branch never trigger refusal). Heads equal: `NEEDS_HUMAN` (a merged PR with nothing new and an open spec is the genuinely inconsistent state). Empty `MERGED_HEAD` or rev-parse failure: `NEEDS_HUMAN`, unchanged. Head identity, never ancestry: land squash-merges, so a `rev-list` count against the default branch reads fully-shipped work as unshipped.
 - CLOSED PR exists, no OPEN PR, and no MERGED PR anywhere on the branch: `NEEDS_HUMAN`, because the PR was closed without merge and pilot never silently reopens human-rejected work.
 
-Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
+Dry-run stops after classification. It prints selected spec, stage, review backend, task counts, consulted status fields, PR probe result if any, skipped candidates, and any would-clear ledger entries. It additionally prints `chain=<off|on>` from `CHAIN_ENABLED` and, only when on, a precondition-checked `would-chain=`: a classified `qa` stage prints `would-chain=make-pr (conditional on a fresh terminal qa_outcome)` — a conditional, never a promise, since dry-run dispatches nothing; any other classified stage prints `would-chain=none (stage <x> heads no pair)`. Every known precondition is evaluated before a target is named, so the diagnostic never names a target the live tick would skip. It writes no ledger (the ledger file is never created or modified on a dry-run tick), checks out no branch, and dispatches nothing. Before this terminal, remove the root config snapshot so a dry-run leaves no persistent scratch state: `rm -f "${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"`.
 
 ```text
 PILOT_VERDICT=NO_WORK spec=<id> stage=<stage> reason="dry-run: classification only, nothing dispatched"
@@ -452,7 +463,7 @@ Setter convention call-out: plan-review sets `plan_review_status` itself in its 
 
 If a sub-skill crashes, asks for judgment under autonomy, or reports ambiguity that needs a person, stop with `NEEDS_HUMAN`. Do not cleanup, reset claims, or record a strike.
 
-Done when: exactly one stage skill has been invoked and has returned — a tick that dispatched a second stage has broken the single-tick contract.
+Done when: exactly one stage skill has been invoked and has returned — a tick that dispatched a second stage has broken the single-tick contract, with one gated exception: under `pipeline.chainStages` on, Phase 5's Chained stage dispatches `make-pr` after this tick's `qa` stage verified `QA_ADVANCED=true`; any other second dispatch still breaks it.
 
 ## Phase 5 — VERIFY + evidence echo
 
@@ -571,7 +582,27 @@ If the post-dispatch tree is dirty outside `.flow/`, stop with `NEEDS_HUMAN` and
 
 If the sub-skill emitted a `Tracker sync:` summary line, pass that line through in the evidence echo. Pilot never re-checks the tracker itself.
 
-Done when: the stage's before/after evidence block and its `stage:` outcome line are in the transcript, and `advanced` was decided from re-read state rather than sub-skill narration.
+### Chained stage (`pipeline.chainStages`)
+
+The chain table is closed — one row, one switch, no per-pair knobs:
+
+| Completed stage | Chained stage | Entered only when |
+|---|---|---|
+| `qa` | `make-pr` | `CHAIN_ENABLED=1` (Phase 2) **and** this tick's qa verify decided `QA_ADVANCED=true` — any fresh terminal `qa_outcome` (SHIP, NEEDS_WORK, NA, BLOCKED), exactly the set the unchained next tick would make-pr on |
+
+`plan` heads no row: the plan dispatch already carries `--review=<backend>` and the plan skill's own Step 7 runs its review fix loop to SHIP inside that dispatch, so a successful plan tick already classifies `work` next — a second review of the unchanged plan would be a paid no-op (or a `NOT_RETRYABLE` terminal). `work` heads no row and is never a target: a NEEDS_WORK review, an unfinished implementation, and the completion gate are human territory. `make-pr` heads no row (it is the terminus). A missing/stale receipt (`QA_ADVANCED=false`) never chains — it takes the healthy-no-advance strike path with `stage=qa`.
+
+When the row is entered, run the chained `make-pr` exactly as the standalone stage runs it — reference those phases, never restate them:
+
+1. Phase 3 branch row for `make-pr` with the branch existing: the qa checkout already put the worktree on `BRANCH_NAME`, so there is no second checkout.
+2. Phase 4 pre-dispatch evidence for `make-pr`: no OPEN PR, already proven by this tick's all-done probe. In backlog mode guard the dispatch first — `DISPATCH_TARGET="/flow-next:make-pr"; assert_allowed_dispatch "$DISPATCH_TARGET"` (`/flow-next:make-pr` is on the allowlist; the assert still runs before every dispatch).
+3. The Phase 4 dispatch line: `/flow-next:make-pr <spec-id> mode:autonomous`. The PR stays draft under autonomy; pilot still never invokes land or merges.
+4. The Phase 5 `make-pr` verify above: the same gh open-PR probe, a second `Evidence:` block (`stage=make-pr`), and its own `stage:` outcome line. The qa stage's evidence block and outcome line stay in the transcript as already echoed — one evidence block and one `stage:` line per dispatched stage.
+5. Phase 6 under `stage=qa+make-pr`: the qa `ADVANCED` ledger clear first, then make-pr's own clear or strike with `STAGE=make-pr`. A dirty non-`.flow/` tree or a gh probe failure after the chained dispatch is crash-class `NEEDS_HUMAN`, no strike, as for any stage.
+
+Nothing else chains. `CHAIN_ENABLED=0` (the default) leaves this subsection unentered and the tick byte-for-byte today's.
+
+Done when: every dispatched stage's before/after evidence block and `stage:` outcome line are in the transcript, and each `advanced` was decided from re-read state rather than sub-skill narration.
 
 ## Phase 3.5 — ASK (backlog mode only, non-workable subjects) — R4, R7, R15
 
@@ -623,6 +654,15 @@ PILOT_VERDICT=ADVANCED spec=<id> stage=<stage> reason="<what advanced>"
 ```
 
 For a `qa` stage the reason names the fresh `qa_outcome` so a transcript-only driver sees the result without re-reading the receipt, e.g. `reason="qa pass: qa_outcome=NEEDS_WORK — findings surfaced on draft PR"` or `reason="qa pass: qa_outcome=BLOCKED — no local app reachable, advancing"`. Every fresh terminal `qa_outcome` (SHIP/NEEDS_WORK/NA/BLOCKED) is an `ADVANCED` — QA is advisory and never `BLOCKED`/`NEEDS_HUMAN` on its own outcome; only a *missing/stale* receipt routes to the healthy-no-advance strike below.
+
+For a chained tick (Phase 5, Chained stage) the ledger writes are sequential within the single-threaded tick: the qa stage's `ADVANCED` clear above completes (atomic `jq` + `mv`) before the chained `make-pr` records its own clear or strike under `STAGE=make-pr` — there is no clear-versus-strike race. The verdict is the last dispatched stage's verdict; `stage=` names every dispatched stage in order joined by `+`; the reason names both outcomes — the fresh `qa_outcome` and the PR URL or its absence:
+
+```text
+PILOT_VERDICT=ADVANCED spec=<id> stage=qa+make-pr reason="qa pass: qa_outcome=<outcome>; make-pr: open PR <url>"
+PILOT_VERDICT=BLOCKED spec=<id> stage=qa+make-pr reason="no advancement (strike 1/2): qa pass: qa_outcome=<outcome>; make-pr: no open PR for <branch>"
+```
+
+A chained `make-pr` that yields no open PR strikes under `make-pr` exactly as the standalone tick would; a driver grepping `PILOT_VERDICT=ADVANCED` keeps working.
 
 On healthy-but-no-advance, record a strike with count, stage, reason, and timestamp:
 
@@ -698,9 +738,9 @@ Terminal verdict when no spec was dispatched, split by why. **The two cases stay
 
   When more than one candidate was deferred, name the first deferred spec (stable id order) in the line; the reason still reads `defer to land`.
 
-### Backlog-mode decision log (R9) — one row per tick, at the resolving terminal
+### Backlog-mode decision log (R9) — one row per dispatched stage, at the resolving terminal
 
-**Active only when `PILOT_AUTONOMY=backlog`.** Every backlog tick that selected a subject appends exactly **one** decision-log row, keyed to the verdict grammar action, at its resolving terminal. The row co-occurs with the state-changing terminal — a live `TRIAGED` is never a bare no-op, so the logged action is always a terminal action (R10). Stored under `.flow/pilot-runs/` (a sync-runs-style dir, NOT a ralph-guard `receipts/` path), auto-gitignored:
+**Active only when `PILOT_AUTONOMY=backlog`.** Every backlog tick that selected a subject appends exactly **one** decision-log row per dispatched stage — one on an unchained tick, two on a chained `qa+make-pr` tick (Phase 5, Chained stage), each with its own `--stage` — keyed to the verdict grammar action, at its resolving terminal. The row co-occurs with the state-changing terminal — a live `TRIAGED` is never a bare no-op, so the logged action is always a terminal action (R10). Stored under `.flow/pilot-runs/` (a sync-runs-style dir, NOT a ralph-guard `receipts/` path), auto-gitignored:
 
 ```bash
 # ACTION ∈ {advanced, asked, blocked, needs-human}  (mapped from the terminal verdict)
@@ -714,10 +754,10 @@ $FLOWCTL pilot-log append --id "$SUBJECT_ID" --action "$ACTION" --stage "${STAGE
 - **`--action`** is the frozen enum `triaged|advanced|asked|blocked|needs-human`. A **live** tick logs only the terminal action (`advanced`/`asked`/`blocked`/`needs-human`); `triaged` is for a diagnostic/dry-run inspection only, matching the `TRIAGED` diagnostic-only verdict.
 - **`--cost-tokens`** is host-reported by the skill (flowctl only stores the row; it never measures cost). Omit the flag when the host cannot report it.
 
-A `NO_WORK` / `DEFERRED_TO_LAND` tick selected no subject, so it writes **no** row (there is nothing to log against). A `--dry-run` tick writes no row (classification/inspection only). The single-tick contract holds: exactly one row per acting backlog tick.
+A `NO_WORK` / `DEFERRED_TO_LAND` tick selected no subject, so it writes **no** row (there is nothing to log against). A `--dry-run` tick writes no row (classification/inspection only). The single-tick contract holds: exactly one row per dispatched stage on an acting backlog tick — one on an unchained tick, two on a chained `qa+make-pr` tick.
 
-**The dep-wait `BLOCKED` terminal above already emits its own `--action blocked` row inline** — that is its single decision-log row, so this generic block adds none for that path. It covers the other resolving terminals (`advanced` / `asked` / `needs-human`) and the strike-based `BLOCKED`. Whichever terminal resolves the tick writes exactly **one** row; two rows for one tick has broken this.
+**The dep-wait `BLOCKED` terminal above already emits its own `--action blocked` row inline** — that is its single decision-log row, so this generic block adds none for that path. It covers the other resolving terminals (`advanced` / `asked` / `needs-human`) and the strike-based `BLOCKED`. Whichever terminal resolves a dispatched stage writes exactly **one** row for it; a second row for the same stage, or a dispatched stage with no row, has broken this.
 
-Done when: the ledger reflects this tick (cleared on `ADVANCED`, incremented on healthy-no-advance, untouched on crash-class), at most one decision-log row was appended, and the terminal verdict line is printed.
+Done when: the ledger reflects this tick (cleared on `ADVANCED`, incremented on healthy-no-advance, untouched on crash-class), one decision-log row per dispatched stage was appended, and the terminal verdict line is printed.
 
 The `PILOT_VERDICT` line is always the last line of the tick output. Print nothing after it.

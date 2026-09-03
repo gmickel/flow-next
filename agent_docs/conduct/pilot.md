@@ -1,9 +1,10 @@
 # Conduct checklist — /flow-next:pilot
 
-A correct tick selects one ready spec, classifies one pipeline stage, dispatches exactly one stage skill, verifies state advanced, and ends with one terminal `PILOT_VERDICT` line.
+A correct tick selects one ready spec, classifies one pipeline stage, dispatches exactly one stage skill (with `pipeline.chainStages` on, `make-pr` after a fresh `qa` verdict is the only admissible second dispatch), verifies state advanced, and ends with one terminal `PILOT_VERDICT` line.
 
-- [ ] The response ends with exactly one `PILOT_VERDICT` line and nothing after it. A tick that advances two stages, or that prints prose below the verdict, has broken this.
-- [ ] Exactly one stage skill is dispatched from `{plan, plan-review, work, make-pr}`, plus `qa` only when `pipeline.qa==on`. Merge, land, resolve-pr, capture, interview, and chart never appear as a pilot stage.
+- [ ] The response ends with exactly one `PILOT_VERDICT` line and nothing after it. A tick that advances two stages outside the gated `qa`→`make-pr` chain, or that prints prose below the verdict, has broken this.
+- [ ] Exactly one stage skill is dispatched from `{plan, plan-review, work, make-pr}`, plus `qa` only when `pipeline.qa==on`; with `pipeline.chainStages==on`, `make-pr` after this tick's fresh `qa` verdict is the only admissible second dispatch. Merge, land, resolve-pr, capture, interview, and chart never appear as a pilot stage.
+- [ ] Chaining (`pipeline.chainStages`, only the literal `on`) enters solely from a `qa` stage that verified `QA_ADVANCED=true` and targets only `make-pr`: it never chains from `plan`, `plan-review`, `work`, or `make-pr`, never into `work`, and never names `plan-review` as a target. Off (the default) leaves the tick byte-for-byte unchanged; the chained tick ends `stage=qa+make-pr` with the last stage's verdict, and `--dry-run` reports `chain=` plus a precondition-checked `would-chain=` without dispatching.
 - [ ] The tick asks the user nothing; ambiguity, a sub-skill crash, or a failed gh probe resolves as `NEEDS_HUMAN` with state left untouched and no strike recorded.
 - [ ] The hard guards run before selection, ledger writes, branch changes, or dispatch: nesting under a Ralph harness refuses, and a tree dirty outside `.flow/` terminates with no cleanup and no claim reset.
 - [ ] Verification evidence is echoed into the transcript — flowctl status fields, task counts and transitions, and for make-pr the gh-confirmed open PR URL — because the driver's validator reads output only.
