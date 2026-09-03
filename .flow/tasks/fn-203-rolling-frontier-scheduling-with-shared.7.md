@@ -19,9 +19,8 @@ After the pre-declared field window (minimum count of beta-run specs with receip
 - [ ] Exactly one topology remains after the change (graduated canonical, or canonical-as-before)
 - [ ] Removal/replacement checklist fully walked; full gate green; CHANGELOG entry matches the outcome
 ## Done summary
-TBD
-
+Decision (Gordon, 2026-09-04): GRADUATE. Rolling works in the field and the measured saving is 52% at the decisive band. Execution is a separate spec: fold the rolling scheduler into the official work skill as a conditional route selected via progressive discovery, then retire work-rolling. See the follow-up spec created the same day.
 ## Evidence
-- Commits:
-- Tests:
-- PRs:
+- Commits: c821b999, afdf5e57
+- Tests: agent-evals studies/rolling-frontier-2026-08 (PREREGISTER.md frozen pre-draw; A0 129.1 min, A1 61.9 min, 52.1% saving, decisive band)
+- PRs: https://github.com/gmickel/flow-next/pull/365, https://github.com/gmickel/flow-next/pull/376

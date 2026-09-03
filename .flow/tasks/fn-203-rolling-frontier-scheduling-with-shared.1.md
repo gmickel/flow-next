@@ -27,11 +27,8 @@ Produce the frozen pre-registration for the R1 eval before any prototype draw ru
 - [ ] Pre-registration frozen before any draw: endpoints, decision rule, model config (opus-5 at medium), wall-first budgets + kill rules, batch/futility plan, redaction contract, isolation design, arm-2 disciplines
 - [ ] No files in this repo modified
 ## Done summary
-Pre-registered the fn-203 three-arm rolling-frontier eval before any draw: study frozen at agent-evals/studies/rolling-frontier-2026-08 (PREREGISTER.md + README + changelog + fixtures registry; commits fddf70c/790d6e3/e6f... see repo log), fixture authored and pinned at flow-swarm branch eval/fixture-rolling-frontier @ 01b89740 (fn-174, 5 dep-independent tasks, Touches pairwise disjoint across all 10 pairs, 4 admissible boundaries at cap 3, leak-checked pre-impl at parent 80f668c6, flowctl-readable). Registration freezes endpoints (blind sealed checklist + full suites; wall-clock; 5 incident classes), exact decision bands (>=15% gate, decisive 20%/10%, INCONCLUSIVE first-class), model config (claude-opus-5 @ medium, all arms/draws), wall-first budgets with per-arm aggregates and bounded reruns, sequential baseline-first gating draws, redaction contract, per-draw isolation (own checkout + FLOW_STATE_DIR), and all three arm-2 disciplines. No product files modified in this repo; flow-next commits are the fn-203 plan artifacts + review-driven plan fixes (task ordering .4->.5 dep, manifest regen wording, field-window authority in spec, lifecycle Touches).
-
-stage: impl-review - ran [r1 NEEDS_WORK (6 findings), r2 NEEDS_WORK (2 survivors), r3 SHIP] via codex/gpt-5.6-sol
+Pre-registered as agent-evals studies/rolling-frontier-2026-08 (PREREGISTER.md frozen before any draw; fixture flow-swarm fn-174 pinned 01b89740; ship gate 15% work-phase wall at quality parity, decisive band 20%). Closed retroactively on 2026-09-04: the work happened on 2026-08-21/22 and the task state was never updated when #365 squash-merged.
 ## Evidence
-- Commits: 8bb40cd3051c3b18bf1ac0c33fd43aa39e308b5a, 61fa639e1ee963af69f97fd93608b2ff31b91117, 72e035e65fdb792c8a84ccf747e4b32aec10458b
-- Tests: baseline: green (cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_worker_anchor_prose test_cp1252_robustness -q), cd plugins/flow-next/tests && python3 -m unittest test_parallel_work_prose test_worker_anchor_prose test_cp1252_robustness -q (re-run green after review fixes), uvx ruff@0.16.0 check ., GATE_SKIPPED:unittest:docs-only - cumulative diff classified tier-B (no executable paths touched)
-- PRs:
-stage: plan-sync - ran (no drift; no downstream edits)
+- Commits: c821b999, afdf5e57
+- Tests: agent-evals studies/rolling-frontier-2026-08 (PREREGISTER.md frozen pre-draw; A0 129.1 min, A1 61.9 min, 52.1% saving, decisive band)
+- PRs: https://github.com/gmickel/flow-next/pull/365, https://github.com/gmickel/flow-next/pull/376

@@ -25,9 +25,8 @@ The one mechanical flowctl surface: a commit mutex (acquire/run/release around a
 - [ ] Focused tests green; tracker manifest/schema untouched or regenerated as the repo rules require
 - [ ] If arm 1 won: task closed unimplemented with skip note, no flowctl change
 ## Done summary
-Closed unimplemented per spec R2 / Decision Context: this task was conditional on arm 2 (shared checkout) winning the Phase A eval. Arm 2 failed quality parity (33/42 vs 37/42); arm 1 won. No flowctl change ships. Study record: rolling-frontier-2026-08 changelog 9635d29.
+Not applicable: the condition was 'only if arm 2 wins'. Arm 1 (isolated worktrees) won; no commit-mutex verb was built. Recorded as done-by-condition on 2026-09-04 so the spec can close honestly.
 ## Evidence
-- Commits:
-- Tests: policy outcome - no code, no tests; eval verdict 9635d29
-- PRs:
-stage: plan-sync - skipped(policy: closed unimplemented, arm-2-only)
+- Commits: c821b999, afdf5e57
+- Tests: agent-evals studies/rolling-frontier-2026-08 (PREREGISTER.md frozen pre-draw; A0 129.1 min, A1 61.9 min, 52.1% saving, decisive band)
+- PRs: https://github.com/gmickel/flow-next/pull/365, https://github.com/gmickel/flow-next/pull/376

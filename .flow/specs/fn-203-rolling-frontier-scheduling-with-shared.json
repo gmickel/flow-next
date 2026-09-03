@@ -791,7 +791,7 @@
     "impl:fn-203-rolling-frontier-scheduling-with-shared.6": 0
   },
   "spec_path": ".flow/specs/fn-203-rolling-frontier-scheduling-with-shared.md",
-  "status": "open",
+  "status": "done",
   "title": "Rolling frontier scheduling with shared notes surface",
   "tracker": {
     "baseHashFlow": null,
@@ -804,5 +804,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-08-22T13:18:18.726073Z"
+  "updated_at": "2026-09-03T07:57:51.723769Z"
 }
