@@ -15,7 +15,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-217-audit-executes-the-retrieval-fix-path.md",
-  "status": "open",
+  "status": "done",
   "title": "Audit executes the retrieval-fix path for re-learned, non-mechanizable lessons",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-01T22:35:09.513194Z"
+  "updated_at": "2026-09-03T10:51:10.586150Z"
 }
