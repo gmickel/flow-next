@@ -26,8 +26,19 @@ canonical-only.
 from __future__ import annotations
 
 import re
+import shutil
+import sys
 import unittest
 from pathlib import Path
+
+# The executable fence tests run the workflow's bash through a POSIX bash with
+# jq on PATH; the Windows CI job has neither the coreutils the fences assume
+# nor a UTF-8 subprocess encoding for the prose comments, so they skip there
+# (the token pins still run everywhere).
+_POSIX_BASH = unittest.skipIf(
+    sys.platform == "win32" or shutil.which("bash") is None or shutil.which("jq") is None,
+    "executable fence tests need a POSIX bash + jq",
+)
 
 PLUGIN_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = PLUGIN_DIR.parent.parent
@@ -139,6 +150,7 @@ class VerdictGrammarTestCase(unittest.TestCase):
             self.assertIn('--action advanced --stage qa', wf, path)
             self.assertIn('--action "$ACTION" --stage make-pr ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}', wf, path)
 
+    @_POSIX_BASH
     def test_make_pr_verify_probe_parse_failure_is_flagged(self):
         # Executable: run the verify parse fence against valid, empty, and
         # malformed probe output. A malformed body must set PR_VERIFY_FAILED=1
@@ -158,6 +170,7 @@ class VerdictGrammarTestCase(unittest.TestCase):
                 out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
                 self.assertEqual(out, f"{url}|{failed}", f"{path}: {body}")
 
+    @_POSIX_BASH
     def test_chain_gate_fence_exits_zero_for_off_and_on(self):
         # Executable: the gate fence must resolve off/on AND exit 0 either way
         # (a trailing `[ ... ] && X=1` returns 1 on the default-off path).

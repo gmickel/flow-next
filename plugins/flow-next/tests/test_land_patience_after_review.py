@@ -30,10 +30,21 @@ checklist has no mirror copy and stays canonical-only.
 
 from __future__ import annotations
 
+import shutil
+import sys
 import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
+
+# The executable fence tests run the workflow's bash through a POSIX bash with
+# jq on PATH; the Windows CI job has neither the coreutils the fences assume
+# nor a UTF-8 subprocess encoding for the prose comments, so they skip there
+# (the token pins still run everywhere).
+_POSIX_BASH = unittest.skipIf(
+    sys.platform == "win32" or shutil.which("bash") is None or shutil.which("jq") is None,
+    "executable fence tests need a POSIX bash + jq",
+)
 PLUGIN = HERE.parent.parent
 LAND = PLUGIN / "skills" / "flow-next-land"
 MIRROR_LAND = PLUGIN / "codex" / "skills" / "flow-next-land"
@@ -109,6 +120,7 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
             with self.subTest(copy=s.path):
                 self.assertIn('=~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""', s.phase0)
 
+    @_POSIX_BASH
     def test_phase0_read_executes_off_states_and_bounds_overflow(self) -> None:
         for s in self.copies:
             with self.subTest(copy=s.path):
@@ -172,6 +184,7 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
                     s.anchor,
                 )
 
+    @_POSIX_BASH
     def test_anchor_block_executes_signal_and_condition_matrix(self) -> None:
         for s in self.copies:
             with self.subTest(copy=s.path):
