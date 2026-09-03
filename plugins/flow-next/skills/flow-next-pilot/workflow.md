@@ -348,7 +348,7 @@ Resolve the optional stage-chain gate (fn-219). Same strict literal-`on` discipl
 CHAIN_ENABLED=0
 PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d' ' -f1).json"
 CHAIN_STAGES="$(jq -r '.value.pipeline.chainStages' "$PILOT_CFG_SNAPSHOT" 2>/dev/null)" || CHAIN_STAGES=""   # snapshot/parse ERROR ⇒ off (fail closed)
-[ "${CHAIN_STAGES:-}" = "on" ] && CHAIN_ENABLED=1   # ONLY the literal `on` chains — never bool true / typos / null
+if [ "${CHAIN_STAGES:-}" = "on" ]; then CHAIN_ENABLED=1; fi   # ONLY the literal `on` chains — never bool true / typos / null; an `if` so the default-off fence exits 0
 ```
 
 `CHAIN_ENABLED` is consumed by the dry-run report below and by Phase 5's Chained stage. With `pipeline.qa` off there is never a fresh `qa` stage to chain from, so the switch is inert and the tick is byte-for-byte today's.
@@ -565,7 +565,7 @@ For `make-pr`, advancement means a gh-confirmed OPEN PR URL for the branch. Ther
 ```bash
 PR_VERIFY_FAILED=0
 PR_VERIFY_JSON=$(gh pr list --head "$BRANCH_NAME" --state all --json url,state,number --limit 10 2>/dev/null) || PR_VERIFY_FAILED=1
-OPEN_PR_URL=$(printf '%s\n' "${PR_VERIFY_JSON:-[]}" | jq -r '.[] | select(.state == "OPEN") | .url' 2>/dev/null | head -1) || PR_VERIFY_FAILED=1
+OPEN_PR_URL=$(printf '%s\n' "${PR_VERIFY_JSON:-[]}" | jq -r 'first(.[] | select(.state == "OPEN") | .url) // empty' 2>/dev/null) || PR_VERIFY_FAILED=1   # jq is the status-bearing command: no trailing `head` to mask a parse error
 ```
 
 `PR_VERIFY_FAILED=1` (gh missing, unauthenticated, API error, or unparseable output) is crash-class: `PILOT_VERDICT=NEEDS_HUMAN spec=<id> stage=make-pr reason="gh probe failed at make-pr verify"`, no strike. Only a clean probe with no OPEN row is the healthy-no-advance path.

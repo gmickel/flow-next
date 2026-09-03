@@ -75,7 +75,7 @@ class ChainGateReadTestCase(unittest.TestCase):
 
     def test_only_literal_on_enables_and_error_is_off(self):
         wf = read(WORKFLOW)
-        self.assertIn('[ "${CHAIN_STAGES:-}" = "on" ] && CHAIN_ENABLED=1', wf)
+        self.assertIn('if [ "${CHAIN_STAGES:-}" = "on" ]; then CHAIN_ENABLED=1; fi', wf)
         # Fail-closed: the jq read's error branch resolves to an empty (off)
         # value, never to an ACTIVE-style fail-open flag.
         self.assertIn('2>/dev/null)" || CHAIN_STAGES=""', wf)
@@ -120,6 +120,56 @@ class VerdictGrammarTestCase(unittest.TestCase):
         # action and the whole-tick cost once.
         self.assertIn('--action advanced --stage qa', wf)
         self.assertIn('--action "$ACTION" --stage make-pr ${COST_TOKENS:+--cost-tokens "$COST_TOKENS"}', wf)
+
+    def test_make_pr_verify_probe_parse_failure_is_flagged(self):
+        # Executable: run the verify parse fence against valid, empty, and
+        # malformed probe output. A malformed body must set PR_VERIFY_FAILED=1
+        # (jq is the status-bearing command — no trailing `head` masks it);
+        # a valid body yields the first OPEN url; no OPEN row yields "" with
+        # the flag still 0 (the healthy-no-advance path).
+        import subprocess
+        wf = read(WORKFLOW)
+        line = next(l for l in wf.splitlines() if l.startswith("OPEN_PR_URL=$(printf"))
+        cases = {
+            '[{"state":"CLOSED","url":"c"},{"state":"OPEN","url":"https://x/1"}]': ("https://x/1", "0"),
+            '[{"state":"CLOSED","url":"c"}]': ("", "0"),
+            '{not json': ("", "1"),
+        }
+        for body, (url, failed) in cases.items():
+            script = f"PR_VERIFY_FAILED=0\nPR_VERIFY_JSON={body!r}\n{line}\nprintf '%s|%s' \"$OPEN_PR_URL\" \"$PR_VERIFY_FAILED\""
+            out = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout
+            self.assertEqual(out, f"{url}|{failed}", body)
+
+    def test_chain_gate_fence_exits_zero_for_off_and_on(self):
+        # Executable: the gate fence must resolve off/on AND exit 0 either way
+        # (a trailing `[ ... ] && X=1` returns 1 on the default-off path).
+        import json
+        import subprocess
+        import tempfile
+        wf = read(WORKFLOW)
+        start = wf.find("CHAIN_ENABLED=0\n")
+        end = wf.find("```", start)
+        fence = wf[start:end]
+        self.assertIn("if [", fence)
+        for value, want in (("off", "0"), ("on", "1"), (True, "0"), ("maybe", "0")):
+            with tempfile.TemporaryDirectory() as td:
+                snap = Path(td) / "snap.json"
+                snap.write_text(json.dumps({"key": None, "value": {"pipeline": {"chainStages": value}}}))
+                script = fence.replace(
+                    'PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d\' \' -f1).json"',
+                    f'PILOT_CFG_SNAPSHOT="{snap}"',
+                ) + '\nprintf "%s" "$CHAIN_ENABLED"'
+                self.assertIn(str(snap), script, "snapshot path substitution failed")
+                res = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+                self.assertEqual(res.returncode, 0, f"{value}: fence exited {res.returncode}")
+                self.assertEqual(res.stdout, want, f"{value}: CHAIN_ENABLED")
+        # missing snapshot ⇒ off, still exit 0
+        script = fence.replace(
+            'PILOT_CFG_SNAPSHOT="${TMPDIR:-/tmp}/flow-pilot-config-$(git rev-parse --show-toplevel 2>/dev/null | cksum | cut -d\' \' -f1).json"',
+            'PILOT_CFG_SNAPSHOT="/nonexistent/snap.json"',
+        ) + '\nprintf "%s" "$CHAIN_ENABLED"'
+        res = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+        self.assertEqual((res.returncode, res.stdout), (0, "0"))
 
     def test_make_pr_verify_probe_captures_gh_status(self):
         # A bare `gh | jq | head` pipeline swallows a gh failure into an empty
