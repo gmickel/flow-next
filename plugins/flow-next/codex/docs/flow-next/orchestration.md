@@ -328,7 +328,7 @@ Notes that keep this honest:
 - **The family rule is advice, not enforcement.** Nothing can verify a model's family from a name you invented; the reviewer tier documents the rule and the receipt records what ran.
 - **Scouting splits by kind of work, not by price.** Mechanical inventory goes to the fast scout tier; analysis that degrades on a fast tier goes to the thinking scout tier.
 
-**Work-stage scheduling:** `/flow-next:work` schedules on the rolling frontier by default - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review - and falls back to the wave loop when plan-sync is on, the spec has fewer than two open tasks, or its tasks form a sequential chain. The route prints once as `Scheduling: rolling | wave (<reason>)`; pilot and land dispatch plain `/flow-next:work` and inherit it. Details: [`../skills/flow-next-work/references/rolling-scheduler.md`](../../skills/flow-next-work/references/rolling-scheduler.md).
+**Work-stage scheduling:** `/flow-next:work` schedules on the rolling frontier by default - a new ready task is admitted at every worker-return event, with isolated per-task workspaces and conductor-owned review - and falls back to the wave loop for a task-id run, when plan-sync is on, when the spec has fewer than two open tasks, or when its tasks form a sequential chain. The route prints once as `Scheduling: rolling | wave (<reason>)`; pilot and land dispatch plain `/flow-next:work` and inherit it. Details: [`../skills/flow-next-work/references/rolling-scheduler.md`](../../skills/flow-next-work/references/rolling-scheduler.md).
 
 ### The wrapper pattern: self-healing bridges for unattended loops
 

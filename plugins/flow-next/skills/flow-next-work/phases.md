@@ -122,15 +122,19 @@ $FLOWCTL tasks --spec <spec-id> --json   # SPEC_MODE: open tasks + depends_on
 
 Take the **wave route** (3a-3g below) when ANY of these hold:
 
-1. `planSync.enabled` is not explicitly `false` (plan-sync's per-wave barrier
+1. SINGLE_TASK_MODE - the run was given a task id, so the wave route runs
+   exactly the requested task alone; the spec's other open tasks are never
+   admitted (rolling admits from the whole ready frontier, which is the wrong
+   scope for a task-id run);
+2. `planSync.enabled` is not explicitly `false` (plan-sync's per-wave barrier
    is the existing fail-closed rule; `false` is the shipped default since
    4.5.1, so this fires only on repos that opted in);
-2. fewer than two open tasks - SINGLE_TASK_MODE, a no-plan implicit task, or
-   one task left (a single lane has nothing to admit);
-3. no two open tasks are dependency-independent under the transitive
-   `depends_on` closure (a fully sequential chain admits one lane at a time,
-   and the single-worker path runs one lane with less machinery than a
-   worktree plus a conductor integration per task).
+3. SPEC_MODE with fewer than two open tasks - a no-plan implicit task, or one
+   task left (a single lane has nothing to admit);
+4. SPEC_MODE where no two open tasks are dependency-independent under the
+   transitive `depends_on` closure (a fully sequential chain admits one lane
+   at a time, and the single-worker path runs one lane with less machinery
+   than a worktree plus a conductor integration per task).
 
 Otherwise take the **rolling route**: read
 [references/rolling-scheduler.md](references/rolling-scheduler.md) and execute
@@ -141,7 +145,7 @@ Echo the decision once, before anything else in Phase 3, in the run report:
 
 ```text
 Scheduling: rolling
-Scheduling: wave (<planSync.enabled=true | single task | sequential dependency chain>)
+Scheduling: wave (<task-id run | planSync.enabled=true | single task | sequential dependency chain>)
 ```
 
 The rolling scheduler's own `Scheduling: degraded to wave (host lacks
