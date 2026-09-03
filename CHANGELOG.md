@@ -2,7 +2,9 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.13.0] - 2026-09-03
+
+Anyone whose `.flow/memory/` keeps re-teaching the same lesson gets a third answer from `/flow-next:audit`: fix how the lesson is found, not what it says. Until now an entry that kept recurring but stated a rule no lint or CI step could check had nowhere to go - Harden needs a mechanizable rule, so the entry fell through to Keep and the next run re-learned it again. The audit now repairs that entry's retrieval surface instead of its wording, so the search that should have surfaced it does.
 
 ### Changed
 
