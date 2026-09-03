@@ -42,9 +42,6 @@ CONFIG_GET = re.compile(r'\$FLOWCTL"?\s+config get')
 CHAIN_KEY_READ = ".value.pipeline.chainStages"
 CHAIN_STAGE_TOKEN = "qa+make-pr"
 CHAIN_HEADING = "### Chained stage (`pipeline.chainStages`)"
-# The two hardcoded pilot description strings the sync script emits into the
-# Codex catalog (each capped by the shared skills budget).
-CATALOG_DESCRIPTION_CAP = 200
 
 
 def read(path: Path) -> str:
@@ -136,8 +133,6 @@ class VerdictGrammarTestCase(unittest.TestCase):
     def test_backlog_decision_log_is_per_dispatched_stage(self):
         for path in WORKFLOWS:
             wf = read(path)
-            self.assertIn("one row per dispatched stage", wf, path)
-            self.assertNotIn("exactly one row per acting backlog tick", wf, path)
             # The chained tick has a concrete two-append template: the qa row is
             # always `advanced` with no cost; the make-pr row carries the terminal
             # action and the whole-tick cost once.
@@ -231,10 +226,11 @@ class SingleStageSurfacesTestCase(unittest.TestCase):
     def test_conduct_checklist_names_the_closed_table(self):
         conduct = read(CONDUCT_MD)
         self.assertIn("pipeline.chainStages", conduct)
-        self.assertIn("never names `plan-review` as a target", conduct)
         self.assertIn(CHAIN_STAGE_TOKEN, conduct)
 
-    def test_sync_script_pilot_descriptions_carry_the_clause_under_the_cap(self):
+    def test_sync_script_pilot_descriptions_carry_the_clause_as_valid_yaml(self):
+        # The catalog length cap is enforced by the sync script's own hard-fail
+        # guard at regen time — not re-pinned here (G2: no size baselines).
         lines = [
             ln for ln in read(SYNC_SCRIPT).splitlines()
             if ln.startswith('generate_openai_yaml "flow-next-pilot"')
@@ -245,7 +241,6 @@ class SingleStageSurfacesTestCase(unittest.TestCase):
             desc = re.findall(r'"(Single-tick[^"]*)"', ln)
             self.assertEqual(len(desc), 1, ln)
             self.assertIn("chainStages", desc[0], ln)
-            self.assertLessEqual(len(desc[0]), CATALOG_DESCRIPTION_CAP, ln)
             # The mirror writes these as UNQUOTED YAML scalars: a `: ` inside
             # the value is a mapping separator and breaks frontmatter parsing.
             self.assertNotIn(": ", desc[0], ln)

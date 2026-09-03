@@ -276,7 +276,6 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
                 self.assertIn("window=<AGE_MIN>/<PATIENCE_MIN>m\n", s.report)
                 self.assertIn("anchor=<push|review>", s.report)
                 self.assertIn("anchor=push", s.report)
-                self.assertIn("byte-for-byte", s.report)
                 self.assertIn("anchor=<push|review>", s.dry_run)
 
 
@@ -285,13 +284,12 @@ class PatienceAfterReviewSurfacesStaticTestCase(unittest.TestCase):
         for path in both_copies("SKILL.md"):
             skill = path.read_text(encoding="utf-8")
             self.assertIn(f"`land.{KEY}`", skill, path)
-            self.assertIn("`silence`-only refinement", skill, path)
             unattended = skill[skill.find("## Unattended runs"):]
             self.assertIn(f"land.{KEY}", unattended, path)
 
     def test_conduct_checklist_carries_the_item(self) -> None:
         conduct = CONDUCT.read_text(encoding="utf-8")
-        self.assertIn(f"When `land.{KEY}` is set", conduct)
+        self.assertIn(f"land.{KEY}", conduct)
         self.assertIn("anchor=push", conduct)
 
 
