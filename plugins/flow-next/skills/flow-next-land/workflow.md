@@ -90,7 +90,7 @@ MERGE_VERDICT_CMD="$(lcfg mergeVerdictCommand)"; [[ "$MERGE_VERDICT_CMD" == "nul
 # fn-200 — opt-in human reviewer request (§2.6b / §3.4b). unset / null / "" ALL mean OFF.
 REQUEST_REVIEWERS="$(lcfg requestReviewers)"; [[ "$REQUEST_REVIEWERS" == "null" ]] && REQUEST_REVIEWERS=""
 # fn-219 — opt-in silence-window re-anchor (§2.6). Active ONLY as a positive integer: unset / null / "" / 0 / non-numeric ALL mean OFF (0 is off because a zero grace period is the strict-silence anti-pattern the window exists to prevent).
-PATIENCE_AFTER_REVIEW="$(lcfg patienceMinutesAfterReview)"; [[ "$PATIENCE_AFTER_REVIEW" =~ ^[1-9][0-9]{0,5}$ ]] || PATIENCE_AFTER_REVIEW=""   # bounded to six digits (≤ 999999 min): an unbounded digit run can overflow bash arithmetic and read as already elapsed
+PATIENCE_AFTER_REVIEW="$(lcfg patienceMinutesAfterReview)"; [[ "$PATIENCE_AFTER_REVIEW" =~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""   # any positive integer is on (the schema is unbounded); §2.6 compares overflow-safely
 ```
 
 Resolve the land ledger — READ-ONLY here (a missing file reads as `{}`; nothing is created or written until an ACT/REPORT write site, so `--dry-run` leaves the filesystem untouched). It lives under the git common dir so it is shared across worktrees and cannot be swept into commits by `git add -A`. **The tick claim below is taken BEFORE the `LEDGER_JSON` read** — a snapshot read outside the claimed interval could gate this tick on state another tick then rewrote:
@@ -462,7 +462,9 @@ if [[ "$REVIEW_SIGNAL" == "silence" && -n "$PATIENCE_AFTER_REVIEW" && "$AUTO_REV
    && REVIEW_EPOCH="$(printf '%s' "$REVIEW_EVENT_AT" | jq -Rr 'fromdateiso8601' 2>/dev/null)" && [[ "$REVIEW_EPOCH" =~ ^[0-9]+$ ]]; then
   REVIEW_AGE_MIN=$(( (NOW_EPOCH - REVIEW_EPOCH) / 60 ))
   WINDOW_ANCHOR=review
-  SILENCE_WINDOW_ELAPSED=$(( REVIEW_AGE_MIN >= PATIENCE_AFTER_REVIEW ? 1 : 0 ))
+  # Overflow-safe: a limit wider than 18 digits exceeds bash's signed range and would wrap
+  # negative (reading as already elapsed) — such a window is never elapsed instead.
+  if [[ ${#PATIENCE_AFTER_REVIEW} -gt 18 ]]; then SILENCE_WINDOW_ELAPSED=0; else SILENCE_WINDOW_ELAPSED=$(( REVIEW_AGE_MIN >= PATIENCE_AFTER_REVIEW ? 1 : 0 )); fi
 fi   # non-silence signal, key off, no head-current review, open threads, or an unparseable timestamp → push anchor, WINDOW_ANCHOR stays push (approve/<login> never rebind — their gates consume the push window, so their reports must say so)
 ```
 

@@ -83,12 +83,13 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
         self.assertEqual(self.text.count("config get land --json"), 1)
 
     def test_off_states_are_anything_but_a_positive_integer(self) -> None:
-        self.assertIn('=~ ^[1-9][0-9]{0,5}$ ]] || PATIENCE_AFTER_REVIEW=""', self.phase0)
+        self.assertIn('=~ ^[1-9][0-9]*$ ]] || PATIENCE_AFTER_REVIEW=""', self.phase0)
 
     def test_phase0_read_executes_off_states_and_bounds_overflow(self) -> None:
         # Executable: run the Phase 0 read line with a stubbed lcfg for each
-        # off state, a bounded on value, and an overflow value that would wrap
-        # bash arithmetic negative (and read as already elapsed).
+        # off state and for on values, including one beyond bash's signed
+        # range — every positive integer is ON (the schema is unbounded); the
+        # §2.6 fence is what handles overflow (see the anchor matrix test).
         import subprocess
         line = next(
             l for l in self.phase0.splitlines()
@@ -96,7 +97,8 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
         )
         cases = {
             "null": "", "": "", "0": "", "abc": "", "-5": "", "15": "15",
-            "999999": "999999", "9223372036854775808": "", "1000000": "",
+            "999999": "999999", "1000000": "1000000",
+            "9223372036854775808": "9223372036854775808",
         }
         for raw, want in cases.items():
             script = f"lcfg() {{ printf '%s\\n' {raw!r}; }}\n{line}\nprintf '%s' \"$PATIENCE_AFTER_REVIEW\""
@@ -159,6 +161,9 @@ class PatienceAfterReviewWorkflowStaticTestCase(unittest.TestCase):
             ({"UNRESOLVED": "2"}, "push|0"),
             ({"REVIEW_EVENT_AT": "not-a-date"}, "push|0"),
             ({"REVIEW_EVENT_AT": ""}, "push|0"),
+            # beyond bash's signed range: rebinds, never elapsed (no wrap-to-elapsed)
+            ({"PATIENCE_AFTER_REVIEW": "9223372036854775808"}, "review|0"),
+            ({"PATIENCE_AFTER_REVIEW": "999999999999999999"}, "review|0"),
         ]
         for override, want in cases:
             env = {**base, **override}

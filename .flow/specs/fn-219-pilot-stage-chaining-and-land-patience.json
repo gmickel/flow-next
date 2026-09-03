@@ -390,6 +390,78 @@
       "task": "fn-219-pilot-stage-chaining-and-land-patience.2",
       "timestamp": "2026-09-03T09:01:11.307194Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "65c6f565d7c31cdbeabed9a87fdb8e73e205624f9af1da7a798cd3f532b53c5c",
+      "backend": "codex",
+      "base_sha": "95c8e537e3344b1447b16ccf920500afa1fbbe2a",
+      "counter_kind": "impl",
+      "failure_class": "head_moved",
+      "finalized": {
+        "digest": "not_applicable",
+        "receipt": "not_applicable",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "9c25ed791c8825bf22afc358f4ed97971b432e7b",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "outcome": "transport_failure",
+      "output_bytes": 65,
+      "output_sha256": "6196f8015169e2c34d2cf0fbb374b8cca128bcc2bc369194f8fb219b535abcae",
+      "reservation_id": "e271f8e9b1ae419bbfa961e4febaf2b3",
+      "round_consumed": false,
+      "scope": "impl:fn-219-pilot-stage-chaining-and-land-patience.3",
+      "superseded_by": null,
+      "task": "fn-219-pilot-stage-chaining-and-land-patience.3",
+      "timestamp": "2026-09-03T09:06:39.691193Z",
+      "verdict": null
+    },
+    {
+      "artifact_sha256": "877b83c65bbd19cc3fa67a11d3867e4945d8d343c205d3e1187bf3bfb16b4492",
+      "backend": "codex",
+      "base_sha": "95c8e537e3344b1447b16ccf920500afa1fbbe2a",
+      "counter_kind": "impl",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-224a62e83e0f74dc3415a05becc898da",
+            "classification": "introduced",
+            "findingId": "finding-224a62e83e0f74dc3415a05becc898da",
+            "firstSeenThisRound": true,
+            "severity": "P1",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "implementation"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "553a327b0e3af1652d3645017b884c27110fa10e",
+      "head_sha_observed": true,
+      "kind": "impl",
+      "model": "gpt-5.6-sol",
+      "outcome": "verdict",
+      "output_bytes": 490680,
+      "output_sha256": "6c4b1d5d89fdeccbaa59be2c189f65bbfc65730e42a1a9e56d898678112b11eb",
+      "reservation_id": "e9f6e6617c134493b8ac374dd87b722e",
+      "round_consumed": true,
+      "scope": "impl:fn-219-pilot-stage-chaining-and-land-patience.3",
+      "superseded_by": null,
+      "task": "fn-219-pilot-stage-chaining-and-land-patience.3",
+      "timestamp": "2026-09-03T09:10:16.927086Z",
+      "tool_calls": 18,
+      "verdict": "NEEDS_WORK"
     }
   ],
   "review_hash_epoch": {
@@ -398,22 +470,12 @@
     "plan": 1,
     "plan#completion": 0
   },
-  "review_pending_rounds": {
-    "impl:fn-219-pilot-stage-chaining-and-land-patience.3": 1
-  },
-  "review_reservations": {
-    "e271f8e9b1ae419bbfa961e4febaf2b3": {
-      "artifact_sha256": "65c6f565d7c31cdbeabed9a87fdb8e73e205624f9af1da7a798cd3f532b53c5c",
-      "counter_scope": "impl:fn-219-pilot-stage-chaining-and-land-patience.3",
-      "epoch": 0,
-      "exclusive": true,
-      "forced": false,
-      "review_type": "impl"
-    }
-  },
+  "review_pending_rounds": {},
+  "review_reservations": {},
   "review_transport_failures": {
     "impl:fn-219-pilot-stage-chaining-and-land-patience.1": 0,
     "impl:fn-219-pilot-stage-chaining-and-land-patience.2": 0,
+    "impl:fn-219-pilot-stage-chaining-and-land-patience.3": 0,
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-219-pilot-stage-chaining-and-land-patience.md",
@@ -430,5 +492,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-03T09:01:28.599972Z"
+  "updated_at": "2026-09-03T09:10:16.941369Z"
 }
