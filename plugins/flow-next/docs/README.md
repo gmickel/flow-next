@@ -11,7 +11,7 @@ The offline-resilient reference for flow-next. Every file here is self-contained
 | Do I need all of it? | [`running-lean.md`](running-lean.md) |
 | What skills exist? | [`skills.md`](skills.md) |
 | How do we adopt this as a team? | [`teams.md`](teams.md) |
-| Which model does what, and how do I change that? | [`orchestration.md`](orchestration.md) |
+| Which model does what, which pipeline shape an item takes, and how do I change either? | [`orchestration.md`](orchestration.md) |
 | How does *my* harness reach another model? | [`reach/README.md`](reach/README.md) |
 | What's every flag on every command? | [`flowctl.md`](flowctl.md) |
 | Something is stuck. | [`troubleshooting.md`](troubleshooting.md) |
@@ -38,7 +38,7 @@ The repo's strategic intent is [`STRATEGY.md`](../../../STRATEGY.md). The vocabu
 | [`skills.md`](skills.md) | All 32 skills in the published catalog, what triggers each one, and what it does |
 | [`spec-template.md`](spec-template.md) | What belongs in a spec, the R-ID rules, and how to customize the scaffold from a root `SPEC.md` |
 | [`flowctl.md`](flowctl.md) | The full CLI: every command, flag, JSON shape, and exit code |
-| [`orchestration.md`](orchestration.md) | The four model tiers, the routing block in your own instruction file, review-backend selection, and the bridge route |
+| [`orchestration.md`](orchestration.md) | Two routing axes: the pipeline shape per item (six deciders, each printing its reason) and the model per job (four tiers, the routing block, review backends, the bridge route); a 26-hour unattended field case and a five-rung setup ladder |
 | [`reach/README.md`](reach/README.md) | What each harness can actually reach, and how it degrades when it cannot |
 | [`../skills/flow-next-pilot/SKILL.md`](../skills/flow-next-pilot/SKILL.md) | The build loop: one ready spec, one stage per tick, one verdict line |
 | [`../skills/flow-next-land/SKILL.md`](../skills/flow-next-land/SKILL.md) | The ship loop: CI, review convergence, the gated merge, the release tail |
