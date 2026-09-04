@@ -19446,7 +19446,15 @@ def _mask_html_comments(text: str) -> str:
     def _blank(m: re.Match) -> str:
         return re.sub(r"[^\n]", " ", m.group(0))
 
-    return re.sub(r"<!--.*?-->", _blank, text, flags=re.DOTALL)
+    # Fenced code blocks first: a `<!--` quoted inside a fence must not open
+    # a comment that swallows real headings and criteria further down.
+    fenced = re.sub(
+        r"^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*$",
+        _blank,
+        text,
+        flags=re.DOTALL | re.MULTILINE,
+    )
+    return re.sub(r"<!--.*?-->", _blank, fenced, flags=re.DOTALL)
 
 
 def resolve_spec_template(use_json: bool = False) -> tuple[Path, str]:
@@ -19478,7 +19486,7 @@ def resolve_spec_template(use_json: bool = False) -> tuple[Path, str]:
                 f"Warning: unreadable spec template override {path}",
                 file=sys.stderr,
             )
-    bundled = Path(__file__).resolve().parent.parent / "templates" / "spec.md"
+    bundled = _bundled_spec_template_path()
     try:
         return bundled, _read_utf8_normalized(bundled)
     except (OSError, UnicodeDecodeError) as exc:
@@ -19487,12 +19495,6 @@ def resolve_spec_template(use_json: bool = False) -> tuple[Path, str]:
             use_json=use_json,
         )
         raise AssertionError("unreachable") from exc  # error_exit never returns
-
-
-def resolve_spec_template_path(use_json: bool = False) -> Path:
-    """Path half of `resolve_spec_template` (kept for callers that only need
-    to report which scaffold applies)."""
-    return resolve_spec_template(use_json=use_json)[0]
 
 
 def spec_skeleton_text(use_json: bool = False) -> str:
@@ -25045,7 +25047,9 @@ def _render_epic_skeleton_from_prospect(
 ) -> str:
     """Render an epic spec body extending the default skeleton with prospect context.
 
-    Format mirrors `create_epic_spec` (Overview / Acceptance / etc.) but
+    Format keeps the pre-fn-220 promote shape (Overview / Acceptance / etc.;
+    `create_epic_spec` now renders templates/spec.md - migrating promote is a
+    follow-up) but
     pre-fills Overview, Leverage, Suggested size, and a `## Source` link
     that points back to the prospect artifact + idea position. Acceptance
     is left as a placeholder pointing at `/flow-next:interview` /
@@ -32217,7 +32221,10 @@ def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
     body_start = m.end()
     next_h2 = re.search(r"^##\s+", masked[body_start:], re.MULTILINE)
     body_end = body_start + next_h2.start() if next_h2 else len(masked)
-    return spec_text[body_start:body_end].strip()
+    # The body comes from the masked copy too: a comment inside the section
+    # (scope markers, the template's trailing cross-links) is guidance, never
+    # content a bullet parser may read.
+    return masked[body_start:body_end].strip()
 
 
 # Read-only heading synonyms (fn-220). Canonical pattern is first so a file

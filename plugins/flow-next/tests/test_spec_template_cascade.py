@@ -272,8 +272,29 @@ class TestSpecTemplateCascade(unittest.TestCase):
         criteria, residue = flowctl._export_scan_acceptance_criteria(text)
         self.assertEqual(criteria, [])
         self.assertEqual(residue, 0)
-        # Guidance prose inside comments is not section content either.
+        # Guidance prose inside comments is not section content either: the
+        # template's trailing cross-links comment sits inside the last section.
         self.assertEqual(flowctl._export_parse_boundaries(text), [])
+        decision = flowctl._export_parse_first_present_section(
+            text, flowctl._EXPORT_DECISION_CONTEXT_HEADINGS
+        )
+        self.assertEqual(
+            re.findall(r"^[-*]\s+", decision, re.MULTILINE), [], decision
+        )
+
+    def test_comment_masking_is_fence_aware(self) -> None:
+        text = (
+            "# t\n\n## Goal & Context\n```html\n<!--\n```\nprose\n\n"
+            "## Acceptance Criteria\n- **R1:** real. Errors: none\n\n"
+            "## Boundaries\n<!-- scope: business -->\n- kept\n"
+        )
+        self.assertEqual(
+            flowctl._spec_markdown_h2s(text),
+            ["Goal & Context", "Acceptance Criteria", "Boundaries"],
+        )
+        criteria, _residue = flowctl._export_scan_acceptance_criteria(text)
+        self.assertEqual([c["id"] for c in criteria], ["R1"])
+        self.assertEqual(flowctl._export_parse_boundaries(text), ["kept"])
 
     def test_comment_masking_keeps_offsets_and_hides_headings(self) -> None:
         text = "# t\n\n<!--\n## Decision Context\nfake\n-->\n\n## Goal & Context\nreal\n"
