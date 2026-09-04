@@ -19437,24 +19437,38 @@ def _strip_leading_yaml_frontmatter(text: str) -> str:
     return text
 
 
-def _mask_html_comments(text: str) -> str:
+def _mask_html_comments(text: str, blank_fences: bool = True) -> str:
     """Blank `<!-- ... -->` blocks (newlines kept) so heading and R-ID scanners
     never read authoring guidance as content. Offsets and line counts are
     preserved, so callers can slice the original text with the masked
-    text's match positions."""
+    text's match positions.
+
+    Fenced code blocks are always used as a LOCATOR: a `<!--` quoted inside a
+    fence never opens a comment that swallows real headings further down.
+    With `blank_fences=True` (the scanners' copy) the fences themselves are
+    blanked too, so nothing inside a fence reads as a heading or an R-ID.
+    With `blank_fences=False` (the content copy) only the comment spans are
+    blanked and fenced content survives verbatim - section bodies are sliced
+    from this copy so a diagram in a spec never disappears from the export.
+    """
 
     def _blank(m: re.Match) -> str:
         return re.sub(r"[^\n]", " ", m.group(0))
 
-    # Fenced code blocks first: a `<!--` quoted inside a fence must not open
-    # a comment that swallows real headings and criteria further down.
     fenced = re.sub(
         r"^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*$",
         _blank,
         text,
         flags=re.DOTALL | re.MULTILINE,
     )
-    return re.sub(r"<!--.*?-->", _blank, fenced, flags=re.DOTALL)
+    if blank_fences:
+        return re.sub(r"<!--.*?-->", _blank, fenced, flags=re.DOTALL)
+    out = list(text)
+    for m in re.finditer(r"<!--.*?-->", fenced, flags=re.DOTALL):
+        for i in range(m.start(), m.end()):
+            if out[i] != "\n":
+                out[i] = " "
+    return "".join(out)
 
 
 def resolve_spec_template(use_json: bool = False) -> tuple[Path, str]:
@@ -32221,10 +32235,12 @@ def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
     body_start = m.end()
     next_h2 = re.search(r"^##\s+", masked[body_start:], re.MULTILINE)
     body_end = body_start + next_h2.start() if next_h2 else len(masked)
-    # The body comes from the masked copy too: a comment inside the section
-    # (scope markers, the template's trailing cross-links) is guidance, never
-    # content a bullet parser may read.
-    return masked[body_start:body_end].strip()
+    # The body comes from the comments-only copy: a comment inside the
+    # section (scope markers, the template's trailing cross-links) is
+    # guidance, never content a bullet parser may read - but fenced code
+    # (diagrams, examples) is content and survives verbatim.
+    content = _mask_html_comments(spec_text or "", blank_fences=False)
+    return content[body_start:body_end].strip()
 
 
 # Read-only heading synonyms (fn-220). Canonical pattern is first so a file

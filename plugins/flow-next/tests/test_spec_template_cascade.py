@@ -296,6 +296,20 @@ class TestSpecTemplateCascade(unittest.TestCase):
         self.assertEqual([c["id"] for c in criteria], ["R1"])
         self.assertEqual(flowctl._export_parse_boundaries(text), ["kept"])
 
+    def test_section_body_keeps_fenced_content_and_drops_comments(self) -> None:
+        """Round-3 regression: fences are a locator for the scanners, never
+        content to erase from an exported section body."""
+        text = (
+            "# t\n\n## Goal & Context\n<!-- scope: business -->\nintro\n\n"
+            "```bash\nflowctl ready --spec fn-1\n```\n\n## Boundaries\n- none\n"
+        )
+        body = flowctl._export_parse_first_present_section(
+            text, flowctl._EXPORT_GOAL_AND_CONTEXT_HEADINGS
+        )
+        self.assertIn("```bash\nflowctl ready --spec fn-1\n```", body)
+        self.assertNotIn("scope: business", body)
+        self.assertTrue(body.startswith("intro"), repr(body))
+
     def test_comment_masking_keeps_offsets_and_hides_headings(self) -> None:
         text = "# t\n\n<!--\n## Decision Context\nfake\n-->\n\n## Goal & Context\nreal\n"
         masked = flowctl._mask_html_comments(text)
