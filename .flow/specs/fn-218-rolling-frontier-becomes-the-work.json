@@ -15,7 +15,7 @@
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
   "spec_path": ".flow/specs/fn-218-rolling-frontier-becomes-the-work.md",
-  "status": "open",
+  "status": "done",
   "title": "Rolling frontier becomes the work skill's default scheduler",
   "tracker": {
     "baseHashFlow": null,
@@ -28,5 +28,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-03T23:36:23.068386Z"
+  "updated_at": "2026-09-04T01:27:08.868362Z"
 }
