@@ -72,7 +72,7 @@ map_model() {
     return
   fi
   case "$claude_model" in
-    opus|claude-opus-*)
+    opus|claude-opus-*|fable|claude-fable-*)
       echo "$CODEX_MODEL_INTELLIGENT" ;;
     sonnet|claude-sonnet-*)
       if echo "$INTELLIGENT_SCOUTS" | grep -qw "$agent_name" 2>/dev/null; then

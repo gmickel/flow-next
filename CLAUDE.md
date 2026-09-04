@@ -198,8 +198,8 @@ _Scaffolded by `/flow-next:setup` as an example, then edited. This section is yo
 Grammar: `<tier>: <model>` or `<tier>: <model> at <effort>`. An absent tier means the session model; an unparseable line is ignored. Tier meanings: [`plugins/flow-next/docs/orchestration.md`](plugins/flow-next/docs/orchestration.md#tiers-what-kind-of-model-a-job-wants). How this harness reaches one: [`plugins/flow-next/docs/reach/`](plugins/flow-next/docs/reach/README.md).
 
 ```
-reviewer: gpt-5.6-sol at high
-implementer: gpt-5.6-terra at medium
+reviewer: gpt-6-astra at high
+implementer: gpt-6-astra at medium
 fast scout: haiku-4.5
 thinking scout: sonnet-5
 ```
