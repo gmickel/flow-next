@@ -53,20 +53,26 @@ A different model reviews every plan and every implementation, the loop iterates
 **Open a PR that already makes its argument.**
 The pull request arrives explaining itself: which acceptance criterion each change satisfies, which decisions still need a human, what deliberately did not change.
 
+**Decide what to build before anyone builds it.**
+An idea too big to write down gets charted one decision at a time; a conversation becomes a spec; a product owner and an engineer refine it in their own passes on one file.
+
 **Your team's context lives in the repo.**
 Specs, decisions, glossary, and memory are files in your repository that the next run reads. A teammate joining on Monday reads the same thing the agent does.
+
+**Prove it in the running app, not by reading the source.**
+Live QA drives the app the way a user would, from the spec's own criteria, and files what it finds with screenshots and a verdict you can audit.
 
 **Hand over as much as the receipts have earned.**
 One dial from a supervised pair to a loop draining the backlog overnight. The gates do not change as you climb.
 
 **Plan on your best model, implement on a cheaper one.**
-Name a model per role once in your `CLAUDE.md`, or say it in the prompt for a single run. Whatever you pick, the model that wrote the diff never reviews it.
+Name a model per role once in your `CLAUDE.md`, or say it in the prompt for a single run. Whatever you pick, the model that wrote the diff never reviews it. The pipeline shape per item and the model per job are decided separately, and each decision prints its reason: [orchestration](plugins/flow-next/docs/orchestration.md).
 
-**Two routing axes, both out of the box.**
-The pipeline shape per item (plan first or work directly, rolling or wave, skip or run the review) and the model per job are decided separately, each decision prints its reason, and a one-paragraph policy in your instruction file steers both unattended. Details: [orchestration](plugins/flow-next/docs/orchestration.md).
+**A way of working, not a tool you bolt on.**
+The same rails carry a solo developer on a Sunday and a fifty-person organisation on a rollout. The spec is the handover object, and it reads the same to product, engineering, and the next agent run.
 
 **Your process outlives your agent.**
-The same specs, gates, receipts, and task state across harnesses. Everything sits in your repository under `.flow/`, in git and code-reviewable, and uninstall is `rm -rf .flow/`.
+The same specs, gates, receipts, and task state across harnesses. In a harness that can dispatch subagents, the same routing runs across models in-host with no bridge at all. Everything sits in your repository under `.flow/`, in git and code-reviewable, and uninstall is `rm -rf .flow/`.
 
 <details>
 <summary><strong>The vocabulary underneath: seven tenets</strong></summary>
