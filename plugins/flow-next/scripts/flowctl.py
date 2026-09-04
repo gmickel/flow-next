@@ -32224,21 +32224,25 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
 def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
     """Return the body text under a single H2 heading (stripped).
 
-    Headings are located on a comment-masked copy (fn-220) so authoring
-    guidance inside `<!-- -->` blocks never reads as a section boundary;
-    the body itself is sliced from the original text.
+    Headings and section boundaries are located on the scanners' copy
+    (comments AND fences blanked, fn-220) so authoring guidance inside
+    `<!-- -->` blocks never reads as a heading; the body is sliced from the
+    comments-only copy, so fenced code (diagrams, examples) survives verbatim
+    while comment text (scope markers, the template's trailing cross-links)
+    never reaches a bullet parser.
     """
     masked = _mask_html_comments(spec_text or "")
     m = heading_re.search(masked)
     if not m:
         return ""
-    body_start = m.end()
+    # Anchor the body at the end of the heading's OWN line. Every heading
+    # pattern ends in `\s*$`, and under MULTILINE that `\s*` runs through the
+    # newlines of blanked comment/fence lines right after the heading - so
+    # `m.end()` would skip a fence-first section's fence entirely.
+    eol = masked.find("\n", m.start())
+    body_start = len(masked) if eol == -1 else eol + 1
     next_h2 = re.search(r"^##\s+", masked[body_start:], re.MULTILINE)
     body_end = body_start + next_h2.start() if next_h2 else len(masked)
-    # The body comes from the comments-only copy: a comment inside the
-    # section (scope markers, the template's trailing cross-links) is
-    # guidance, never content a bullet parser may read - but fenced code
-    # (diagrams, examples) is content and survives verbatim.
     content = _mask_html_comments(spec_text or "", blank_fences=False)
     return content[body_start:body_end].strip()
 

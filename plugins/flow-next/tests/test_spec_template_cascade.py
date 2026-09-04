@@ -310,6 +310,21 @@ class TestSpecTemplateCascade(unittest.TestCase):
         self.assertNotIn("scope: business", body)
         self.assertTrue(body.startswith("intro"), repr(body))
 
+    def test_fence_first_section_body_survives(self) -> None:
+        """Round-4 regression: a fence (or a comment then a fence) as the FIRST
+        thing under a heading must not be swallowed by the heading regex's
+        trailing whitespace match on the masked copy."""
+        cases = {
+            "fence-first": "## Goal & Context\n```\ndiagram\n```\n\n## Boundaries\n- none\n",
+            "comment-then-fence": "## Goal & Context\n<!-- scope -->\n\n```\ndiagram\n```\n\n## Boundaries\n- none\n",
+        }
+        for name, section in cases.items():
+            with self.subTest(case=name):
+                body = flowctl._export_parse_first_present_section(
+                    "# t\n\n" + section, flowctl._EXPORT_GOAL_AND_CONTEXT_HEADINGS
+                )
+                self.assertEqual(body, "```\ndiagram\n```", repr(body))
+
     def test_comment_masking_keeps_offsets_and_hides_headings(self) -> None:
         text = "# t\n\n<!--\n## Decision Context\nfake\n-->\n\n## Goal & Context\nreal\n"
         masked = flowctl._mask_html_comments(text)
