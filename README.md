@@ -62,6 +62,9 @@ One dial from a supervised pair to a loop draining the backlog overnight. The ga
 **Plan on your best model, implement on a cheaper one.**
 Name a model per role once in your `CLAUDE.md`, or say it in the prompt for a single run. Whatever you pick, the model that wrote the diff never reviews it.
 
+**Two routing axes, both out of the box.**
+The pipeline shape per item (plan first or work directly, rolling or wave, skip or run the review) and the model per job are decided separately, each decision prints its reason, and a one-paragraph policy in your instruction file steers both unattended. Details: [orchestration](plugins/flow-next/docs/orchestration.md).
+
 **Your process outlives your agent.**
 The same specs, gates, receipts, and task state across harnesses. Everything sits in your repository under `.flow/`, in git and code-reviewable, and uninstall is `rm -rf .flow/`.
 

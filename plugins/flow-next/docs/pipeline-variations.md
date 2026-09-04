@@ -4,6 +4,8 @@ The default pipeline composes ([root README](../../../README.md#compose-the-pipe
 
 > Adjacent, not the same: [`running-lean.md`](running-lean.md) is about which **layers** (subsystems) you switch on at all and what each costs to keep on. This page is about which **stages** one piece of work passes through. [`/flow-next:guide`](../skills/flow-next-guide/SKILL.md) is the router that answers the question live for one specific situation - this page is the reference it rhymes with, not a second router.
 
+Who picks the route at run time, and what each decider prints, is the [pipeline routing](orchestration.md#pipeline-routing-who-decides-the-shape) section of the orchestration page; this page is the rubric those deciders apply.
+
 **Read the variants below as worked examples.** They illustrate routes the smallest-sufficient rule produces for six common shapes of work. Your change composes its own route; these show the reasoning, so you can reproduce it, not memorize it.
 
 ## Pick by risk and unknowns

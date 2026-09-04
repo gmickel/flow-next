@@ -1,9 +1,18 @@
-# Orchestration & model routing
+# Orchestration: pipeline routing and model routing
 
 > **Codex install note:** when YOU run a flow-next command on THIS Codex install, invoke it as `$flow-next-<name>` (or pick it from the skills dropdown) wherever this page writes `/flow-next:<name>` — and when the written name itself already starts with `flow-next-` (e.g. `/flow-next:flow-next-drive`), the prefix is not doubled: invoke `$flow-next-drive`. Passages describing OTHER hosts (Claude Code `claude -p` / `/loop` examples, Grok, Cursor, OpenCode sections) document those hosts' own syntax and are quoted verbatim — do not convert them.
 
 
 flow-next is an orchestration layer, not a single-agent workflow. The host agent (Claude Code / Codex / Droid) conducts: it fans work out to tiered subagents, routes reviews to a *different* model family than the writer, optionally drives a second CLI agent through a headless bridge, and runs autonomous build/ship loops. Which model does what is a routing decision - and every routing decision in flow-next is either a parameter or a sentence of intent away. The second kind carries judgment.
+
+**flow-next routes on two axes, and each decision prints its reason.** A per-prompt model router picks a model path for one request and the choice disappears. flow-next decides the *shape* of the pipeline per item and the *model* per job, and each decision lands as a line in the run report or a receipt on disk.
+
+| Axis | The question | Who decides | Where the decision shows |
+|---|---|---|---|
+| **A. Pipeline routing** | Which stages does this item run - interview, plan, plan review, work directly, rolling or wave, QA, how many review rounds? | Capture's `Recommended next:` line, the guide router, pilot's stage classifier, work's Phase 3 route and zero-task fork, the review triage gate, `flowctl review-route` | The `Recommended next:` / `Scheduling:` / `PILOT_VERDICT` lines, the triage receipt, the review ledger |
+| **B. Model routing** | Which model runs this job - the implementer, the reviewer, a scout - and from which family? | The routing block in your instruction file, `review.backend`, per-task `review:` pins, the bridge recipes, a sentence in the moment | The review receipt's `model` field, the worker dispatch prompt, the PR body's verification block |
+
+Axis A is documented below under [Pipeline routing](#pipeline-routing-who-decides-the-shape); the rest of this page is axis B. A [field case](#field-case-one-paragraph-twenty-specs) shows both axes running unattended for 26 hours, and the [setup ladder](#setup-ladder-from-nothing-to-a-standing-policy) takes a repo from zero configuration to a standing policy in five copy-paste rungs.
 
 The pattern this page serves: use your smartest model to orchestrate and judge, route mechanical or token-hungry work to faster/cheaper models, and pick reviewers from a different family than the writer. flow-next was built in this shape - this page maps the dials.
 
@@ -16,8 +25,11 @@ The pattern this page serves: use your smartest model to orchestrate and judge, 
 - [Two ways to route](#two-ways-to-route)
 - [Deterministic routing: the parameter surfaces](#deterministic-routing-the-parameter-surfaces)
 - [Prompted orchestration: routing with judgment](#prompted-orchestration-routing-with-judgment)
+- [Pipeline routing: who decides the shape](#pipeline-routing-who-decides-the-shape)
+- [Field case: one paragraph, twenty specs](#field-case-one-paragraph-twenty-specs)
 - [Field patterns, mapped to flow-next](#field-patterns-mapped-to-flow-next)
 - [A default pipeline, expressed as tiers](#a-default-pipeline-expressed-as-tiers)
+- [Setup ladder: from nothing to a standing policy](#setup-ladder-from-nothing-to-a-standing-policy)
 - [Durable routing: the routing block in your instruction file](#durable-routing-the-routing-block-in-your-instruction-file)
 - [Chaining the loops](#chaining-the-loops)
 - [Unattended chart driving (not a pilot stage)](#unattended-chart-driving-not-a-pilot-stage)
@@ -297,6 +309,42 @@ and feed its verdict into the fix loop like any other reviewer.
 
 Backends, reviewers, and bridged implementers are prompts plus plumbing - when a rung you want is missing, describe it and the host builds the arrangement on the spot. The deterministic flags (`--review=<backend>`, `--depth=short`) still work inline for the parts that *are* parameterized; prompting composes around them.
 
+## Pipeline routing: who decides the shape
+
+Nobody configures the shape an item takes. Six deciders read the item's state and print their reason; you override any of them with a flag, a field, or a sentence.
+
+| Decider | Reads | Decides | Prints | Lives in |
+|---|---|---|---|---|
+| **Capture's next step** | The spec it just wrote: readiness, open `[inferred]` criteria, parked unknowns, design risk | `/flow-next:interview`, `/flow-next:plan`, `/flow-next:work <id> --no-plan`, or `/flow-next:guide` when signals conflict | `Recommended next: /flow-next:<stage> <id> - <reason>` on every run | [`flow-next-capture/workflow.md`](../../skills/flow-next-capture/workflow.md#phase-6-suggested-next-step-r16) |
+| **The guide router** | A free-form description of where you are | The smallest sufficient workflow, with the safe-skip stated | One recommendation with a positive signal and a skip condition | [`flow-next-guide/SKILL.md`](../../skills/flow-next-guide/SKILL.md#smallest-sufficient-matrix-exact) |
+| **Pilot's stage classifier** | One ready spec's state: tasks, plan-review status, done tasks, the `no_plan` field, an open PR | `plan`, `plan-review`, `work`, `qa` (opt-in), `make-pr`, or defer to land | `PILOT_VERDICT=<verdict> spec=<id> stage=<stage> reason="..."` | [`flow-next-pilot/workflow.md`](../../skills/flow-next-pilot/workflow.md#phase-2-classify-the-stage) |
+| **Work's Phase 3 route** | Whether the run was given a task id, `planSync.enabled`, the open task count, the dependency closure | Rolling frontier (default) or the wave loop; a zero-task spec forks to plan-first or work-directly | `Scheduling: rolling` or `Scheduling: wave (<reason>)` before the first claim | [`flow-next-work/phases.md`](../../skills/flow-next-work/phases.md#phase-3-task-scheduling) and [`references/no-plan-route.md`](../../skills/flow-next-work/references/no-plan-route.md) |
+| **The review triage gate** | The diff: lockfile-only, docs-only, release chore, generated files | Skip the review backend with a `triage_skip` receipt, or run the full review; `FLOW_TRIAGE_LLM=1` adds a judge for ambiguous diffs | `Triage-skip: <reason>` and a SHIP receipt with `mode: triage_skip` | [`flow-next-impl-review/SKILL.md`](../../skills/flow-next-impl-review/SKILL.md#step-05-trivial-diff-triage-fn-296), [`flowctl triage-skip`](flowctl.md#triage-skip) |
+| **`flowctl review-route`** | The review ledger: pending reservations, the last verdict, the artifact hash | First-round three-draw fan-out, fix-then-rereview, or stop (`NOT_RETRYABLE` on an unchanged artifact) | The route action in JSON, consumed by the review skills | [`flowctl.md`](flowctl.md) |
+
+Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tiers a diff so a docs-only change runs lint alone, and land's [CI-fix budget and patience window](../../skills/flow-next-land/SKILL.md) decide when a PR merges. Every decider fails closed toward the more careful shape: a missing `Touches:` line holds a task out of the rolling frontier, a spec with unresolved questions routes to interview, an ambiguous diff gets the full review.
+
+**Overriding a decider** is one surface each: `--no-plan` or `flowctl spec set-no-plan` for the fork, a task id instead of a spec id for the wave route, `--no-triage` for the gate, `--review=<backend>` or `flowctl task set-backend` for the reviewer, and a sentence for anything else ("use 1 reviewer instead of 3").
+
+## Field case: one paragraph, twenty specs
+
+A Linux desktop app in a private repo was built from a masterplan in September 2026 with one paragraph of standing policy and no per-spec attention. The paragraph, verbatim from the plan:
+
+> This is a fast build. Specs are captured with `--no-plan` and worked directly; no plan reviews and no implementation reviews run during the build; flow-next's `pipeline.qa` stage stays off so pilot never waits on a drive. What stays on because it costs nothing: CI unit and contract jobs, the a11y lint, and the visual baselines as advisory diffs. When the v1 surface is complete, a cleanup phase turns the gates back on and works through what they find.
+
+Capture read the paragraph and minted every spec with the `no_plan` field; pilot classified each ready spec straight to the work stage; land opened, babysat and merged the PRs.
+
+| Measured | Value |
+|---|---|
+| Wall clock, first PR opened to last PR merged | 26 hours (3 Sep 14:04 to 4 Sep 15:59) |
+| Specs captured and closed | 20, all `no_plan` |
+| Pull requests merged | 21 (one was a CI fix) |
+| Code landed | 1,011 files, 105,837 lines |
+| Bot review threads resolved by land | 147 of 147 |
+| Land strikes, human interventions | 0 |
+
+What the paragraph chose, so the numbers read correctly: every spec skipped planning because the policy said so, review ran at the PR level from the code host's bot with the in-pipeline reviews and the QA drive switched off, and one model family did every job. The repo was greenfield. Those are the policy's choices for a fast build with a cleanup phase behind it, and each is one sentence away from a different shape: "decide per spec, from its Boundaries and the size of its Touches, whether to plan first or work directly" turns the shape decision over to the host per item, and rung 3 of the ladder puts a second family on the reviews. Rung 5 below shows that fuller paragraph.
+
 ## Field patterns, mapped to flow-next
 
 The orchestration patterns that emerged in the wild through mid-2026 all have a direct flow-next expression - most need one config key or one sentence:
@@ -308,6 +356,9 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 | **Cross-family reviewer** | The model that writes is never the model that reviews - uncorrelated blind spots | `review.backend <backend>` - per-task `review:` pins exceptions |
 | **Effort discipline** | Run the orchestrator at high, not max - top effort tiers are token furnaces with flat-or-worse output on routine work | Session effort is yours; a bridged child takes its effort inline (`-c model_reasoning_effort=medium` is the recommended floor - raise it for gnarly tasks) |
 | **Token-hungry offload** | Computer use, live-app verification, bulk analysis go to other models/agents; results come back as evidence | `/flow-next:qa` drives the app in its own context and files P0/P1/P2 findings; workers run fresh-context and return receipts |
+| **Single path** | One request, one model, done | A tier pinned in the routing block (`implementer: <model> at <effort>`); absent, the session model |
+| **Cascade** | A cheap model tries first; a gate decides whether a stronger one takes over | The value tier implements, the review verdict is the gate, and the standing permission to escalate ("if a cheaper model misses the bar, rerun on a smarter one") moves the job up. The gate is a real review with a receipt, never a classifier |
+| **Critique** | A second model criticises and the first revises | Cross-family review on every backend, three axis draws on the first round of `codex` and `host`, one fresh reviewer per re-round, a bounded round cap, and `MAJOR_RETHINK` escalating to a human instead of looping |
 
 ## A default pipeline, expressed as tiers
 
@@ -409,6 +460,55 @@ Contract:
 - **Chart mode creates; work mode resolves.** Charting an idea must not start answering its own decisions. Status mode (`--status`) mutates nothing.
 
 Plain-language steering still works for humans; the exact flags and `flowctl chart` surface are for automation. Full skill contract: [`../skills/flow-next-chart/SKILL.md`](../../skills/flow-next-chart/SKILL.md); CLI: [`flowctl.md`](flowctl.md#chart).
+
+## Setup ladder: from nothing to a standing policy
+
+Each rung is one copy-paste and one sentence on what it buys. Stop at any rung; the rungs below it keep working.
+
+**Rung 1 - nothing.** Axis A runs with zero configuration: capture prints its next step, pilot classifies, work picks rolling or wave, triage skips trivial diffs. The session model does every job.
+
+**Rung 2 - a cross-family reviewer.**
+
+```bash
+flowctl config set review.backend codex     # or copilot | cursor | host
+```
+
+Every plan and implementation review now comes from a model that did not write the diff, and the verdict lands as a receipt on disk. Unattended ticks read this key; a prompt cannot reach a 3am pilot tick.
+
+**Rung 3 - the routing block.** In `CLAUDE.md` or `AGENTS.md` (`/flow-next:setup` scaffolds it commented out):
+
+```text
+reviewer: gpt-5.6-sol at high
+implementer: gpt-5.6-terra at medium
+fast scout: haiku-4.5
+thinking scout: sonnet-5
+```
+
+Name the ids your harness serves. Unset tiers stay on the session model, which is where planning, capture, interview and every verdict belong. A model the harness cannot reach falls back to the session model with one note.
+
+**Rung 4 - per-item exceptions.**
+
+```bash
+flowctl task set-backend fn-12.3 --review cursor:<model>   # this task's reviewer
+flowctl spec set-no-plan fn-14                             # this spec skips planning
+/flow-next:work fn-12 --review=host                        # this run's reviewer
+```
+
+Fields ride with the item, so pilot and land honour them at 3am too.
+
+**Rung 5 - a standing policy paragraph.** In the same instruction file:
+
+```text
+Work the ready specs. Decide per spec, from its Boundaries and the size of
+its Touches, whether to plan first or work directly; a spec with open
+[inferred] criteria goes to interview instead. Anything touching auth or the
+migration you implement yourself on the session model; plain CRUD goes out
+to a codex exec bridge. Reviews come from codex either way; if a task's
+review comes back NEEDS_WORK twice, stop bridging it and implement it
+yourself.
+```
+
+The host judges each item against the paragraph and prints the reason with each decision. The field case above ran a shorter paragraph than this one for 26 hours.
 
 ## In your repo
 
