@@ -40,9 +40,8 @@ CURSOR_MANIFEST = PLUGIN_DIR / ".cursor-plugin" / "plugin.json"
 FRONTMATTER_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
 
 # The exact canonical command surface after the fn-124 flatten (+ chart from
-# fn-135.4, + guide from fn-135.6, + work-rolling from fn-203.4 [experimental
-# beta - deleted at graduation or sunset, fn-203 R10], + features from
-# fn-211.4; epic-review retired).
+# fn-135.4, + guide from fn-135.6, + features from fn-211.4; epic-review
+# retired; work-rolling graduated into work's default scheduler, fn-218).
 # Pinned so a silent delete-one-add-one swap fails CI: adding or removing a
 # command is a deliberate surface change that MUST update this set. Keep
 # alphabetical.
@@ -52,7 +51,6 @@ EXPECTED_COMMANDS = frozenset({
     "prime", "prose", "prospect", "qa", "ralph-init", "resolve-pr", "setup",
     "spec-completion-review",
     "strategy", "sync", "tracker-sync", "uninstall", "visual", "work",
-    "work-rolling",
 })
 
 

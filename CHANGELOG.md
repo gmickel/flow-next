@@ -2,6 +2,18 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+Multi-task specs build faster by default: `/flow-next:work` now schedules on the rolling frontier, the architecture the experimental `/flow-next:work-rolling` beta proved in the field, and the beta itself is gone.
+
+### Changed
+
+- **`/flow-next:work` schedules on the rolling frontier by default.** The next eligible task is admitted the moment any worker returns instead of waiting at wave barriers, each worker in an isolated workspace, with review and completion conductor-owned per task - the pre-registered fn-203 eval measured a 52.1% work-phase wall saving at quality parity, and the beta ran end-to-end on Claude Code, Cursor and Grok Build. Nothing to enable. The wave loop remains as the structural fallback, chosen from run and spec state alone: a task-id run (`work fn-N.M` runs exactly that task, never the spec's wider frontier), plan-sync on (`planSync.enabled` not `false` - its per-wave barrier is the existing fail-closed rule), fewer than two open tasks (a no-plan implicit task, or one task left), or a fully sequential dependency chain, where one lane runs with less machinery on the single-worker path. The route prints once during Phase 3, before the first task is claimed (the wave form at entry, the rolling form after the scheduler's dispatch probe), as `Scheduling: rolling` or `Scheduling: wave (<reason>)`; a host measured to block on dispatch still reports `degraded to wave`. Touches overlap is still judged per admission inside the scheduler, never at the route; there is no config knob and no host table. Pilot, land and Ralph dispatch plain work and inherit the route. (fn-218)
+
+### Removed
+
+- **`/flow-next:work-rolling` is gone.** The experimental beta graduated into work's default scheduler; its scheduler reference moved to `skills/flow-next-work/references/rolling-scheduler.md` and is read only on the rolling route. No alias: fn-203 recorded that exactly one topology survives graduation, and no autonomous driver ever named the beta. Repos that ran it invoke `/flow-next:work` instead. (fn-218)
+
 ## [flow-next 4.13.1] - 2026-09-03
 
 Anyone running `/flow-next:pilot` and `/flow-next:land` unattended under a host loop gets two new controls over where the loop idles: pilot can open the draft PR in the same tick as a live QA verdict instead of paying an interval for a stage it was always going to run, and land can measure its merge wait from the bot's clean review instead of from the last push. Both are opt-in keys, off by default, and toggle independently; with either on, every gate, verdict, and merge license behaves exactly as before.

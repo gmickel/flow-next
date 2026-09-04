@@ -107,11 +107,59 @@ Like the worker `BASE_COMMIT`, bash variables do not survive across tool calls, 
 
 Done when: the run is on the branch the choice named (under autonomy, exactly the spec's `branch_name`) and `.flow/tmp/spec_base` holds the merge-base.
 
-## Phase 3: Task Wave Loop
+## Phase 3: Task Scheduling
 
-In SPEC_MODE, inspect the whole ready frontier and prefer a concurrent safe
-subset. In SINGLE_TASK_MODE, the selected wave is always the requested task
-alone. Every task still gets a fresh-context worker.
+**Route decision (once, at Phase 3 entry).** Two schedulers exist; the rolling
+frontier is the default and the wave loop below is its structural fallback.
+Decide from spec state plus the plan-sync setting - never from a config knob,
+a host name, or a Touches comparison (Touches are judged per admission inside
+whichever scheduler runs):
+
+```bash
+$FLOWCTL config get planSync.enabled --json
+$FLOWCTL tasks --spec <spec-id> --json   # SPEC_MODE: open tasks + depends_on
+```
+
+Take the **wave route** (3a-3g below) when ANY of these hold:
+
+1. SINGLE_TASK_MODE - the run was given a task id, so the wave route runs
+   exactly the requested task alone; the spec's other open tasks are never
+   admitted (rolling admits from the whole ready frontier, which is the wrong
+   scope for a task-id run);
+2. `planSync.enabled` is not explicitly `false` (plan-sync's per-wave barrier
+   is the existing fail-closed rule; `false` is the shipped default since
+   4.5.1, so this fires only on repos that opted in);
+3. SPEC_MODE with fewer than two open tasks - a no-plan implicit task, or one
+   task left (a single lane has nothing to admit);
+4. SPEC_MODE where no two open tasks are dependency-independent under the
+   transitive `depends_on` closure (a fully sequential chain admits one lane
+   at a time, and the single-worker path runs one lane with less machinery
+   than a worktree plus a conductor integration per task).
+
+Otherwise take the **rolling route**: read
+[references/rolling-scheduler.md](references/rolling-scheduler.md) and execute
+it as this run's Phase 3 (it re-enters 3b.1, 3c, 3d.1, 3e's stage-line
+contract, and 3g by pointer). Do not execute 3a-3g directly on that route.
+
+Echo the decision exactly once in the run report, before the first claim:
+
+```text
+Scheduling: rolling
+Scheduling: degraded to wave (host lacks non-blocking dispatch)
+Scheduling: wave (<task-id run | planSync.enabled=true | single task | sequential dependency chain>)
+```
+
+The wave route prints its line here, at Phase 3 entry. The rolling route
+prints its line from inside the scheduler at run setup, after its
+dispatch-behaviour probe (rolling-scheduler.md 3.0) and before the first
+admission or claim - so a host measured to block prints the `degraded` form
+instead of `rolling`, never both. A run that
+printed no `Scheduling:` line, printed two, or took the rolling route with
+plan-sync on, has broken this.
+
+**Wave route.** In SPEC_MODE, inspect the whole ready frontier and prefer a
+concurrent safe subset. In SINGLE_TASK_MODE, the selected wave is always the
+requested task alone. Every task still gets a fresh-context worker.
 
 ### 3a. Inspect Ready Frontier and Select a Wave
 
@@ -728,7 +776,9 @@ Confirm before ship:
 ## Example flow
 
 ```
-Phase 1 (resolve) → Phase 2 (branch) → Phase 3:
+Phase 1 (resolve) → Phase 2 (branch) → Phase 3 (route: rolling by default; wave when plan-sync on, <2 open tasks, or a sequential chain):
+  ├─ rolling: references/rolling-scheduler.md (admit at every worker return → per-task integrate/review/done → quiesce → 3g)
+  ├─ wave:
   ├─ 3a-c: inspect frontier → select/claim wave → dispatch isolated worker(s)
   ├─ 3d: join → integrate → review/complete each task
   ├─ 3e: plan-sync after the wave resolves (if enabled + downstream tasks exist)

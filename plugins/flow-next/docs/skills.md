@@ -2,7 +2,7 @@
 
 Every stable skill flow-next ships, in one table. 32 skills: 27 slash-command-triggered (`/flow-next:<name>`) and 5 phrase-triggered. A phrase-triggered skill has no command file: describe what you want and the host agent matches the skill description, and on hosts that surface skills as commands it is also invocable by full skill name (`/flow-next:flow-next-worktree-kit`). Each row links the canonical `SKILL.md`.
 
-Two surfaces ship without a row here, on purpose. `/flow-next:work-rolling` is an experimental-tier beta and stays out of the published catalog until it graduates ([what it changes](../skills/flow-next-work-rolling/SKILL.md)), and `/flow-next:uninstall` is a command with no skill behind it.
+One surface ships without a row here, on purpose: `/flow-next:uninstall` is a command with no skill behind it.
 
 > Lifecycle position and narrative for the core commands: [root README - How the flow works](../../../README.md#how-the-flow-works). Slash commands also appear in the [root README - Commands table](../../../README.md#commands) with flags and opt-in notes.
 

@@ -23,7 +23,7 @@ Common recovery patterns for stuck tasks, broken state, Ralph debugging, and rev
 - [Uninstall](#uninstall)
 - [Cursor in-IDE browser MCP missing (`cursor-ide-browser`)](#cursor-in-ide-browser-mcp-missing-cursor-ide-browser)
 - [Renamed skill: `browser` → `flow-next-drive` (1.4.0)](#renamed-skill-browser-flow-next-drive-140)
-- [Rolling-frontier work beta (`/flow-next:work-rolling`, experimental)](#rolling-frontier-work-beta-flow-nextwork-rolling-experimental)
+- [Rolling-frontier scheduling (`/flow-next:work` default route)](#rolling-frontier-scheduling-flow-nextwork-default-route)
 - [See also](#see-also)
 
 ## Updated the plugin: do I re-run setup?
@@ -289,17 +289,16 @@ If a cached install still surfaces an orphaned `browser` / `agent-browser` skill
 rm -rf ~/.claude/plugins/cache/<marketplace>   # then reload Claude Code
 ```
 
-## Rolling-frontier work beta (`/flow-next:work-rolling`, experimental)
+## Rolling-frontier scheduling (`/flow-next:work` default route)
 
-The beta is a thin delta over canonical work; most failures resolve exactly as canonical `/flow-next:work` failures do. Its own failure modes:
+`/flow-next:work` schedules on the rolling frontier by default and prints the route once during Phase 3, before the first claim - the wave form at entry, the rolling form after the scheduler's dispatch probe (`Scheduling: rolling`, or `Scheduling: wave (<reason>)`). Most failures resolve exactly as wave-route failures do. Route-specific ones:
 
-- **`NEEDS_HUMAN: canonical flow-next-work skill not found`** - the beta consumes the canonical work skill's files by pointer and cannot run without them. The canonical skill is missing or the plugin install is broken; reinstall/update the flow-next plugin so `skills/flow-next-work/` resolves.
-- **A task is held or dropped as claimed by another actor** - task claims live in the shared runtime state store and are spec-scoped, not skill-scoped, so a beta run and a canonical run on the same spec contend on the same claims and fail closed against each other. That is the designed behavior, not a bug. Do not clear or steal another run's claim; if the other run is truly dead, recover with the human-only repair in [Reset a stuck task](#reset-a-stuck-task).
-- **`Sequential fallback: planSync.enabled=true`** - plan-sync disables concurrent admission entirely (fail-closed); the run degrades to serial, canonical behavior. **`false` is the shipped default since 4.5.1** (earlier inits wrote `true`), so this fires only on repos that opted into plan-sync: rolling admission requires `planSync.enabled=false` (`flowctl config set planSync.enabled false`). An interactive beta run offers that command once when the gate fires; an autonomous run only reports it and never mutates config.
+- **`Scheduling: wave (planSync.enabled=true)`** - plan-sync's per-wave barrier is a fail-closed rule, so a repo that opted into plan-sync runs the wave loop. **`false` is the shipped default since 4.5.1** (earlier inits wrote `true`), so this fires only on repos that opted in: rolling needs `flowctl config set planSync.enabled false`. The run never mutates config itself.
+- **`Scheduling: wave (task-id run | single task | sequential dependency chain)`** - the run was given a task id (the wave route runs exactly that task), the spec has fewer than two open tasks, or no two open tasks are dependency-independent; one lane has nothing for rolling admission to schedule, so the single-worker wave path runs it with less machinery. Not an error.
+- **`Scheduling: degraded to wave (host lacks non-blocking dispatch)`** - the host's subagent dispatch was measured to block until completion, so the rolling overlap is lost; the rest of the rolling lifecycle (isolated workspaces, conductor-owned review, notes surface) still runs. See the [platforms matrix](platforms.md).
+- **A task is held or dropped as claimed by another actor** - task claims live in the shared runtime state store and are spec-scoped, so two runs on the same spec contend on the same claims and fail closed against each other. That is the designed behavior, not a bug. Do not clear or steal another run's claim; if the other run is truly dead, recover with the human-only repair in [Reset a stuck task](#reset-a-stuck-task).
 - **`Notes surface: unavailable (...)`** - the shared run-notes directory could not be created. Advisory only: the run continues without it, nothing blocks. A notes dir abandoned by an interrupted run (under `<state-root>/flow-notes/`, see [`architecture.md`](architecture.md#outside-tree-runtime-state-and-run-notes-dirs)) is inert markdown and safe to delete by hand.
 - **A worker reports a merge conflict at integration** - per-task integration reuses the wave-join mechanics; the conflicting task is retried serially, never a correctness loss. Same handling as [the wave-join section above](#worker-reports-a-merge-conflict-at-wave-join-fn-176-wave-dispatch).
-
-The beta is experimental: it can change or disappear in a future release. Canonical `/flow-next:work` is unchanged and remains the default.
 
 ## See also
 
