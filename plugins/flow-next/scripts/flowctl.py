@@ -31429,6 +31429,14 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
     spec_data["id"] = new_id
     spec_data["title"] = args.title
     spec_data["spec_path"] = f"{FLOW_DIR}/{SPECS_DIR}/{new_id}.md"
+    # branch_name defaults to the spec id at create time; a rename that left
+    # it at the old slug silently broke land's PR discovery and autonomous
+    # work's branch naming (observed on fn-218). Re-derive it ONLY when it
+    # still equals the old spec id (its create-time default); any other
+    # value - whatever set it - is kept.
+    branch_rederived = spec_data.get("branch_name") == old_id
+    if branch_rederived:
+        spec_data["branch_name"] = new_id
     spec_data["updated_at"] = now_iso()
     atomic_write_json(spec_json_parent / f"{new_id}.json", spec_data)
 
@@ -31493,6 +31501,8 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
     }
     if updated_deps_in:
         result["updated_deps_in"] = updated_deps_in
+    result["branch_name"] = spec_data.get("branch_name")
+    result["branch_rederived"] = branch_rederived
 
     if args.json:
         json_output(result)
