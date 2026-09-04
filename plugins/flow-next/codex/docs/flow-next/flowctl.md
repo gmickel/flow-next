@@ -1059,7 +1059,7 @@ flowctl config set memory.enabled false [--json]
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion (opt-in since 4.5.1; earlier inits wrote `true`) |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync - scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
-| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:gpt-5.4:high`, `cursor:gpt-5.5-high` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
 | `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (Ralph / pilot / receipt harness) this key may only **lower** the cap, never raise it - whatever wrote the file and however it was written - so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. Additionally the guard blocks `config set` on this key (in both its leaf and parent-key JSON forms), file-tool writes to `.flow/config.json`, and a `MAX_REVIEW_ITERATIONS=` assignment, because fn-159's invariant is that the implementing agent can never reset or extend its own gate. The guard does not fire on Cursor (different hook events), where the rule degrades to prose only - same as the existing counter-reset block. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
@@ -1131,10 +1131,10 @@ flowctl review-backend [<task-or-spec-id>] [--json]
 Text output prints the bare backend name (e.g. `codex`) for skill grep back-compat. JSON output (`source` ∈ `task` / `epic` / `env` / `config` / `hint`):
 
 ```json
-{"backend": "codex", "spec": "codex:gpt-5.4:high", "model": "gpt-5.4", "effort": "high", "source": "env"}
+{"backend": "codex", "spec": "codex:<model>:high", "model": "<model>", "effort": "high", "source": "env"}
 ```
 
-Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.4:xhigh`, `copilot:claude-opus-4.5:high`, `cursor:gpt-5.5-high` (cursor folds effort into the model name - no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
+Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
 
 | Backend form | Meaning |
 |--------------|---------|
@@ -1145,7 +1145,7 @@ Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:gpt-5.
 
 When a review runs **without an explicit model** (unconfigured `codex` / `copilot` / `cursor`), flow-next resolves the *strongest model the account can actually run* instead of a fixed hardcoded default. The mechanism is **optimistic-first**, so the happy path costs nothing:
 
-- **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-5.6-sol`, `copilot` → `gpt-5.5`, `cursor` → `gpt-5.6-sol-high`). The ranking is a *preference*, never a parse-time gate - an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
+- **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-6-astra`, `copilot` → `gpt-6-astra`, `cursor` → `gpt-5.6-sol-high`; Cursor receives no further OpenAI models, so its ranking stays where it is). The ranking is a *preference*, never a parse-time gate - an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
 - **Happy path (zero overhead).** The top model dispatches directly - no probe, no list call, no extra subprocess. On a current CLI where the default just works, the argv is byte-identical to a hardcoded default.
 - **Fallback ladder (failure only).** If - and only if - that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails - codex omits `--model`, copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged - the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
 - **Cache.** The resolved fallback is memoized per **`(backend, CLI version, effective routing intent)`** in `.flow/.cache/model-resolution.json` (locked atomic write, gitignored). Changing the registry ladder or the requested routing intent forces a fresh resolution even when the requested model name happens to match the old default. Downgrade/floor entries expire after 24 hours so newly available stronger models are re-probed without requiring a CLI upgrade. A corrupt, missing, legacy, or expired entry is a cold start, never an error; concurrent mutations preserve unrelated entries; explicit models bypass the cache entirely.
@@ -2005,7 +2005,7 @@ Trivial-diff fast path that bypasses the configured review backend on whiteliste
 flowctl triage-skip --base main [--task fn-1.2] [--receipt /tmp/triage.json] [--json]
 
 # With LLM judge for ambiguous diffs (gated behind FLOW_TRIAGE_LLM=1 in Ralph)
-flowctl triage-skip --base main --backend codex --model gpt-5.6-luna --effort high [--json]
+flowctl triage-skip --base main --backend codex --model <model> --effort high [--json]
 
 # Whitelist-only mode (ambiguous → REVIEW)
 flowctl triage-skip --base main --no-llm [--json]
@@ -2141,7 +2141,7 @@ npm install -g @openai/codex
 codex auth
 ```
 
-**Model:** Uses the registry's ranking top at high effort by default (no user config needed) - resolved strongest-available via the [model-resolution ladder](#model-resolution-strongest-available-never-fail--fn-76) (on an older codex CLI that rejects it, the ladder transparently downgrades to `gpt-5.5` and caches that). Override with `FLOW_CODEX_MODEL` env var.
+**Model:** Uses the registry's ranking top at high effort by default (no user config needed) - resolved strongest-available via the [model-resolution ladder](#model-resolution-strongest-available-never-fail--fn-76) (on an older codex CLI that rejects it, the ladder transparently steps down the ranking and caches the rung that works). Override with `FLOW_CODEX_MODEL` env var.
 
 **Commands:**
 
@@ -2387,7 +2387,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
 Validator pass over prior review findings (`fn-32.1 --validate`). Drops confirmed false-positives in the same chat session.
 
 ```bash
-flowctl codex validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec codex:gpt-5.4:high] [--json]
+flowctl codex validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec codex:<model>:high] [--json]
 ```
 
 `--findings-file` is JSON-Lines (one finding per line, with at least `id`). Empty/missing → no-op. Receipt drives session resume via `session_id`.
@@ -2399,7 +2399,7 @@ flowctl codex validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3
 Specialized deep-review pass (`fn-32.2 --deep`). Runs after primary review in the same chat session.
 
 ```bash
-flowctl codex deep-pass --pass adversarial --receipt /tmp/impl-fn-1.3.json [--primary-findings primary.jsonl] [--spec codex:gpt-5.4:high] [--json]
+flowctl codex deep-pass --pass adversarial --receipt /tmp/impl-fn-1.3.json [--primary-findings primary.jsonl] [--spec codex:<model>:high] [--json]
 flowctl codex deep-pass --pass security    --receipt /tmp/impl-fn-1.3.json --primary-findings primary.jsonl
 flowctl codex deep-pass --pass performance --receipt /tmp/impl-fn-1.3.json --primary-findings primary.jsonl
 ```
@@ -2415,7 +2415,7 @@ GitHub Copilot CLI wrappers - alternative review backend, parallel to codex. Sam
 
 ```bash
 # Implementation review
-flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--spec copilot:claude-opus-4.5:high] [--json]
+flowctl copilot impl-review <task-id> --base <branch> [--receipt <path>] [--spec copilot:<model>:high] [--json]
 
 # Plan review
 flowctl copilot plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
@@ -2439,7 +2439,7 @@ Cursor `cursor-agent` CLI wrappers - alternative review backend, parallel to cod
 
 ```bash
 # Implementation review
-flowctl cursor impl-review <task-id> --base <branch> [--receipt <path>] [--spec cursor:gpt-5.5-high] [--json]
+flowctl cursor impl-review <task-id> --base <branch> [--receipt <path>] [--spec cursor:<model>] [--json]
 
 # Plan review
 flowctl cursor plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]

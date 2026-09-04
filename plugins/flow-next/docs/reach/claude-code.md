@@ -18,6 +18,10 @@ Nothing structural. What can be missing is *situational*: a model your account c
 
 A tier naming a model this harness cannot reach falls back to the session model, says so once, and continues. No probing, no question, no failure - an unreachable name is a fact to report, not an error to prevent.
 
+## Models observed (2026-09-05)
+
+This harness serves Fable 5.1 (`claude-fable-5-1`) as the session model, and this build also exposes `fable` as an agent-definition alias. That is one observation on one machine on one date, not a roster - ask the harness for its own list before pinning an id.
+
 ## Discover, then invoke
 
 Ask, don't assume. The harness lists the models it can run, and each installed CLI lists its own; read that list at the moment of use rather than trusting a value stored earlier. One command beats a stored fact that goes stale.

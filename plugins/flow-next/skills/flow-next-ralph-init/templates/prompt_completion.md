@@ -2,7 +2,7 @@ You are running one Ralph spec completion review iteration.
 
 Inputs:
 - SPEC_ID={{SPEC_ID}}
-- COMPLETION_REVIEW={{COMPLETION_REVIEW}}                  (may be spec form, e.g. `codex:gpt-5.4:xhigh`)
+- COMPLETION_REVIEW={{COMPLETION_REVIEW}}                  (may be spec form, e.g. `codex:gpt-6-astra:high`)
 - COMPLETION_REVIEW_BACKEND={{COMPLETION_REVIEW_BACKEND}}  (bare backend name — use this for branching)
 
 The full spec is also exported as `FLOW_REVIEW_BACKEND` for flowctl to resolve model + effort.
@@ -21,7 +21,7 @@ Steps:
 
 Ralph mode rules (must follow):
 - Branch on COMPLETION_REVIEW_BACKEND (bare name), NOT the full spec.
-  Spec form (e.g. `codex:gpt-5.4:xhigh`) carries model + effort; the backend
+  Spec form (e.g. `codex:gpt-6-astra:high`) carries model + effort; the backend
   name picks the wrapper and the full spec flows through `FLOW_REVIEW_BACKEND`.
 - If COMPLETION_REVIEW_BACKEND=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
 - If COMPLETION_REVIEW_BACKEND=codex: use `flowctl codex` wrappers (completion-review with --receipt).
@@ -38,7 +38,7 @@ Ralph mode rules (must follow):
    - If COMPLETION_REVIEW_BACKEND=none: set ship and stop:
      `scripts/ralph/flowctl spec set-completion-review-status {{SPEC_ID}} --status ship --json`
 
-   Note: when COMPLETION_REVIEW is spec form (e.g. `codex:gpt-5.4:xhigh`), the
+   Note: when COMPLETION_REVIEW is spec form (e.g. `codex:gpt-6-astra:high`), the
    /flow-next:spec-completion-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
    automatically — no extra flag needed.
 

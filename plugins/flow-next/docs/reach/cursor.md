@@ -18,6 +18,10 @@ Model selection carried by an agent definition. Every other reach mechanism is p
 
 With no caller-side model in the dispatch, every tier resolves to the session model - which is exactly the shipped default and needs no configuration. When a tier matters here (a reviewer from a family that did not write the diff, most often), name the model in the dispatch or shell out; otherwise let it degrade and say so once.
 
+## Models observed (2026-09-05)
+
+Cursor does not serve GPT-6 Astra, and it will not serve later OpenAI models either: OpenAI is winding down its Cursor contract after the SpaceX acquisition, with a proposed shutoff of 12 November 2026 ([OpenAI's decision](https://openai.com/index/our-decision-on-cursor-following-its-acquisition-by-spacex/)). A cross-family review from inside Cursor therefore runs on the `host` backend with a non-OpenAI model on the `reviewer` tier, or on the `codex` CLI backend invoked from outside Cursor.
+
 ## Discover, then invoke
 
 This harness's CLI lists the models it can reach, and that list moves - ask it immediately before pinning one in a dispatch rather than copying an identifier from a document.

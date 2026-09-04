@@ -107,7 +107,7 @@ reads prose. Worked phrasings:
 
 - "use 1 reviewer instead of 3" → a single draw: `--draw correctness`
 - "use three different model families for the review fan-out" → three explicit
-  per-draw backend specs, e.g. `--draw correctness=codex:gpt-5.2:medium
+  per-draw backend specs, e.g. `--draw correctness=codex:<model>:medium
   --draw contracts=cursor:sonnet-4.5 --draw integration=copilot:gemini-2.5-pro`
   — three genuinely distinct families; cross-family is three explicit
   dispatch specs, never a config key. Spec grammar per backend: codex takes

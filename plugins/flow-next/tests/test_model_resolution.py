@@ -70,6 +70,13 @@ CURSOR_UNAVAILABLE_STREAM = (
     "composer-2.5, claude-opus-4-8-thinking-high"
 )
 
+# Ranking handles derived from the registry (the source of truth) so a ranking
+# change does not require editing every assertion in this file. The literal ids
+# above stay literal: they are captured CLI error text, i.e. fixture data.
+CODEX_TOP, CODEX_SECOND, CODEX_THIRD = BACKEND_REGISTRY["codex"]["models"][:3]
+COPILOT_TOP, COPILOT_SECOND = BACKEND_REGISTRY["copilot"]["models"][:2]
+CURSOR_TOP = BACKEND_REGISTRY["cursor"]["models"][0]
+
 CODEX_OK_STREAM = '{"type":"thread.started","thread_id":"t1"}\n{"type":"agent_message","message":"<verdict>SHIP</verdict>"}'
 CURSOR_OK_STREAM = '{"type":"result","is_error":false,"result":"ok","session_id":"s1"}'
 
@@ -222,7 +229,7 @@ class TestHappyPath(unittest.TestCase):
         # Exactly ONE subprocess: the dispatch. No --version, no --list-models.
         self.assertEqual(len(calls), 1)
         self.assertNotIn("--version", calls[0])
-        self.assertEqual(_model_of(calls[0]), "gpt-5.6-sol")  # ranking top
+        self.assertEqual(_model_of(calls[0]), CODEX_TOP)  # ranking top
 
     def test_codex_happy_argv_byte_identical_to_hardcoded_default(self) -> None:
         # The unconfigured dispatch argv must equal an EXPLICIT ranking-top pin.
@@ -235,7 +242,7 @@ class TestHappyPath(unittest.TestCase):
             with _repo() as root:
                 flowctl.run_codex_exec(
                     "p", sandbox="read-only",
-                    spec=BackendSpec.parse("codex:gpt-5.6-sol:high"), repo_root=root,
+                    spec=BackendSpec.parse(f"codex:{CODEX_TOP}:high"), repo_root=root,
                 )
         self.assertEqual(unconf[0], explicit[0])
 
@@ -248,7 +255,7 @@ class TestHappyPath(unittest.TestCase):
                 )
         self.assertEqual(rc, 0)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(_model_of(calls[0]), "gpt-5.5")  # ranking top
+        self.assertEqual(_model_of(calls[0]), COPILOT_TOP)  # ranking top
 
     def test_cursor_happy_path_no_list_call(self) -> None:
         calls: list = []
@@ -259,7 +266,7 @@ class TestHappyPath(unittest.TestCase):
                 )
         self.assertEqual(rc, 0)
         self.assertEqual(len(calls), 1)  # no --list-models on the happy path
-        self.assertEqual(_model_of(calls[0]), "gpt-5.6-sol-high")
+        self.assertEqual(_model_of(calls[0]), CURSOR_TOP)
 
 
 # --- R3: fallback ladder (signature-only) ---
@@ -267,9 +274,9 @@ class TestHappyPath(unittest.TestCase):
 
 class TestCodexLadder(unittest.TestCase):
     def test_ladder_steps_down_on_signature(self) -> None:
-        # top (gpt-5.6-sol) fails signature; gpt-5.5 succeeds.
+        # the ranking top fails the signature; the next rung succeeds.
         def result(model):
-            if model == "gpt-5.6-sol":
+            if model == CODEX_TOP:
                 return (CODEX_UNAVAILABLE_STREAM, "", 1)
             return (CODEX_OK_STREAM, "", 0)
 
@@ -282,8 +289,8 @@ class TestCodexLadder(unittest.TestCase):
                 )
         self.assertEqual(rc, 0)
         dispatched = [_model_of(c) for c in calls if "exec" in c]
-        self.assertEqual(dispatched[:2], ["gpt-5.6-sol", "gpt-5.5"])
-        self.assertIn("downgraded to 'gpt-5.5'", err.getvalue())
+        self.assertEqual(dispatched[:2], [CODEX_TOP, CODEX_SECOND])
+        self.assertIn(f"downgraded to '{CODEX_SECOND}'", err.getvalue())
 
     def test_non_signature_failure_propagates_without_ladder(self) -> None:
         # A generic (non-signature) failure must NOT trigger a step-down.
@@ -314,7 +321,9 @@ class TestCodexLadder(unittest.TestCase):
         self.assertEqual(rc, 0)
         dispatched = [_model_of(c) for c in calls if "exec" in c]
         # ranking[0..2] tried, then floor (None = --model omitted).
-        self.assertEqual(dispatched, ["gpt-5.6-sol", "gpt-5.5", "gpt-5.4", None])
+        self.assertEqual(
+            dispatched, [CODEX_TOP, CODEX_SECOND, CODEX_THIRD, None]
+        )
         floor_argv = [c for c in calls if "exec" in c][-1]
         self.assertNotIn("--model", floor_argv)
         # R5: the floor omits the model AND the reasoning-effort pin. Asserted on
@@ -341,7 +350,7 @@ class TestCodexLadder(unittest.TestCase):
         flowctl.enforce_and_increment_review_cap = spy
         try:
             def result(model):
-                return (CODEX_UNAVAILABLE_STREAM, "", 1) if model == "gpt-5.6-sol" else (CODEX_OK_STREAM, "", 0)
+                return (CODEX_UNAVAILABLE_STREAM, "", 1) if model == CODEX_TOP else (CODEX_OK_STREAM, "", 0)
 
             with _scripted(flowctl, dispatch_result=result):
                 with _repo() as root, redirect_stderr(io.StringIO()):
@@ -356,7 +365,7 @@ class TestCodexLadder(unittest.TestCase):
 class TestCopilotLadder(unittest.TestCase):
     def test_ladder_steps_down_on_signature(self) -> None:
         def result(model):
-            if model == "gpt-5.5":
+            if model == COPILOT_TOP:
                 return ("", COPILOT_UNAVAILABLE_STREAM, 1)
             return ("SHIP", "", 0)
 
@@ -366,7 +375,7 @@ class TestCopilotLadder(unittest.TestCase):
                 out, sid, rc, e = flowctl.run_copilot_exec("p", "sess", root, spec=BackendSpec("copilot"))
         self.assertEqual(rc, 0)
         dispatched = [_model_of(c) for c in calls if "-p" in c or "--session-id" in " ".join(c) or "--model" in c]
-        self.assertEqual(dispatched[:2], ["gpt-5.5", "gpt-5.4"])
+        self.assertEqual(dispatched[:2], [COPILOT_TOP, COPILOT_SECOND])
 
     def test_floor_uses_auto_and_omits_effort(self) -> None:
         calls: list = []
@@ -387,7 +396,7 @@ class TestCursorLadder(unittest.TestCase):
     def test_consults_list_models_and_picks_best_intersection(self) -> None:
         # top fails; --list-models offers gpt-5.5-high (a lower ranking entry).
         def result(model):
-            if model == "gpt-5.6-sol-high":
+            if model == CURSOR_TOP:
                 return (CURSOR_UNAVAILABLE_STREAM, CURSOR_UNAVAILABLE_STREAM, 1)
             return (CURSOR_OK_STREAM, "", 0)
 
@@ -398,7 +407,7 @@ class TestCursorLadder(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertTrue(any("--list-models" in c for c in calls))
         dispatched = [_model_of(c) for c in calls if "ask" in c]
-        self.assertEqual(dispatched[0], "gpt-5.6-sol-high")
+        self.assertEqual(dispatched[0], CURSOR_TOP)
         self.assertEqual(dispatched[1], "gpt-5.5-high")  # best list ∩ ranking
 
     def test_empty_list_falls_to_floor_auto(self) -> None:
@@ -417,20 +426,20 @@ class TestCursorLadder(unittest.TestCase):
 class TestCache(unittest.TestCase):
     def _codex_ladder_run(self, root, calls=None):
         def result(model):
-            return (CODEX_UNAVAILABLE_STREAM, "", 1) if model == "gpt-5.6-sol" else (CODEX_OK_STREAM, "", 0)
+            return (CODEX_UNAVAILABLE_STREAM, "", 1) if model == CODEX_TOP else (CODEX_OK_STREAM, "", 0)
         with _scripted(flowctl, dispatch_result=result, version="0.142", calls=calls):
             with redirect_stderr(io.StringIO()):
                 return flowctl.run_codex_exec("p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root)
 
     def test_round_trip_second_run_uses_cached_model_directly(self) -> None:
         with _repo() as root:
-            # First run: ladder resolves gpt-5.6-sol → gpt-5.5, caches it.
+            # First run: ladder resolves top → second rung, caches it.
             self._codex_ladder_run(root)
             cache = _cache_models(root)
-            self.assertEqual(list(cache.values()), ["gpt-5.5"])
+            self.assertEqual(list(cache.values()), [CODEX_SECOND])
             self.assertTrue(next(iter(cache)).startswith("codex@0.142@"))
 
-            # Second run: cache hit → dispatch gpt-5.5 DIRECTLY (no failed top).
+            # Second run: cache hit → dispatch the cached rung DIRECTLY.
             calls: list = []
             def result(model):
                 # If the cache were ignored, the top would be tried and fail.
@@ -439,7 +448,7 @@ class TestCache(unittest.TestCase):
                 with redirect_stderr(io.StringIO()):
                     flowctl.run_codex_exec("p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root)
             dispatched = [_model_of(c) for c in calls if "exec" in c]
-            self.assertEqual(dispatched, ["gpt-5.5"])  # cached, no top round-trip
+            self.assertEqual(dispatched, [CODEX_SECOND])  # cached, no top round-trip
 
     def test_cache_key_is_per_cli_version(self) -> None:
         with _repo() as root:
@@ -450,21 +459,22 @@ class TestCache(unittest.TestCase):
                 with redirect_stderr(io.StringIO()):
                     flowctl.run_codex_exec("p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root)
             dispatched = [_model_of(c) for c in calls if "exec" in c]
-            self.assertEqual(dispatched, ["gpt-5.6-sol"])  # top works on new CLI
+            self.assertEqual(dispatched, [CODEX_TOP])  # top works on new CLI
 
     def test_cached_model_signature_failure_invalidates_and_reresolves(self) -> None:
         with _repo() as root:
-            self._codex_ladder_run(root)  # cache: codex@0.142 -> gpt-5.5
-            # Now gpt-5.5 ALSO fails the signature (org revoked mid-version);
-            # gpt-5.4 works. The stale entry must be dropped and re-resolved.
+            self._codex_ladder_run(root)  # cache: codex@0.142 -> second rung
+            # Now the cached rung ALSO fails the signature (org revoked
+            # mid-version); the third rung works. The stale entry must be
+            # dropped and re-resolved.
             def result(model):
-                if model in ("gpt-5.6-sol", "gpt-5.5"):
+                if model in (CODEX_TOP, CODEX_SECOND):
                     return (CODEX_UNAVAILABLE_STREAM, "", 1)
                 return (CODEX_OK_STREAM, "", 0)
             with _scripted(flowctl, dispatch_result=result, version="0.142"):
                 with redirect_stderr(io.StringIO()):
                     flowctl.run_codex_exec("p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root)
-            self.assertEqual(list(_cache_models(root).values()), ["gpt-5.4"])
+            self.assertEqual(list(_cache_models(root).values()), [CODEX_THIRD])
 
     def test_corrupt_cache_is_cold_start(self) -> None:
         with _repo() as root:
@@ -477,21 +487,21 @@ class TestCache(unittest.TestCase):
                     "p", sandbox="read-only", spec=BackendSpec("codex"), repo_root=root,
                 )
             self.assertEqual(rc, 0)  # corrupt cache never raises
-            self.assertEqual(_model_of([c for c in calls if "exec" in c][0]), "gpt-5.6-sol")
+            self.assertEqual(_model_of([c for c in calls if "exec" in c][0]), CODEX_TOP)
 
     def test_explicit_model_bypasses_cache_entirely(self) -> None:
         with _repo() as root:
-            self._codex_ladder_run(root)  # writes codex@0.142 -> gpt-5.5
+            self._codex_ladder_run(root)  # writes codex@0.142 -> second rung
             calls: list = []
             # Explicit pin of the ranking top must dispatch it verbatim, ignoring
             # the cached downgrade, and never consult --version.
             with _scripted(flowctl, dispatch_result=lambda m: (CODEX_OK_STREAM, "", 0), calls=calls):
                 flowctl.run_codex_exec(
                     "p", sandbox="read-only",
-                    spec=BackendSpec.parse("codex:gpt-5.6-sol:high"), repo_root=root,
+                    spec=BackendSpec.parse(f"codex:{CODEX_TOP}:high"), repo_root=root,
                 )
             self.assertNotIn("--version", [tok for c in calls for tok in c])
-            self.assertEqual(_model_of([c for c in calls if "exec" in c][0]), "gpt-5.6-sol")
+            self.assertEqual(_model_of([c for c in calls if "exec" in c][0]), CODEX_TOP)
 
     def test_resolved_intent_same_model_has_distinct_cache_intent(self) -> None:
         with _repo() as root:
@@ -504,7 +514,7 @@ class TestCache(unittest.TestCase):
                     flowctl,
                     dispatch_result=lambda model: (
                         (CODEX_UNAVAILABLE_STREAM, "", 1)
-                        if model == "gpt-5.6-sol"
+                        if model == CODEX_TOP
                         else (CODEX_OK_STREAM, "", 0)
                     ),
                 ):
@@ -516,7 +526,7 @@ class TestCache(unittest.TestCase):
                 # Same model, different routing intent (a non-explicit spec
                 # carried through a re-resolve) — a distinct cache identity.
                 carried_spec = BackendSpec(
-                    "codex", model="gpt-5.6-sol", model_explicit=False
+                    "codex", model=CODEX_TOP, model_explicit=False
                 ).resolve()
                 self.assertEqual(carried_spec.model, registry_spec.model)
                 self.assertNotEqual(
@@ -531,7 +541,7 @@ class TestCache(unittest.TestCase):
                 ):
                     flowctl.run_codex_exec("p", spec=carried_spec, repo_root=root)
                 dispatched = [_model_of(c) for c in calls if "exec" in c]
-                self.assertEqual(dispatched, ["gpt-5.6-sol"])
+                self.assertEqual(dispatched, [CODEX_TOP])
                 self.assertEqual(_cache_models(root), {})
 
                 # The obsolete registry-intent entry was pruned. A subsequent
@@ -572,7 +582,7 @@ class TestCache(unittest.TestCase):
                     )
                 self.assertEqual(
                     [_model_of(call) for call in calls if "exec" in call],
-                    ["gpt-5.6-sol"],
+                    [CODEX_TOP],
                 )
 
     def test_expired_downgrade_reprobes_stronger_model(self) -> None:
@@ -594,7 +604,7 @@ class TestCache(unittest.TestCase):
             ):
                 flowctl.run_codex_exec("p", spec=BackendSpec("codex"), repo_root=root)
             self.assertEqual(
-                [_model_of(c) for c in calls if "exec" in c], ["gpt-5.6-sol"]
+                [_model_of(c) for c in calls if "exec" in c], [CODEX_TOP]
             )
 
     def test_expired_floor_reprobes_stronger_model(self) -> None:
@@ -631,7 +641,7 @@ class TestCache(unittest.TestCase):
             ):
                 flowctl.run_codex_exec("p", spec=BackendSpec("codex"), repo_root=root)
             self.assertEqual(
-                [_model_of(c) for c in calls if "exec" in c], ["gpt-5.6-sol"]
+                [_model_of(c) for c in calls if "exec" in c], [CODEX_TOP]
             )
 
     def test_concurrent_puts_preserve_every_intent(self) -> None:
@@ -692,14 +702,14 @@ class TestResolutionOut(unittest.TestCase):
     def test_records_downgraded_model(self) -> None:
         res = {}
         def result(model):
-            return (CODEX_UNAVAILABLE_STREAM, "", 1) if model == "gpt-5.6-sol" else (CODEX_OK_STREAM, "", 0)
+            return (CODEX_UNAVAILABLE_STREAM, "", 1) if model == CODEX_TOP else (CODEX_OK_STREAM, "", 0)
         with _scripted(flowctl, dispatch_result=result):
             with _repo() as root, redirect_stderr(io.StringIO()):
                 flowctl.run_codex_exec(
                     "p", sandbox="read-only", spec=BackendSpec("codex"),
                     repo_root=root, resolution_out=res,
                 )
-        self.assertEqual(res["model"], "gpt-5.5")
+        self.assertEqual(res["model"], CODEX_SECOND)
         self.assertFalse(res["floor"])
 
     def test_records_happy_path_model(self) -> None:
@@ -710,7 +720,7 @@ class TestResolutionOut(unittest.TestCase):
                     "p", sandbox="read-only", spec=BackendSpec("codex"),
                     repo_root=root, resolution_out=res,
                 )
-        self.assertEqual(res["model"], "gpt-5.6-sol")
+        self.assertEqual(res["model"], CODEX_TOP)
         self.assertFalse(res["floor"])
 
 
@@ -729,7 +739,7 @@ class TestHandlerResolvedSpecs(unittest.TestCase):
         self.assertIsNotNone(handler_spec.model)
 
         def result(model):
-            if model == "gpt-5.6-sol":
+            if model == CODEX_TOP:
                 return (CODEX_UNAVAILABLE_STREAM, "", 1)
             return (CODEX_OK_STREAM, "", 0)
 
@@ -741,14 +751,14 @@ class TestHandlerResolvedSpecs(unittest.TestCase):
                 )
         self.assertEqual(rc, 0)
         dispatched = [_model_of(c) for c in calls if "exec" in c]
-        self.assertEqual(dispatched[:2], ["gpt-5.6-sol", "gpt-5.5"])
+        self.assertEqual(dispatched[:2], [CODEX_TOP, CODEX_SECOND])
 
     def test_preresolved_default_still_ladders_cursor(self) -> None:
         handler_spec = BackendSpec("cursor").resolve()
         self.assertFalse(handler_spec.model_explicit)
 
         def result(model):
-            if model == "gpt-5.6-sol-high":
+            if model == CURSOR_TOP:
                 # signature lands on STDERR (live capture 2026-07-10); stdout is
                 # not parseable JSON, so _parse_cursor_result blanks it.
                 return ("", CURSOR_UNAVAILABLE_STREAM, 1)
@@ -893,7 +903,7 @@ class TestRoleMapRemoved(unittest.TestCase):
             try:
                 os.chdir(root)
                 r = BackendSpec("codex").resolve()
-                self.assertEqual(r.model, "gpt-5.6-sol")  # registry default
+                self.assertEqual(r.model, CODEX_TOP)  # registry default
                 self.assertFalse(r.model_explicit)
                 m, e, src = flowctl.resolve_fast_judge_model("codex")
                 self.assertEqual((m, e, src), ("gpt-5.6-luna", "high", "baseline"))
@@ -920,7 +930,7 @@ class TestReviewResolutionOrder(unittest.TestCase):
             try:
                 os.chdir(root)
                 r = BackendSpec("codex").resolve()
-                self.assertEqual(r.model, "gpt-5.6-sol")
+                self.assertEqual(r.model, CODEX_TOP)
                 self.assertEqual(r.effort, "high")
                 self.assertFalse(r.model_explicit)
             finally:
@@ -960,7 +970,7 @@ class TestReviewResolutionOrder(unittest.TestCase):
             try:
                 os.chdir(root)
                 resolved = flowctl.resolve_review_spec("codex", None)
-                self.assertEqual(resolved.model, "gpt-5.6-sol")
+                self.assertEqual(resolved.model, CODEX_TOP)
                 self.assertFalse(resolved.model_explicit)
             finally:
                 os.chdir(prev)

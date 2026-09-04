@@ -18,6 +18,10 @@ Dependable per-spawn model steering. Nothing else is missing; the shell-out rout
 
 When a tier cannot be honored on the spawn path, the work runs on the session model (or via a shelled-out run, when one is available) and the fallback is stated once. A preference is never recorded as if it were an observation.
 
+## Models observed (2026-09-05)
+
+This harness serves GPT-6 Astra (`gpt-6-astra`), released 2026-09-05 and strong at planning, coding, and reviewing. That is one observation on one date; ask the CLI for its current list before pinning the identifier in a shell-out.
+
 ## Discover, then invoke
 
 Ask the CLI which models it offers immediately before invoking one, rather than trusting a value stored earlier - that habit is what makes an unreachable identifier a one-line correction instead of a failed run.

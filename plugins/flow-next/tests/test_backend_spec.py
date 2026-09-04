@@ -138,17 +138,17 @@ class TestRegistryShape(unittest.TestCase):
         )
 
     def test_codex_defaults(self) -> None:
-        # fn-76: default_model is the ranking top (gpt-5.6-sol). Older codex CLIs
-        # (< 0.144) 400 on it; the run_codex_exec ladder downgrades to gpt-5.5.
-        self.assertEqual(BACKEND_REGISTRY["codex"]["default_model"], "gpt-5.6-sol")
+        # fn-76: default_model is the ranking top (gpt-6-astra). Installs that
+        # cannot serve it step down the run_codex_exec ladder.
+        self.assertEqual(BACKEND_REGISTRY["codex"]["default_model"], "gpt-6-astra")
         self.assertEqual(BACKEND_REGISTRY["codex"]["default_effort"], "high")
 
     def test_copilot_defaults(self) -> None:
-        # Bumped to gpt-5.5/high when the newer OpenAI/Anthropic rows were
-        # activated in copilot CLI 1.0.36 (verified live via `copilot -p
-        # "/model"`). Stays on `high` effort — `xhigh` spends far more
-        # reasoning tokens without matching quality gains on review prompts.
-        self.assertEqual(BACKEND_REGISTRY["copilot"]["default_model"], "gpt-5.5")
+        # Ranking top (gpt-6-astra, rolled out to Copilot 2026-09-05); an
+        # org policy withholding it is healed by the ladder. Stays on `high`
+        # effort — `xhigh` spends far more reasoning tokens without matching
+        # quality gains on review prompts.
+        self.assertEqual(BACKEND_REGISTRY["copilot"]["default_model"], "gpt-6-astra")
         self.assertEqual(BACKEND_REGISTRY["copilot"]["default_effort"], "high")
 
     def test_copilot_model_catalog(self) -> None:
@@ -161,8 +161,10 @@ class TestRegistryShape(unittest.TestCase):
         self.assertEqual(
             BACKEND_REGISTRY["copilot"]["models"],
             [
+                "gpt-6-astra",
                 "gpt-5.5",
                 "gpt-5.4",
+                "claude-fable-5.1",
                 "claude-opus-5",
                 "claude-opus-4.8",
                 "claude-opus-4.7",
@@ -466,14 +468,16 @@ class TestResolve(unittest.TestCase):
 
     def test_bare_codex_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("codex").resolve()
-        # fn-76: codex default is now the ranking top (gpt-5.6-sol).
-        self.assertEqual(r, BackendSpec("codex", "gpt-5.6-sol", "high"))
+        # fn-76: codex default is the ranking top.
+        top = BACKEND_REGISTRY["codex"]["models"][0]
+        self.assertEqual(r, BackendSpec("codex", top, "high"))
         # Unconfigured → not explicit → ladder-/cache-eligible downstream.
         self.assertFalse(r.model_explicit)
 
     def test_bare_copilot_fills_both_defaults(self) -> None:
         r = BackendSpec.parse("copilot").resolve()
-        self.assertEqual(r, BackendSpec("copilot", "gpt-5.5", "high"))
+        top = BACKEND_REGISTRY["copilot"]["models"][0]
+        self.assertEqual(r, BackendSpec("copilot", top, "high"))
 
     def test_bare_cursor_fills_model_effort_stays_none(self) -> None:
         # Model fills from registry default; effort stays None (no effort axis).
@@ -978,14 +982,17 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
 
     def test_spec_none_falls_back_to_registry_defaults(self) -> None:
         # Defensive path: spec=None must resolve via bare-codex defaults
-        # (fn-76: ranking top gpt-5.6-sol / high). This keeps non-review callers
+        # (fn-76: ranking top / high). This keeps non-review callers
         # safe. repo_root defaults to None → cache/ladder are no-ops, so the
         # happy path dispatches the ranking top directly.
         captured: list = []
         with _stub_subprocess(flowctl, captured, stdout='{"type":"thread.started","thread_id":"t1"}'):
             flowctl.run_codex_exec("prompt", sandbox="read-only", spec=None)
         argv, _ = captured[0]
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-sol")
+        self.assertEqual(
+            argv[argv.index("--model") + 1],
+            BACKEND_REGISTRY["codex"]["models"][0],
+        )
         self.assertEqual(
             argv[argv.index("-c") + 1],
             'model_reasoning_effort="high"',
@@ -1001,7 +1008,10 @@ class TestRunCodexExecHonorsSpec(unittest.TestCase):
             flowctl.run_codex_exec("prompt", sandbox="read-only", spec=spec)
         argv, _ = captured[0]
         # Registry default model (fn-76 ranking top, no env set) + env effort.
-        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-sol")
+        self.assertEqual(
+            argv[argv.index("--model") + 1],
+            BACKEND_REGISTRY["codex"]["models"][0],
+        )
         self.assertEqual(
             argv[argv.index("-c") + 1],
             'model_reasoning_effort="low"',
@@ -1224,8 +1234,8 @@ class TestResolveReviewSpec(unittest.TestCase):
             self.assertEqual(out.backend, "copilot")
 
     def test_copilot_helper_coerces_config_default(self) -> None:
-        # Finding B + A: copilot coerces a non-copilot config default to copilot's
-        # gpt-5.5 (not the retired gpt-5.2), so the receipt is accurate.
+        # Finding B + A: copilot coerces a non-copilot config default to
+        # copilot's own ranking top, so the receipt is accurate.
         with _flow_fixture() as td:
             (td / ".flow" / "config.json").write_text(
                 json.dumps({"review": {"backend": "rp"}})
@@ -1235,7 +1245,7 @@ class TestResolveReviewSpec(unittest.TestCase):
             args = argparse.Namespace(spec=None, json=False)
             out = flowctl._resolve_copilot_review_spec(args, "fn-9-e.1")
             self.assertEqual(out.backend, "copilot")
-            self.assertEqual(out.model, "gpt-5.5")
+            self.assertEqual(out.model, BACKEND_REGISTRY["copilot"]["models"][0])
 
     def test_backend_hint_fallback_when_nothing_set(self) -> None:
         with _flow_fixture() as td:
@@ -1243,7 +1253,10 @@ class TestResolveReviewSpec(unittest.TestCase):
             _write_task(td / ".flow", "fn-9-e.1", "fn-9-e")
             resolved = flowctl.resolve_review_spec("codex", "fn-9-e.1")
             self.assertEqual(resolved.backend, "codex")
-            self.assertEqual(resolved.model, "gpt-5.6-sol")  # fn-76 ranking top
+            # fn-76 ranking top
+            self.assertEqual(
+                resolved.model, BACKEND_REGISTRY["codex"]["models"][0]
+            )
             self.assertEqual(resolved.effort, "high")
 
     def test_no_task_id_still_resolves(self) -> None:
@@ -1251,7 +1264,10 @@ class TestResolveReviewSpec(unittest.TestCase):
         with _flow_fixture():
             resolved = flowctl.resolve_review_spec("copilot", None)
             self.assertEqual(resolved.backend, "copilot")
-            self.assertEqual(resolved.model, "gpt-5.5")  # registry default
+            # registry default
+            self.assertEqual(
+                resolved.model, BACKEND_REGISTRY["copilot"]["models"][0]
+            )
 
     def test_spec_id_resolves_per_spec_default_review_no_task(self) -> None:
         # PR #184 T3: plan/completion reviews pass task_id=None but DO know the
@@ -1550,9 +1566,10 @@ class TestReviewBackendCmd(unittest.TestCase):
         os.environ["FLOW_REVIEW_BACKEND"] = "codex"
         with _flow_fixture():
             payload = self._run_json()
+            top = BACKEND_REGISTRY["codex"]["models"][0]
             self.assertEqual(payload["backend"], "codex")
-            self.assertEqual(payload["spec"], "codex:gpt-5.6-sol:high")
-            self.assertEqual(payload["model"], "gpt-5.6-sol")
+            self.assertEqual(payload["spec"], f"codex:{top}:high")
+            self.assertEqual(payload["model"], top)
             self.assertEqual(payload["effort"], "high")
             self.assertEqual(payload["source"], "env")
 
@@ -1623,7 +1640,8 @@ class TestReviewBackendCmd(unittest.TestCase):
             self.assertEqual(payload["backend"], "codex")
             # Full spec resolves to registry defaults since model was unparseable
             # (fn-76: legacy dash-composite still degrades to bare; ranking top).
-            self.assertEqual(payload["spec"], "codex:gpt-5.6-sol:high")
+            top = BACKEND_REGISTRY["codex"]["models"][0]
+            self.assertEqual(payload["spec"], f"codex:{top}:high")
             self.assertEqual(payload["source"], "env")
 
     def test_garbage_env_returns_ask(self) -> None:

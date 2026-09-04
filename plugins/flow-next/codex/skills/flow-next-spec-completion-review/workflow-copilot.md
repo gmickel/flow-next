@@ -25,7 +25,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.j
 
 # Runtime config:
 #   --spec <spec>           full spec (backend:model:effort), highest priority
-#   FLOW_REVIEW_BACKEND     spec-form ok: copilot:claude-opus-4.5:xhigh
+#   FLOW_REVIEW_BACKEND     spec-form ok: copilot:<model>:xhigh
 #   FLOW_COPILOT_MODEL      fills missing model only (else registry default)
 #   FLOW_COPILOT_EFFORT     fills missing effort only (default high)
 

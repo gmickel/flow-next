@@ -359,7 +359,7 @@ Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
 - Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossSpec <true|false>)
-- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|host|none OR spec form like codex:gpt-5.4:xhigh or cursor:gpt-5.5-high>)
+- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|host|none OR spec form like codex:<model>:xhigh or cursor:<model>>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 - HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
 - Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
@@ -523,7 +523,7 @@ Available questions (include only if corresponding config is unset):
 
 When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex` AND `PLATFORM` is NOT `cursor`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Grok host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). On `PLATFORM=cursor` do NOT add the Codex Recommended label — `Host (Recommended)` already leads. On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or an `implementer` tier pointing at the same family), so codex review would be SAME-family - prefer a detected non-GPT backend there (copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the user changes it later with `flowctl config set review.backend <name>`, surfaced in 6c's current-config notice.
 
-Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `cursor` / `rp` / `none`). Power users can also write a full spec like `codex:gpt-5.4:high`, `copilot:claude-opus-4.5:xhigh`, or `cursor:gpt-5.5-high` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms. Backend `host` is bare only (no `host:<model>` — the model is named on the `reviewer` tier of the AGENTS.md routing block).
+Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `cursor` / `rp` / `none`). Power users can also write a full spec like `codex:<model>:high`, `copilot:<model>:xhigh`, or `cursor:<model>` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms. Backend `host` is bare only (no `host:<model>` — the model is named on the `reviewer` tier of the AGENTS.md routing block).
 
 **No Model Routing question exists.** Setup never asks which models to route to,
 never probes a CLI for slugs, and never proposes a pin. Step 7 writes one

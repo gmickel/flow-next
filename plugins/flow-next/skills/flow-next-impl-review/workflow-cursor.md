@@ -40,7 +40,7 @@ RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 
 # Runtime config:
 #   --spec <spec>           full spec (cursor:<model>), highest priority
-#   FLOW_REVIEW_BACKEND     env (spec-form ok: cursor:gpt-5.5-high)
+#   FLOW_REVIEW_BACKEND     env (spec-form ok: cursor:<model>)
 #   FLOW_CURSOR_MODEL       env (fills missing model only; else registry default)
 #   per-task stored review  via `flowctl task set-backend` (highest if set)
 #

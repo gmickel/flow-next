@@ -200,11 +200,11 @@ TEMPLATE_HASHES = {
     # call's tag set differs from the step's return set: NEEDS_WORK loops
     # in-step, while only terminal tags return control to Ralph.
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_plan.md":
-        "831b2343815f0638346b3e2e00f109274f4c00fd77603baa45f2bbefab04f9f0",
+        "9d861e2575f6c8ba1e0415cf124dff3c7b079030e8e3302bdf5dbcb4a95ff366",
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_work.md":
-        "ea6ec42334de84f704110b473f58866738255f4411332262a43901614daf796e",
+        "ba750839f6804c09060dcae67e50306c4e9c9efc4c15fd3b4b100400e77cbd56",
     "plugins/flow-next/skills/flow-next-ralph-init/templates/prompt_completion.md":
-        "66a6787c41509a9161abb2818421773b039b17e21856556d27524314bb174a29",
+        "32b7e699ebc6eefeb836874ef9da4f18c9e60e7c6b365bf01d08d2fbde0b4dba",
 }
 
 

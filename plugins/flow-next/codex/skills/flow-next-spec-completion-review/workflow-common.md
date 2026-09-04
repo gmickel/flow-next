@@ -66,12 +66,12 @@ echo "Review backend: $BACKEND"
 ```bash
 # FOREGROUND RULE: run this as ONE blocking foreground Bash call (timeout 600s).
 # NEVER run_in_background + monitor - a background completion does not resume a subagent context.
-FLOW_REVIEW_BACKEND=codex:gpt-5.5:xhigh $FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
-FLOW_REVIEW_BACKEND=copilot:claude-opus-4.5 $FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=codex:<model>:xhigh $FLOWCTL codex completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=copilot:<model> $FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Cursor folds effort into the model name (no :<effort>):
-FLOW_REVIEW_BACKEND=cursor:gpt-5.5-high $FLOWCTL cursor completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+FLOW_REVIEW_BACKEND=cursor:<model> $FLOWCTL cursor completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
-$FLOWCTL codex completion-review "$SPEC_ID" --spec "codex:gpt-5.5:xhigh" --receipt "$RECEIPT_PATH"
+$FLOWCTL codex completion-review "$SPEC_ID" --spec "codex:<model>:xhigh" --receipt "$RECEIPT_PATH"
 ```
 
 Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.

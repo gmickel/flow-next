@@ -27,7 +27,7 @@ RECEIPT_PATH="${REVIEW_RECEIPT_PATH:-/tmp/completion-review-receipt-${SPEC_ID}.j
 
 # Runtime config:
 #   --spec <spec>           full spec (cursor:<model>), highest priority
-#   FLOW_REVIEW_BACKEND     spec-form ok: cursor:gpt-5.5-high
+#   FLOW_REVIEW_BACKEND     spec-form ok: cursor:<model>
 #   FLOW_CURSOR_MODEL       fills missing model only (else registry default)
 #
 # Cursor folds reasoning effort INTO the model name, so there is NO effort
