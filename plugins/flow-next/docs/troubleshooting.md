@@ -291,7 +291,7 @@ rm -rf ~/.claude/plugins/cache/<marketplace>   # then reload Claude Code
 
 ## Rolling-frontier scheduling (`/flow-next:work` default route)
 
-`/flow-next:work` schedules on the rolling frontier by default and prints the route once at Phase 3 entry (`Scheduling: rolling`, or `Scheduling: wave (<reason>)`). Most failures resolve exactly as wave-route failures do. Route-specific ones:
+`/flow-next:work` schedules on the rolling frontier by default and prints the route once during Phase 3, before the first claim - the wave form at entry, the rolling form after the scheduler's dispatch probe (`Scheduling: rolling`, or `Scheduling: wave (<reason>)`). Most failures resolve exactly as wave-route failures do. Route-specific ones:
 
 - **`Scheduling: wave (planSync.enabled=true)`** - plan-sync's per-wave barrier is a fail-closed rule, so a repo that opted into plan-sync runs the wave loop. **`false` is the shipped default since 4.5.1** (earlier inits wrote `true`), so this fires only on repos that opted in: rolling needs `flowctl config set planSync.enabled false`. The run never mutates config itself.
 - **`Scheduling: wave (task-id run | single task | sequential dependency chain)`** - the run was given a task id (the wave route runs exactly that task), the spec has fewer than two open tasks, or no two open tasks are dependency-independent; one lane has nothing for rolling admission to schedule, so the single-worker wave path runs it with less machinery. Not an error.
