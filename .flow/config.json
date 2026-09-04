@@ -15,6 +15,7 @@
     "cleanReviewCommentPattern": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit|\\*\\*Code Review\\*\\*.*\\*\\*Completed\\*\\*",
     "mergeVerdictCommand": "",
     "patienceMinutes": 30,
+    "patienceMinutesAfterReview": 10,
     "release": true,
     "requestReviewers": "",
     "reviewSignal": "silence",
