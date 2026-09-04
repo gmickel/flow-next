@@ -49,6 +49,10 @@ def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
         [sys.executable, str(FLOWCTL_PY), *args],
         capture_output=True,
         text=True,
+        # flowctl reconfigures its stdio to UTF-8; decode the same way, or a
+        # Windows runner's cp1252 default mangles the template's em-dashes
+        # and the byte-for-byte skeleton comparison fails for no real reason.
+        encoding="utf-8",
         input=stdin,
         timeout=30,
     )
