@@ -47,32 +47,32 @@ Flow-Next puts the discipline in the operating model. It turns rough intent into
 
 Flow-Next is an AI agent orchestration plugin: agent-native skills layered on a bundled pure-stdlib Python CLI (`flowctl`). The host agent is the intelligence; flowctl is the deterministic plumbing. One arc, from the conversation you already had to a merged pull request: decide what to build, build it, prove it. Every skill runs from plain language, and the slash commands are the precise form of the same thing. No external services, no SaaS, no global config.
 
-**Ship more without lowering the bar.**
-Every change in your queue has already been read by a different model and carries whatever fixes that review demanded.
+**Everything reaches your queue already reviewed.**
+A different model reviews every plan and every implementation, the loop iterates until SHIP, and a task cannot be marked done without evidence JSON.
 
-**Reviews stop being where work waits.**
-Open the pull request and the argument is already made. The reviewer's first screen is the reasoning behind the change and the criteria it claims to satisfy.
+**Open a PR that already makes its argument.**
+The pull request arrives explaining itself: which acceptance criterion each change satisfies, which decisions still need a human, what deliberately did not change.
 
 **Decide what to build before anyone builds it.**
 An idea too big to write down gets charted one decision at a time; a conversation becomes a spec; a product owner and an engineer refine it in their own passes on one file.
 
-**Your team's context stops living in three people's heads.**
-The reasons behind the code sit next to the code. A new teammate, or the next agent run, starts from what the last one learned.
+**Your team's context lives in the repo.**
+Specs, decisions, glossary, and memory are files in your repository that the next run reads. A teammate joining on Monday reads the same thing the agent does.
 
 **Prove it in the running app, not by reading the source.**
 Live QA drives the app the way a user would, from the spec's own criteria, and files what it finds with screenshots and a verdict you can audit.
 
-**Climb to autonomy without a leap of faith.**
-Start by watching a single task run. Move up a rung when the receipts have earned it, and step back down whenever you want.
+**Hand over as much as the receipts have earned.**
+One dial from a supervised pair to a loop draining the backlog overnight. The gates do not change as you climb.
 
-**Spend the expensive model where it earns its keep.**
-Name a model per role once in your `CLAUDE.md`, or say it in the prompt for a single run. Whatever you pick, the model that wrote the diff never reviews it.
+**Plan on your best model, implement on a cheaper one.**
+Name a model per role once in your `CLAUDE.md`, or say it in the prompt for a single run. Whatever you pick, the model that wrote the diff never reviews it. The pipeline shape per item and the model per job are decided separately, and each decision prints its reason: [orchestration](plugins/flow-next/docs/orchestration.md).
 
 **A way of working, not a tool you bolt on.**
 The same rails carry a solo developer on a Sunday and a fifty-person organisation on a rollout. The spec is the handover object, and it reads the same to product, engineering, and the next agent run.
 
 **Your process outlives your agent.**
-Switch harness, model, or vendor and nothing has to move. In a harness that can dispatch subagents, the same routing runs across models in-host with no bridge at all.
+The same specs, gates, receipts, and task state across harnesses. In a harness that can dispatch subagents, the same routing runs across models in-host with no bridge at all. Everything sits in your repository under `.flow/`, in git and code-reviewable, and uninstall is `rm -rf .flow/`.
 
 <details>
 <summary><strong>The vocabulary underneath: seven tenets</strong></summary>
