@@ -420,7 +420,7 @@ flowctl spec set-branch fn-1 --branch "fn-1-spec" [--json]
 
 ### spec set-title
 
-Rename a spec by setting a new title (slug + filenames update; the JSON sidecar's `id` field follows).
+Rename a spec by setting a new title (slug + filenames update; the JSON sidecar's `id` field follows). A `branch_name` still at its create-time default (the old spec id) follows the rename too; an explicit `set-branch` value is kept. The JSON result reports `branch_name` and `branch_rederived`.
 
 ```bash
 flowctl spec set-title fn-1 --title "New title" [--json]
