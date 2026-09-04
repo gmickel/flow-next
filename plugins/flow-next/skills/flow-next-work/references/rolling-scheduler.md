@@ -11,7 +11,7 @@
 
 Contents:
 
-- [3.0 Notes surface](#30-notes-surface) - run setup, fail-soft
+- [3.0 Notes surface + dispatch probe](#30-notes-surface--dispatch-probe) - run setup (fail-soft), the one-time non-blocking-dispatch measurement, the run's single `Scheduling:` line
 - [3a Admission at every worker-return event](#3a-admission-at-every-worker-return-event) - the five conditions + report lines
 - [3b Claim at admission](#3b-claim-at-admission) - claim-at-admission + tracker touchpoint pointer
 - [3c Spawn workers](#3c-spawn-workers) - always `PARALLEL_WAVE: true`; notes pointer line
@@ -32,7 +32,7 @@ files and run suites freely, and the conductor's per-return integration doubles
 as a quality pass over each diff. Speed bought by under-testing is the failure
 mode this architecture exists to avoid.
 
-## 3.0 Notes surface
+## 3.0 Notes surface + dispatch probe
 
 **Shared notes surface (create FIRST, advisory).** One per-run notes directory
 outside the mutable tree, sibling to the runtime state dir, keyed by spec id
@@ -82,6 +82,21 @@ directory's content into a dispatch prompt** - a dispatch that pasted a note's
 body instead of the path has broken this. The conductor deletes the directory
 only after Phase 5 completes cleanly (see 3f); a dir abandoned by an
 interrupted run is inert prose and may be removed by hand.
+
+**Dispatch probe + the run's ONE `Scheduling:` line (before 3a, before any
+claim).** Rolling admission needs non-blocking subagent dispatch with
+completion notifications. Judge that by the host's ACTUAL behaviour - a live
+measurement (dispatch two short sleep agents and observe whether control
+returns before completion, with per-completion signals) or a prior
+in-session one - never by host name. Then print the line phases.md Phase 3
+deferred to this file, exactly once, before entering 3a:
+
+```text
+Scheduling: rolling                                            # dispatch measured non-blocking
+Scheduling: degraded to wave (host lacks non-blocking dispatch)  # dispatch measured blocking - 3c's degraded shape applies
+```
+
+A rolling run whose first `flowctl start` precedes this line has broken this.
 
 ## 3a Admission at Every Worker-Return Event
 
@@ -240,15 +255,13 @@ workers keep running.
 **Blocking-dispatch hosts degrade honestly (fail-closed - scheduling/join
 only).** On a host whose ordinary subagent dispatch BLOCKS until completion
 and offers no background dispatch with completion notifications, dispatching
-multiple workers silently recreates the wave barrier. **Judge that condition
-by the host's ACTUAL dispatch behavior - a live measurement (dispatch two
-short sleep agents and observe whether control returns before completion,
-with per-completion signals) or a prior in-session one - never by host name:
-the original host list here was an assumption, and both named hosts fell to a
-five-minute probe (measured non-blocking and rolling end-to-end 2026-08-27:
-Cursor on macOS, and Grok Build 1.0.5 via `spawn_subagent` background mode;
-Claude Code's background Task dispatch remains the canonical example).** On a
-genuinely blocking host the failure shape is: the
+multiple workers silently recreates the wave barrier. **The 3.0 probe already
+measured this** - by the host's ACTUAL dispatch behaviour, never by host
+name: the original host list here was an assumption, and both named hosts
+fell to a five-minute probe (measured non-blocking and rolling end-to-end
+2026-08-27: Cursor on macOS, and Grok Build 1.0.5 via `spawn_subagent`
+background mode; Claude Code's background Task dispatch remains the canonical
+example). On a genuinely blocking host the failure shape is: the
 conductor cannot observe the first return until all return, and the run is
 wave scheduling wearing a rolling label. Do not pretend otherwise - but
 degrade ONLY the scheduling and the join, never the rest of this route's
@@ -261,11 +274,9 @@ completion) before the next admission event. The notes surface (3.0 creation,
 unchanged; only the rolling overlap is lost, exactly as the platforms note
 states. Record the degradation wherever the run reports its shape - the run
 report and any receipt line describing scheduling carries
-`Scheduling: degraded to wave (host lacks non-blocking dispatch)` - so a field
-receipt can never claim rolling for a run that actually exercised waves. This
-is also where the route's ONE `Scheduling:` line is printed (phases.md Phase 3
-defers it to this probe): `Scheduling: rolling` when dispatch measured
-non-blocking, the degraded form otherwise, before the first claim.
+`Scheduling: degraded to wave (host lacks non-blocking dispatch)` - the line
+3.0 already printed; never print a second one here - so a field receipt can
+never claim rolling for a run that actually exercised waves.
 
 ## 3d Per-Return Integrate, Review, Complete
 

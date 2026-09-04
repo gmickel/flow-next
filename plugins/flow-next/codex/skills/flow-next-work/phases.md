@@ -150,9 +150,10 @@ Scheduling: wave (<task-id run | planSync.enabled=true | single task | sequentia
 ```
 
 The wave route prints its line here, at Phase 3 entry. The rolling route
-prints its line from inside the scheduler, after its dispatch-behaviour probe
-(rolling-scheduler.md 3c) and before the first claim - so a host measured to
-block prints the `degraded` form instead of `rolling`, never both. A run that
+prints its line from inside the scheduler at run setup, after its
+dispatch-behaviour probe (rolling-scheduler.md 3.0) and before the first
+admission or claim - so a host measured to block prints the `degraded` form
+instead of `rolling`, never both. A run that
 printed no `Scheduling:` line, printed two, or took the rolling route with
 plan-sync on, has broken this.
 
