@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Changed
+
+- **Unconfigured `codex` and `copilot` reviews now start on GPT-6 Astra.** The review-backend rankings put `gpt-6-astra` at the top for both CLIs (Copilot also lists `claude-fable-5.1` after the OpenAI rungs), so a repo with `review.backend codex` and no model pinned gets Astra on the first dispatch; the fallback ladder still steps down the ranking on the CLI's model-unavailable signature and caches the rung that works, so an older CLI or an org policy that withholds the model degrades instead of failing. Cursor's ranking is unchanged because Cursor receives no further OpenAI models (contract wind-down 12 November 2026). Ralph's prompt templates and the docs show current ids only beside a date; every other example uses `<model>` placeholders.
+
 ## [flow-next 4.15.0] - 2026-09-04
 
 Specs written from the command line now read like captured ones: they carry the same section structure every downstream reader expects, so plan review, R-ID coverage, completion review, and the generated PR body find a goal, boundaries, and acceptance criteria where they look for them instead of exporting blanks. Renaming a spec is safe in the same way - a retitled spec keeps its branch instead of stranding the old slug.
