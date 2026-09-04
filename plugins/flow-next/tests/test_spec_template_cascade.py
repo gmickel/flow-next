@@ -132,19 +132,22 @@ class TestSpecTemplateCascade(unittest.TestCase):
             "## Goal & Context\nfrom spec.md\n\n"
             "## Acceptance Criteria\n- **R1:** y. Errors: none\n"
         )
+        # Plant one override at a time: on a case-insensitive filesystem
+        # (macOS APFS, NTFS) SPEC.md and spec.md are the same file, so the
+        # both-present precedence check lives in
+        # test_both_overrides_present_warns_once_and_takes_upper (skipped there).
         (self.root / "SPEC.md").write_text(spec_upper, encoding="utf-8")
-        (self.root / "spec.md").write_text(spec_lower, encoding="utf-8")
-
         code, out, err = self._run("spec", "skeleton")
         self.assertEqual(code, 0, err or out)
         self.assertEqual(out, spec_upper)
-
         (self.root / "SPEC.md").unlink()
+
+        (self.root / "spec.md").write_text(spec_lower, encoding="utf-8")
         code, out, err = self._run("spec", "skeleton")
         self.assertEqual(code, 0, err or out)
         self.assertEqual(out, spec_lower)
-
         (self.root / "spec.md").unlink()
+
         code, out, err = self._run("spec", "skeleton", "--json")
         self.assertEqual(code, 0, err or out)
         self.assertEqual(_h2s(json.loads(out)["skeleton"]), _CANONICAL_H2S)

@@ -19485,12 +19485,18 @@ def resolve_spec_template(use_json: bool = False) -> tuple[Path, str]:
     repo_root = get_repo_root()
     upper = repo_root / "SPEC.md"
     lower = repo_root / "spec.md"
-    if upper.is_file() and lower.is_file() and not upper.samefile(lower):
-        print(
-            f"Warning: both {upper} and {lower} exist; using SPEC.md",
-            file=sys.stderr,
-        )
-    for path in (upper, lower):
+    candidates = [upper, lower]
+    if upper.is_file() and lower.is_file():
+        if upper.samefile(lower):
+            # Case-insensitive filesystem (macOS APFS, NTFS): one file, one
+            # rung - never probe or warn about it twice.
+            candidates = [upper]
+        else:
+            print(
+                f"Warning: both {upper} and {lower} exist; using SPEC.md",
+                file=sys.stderr,
+            )
+    for path in candidates:
         if not path.is_file():
             continue
         try:
