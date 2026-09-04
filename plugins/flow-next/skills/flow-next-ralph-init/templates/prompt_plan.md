@@ -2,7 +2,7 @@ You are running one Ralph plan gate iteration.
 
 Inputs:
 - SPEC_ID={{SPEC_ID}}
-- PLAN_REVIEW={{PLAN_REVIEW}}                  (may be spec form, e.g. `codex:gpt-5.4:xhigh`)
+- PLAN_REVIEW={{PLAN_REVIEW}}                  (may be spec form, e.g. `codex:gpt-6-astra:high`)
 - PLAN_REVIEW_BACKEND={{PLAN_REVIEW_BACKEND}}  (bare backend name — use this for branching)
 - REQUIRE_PLAN_REVIEW={{REQUIRE_PLAN_REVIEW}}
 
@@ -22,7 +22,7 @@ Steps:
 
 Ralph mode rules (must follow):
 - Branch on PLAN_REVIEW_BACKEND (bare name), NOT the full PLAN_REVIEW spec.
-  Spec form (e.g. `codex:gpt-5.4:xhigh`) carries model + effort; the backend
+  Spec form (e.g. `codex:gpt-6-astra:high`) carries model + effort; the backend
   name picks the wrapper and the full spec flows through `FLOW_REVIEW_BACKEND`.
 - If PLAN_REVIEW_BACKEND=rp: use `flowctl rp` wrappers (setup-review, select-add, prompt-get, chat-send).
 - If PLAN_REVIEW_BACKEND=codex: use `flowctl codex` wrappers (plan-review with --receipt).
@@ -42,7 +42,7 @@ Ralph mode rules (must follow):
      - Else: set ship and stop:
        `scripts/ralph/flowctl spec set-plan-review-status {{SPEC_ID}} --status ship --json`
 
-   Note: when PLAN_REVIEW is spec form (e.g. `codex:gpt-5.4:xhigh`), the
+   Note: when PLAN_REVIEW is spec form (e.g. `codex:gpt-6-astra:high`), the
    /flow-next:plan-review skill picks up the spec from `FLOW_REVIEW_BACKEND`
    automatically — no extra flag needed.
 

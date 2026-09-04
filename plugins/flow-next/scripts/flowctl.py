@@ -7911,6 +7911,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # model-unavailable signature only. Ranking is a preference, never a
         # parse-time gate — unknown explicit models warn-and-accept.
         "models": [
+            "gpt-6-astra",  # GA 2026-09-05; confirmed served by the codex CLI on that date
             "gpt-5.6-sol",  # requires codex CLI >= 0.144 (older CLIs 400: "requires a newer version of Codex" — probed 2026-07-10); ladder downgrades to gpt-5.5
             "gpt-5.5",
             "gpt-5.4",
@@ -7922,7 +7923,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``none`` / ``minimal`` accepted at CLI layer; ``minimal`` is gated by
         # server-side web_search check (not applicable to our reviews).
         "efforts": {"none", "minimal", "low", "medium", "high", "xhigh"},
-        "default_model": "gpt-5.6-sol",  # == models[0] (fn-76 invariant)
+        "default_model": "gpt-6-astra",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
     },
     "copilot": {
@@ -7941,8 +7942,10 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ladder heals per-install gaps, so docs-listed rungs are safe even
         # where a given org disallows them.
         "models": [
+            "gpt-6-astra",  # rolled out to Copilot 2026-09-05 (maintainer-confirmed); the ladder steps down if an org policy withholds it
             "gpt-5.5",
             "gpt-5.4",
+            "claude-fable-5.1",  # rolled out to Copilot 2026-09-05; Claude-family, so --effort is dropped
             "claude-opus-5",  # GA per docs 2026-07-24 (1M ctx + reasoning levels in CLI)
             "claude-opus-4.8",
             "claude-opus-4.7",
@@ -7961,7 +7964,7 @@ BACKEND_REGISTRY: dict[str, dict[str, Any]] = {
         # ``run_copilot_exec`` handles by dropping the flag when model starts
         # with ``claude-``.
         "efforts": {"low", "medium", "high", "xhigh"},
-        "default_model": "gpt-5.5",  # == models[0] (fn-76 invariant)
+        "default_model": "gpt-6-astra",  # == models[0] (fn-76 invariant)
         "default_effort": "high",
     },
     "cursor": {

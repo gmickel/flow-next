@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-221-claude-cli-review-backend-claude-p-as-a",
+  "created_at": "2026-09-04T22:57:21.187442Z",
+  "depends_on_epics": [],
+  "id": "fn-221-claude-cli-review-backend-claude-p-as-a",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-221-claude-cli-review-backend-claude-p-as-a.md",
+  "status": "open",
+  "title": "claude CLI review backend: claude -p as a packaged cross-family reviewer",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-04T22:57:21.190120Z"
+}
