@@ -2,7 +2,7 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.14.0] - 2026-09-04
 
 Multi-task specs build faster by default: `/flow-next:work` now schedules on the rolling frontier, the architecture the experimental `/flow-next:work-rolling` beta proved in the field, and the beta itself is gone.
 
