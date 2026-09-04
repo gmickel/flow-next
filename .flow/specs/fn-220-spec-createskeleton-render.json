@@ -163,7 +163,7 @@
     "impl:fn-220-spec-createskeleton-render.1": 0
   },
   "spec_path": ".flow/specs/fn-220-spec-createskeleton-render.md",
-  "status": "open",
+  "status": "done",
   "title": "spec create/skeleton render templates/spec.md (one template, override cascade, exporter synonyms)",
   "tracker": {
     "baseHashFlow": null,
@@ -176,5 +176,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-04T10:34:34.423049Z"
+  "updated_at": "2026-09-04T11:55:05.003596Z"
 }
