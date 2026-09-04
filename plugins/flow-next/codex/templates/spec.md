@@ -49,6 +49,7 @@ Discovery cascade (first match wins):
   1. <repo_root>/SPEC.md           (your customized scaffold — uppercase preferred)
   2. <repo_root>/spec.md           (lowercase honored when uppercase absent)
   3. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
+`flowctl spec create` and `flowctl spec skeleton` render this file through the same cascade (frontmatter stripped).
 
 Customizing: adding sections and rewriting the guidance prose under any heading is
 free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
@@ -68,8 +69,8 @@ the request; every task traces to an R-ID. Capabilities the request never
 asked for are not scope — name them in ## Boundaries as out-of-scope, one line
 each. Prefer designs that ELIMINATE a risk structurally (closed schema, inert
 format, unexposed capability) over machinery that manages it (trust layers,
-scanners, caps, extra state stores). Rejected bigger designs get one line in
-## Decision Context, never sections. This trims scope, never rigor: the
+scanners, caps, extra state stores). Rejected bigger designs get one line
+in ## Decision Context, never sections. This trims scope, never rigor: the
 error/negative-cases discipline below, Boundaries, and R-ID coverage are
 EXEMPT and stay complete. So are filesystem-identity, permission, and
 concurrency guards (realpath/symlink containment, lock-guarded writes, forced

@@ -113,8 +113,7 @@ PROMPT_HASHES = {
     # quality-auditor already carries but impl-review was blind to.
     "SMELL_BASELINE_BLOCK":
         "0fcf594a970ca41958003e4a41f99f0b8d590704d9c1ef32e47cd80722c68db9",
-    "SPEC_SKELETON_TEMPLATE":
-        "181c5cd5cba913346dc8c1800871dd42d139321319f86b80a67248ca15063ead",
+    # fn-220: SPEC_SKELETON_TEMPLATE deleted; the scaffold is templates/spec.md, rendered by spec_skeleton_text().
     # fn-210.1: same comment-as-alibi finding class as impl-review.
     "STANDALONE_REVIEW_PROMPT_FALLBACK":
         "beedb8d647f78d782b3e58ebdeb8cbace8ae7dcb5b9e432359a6627a9a255963",

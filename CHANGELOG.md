@@ -4,6 +4,10 @@ All notable changes to the flow-next.
 
 ## Unreleased
 
+### Changed
+
+- **Specs created from the CLI now carry the same structure as captured specs.** `flowctl spec create` and `flowctl spec skeleton` render the canonical `templates/spec.md` (Goal & Context, Architecture & Data Models, API Contracts, Edge Cases & Constraints, Acceptance Criteria, Boundaries, Decision Context) instead of the legacy six-heading skeleton, so plan review, R-ID coverage, completion review, and the make-pr export read a CLI-born spec the same way they read a captured one - `spec create --plan-file` specs no longer export empty goal and boundaries or fall back to the spec id as the PR title. The documented override cascade `SPEC.md` -> `spec.md` -> bundled template is now applied by flowctl itself. Existing spec files are untouched; specs written with the old headings still export through read-only synonyms (`Overview`, `Acceptance`, `Boundaries / non-goals`, `Decision context`) and `flowctl validate` prints one `legacy spec headings` warning per such spec as the migration nudge. The R22 byte-for-byte skeleton baseline moved to the template itself. (fn-220)
+
 ### Fixed
 
 - **Renaming a spec no longer strands its branch name.** `flowctl spec set-title` renamed the id and files but left `branch_name` at the old slug, so a retitled spec silently dropped out of land's PR discovery and autonomous work named the wrong branch (caught by review on PR #395). A `branch_name` that still equals the old spec id (its create-time default) now follows the rename; any other value is kept, and the JSON result reports `branch_name` and `branch_rederived`.
