@@ -31432,7 +31432,8 @@ def cmd_spec_set_title(args: argparse.Namespace) -> None:
     # branch_name defaults to the spec id at create time; a rename that left
     # it at the old slug silently broke land's PR discovery and autonomous
     # work's branch naming (observed on fn-218). Re-derive it ONLY when it
-    # still equals the old default - an explicit `set-branch` value is kept.
+    # still equals the old spec id (its create-time default); any other
+    # value - whatever set it - is kept.
     branch_rederived = spec_data.get("branch_name") == old_id
     if branch_rederived:
         spec_data["branch_name"] = new_id

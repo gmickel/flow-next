@@ -6,7 +6,7 @@ All notable changes to the flow-next.
 
 ### Fixed
 
-- **Renaming a spec no longer strands its branch name.** `flowctl spec set-title` renamed the id and files but left `branch_name` at the old slug, so a retitled spec silently dropped out of land's PR discovery and autonomous work named the wrong branch (caught by review on PR #395). A `branch_name` still at its create-time default now follows the rename; an explicit `set-branch` value is kept, and the JSON result reports `branch_name` and `branch_rederived`.
+- **Renaming a spec no longer strands its branch name.** `flowctl spec set-title` renamed the id and files but left `branch_name` at the old slug, so a retitled spec silently dropped out of land's PR discovery and autonomous work named the wrong branch (caught by review on PR #395). A `branch_name` that still equals the old spec id (its create-time default) now follows the rename; any other value is kept, and the JSON result reports `branch_name` and `branch_rederived`.
 
 ## [flow-next 4.14.0] - 2026-09-04
 
