@@ -19417,11 +19417,6 @@ def _bundled_spec_template_path() -> Path:
     return Path(__file__).resolve().parent.parent / "templates" / "spec.md"
 
 
-def _spec_template_repo_root() -> Path:
-    """Git toplevel via the memoized get_repo_root(); it already falls back to cwd."""
-    return get_repo_root()
-
-
 def _read_utf8_normalized(path: Path) -> str:
     """Read UTF-8 text and normalize CRLF/CR to LF."""
     with path.open(encoding="utf-8", newline="") as handle:
@@ -19429,7 +19424,8 @@ def _read_utf8_normalized(path: Path) -> str:
 
 
 def _strip_leading_yaml_frontmatter(text: str) -> str:
-    """Drop a leading YAML frontmatter block (`---` ... `---`); keep the rest."""
+    """Drop a leading YAML frontmatter block (`---` ... `---`) and the blank
+    line(s) that follow it; keep the rest byte-for-byte."""
     if not text.startswith("---"):
         return text
     lines = text.split("\n")
@@ -19437,61 +19433,87 @@ def _strip_leading_yaml_frontmatter(text: str) -> str:
         return text
     for i in range(1, len(lines)):
         if lines[i] == "---":
-            return "\n".join(lines[i + 1 :])
+            return "\n".join(lines[i + 1 :]).lstrip("\n")
     return text
 
 
-def resolve_spec_template_path() -> Path:
-    """First readable spec scaffold: repo SPEC.md, spec.md, then bundled.
+def _mask_html_comments(text: str) -> str:
+    """Blank `<!-- ... -->` blocks (newlines kept) so heading and R-ID scanners
+    never read authoring guidance as content. Offsets and line counts are
+    preserved, so callers can slice the original text with the masked
+    text's match positions."""
 
-    An unreadable override (OSError or UnicodeDecodeError) falls through
-    to the next rung with one stderr warning naming the file. The bundled
-    path is returned even when missing; `spec_skeleton_text` treats that
-    as an install error.
+    def _blank(m: re.Match) -> str:
+        return re.sub(r"[^\n]", " ", m.group(0))
+
+    return re.sub(r"<!--.*?-->", _blank, text, flags=re.DOTALL)
+
+
+def resolve_spec_template(use_json: bool = False) -> tuple[Path, str]:
+    """First readable spec scaffold as `(path, text)`: repo `SPEC.md`, then
+    `spec.md`, then the bundled `templates/spec.md`.
+
+    An unreadable override (OSError or UnicodeDecodeError) falls through to
+    the next rung with one stderr warning naming the file. Both overrides
+    present as distinct files warns once and takes `SPEC.md` (same rule as
+    the skills' walker). A missing or unreadable bundled template is an
+    install error: exits non-zero naming the path (JSON-shaped under
+    `use_json`).
     """
-    repo_root = _spec_template_repo_root()
-    bundled = _bundled_spec_template_path()
-    for path in (repo_root / "SPEC.md", repo_root / "spec.md"):
+    repo_root = get_repo_root()
+    upper = repo_root / "SPEC.md"
+    lower = repo_root / "spec.md"
+    if upper.is_file() and lower.is_file() and not upper.samefile(lower):
+        print(
+            f"Warning: both {upper} and {lower} exist; using SPEC.md",
+            file=sys.stderr,
+        )
+    for path in (upper, lower):
         if not path.is_file():
             continue
         try:
-            _read_utf8_normalized(path)
+            return path, _read_utf8_normalized(path)
         except (OSError, UnicodeDecodeError):
             print(
                 f"Warning: unreadable spec template override {path}",
                 file=sys.stderr,
             )
-            continue
-        return path
-    return bundled
+    bundled = Path(__file__).resolve().parent.parent / "templates" / "spec.md"
+    try:
+        return bundled, _read_utf8_normalized(bundled)
+    except (OSError, UnicodeDecodeError) as exc:
+        error_exit(
+            f"Bundled spec template not found or unreadable: {bundled}",
+            use_json=use_json,
+        )
+        raise AssertionError("unreachable") from exc  # error_exit never returns
 
 
-def spec_skeleton_text() -> str:
+def resolve_spec_template_path(use_json: bool = False) -> Path:
+    """Path half of `resolve_spec_template` (kept for callers that only need
+    to report which scaffold applies)."""
+    return resolve_spec_template(use_json=use_json)[0]
+
+
+def spec_skeleton_text(use_json: bool = False) -> str:
     """Return the resolved spec scaffold (frontmatter stripped).
 
-    Reads the cascade from `resolve_spec_template_path()`. Header line
-    keeps placeholder tokens `<spec-id>` and `<Title>`; `cmd_spec_create`
-    substitutes them. A missing bundled template is an install error.
+    Reads the cascade from `resolve_spec_template()`. Header line keeps the
+    placeholder tokens `<spec-id>` and `<Title>`; `cmd_spec_create`
+    substitutes them.
     """
-    path = resolve_spec_template_path()
-    try:
-        text = _read_utf8_normalized(path)
-    except (OSError, UnicodeDecodeError):
-        error_exit(
-            f"Bundled spec template not found: {path}",
-            use_json=False,
-        )
+    _path, text = resolve_spec_template(use_json=use_json)
     return _strip_leading_yaml_frontmatter(text)
 
 
-def create_epic_spec(id_str: str, title: str) -> str:
+def create_epic_spec(id_str: str, title: str, use_json: bool = False) -> str:
     """Create epic spec markdown content.
 
-    Internally renders the canonical skeleton from `spec_skeleton_text()`
-    and substitutes the header placeholders. Single source — no inline
-    skeleton string anywhere else.
+    Renders the resolved scaffold from `spec_skeleton_text()` and substitutes
+    the header placeholders. Single source — no inline skeleton string
+    anywhere else.
     """
-    return spec_skeleton_text().replace(
+    return spec_skeleton_text(use_json=use_json).replace(
         "<spec-id> <Title>", f"{id_str} {title}", 1
     )
 
@@ -26668,7 +26690,7 @@ def cmd_spec_skeleton(args: argparse.Namespace) -> None:
     template itself (fn-220).
     """
     use_json = bool(getattr(args, "json", False))
-    skeleton = spec_skeleton_text()
+    skeleton = spec_skeleton_text(use_json=use_json)
     if use_json:
         json_output({"skeleton": skeleton})
     else:
@@ -26788,7 +26810,7 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         if tracker_first_flag and tracker_id_val:
             spec_data["tracker"]["identifier"] = tracker_id_val
         json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
-        spec_content = create_epic_spec(spec_id, args.title)
+        spec_content = create_epic_spec(spec_id, args.title, use_json=args.json)
 
         # No-clobber publication under the allocation lock (fn-135): concurrent
         # chart/spec creates cannot reserve the same number then overwrite.
@@ -32115,6 +32137,10 @@ def _export_scan_acceptance_criteria(
     if not spec_text:
         return [], 0
 
+    # fn-220: scan a comment-masked copy so template guidance (placeholder
+    # and example R-ID bullets inside `<!-- -->`) never parses as criteria.
+    spec_text = _mask_html_comments(spec_text)
+
     # Find the section heading. Tolerate canonical + 2 legacy forms.
     heading_re = re.compile(
         r"^##\s+Acceptance(?:\s+[Cc]riteria)?\s*$",
@@ -32178,13 +32204,19 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
 
 
 def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
-    """Return the body text under a single H2 heading (stripped)."""
-    m = heading_re.search(spec_text or "")
+    """Return the body text under a single H2 heading (stripped).
+
+    Headings are located on a comment-masked copy (fn-220) so authoring
+    guidance inside `<!-- -->` blocks never reads as a section boundary;
+    the body itself is sliced from the original text.
+    """
+    masked = _mask_html_comments(spec_text or "")
+    m = heading_re.search(masked)
     if not m:
         return ""
     body_start = m.end()
-    next_h2 = re.search(r"^##\s+", spec_text[body_start:], re.MULTILINE)
-    body_end = body_start + next_h2.start() if next_h2 else len(spec_text)
+    next_h2 = re.search(r"^##\s+", masked[body_start:], re.MULTILINE)
+    body_end = body_start + next_h2.start() if next_h2 else len(masked)
     return spec_text[body_start:body_end].strip()
 
 
@@ -32193,20 +32225,18 @@ def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
 # body. Matching is case-insensitive on the full heading line; nothing writes
 # these names.
 _EXPORT_GOAL_AND_CONTEXT_HEADINGS = (
-    re.compile(r"^##\s+Goal\s+&\s+Context\s*$", re.MULTILINE),
-    re.compile(r"^##\s+Goal\s+&\s+Context\s*$", re.MULTILINE | re.IGNORECASE),
-    re.compile(r"^##\s+Goal\s+and\s+Context\s*$", re.MULTILINE | re.IGNORECASE),
+    # `Goal & Context`, `Goal and Context`, and the pre-fn-220 tolerance for
+    # `Goal Context` / `Goal &Context` (the old regex accepted an optional `&`).
+    re.compile(r"^##\s+Goal\s*(?:&|and)?\s*Context\s*$", re.MULTILINE | re.IGNORECASE),
     re.compile(r"^##\s+Overview\s*$", re.MULTILINE | re.IGNORECASE),
     re.compile(r"^##\s+Context\s*$", re.MULTILINE | re.IGNORECASE),
 )
 _EXPORT_BOUNDARIES_HEADINGS = (
-    re.compile(r"^##\s+Boundaries\s*$", re.MULTILINE),
     re.compile(r"^##\s+Boundaries\s*$", re.MULTILINE | re.IGNORECASE),
     re.compile(r"^##\s+Boundaries\s*/\s*non-goals\s*$", re.MULTILINE | re.IGNORECASE),
     re.compile(r"^##\s+Non-goals\s*$", re.MULTILINE | re.IGNORECASE),
 )
 _EXPORT_DECISION_CONTEXT_HEADINGS = (
-    re.compile(r"^##\s+Decision\s+Context\s*$", re.MULTILINE),
     re.compile(r"^##\s+Decision\s+Context\s*$", re.MULTILINE | re.IGNORECASE),
 )
 
@@ -32216,8 +32246,9 @@ def _export_parse_first_present_section(
 ) -> str:
     """Body under the first heading pattern that exists in the file."""
     text = spec_text or ""
+    masked = _mask_html_comments(text)
     for heading_re in heading_res:
-        if heading_re.search(text):
+        if heading_re.search(masked):
             return _export_parse_spec_section(text, heading_re)
     return ""
 
@@ -35676,7 +35707,9 @@ _LEGACY_SPEC_HEADING_FOLDED = frozenset(
 def _spec_markdown_h2s(spec_text: str) -> list[str]:
     return [
         m.group(1).strip()
-        for m in re.finditer(r"^##\s+(.+?)\s*$", spec_text, re.MULTILINE)
+        for m in re.finditer(
+            r"^##\s+(.+?)\s*$", _mask_html_comments(spec_text), re.MULTILINE
+        )
     ]
 
 

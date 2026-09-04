@@ -221,6 +221,86 @@ class TestSpecTemplateCascade(unittest.TestCase):
         hits = [w for w in legacy["warnings"] if "legacy spec headings" in w]
         self.assertEqual(len(hits), 1, legacy.get("warnings"))
 
+    # --- round-1 review findings (fn-220 host review) ---
+
+    def test_skeleton_has_no_leading_blank_line(self) -> None:
+        code, out, err = self._run("spec", "skeleton", "--json")
+        self.assertEqual(code, 0, err or out)
+        skeleton = json.loads(out)["skeleton"]
+        self.assertFalse(skeleton.startswith("\n"), repr(skeleton[:20]))
+
+    def test_unreadable_override_falls_through_with_one_warning(self) -> None:
+        (self.root / "SPEC.md").write_bytes(b"# \xff\xfe not utf-8\n")
+        code, out, err = self._run("spec", "skeleton", "--json")
+        self.assertEqual(code, 0, err or out)
+        self.assertEqual(_h2s(json.loads(out)["skeleton"]), _CANONICAL_H2S)
+        self.assertEqual(err.count("unreadable spec template override"), 1, err)
+
+    def test_both_overrides_present_warns_once_and_takes_upper(self) -> None:
+        (self.root / "SPEC.md").write_text(
+            "# <spec-id> <Title>\n\n## Goal & Context\nupper\n", encoding="utf-8"
+        )
+        (self.root / "spec.md").write_text(
+            "# <spec-id> <Title>\n\n## Goal & Context\nlower\n", encoding="utf-8"
+        )
+        if (self.root / "SPEC.md").samefile(self.root / "spec.md"):
+            self.skipTest("case-insensitive filesystem: one file, no ambiguity")
+        code, out, err = self._run("spec", "skeleton", "--json")
+        self.assertEqual(code, 0, err or out)
+        self.assertIn("upper", json.loads(out)["skeleton"])
+        self.assertEqual(err.count("both"), 1, err)
+
+    def test_bundled_template_has_exactly_seven_h2_lines(self) -> None:
+        """The comment-blind `^## ` scan and the masked scan must agree on the
+        bundled template: guidance comments carry no line-start H2."""
+        text = (
+            Path(flowctl.__file__).resolve().parent.parent / "templates" / "spec.md"
+        ).read_text(encoding="utf-8")
+        raw_h2 = re.findall(r"^## (.+)$", text, re.MULTILINE)
+        self.assertEqual(len(raw_h2), 7, raw_h2)
+        self.assertEqual(set(raw_h2), _CANONICAL_H2S)
+
+    def test_fresh_cli_spec_exports_no_phantom_criteria(self) -> None:
+        code, out, err = self._run(
+            "spec", "create", "--title", "Phantom probe", "--json"
+        )
+        self.assertEqual(code, 0, err or out)
+        spec_id = json.loads(out)["id"]
+        text = (self.root / ".flow" / "specs" / f"{spec_id}.md").read_text(
+            encoding="utf-8"
+        )
+        criteria, residue = flowctl._export_scan_acceptance_criteria(text)
+        self.assertEqual(criteria, [])
+        self.assertEqual(residue, 0)
+        # Guidance prose inside comments is not section content either.
+        self.assertEqual(flowctl._export_parse_boundaries(text), [])
+
+    def test_comment_masking_keeps_offsets_and_hides_headings(self) -> None:
+        text = "# t\n\n<!--\n## Decision Context\nfake\n-->\n\n## Goal & Context\nreal\n"
+        masked = flowctl._mask_html_comments(text)
+        self.assertEqual(len(masked), len(text))
+        self.assertEqual(flowctl._spec_markdown_h2s(text), ["Goal & Context"])
+        self.assertEqual(
+            flowctl._export_parse_first_present_section(
+                text, flowctl._EXPORT_GOAL_AND_CONTEXT_HEADINGS
+            ),
+            "real",
+        )
+        self.assertEqual(
+            flowctl._export_parse_first_present_section(
+                text, flowctl._EXPORT_DECISION_CONTEXT_HEADINGS
+            ),
+            "",
+        )
+
+    def test_goal_heading_tolerates_missing_ampersand(self) -> None:
+        for heading in ("## Goal Context", "## Goal &Context", "## goal and context"):
+            with self.subTest(heading=heading):
+                body = flowctl._export_parse_first_present_section(
+                    f"# t\n\n{heading}\nbody\n", flowctl._EXPORT_GOAL_AND_CONTEXT_HEADINGS
+                )
+                self.assertEqual(body, "body")
+
 
 if __name__ == "__main__":
     unittest.main()

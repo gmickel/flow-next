@@ -131,8 +131,12 @@ Sub-scoped sibling criteria use single-letter suffixes (`R4a`, `R4b`) when one
 logical parent splits during revision — siblings sort lexically (`R4a` before
 `R4b` before `R5`). Multi-letter suffixes (`R4ab`) are not supported.
 
+<!--
+Placeholder shape (write real criteria in their place; a comment-wrapped
+bullet is never read as a live R-ID):
 - **R1:** <Testable criterion>. Errors: <enumerated error/invalid-input/boundary cases, or "no error surface beyond X">
 - **R2:** <Testable criterion>. Errors: <cases, or "no error surface beyond X">
+-->
 
 **Error cases (negative-cases discipline):** each behavioral criterion states its
 error / invalid-input / boundary handling *inside* the R-ID bullet (sub-clauses
@@ -140,10 +144,12 @@ or sub-bullets — not sub-R-IDs), **or** explicitly records
 "no error surface beyond X". A one-line "none" declaration is complete; silence
 is incomplete. Standing G-IDs in `.flow/criteria.md` are referenced, never restated.
 
+<!--
 Example:
 - **R1:** Parse config file into typed settings. Errors: malformed JSON → clear
   message + non-zero exit; missing file → same; over size limit → reject.
 - **R2:** Settings object is frozen after load (no error surface beyond R1).
+-->
 
 ## Boundaries
 <!-- scope: business -->

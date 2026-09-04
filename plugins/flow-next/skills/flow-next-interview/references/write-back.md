@@ -63,7 +63,7 @@ Hard rules:
 
 Create spec with interview output. **This branch writes a spec and zero tasks** — task creation is `/flow-next:plan`'s job. A run that leaves `flowctl tasks --spec <id>` non-empty has broken this.
 
-The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). `flowctl spec skeleton` is **NOT** the seed here — it returns a 1.0.2-shape skeleton (`Overview` / `Scope` / `Approach` / `Quick commands` / `Acceptance` / `References`) for R22 byte-for-byte backward-compat with the pre-1.1.0 `flowctl spec create` output, which uses different section names than the new canonical template. Reading from `flowctl spec skeleton` here would seed sections the scope-aware write-policy doesn't recognize. Read the template file directly. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
+The canonical section layout for the spec body is in [`plugins/flow-next/templates/spec.md`](../../templates/spec.md) — the **template file is the seed** for the canonical 7-section structure (`Goal & Context`, `Architecture & Data Models`, `API Contracts`, `Edge Cases & Constraints`, `Acceptance Criteria`, `Boundaries`, `Decision Context`). Since fn-220 `flowctl spec skeleton` renders that same template through the `SPEC.md` -> `spec.md` -> bundled cascade (frontmatter stripped), so either the file or the command is an acceptable seed; the walker below reads the file because it also needs `TEMPLATE_PATH` for the scope-owner markers. Fill the scope-owned canonical sections per the write-policy above, then append the auxiliary interview-audit sections below the canonical body (the R21 sync-codex drift guard forbids re-embedding the canonical section sequence in any skill markdown — the template file is the only allowed location).
 
 **Spec-id scheme.** When minting a brand-new spec here, route on `tracker.specIds` from the interview run's **single** root config snapshot (fn-110). Interview holds no earlier snapshot, so this write-back is where it is taken - one root read for the run, never a per-leaf `config get tracker.specIds` and never a second snapshot. Tracker-first is the team default when the bridge is active (`tracker.specIds=tracker`): create-first then mint. Explicit user override always wins; bridge inactive / no transport degrades **silently** to flow-first. No runtime nag (withdrawn R10). Network cost is conditional: when `tracker.perEvent.interview` is already active, tracker-first reorders that write; when the leaf is off (default), it adds an earlier remote write.
 
@@ -100,10 +100,9 @@ if [ -z "$SPEC_OUTPUT" ] && [ -z "$IDENTIFIER" ]; then
 fi
 
 # Build the spec body in-memory:
-#   1. Seed from the canonical template FILE (not `flowctl spec skeleton` —
-#      that command stays 1.0.2-compatible per R22; its section names
-#      (Overview / Scope / Approach / Quick commands / Acceptance / References)
-#      don't match the scope-aware write-policy's canonical section names).
+#   1. Seed from the canonical template FILE (`flowctl spec skeleton` renders
+#      the same file through the same cascade since fn-220; the walker is used
+#      here because TEMPLATE_PATH is needed for the scope-owner markers).
 #
 #      Resolve the template via the 3-tier discovery cascade. The full walker
 #      (cascade order, case-insensitive FS probe, both-exist warning, plugin-root

@@ -8,12 +8,48 @@
   "default_sync": null,
   "depends_on_epics": [],
   "id": "fn-220-spec-createskeleton-render",
-  "impl_review_rounds": {},
+  "impl_review_rounds": {
+    "fn-220-spec-createskeleton-render.1": 1
+  },
   "next_task": 1,
   "no_plan": true,
   "plan_review_rounds": 0,
   "plan_review_status": "unknown",
   "plan_reviewed_at": null,
+  "review_attempts": [
+    {
+      "artifact_sha256": "40af12b8257dae0415cb376bf1f616de1c83c30a0fbc606ea68207157dcdde71",
+      "backend": "host",
+      "counter_kind": "impl",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "not_applicable"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "15f9523ab7b727de72e15451e99107f22d6f8ec1",
+      "head_sha_observed": false,
+      "kind": "impl",
+      "outcome": "verdict",
+      "output_bytes": 6391,
+      "output_sha256": "417e361919813a55097d3fcbde74a0ee9502b39362980466f36f21d836e4a7e3",
+      "reservation_id": "426b46faf22744eb9575ec2e8dac8216",
+      "round_consumed": true,
+      "scope": "impl:fn-220-spec-createskeleton-render.1",
+      "superseded_by": null,
+      "task": "fn-220-spec-createskeleton-render.1",
+      "timestamp": "2026-09-04T09:51:24.462105Z",
+      "verdict": "NEEDS_WORK"
+    }
+  ],
+  "review_hash_epoch": {},
+  "review_pending_rounds": {},
+  "review_reservations": {},
+  "review_transport_failures": {
+    "impl:fn-220-spec-createskeleton-render.1": 0
+  },
   "spec_path": ".flow/specs/fn-220-spec-createskeleton-render.md",
   "status": "open",
   "title": "spec create/skeleton render templates/spec.md (one template, override cascade, exporter synonyms)",
@@ -28,5 +64,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-04T09:10:06.675244Z"
+  "updated_at": "2026-09-04T09:51:24.765813Z"
 }

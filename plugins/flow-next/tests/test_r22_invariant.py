@@ -32,6 +32,10 @@ import sys
 import unittest
 from pathlib import Path
 
+# fn-139.1: the tracker package sits beside flowctl.py; under a test module
+# sys.path[0] is THIS directory, not scripts/, so it would not import.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
 
 HERE = Path(__file__).resolve()
 PLUGIN_DIR = HERE.parent.parent
@@ -59,16 +63,15 @@ def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
 
 
 def _strip_leading_yaml_frontmatter(text: str) -> str:
-    """Drop a leading YAML frontmatter block (`---` ... `---`); keep the rest."""
-    if not text.startswith("---"):
-        return text
-    lines = text.split("\n")
-    if lines[0] != "---":
-        return text
-    for i in range(1, len(lines)):
-        if lines[i] == "---":
-            return "\n".join(lines[i + 1 :])
-    return text
+    """The CLI's own helper, imported so this test pins CLI behaviour, not a copy."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("flowctl_r22_under_test", FLOWCTL_PY)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod._strip_leading_yaml_frontmatter(text)
 
 
 def _expected_skeleton_from_template() -> str:
