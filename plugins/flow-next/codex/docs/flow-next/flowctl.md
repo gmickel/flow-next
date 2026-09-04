@@ -288,7 +288,7 @@ flowctl scope write-policy business|technical|both --current-sections-json <file
 
 ### spec create
 
-Create new spec.
+Create new spec. The new spec's markdown is the canonical scaffold `templates/spec.md`, resolved through the override cascade `SPEC.md` -> `spec.md` -> bundled (first match wins); `--plan-file` replaces it wholesale.
 
 ```bash
 flowctl spec create --title "Spec title" [--branch "fn-1-spec-title"] [--plan-file plan.md | --plan -] [--json]
@@ -519,7 +519,7 @@ as claimed-not-evidenced and keys its coverage abort on the undeclared set.
 
 ### spec skeleton
 
-Print the canonical fresh-spec markdown skeleton (R22 byte-for-byte baseline; consumed by `spec create`).
+Print the resolved spec scaffold - the canonical `templates/spec.md` (YAML frontmatter stripped) through the same `SPEC.md` -> `spec.md` -> bundled cascade `spec create` uses. The legacy six-heading skeleton is gone (fn-220).
 
 ```bash
 flowctl spec skeleton [--json]

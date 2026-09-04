@@ -19405,53 +19405,137 @@ def scan_max_task_id(flow_dir: Path, epic_id: str) -> int:
 # --- Spec File Operations ---
 
 
-# fn-44.1: canonical fresh-spec skeleton — single source of truth.
-# Printed verbatim by `flowctl spec skeleton`; consumed (with placeholder
-# substitution) by `cmd_spec_create`. Tests assert byte-for-byte parity
-# with the 1.0.2 output by calling `flowctl spec skeleton` and comparing
-# against the legacy snapshot. Do NOT change this string without bumping
-# the R22 backward-compat baseline + updating the snapshot fixture.
-SPEC_SKELETON_TEMPLATE = """# <spec-id> <Title>
-
-## Overview
-TBD
-
-## Scope
-TBD
-
-## Approach
-TBD
-
-## Quick commands
-<!-- Required: at least one smoke command for the repo -->
-- `# e.g., npm test, bun test, make test`
-
-## Acceptance
-- [ ] TBD
-
-## References
-- TBD
-"""
+# Scaffold is plugins/flow-next/templates/spec.md (fn-220). Changing the
+# scaffold means editing that file; the R22 baseline is the template itself.
+# `flowctl spec skeleton` prints it (YAML frontmatter stripped); `spec create`
+# substitutes `<spec-id> <Title>` in the H1. Override cascade, first match
+# wins: <repo>/SPEC.md, <repo>/spec.md, then the bundled template.
 
 
-def spec_skeleton_text() -> str:
-    """Return the canonical fresh-spec skeleton (R22 byte-for-byte baseline).
+def _bundled_spec_template_path() -> Path:
+    """Bundled templates/spec.md, resolved relative to this file (same as usage.md)."""
+    return Path(__file__).resolve().parent.parent / "templates" / "spec.md"
 
-    This is the deterministic source of truth for `flowctl spec skeleton`
-    and `flowctl spec create`. Header line uses placeholder tokens
-    `<spec-id>` and `<Title>`; `cmd_spec_create` substitutes them.
+
+def _read_utf8_normalized(path: Path) -> str:
+    """Read UTF-8 text and normalize CRLF/CR to LF."""
+    with path.open(encoding="utf-8", newline="") as handle:
+        return handle.read().replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _strip_leading_yaml_frontmatter(text: str) -> str:
+    """Drop a leading YAML frontmatter block (`---` ... `---`) and the blank
+    line(s) that follow it; keep the rest byte-for-byte."""
+    if not text.startswith("---"):
+        return text
+    lines = text.split("\n")
+    if lines[0] != "---":
+        return text
+    for i in range(1, len(lines)):
+        if lines[i] == "---":
+            return "\n".join(lines[i + 1 :]).lstrip("\n")
+    return text
+
+
+def _mask_html_comments(text: str, blank_fences: bool = True) -> str:
+    """Blank `<!-- ... -->` blocks (newlines kept) so heading and R-ID scanners
+    never read authoring guidance as content. Offsets and line counts are
+    preserved, so callers can slice the original text with the masked
+    text's match positions.
+
+    Fenced code blocks are always used as a LOCATOR: a `<!--` quoted inside a
+    fence never opens a comment that swallows real headings further down.
+    With `blank_fences=True` (the scanners' copy) the fences themselves are
+    blanked too, so nothing inside a fence reads as a heading or an R-ID.
+    With `blank_fences=False` (the content copy) only the comment spans are
+    blanked and fenced content survives verbatim - section bodies are sliced
+    from this copy so a diagram in a spec never disappears from the export.
     """
-    return SPEC_SKELETON_TEMPLATE
+
+    def _blank(m: re.Match) -> str:
+        return re.sub(r"[^\n]", " ", m.group(0))
+
+    fenced = re.sub(
+        r"^(`{3,}|~{3,})[^\n]*\n.*?^\1[ \t]*$",
+        _blank,
+        text,
+        flags=re.DOTALL | re.MULTILINE,
+    )
+    if blank_fences:
+        return re.sub(r"<!--.*?-->", _blank, fenced, flags=re.DOTALL)
+    out = list(text)
+    for m in re.finditer(r"<!--.*?-->", fenced, flags=re.DOTALL):
+        for i in range(m.start(), m.end()):
+            if out[i] != "\n":
+                out[i] = " "
+    return "".join(out)
 
 
-def create_epic_spec(id_str: str, title: str) -> str:
+def resolve_spec_template(use_json: bool = False) -> tuple[Path, str]:
+    """First readable spec scaffold as `(path, text)`: repo `SPEC.md`, then
+    `spec.md`, then the bundled `templates/spec.md`.
+
+    An unreadable override (OSError or UnicodeDecodeError) falls through to
+    the next rung with one stderr warning naming the file. Both overrides
+    present as distinct files warns once and takes `SPEC.md` (same rule as
+    the skills' walker). A missing or unreadable bundled template is an
+    install error: exits non-zero naming the path (JSON-shaped under
+    `use_json`).
+    """
+    repo_root = get_repo_root()
+    upper = repo_root / "SPEC.md"
+    lower = repo_root / "spec.md"
+    candidates = [upper, lower]
+    if upper.is_file() and lower.is_file():
+        if upper.samefile(lower):
+            # Case-insensitive filesystem (macOS APFS, NTFS): one file, one
+            # rung - never probe or warn about it twice.
+            candidates = [upper]
+        else:
+            print(
+                f"Warning: both {upper} and {lower} exist; using SPEC.md",
+                file=sys.stderr,
+            )
+    for path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            return path, _read_utf8_normalized(path)
+        except (OSError, UnicodeDecodeError):
+            print(
+                f"Warning: unreadable spec template override {path}",
+                file=sys.stderr,
+            )
+    bundled = _bundled_spec_template_path()
+    try:
+        return bundled, _read_utf8_normalized(bundled)
+    except (OSError, UnicodeDecodeError) as exc:
+        error_exit(
+            f"Bundled spec template not found or unreadable: {bundled}",
+            use_json=use_json,
+        )
+        raise AssertionError("unreachable") from exc  # error_exit never returns
+
+
+def spec_skeleton_text(use_json: bool = False) -> str:
+    """Return the resolved spec scaffold (frontmatter stripped).
+
+    Reads the cascade from `resolve_spec_template()`. Header line keeps the
+    placeholder tokens `<spec-id>` and `<Title>`; `cmd_spec_create`
+    substitutes them.
+    """
+    _path, text = resolve_spec_template(use_json=use_json)
+    return _strip_leading_yaml_frontmatter(text)
+
+
+def create_epic_spec(id_str: str, title: str, use_json: bool = False) -> str:
     """Create epic spec markdown content.
 
-    Internally renders the canonical skeleton from `spec_skeleton_text()`
-    and substitutes the header placeholders. Single source — no inline
-    skeleton string anywhere else.
+    Renders the resolved scaffold from `spec_skeleton_text()` and substitutes
+    the header placeholders. Single source — no inline skeleton string
+    anywhere else.
     """
-    return spec_skeleton_text().replace(
+    return spec_skeleton_text(use_json=use_json).replace(
         "<spec-id> <Title>", f"{id_str} {title}", 1
     )
 
@@ -24983,7 +25067,9 @@ def _render_epic_skeleton_from_prospect(
 ) -> str:
     """Render an epic spec body extending the default skeleton with prospect context.
 
-    Format mirrors `create_epic_spec` (Overview / Acceptance / etc.) but
+    Format keeps the pre-fn-220 promote shape (Overview / Acceptance / etc.;
+    `create_epic_spec` now renders templates/spec.md - migrating promote is a
+    follow-up) but
     pre-fills Overview, Leverage, Suggested size, and a `## Source` link
     that points back to the prospect artifact + idea position. Acceptance
     is left as a placeholder pointing at `/flow-next:interview` /
@@ -26207,7 +26293,7 @@ def cmd_strategy_read(args: argparse.Namespace) -> None:
 # `scope resolve`        — token-safe parser; resolves --scope / --biz / --tech
 # `scope bank`           — prints question-bank path for a given scope
 # `scope write-policy`   — emits per-section write policy for a given scope
-# `spec skeleton`        — prints the canonical fresh-spec skeleton (R22 baseline)
+# `spec skeleton`        — prints templates/spec.md (cascade; fn-220)
 # (fn-113: `scope suggest` deleted; R25 threshold lives in capture skill prose)
 
 # Valid scope values + the question-bank filename each maps to.
@@ -26621,14 +26707,14 @@ def cmd_scope_write_policy(args: argparse.Namespace) -> None:
 
 
 def cmd_spec_skeleton(args: argparse.Namespace) -> None:
-    """Print the canonical fresh-spec skeleton (R22 byte-for-byte baseline).
+    """Print the resolved spec scaffold (templates/spec.md via the cascade).
 
     Single source of truth — `flowctl spec create` writes the same content
-    (with header placeholders substituted). Tests compare this output
-    against the 1.0.2 snapshot to detect drift.
+    (with header placeholders substituted). The R22 baseline is the bundled
+    template itself (fn-220).
     """
     use_json = bool(getattr(args, "json", False))
-    skeleton = spec_skeleton_text()
+    skeleton = spec_skeleton_text(use_json=use_json)
     if use_json:
         json_output({"skeleton": skeleton})
     else:
@@ -26748,7 +26834,7 @@ def cmd_spec_create(args: argparse.Namespace) -> None:
         if tracker_first_flag and tracker_id_val:
             spec_data["tracker"]["identifier"] = tracker_id_val
         json_content = json.dumps(spec_data, indent=2, sort_keys=True) + "\n"
-        spec_content = create_epic_spec(spec_id, args.title)
+        spec_content = create_epic_spec(spec_id, args.title, use_json=args.json)
 
         # No-clobber publication under the allocation lock (fn-135): concurrent
         # chart/spec creates cannot reserve the same number then overwrite.
@@ -32075,6 +32161,10 @@ def _export_scan_acceptance_criteria(
     if not spec_text:
         return [], 0
 
+    # fn-220: scan a comment-masked copy so template guidance (placeholder
+    # and example R-ID bullets inside `<!-- -->`) never parses as criteria.
+    spec_text = _mask_html_comments(spec_text)
+
     # Find the section heading. Tolerate canonical + 2 legacy forms.
     heading_re = re.compile(
         r"^##\s+Acceptance(?:\s+[Cc]riteria)?\s*$",
@@ -32138,21 +32228,68 @@ def _export_parse_acceptance_criteria(spec_text: str) -> list[dict[str, Any]]:
 
 
 def _export_parse_spec_section(spec_text: str, heading_re: re.Pattern) -> str:
-    """Return the body text under a single H2 heading (stripped)."""
-    m = heading_re.search(spec_text or "")
+    """Return the body text under a single H2 heading (stripped).
+
+    Headings and section boundaries are located on the scanners' copy
+    (comments AND fences blanked, fn-220) so authoring guidance inside
+    `<!-- -->` blocks never reads as a heading; the body is sliced from the
+    comments-only copy, so fenced code (diagrams, examples) survives verbatim
+    while comment text (scope markers, the template's trailing cross-links)
+    never reaches a bullet parser.
+    """
+    masked = _mask_html_comments(spec_text or "")
+    m = heading_re.search(masked)
     if not m:
         return ""
-    body_start = m.end()
-    next_h2 = re.search(r"^##\s+", spec_text[body_start:], re.MULTILINE)
-    body_end = body_start + next_h2.start() if next_h2 else len(spec_text)
-    return spec_text[body_start:body_end].strip()
+    # Anchor the body at the end of the heading's OWN line. Every heading
+    # pattern ends in `\s*$`, and under MULTILINE that `\s*` runs through the
+    # newlines of blanked comment/fence lines right after the heading - so
+    # `m.end()` would skip a fence-first section's fence entirely.
+    eol = masked.find("\n", m.start())
+    body_start = len(masked) if eol == -1 else eol + 1
+    next_h2 = re.search(r"^##\s+", masked[body_start:], re.MULTILINE)
+    body_end = body_start + next_h2.start() if next_h2 else len(masked)
+    content = _mask_html_comments(spec_text or "", blank_fences=False)
+    return content[body_start:body_end].strip()
+
+
+# Read-only heading synonyms (fn-220). Canonical pattern is first so a file
+# that has both the template heading and a legacy name prefers the canonical
+# body. Matching is case-insensitive on the full heading line; nothing writes
+# these names.
+_EXPORT_GOAL_AND_CONTEXT_HEADINGS = (
+    # `Goal & Context`, `Goal and Context`, and the pre-fn-220 tolerance for
+    # `Goal Context` / `Goal &Context` (the old regex accepted an optional `&`).
+    re.compile(r"^##\s+Goal\s*(?:&|and)?\s*Context\s*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^##\s+Overview\s*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^##\s+Context\s*$", re.MULTILINE | re.IGNORECASE),
+)
+_EXPORT_BOUNDARIES_HEADINGS = (
+    re.compile(r"^##\s+Boundaries\s*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^##\s+Boundaries\s*/\s*non-goals\s*$", re.MULTILINE | re.IGNORECASE),
+    re.compile(r"^##\s+Non-goals\s*$", re.MULTILINE | re.IGNORECASE),
+)
+_EXPORT_DECISION_CONTEXT_HEADINGS = (
+    re.compile(r"^##\s+Decision\s+Context\s*$", re.MULTILINE | re.IGNORECASE),
+)
+
+
+def _export_parse_first_present_section(
+    spec_text: str, heading_res: tuple[re.Pattern, ...]
+) -> str:
+    """Body under the first heading pattern that exists in the file."""
+    text = spec_text or ""
+    masked = _mask_html_comments(text)
+    for heading_re in heading_res:
+        if heading_re.search(masked):
+            return _export_parse_spec_section(text, heading_re)
+    return ""
 
 
 def _export_parse_boundaries(spec_text: str) -> list[str]:
     """Extract bullet items from `## Boundaries` (one bullet per line)."""
-    body = _export_parse_spec_section(
-        spec_text,
-        re.compile(r"^##\s+Boundaries\s*$", re.MULTILINE),
+    body = _export_parse_first_present_section(
+        spec_text, _EXPORT_BOUNDARIES_HEADINGS
     )
     if not body:
         return []
@@ -33441,9 +33578,8 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
         acceptance_criteria,
         acceptance_criteria_residue,
     ) = _export_scan_acceptance_criteria(spec_text)
-    goal_and_context = _export_parse_spec_section(
-        spec_text,
-        re.compile(r"^##\s+Goal\s+&?\s*[Cc]ontext\s*$", re.MULTILINE),
+    goal_and_context = _export_parse_first_present_section(
+        spec_text, _EXPORT_GOAL_AND_CONTEXT_HEADINGS
     )
     architecture_overview_full = _export_parse_spec_section(
         spec_text,
@@ -33465,9 +33601,8 @@ def cmd_spec_export_cognitive_aid(args: argparse.Namespace) -> None:
     # {"question": "<bold prefix or first sentence>", "answer": "<rest>",
     # "tag": "<source-tag>"}.
     decision_context: list[dict[str, Any]] = []
-    decision_body = _export_parse_spec_section(
-        spec_text,
-        re.compile(r"^##\s+Decision\s+Context\s*$", re.MULTILINE),
+    decision_body = _export_parse_first_present_section(
+        spec_text, _EXPORT_DECISION_CONTEXT_HEADINGS
     )
     if decision_body:
         bullet_re = re.compile(r"^[-*]\s+(.+?)$", re.MULTILINE)
@@ -35586,6 +35721,55 @@ def validate_flow_root(flow_dir: Path) -> list[str]:
     return errors
 
 
+# Canonical H2s that mean "already on the templates/spec.md shape". A spec
+# with any of these is not warned as legacy even if it also has old names.
+_VALIDATE_CANONICAL_H2S = frozenset(
+    {"Goal & Context", "Acceptance Criteria", "Boundaries"}
+)
+_LEGACY_SPEC_HEADING_FOLDED = frozenset(
+    {
+        "overview",
+        "context",
+        "acceptance",
+        "boundaries / non-goals",
+        "non-goals",
+    }
+)
+
+
+def _spec_markdown_h2s(spec_text: str) -> list[str]:
+    return [
+        m.group(1).strip()
+        for m in re.finditer(
+            r"^##\s+(.+?)\s*$", _mask_html_comments(spec_text), re.MULTILINE
+        )
+    ]
+
+
+def _is_legacy_spec_heading(heading: str) -> bool:
+    """True for read-only synonym names that validate should nudge to migrate."""
+    folded = re.sub(r"\s+", " ", heading.strip()).lower()
+    if folded in _LEGACY_SPEC_HEADING_FOLDED:
+        return True
+    if folded == "decision context" and heading.strip() != "Decision Context":
+        return True
+    return False
+
+
+def _legacy_spec_headings_warning(spec_id: str, spec_text: str) -> Optional[str]:
+    """One warning when the spec parses only through legacy heading synonyms."""
+    headings = _spec_markdown_h2s(spec_text)
+    if any(h in _VALIDATE_CANONICAL_H2S for h in headings):
+        return None
+    legacy = [h for h in headings if _is_legacy_spec_heading(h)]
+    if not legacy:
+        return None
+    return (
+        f"Spec {spec_id}: legacy spec headings ({', '.join(legacy)}) - "
+        "prefer templates/spec.md"
+    )
+
+
 def validate_epic(
     flow_dir: Path,
     epic_id: str,
@@ -35616,6 +35800,15 @@ def validate_epic(
     epic_spec = flow_dir / SPECS_DIR / f"{epic_id}.md"
     if not epic_spec.exists():
         errors.append(f"Spec markdown missing: {epic_spec}")
+    else:
+        try:
+            spec_md_text = _read_utf8_normalized(epic_spec)
+        except (OSError, UnicodeDecodeError):
+            spec_md_text = ""
+        if spec_md_text:
+            legacy_warning = _legacy_spec_headings_warning(epic_id, spec_md_text)
+            if legacy_warning:
+                warnings.append(legacy_warning)
 
     # Validate spec dependencies
     deps = epic_data.get("depends_on_epics", [])
@@ -54012,8 +54205,8 @@ def main() -> None:
         p_skel = parent_sub.add_parser(
             "skeleton",
             help=(
-                "Print the canonical fresh-spec markdown skeleton "
-                "(R22 byte-for-byte baseline; consumed by `spec create`)"
+                "Print the canonical spec scaffold (templates/spec.md via "
+                "SPEC.md -> spec.md -> bundled; consumed by `spec create`)"
             ),
         )
         p_skel.add_argument("--json", action="store_true", help="JSON output")

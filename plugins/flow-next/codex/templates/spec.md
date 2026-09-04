@@ -49,6 +49,7 @@ Discovery cascade (first match wins):
   1. <repo_root>/SPEC.md           (your customized scaffold — uppercase preferred)
   2. <repo_root>/spec.md           (lowercase honored when uppercase absent)
   3. bundled ${PLUGIN_ROOT}/templates/spec.md  (this file — canonical source of truth)
+`flowctl spec create` and `flowctl spec skeleton` render this file through the same cascade (frontmatter stripped).
 
 Customizing: adding sections and rewriting the guidance prose under any heading is
 free. Renaming or removing `## Acceptance Criteria`, `## Boundaries`,
@@ -68,8 +69,8 @@ the request; every task traces to an R-ID. Capabilities the request never
 asked for are not scope — name them in ## Boundaries as out-of-scope, one line
 each. Prefer designs that ELIMINATE a risk structurally (closed schema, inert
 format, unexposed capability) over machinery that manages it (trust layers,
-scanners, caps, extra state stores). Rejected bigger designs get one line in
-## Decision Context, never sections. This trims scope, never rigor: the
+scanners, caps, extra state stores). Rejected bigger designs get one line
+in ## Decision Context, never sections. This trims scope, never rigor: the
 error/negative-cases discipline below, Boundaries, and R-ID coverage are
 EXEMPT and stay complete. So are filesystem-identity, permission, and
 concurrency guards (realpath/symlink containment, lock-guarded writes, forced
@@ -130,8 +131,12 @@ Sub-scoped sibling criteria use single-letter suffixes (`R4a`, `R4b`) when one
 logical parent splits during revision — siblings sort lexically (`R4a` before
 `R4b` before `R5`). Multi-letter suffixes (`R4ab`) are not supported.
 
+<!--
+Placeholder shape (write real criteria in their place; a comment-wrapped
+bullet is never read as a live R-ID):
 - **R1:** <Testable criterion>. Errors: <enumerated error/invalid-input/boundary cases, or "no error surface beyond X">
 - **R2:** <Testable criterion>. Errors: <cases, or "no error surface beyond X">
+-->
 
 **Error cases (negative-cases discipline):** each behavioral criterion states its
 error / invalid-input / boundary handling *inside* the R-ID bullet (sub-clauses
@@ -139,10 +144,12 @@ or sub-bullets — not sub-R-IDs), **or** explicitly records
 "no error surface beyond X". A one-line "none" declaration is complete; silence
 is incomplete. Standing G-IDs in `.flow/criteria.md` are referenced, never restated.
 
+<!--
 Example:
 - **R1:** Parse config file into typed settings. Errors: malformed JSON → clear
   message + non-zero exit; missing file → same; over size limit → reject.
 - **R2:** Settings object is frozen after load (no error surface beyond R1).
+-->
 
 ## Boundaries
 <!-- scope: business -->

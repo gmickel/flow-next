@@ -113,8 +113,7 @@ PROMPT_HASHES = {
     # quality-auditor already carries but impl-review was blind to.
     "SMELL_BASELINE_BLOCK":
         "0fcf594a970ca41958003e4a41f99f0b8d590704d9c1ef32e47cd80722c68db9",
-    "SPEC_SKELETON_TEMPLATE":
-        "181c5cd5cba913346dc8c1800871dd42d139321319f86b80a67248ca15063ead",
+    # fn-220: SPEC_SKELETON_TEMPLATE deleted; the scaffold is templates/spec.md, rendered by spec_skeleton_text().
     # fn-210.1: same comment-as-alibi finding class as impl-review.
     "STANDALONE_REVIEW_PROMPT_FALLBACK":
         "beedb8d647f78d782b3e58ebdeb8cbace8ae7dcb5b9e432359a6627a9a255963",
@@ -178,6 +177,12 @@ DEEP_PASS_HASHES = {
 
 # On-disk prompt templates. These are what real installs actually read.
 TEMPLATE_HASHES = {
+    # fn-220: the spec scaffold `flowctl spec create` / `spec skeleton` render.
+    # This pin is the R22 byte-for-byte baseline the deleted
+    # SPEC_SKELETON_TEMPLATE constant used to carry: a scaffold edit is a
+    # deliberate bump with a rationale in the commit message, never silent.
+    "plugins/flow-next/templates/spec.md":
+        "5032758a08e0d8180d062f3e4fe2c4a9309301cb5f932a9eb6549aae59a536f5",
     "plugins/flow-next/skills/flow-next-impl-review/validate-pass.md":
         "eb39e0d69df44a5696d32844baf920d6cfa0440d9f918db2628b79c1d03ecb27",
     "plugins/flow-next/skills/flow-next-impl-review/deep-passes.md":

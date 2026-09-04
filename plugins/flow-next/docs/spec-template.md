@@ -38,6 +38,8 @@ When a skill needs the spec template, it walks three locations in order (first m
 2. `<repo_root>/spec.md` - lowercase honored when uppercase absent
 3. `${PLUGIN_ROOT}/templates/spec.md` - bundled (canonical source of truth)
 
+Since fn-220 flowctl itself applies this cascade for `spec create` and `spec skeleton`, so a repo `SPEC.md` shapes CLI-created specs as well as skill-authored ones.
+
 Case-insensitive FS handling (macOS APFS, Windows NTFS) and the bash walker that implements it live in [`../references/spec-template-discovery.md`](../references/spec-template-discovery.md).
 
 ## Customizing the scaffold for your project

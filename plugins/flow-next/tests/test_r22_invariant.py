@@ -17,8 +17,8 @@ Five sub-invariants (R22 (a)-(e)) covered here:
   (d) Capture's biz-routing layer, given a zero-biz-signal conversation,
       adds NO content to business destinations and fires NO suggestion.
   (e) `flowctl spec skeleton` produces byte-for-byte identical output to
-      the 1.0.2 baseline (literal expected string encoded in this test
-      file, NOT a fixture — fn-44 task spec contract).
+      the bundled templates/spec.md with YAML frontmatter stripped
+      (fn-220 moved the baseline off the 1.0.2 six-heading skeleton).
 
 Additionally: R23 section-merge contract — auxiliary sections preserved,
 R-IDs append-only, placeholder-only replacement.
@@ -31,6 +31,10 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+
+# fn-139.1: the tracker package sits beside flowctl.py; under a test module
+# sys.path[0] is THIS directory, not scripts/, so it would not import.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 
 HERE = Path(__file__).resolve()
@@ -45,41 +49,39 @@ def _run(*args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
         [sys.executable, str(FLOWCTL_PY), *args],
         capture_output=True,
         text=True,
+        # flowctl reconfigures its stdio to UTF-8; decode the same way, or a
+        # Windows runner's cp1252 default mangles the template's em-dashes
+        # and the byte-for-byte skeleton comparison fails for no real reason.
+        encoding="utf-8",
         input=stdin,
         timeout=30,
     )
 
 
 # ============================================================================
-# R22 (e): byte-for-byte skeleton parity with the 1.0.2 baseline.
+# R22 (e): byte-for-byte skeleton parity with bundled templates/spec.md.
 # ============================================================================
-# This literal string is the 1.0.2 SPEC_SKELETON_TEMPLATE — the same content
-# `flowctl spec create` writes today. ANY deviation between `flowctl spec
-# skeleton` output and this expected string is a regression of R22 — the
-# user who creates a fresh spec via the canonical CLI MUST see the same
-# scaffold as on 1.0.2, with no new sections, no rearranged sections, and
-# no inserted HTML-comment annotations.
-EXPECTED_SKELETON_R22 = """# <spec-id> <Title>
+# fn-220 moved the baseline to the canonical template. Expected output is
+# computed from plugins/flow-next/templates/spec.md (YAML frontmatter
+# stripped). Changing the scaffold means editing that file.
 
-## Overview
-TBD
 
-## Scope
-TBD
+def _strip_leading_yaml_frontmatter(text: str) -> str:
+    """The CLI's own helper, imported so this test pins CLI behaviour, not a copy."""
+    import importlib.util
 
-## Approach
-TBD
+    spec = importlib.util.spec_from_file_location("flowctl_r22_under_test", FLOWCTL_PY)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod._strip_leading_yaml_frontmatter(text)
 
-## Quick commands
-<!-- Required: at least one smoke command for the repo -->
-- `# e.g., npm test, bun test, make test`
 
-## Acceptance
-- [ ] TBD
-
-## References
-- TBD
-"""
+def _expected_skeleton_from_template() -> str:
+    raw = (PLUGIN_DIR / "templates" / "spec.md").read_text(encoding="utf-8")
+    raw = raw.replace("\r\n", "\n").replace("\r", "\n")
+    return _strip_leading_yaml_frontmatter(raw)
 
 
 class TestR22A_ZeroFlagDefault(unittest.TestCase):
@@ -245,39 +247,33 @@ class TestR22D_CaptureZeroSignalNoFire(unittest.TestCase):
 
 
 class TestR22E_SpecSkeletonByteForByte(unittest.TestCase):
-    """R22 (e): `flowctl spec skeleton` byte-for-byte parity with 1.0.2.
-
-    The expected output is encoded as a literal string above. ANY drift
-    means a user creating a fresh spec via the canonical CLI sees something
-    different from 1.0.2 — the precise behavior R22 forbids."""
+    """R22 (e): `flowctl spec skeleton` equals bundled templates/spec.md
+    with YAML frontmatter stripped (baseline moved in fn-220)."""
 
     def test_skeleton_byte_for_byte_matches_baseline(self) -> None:
         proc = _run("spec", "skeleton")
         self.assertEqual(proc.returncode, 0)
-        actual = proc.stdout
+        expected = _expected_skeleton_from_template()
         self.assertEqual(
-            actual,
-            EXPECTED_SKELETON_R22,
+            proc.stdout,
+            expected,
             "R22 (e) violation: `flowctl spec skeleton` output diverges "
-            "from the 1.0.2 baseline. Update SPEC_SKELETON_TEMPLATE only "
-            "with explicit user approval — this is the backward-compat surface.",
+            "from bundled templates/spec.md (frontmatter stripped). The "
+            "scaffold is that file — edit it to change the baseline.",
         )
 
-    def test_skeleton_no_canonical_sequence_re_embedded(self) -> None:
-        """R22 (e) corollary: the 1.0.2 skeleton has NO H2 sections
-        named `## Goal & Context` / `## Architecture & Data Models` /
-        `## API Contracts` — those live in the rich `templates/spec.md`,
-        NOT in the CLI-emitted skeleton. The CLI skeleton is intentionally
-        sparse (Overview / Scope / Approach / Quick commands / Acceptance
-        / References) to match the 1.0.2 contract."""
+    def test_skeleton_carries_canonical_h2s(self) -> None:
+        """CLI skeleton is the canonical template, including its seven H2s."""
         proc = _run("spec", "skeleton")
         self.assertEqual(proc.returncode, 0)
         skeleton = proc.stdout
-        # The rich template lives at templates/spec.md; the CLI skeleton
-        # stays 1.0.2-shape.
-        self.assertNotIn("## Goal & Context", skeleton)
-        self.assertNotIn("## Architecture & Data Models", skeleton)
-        self.assertNotIn("## API Contracts", skeleton)
+        self.assertIn("## Goal & Context", skeleton)
+        self.assertIn("## Architecture & Data Models", skeleton)
+        self.assertIn("## API Contracts", skeleton)
+        self.assertIn("## Edge Cases & Constraints", skeleton)
+        self.assertIn("## Acceptance Criteria", skeleton)
+        self.assertIn("## Boundaries", skeleton)
+        self.assertIn("## Decision Context", skeleton)
 
     def test_skeleton_json_envelope_matches(self) -> None:
         """`flowctl spec skeleton --json` wraps the same text in a JSON
@@ -286,7 +282,7 @@ class TestR22E_SpecSkeletonByteForByte(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         payload = json.loads(proc.stdout)
         self.assertTrue(payload["success"])
-        self.assertEqual(payload["skeleton"], EXPECTED_SKELETON_R22)
+        self.assertEqual(payload["skeleton"], _expected_skeleton_from_template())
 
 
 class TestR23_SectionMergeContract(unittest.TestCase):

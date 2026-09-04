@@ -4,8 +4,9 @@ Canonical heading since 1.1.4 is `## Acceptance Criteria` (matches the
 canonical template at `plugins/flow-next/templates/spec.md`). The parser
 also tolerates two legacy forms for back-compat:
 
-- `## Acceptance` — plan-skill template pre-1.1.4 (and `flowctl spec
-  skeleton` output, locked by the R22 invariant).
+- `## Acceptance` — plan-skill template pre-1.1.4 and `flowctl prospect
+  promote` output (the pre-fn-220 `spec skeleton` shape; the skeleton now
+  renders the canonical template).
 - `## Acceptance criteria` — older lowercase-criteria form.
 
 R-ID format: canonical is `R<digits>`. Since fn-49.1 the parser also
