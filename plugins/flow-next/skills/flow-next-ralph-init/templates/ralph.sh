@@ -1219,7 +1219,7 @@ Violations break automation and leave the user with incomplete work. Be precise,
   plan_review_status=""
   task_status=""
   impl_receipt_ok="1"
-  # Gate on BARE backend name (spec form like codex:gpt-5.4:xhigh resolves to codex).
+  # Gate on BARE backend name (spec form like codex:<model>:xhigh resolves to codex).
   if [[ "$status" == "plan" && ( "$PLAN_REVIEW_BACKEND" == "rp" || "$PLAN_REVIEW_BACKEND" == "codex" || "$PLAN_REVIEW_BACKEND" == "copilot" || "$PLAN_REVIEW_BACKEND" == "cursor" ) ]]; then
     if ! verify_receipt "$REVIEW_RECEIPT_PATH" "plan_review" "$spec_id"; then
       echo "ralph: missing plan review receipt; forcing retry" >> "$iter_log"

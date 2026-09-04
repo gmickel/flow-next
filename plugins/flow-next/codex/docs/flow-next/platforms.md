@@ -343,6 +343,7 @@ The interview skill's optional async fact-scout dispatch names Claude Code's `Ex
 
 ### Caveats / intentional limits
 
+- **OpenAI models are winding down on Cursor (dated 2026-09-05).** GPT-6 Astra does not reach Cursor and no later OpenAI model will, since OpenAI is ending its Cursor contract after the SpaceX acquisition with a proposed shutoff of 12 November 2026, so a cross-family review from inside Cursor should pin a non-OpenAI reviewer on `review.backend host` or call the `codex` CLI backend from outside Cursor - see [`reach/cursor.md`](reach/cursor.md).
 - **Agents frontmatter aliases → inherit.** On Cursor, `agents/*.md` family aliases are ignored; subagents inherit the session model. Naming the model in the dispatch itself is the escape hatch - no alias-to-slug rewrite pass (marketplace import consumes canonical files as-is).
 - **Ralph autonomous mode is intentionally not built for Cursor.** Cursor has a full agent-hook set (and Claude Code hook compatibility exists upstream), but flow-next does **not** register Ralph guards on Cursor - interactive plan / work / review is the supported surface. Scaffolding `scripts/ralph/` does not enable the autonomous loop here.
 - **Tracker lifecycle touchpoints use the deterministic facade.** Cursor keeps

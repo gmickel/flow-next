@@ -354,7 +354,7 @@ The orchestration patterns that emerged in the wild through mid-2026 all have a 
 | **Orchestrator → executor** | The frontier model plans and judges; a cheaper, highly steerable model (the implementer tier, on a subscription you already pay for) writes the code | A `codex exec` bridge recipe, ad hoc or as standing prose in `CLAUDE.md`. Host keeps gating/git/review; the bridged child writes code |
 | **Orchestrator → reader** | Token-hungry, low-judgment reads (codebase analysis, doc sweeps) run on fast models that report summaries back - the orchestrator never holds the raw tokens | Already the default: planning scouts and prime scanners run on the fast tiers and return digests. Add `/flow-next:map` for token-efficient exploration |
 | **Cross-family reviewer** | The model that writes is never the model that reviews - uncorrelated blind spots | `review.backend <backend>` - per-task `review:` pins exceptions |
-| **Effort discipline** | Run the orchestrator at high, not max - top effort tiers are token furnaces with flat-or-worse output on routine work | Session effort is yours; a bridged child takes its effort inline (`-c model_reasoning_effort=medium` is the recommended floor - raise it for gnarly tasks) |
+| **Effort discipline** | Run the orchestrator at high, not max - top effort tiers are token furnaces with flat-or-worse output on routine work | Session effort is yours; a bridged child takes its effort inline (`-c model_reasoning_effort=medium` is the recommended floor - raise it for gnarly tasks, and keep `low` for plain CRUD) |
 | **Token-hungry offload** | Computer use, live-app verification, bulk analysis go to other models/agents; results come back as evidence | `/flow-next:qa` drives the app in its own context and files P0/P1/P2 findings; workers run fresh-context and return receipts |
 | **Single path** | One request, one model, done | A tier pinned in the routing block (`implementer: <model> at <effort>`); absent, the session model |
 | **Cascade** | A cheap model tries first; a gate decides whether a stronger one takes over | The value tier implements, the review verdict is the gate, and the standing permission to escalate ("if a cheaper model misses the bar, rerun on a smarter one") moves the job up. The gate is a real review with a receipt, never a classifier |
@@ -478,10 +478,10 @@ Every plan and implementation review now comes from a model that did not write t
 **Rung 3 - the routing block.** In `CLAUDE.md` or `AGENTS.md` (`/flow-next:setup` scaffolds it commented out):
 
 ```text
-reviewer: gpt-5.6-sol at high
-implementer: gpt-5.6-terra at medium
-fast scout: haiku-4.5
-thinking scout: sonnet-5
+reviewer: <model> at high
+implementer: <model> at medium
+fast scout: <model>
+thinking scout: <model>
 ```
 
 Name the ids your harness serves. Unset tiers stay on the session model, which is where planning, capture, interview and every verdict belong. A model the harness cannot reach falls back to the session model with one note.

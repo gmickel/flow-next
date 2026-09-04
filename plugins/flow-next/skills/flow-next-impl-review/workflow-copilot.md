@@ -38,7 +38,7 @@ RECEIPT_PATH="$(jq -r '.receipt_path' <<<"$ROUTE")"
 
 # Runtime config:
 #   --spec <spec>           full spec (backend:model:effort), highest priority
-#   FLOW_REVIEW_BACKEND     env (spec-form ok: copilot:claude-opus-4.5:xhigh)
+#   FLOW_REVIEW_BACKEND     env (spec-form ok: copilot:<model>:xhigh)
 #   FLOW_COPILOT_MODEL      env (fills missing model only; else registry default)
 #   FLOW_COPILOT_EFFORT     env (fills missing effort only; default high)
 #   per-task stored review  via `flowctl task set-backend` (highest if set)
