@@ -55,6 +55,9 @@ git config user.email "ci@test.local"
 git config user.name "CI Test"
 
 cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/
+# fn-220: flowctl renders the spec scaffold from <dir-holding-scripts>/templates/spec.md
+# (the bundled rung of the SPEC.md -> spec.md -> bundled cascade); stage it beside the copy.
+mkdir -p templates && cp "$PLUGIN_ROOT/templates/spec.md" templates/spec.md
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Basic Commands

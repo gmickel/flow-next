@@ -72,6 +72,9 @@ cd "$TEST_DIR/repo"
 git init -q
 
 cp "$PLUGIN_ROOT/scripts/flowctl.py" scripts/flowctl.py
+# fn-220: flowctl renders the spec scaffold from <dir-holding-scripts>/templates/spec.md
+# (the bundled rung of the SPEC.md -> spec.md -> bundled cascade); stage it beside the copy.
+mkdir -p templates && cp "$PLUGIN_ROOT/templates/spec.md" templates/spec.md
 cp "$PLUGIN_ROOT/scripts/flowctl_bootstrap.py" scripts/flowctl_bootstrap.py
 cp "$PLUGIN_ROOT/scripts/flowctl-help.txt" scripts/flowctl-help.txt
 cp "$PLUGIN_ROOT/scripts/flowctl" scripts/flowctl
