@@ -2,7 +2,9 @@
 
 All notable changes to the flow-next.
 
-## Unreleased
+## [flow-next 4.15.0] - 2026-09-04
+
+Specs written from the command line now read like captured ones: they carry the same section structure every downstream reader expects, so plan review, R-ID coverage, completion review, and the generated PR body find a goal, boundaries, and acceptance criteria where they look for them instead of exporting blanks. Renaming a spec is safe in the same way - a retitled spec keeps its branch instead of stranding the old slug.
 
 ### Changed
 
