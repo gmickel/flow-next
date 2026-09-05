@@ -2,7 +2,11 @@
   "$schema": "https://flow-next.dev/schema/flow-config.schema.json",
   "artifacts": {
     "html": {
-      "enabled": false
+      "enabled": true,
+      "theme": "instrument"
+    },
+    "motion": {
+      "enabled": true
     }
   },
   "chart": {
@@ -12,25 +16,26 @@
   "land": {
     "automatedReviewers": "copilot-pull-request-reviewer",
     "ciFixBudget": 3,
-    "cleanReviewCommentPattern": "(Didn'?t find any( major)? issues|No( major)? issues found).*Reviewed commit|\\*\\*Code Review\\*\\*.*\\*\\*Completed\\*\\*",
-    "mergeVerdictCommand": "",
-    "patienceMinutes": 30,
-    "patienceMinutesAfterReview": 10,
-    "release": true,
-    "requestReviewers": "",
-    "reviewSignal": "silence",
+    "cleanReviewCommentPattern": "LGTM.*Reviewed commit",
+    "mergeVerdictCommand": "scripts/merge-verdict.sh",
+    "patienceMinutes": 45,
+    "patienceMinutesAfterReview": 0,
+    "release": false,
+    "requestReviewers": "alice,acme/platform,codeowners",
+    "reviewSignal": "approve",
     "reviewTrigger": ""
   },
   "memory": {
     "enabled": true
   },
   "pilot": {
-    "autonomy": "ready",
+    "autonomy": "backlog",
     "gateClasses": []
   },
   "pipeline": {
     "chainStages": "off",
-    "qa": "off"
+    "lint": "on",
+    "qa": "on"
   },
   "planSync": {
     "crossSpec": true,
@@ -46,17 +51,17 @@
   "tracker": {
     "charts": "off",
     "conflictTiebreak": "flow-wins",
-    "enabled": false,
+    "enabled": true,
     "perEvent": {
       "capture": "reconcile",
       "completionReview": "reconcile",
       "interview": "reconcile",
       "land": {
-        "merged": "off"
+        "merged": "push"
       },
       "makePr": "comment",
       "plan": "reconcile",
-      "qa": "off",
+      "qa": "comment",
       "resolvePr": "comment",
       "work": {
         "done": "comment",
@@ -117,7 +122,7 @@
     },
     "specIds": "tracker",
     "staleAfterHours": 24,
-    "type": null,
+    "type": "github",
     "version": 1
   }
 }

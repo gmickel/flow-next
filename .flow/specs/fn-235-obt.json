@@ -1,0 +1,24 @@
+{
+  "branch_name": "fn-235-obt",
+  "created_at": "2026-09-05T15:58:04.545784Z",
+  "depends_on_epics": [],
+  "id": "fn-235-obt",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-235-obt.md",
+  "status": "open",
+  "title": "\u65e5\u672c\u8a9e\u306e\u307f",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-05T15:58:04.545792Z"
+}

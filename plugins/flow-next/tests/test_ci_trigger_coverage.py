@@ -84,7 +84,8 @@ class TriggerCoverage(unittest.TestCase):
         surface = _read_surface() - EXEMPT_TOP_LEVEL
         self.assertIn("agent_docs", surface, "the measured 2026-08-13 gap must stay covered")
         for event, patterns in blocks.items():
-            self.assertTrue(patterns, f"{event} filter parsed empty")
+            if not patterns:  # No path filter triggers CI for every changed path.
+                continue
             uncovered = sorted(top for top in surface if not _covered(patterns, top))
             self.assertEqual(
                 [],

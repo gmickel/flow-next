@@ -7,6 +7,7 @@ import sys
 import tempfile
 import tomllib
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -18,6 +19,29 @@ ROLE = '[agents.agents_md_scout]\ndescription = "old"\nconfig_file = "agents/age
 
 
 class ConfigMergeTests(unittest.TestCase):
+    def test_utf8_config_and_roles_under_legacy_locale(self):
+        original_open = Path.open
+        original_fdopen = os.fdopen
+        def locale_open(path, mode='r', buffering=-1, encoding=None, errors=None, newline=None):
+            return original_open(path, mode, buffering, ('cp1252' if encoding in (None, 'locale') and 'b' not in mode else encoding), errors, newline)
+        def locale_fdopen(fd, mode='r', buffering=-1, encoding=None, **kwargs):
+            return original_fdopen(fd, mode, buffering, encoding=encoding or 'cp1252', **kwargs)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / 'roles'
+            source.mkdir()
+            (source / 'scout.toml').write_text('description = "Unicode \u2192 \u201d"\n', encoding='utf-8')
+            config = root / 'config.toml'
+            user = '[custom]\nnote = "\u65e5\u672c"\n'
+            config.write_text(user, encoding='utf-8')
+            with mock.patch.object(Path, 'open', locale_open), mock.patch.object(os, 'fdopen', locale_fdopen):
+                mod.update(config, source, 12)
+                mod.update(config, source, 12)
+            data = tomllib.loads(config.read_text(encoding='utf-8'))
+            self.assertEqual(data['custom']['note'], '\u65e5\u672c')
+            self.assertEqual(data['agents']['scout']['description'], 'Unicode \u2192 \u201d')
+            self.assertEqual(next(root.glob('config.toml.pre-flow-next-*')).read_bytes(), user.encode('utf-8'))
+
     def test_unmarked_duplicate_recovery_and_scope(self):
         text = '[agents]\nenabled = true\nmax_concurrent_threads_per_session = 12\n' + ROLE
         text += mod.END + '\n' + mod.BEGIN + '\nmax_threads = 12\n' + ROLE + mod.END + '\n'
