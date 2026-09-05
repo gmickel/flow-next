@@ -69,6 +69,11 @@ if [ ! -d "$CODEX_DIR" ]; then
     exit 1
 fi
 
+# Refuse unsafe/conflicting config before copying any installed artifacts.
+CODEX_MAX_THREADS="${CODEX_MAX_THREADS:-12}"
+python3 "$SCRIPT_DIR/merge_codex_config.py" "$CODEX_DIR/config.toml" "$CODEX_SRC/agents" \
+    --max-threads "$CODEX_MAX_THREADS" --check
+
 echo "Installing $PLUGIN to Codex CLI (multi-agent mode)..."
 echo
 
@@ -376,77 +381,8 @@ echo -e "${GREEN}✓${NC} $PROMPT_COUNT prompts"
 echo -e "${BLUE}Merging config.toml...${NC}"
 CONFIG="$CODEX_DIR/config.toml"
 
-# Ensure multi_agent = true at TOML root
-if [ -f "$CONFIG" ]; then
-    if ! grep -q "^multi_agent" "$CONFIG" 2>/dev/null; then
-        tmp="/tmp/codex-config-prepend.toml"
-        { echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
-          echo "multi_agent = true"
-          echo ""
-          cat "$CONFIG"
-        } > "$tmp"
-        mv "$tmp" "$CONFIG"
-    fi
-else
-    { echo "# Enable custom multi-agent roles (Codex 0.102.0+)"
-      echo "multi_agent = true"
-      echo ""
-    } > "$CONFIG"
-fi
-
-# Clean old flow-next entries
-if grep -q "flow-next multi-agent roles" "$CONFIG" 2>/dev/null; then
-    sed -i.bak '/# --- flow-next multi-agent roles/,/# --- end flow-next roles ---/d' "$CONFIG"
-    rm -f "${CONFIG}.bak"
-fi
-
-# Clean old max_threads we may have written
-if grep -q "^max_threads" "$CONFIG" 2>/dev/null; then
-    sed -i.bak '/^max_threads/d' "$CONFIG"
-    rm -f "${CONFIG}.bak"
-fi
-
-# Migration: clean up legacy standalone [features] block (pre-fix versions
-# of this script wrote a duplicate [features] table, which TOML rejects)
-if grep -q "# --- flow-next features" "$CONFIG" 2>/dev/null; then
-    sed -i.bak '/# --- flow-next features/,/# --- end flow-next features ---/d' "$CONFIG"
-    rm -f "${CONFIG}.bak"
-fi
-
-# Ensure exactly one `hooks = true` under [features], migrating away from the
-# deprecated `codex_hooks` spelling and de-duplicating. Idempotent + dedup-safe:
-# handles a config that already carries BOTH codex_hooks and hooks (which older
-# versions of this script produced) without leaving an invalid duplicate key.
-python3 "$SCRIPT_DIR/normalize_codex_hooks.py" "$CONFIG"
-
-# Generate agent entries
-CODEX_MAX_THREADS="${CODEX_MAX_THREADS:-12}"
-{
-    echo ""
-    echo "# --- flow-next multi-agent roles (auto-generated) ---"
-    echo "# Re-run install-codex.sh to regenerate"
-    echo ""
-
-    # Only declare [agents] if it doesn't already exist
-    if ! grep -q "^\[agents\]" "$CONFIG" 2>/dev/null; then
-        echo "[agents]"
-    fi
-    echo "max_threads = $CODEX_MAX_THREADS"
-    echo ""
-
-    for toml_file in "$CODEX_SRC/agents/"*.toml; do
-        [ -f "$toml_file" ] || continue
-        name=$(basename "$toml_file" .toml)
-        role_key="${name//-/_}"
-        desc=$(grep '^description = ' "$toml_file" | head -1 | sed 's/^description = "//;s/"$//')
-        echo "[agents.$role_key]"
-        echo "description = \"$desc\""
-        echo "config_file = \"agents/$name.toml\""
-        echo ""
-    done
-
-    echo "# --- end flow-next roles ---"
-} >> "$CONFIG"
+python3 "$SCRIPT_DIR/merge_codex_config.py" "$CONFIG" "$CODEX_SRC/agents" \
+    --max-threads "$CODEX_MAX_THREADS"
 
 echo -e "  ${GREEN}✓${NC} config.toml ($AGENT_COUNT agent entries, max_threads=$CODEX_MAX_THREADS)"
 echo -e "  ${GREEN}✓${NC} [features] hooks = true (feature flag only; no default Ralph hooks file)"

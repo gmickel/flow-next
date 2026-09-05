@@ -239,3 +239,21 @@ When planning an epic or opening a PR, include doc updates as acceptance criteri
   - `~/work/mickel.tech/app/apps/flow-next/page.tsx` — feature card on the public marketing site. External contributors **do not** need to update this; lives in a separate private repo. PRs from non-maintainers should skip the website task entirely; Gordon adds the corresponding feature card during release.
 
 Skip rules: pure internal refactors with no user-visible surface skip README + website; bug fixes with no doc impact get a CHANGELOG entry only. When in doubt, include the doc update.
+
+## Codex installer configuration recovery
+
+`install-codex.sh` preflights its config merge before copying artifacts. Role
+registrations are owned by their generated role name plus matching
+`config_file = "agents/<name>.toml"`, not by comment markers alone. This repairs
+older marker-less registrations and duplicate appended blocks while preserving
+unrelated tables and non-conflicting role overrides. A same-name role pointing
+to another file, conflicting overrides, or unrelated malformed TOML aborts the
+install without replacing the config.
+
+The merger validates the complete result, writes `max_threads` inside `[agents]`,
+consolidates the legacy `max_concurrent_threads_per_session` alias,
+and atomically replaces the config with its original permissions. Changed
+configs retain a private `config.toml.pre-flow-next-*` backup beside the original;
+a repeat install leaves an already-current config unchanged. Set `CODEX_HOME`
+to repair an alternate profile; do not copy an entire config between machines.
+Python 3.11+ is required for TOML validation.

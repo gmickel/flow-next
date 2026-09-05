@@ -2,6 +2,12 @@
 
 All notable changes to the flow-next.
 
+## Unreleased
+
+### Fixed
+
+- Codex installs recover duplicate Flow-Next agent registrations left behind when opening comment markers were removed. The installer preserves unrelated settings and role overrides, places the thread limit in the correct table, and validates the merged config before replacing it with a private backup. Conflicting user-owned roles or malformed unrelated TOML stop the install instead of breaking Codex startup. Reported by @gmickel.
+
 ## [flow-next 4.16.0] - 2026-09-05
 
 Teams conducting flow-next from OpenAI Codex, Cursor, Grok Build, Factory Droid or OpenCode can now get a Claude-family review verdict through the packaged review path, with the same receipt, model ladder, round counter and fix-and-re-review loop as every other CLI backend. Before, the only way to that verdict from those hosts was to describe a `claude -p` call by hand: no ladder, no record of the model that ran, no round counter, and a different review surface every time someone typed it.
