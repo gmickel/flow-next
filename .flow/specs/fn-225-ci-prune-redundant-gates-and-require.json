@@ -1,13 +1,13 @@
 {
   "branch_name": "ci/audit-gates",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "not_required",
+  "completion_reviewed_at": "2026-09-05T16:12:17.195625Z",
   "created_at": "2026-09-05T15:30:58.677582Z",
   "default_impl": null,
   "default_review": null,
   "default_sync": null,
   "depends_on_epics": [],
-  "id": "fn-225-prune-ci-events-while-preserving",
+  "id": "fn-225-ci-prune-redundant-gates-and-require",
   "impl_review_rounds": {
     "fn-225-prune-ci-events-while-preserving.1": 0
   },
@@ -113,9 +113,9 @@
   "review_transport_failures": {
     "impl:fn-225-prune-ci-events-while-preserving.1": 0
   },
-  "spec_path": ".flow/specs/fn-225-prune-ci-events-while-preserving.md",
+  "spec_path": ".flow/specs/fn-225-ci-prune-redundant-gates-and-require.md",
   "status": "open",
-  "title": "Prune CI events while preserving platform and release evidence",
+  "title": "ci: prune redundant gates and require tested release revisions",
   "tracker": {
     "baseHashFlow": null,
     "baseHashTracker": null,
@@ -127,5 +127,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-05T16:10:50.149287Z"
+  "updated_at": "2026-09-05T16:12:17.478340Z"
 }
