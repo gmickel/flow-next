@@ -34,13 +34,14 @@ class ConfigMergeTests(unittest.TestCase):
             config = root / 'config.toml'
             user = '[custom]\nnote = "\u65e5\u672c"\n'
             config.write_text(user, encoding='utf-8')
+            original_bytes = config.read_bytes()
             with mock.patch.object(Path, 'open', locale_open), mock.patch.object(os, 'fdopen', locale_fdopen):
                 mod.update(config, source, 12)
                 mod.update(config, source, 12)
             data = tomllib.loads(config.read_text(encoding='utf-8'))
             self.assertEqual(data['custom']['note'], '\u65e5\u672c')
             self.assertEqual(data['agents']['scout']['description'], 'Unicode \u2192 \u201d')
-            self.assertEqual(next(root.glob('config.toml.pre-flow-next-*')).read_bytes(), user.encode('utf-8'))
+            self.assertEqual(next(root.glob('config.toml.pre-flow-next-*')).read_bytes(), original_bytes)
 
     def test_unmarked_duplicate_recovery_and_scope(self):
         text = '[agents]\nenabled = true\nmax_concurrent_threads_per_session = 12\n' + ROLE
