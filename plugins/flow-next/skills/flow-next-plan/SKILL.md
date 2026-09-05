@@ -137,14 +137,14 @@ if [ "$ACTIVE" = "1" ]; then
 fi
 ```
 
-`review-backend` returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none` (configured).
+`review-backend` returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`claude`/`host`/`none` (configured).
 
 When the sentinel prints, STOP and Read [`references/setup-questions.md`](references/setup-questions.md) before any further step — it owns RepoPrompt eligibility, the two question variants, and the empty/ambiguous defaults.
 
-**If REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none** (already configured): ask nothing — depth defaults apply unless passed, research is `repo-scout`, review is the configured backend. Show the override hint:
+**If REVIEW_BACKEND is rp, codex, copilot, cursor, claude, host, or none** (already configured): ask nothing — depth defaults apply unless passed, research is `repo-scout`, review is the configured backend. Show the override hint:
 
 ```
-(Tip: --depth=short|standard|deep, --review=rp|codex|host|none)
+(Tip: --depth=short|standard|deep, --review=rp|codex|copilot|cursor|claude|host|none)
 ```
 
 ## Spec-id scheme (team default)

@@ -279,6 +279,36 @@ class ReviewCounterRecoveryGuardTestCase(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
         self.assertIn("human-only", proc.stderr)
 
+    def test_claude_review_dispatch_guarded_exactly_like_cursor(self) -> None:
+        # fn-221 R4: `flowctl claude <review>` is a review dispatch like the
+        # cursor spelling - the literal `--force` and an argument-position
+        # expansion that could carry it are both blocked; the plain review
+        # command (and the shipped fence shapes) stay allowed.
+        for cursor_cmd in (
+            "$FLOWCTL cursor impl-review fn-159.5 --base main --force",
+            '"$FLOWCTL" cursor impl-review fn-1.1 $FLAGS',
+            '"$FLOWCTL" cursor plan-review fn-1 "$(printf %s -- --force)"',
+            '"$FLOWCTL" cursor completion-review fn-1 --receipt /tmp/r.json "$x"',
+        ):
+            command = cursor_cmd.replace("cursor", "claude")
+            with self.subTest(command=command):
+                cursor_proc = self._hook(cursor_cmd)
+                proc = self._hook(command)
+                self.assertEqual(cursor_proc.returncode, 2, cursor_proc.stderr)
+                self.assertEqual(proc.returncode, 2, proc.stderr)
+                self.assertIn("human-only", proc.stderr)
+        for command in (
+            "$FLOWCTL claude impl-review fn-159.5 --base main",
+            '$FLOWCTL claude impl-review "${args[@]}"',
+            'FLOW_REVIEW_BACKEND=claude:claude-opus-5:high $FLOWCTL claude '
+            'impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"',
+            '$FLOWCTL claude deep-pass --pass adversarial --receipt "$RECEIPT_PATH"',
+            '$FLOWCTL claude validate --receipt "$RECEIPT_PATH" --json',
+        ):
+            with self.subTest(command=command):
+                proc = self._hook(command)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+
     def test_blocks_cap_raise_via_config_set_leaf_key(self) -> None:
         """fn-168 R7 route 1: extending the gate is the same self-grant as resetting it."""
         proc = self._hook("$FLOWCTL config set review.maxIterations 99")

@@ -508,7 +508,7 @@ def handle_file_tool_receipt_check(data: dict) -> None:
 
 _SHELL_COMMAND_SEPARATORS = frozenset({"|", "||", "&", "&&", ";", "(", ")"})
 _FLOWCTL_PATH_RE = re.compile(r"(?:.*/)?flowctl(?:\.py)?$")
-_REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor"})
+_REVIEW_BACKENDS = frozenset({"codex", "copilot", "cursor", "claude"})
 _REVIEW_DISPATCHES = frozenset({"impl-review", "plan-review", "completion-review"})
 _ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*")
 # fn-168 / PR #295 bot r1: an export|declare|typeset|readonly|env whose NAME is an
@@ -598,7 +598,7 @@ _GUARDED_SUBCOMMAND_GROUPS = frozenset({"spec", "review-rounds", "config"})
 # value-taking flag, or the id positional that comes first. Anything else is
 # unknowable pre-expansion and fails closed.
 #
-# The value-taking long options of `{codex,copilot,cursor} {impl,plan,
+# The value-taking long options of `{codex,copilot,cursor,claude} {impl,plan,
 # completion}-review` and `review-rounds increment` (their store_true flags —
 # --force, --json, --help — deliberately absent: nothing may follow them).
 _GUARDED_DISPATCH_VALUE_FLAGS = frozenset({
@@ -1392,7 +1392,7 @@ def handle_pre_tool_use(data: dict) -> None:
             "flowctl SUBCOMMANDS must also be spelled literally: a variable or "
             "command substitution in either of the two tokens after the launcher "
             "is blocked (variable ARGUMENTS - ids, paths, --reservation-id - are fine). "
-            "On a review dispatch (codex/copilot/cursor *-review, review-rounds "
+            "On a review dispatch (codex/copilot/cursor/claude *-review, review-rounds "
             "increment) a variable ARGUMENT is only allowed as the id right after "
             "the subcommand or as the value of a literal value-taking flag - "
             "spell every other flag out literally."

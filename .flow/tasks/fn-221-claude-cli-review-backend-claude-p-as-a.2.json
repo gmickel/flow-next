@@ -1,0 +1,16 @@
+{
+  "assignee": null,
+  "claim_note": "",
+  "claimed_at": null,
+  "created_at": "2026-09-04T23:52:19.525995Z",
+  "depends_on": [
+    "fn-221-claude-cli-review-backend-claude-p-as-a.1"
+  ],
+  "id": "fn-221-claude-cli-review-backend-claude-p-as-a.2",
+  "priority": null,
+  "spec": "fn-221-claude-cli-review-backend-claude-p-as-a",
+  "spec_path": ".flow/tasks/fn-221-claude-cli-review-backend-claude-p-as-a.2.md",
+  "status": "todo",
+  "title": "flowctl claude subcommands, surface pins, schema regen",
+  "updated_at": "2026-09-05T00:21:33.221300Z"
+}

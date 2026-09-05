@@ -11,6 +11,7 @@ user-invocable: false
 - `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
 - `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
+- `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 - `BACKEND=rp` → [workflow-rp.md](workflow-rp.md)
 
@@ -20,8 +21,8 @@ Verify that the combined implementation of all tasks in a spec satisfies the spe
 
 **Role**: Spec Completion Review Coordinator (NOT the reviewer)
 **Backends** (branch on the Phase 0 `RP_ELIGIBLE` probe):
-- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), or host-native (`host`)
-- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), or host-native (`host`) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
+- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`)
+- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
 
 ## Preamble — execute Phase 0 exactly once
 
@@ -29,13 +30,13 @@ Verify that the combined implementation of all tasks in a spec satisfies the spe
 
 Exception: a `--review=<backend>` argument (see Backend Selection below) wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` / `RP_ELIGIBLE` setup lines).
 
-When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor`, `host` (plus `none`). Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor`, `claude`, `host` (plus `none`). Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
 
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|copilot|cursor|host|none` argument
-2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`) OR spec form (`codex:<model>:xhigh`, `copilot:<model>`, `cursor:<model>`); `host` is bare-only (`host:<model>` is rejected)
+1. `--review=rp|codex|copilot|cursor|claude|host|none` argument
+2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `claude`, `host`, `none`) OR spec form (`codex:<model>:xhigh`, `copilot:<model>`, `cursor:<model>`, `claude:<model>:<effort>`); `host` is bare-only (`host:<model>` is rejected)
 3. `.flow/config.json` → `review.backend` (same bare / spec forms)
 4. **Error** - no auto-detection
 
@@ -46,6 +47,7 @@ Check $ARGUMENTS for:
 - `--review=codex` or `--review codex` → use codex
 - `--review=copilot` or `--review copilot` → use copilot
 - `--review=cursor` or `--review cursor` → use cursor
+- `--review=claude` or `--review claude` → use claude
 - `--review=host` or `--review host` → use host
 - `--review=none` or `--review none` → skip review
 
@@ -61,7 +63,7 @@ The per-backend summary (models, env vars, `--spec` forms) and the `backend[:mod
 
 ## Critical Rules
 
-Per-backend critical rules live in the backend file you route to (`workflow-codex.md`, `workflow-copilot.md`, `workflow-cursor.md`, `workflow-rp.md`) — each opens with its own **Critical rules** section. The host safety invariant and the all-backends rules stay here because they gate routing itself.
+Per-backend critical rules live in the backend file you route to (`workflow-codex.md`, `workflow-copilot.md`, `workflow-cursor.md`, `workflow-claude.md`, `workflow-rp.md`) — each opens with its own **Critical rules** section. The host safety invariant and the all-backends rules stay here because they gate routing itself.
 
 **For host backend (fn-123 R5 / fn-126):**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
@@ -80,7 +82,7 @@ The three **hard invariants** (never self-declare SHIP, never mix backends, neve
 ## Input
 
 Arguments: $ARGUMENTS
-Format: `<spec-id> [--review=rp|codex|copilot|cursor|host|none]`
+Format: `<spec-id> [--review=rp|codex|copilot|cursor|claude|host|none]`
 
 - Spec ID - Required, e.g. `fn-1` or `fn-22-53k`
 - `--review` - Optional backend override
@@ -191,7 +193,7 @@ if [[ -n "$TERMINAL_STATUS" \
   # Bind evidence requirements to the durable attempt being resumed, never
   # the backend selected for this invocation (which may have changed).
   case "$ATTEMPT_BACKEND" in
-    codex|copilot|cursor|host) RECEIPT_REQUIRED=true ;;
+    codex|copilot|cursor|claude|host) RECEIPT_REQUIRED=true ;;
     rp)
       [[ "$VERDICT" == "SHIP" \
         && ( -n "${REVIEW_RECEIPT_PATH:-}" || -f "$RECEIPT_RECOVERY" ) ]] \

@@ -1,10 +1,10 @@
 usage: flowctl.py [-h]
-                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-route,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
+                  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-route,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record} ...
 
 flowctl - CLI for .flow/ task tracking
 
 positional arguments:
-  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-route,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
+  {init,setup-block,detect,status,config,tracker,sync,pilot-log,pilot,review-backend,review-findings,review-rounds,review-route,review-artifact,memory,prospect,chart,anchor,brief,repo-map,prime,glossary,criteria,strategy,spec,scope,pr-cognitive-aid,task,dep,show,specs,tasks,list,cat,usage,ready,next,start,done,block,validate,triage-skip,gate,checkpoint,rp,codex,copilot,cursor,claude,review-deep-auto,review-walkthrough-defer,review-walkthrough-record}
     init                Initialize .flow/ directory
     setup-block         Apply or resolve the tracked Flow-Next docs block
     detect              Check if .flow/ exists
@@ -78,6 +78,7 @@ positional arguments:
     codex               Codex CLI helpers
     copilot             GitHub Copilot CLI helpers
     cursor              Cursor (cursor-agent CLI) helpers
+    claude              Claude Code (claude CLI) helpers
     review-deep-auto    Print deep passes that auto-enable for a changed-file
                         list (fn-32.2)
     review-walkthrough-defer

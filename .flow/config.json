@@ -29,6 +29,7 @@
     "gateClasses": []
   },
   "pipeline": {
+    "chainStages": "off",
     "qa": "off"
   },
   "planSync": {
@@ -36,7 +37,7 @@
     "enabled": false
   },
   "review": {
-    "backend": "codex",
+    "backend": "codex:gpt-6-astra:high",
     "maxIterations": 8
   },
   "scouts": {

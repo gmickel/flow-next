@@ -2,7 +2,7 @@
 
 > **Loaded only when THIS task's resolved review mode is `host`** (worker flag
 > `REVIEW_MODE: host-deferred`, phases.md 3c). Every other backend (`none`, `rp`,
-> `codex`, `copilot`, `cursor`) keeps the worker-owned review dispatch + worker-owned
+> `codex`, `copilot`, `cursor`, `claude`) keeps the worker-owned review dispatch + worker-owned
 > `flowctl done` unchanged and never reads this file.
 
 Contents:

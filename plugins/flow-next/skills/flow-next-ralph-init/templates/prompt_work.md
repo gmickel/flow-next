@@ -14,7 +14,7 @@ The full spec is also exported as `FLOW_REVIEW_BACKEND` for flowctl to resolve m
 ```
 /flow-next:work {{TASK_ID}} --branch={{BRANCH_MODE_EFFECTIVE}} --review={{WORK_REVIEW_BACKEND}}
 ```
-`--review` takes the bare backend name (`rp`, `codex`, `copilot`, `cursor`, `none`). If
+`--review` takes the bare backend name (`rp`, `codex`, `copilot`, `cursor`, `claude`, `none`). If
 WORK_REVIEW was spec form (e.g. `copilot:gpt-6-astra:high` or `cursor:gpt-5.6-sol-high`), the exported
 `FLOW_REVIEW_BACKEND` carries the full spec through to flowctl which resolves
 model + effort automatically (cursor folds effort into the model name — no `:effort`).
@@ -23,11 +23,12 @@ When `--review=rp`, the worker subagent invokes `/flow-next:impl-review` interna
 When `--review=codex`, the worker uses `flowctl codex impl-review` for review.
 When `--review=copilot`, the worker uses `flowctl copilot impl-review` for review.
 When `--review=cursor`, the worker uses `flowctl cursor impl-review` for review.
+When `--review=claude`, the worker uses `flowctl claude impl-review` for review.
 The impl-review skill handles review coordination and requires `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN</verdict>` from reviewer.
 NEEDS_HUMAN means a design judgment needs human authority, never a soft NEEDS_WORK;
 MAJOR_RETHINK remains "the approach is wrong" and requires redesign.
 Do NOT improvise review prompts - the skill has the correct format.
-Never call `copilot` or `cursor-agent` directly; never pass `--continue` — session continuity is via stored UUID passed to `--resume=<uuid>`.
+Never call `copilot`, `cursor-agent`, or `claude` directly; never pass `--continue` — session continuity is via stored UUID passed to `--resume=<uuid>`.
 
 **Step 2: Verify task done** (AFTER skill returns)
 ```bash
@@ -35,7 +36,7 @@ scripts/ralph/flowctl show {{TASK_ID}} --json
 ```
 If status != `done`, output `<promise>RETRY</promise>` and stop.
 
-**Step 3: Write impl receipt** (MANDATORY if WORK_REVIEW_BACKEND=rp, codex, copilot, or cursor)
+**Step 3: Write impl receipt** (MANDATORY if WORK_REVIEW_BACKEND=rp, codex, copilot, cursor, or claude)
 For rp mode:
 ```bash
 mkdir -p "$(dirname '{{REVIEW_RECEIPT_PATH}}')"

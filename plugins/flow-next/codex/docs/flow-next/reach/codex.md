@@ -25,6 +25,8 @@ When a tier cannot be honored on the spawn path, the work runs on the session mo
 
 This harness serves GPT-6 Astra (`gpt-6-astra`), released 2026-09-05 and strong at planning, coding, and reviewing. That is one observation on one date; ask the CLI for its current list before pinning the identifier in a shell-out.
 
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) is the packaged Claude-family verdict from this harness: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), with the same receipt, ladder and fix loop as the `codex` backend - a cross-family review whenever the session model that wrote the diff is another family (this harness's own models are), same-family if a Claude model wrote it.
+
 ## Discover, then invoke
 
 Ask the CLI which models it offers immediately before invoking one, rather than trusting a value stored earlier - that habit is what makes an unreachable identifier a one-line correction instead of a failed run.

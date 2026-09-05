@@ -9,7 +9,7 @@
 A run that asks both blocks, or continues before an answer, has broken this. Parse
 naturally — the user may reply terse or ramble via voice.
 
-## REVIEW_BACKEND is rp, codex, copilot, cursor, host, or none (already configured)
+## REVIEW_BACKEND is rp, codex, copilot, cursor, claude, host, or none (already configured)
 
 Only ask the branch question. Show override hint:
 
@@ -18,7 +18,7 @@ Quick setup: Where to work?
 a) Current branch  b) New branch  c) Isolated worktree
 
 (Reply: "a", "current", or just tell me)
-(Tip: --review=rp|codex|copilot|cursor|host|none overrides configured backend)
+(Tip: --review=rp|codex|copilot|cursor|claude|host|none overrides configured backend)
 ```
 
 ## REVIEW_BACKEND is ASK (not configured)

@@ -13,6 +13,7 @@ selected review backend:**
 - `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
 - `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
+- `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 - `BACKEND=rp` → [workflow-rp.md](workflow-rp.md)
 
@@ -25,8 +26,8 @@ Conduct a John Carmack-level review of spec plans.
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends** (branch on the common workflow's `RP_ELIGIBLE` probe):
 - When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI
-  (copilot), Cursor CLI (cursor), or host-native (`host`)
-- When `RP_ELIGIBLE=0`: Codex CLI, GitHub Copilot CLI, Cursor CLI, or
+  (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`)
+- When `RP_ELIGIBLE=0`: Codex CLI, GitHub Copilot CLI, Cursor CLI, Claude Code CLI, or
   host-native — rp remains accepted explicitly but errors at runtime
 
 ## Preamble — execute common routing exactly once
@@ -44,14 +45,14 @@ input and fails through the rp runtime check.
 
 Priority (first match wins):
 
-1. `--review=rp|codex|copilot|cursor|host|export|none`
+1. `--review=rp|codex|copilot|cursor|claude|host|export|none`
 2. Per-spec `default_review`
 3. `FLOW_REVIEW_BACKEND`
 4. `.flow/config.json` `review.backend`
 5. Error — no auto-detection
 
 Configured values accept `backend[:model[:effort]]`; `cursor` takes a model but
-no effort, and `host`, `rp`, and `none` are bare-only. `export` is a one-off
+no effort, `claude` takes `claude[:<model>[:<effort>]]`, and `host`, `rp`, and `none` are bare-only. `export` is a one-off
 mode, never a configured backend.
 
 ## Common Critical Rules
@@ -134,7 +135,7 @@ When the verdict is `NEEDS_WORK`:
 3. Sync affected task specs when requirements, acceptance, design decisions,
    interfaces, retry/error semantics, or state values changed.
 4. Re-enter the SAME selected backend file's re-review step. Never load or mix
-   another backend. Codex/Copilot/Cursor resume only through a same-mode receipt;
+   another backend. Codex/Copilot/Cursor/Claude resume only through a same-mode receipt;
    host uses a fresh read-only subagent; rp stays in the same chat.
 5. Repeat until `SHIP`, `MAJOR_RETHINK`, backend failure, or deterministic cap.
 

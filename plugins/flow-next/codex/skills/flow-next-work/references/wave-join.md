@@ -64,7 +64,7 @@ N+1's worker (isolated workspace, wave rules apply) before or while running
 review(N) — instead of leaving the reviewer as the only live agent. This
 schedule point exists for review modes the CONDUCTOR runs after the worker
 returns (`host` / host-deferred); with worker-owned review backends (rp,
-codex, copilot, cursor) the review finishes inside the worker, so there is
+codex, copilot, cursor, claude) the review finishes inside the worker, so there is
 nothing to overlap post-return — concurrency there comes from the wave
 dispatch rule itself. The
 overlapped worker is a ONE-TASK WAVE: it returns the parallel-wave handover

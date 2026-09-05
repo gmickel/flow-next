@@ -2064,7 +2064,7 @@ class TestReviewFanout(unittest.TestCase):
         # an argparse invalid-choice error before any handler runs (the old
         # in-handler registry re-check was unreachable and has been removed —
         # host review r1).
-        for backend in ("copilot", "cursor"):
+        for backend in ("copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
                 code, out, err = self._run(
                     backend, "impl-review-fanout", "--base", "HEAD~1", "--json"

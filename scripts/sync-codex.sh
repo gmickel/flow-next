@@ -552,7 +552,7 @@ its backend rather than the project default. `none` still skips review.
 TASK_ID: fn-X.Y
 SPEC_ID: fn-X
 FLOWCTL: $FLOWCTL
-REVIEW_MODE: none|rp|codex|copilot|cursor|host-deferred
+REVIEW_MODE: none|rp|codex|copilot|cursor|claude|host-deferred
 RALPH_MODE: true|false
 PARALLEL_WAVE: true|false
 WORKSPACE: <isolated mutable workspace>

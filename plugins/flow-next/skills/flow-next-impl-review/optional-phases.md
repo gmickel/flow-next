@@ -179,6 +179,14 @@ for pass in $SELECTED_PASSES; do
         --receipt "$RECEIPT_PATH" \
         --json
       ;;
+    claude)
+      # Resumes the primary session from the receipt; writes no diff file.
+      $FLOWCTL claude deep-pass \
+        --pass "$pass" \
+        --primary-findings "$PRIMARY_FINDINGS" \
+        --receipt "$RECEIPT_PATH" \
+        --json
+      ;;
     rp)
       # RP: same-chat session continuity is automatic. Render the
       # pass-specific prompt from deep-passes.md (inject primary
@@ -314,6 +322,13 @@ case "$BACKEND" in
     ;;
   cursor)
     VALIDATOR_JSON="$($FLOWCTL cursor validate \
+      --findings-file "$FINDINGS_FILE" \
+      --receipt "$RECEIPT_PATH" \
+      --json 2>&1)"
+    ;;
+  claude)
+    # Resumes the primary session from the receipt; writes no diff file.
+    VALIDATOR_JSON="$($FLOWCTL claude validate \
       --findings-file "$FINDINGS_FILE" \
       --receipt "$RECEIPT_PATH" \
       --json 2>&1)"

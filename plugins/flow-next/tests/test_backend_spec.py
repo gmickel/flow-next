@@ -62,12 +62,28 @@ BACKEND_REGISTRY = flowctl.BACKEND_REGISTRY
 class TestRegistryShape(unittest.TestCase):
     """Registry contents are the contract downstream code depends on."""
 
-    def test_exactly_six_backends(self) -> None:
+    def test_exactly_seven_backends(self) -> None:
         # cursor added in fn-74 (model-yes / effort-no shape).
         # host added in fn-123 (non-executable selection sentinel; no model/effort).
+        # claude added in fn-221 (model-yes / effort-yes, the CLI's own set).
         self.assertEqual(
             sorted(BACKEND_REGISTRY.keys()),
-            ["codex", "copilot", "cursor", "host", "none", "rp"],
+            ["claude", "codex", "copilot", "cursor", "host", "none", "rp"],
+        )
+
+    def test_claude_default_model(self) -> None:
+        # fn-221 / fn-76: the default IS the ranking top; ids probed 2026-09-05.
+        reg = BACKEND_REGISTRY["claude"]
+        self.assertEqual(reg["default_model"], reg["models"][0])
+        self.assertEqual(reg["default_model"], "claude-fable-5-1")
+        self.assertEqual(reg["default_effort"], "high")
+
+    def test_claude_effort_set(self) -> None:
+        # The claude CLI's own --effort set (2.1.260): five values, no
+        # ``none`` / ``minimal``.
+        self.assertEqual(
+            BACKEND_REGISTRY["claude"]["efforts"],
+            {"low", "medium", "high", "xhigh", "max"},
         )
 
     def test_cursor_effort_is_none(self) -> None:
@@ -184,7 +200,7 @@ class TestRegistryShape(unittest.TestCase):
         # fn-76: every model-bearing backend's ``models`` is an ordered list
         # (the quality ranking), not a set — order is load-bearing for the
         # fallback ladder.
-        for backend in ("codex", "copilot", "cursor"):
+        for backend in ("codex", "copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
                 self.assertIsInstance(
                     BACKEND_REGISTRY[backend]["models"], list
@@ -195,7 +211,7 @@ class TestRegistryShape(unittest.TestCase):
         # entry, so the happy-path dispatch argv is byte-identical to a hardcoded
         # default. If these ever diverge, the happy path stops dispatching the
         # strongest model.
-        for backend in ("codex", "copilot", "cursor"):
+        for backend in ("codex", "copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
                 reg = BACKEND_REGISTRY[backend]
                 self.assertEqual(reg["default_model"], reg["models"][0])
@@ -361,6 +377,26 @@ class TestParseInvalid(unittest.TestCase):
             BackendSpec.parse("copilot:gpt-5.4:minimal")
         with self.assertRaisesRegex(ValueError, "Unknown effort for copilot"):
             BackendSpec.parse("copilot:gpt-5.4:none")
+
+    def test_claude_full(self) -> None:
+        # fn-221 R1: claude:<model>:<effort> resolves through the registry.
+        s = BackendSpec.parse("claude:claude-opus-5:xhigh")
+        self.assertEqual(s, BackendSpec("claude", "claude-opus-5", "xhigh"))
+        self.assertTrue(s.model_explicit)
+
+    def test_claude_unknown_effort_names_the_five(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unknown effort for claude") as cm:
+            BackendSpec.parse("claude:claude-opus-5:ultra")
+        for effort in sorted(BACKEND_REGISTRY["claude"]["efforts"]):
+            self.assertIn(f"'{effort}'", str(cm.exception))
+        self.assertNotIn("'minimal'", str(cm.exception))
+
+    def test_claude_unknown_model_warns_and_accepts(self) -> None:
+        err = io.StringIO()
+        with redirect_stderr(err):
+            s = BackendSpec.parse("claude:claude-nova-9")
+        self.assertEqual(s, BackendSpec("claude", "claude-nova-9", None))
+        self.assertIn("not in flow-next's claude ranking", err.getvalue())
 
     def test_cursor_rejects_effort(self) -> None:
         # Cursor has no effort axis — ``cursor:<model>:<effort>`` must raise.
@@ -1300,6 +1336,52 @@ class TestResolveReviewSpec(unittest.TestCase):
             self.assertEqual(out.model, "gpt-5.3-codex")
 
 
+class TestClaudeReviewSpecResolution(unittest.TestCase):
+    """fn-221: ``_resolve_claude_review_spec`` mirrors the cursor strictness.
+
+    Claude model ids do not cross over, so a foreign ``--spec`` exits 2 and a
+    foreign resolved default (config / per-task) is coerced to the claude
+    default, while a ``claude:<model>:<effort>`` pin from any source is honoured.
+    """
+
+    def setUp(self) -> None:
+        self._env = os.environ.copy()
+        for key in list(os.environ.keys()):
+            if key.startswith("FLOW_"):
+                os.environ.pop(key, None)
+
+    def tearDown(self) -> None:
+        os.environ.clear()
+        os.environ.update(self._env)
+
+    def test_explicit_foreign_spec_exits_2(self) -> None:
+        args = argparse.Namespace(spec="codex:gpt-5.5:high", json=False)
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            flowctl._resolve_claude_review_spec(args, None)
+        self.assertEqual(cm.exception.code, 2)
+
+    def test_configured_cursor_default_coerces_to_claude_default(self) -> None:
+        args = argparse.Namespace(spec=None, json=False)
+        cursor_default = BackendSpec("cursor", "gpt-5.6-sol-high", None)
+        with mock.patch.object(
+            flowctl, "resolve_review_spec", return_value=cursor_default
+        ):
+            out = flowctl._resolve_claude_review_spec(args, None)
+        self.assertEqual(out.backend, "claude")
+        self.assertEqual(out.model, BACKEND_REGISTRY["claude"]["models"][0])
+        self.assertEqual(out.effort, BACKEND_REGISTRY["claude"]["default_effort"])
+        self.assertFalse(out.model_explicit)
+
+    def test_per_task_claude_pin_is_honoured(self) -> None:
+        args = argparse.Namespace(spec=None, json=False)
+        pinned = BackendSpec("claude", "claude-opus-5", "xhigh")
+        with mock.patch.object(
+            flowctl, "resolve_review_spec", return_value=pinned
+        ):
+            out = flowctl._resolve_claude_review_spec(args, None)
+        self.assertEqual(out, BackendSpec("claude", "claude-opus-5", "xhigh"))
+
+
 # --- Per-task review spec actually runs that model (fn-28.3 integration) ---
 
 
@@ -1853,7 +1935,7 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
             "extract_review",
             "has_sandbox",
         }
-        for backend in ("codex", "copilot", "cursor"):
+        for backend in ("codex", "copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
                 reg = BACKEND_REGISTRY[backend]
                 for key in required:

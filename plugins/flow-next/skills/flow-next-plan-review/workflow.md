@@ -29,8 +29,8 @@ fi
 
 Resolve the canonical spec id from the positional argument before backend
 routing. Parse `--review=<mode>` / `--review <mode>` from `$ARGUMENTS` first.
-Accepted explicit modes: `rp`, `codex`, `copilot`, `cursor`, `host`, `export`,
-`none`.
+Accepted explicit modes: `rp`, `codex`, `copilot`, `cursor`, `claude`, `host`,
+`export`, `none`.
 
 When an explicit mode exists, set `BACKEND` directly and do not call
 `review-backend`. Otherwise:
@@ -72,7 +72,7 @@ This re-anchor is mandatory before every fix cycle. A user-edited spec is the
 source of truth; never review or restore a stale generated/checkpoint copy
 unless recovering after context compaction.
 
-For Codex/Copilot/Cursor, derive reviewer code anchors from the current spec in
+For Codex/Copilot/Cursor/Claude, derive reviewer code anchors from the current spec in
 the selected backend's single atomic dispatch fence. For host and rp, provide
 the same current spec/task material and review focus.
 
@@ -85,6 +85,7 @@ Read exactly one:
 | `codex` | [workflow-codex.md](workflow-codex.md) |
 | `copilot` | [workflow-copilot.md](workflow-copilot.md) |
 | `cursor` | [workflow-cursor.md](workflow-cursor.md) |
+| `claude` | [workflow-claude.md](workflow-claude.md) |
 | `host` | [workflow-host.md](workflow-host.md) |
 | `rp` | [workflow-rp.md](workflow-rp.md) |
 

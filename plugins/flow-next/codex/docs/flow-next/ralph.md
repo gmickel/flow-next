@@ -227,7 +227,7 @@ Driver recipes:
 
 **The full pipeline** runs pilot and land **concurrently** - pilot builds spec N while land babysits spec N−1's PR. Same-session (two `/loop` jobs, ticks serialize) works for small backlogs; the real assembly line is **two instances** (Claude Code / Codex), each in **its own clone or git worktree** - both loops mutate the working tree (pilot checks out spec branches, land checks out PR branches for CI fixes), so two loops sharing one checkout would trip each other's dirty-tree guards. GitHub is the shared state: land pushes the spec close after merging, pilot pulls the base branch before planning, and the strike ledgers are per-clone by design. The loops never contend: land touches only specs with all tasks done (in-flight specs stay pilot's), and pilot skips specs that already have an open PR.
 
-The `rp` review backend runs headlessly through the CE-first CLI ladder as long as RepoPrompt CE is running on the same Mac (cold start: `open -ga "RepoPrompt CE"`; a stopped app fails fast). Discontinued Classic remains only the final executable fallback. On machines without the app (remote/CI), use `--review=codex`, `--review=copilot`, `--review=cursor`, or `--review=none`.
+The `rp` review backend runs headlessly through the CE-first CLI ladder as long as RepoPrompt CE is running on the same Mac (cold start: `open -ga "RepoPrompt CE"`; a stopped app fails fast). Discontinued Classic remains only the final executable fallback. On machines without the app (remote/CI), use `--review=codex`, `--review=copilot`, `--review=cursor`, `--review=claude`, or `--review=none`.
 
 ---
 
@@ -507,9 +507,9 @@ Edit `scripts/ralph/config.env`:
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `PLAN_REVIEW` | `rp`, `codex`, `none` | - | Plan review backend |
-| `WORK_REVIEW` | `rp`, `codex`, `none` | - | Impl review backend |
-| `COMPLETION_REVIEW` | `rp`, `codex`, `none` | - | Completion review backend |
+| `PLAN_REVIEW` | `rp`, `codex`, `copilot`, `cursor`, `claude`, `none` | - | Plan review backend |
+| `WORK_REVIEW` | `rp`, `codex`, `copilot`, `cursor`, `claude`, `none` | - | Impl review backend |
+| `COMPLETION_REVIEW` | `rp`, `codex`, `copilot`, `cursor`, `claude`, `none` | - | Completion review backend |
 | `REQUIRE_PLAN_REVIEW` | `0`, `1` | `0` | Block work until plan approved |
 
 ### Branches
