@@ -68,3 +68,4 @@ stage: impl-review - ran [codex fan-out round 1 NEEDS_WORK (2 merged findings) -
 - Commits: 362ae5a324b5a4e53c9e77bc8ead11343090159e, 8a3e58178898e71900fc7777025260fc3f7338df
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_model_resolution test_backend_spec test_review_prompt_constraints -q (236 tests OK; baseline 213 OK), uvx ruff@0.16.0 check plugins/flow-next/scripts/flowctl.py plugins/flow-next/tests (clean; baseline clean), python3 scripts/run_tests_parallel.py (RED: 29 failures in test_install_codex_legacy_cleanup, test_install_opencode, test_tracker_distribution, test_flow_config_schema, test_flow_config_schema_drift, test_startup_bootstrap - all tracker-manifest / config-schema / codex-mirror regeneration owned by fn-221.2 (flowctl_tracker, schema) and .3/.4 (mirror); outside this task's Touches; no gate receipt minted)
 - PRs:
+stage: plan-sync - skipped(config: planSync.enabled != true)
