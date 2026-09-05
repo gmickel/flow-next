@@ -55,3 +55,4 @@ stage: impl-review - ran [codex fan-out round 1 NEEDS_WORK (2 merged findings: p
 - Commits: 29958e4f21daca032eb14860b6bd44f7a553240b, d593fd7a39e7c693a0f9d5cef05aaaff7139ba3a, 39bd067296beab7e427c679d47c56ffc93f62d1e
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_skill_prose_diet test_foreground_rule_fences test_backend_spec test_flowctl_surface test_review_fanout_prose_contract test_setup_cursor_host test_setup_grok_host test_skill_prose_flowctl_surface test_review_route test_claude_review_commands test_ralph_guard test_ralph_docs_truth test_work_reached_path_routes -q (404 OK; baseline 266 OK), ./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git status --short plugins/flow-next/codex (clean, guards green), python3 scripts/run_tests_parallel.py (204 files, 4775 tests, OK; receipt .flow/tmp/green-receipts/39bd0672-unittest.json), uvx ruff@0.16.0 check . (clean)
 - PRs:
+stage: plan-sync - skipped(config: planSync.enabled != true)
