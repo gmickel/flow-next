@@ -392,6 +392,31 @@ class ClaudeFailures(unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertFalse(receipt.exists())
 
+    def test_session_passes_reject_foreign_spec_before_spawn(self):
+        # Review round 1 finding: the optional passes share the primary
+        # commands' strict grammar - a foreign model id never reaches the CLI.
+        with _flow_repo() as (repo, base):
+            receipt = repo / "receipt.json"
+            receipt.write_text(json.dumps({
+                "type": "impl_review", "id": TASK_ID, "mode": "claude",
+                "verdict": "NEEDS_WORK", "session_id": SID,
+            }), encoding="utf-8")
+            findings = repo / "findings.jsonl"
+            findings.write_text(json.dumps({"id": "f1", "description": "x"}) + "\n",
+                                encoding="utf-8")
+            for argv in (
+                ("claude", "deep-pass", "--pass", "adversarial"),
+                ("claude", "validate", "--findings-file", str(findings)),
+            ):
+                with self.subTest(command=argv[1]), _fake_claude() as calls:
+                    code, out, _err = _run_cli(
+                        *argv, "--receipt", str(receipt), "--json",
+                        "--spec", "codex:gpt-5.5:high",
+                    )
+                    self.assertEqual(code, 2)
+                    self.assertIn("claude:<model>[:<effort>]", json.loads(out)["error"])
+                    self.assertEqual(calls, [])
+
 
 if __name__ == "__main__":
     unittest.main()

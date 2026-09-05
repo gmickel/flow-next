@@ -38158,13 +38158,21 @@ def _resolve_session_pass_spec(
     defaults are rewritten; a stored per-task/epic review: pin is left alone
     (validate/deep always shell the named backend CLI regardless).
     """
-    if backend == "cursor" and spec_arg:
+    # Backends whose model ids do not cross over reject a foreign --spec here
+    # exactly as their primary review commands do (cursor: fn-74; claude:
+    # fn-221 - a resumed pass with `--model gpt-…` hands the CLI an id it
+    # cannot serve).
+    strict_grammar = {
+        "cursor": "cursor:<model>",
+        "claude": "claude:<model>[:<effort>]",
+    }
+    if backend in strict_grammar and spec_arg:
         try:
             parsed = BackendSpec.parse(spec_arg)
-            if parsed.backend != "cursor":
+            if parsed.backend != backend:
                 error_exit(
-                    "cursor commands require a cursor:<model> --spec "
-                    f"(got '{parsed.backend}')",
+                    f"{backend} commands require a {strict_grammar[backend]} "
+                    f"--spec (got '{parsed.backend}')",
                     use_json=use_json,
                     code=2,
                 )
