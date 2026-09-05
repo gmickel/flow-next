@@ -135,8 +135,10 @@ def merge(text: str, source: Path, max_threads: int) -> str:
         for key in name:
             before = before[key]
             after = after[key]
-        if not isinstance(before, dict):
-            raise ValueError('Unsupported array table in config; original preserved')
+        if isinstance(before, list):
+            if not isinstance(after, list) or any(item not in after for item in before):
+                raise ValueError('Unrelated array table would change; original preserved')
+            continue
         allowed = {'max_threads', 'max_concurrent_threads_per_session'} if name == ('agents',) else set()
         if name == ('features',):
             allowed = {'hooks', 'codex_hooks', 'multi_agent'}

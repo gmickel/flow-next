@@ -43,6 +43,12 @@ class ConfigMergeTests(unittest.TestCase):
         out = mod.merge(mod.BEGIN + '\n' + user + ROLE + mod.END + '\n', SOURCE, 12)
         self.assertIn(user, out)
 
+    def test_skill_config_array_tables_preserved(self):
+        text = '[[skills.config]]\npath = "/skills/one"\nenabled = false\n[[skills.config]]\npath = "/skills/two"\nenabled = true\n'
+        out = mod.merge(text, SOURCE, 12)
+        self.assertEqual(tomllib.loads(out)['skills'], tomllib.loads(text)['skills'])
+        self.assertEqual(mod.merge(out, SOURCE, 12), out)
+
     def test_marker_inside_user_string_cannot_silently_change(self):
         text = '[custom]\nnote = """\n' + mod.END + '\n"""\n'
         with self.assertRaises(ValueError):
