@@ -38,7 +38,7 @@ $FLOWCTL claude completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|NEEDS_HUMAN`.**
 
-The runner invokes `claude -p --output-format json --permission-mode dontAsk --tools Read Grep Glob --strict-mcp-config` with `cwd=repo_root`, the prompt on stdin, and `--model` / `--effort` from the resolved spec. `Read`, `Grep`, `Glob` are the only tools that exist for the child (no Bash, no write tool, no MCP tools); the reviewed diff is materialised to `.flow/tmp/claude-review/<receipt-id>-<base7>-<head7>.diff` and named in the prompt, so the reviewer reads it with `Read` instead of running git. At the ladder floor the runner omits both `--model` and `--effort`.
+The runner invokes `claude -p --output-format json --permission-mode dontAsk --tools Read Grep Glob --strict-mcp-config` with `cwd=repo_root`, the prompt on stdin, and `--model` / `--effort` from the resolved spec. `Read`, `Grep`, `Glob` are the only tools that exist for the child (no Bash, no write tool, no MCP tools); the reviewed diff is materialised to `.flow/tmp/claude-review/<receipt-id>-<base7>-<head7>.diff` and named in the prompt, so the reviewer reads it with `Read` instead of running git. At the ladder floor the runner omits both `--model` and `--effort` and the receipt records `"effort": null`.
 
 ## Step 3: Handle Verdict
 
@@ -54,7 +54,7 @@ If `VERDICT=NEEDS_WORK`:
 Receipt is written automatically by `flowctl claude completion-review` when `--receipt` provided.
 Format: `{"type":"completion_review","id":"<spec-id>","mode":"claude","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"claude:<model>:<effort>","timestamp":"..."}`
 
-The `spec` field is the canonical round-trippable form; `model` + `effort` are the resolved values (`effort` absent when the ladder floored). `mode` plus `model` name the family — read them for the same-family advisory above.
+The `spec` field is the canonical round-trippable form; `model` + `effort` are the resolved values (`effort` is `null` when the ladder floored). `mode` plus `model` name the family — read them for the same-family advisory above.
 
 When `.flow/criteria.md` exists, the prompt includes the project's global acceptance criteria and the receipt may carry the additive `criteria: [{id, status, note?}]` field (absent when the reviewer output has no parseable `## Global criteria` section).
 

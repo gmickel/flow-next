@@ -29,8 +29,8 @@ fi
 
 Resolve the canonical spec id from the positional argument before backend
 routing. Parse `--review=<mode>` / `--review <mode>` from `$ARGUMENTS` first.
-Accepted explicit modes: `rp`, `codex`, `copilot`, `cursor`, `host`, `export`,
-`none`.
+Accepted explicit modes: `rp`, `codex`, `copilot`, `cursor`, `claude`, `host`,
+`export`, `none`.
 
 When an explicit mode exists, set `BACKEND` directly and do not call
 `review-backend`. Otherwise:

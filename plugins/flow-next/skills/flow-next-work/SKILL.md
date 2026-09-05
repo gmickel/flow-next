@@ -89,7 +89,7 @@ Check configured backend:
 ```bash
 REVIEW_BACKEND=$($FLOWCTL review-backend)
 ```
-Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`host`/`none` (configured).
+Returns: `ASK` (not configured), or `rp`/`codex`/`copilot`/`cursor`/`claude`/`host`/`none` (configured).
 
 ### Option Parsing (skip questions if found in arguments)
 

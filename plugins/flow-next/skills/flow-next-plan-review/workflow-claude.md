@@ -36,7 +36,7 @@ status, cumulative rounds, and receipt writes. Claude invokes
 `claude -p --output-format json --permission-mode dontAsk --tools Read Grep Glob --strict-mcp-config`
 in the repo root with the prompt on stdin; the reviewer holds only the three
 read tools (no Bash, no write tool, no MCP). The receipt carries `model` and
-`effort` (`effort` absent when the ladder floored).
+`effort` (`effort` is `null` when the ladder floored).
 
 Carry the verdict directly into SKILL.md's shared Fix Loop. The first call
 omits a resume id; only a persisted same-mode `session_id` enables continuation

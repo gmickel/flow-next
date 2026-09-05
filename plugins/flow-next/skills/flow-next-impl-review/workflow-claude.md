@@ -59,7 +59,7 @@ $FLOWCTL claude impl-review "${args[@]}"
 
 **Output includes `VERDICT=SHIP|NEEDS_WORK|MAJOR_RETHINK|NEEDS_HUMAN`.**
 
-The runner invokes `claude -p --output-format json --permission-mode dontAsk --tools Read Grep Glob --strict-mcp-config` with `cwd=repo_root`, the prompt on **stdin** (no argv transport cap), and `--model` / `--effort` from the resolved spec. Read-only by construction: `Read`, `Grep`, `Glob` are the only tools that exist for the child (no Bash, no Edit, no Write, no MCP tools), so the reviewer cannot run `git diff` itself — every primary dispatch materialises the reviewed range to `.flow/tmp/claude-review/<receipt-id>-<base7>-<head7>.diff` (gitignored) and the prompt names that path and the range; the reviewer reads it with `Read`. At the resolution ladder's floor the runner omits both `--model` and `--effort` and the receipt records no effort.
+The runner invokes `claude -p --output-format json --permission-mode dontAsk --tools Read Grep Glob --strict-mcp-config` with `cwd=repo_root`, the prompt on **stdin** (no argv transport cap), and `--model` / `--effort` from the resolved spec. Read-only by construction: `Read`, `Grep`, `Glob` are the only tools that exist for the child (no Bash, no Edit, no Write, no MCP tools), so the reviewer cannot run `git diff` itself — every primary dispatch materialises the reviewed range to `.flow/tmp/claude-review/<receipt-id>-<base7>-<head7>.diff` (gitignored) and the prompt names that path and the range; the reviewer reads it with `Read`. At the resolution ladder's floor the runner omits both `--model` and `--effort` and the receipt records `"effort": null`.
 
 ## Step 3: Handle Verdict
 
@@ -75,7 +75,7 @@ If `VERDICT=NEEDS_WORK`:
 Receipt is written automatically by `flowctl claude impl-review` when `--receipt` provided.
 Format: `{"type":"impl_review","id":"<id>","mode":"claude","verdict":"<verdict>","session_id":"<uuid>","model":"<model>","effort":"<effort>","spec":"claude:<model>:<effort>","timestamp":"..."}`
 
-The `spec` field is the canonical round-trippable form; `model` + `effort` are the resolved values (`effort` is absent when the ladder floored). `mode` plus `model` name the family — read them for the same-family advisory above.
+The `spec` field is the canonical round-trippable form; `model` + `effort` are the resolved values (`effort` is `null` when the ladder floored). `mode` plus `model` name the family — read them for the same-family advisory above.
 
 Session resume guard: re-review only resumes the claude session when the existing receipt at `$RECEIPT_PATH` has `mode == "claude"`. The first call omits `--resume` and captures the CLI's generated `session_id`; continuations pass `--resume <session_id>` using that persisted id. Session transcripts live in the CLI's own session store on disk. A cross-backend switch (e.g., codex receipt at the same path) starts a fresh session.
 
