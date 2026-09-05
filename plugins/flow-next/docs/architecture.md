@@ -2,7 +2,7 @@
 
 How flow-next stores state, how the spec-first task model works, and the separation of concerns between metadata and narrative content.
 
-The design tenet behind all of it: **everything lives in the repo**. Specs, tasks, memory, receipts are plain markdown + JSON under `.flow/` - in git, code-reviewable, diff-able, fork-survivable. No external services, no global config, no database. Uninstall is `rm -rf .flow/`.
+Specs, tasks, memory, and receipts live as Markdown and JSON under `.flow/`, where Git can preserve and review them. The installed plugin supplies the skills and CLI. Your coding agent and providers run the models; your Git host and CI handle pull requests and checks. Flow-Next needs no hosted service of its own. [Uninstall](troubleshooting.md#uninstall) removes the plugin while preserving project history.
 
 ## Contents
 

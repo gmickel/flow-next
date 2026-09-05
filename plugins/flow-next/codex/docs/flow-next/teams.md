@@ -35,6 +35,19 @@ The vocabulary on this page - *handover objects*, *Delegate / Review / Own*, *li
 
 ---
 
+## Try it on one team change
+
+Choose one repository and one change the team already understands. Keep the normal board, reviewers, and merge policy.
+
+| Person | What they open | What they do |
+|---|---|---|
+| Product owner | The spec in the repository, tracker mirror, or optional HTML view | Review the goal, acceptance criteria, and non-goals |
+| Engineer | The same spec, then its task breakdown | Add constraints, check the approach, and start the implementation |
+| Implementing agent | The spec, current task, and repository | Build and verify the change; leave evidence |
+| Reviewer | The pull request | Follow acceptance coverage, inspect the important changes, and check the evidence |
+
+At the end, ask whether the spec surfaced a missed decision, whether review found useful defects, and whether the PR reduced investigation work. Use that result to decide what to keep for the next change.
+
 ## Lifecycle map
 
 The starter-kit methodology defines a nine-step lifecycle from rough idea to merged code. Each step has a concrete Flow-Next surface:
@@ -440,21 +453,15 @@ What `.flow/` looks like with N developers in parallel:
 
 ---
 
-## Autonomous mode (Ralph) in a team
+<a id="autonomous-mode-ralph-in-a-team"></a>
 
-Ralph is the *factory of agents* mode - the loop runs overnight against a queued spec, with cross-model review gates and receipt-based proof-of-work. See [docs/ralph.md](ralph.md).
+## Autonomous work in a team
 
-In a team setting:
+Use pilot to advance ready specs toward draft PRs and land to handle CI, review convergence, and the merge policy the team authorized. Your host loop or scheduler drives repeated invocations. Keep overlapping runs in separate clones or isolated workspaces and give each a clear scope.
 
-- **Ralph runs against one spec at a time** on its own branch (typically a worktree to avoid touching the dev's working tree).
-- **`/flow-next:make-pr` is the terminus.** Ralph defaults to `--draft` so the human owns the merge decision. The PR body is the morning-review surface - read the cognitive-aid sections, scan the diff, merge or comment.
-- **Ralph is *not* Spec-as-PR.** The spec must already exist (frozen, reviewed, merged) before Ralph runs against it. Otherwise Ralph drifts on every iteration as the spec moves under it.
-- **Ralph is *not* a replacement for `/work`.** Use Ralph for well-scoped, mechanical-feeling specs (refactors, test backfills, lint cleanup, mechanical migrations). Use `/work` for design-heavy or architectural specs where the human stays in the loop.
-- **Ralph fits the methodology's iterative-loop *vs* factory-of-agents distinction.** Iterative-loop = `/work` with a human at the keyboard. Factory = Ralph. The choice is per-spec, not per-team.
+Humans approve the intent and the conditions for merging. The spec and PR remain the handover surfaces whether the run is supervised or unattended. Use the [orchestration guide](orchestration.md#chaining-the-loops) for driver recipes.
 
-Ralph emits run logs to `scripts/ralph/runs/<run>/` - receipts, verbose logs, the Claude session jsonl. The morning-review workflow lives in [ralph.md - Morning Review Workflow](ralph.md#morning-review-workflow).
-
----
+Ralph is deprecated. Existing installations retain their [reference](ralph.md); new team setups should use pilot and land.
 
 ## Tracker sync & Linear Diffs
 

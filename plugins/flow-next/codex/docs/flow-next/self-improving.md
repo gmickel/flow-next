@@ -7,11 +7,17 @@ flow-next gets better as you use it. Memory, glossary, decision records, strateg
 
 > Subsystem details live in the peer docs - [`memory-schema.md`](memory-schema.md), [`glossary.md`](glossary.md), [`strategy.md`](strategy.md), [`../skills/flow-next-features/SKILL.md`](../../skills/flow-next-features/SKILL.md). This page is the loop map: where each surface is seeded, grown, read, and pruned.
 
+## The next task starts with what this one learned
+
+A review finds an integration mistake and the fix reaches SHIP. The workflow records the cause, correction, and prevention in project memory. When a later task touches that module, the worker can read the relevant lesson before implementing the next change.
+
+The same continuity applies when you change sessions or coding agents. The next agent reads the spec, current task state, decisions, and relevant lessons from the repository. A team member can inspect those files too.
+
 ## The compounding loops
 
 | Surface | Seeded by | Grows through | Read by | Pruned by |
 |---------|-----------|---------------|---------|-----------|
-| **Memory** (`.flow/memory/`) | `flowctl memory init` (opt-in) | Worker auto-capture on NEEDS_WORK → SHIP; Ralph writes the same entries autonomously | `memory-scout` during planning; worker re-anchor before each task | `/flow-next:audit` - Keep / Update / Consolidate / Replace / Delete / Harden per entry |
+| **Memory** (`.flow/memory/`) | Project setup (on by default) | Worker auto-capture on NEEDS_WORK → SHIP; Ralph writes the same entries autonomously | `memory-scout` during planning; worker re-anchor before each task | `/flow-next:audit` - Keep / Update / Consolidate / Replace / Delete / Harden per entry |
 | **Glossary** (`GLOSSARY.md`) | `/flow-next:prime` - repo scan, read-back gated | `/flow-next:interview` + `/flow-next:capture` term adds when new vocabulary surfaces | Plan scouts, worker re-anchor, review prompts (task-relevant terms only) | `/flow-next:audit` Phase 0.5 - staleness + alias creep |
 | **Decision records** (`.flow/memory/knowledge/decisions/`) | - (accrete from work) | `/flow-next:capture --override-strategy` prompts a record; interview + review cycles capture load-bearing choices | `memory-scout` during planning | `/flow-next:audit` - supersede-not-delete (historical trail preserved) |
 | **Strategy** (`STRATEGY.md`) | `/flow-next:strategy` | Drift surfaced read-only by plan / capture / sync - updates stay human-confirmed | `/flow-next:prospect`, plan (`## Strategy Alignment`), interview, capture | `/flow-next:strategy` (the only writer) |

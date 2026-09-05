@@ -9,6 +9,12 @@ This page names the two **operating profiles** those layers serve, prices each l
 
 > Adjacent, not the same: [`../../../README.md`](https://github.com/gmickel/flow-next/blob/main/README.md) is the happy path, and [`pipeline-variations.md`](pipeline-variations.md) owns the **stage** axis - which stages one piece of work runs, chosen by risk and unknowns (the docs-site page *Menu, Not a Rail* is its doctrine). This page is about which **layers** you switch on at all, and what each one costs you to keep on.
 
+## What you pay for
+
+Flow-Next is MIT-licensed and needs no Flow-Next account or hosted service. You supply your coding-agent access and project environment. Planning, implementation, review, and live QA use the agents you configure and count toward their usage limits.
+
+An extra reviewer adds a review pass. A fix adds implementation and re-review. Live QA adds a running application and a drive pass. Choose those capabilities per change or as standing project policy; the sections below describe what each layer does and when to use it.
+
 ## Two profiles
 
 | | **Human-driven** | **Autonomous** |

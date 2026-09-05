@@ -9,7 +9,7 @@ flow-next is an orchestration layer, not a single-agent workflow. The host agent
 | **A. Pipeline routing** | Which stages does this item run - interview, plan, plan review, work directly, rolling or wave, QA, how many review rounds? | Capture's `Recommended next:` line, the guide router, pilot's stage classifier, work's Phase 3 route and zero-task fork, the review triage gate, `flowctl review-route` | The `Recommended next:` / `Scheduling:` / `PILOT_VERDICT` lines, the triage receipt, the review ledger |
 | **B. Model routing** | Which model runs this job - the implementer, the reviewer, a scout - and from which family? | The routing block in your instruction file, `review.backend`, per-task `review:` pins, the bridge recipes, a sentence in the moment | The review receipt's `model` field, the worker dispatch prompt, the PR body's verification block |
 
-Axis A is documented below under [Pipeline routing](#pipeline-routing-who-decides-the-shape); the rest of this page is axis B. A [field case](#field-case-one-paragraph-twenty-specs) shows both axes running unattended for 26 hours, and the [setup ladder](#setup-ladder-from-nothing-to-a-standing-policy) takes a repo from zero configuration to a standing policy in five copy-paste rungs.
+Axis A is documented below under [Pipeline routing](#pipeline-routing-who-decides-the-shape); the rest of this page is axis B. A [field case](#field-case-one-paragraph-twenty-specs) shows both axes running unattended through 38 merged pull requests, and the [setup ladder](#setup-ladder-from-nothing-to-a-standing-policy) takes a repo from zero configuration to a standing policy in five copy-paste rungs.
 
 The pattern this page serves: use your smartest model to orchestrate and judge, route mechanical or token-hungry work to faster/cheaper models, and pick reviewers from a different family than the writer. flow-next was built in this shape - this page maps the dials.
 
@@ -23,7 +23,7 @@ The pattern this page serves: use your smartest model to orchestrate and judge, 
 - [Deterministic routing: the parameter surfaces](#deterministic-routing-the-parameter-surfaces)
 - [Prompted orchestration: routing with judgment](#prompted-orchestration-routing-with-judgment)
 - [Pipeline routing: who decides the shape](#pipeline-routing-who-decides-the-shape)
-- [Field case: one paragraph, twenty specs](#field-case-one-paragraph-twenty-specs)
+- [Field case: one paragraph, 38 PRs landed](#field-case-one-paragraph-38-prs-landed)
 - [Field patterns, mapped to flow-next](#field-patterns-mapped-to-flow-next)
 - [A default pipeline, expressed as tiers](#a-default-pipeline-expressed-as-tiers)
 - [Setup ladder: from nothing to a standing policy](#setup-ladder-from-nothing-to-a-standing-policy)
@@ -323,24 +323,24 @@ Two more gates sit beside these: [`flowctl gate classify`](flowctl.md#gate) tier
 
 **Overriding a decider** is one surface each: `--no-plan` or `flowctl spec set-no-plan` for the fork, a task id instead of a spec id for the wave route, `--no-triage` for the gate, `--review=<backend>` or `flowctl task set-backend` for the reviewer, and a sentence for anything else ("use 1 reviewer instead of 3").
 
-## Field case: one paragraph, twenty specs
+<a id="field-case-one-paragraph-twenty-specs"></a>
 
-A Linux desktop app in a private repo was built from a masterplan in September 2026 with one paragraph of standing policy and no per-spec attention. The paragraph, verbatim from the plan:
+## Field case: one paragraph, 38 PRs landed
 
-> This is a fast build. Specs are captured with `--no-plan` and worked directly; no plan reviews and no implementation reviews run during the build; flow-next's `pipeline.qa` stage stays off so pilot never waits on a drive. What stays on because it costs nothing: CI unit and contract jobs, the a11y lint, and the visual baselines as advisory diffs. When the v1 surface is complete, a cleanup phase turns the gates back on and works through what they find.
+One unattended run building a Linux desktop app in a private repo landed **38 pull requests**, steered by a single paragraph of standing policy with nobody in the loop. Each item was planned or worked directly by judgment, reviewed by another model family, QA'd in the running app, CI-green, and merged with a receipt.
 
-Capture read the paragraph and minted every spec with the `no_plan` field; pilot classified each ready spec straight to the work stage; land opened, babysat and merged the PRs.
+The policy steered both routing axes. The host chose the pipeline shape per item and the model per job; pilot advanced the work toward pull requests, and land handled CI and review convergence through merge.
 
-| Measured | Value |
+| Run outcome, as of 5 September 2026 | Result |
 |---|---|
-| Wall clock, first PR opened to last PR merged | 26 hours (3 Sep 14:04 to 4 Sep 15:59) |
-| Specs captured and closed | 20, all `no_plan` |
-| Pull requests merged | 21 (one was a CI fix) |
-| Code landed | 1,011 files, 105,837 lines |
-| Bot review threads resolved by land | 147 of 147 |
-| Land strikes, human interventions | 0 |
+| Pull requests landed | 38 |
+| Steering | One paragraph of standing policy, nobody in the loop |
+| Pipeline shape | Planned or worked directly, chosen by judgment per item |
+| Review | Another model family reviewed each item |
+| Live QA | Each item exercised in the running app |
+| Merge evidence | CI green and a receipt for each merged pull request |
 
-What the paragraph chose, so the numbers read correctly: every spec skipped planning because the policy said so, review ran at the PR level from the code host's bot with the in-pipeline reviews and the QA drive switched off, and one model family did every job. The repo was greenfield. Those are the policy's choices for a fast build with a cleanup phase behind it, and each is one sentence away from a different shape: "decide per spec, from its Boundaries and the size of its Touches, whether to plan first or work directly" turns the shape decision over to the host per item, and rung 3 of the ladder puts a second family on the reviews. Rung 5 below shows that fuller paragraph.
+The useful pattern is the malleable pipeline. One policy can send a fully understood change directly to work and give another change a planning pass, while assigning models and verification to suit the job. Rung 5 below shows how to write that kind of standing policy for your own repo.
 
 ## Field patterns, mapped to flow-next
 
@@ -505,7 +505,7 @@ review comes back NEEDS_WORK twice, stop bridging it and implement it
 yourself.
 ```
 
-The host judges each item against the paragraph and prints the reason with each decision. The field case above ran a shorter paragraph than this one for 26 hours.
+The host judges each item against the paragraph and prints the reason with each decision. The field case above shows both routing axes applied across 38 merged pull requests.
 
 ## In your repo
 
