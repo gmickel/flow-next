@@ -37,32 +37,13 @@ SRC = REPO_ROOT / "plugins" / "flow-next"
 REQUIRED_COMPONENT_KEYS = ("skills", "agents", "commands", "rules")
 
 
-def _skill_dirs(root: Path) -> set[str]:
-    base = root / "skills"
-    if not base.is_dir():
-        return set()
-    return {p.name for p in base.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()}
-
-
-def _command_files(root: Path) -> set[str]:
-    base = root / "commands"
-    if not base.is_dir():
-        return set()
-    return {p.name for p in base.glob("*.md")}
-
-
-def _agent_files(root: Path) -> set[str]:
-    base = root / "agents"
-    if not base.is_dir():
-        return set()
-    return {p.name for p in base.glob("*.md")}
-
-
-def _rule_files(root: Path) -> set[str]:
-    base = root / "rules"
-    if not base.is_dir():
-        return set()
-    return {p.name for p in base.glob("*.mdc")}
+def _component_files(root: Path, component: str) -> dict[str, bytes]:
+    base = root / component
+    return {
+        path.relative_to(base).as_posix(): path.read_bytes()
+        for path in sorted(base.rglob("*"))
+        if path.is_file()
+    }
 
 
 def _check_manifest(dest: Path, errors: list[str]) -> None:
@@ -104,45 +85,29 @@ def main() -> int:
     # Manifest present + explicit component paths.
     _check_manifest(dest, errors)
 
-    # Completeness: dest must match source 1:1 for the copied component trees.
-    for label, fn in (
-        ("skills", _skill_dirs),
-        ("commands", _command_files),
-        ("agents", _agent_files),
-        ("rules", _rule_files),
-    ):
-        src_set, dst_set = fn(SRC), fn(dest)
-        if not src_set:
+    # Compare every payload file, including nested skill references/templates.
+    file_count = 0
+    for label in REQUIRED_COMPONENT_KEYS:
+        source = {
+            rel: content for rel, content in _component_files(SRC, label).items()
+            if "__pycache__" not in Path(rel).parts
+            and not rel.endswith(".pyc") and Path(rel).name != ".DS_Store"
+        }
+        installed = _component_files(dest, label)
+        file_count += len(installed)
+        if not source:
             errors.append(f"source has no {label} — cannot verify (check SRC path)")
             continue
-        missing = src_set - dst_set
-        extra = dst_set - src_set
+        missing = source.keys() - installed.keys()
+        extra = installed.keys() - source.keys()
         if missing:
             errors.append(f"{label}: {len(missing)} missing in install: {sorted(missing)[:5]}")
         if extra:
             errors.append(f"{label}: {len(extra)} unexpected in install: {sorted(extra)[:5]}")
-
-    # Content integrity: same names is not enough — stale/empty/corrupted
-    # copies with matching names must fail (fn-123 review hardening). Compare
-    # content hashes for every file under the copied component trees.
-    import hashlib
-
-    def _tree_hashes(root: Path, sub: str) -> dict[str, str]:
-        base = root / sub
-        if not base.is_dir():
-            return {}
-        return {
-            str(p.relative_to(base)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(base.rglob("*"))
-            if p.is_file()
-        }
-
-    for sub in ("skills", "commands", "agents", "rules"):
-        src_h, dst_h = _tree_hashes(SRC, sub), _tree_hashes(dest, sub)
-        stale = [rel for rel, h in src_h.items() if rel in dst_h and dst_h[rel] != h]
+        stale = [rel for rel, content in source.items() if rel in installed and installed[rel] != content]
         if stale:
             errors.append(
-                f"{sub}: {len(stale)} file(s) differ from source (stale install?"
+                f"{label}: {len(stale)} file(s) differ from source (stale install?"
                 f" re-run installer): {stale[:5]}"
             )
 
@@ -163,10 +128,7 @@ def main() -> int:
 
     print(
         f"OK: Cursor install verified at {dest}\n"
-        f"    skills={len(_skill_dirs(dest))} "
-        f"commands={len(_command_files(dest))} "
-        f"agents={len(_agent_files(dest))} "
-        f"rules={len(_rule_files(dest))}; "
+        f"    component files={file_count}; "
         f"excludes honored (no codex/ tests/ *.pyc)."
     )
     return 0

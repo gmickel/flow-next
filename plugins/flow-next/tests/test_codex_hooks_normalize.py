@@ -10,6 +10,7 @@ import importlib.util
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -60,6 +61,23 @@ def _assert_normal(text: str):
 # unittest-style (fn-111 follow-up): module-level pytest functions were
 # invisible to unittest discover - these tests silently never ran in CI.
 class TestCodexHooksNormalize(unittest.TestCase):
+    def test_commented_features_header_is_normalized_once(self):
+        src = "[features] # user comment\ncodex_hooks = true\nshell_tool = true\n"
+        out = normalize(src)
+        self.assertEqual(tomllib.loads(out)["features"], {"shell_tool": True, "hooks": True})
+        self.assertIn("[features] # user comment\n", out)
+        self.assertEqual(normalize(out), out)
+
+    def test_unrelated_commented_and_array_tables_are_preserved(self):
+        for header in ("[custom] # user comment", "[[custom]]", "[[custom]] # user comment"):
+            with self.subTest(header=header):
+                unrelated = f"{header}\nhooks = false\ncodex_hooks = false\n"
+                out = normalize("[features]\ncodex_hooks = true\n" + unrelated)
+                data = tomllib.loads(out)
+                self.assertTrue(data["features"]["hooks"])
+                self.assertIn(unrelated, out)
+                self.assertEqual(normalize(out), out)
+
     def test_both_keys_dedup_to_one(self):
         """The exact bug: both codex_hooks and hooks present -> single hooks."""
         src = (

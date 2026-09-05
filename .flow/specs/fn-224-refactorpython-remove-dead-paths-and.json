@@ -1,0 +1,24 @@
+{
+  "branch_name": "refactor/python-slop-review",
+  "created_at": "2026-09-05T11:40:05.563143Z",
+  "depends_on_epics": [],
+  "id": "fn-224-refactorpython-remove-dead-paths-and",
+  "next_task": 1,
+  "plan_review_status": "unknown",
+  "plan_reviewed_at": null,
+  "spec_path": ".flow/specs/fn-224-refactorpython-remove-dead-paths-and.md",
+  "status": "open",
+  "title": "refactor(python): remove dead paths and fix exposed regressions",
+  "tracker": {
+    "baseHashFlow": null,
+    "baseHashTracker": null,
+    "depRelations": [],
+    "id": null,
+    "identifier": null,
+    "lastSyncedAt": null,
+    "mergeBaseFlow": null,
+    "mergeBaseTracker": null,
+    "url": null
+  },
+  "updated_at": "2026-09-05T11:42:56.780956Z"
+}

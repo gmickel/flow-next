@@ -78,8 +78,6 @@ PINNED_PERMISSION_KEYS: frozenset[str] = frozenset(
     }
 )
 
-PERMISSION_ACTIONS: frozenset[str] = frozenset({"allow", "ask", "deny"})
-
 # Canonical frontmatter keys that carry no permission meaning and are dropped.
 # Together with the handled keys below this is a closed allowlist: an unknown
 # canonical key fails generation, because a silently dropped permission-shaped
@@ -220,19 +218,6 @@ def permission_map(tokens: list[str], source: Path) -> dict[str, str]:
                 f"in the pinned PermissionConfig key set",
             )
         out[key] = "deny"
-    for key, action in out.items():
-        if key not in PINNED_PERMISSION_KEYS:
-            raise GenerateError(
-                "UNREPRESENTABLE_DENIAL",
-                f"emitted permission key {key!r} from {source} is not in the "
-                f"pinned PermissionConfig key set",
-            )
-        if action not in PERMISSION_ACTIONS:
-            raise GenerateError(
-                "UNREPRESENTABLE_DENIAL",
-                f"emitted permission action {action!r} for {key!r} from "
-                f"{source} is not allow|ask|deny",
-            )
     return out
 
 

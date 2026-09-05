@@ -34,6 +34,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 # fn-139.1: the tracker package sits beside flowctl.py; under a test module
 # sys.path[0] is THIS directory, not scripts/, so it would not import.
@@ -257,6 +258,47 @@ class ConfigSnapshotTestCase(unittest.TestCase):
         self.assertIs(self._get_json(key="memory.enabled")["value"], True)
         self._write_config({"memory": {"enabled": False}})
         self.assertIs(self._get_json(key="memory.enabled")["value"], False)
+
+    def test_config_readers_share_invalid_file_fallback(self) -> None:
+        path = self.tmpdir / ".flow" / "config.json"
+        for content in (None, b"{broken", b"[]", b"null", b"false", b"\xff"):
+            with self.subTest(content=content):
+                if content is not None:
+                    path.write_bytes(content)
+                snapshot = self.flowctl.load_config_snapshot()
+                self.assertIsNone(snapshot.raw)
+                self.assertEqual(snapshot.merged, self.flowctl.get_default_config())
+                self.assertEqual(self.flowctl.load_flow_config(), snapshot.merged)
+                self.assertIs(
+                    self.flowctl._get_config_from_file("memory.enabled"),
+                    self.flowctl._CONFIG_RAW_SENTINEL,
+                )
+
+    def test_raw_probe_preserves_explicit_values_and_nested_absence(self) -> None:
+        self._write_config({"probe": {"null": None, "false": False, "empty": {}}})
+        for key, expected in (("null", None), ("false", False), ("empty", {})):
+            with self.subTest(key=key):
+                self.assertEqual(
+                    self.flowctl._get_config_from_file(f"probe.{key}"), expected
+                )
+                self.assertIs(
+                    self.flowctl._get_config_from_file(f"probe.{key}.missing"),
+                    self.flowctl._CONFIG_RAW_SENTINEL,
+                )
+
+    def test_each_config_reader_resolves_flow_directory_once(self) -> None:
+        self._write_config({"memory": {"enabled": False}})
+        for reader in (
+            self.flowctl.load_flow_config,
+            self.flowctl.load_config_snapshot,
+            lambda: self.flowctl._get_config_from_file("memory.enabled"),
+        ):
+            with self.subTest(reader=reader):
+                with mock.patch.object(
+                    self.flowctl, "get_flow_dir", wraps=self.flowctl.get_flow_dir
+                ) as resolve:
+                    reader()
+                resolve.assert_called_once_with()
 
 
 if __name__ == "__main__":

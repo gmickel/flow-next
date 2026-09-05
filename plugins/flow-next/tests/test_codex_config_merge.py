@@ -42,6 +42,16 @@ class ConfigMergeTests(unittest.TestCase):
             self.assertEqual(data['custom']['note'], '\u65e5\u672c')
             self.assertEqual(data['agents']['scout']['description'], 'Unicode \u2192 \u201d')
             self.assertEqual(next(root.glob('config.toml.pre-flow-next-*')).read_bytes(), original_bytes)
+    def test_commented_headers_and_array_tables_preserve_user_settings(self):
+        text = '[features] # user switches\ncodex_hooks = true\n'
+        text += '[custom] # other hooks\nhooks = false\n'
+        text += '[[skills.config]] # disabled skill\npath = "/mine"\nenabled = false\n'
+        result = mod.merge(text, SOURCE, 12)
+        data = tomllib.loads(result)
+        self.assertTrue(data['features']['hooks'])
+        self.assertEqual(data['custom'], {'hooks': False})
+        self.assertEqual(data['skills'], tomllib.loads(text)['skills'])
+        self.assertEqual(mod.merge(result, SOURCE, 12), result)
 
     def test_unmarked_duplicate_recovery_and_scope(self):
         text = '[agents]\nenabled = true\nmax_concurrent_threads_per_session = 12\n' + ROLE
