@@ -58,3 +58,4 @@ stage: impl-review - ran [codex fan-out round 1 NEEDS_WORK (1 merged finding, 3 
 - Commits: 8f940687313d133690eac08e974cbe1a28c85db0, 78ee42793a3e13bc53b25e5f8a6d6bdbd5310b65
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_claude_review_commands test_cursor_review_commands test_backend_spec test_model_resolution test_flowctl_surface test_review_prompt_constraints -q, ./scripts/sync-codex.sh && ./scripts/sync-codex.sh && git status --short plugins/flow-next/codex, python3 scripts/check_doc_anchors.py, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check ., GATE_SKIPPED:unittest:green-receipt 78ee4279 - baseline reused from prior post-gate pass
 - PRs:
+stage: plan-sync - skipped(config: planSync.enabled != true)
