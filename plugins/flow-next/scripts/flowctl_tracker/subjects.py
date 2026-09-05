@@ -17,8 +17,7 @@ import time
 from pathlib import Path
 from typing import Iterator, Optional, Union
 
-from .lifecycle.helpers import (Result, atomic_write_json, default_tracker,
-                                derive_link_state, dict_, leaf_is_safe,
+from .lifecycle.helpers import (Result, atomic_write_json, dict_, leaf_is_safe,
                                 merged_tracker, now_iso)
 from .types import ErrorClass, TrackerError
 
@@ -229,7 +228,17 @@ def _bounded_file_lock(
     """
     from .config_lock import ConfigLockTimeout  # noqa: PLC0415
 
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        invalid_parent = lock_path.parent.is_symlink() or not lock_path.parent.is_dir()
+    except OSError as exc:
+        raise ConfigLockTimeout(
+            f"cannot prepare {label} lock parent {lock_path.parent}: {exc}"
+        ) from exc
+    if invalid_parent:
+        raise ConfigLockTimeout(
+            f"{label} lock parent is not a real directory: {lock_path.parent}"
+        )
     try:
         st = os.lstat(lock_path)
         if not stat_mod.S_ISREG(st.st_mode):
@@ -418,17 +427,6 @@ def subject_collision(
                 details={"owner": sid, "kind": kind, "durable": durable_id},
             )
     return None
-
-
-def ensure_tracker_block(data: dict) -> dict:
-    """Ensure subject data has a tracker block with schema defaults."""
-    raw = dict_(data.get("tracker"))
-    if not raw:
-        raw = default_tracker()
-    data = dict(data)
-    data["tracker"] = {**default_tracker(), **raw}
-    data["tracker"]["linkState"] = derive_link_state(raw)
-    return data
 
 
 def charts_projection_enabled(config: dict) -> bool:
