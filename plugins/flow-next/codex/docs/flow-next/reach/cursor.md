@@ -25,7 +25,7 @@ With no caller-side model in the dispatch, every tier resolves to the session mo
 
 Cursor does not serve GPT-6 Astra, and it will not serve later OpenAI models either: OpenAI is winding down its Cursor contract after the SpaceX acquisition, with a proposed shutoff of 12 November 2026 ([OpenAI's decision](https://openai.com/index/our-decision-on-cursor-following-its-acquisition-by-spacex/)). A cross-family review from inside Cursor therefore runs on the `host` backend with a non-OpenAI model on the `reviewer` tier, or on the `codex` CLI backend invoked from outside Cursor.
 
-The `claude` review backend (`review.backend claude`, observed 2026-09-05) is a third cross-family route from inside Cursor: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), with the same receipt, ladder and fix loop as the other CLI backends.
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) is a third CLI route to a reviewer from inside Cursor: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), with the same receipt, ladder and fix loop as the other CLI backends - cross-family when the session model that wrote the diff is another family, same-family when it is a Claude model (the receipt records the model either way).
 
 ## Discover, then invoke
 

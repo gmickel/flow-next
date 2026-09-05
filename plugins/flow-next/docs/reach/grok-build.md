@@ -20,7 +20,7 @@ When the reviewer tier cannot be satisfied natively, the honest outcomes are: sh
 
 ## Models observed (2026-09-05)
 
-The `claude` review backend (`review.backend claude`, observed 2026-09-05) is one way to satisfy the reviewer tier from here: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), a second family with the same receipt, ladder and fix loop as the `codex` / `copilot` / `cursor` backends.
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) is one way to satisfy the reviewer tier from here: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), a second family with the same receipt, ladder and fix loop as the `codex` / `copilot` / `cursor` backends - cross-family because the writer here is this harness's own family, never a Claude model.
 
 ## Discover, then invoke
 

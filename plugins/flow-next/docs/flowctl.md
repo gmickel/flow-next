@@ -2457,7 +2457,7 @@ Spec form: `cursor[:model]` - **effort is folded into the model name** (Cursor c
 
 ### claude
 
-Claude Code CLI wrappers (`claude -p`) - the Claude-family review backend, parallel to codex/copilot/cursor. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model, same ladder, round counter and fix loop. From Codex, Cursor, Grok Build, Droid or OpenCode it is the cross-family verdict those hosts could not reach through `host`; from Claude Code it is **same-family** (the receipt records `mode: "claude"` plus the model, and the review skills say so once - prefer `codex` or `host` there when independence is the point).
+Claude Code CLI wrappers (`claude -p`) - the Claude-family review backend, parallel to codex/copilot/cursor. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model, same ladder, round counter and fix loop. It is the Claude-family verdict that only Claude Code could reach through `host` before; whether it is cross-family depends on the writer's model family, not the host: cross-family when another family's session model wrote the diff, **same-family** when a Claude model did (always from Claude Code; on Cursor, Droid or OpenCode whenever the session model is a Claude model). A same-family review still runs and is receipted (`mode: "claude"` plus the model), and the review skills say so once - prefer `codex` or `host` when independence is the point.
 
 ```bash
 # Implementation review
