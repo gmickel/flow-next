@@ -44,6 +44,7 @@ PLUGIN_ROOT="${CODEX_HOME:-$HOME/.codex}"
    HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
    HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
    HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
+   HAVE_CLAUDE=$(which claude >/dev/null 2>&1 && echo 1 || echo 0)
    ```
 
 4. Determine review backend (skip if UPDATE_MODE=1):
@@ -55,14 +56,16 @@ PLUGIN_ROOT="${CODEX_HOME:-$HOME/.codex}"
      b) Codex CLI (cross-platform, reviewer models via a Codex subscription)
      c) GitHub Copilot CLI (cross-platform, Claude/GPT via Copilot)
      d) Cursor CLI (cross-platform, runs cursor-agent; reviewer models via a Cursor subscription)
+     e) Claude Code CLI (cross-platform, runs claude -p; Claude-family reviewer — same-family when Ralph drives Claude Code)
 
-     (Reply: "a", "rp", "b", "codex", "c", "copilot", "d", "cursor", or just tell me)
+     (Reply: "a", "rp", "b", "codex", "c", "copilot", "d", "cursor", "e", "claude", or just tell me)
      ```
-     Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot` > `cursor`.
+     Wait for response. Default if empty/ambiguous: prefer `rp` > `codex` > `copilot` > `cursor` > `claude`.
    - If only the RepoPrompt CLI ladder resolves: use `rp`
    - If only codex available: use `codex`
    - If only copilot available: use `copilot`
    - If only cursor-agent available: use `cursor`
+   - If only claude available: use `claude`
    - If none available: use `none`
 
 5. Copy files using bash — **the copies run through `cp`, never the Write tool.** A template reproduced by writing its contents has broken this:

@@ -504,9 +504,9 @@ Edit `scripts/ralph/config.env`:
 
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
-| `PLAN_REVIEW` | `rp`, `codex`, `none` | - | Plan review backend |
-| `WORK_REVIEW` | `rp`, `codex`, `none` | - | Impl review backend |
-| `COMPLETION_REVIEW` | `rp`, `codex`, `none` | - | Completion review backend |
+| `PLAN_REVIEW` | `rp`, `codex`, `copilot`, `cursor`, `claude`, `none` | - | Plan review backend |
+| `WORK_REVIEW` | `rp`, `codex`, `copilot`, `cursor`, `claude`, `none` | - | Impl review backend |
+| `COMPLETION_REVIEW` | `rp`, `codex`, `copilot`, `cursor`, `claude`, `none` | - | Completion review backend |
 | `REQUIRE_PLAN_REVIEW` | `0`, `1` | `0` | Block work until plan approved |
 
 ### Branches

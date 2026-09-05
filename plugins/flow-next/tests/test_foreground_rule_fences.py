@@ -24,9 +24,9 @@ RULE2 = "# NEVER run_in_background + monitor"
 
 # A fence is "review-invoking" when its body launches a backend review command.
 INVOKE = re.compile(
-    r"(^(FLOW_\w+=\S+ )?\$FLOWCTL (codex|copilot|cursor) "
+    r"(^(FLOW_\w+=\S+ )?\$FLOWCTL (codex|copilot|cursor|claude) "
     r"(impl-review|plan-review|completion-review)\b"
-    r"|args=\((codex|copilot|cursor) (impl-review|plan-review|completion-review)\))",
+    r"|args=\((codex|copilot|cursor|claude) (impl-review|plan-review|completion-review)\))",
     re.M,
 )
 

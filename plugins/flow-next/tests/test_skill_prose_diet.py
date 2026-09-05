@@ -291,7 +291,7 @@ class ImplReviewArgFenceTestCase(unittest.TestCase):
 
 class PlanReviewSingleSourceTestCase(unittest.TestCase):
     INVOKE = re.compile(r"^\$FLOWCTL (codex|copilot|cursor) plan-review", re.M)
-    BACKENDS = ("codex", "copilot", "cursor", "host", "rp")
+    BACKENDS = ("claude", "codex", "copilot", "cursor", "host", "rp")
 
     def test_backend_blocks_live_only_in_selected_workflows(self):
         skill_dir = SKILLS / "flow-next-plan-review"

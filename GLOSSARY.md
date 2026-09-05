@@ -137,7 +137,7 @@ _Relates to_: Spec, Task
 
 ## Review backend
 
-The engine that performs a cross-model review: `rp` (RepoPrompt), `codex`, `copilot`, `cursor`, `host`, or `none`, resolved by the `review.backend` grammar (env > per-spec/task > config). The backend is the review *mechanism*, distinct from the model it happens to run and from the reviewing agent's findings.
+The engine that performs a cross-model review: `rp` (RepoPrompt), `codex`, `copilot`, `cursor`, `claude`, `host`, or `none`, resolved by the `review.backend` grammar (env > per-spec/task > config). The backend is the review *mechanism*, distinct from the model it happens to run and from the reviewing agent's findings.
 
 
 
