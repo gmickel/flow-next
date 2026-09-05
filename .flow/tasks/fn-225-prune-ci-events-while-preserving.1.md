@@ -25,9 +25,14 @@ Read all scoped instructions. No broad test exclusions. Cross-platform acceptanc
 - [ ] R5: Focused regressions, full suite and Ruff pass.
 
 ## Done summary
-TBD
+Implemented PR cancellation, job timeouts, conservative PR/main CI classification, Windows-stub scoping with weekly backstop, stable CI aggregate, and exact main-push release evidence. Fixed Windows Codex config UTF-8 handling; added focused range/rename/aggregate/release/encoding regression coverage and changelog guidance.
 
+Baseline: red before implementation from temporary-storage quota; an in-checkout TMPDIR retry caused containment failures and fixture pollution. All generated tracked pollution was reversed in a separate commit. Final suite used external private TMPDIR and passed 206 files / 4792 tests / 7 skips. Ruff and actionlint passed. Physical Windows/macOS GitHub acceptance remains for conductor after push; no release or push performed.
+
+GATE_SKIPPED:unittest:green-receipt 02b6768a
+
+stage: impl-review - ran [2026-09-05T16:03:27Z..2026-09-05T16:11:46.402340+00:00] | SHIP after rename-source finding fixed and single resumed review. Receipt: /tmp/impl-review-receipt-f3f21b2fd6e1-fn-225-prune-ci-events-while-preserving.1.json
 ## Evidence
-- Commits:
-- Tests:
+- Commits: 71e1e1d1abcf5c7e6060a35f8b0db461becbf1b9, 384ccd60b0fa8d0bd6ad8a97a190112c11a7cd7a, 02b6768a0a4abce4108a69081f2e03efb140cfe5
+- Tests: baseline: interrupted first run (no terminal result); second run red pre-edit with /tmp Disk quota exceeded; in-checkout TMPDIR retry invalidated containment and was stopped; generated fixture pollution reversed in commit 384ccd60, TMPDIR=/home/gordon/.local/state/ci-audit-20260905/flow-next-tmp python3 scripts/run_tests_parallel.py: PASS 206 files, 4792 tests, 7 skips, exit 0 (.flow/tmp/final-tests-2.log), GATE_SKIPPED:unittest:green-receipt 02b6768a, uvx ruff@0.16.0 check .: PASS, python3 -m unittest discover -s plugins/flow-next/tests -p test_ci*.py -q: PASS 6 tests, python3 -m unittest discover -s plugins/flow-next/tests -p test_codex_config_merge.py -q: PASS 13 tests; cp1252 reproduction red-to-green, python3 -m unittest discover -s plugins/flow-next/tests -p test_tracker_package_import.py -q: PASS 8 tests, actionlint .github/workflows/test-flow-next.yml .github/workflows/release.yml .github/workflows/docs-linkcheck.yml: PASS, git diff --check: PASS, Git rename regression: red source path absent, green both paths and full units/stub; divergent PR/main ranges verified
 - PRs:
