@@ -18,6 +18,10 @@ A second model family in-host. That matters for exactly one tier: **reviewer**, 
 
 When the reviewer tier cannot be satisfied natively, the honest outcomes are: shell out to another vendor's CLI, or state that the review is same-family and let a human decide. An attended session asks; an unattended one stops and says a human is needed. A same-family verdict presented as an independent one is the failure this page exists to prevent.
 
+## Models observed (2026-09-05)
+
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) is one way to satisfy the reviewer tier from here: it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), a second family with the same receipt, ladder and fix loop as the `codex` / `copilot` / `cursor` backends.
+
 ## Discover, then invoke
 
 Ask the harness and any installed CLI what they currently offer before naming a model. What is reachable from this machine and this account is a property of the machine, not of a document.

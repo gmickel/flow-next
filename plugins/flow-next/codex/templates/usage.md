@@ -106,8 +106,9 @@ codex exec -s read-only --skip-git-repo-check "<prompt>" </dev/null
 
 ```bash
 # Cross-family review — the model that writes is never the model that reviews
-flowctl config set review.backend codex                              # or host | cursor:<model>
+flowctl config set review.backend codex                              # or host | cursor:<model> | claude:<model>:<effort>
 flowctl task set-backend fn-1-add-oauth.3 --review cursor:<model>     # per-task review: override
+flowctl task set-backend fn-1-add-oauth.4 --review claude:<model>:high  # Claude Code CLI reviewer (same-family from Claude Code; the receipt records it)
 ```
 
 **Prompted orchestration** — describe the policy; the host judges per item, no parameter required:

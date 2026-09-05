@@ -82,6 +82,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
   - [codex](#codex)
   - [copilot](#copilot)
   - [cursor](#cursor)
+  - [claude](#claude)
   - [Ralph run control (repo-local after ralph-init)](#ralph-run-control-repo-local-after-ralph-init)
   - [review-deep-auto](#review-deep-auto)
   - [review-walkthrough-defer](#review-walkthrough-defer)
@@ -98,7 +99,7 @@ CLI for `.flow/` task tracking. Agents must use flowctl for all writes.
 init, setup-block, detect, status, config, tracker, sync, pilot, pilot-log, review-backend, review-findings, models, review-rounds, review-artifact,
 memory, prospect, chart, anchor, repo-map, prime, glossary, strategy, criteria, spec, scope, task, dep,
 show, specs, tasks, list, cat, ready, next, start, done, block, validate, triage-skip, gate,
-checkpoint, rp, codex, copilot, cursor,
+checkpoint, rp, codex, copilot, cursor, claude,
 review-deep-auto, review-walkthrough-defer, review-walkthrough-record
 ```
 
@@ -1032,7 +1033,7 @@ flowctl config get [--json]
 
 # Set a config value
 flowctl config set memory.enabled true [--json]
-flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, host, or none
+flowctl config set review.backend codex [--json]  # rp, codex, copilot, cursor, claude, host, or none
 
 # Disable a boolean config explicitly
 flowctl config set memory.enabled false [--json]
@@ -1056,7 +1057,7 @@ flowctl config set memory.enabled false [--json]
 | `planSync.enabled` | bool | `false` | Enable plan-sync after task completion (opt-in since 4.5.1; earlier inits wrote `true`) |
 | `planSync.crossSpec` | bool | `false` | Cross-spec plan-sync - scan other open specs for stale references after each task (opt-in; increases sync time)* |
 | `scouts.github` | bool | `false` | Enable github-scout during planning (requires gh CLI) |
-| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
+| `review.backend` | string | `null` | Default review backend (`rp`, `codex`, `copilot`, `cursor`, `claude`, `host`, `none`), or spec form (`codex:<model>:<effort>`, `claude:<model>:<effort>` with efforts `low`/`medium`/`high`/`xhigh`/`max`, `cursor:<model>` - cursor folds effort into the model, no `:effort` rung). If unset, review commands require `--review` or `FLOW_REVIEW_BACKEND`. |
 | `review.maxIterations` | int | `8` | Cumulative review-round cap per scope. **Precedence: env `MAX_REVIEW_ITERATIONS` > this key > 8.** Minimum 1 on **both** rungs, and the cap can never be disabled: an invalid config value falls back to 8, and a **present-but-invalid** env value also stops at 8 rather than handing control to the config value it was overriding (only an absent or empty env var proceeds to the config rung). This is the knob to reach for when a review loop costs more than it is worth: **lower the cap, never re-add trend-based stall inference** (see the fn-168 decision record). Raising it is a **human** act, enforced in the consumer rather than only at the guard: in an autonomous run (Ralph / pilot / receipt harness) this key may only **lower** the cap, never raise it - whatever wrote the file and however it was written - so a bigger number cannot extend an agent's own gate. Lowering stays honored, since that is the intended knob. Additionally the guard blocks `config set` on this key (in both its leaf and parent-key JSON forms), file-tool writes to `.flow/config.json`, and a `MAX_REVIEW_ITERATIONS=` assignment, because fn-159's invariant is that the implementing agent can never reset or extend its own gate. The guard does not fire on Cursor (different hook events), where the rule degrades to prose only - same as the existing counter-reset block. |
 | `tracker.enabled` | bool | `false` | Enable the tracker-sync bridge (see [`flowctl sync`](#flowctl-sync)). The bridge is active iff raw `tracker.enabled == true` OR raw `tracker.type ∈ {linear, github, gitlab, jira}`. |
 | `tracker.type` | string | `null` | Tracker backend: `linear`, `github`, `gitlab`, or `jira`. |
@@ -1131,7 +1132,7 @@ Text output prints the bare backend name (e.g. `codex`) for skill grep back-comp
 {"backend": "codex", "spec": "codex:<model>:high", "model": "<model>", "effort": "high", "source": "env"}
 ```
 
-Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
+Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:<model>:xhigh`, `copilot:<model>:high`, `claude:<model>:xhigh` (efforts `low|medium|high|xhigh|max`), `cursor:<model>` (cursor folds effort into the model name - no `:effort` rung). RP is bare only (model set via window config); `none` is an explicit opt-out.
 
 | Backend form | Meaning |
 |--------------|---------|
@@ -1140,11 +1141,11 @@ Spec grammar: `backend[:model[:effort]]`. Examples: `rp`, `codex`, `codex:<model
 
 #### Model resolution (strongest-available, never-fail: fn-76)
 
-When a review runs **without an explicit model** (unconfigured `codex` / `copilot` / `cursor`), flow-next resolves the *strongest model the account can actually run* instead of a fixed hardcoded default. The mechanism is **optimistic-first**, so the happy path costs nothing:
+When a review runs **without an explicit model** (unconfigured `codex` / `copilot` / `cursor` / `claude`), flow-next resolves the *strongest model the account can actually run* instead of a fixed hardcoded default. The mechanism is **optimistic-first**, so the happy path costs nothing:
 
-- **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-6-astra`, `copilot` → `gpt-6-astra`, `cursor` → `gpt-5.6-sol-high`; Cursor receives no further OpenAI models, so its ranking stays where it is). The ranking is a *preference*, never a parse-time gate - an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
+- **Ranking.** Each backend's model set is a curated **quality ranking** (strongest first); the ranking's top entry IS the encoded default (`codex` → `gpt-6-astra`, `copilot` → `gpt-6-astra`, `cursor` → `gpt-5.6-sol-high`, `claude` → `claude-fable-5-1` then `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, probed 2026-09-05 on Claude Code 2.1.260; Cursor receives no further OpenAI models, so its ranking stays where it is). The ranking is a *preference*, never a parse-time gate - an **unknown explicit model warns and is accepted** (the CLI stays the availability authority); the reasoning-effort axis stays strict.
 - **Happy path (zero overhead).** The top model dispatches directly - no probe, no list call, no extra subprocess. On a current CLI where the default just works, the argv is byte-identical to a hardcoded default.
-- **Fallback ladder (failure only).** If - and only if - that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot** step down the ranking (max 2 steps). The terminal **floor** never fails - codex omits `--model`, copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged - the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
+- **Fallback ladder (failure only).** If - and only if - that dispatch fails with the backend's **distinctive model-unavailable signature** (codex: *"requires a newer version of Codex"* / model-not-found; copilot: *`… from --model flag is not available`*; cursor: *`Cannot use this model: …`*; claude: **not an exit code** - the CLI exits 0 with `is_error: true`, `api_error_status: 404` and a result text starting *"There's an issue with the selected model"*, or prints the `[claude-code:unrecognized_model]` stderr tag; a 404 without that text, or the text without a 404, with no stderr tag, is a transport failure), flow-next resolves a fallback: **cursor** consults `cursor-agent --list-models` and dispatches the best `list ∩ ranking` entry; **codex/copilot/claude** step down the ranking (max 2 steps; the claude CLI has no list command, so its ladder is the static ranking only). The terminal **floor** never fails - codex omits `--model`, claude omits both `--model` and `--effort` (its receipt then carries `"effort": null`), copilot/cursor use `--model auto` (and the reasoning-effort flag is dropped). Any *other* failure (auth / network / sandbox / timeout) propagates unchanged - the ladder never masks a real error. A ladder retry is the **same review round** (it does not consume an extra review-cap iteration).
 - **Cache.** The resolved fallback is memoized per **`(backend, CLI version, effective routing intent)`** in `.flow/.cache/model-resolution.json` (locked atomic write, gitignored). Changing the registry ladder or the requested routing intent forces a fresh resolution even when the requested model name happens to match the old default. Downgrade/floor entries expire after 24 hours so newly available stronger models are re-probed without requiring a CLI upgrade. A corrupt, missing, legacy, or expired entry is a cold start, never an error; concurrent mutations preserve unrelated entries; explicit models bypass the cache entirely.
 - **Hygiene.** A downgrade or floor emits **one** stderr warning naming what was tried and what ran; the receipt records the model **actually used** (else `"auto"` / `"default"`), never a fabricated name.
 
@@ -2121,7 +2122,7 @@ flowctl rp prompt-export --window "$W" --tab "$T" --out /tmp/export.md
 
 ### Review command architecture (fn-112)
 
-All nine `flowctl {codex,copilot,cursor} {impl,plan,completion}-review` commands are thin wrappers over one driver: `cmd_backend_review(backend, kind)`. Per-backend variance (sandbox flags, session markers, argv-budget fit, receipt shape) lives as hooks on `BACKEND_REGISTRY` entries, wired lazily by `_wire_backend_review_hooks`. Adding a fourth review backend is a registry entry (hooks + models/efforts), not a new clone of the pipeline.
+All twelve `flowctl {codex,copilot,cursor,claude} {impl,plan,completion}-review` commands are thin wrappers over one driver: `cmd_backend_review(backend, kind)`. Per-backend variance (sandbox flags, session markers, argv-budget fit or stdin delivery, receipt shape) lives as hooks on `BACKEND_REGISTRY` entries, wired lazily by `_wire_backend_review_hooks`. Adding a review backend (`cursor` in fn-74, `claude` in fn-221) is a registry entry (hooks + models/efforts), not a new clone of the pipeline.
 
 Reviewer tallies prefer one fenced `json` block (`suppressed_count`, `classification_counts`, `unaddressed`, `deep_findings`); prose tally lines remain a logged fallback. The `<verdict>SHIP|NEEDS_WORK|MAJOR_RETHINK</verdict>` tag contract is unchanged. Plan/completion handlers self-write `*_review_status` from the verdict; the standalone `spec set-*-review-status` commands still work.
 
@@ -2250,8 +2251,8 @@ a transport failure, with one refund. Task mode reserves exactly one round;
 standalone reserves none (nonce rid). Re-review rounds after fixes are the plain
 `impl-review` invocation - when the prior receipt carries `draws[]`, lean resume is
 disabled for that round and the full merged container is injected. The fan-out is
-gated to the codex and host backends; `copilot` and `cursor` keep exactly one
-dispatch per round.
+gated to the codex and host backends; `copilot`, `cursor`, and `claude` keep exactly
+one dispatch per round.
 
 **How it works:**
 
@@ -2305,7 +2306,7 @@ When the project defines global criteria in `.flow/criteria.md`, completion-revi
 
 **Session continuity:** Receipt includes `session_id` (thread_id from codex). Subsequent reviews read the existing receipt and resume the conversation, maintaining full context across fix → re-review cycles.
 
-**Deterministic review cap + convergence (fn-90/fn-159 - all backends: codex/copilot/cursor internally; rp via `flowctl review-rounds`):**
+**Deterministic review cap + convergence (fn-90/fn-159 - all backends: codex/copilot/cursor/claude internally; rp via `flowctl review-rounds`):**
 
 The fix→re-review loop is bounded by a **flowctl-owned cumulative round counter on spec state**, not just the host LLM's in-agent iteration counter (which resets on every fresh `/flow-next:*-review` invocation - the loop-runaway root cause). It applies to every backend and every review kind:
 
@@ -2333,7 +2334,7 @@ The fix→re-review loop is bounded by a **flowctl-owned cumulative round counte
   other exit-4 terminal: receipt, attempt, and status persist before
   `ESCALATE: reviewer requested human review` returns control to a human.
 - **Cap enforcement:** each backend reserves a round BEFORE running the reviewer
-  (codex/copilot/cursor inside their wrapper; rp via `review-rounds increment`).
+  (codex/copilot/cursor/claude inside their wrapper; rp via `review-rounds increment`).
   At the resolved cap in delivered-verdict rounds it refuses before dispatch,
   prints `ESCALATE:`, and exits `4`. The message includes live verdict rounds and
   refunded transport attempts. The cap resolves **env `MAX_REVIEW_ITERATIONS` >
@@ -2453,6 +2454,40 @@ flowctl cursor deep-pass --pass adversarial|security|performance \
 ```
 
 Spec form: `cursor[:model]` - **effort is folded into the model name** (Cursor convention), so `cursor:<model>:<effort>` is rejected. Default model resolved via env (`FLOW_CURSOR_MODEL`, no `FLOW_CURSOR_EFFORT`) / config / registry. Receipt fields mirror codex/copilot but **omit `effort`**: `mode: "cursor"`, `spec: "cursor:<model>"`, `session_id` for resume. Sessions are **resume-only** - the first call omits `--resume` and persists Cursor's generated `session_id`; a continuation passes `--resume <stored-id>` only when the receipt's `mode == "cursor"` (cross-backend → fresh). Runs `cursor-agent -p --output-format json --trust --mode ask` with `cwd=repo_root` (read-only Q&A; never mutates the tree). Keep the model list synced with `cursor-agent --list-models`. **Auth:** stored `cursor-agent` login OR `CURSOR_API_KEY`. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot` - a cursor user who enables it also needs codex/copilot present; with the judge off (the default) cursor reviews use the deterministic whitelist, zero extra dependency.
+
+### claude
+
+Claude Code CLI wrappers (`claude -p`) - the Claude-family review backend, parallel to codex/copilot/cursor. Same review criteria (Carmack-level, 7 each for plan/impl), same receipt schema, same session-resume model, same ladder, round counter and fix loop. From Codex, Cursor, Grok Build, Droid or OpenCode it is the cross-family verdict those hosts could not reach through `host`; from Claude Code it is **same-family** (the receipt records `mode: "claude"` plus the model, and the review skills say so once - prefer `codex` or `host` there when independence is the point).
+
+```bash
+# Implementation review
+flowctl claude impl-review <task-id> --base <branch> [--receipt <path>] [--spec claude:<model>:high] [--json]
+
+# Plan review
+flowctl claude plan-review <spec-id> --files <file1,file2,...> [--receipt <path>] [--spec ...] [--json]
+
+# Completion review
+flowctl claude completion-review <spec-id> [--receipt <path>] [--spec ...] [--json]
+
+# Validator pass (fn-32.1 --validate)
+flowctl claude validate --findings-file findings.jsonl --receipt /tmp/impl-fn-1.3.json [--spec ...] [--json]
+
+# Deep-pass review (fn-32.2 --deep)
+flowctl claude deep-pass --pass adversarial|security|performance \
+  --receipt /tmp/impl-fn-1.3.json [--primary-findings primary.jsonl] [--spec ...] [--json]
+```
+
+Spec form: `claude[:model[:effort]]`; efforts are the CLI's own `low`, `medium`, `high`, `xhigh`, `max` (default `high`; an unknown effort is rejected at parse time naming that set, an unknown model warns and is accepted). Default model resolved via env (`FLOW_CLAUDE_MODEL` / `FLOW_CLAUDE_EFFORT`) / config / registry. A foreign `--spec` (`codex:...`) exits 2 before anything is spawned, and a foreign configured default is coerced to the claude default, because Claude model ids do not cross over. Receipt fields mirror codex: `mode: "claude"`, `spec`, `model`, `effort` (`null` at the ladder floor, where both `--model` and `--effort` are omitted), `session_id` for resume.
+
+**Transport.** The prompt goes to the CLI on **stdin** - no positional, no argv cap, no fitter. The argv is a fixed token list: `claude -p --output-format json --permission-mode dontAsk --tools Read Grep Glob --strict-mcp-config`, plus `--model <id>` / `--effort <e>` from the resolved spec and `--resume <session_id>` on a continuation. `--tools Read Grep Glob` makes those three the *only* tools that exist for the child (unlike `--allowedTools`, which pre-approves and leaves a user's own `permissions.allow` grants such as `Bash(git:*)` reachable), `--strict-mcp-config` with no `--mcp-config` excludes every configured MCP server, and `dontAsk` denies anything else without a prompt. The reviewer has no shell and no write tool, in any form.
+
+**Diff delivery by path.** Because the shared review prompt tells the reviewer to run `git diff <range>` and this child cannot, every **primary** dispatch (`impl-review`, `plan-review`, `completion-review`, resumed or not) writes the reviewed range to `.flow/tmp/claude-review/<receipt-id>-<base7>-<head7>.diff` (gitignored; atomic write, symlinked directory or leaf refused, resolved path must stay under `.flow/tmp` - any of those failing aborts before the CLI is spawned) and appends a `## Diff delivery (claude backend)` note naming the path and the range. The file name is the range identity: a re-review after a fix commit resumes the same receipt's session with a **new** file for the new range and leaves the first byte-identical; a changed base at an unchanged head lands in its own file. `deep-pass` and `validate` pass no range and write nothing - they resume the session that already read the primary's file.
+
+**Sessions.** Resume-only: the first call omits `--resume` and persists the CLI's `session_id` from the JSON payload; a continuation (same-round re-review, `deep-pass`, `validate`) passes `--resume <stored-id>` only when the receipt's `mode == "claude"` (cross-backend → fresh). Prior findings are injected unconditionally on re-review (no two-phase resume). Transcripts live in the CLI's own session store.
+
+**Errors.** `claude` missing from PATH → exit 2 `claude not found in PATH` before any spawn (install: [Claude Code setup](https://code.claude.com/docs/en/setup)). The CLI's `--output-format json` result is parsed strictly: a payload that is not the single `type: "result"` object, or an `is_error: true` envelope that is not the model-unavailable signature, is a transport failure with RETRY semantics - journaled as an attempt with no verdict, never a receipt. The model-unavailable signature is exact: (`is_error` true AND `api_error_status` 404 AND the result text names the selected model) OR the `[claude-code:unrecognized_model]` stderr tag; only that steps the ladder (max 2 steps, cached per CLI version), and the floor omits `--model` and `--effort`.
+
+**Fan-out.** No first-round three-draw fan-out (fn-215 R15): the fan-out subcommands stay registered under `flowctl codex` only, so `flowctl claude impl-review-fanout ...` is an argparse invalid choice. `claude` gets the fix loop and the round counter like `copilot` and `cursor`. **Ralph:** the guard recognises `flowctl claude <review> ...` exactly like the cursor spelling, so `--force` and the other human-only recovery arguments are blocked under Ralph. **Triage note:** the opt-in LLM triage judge (`FLOW_TRIAGE_LLM=1`, default off) stays `codex|copilot`; with the judge off (the default) claude reviews use the deterministic whitelist.
 
 ### Ralph run control (repo-local after ralph-init)
 

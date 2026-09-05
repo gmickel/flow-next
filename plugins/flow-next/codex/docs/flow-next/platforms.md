@@ -34,6 +34,7 @@ The plugin **does not** ship `hooks/hooks.json`. Fresh install = zero guard proc
 - [Windows: Python discovery](#windows-python-discovery)
 - [RepoPrompt review backend (macOS-only)](#repoprompt-review-backend-macos-only)
 - [Windows + Copilot review backend](#windows-copilot-review-backend)
+- [Claude Code CLI review backend](#claude-code-cli-review-backend)
 - [Optional skill requirements](#optional-skill-requirements)
 - [Community ports and inspired projects](#community-ports-and-inspired-projects)
 - [See also](#see-also)
@@ -268,7 +269,7 @@ Then run **`/flow-next:setup`** in the project (slash syntax - **not** `$flow-ne
 - **Slash commands.** Drive with `/flow-next:<name>` - **not** Codex `$flow-next-` syntax. Type `/flow-next:` to discover the namespaced command surface. The separately indexed `/flow-next-…` skill names are an implementation surface, not the documented invocation contract.
 - **Multi-agent flows work - verified end-to-end.** A real `/flow-next:plan` run under Grok 0.2.27 **fanned out all seven scout subagents** (`repo-scout`, `practice-scout`, `docs-scout`, `spec-scout`, `docs-gap-scout`, `memory-scout`, `flow-gap-analyst`) in parallel; they spawned, completed, and the skill drove `flowctl` to create the spec + tasks and validate. Grok **dispatches flow-next's custom `subagent_type`s** even when `grok inspect` does not list them in its agent UI.
 - **MCP servers** resolve (e.g. RepoPrompt, linear-server); `flowctl` resolves from the **plugin install** - the skill derives the plugin root from its own SKILL.md path (probe-verified in a repo with no `.flow/bin`).
-- **Review menu includes `host`.** Setup offers `host` alongside `rp` / `codex` / `copilot` / `cursor` / `none`. **Single-family fail-closed:** this host reaches only one model family natively, so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot`), not a native multi-family subagent. The host-native routing block lands in AGENTS.md and documents the same honesty.
+- **Review menu includes `host`.** Setup offers `host` alongside `rp` / `codex` / `copilot` / `cursor` / `claude` / `none`. **Single-family fail-closed:** this host reaches only one model family natively, so native `host` review fails closed (interactive → ask; autonomous → `NEEDS_HUMAN`) unless the writer is non-Grok. Cross-family review on Grok comes through bridge backends (`codex` / `cursor` / `copilot` / `claude`), not a native multi-family subagent. The host-native routing block lands in AGENTS.md and documents the same honesty.
 
 ### Caveats / intentional limits
 
@@ -334,7 +335,7 @@ Both copy the plugin into `~/.cursor/plugins/local/flow-next` (`%USERPROFILE%\.c
 - **AskUserQuestion** renders natively, including multi-question batches (auto "Other...", Skip honored).
 - **Multi-agent:** a full `/flow-next:plan` fans out scout subagents in parallel and drives `flowctl` end-to-end. A model named in the dispatch itself (this host's own identifiers) is honored; the host self-corrects near-miss ids.
 - **`readonly: true`** on read-only agents (scouts, reviewers) enforces write restriction on Cursor (`disallowedTools` is not consumed there).
-- **`review.backend host`:** fresh-context subagent review on the `reviewer` tier from the AGENTS.md routing block (or a model named in the dispatch itself), from a family that did not write the diff (preferred from inside Cursor; existing `codex` / `copilot` / `cursor` CLI / `rp` backends remain selectable).
+- **`review.backend host`:** fresh-context subagent review on the `reviewer` tier from the AGENTS.md routing block (or a model named in the dispatch itself), from a family that did not write the diff (preferred from inside Cursor; existing `codex` / `copilot` / `cursor` / `claude` CLI / `rp` backends remain selectable).
 - **`rules/flow-next.mdc`:** Cursor-native guidance rail (flowctl lifecycle + `flowctl usage` pull directives).
 - **AGENTS.md routing block** from setup: the four tier lines, commented out, for you to fill with the model ids this host actually serves - ask the harness for its list rather than copying one (see [`reach/cursor.md`](reach/cursor.md)).
 - **`flowctl`** resolves from the plugin install: Cursor exposes no plugin-root env var, but it injects the loading skill's absolute `SKILL.md` path, and the preamble derives the plugin root two levels above it (probe-verified in a repo with no `.flow/bin`, CLI and desktop app).
@@ -400,7 +401,7 @@ flow-next's bundled `flowctl` is a thin launcher over `flowctl.py`. On Windows i
 
 ## RepoPrompt review backend (macOS-only)
 
-The `rp` review backend drives [RepoPrompt Community Edition](https://repoprompt.com) on macOS. Flow-Next prefers `rpce-cli` on PATH, then the current and legacy CE user links, with discontinued Classic `rp-cli` retained only as the final compatibility fallback. Once CE is selected, a connection or command failure is authoritative and never retries against Classic. `/flow-next:plan` and the review skills only *propose* RepoPrompt when that CE-first capability ladder finds a runnable CLI; other hosts steer to the cross-platform backends (`codex`, `copilot`, `cursor`, `host`, `none`). Explicit `--review=rp` / `review.backend=rp` remains accepted anywhere and fails at runtime with a clear supported-RepoPrompt-CLI diagnostic when no candidate exists.
+The `rp` review backend drives [RepoPrompt Community Edition](https://repoprompt.com) on macOS. Flow-Next prefers `rpce-cli` on PATH, then the current and legacy CE user links, with discontinued Classic `rp-cli` retained only as the final compatibility fallback. Once CE is selected, a connection or command failure is authoritative and never retries against Classic. `/flow-next:plan` and the review skills only *propose* RepoPrompt when that CE-first capability ladder finds a runnable CLI; other hosts steer to the cross-platform backends (`codex`, `copilot`, `cursor`, `claude`, `host`, `none`). Explicit `--review=rp` / `review.backend=rp` remains accepted anywhere and fails at runtime with a clear supported-RepoPrompt-CLI diagnostic when no candidate exists.
 
 ## Windows + Copilot review backend
 
@@ -412,6 +413,17 @@ Works natively from flow-next 1.1.9. flow-next picks the prompt-delivery path pe
 No configuration knob - `run_copilot_exec` switches transparently on `sys.platform == "win32"`. Session continuity is tracked via a touch marker under `.flow/tmp/copilot-sessions/<uuid>` (needed because stdin-mode `--resume` is resume-only, unlike `-p` mode's create-or-resume).
 
 Upstream tracking: [github/copilot-cli#3398](https://github.com/github/copilot-cli/issues/3398) requests a first-class `--prompt-file` flag, which will let both paths converge.
+
+## Claude Code CLI review backend
+
+`review.backend claude` runs the review on the Claude Code CLI (`claude -p`, headless) and is reachable from every host that can shell out: Claude Code, Codex, Droid, Cursor, Grok Build, and OpenCode. The one prerequisite is the `claude` CLI installed and authenticated on the machine ([install page](https://code.claude.com/docs/en/setup)); `flowctl claude <review>` exits 2 with `claude not found in PATH` when it is missing, before anything is spawned, and `/flow-next:setup` lists the backend only when the CLI is on PATH. No API key is read by flow-next: the CLI's own login is the credential.
+
+What it buys per host:
+
+- **Codex, Cursor, Grok Build, Droid, OpenCode:** the Claude-family verdict that only Claude Code could reach through `host`. The writer is another family, so this is a cross-family review with the ladder, the receipt, the round counter and the fix loop of every other CLI backend.
+- **Claude Code:** the review is **same-family** - the session model and the reviewer share a family, so the verdict is not the independent one the [reviewer tier](orchestration.md#tiers-what-kind-of-model-a-job-wants) asks for. The backend still runs (a fresh-process Claude second opinion is a legitimate, receipted choice); the receipt records `mode: "claude"` and the model, and the review skills say so once. Prefer `codex` or `host` with a cross-family `reviewer:` pin from inside Claude Code when independence is the point.
+
+The reviewer child gets no shell and no write tool: `--tools Read Grep Glob` is the whole tool set, `--strict-mcp-config` excludes every configured MCP server, and the reviewed diff arrives by path under `.flow/tmp/claude-review/`. Command shape, receipt fields, the ladder signature and session resume: [`flowctl.md`](flowctl.md#claude).
 
 ## Optional skill requirements
 

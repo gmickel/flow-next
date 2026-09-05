@@ -43,3 +43,7 @@ A dispatch-time model override (prose requests in a Task dispatch are ignored - 
 ## Degradation
 
 No pinned agent for the tier's model → the subagent inherits the session model, stated once. That is the shipped default, so the whole pipeline runs either way - only the tier split is lost. For host review specifically, a session-model reviewer is the session grading itself: the fail-closed cross-family check fires - ask (interactive) or `NEEDS_HUMAN` (autonomous), **never a fallback to another CLI**. Verified live (1.18.19): the degraded reviewer self-reported the substitution and the conductor asked instead of shipping the verdict silently.
+
+## Models observed (2026-09-05)
+
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) is the CLI route for a Claude-family verdict from here - it shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only), cross-family when the session model is another family. It is its own backend, never a subprocess inside a `host` review.

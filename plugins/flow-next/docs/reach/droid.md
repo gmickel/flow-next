@@ -18,6 +18,10 @@ Nothing structural for routing. The known divergences here are tool and hook nam
 
 A tier this harness cannot honor runs on the session model and says so once. If a subagent dispatch behaves differently than expected, the work still completes in session - reach degrades, it does not fail.
 
+## Models observed (2026-09-05)
+
+The `claude` review backend (`review.backend claude`, observed 2026-09-05) shells out to `claude -p` (read-only, prompt on stdin) and steps the ranking `claude-fable-5-1` → `claude-opus-5` → `claude-sonnet-5` → `claude-haiku-4-5` (ids probed 2026-09-05 on Claude Code 2.1.260; the CLI lists no models, so the ladder steps that static ranking only). Droid runs the canonical Claude-first plugin, so check the session model's family before treating that verdict as independent: cross-family when the writer is another family, same-family otherwise (the receipt records the model either way).
+
 ## Discover, then invoke
 
 Ask the harness and each installed CLI what they currently offer, at the moment of use. A stored answer is the thing that goes stale.

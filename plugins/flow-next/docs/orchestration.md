@@ -141,16 +141,19 @@ The Codex mirror maps these groups to that host's own tiers at sync time (`scrip
 
 > **Optional.** flow-next runs fully without this; `review.backend` is unset by default and reviews run in-host. It costs an out-of-host review pass per review round, a second CLI installed and authenticated, and a fix-and-re-review loop that can run up to `review.maxIterations` rounds; turn it on when agent-written diffs get merged without a human reading them line by line, or invoke it manually with `/flow-next:impl-review` on the changes that warrant it. Two cheaper standing settings exist: `none` switches the review gates off entirely (each review skill exits cleanly, and pilot skips its plan-review and completion-review gates), while `host` keeps every gate and runs the reviewer as a host-native fresh-context subagent with a cross-family `reviewer:` pin from [the routing block](#the-routing-block) - no second CLI. The trade is priced in [`running-lean.md`](running-lean.md#turning-the-dial-none-and-host).
 
-The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | host | none` (`host` is bare-only - no model/effort rungs). The three CLI review backends (`codex` / `copilot` / `cursor`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
+The review subsystem is the most routable surface. Spec grammar `backend[:model[:effort]]`, registry `rp | codex | copilot | cursor | claude | host | none` (`host` is bare-only - no model/effort rungs). The four CLI review backends (`codex` / `copilot` / `cursor` / `claude`) are `BACKEND_REGISTRY` entries driving one shared `cmd_backend_review` pipeline (fn-112); genuine variance is hooks, not cloned commands.
 
 ```bash
 flowctl config set review.backend codex                    # project default
 flowctl config set review.backend cursor:<model>          # cursor folds effort into the model name
 flowctl config set review.backend codex:<model>:xhigh     # explicit model + effort
+flowctl config set review.backend claude:<model>:high     # Claude Code CLI, headless and read-only (efforts low|medium|high|xhigh|max)
 flowctl config set review.maxIterations 6                 # review-round cap (env MAX_REVIEW_ITERATIONS wins; >= 1, human-only under Ralph)
 ```
 
 Precedence (highest wins): per-task `review:` / per-spec `default_review` → `FLOW_REVIEW_BACKEND` → `.flow/config.json` `review.backend` → backend-specific env → registry default. A single task can pin a different reviewer than the project default and the override routes end-to-end. The `cursor` backend reaches reviewer models from several families in one place, on your existing Cursor subscription - ask its CLI for the current list rather than copying identifiers from a document. Full grammar + registry: [`flowctl.md`](flowctl.md#review-backend).
+
+**When `claude` is the cross-family pick.** From Codex, Cursor, Grok Build, Droid or OpenCode the session model is another family, so `review.backend claude` is the Claude-family verdict that only Claude Code could reach through `host` - with the same ladder, receipt, round counter and fix loop as `codex` / `copilot` / `cursor`. From Claude Code the same backend is **same-family**: it still runs (a fresh-process second opinion is a legitimate, receipted choice), the receipt records `mode: "claude"` plus the model, and the review skills say so once - but for an independent verdict prefer `codex`, or `host` with a cross-family `reviewer:` pin. The reviewer child has no shell and no write tool (`--tools Read Grep Glob`, `--strict-mcp-config`); the diff reaches it by path. Details: [`flowctl.md`](flowctl.md#claude).
 
 **The review prompt carries identities, not payloads (fn-169).** A reviewer runs
 in your checkout with a shell, so it is an executor like any other agent: flow-next
@@ -169,7 +172,8 @@ Two consequences are load-bearing rather than incidental. First, **a prompt-payl
 fitter or truncator is evidence the payload is wrong** - flow-next kept exactly one
 size guard, `CURSOR_ARGV_TRANSPORT_MAX`, and it is named as *transport* because
 `cursor-agent` takes its prompt as a positional argv argument and Windows
-`CreateProcessW` has a hard limit. It refuses loudly; it never trims. Second, an
+`CreateProcessW` has a hard limit. It refuses loudly; it never trims (`claude`
+takes its prompt on stdin and needs no guard at all). Second, an
 evidence read that FAILS aborts before a review round is reserved, because with
 nothing embedded an empty scope map is not a degraded review, it is no review.
 
@@ -181,7 +185,8 @@ and dispatches fresh. The order is deliberate - a lean prompt reaching a
 context-free session would be a fresh blind review with the priors dropped, which is
 the runaway this machinery exists to stop. Two-phase resume is enabled for `codex`,
 whose resume is measured; `copilot` (whose `--resume` is create-or-resume via a
-marker) and `cursor` inject unconditionally. `host` always injects - it has no
+marker), `cursor`, and `claude` (resume-only, by the CLI's own session id) inject
+unconditionally. `host` always injects - it has no
 session by design, every re-review being a fresh subagent. Injecting when it was
 unnecessary costs bytes; not injecting after a silent resume failure costs a blind
 review, so injection is the default everywhere it is not provably unnecessary.
@@ -205,7 +210,7 @@ consolidated fix pass; the merged round consumes ONE review round against the ca
 not three. Re-review rounds after fixes are a single dispatch carrying the full
 merged prior-finding container - the harvest value is the first round, and
 re-review verifies fixes, which needs continuity, not breadth. `rp` keeps its
-single stateful chat, and `copilot` / `cursor` keep single dispatch every round.
+single stateful chat, and `copilot` / `cursor` / `claude` keep single dispatch every round.
 The residual is real: roughly a third of validated findings eluded every draw in
 the studies, so round 2 shrinks rather than disappears.
 
@@ -215,8 +220,9 @@ the studies, so round 2 shrinks rather than disappears.
 
 - **cursor** - `cursor-agent` has **no system-prompt mechanism**: the flow-next reviewer rubric travels as a plain user prompt *on top of* Cursor's own built-in persona (which carries its OWN review rubric and an end-to-end-thoroughness bias), and `cursor-agent` auto-attaches the workspace `AGENTS.md` / `CLAUDE.md`, skill catalogs, and MCP instruction blocks. That ambient guidance dilutes the in-scope anchor and biases the reviewer toward always-produce-findings - an amplifier of review-loop non-convergence, not the root cause. There is no cursor CLI knob to suppress the auto-attach.
 - **codex** - `codex exec` auto-loads the host repo's project doc (`AGENTS.md`); in a repo whose `AGENTS.md` routes all work through the flow-next skills, the reviewer adopts that role and re-dispatches the review at itself instead of performing it (#331 route A - suppressed at the argv level with `-c project_doc_max_bytes=0` on both the fresh and resume dispatch). With the flow-next codex plugin installed, the reviewer can also read the plugin's own coordinator skills ("never self-declares a verdict") and obediently withhold the verdict tag (#331 route B - no CLI knob exists).
+- **claude** - `claude -p` loads the repo's `CLAUDE.md` (and the user's own) into every run, the same channel as cursor's auto-attach; the child has no shell, so the route-A self-dispatch cannot happen, but the role adoption can.
 
-On both backends flow-next prepends an explicit **persona-override preamble** on every review path: it declares that any ambient rubric/persona/instruction from the environment - built-in persona, auto-attached `AGENTS.md`/`CLAUDE.md`, skill catalogs, MCP blocks - is *superseded*, and the ONLY rubric + verdict contract is the flow-next one that follows. Repo-specific review invariants belong in `.flow/criteria.md` (standing G-IDs), which rides the review prompts themselves and reaches every reviewer regardless of backend - `AGENTS.md` is host-agent operating instructions, not a review-criteria channel, and a reviewer that inherits it returns no verdict at all rather than a stricter one (#331). Documented, not configurable; it rides automatically on `review.backend cursor:*` and `codex`. A review that still completes with no verdict is journaled as `missing_verdict` (not a transport failure class), and a streak of those terminates with instruction-contamination guidance instead of "repair the backend". The structured-findings ratchet and deterministic convergence terminals (unchanged-artifact refusal, early escalation when the reviewer explicitly marks the same finding `not-fixed` in two consecutive rounds, the round cap, and reviewer-emitted `NEEDS_HUMAN`) apply to every backend - see [`flowctl.md`](flowctl.md#codex-impl-review).
+On all three backends flow-next prepends an explicit **persona-override preamble** on every review path: it declares that any ambient rubric/persona/instruction from the environment - built-in persona, auto-attached `AGENTS.md`/`CLAUDE.md`, skill catalogs, MCP blocks - is *superseded*, and the ONLY rubric + verdict contract is the flow-next one that follows. Repo-specific review invariants belong in `.flow/criteria.md` (standing G-IDs), which rides the review prompts themselves and reaches every reviewer regardless of backend - `AGENTS.md` is host-agent operating instructions, not a review-criteria channel, and a reviewer that inherits it returns no verdict at all rather than a stricter one (#331). Documented, not configurable; it rides automatically on `review.backend cursor:*`, `codex`, and `claude`. A review that still completes with no verdict is journaled as `missing_verdict` (not a transport failure class), and a streak of those terminates with instruction-contamination guidance instead of "repair the backend". The structured-findings ratchet and deterministic convergence terminals (unchanged-artifact refusal, early escalation when the reviewer explicitly marks the same finding `not-fixed` in two consecutive rounds, the round cap, and reviewer-emitted `NEEDS_HUMAN`) apply to every backend - see [`flowctl.md`](flowctl.md#codex-impl-review).
 
 #### Steering the fan-out: worked recipes
 
@@ -253,7 +259,7 @@ Offloading the token-heavy part (writing code) to a second CLI is a **routing de
 ```bash
 codex exec -m <model> -c model_reasoning_effort=<effort> "<self-contained prompt>"
 cursor-agent --model <model> --force "<self-contained prompt>"
-claude -p "<self-contained prompt>"     # the same bridge in reverse, from a Codex/Cursor host
+claude -p "<self-contained prompt>"     # the same bridge in reverse, from a Codex/Cursor host (for a Claude REVIEW verdict use `review.backend claude`, not this)
 ```
 
 Two rules survive from the packaged path and are not optional:
@@ -467,7 +473,7 @@ Each rung is one copy-paste and one sentence on what it buys. Stop at any rung; 
 **Rung 2 - a cross-family reviewer.**
 
 ```bash
-flowctl config set review.backend codex     # or copilot | cursor | host
+flowctl config set review.backend codex     # or copilot | cursor | claude | host
 ```
 
 Every plan and implementation review now comes from a model that did not write the diff, and the verdict lands as a receipt on disk. Unattended ticks read this key; a prompt cannot reach a 3am pilot tick.
