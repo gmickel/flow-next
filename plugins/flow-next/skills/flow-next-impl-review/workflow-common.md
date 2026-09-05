@@ -9,7 +9,7 @@ artifact, explicitly reset, or deliberately use `--force`.
 
 ## Philosophy
 
-The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex, Copilot, and Cursor use context hints from flowctl (codex/copilot/cursor backends).
+The reviewer model only sees selected files. RepoPrompt's Builder discovers context you'd miss (rp backend). Codex, Copilot, Cursor, and Claude use context hints from flowctl (codex/copilot/cursor/claude backends).
 
 ---
 
@@ -56,17 +56,17 @@ BACKEND=$($FLOWCTL review-backend "$REVIEW_ID")
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
   if [ "$RP_ELIGIBLE" = 1 ]; then
-    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
+    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|claude|host|none"
   else
-    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
+    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|host|none"
   fi
   exit 1
 fi
 
 if [ "$RP_ELIGIBLE" = 1 ]; then
-  echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|host|none)"
+  echo "Review backend: $BACKEND (override: --review=rp|codex|copilot|cursor|claude|host|none)"
 else
-  echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|host|none)"
+  echo "Review backend: $BACKEND (override: --review=codex|copilot|cursor|claude|host|none)"
 fi
 ```
 
@@ -83,6 +83,8 @@ FLOW_REVIEW_BACKEND=codex:<model>:xhigh $FLOWCTL codex impl-review "$TASK_ID" --
 FLOW_REVIEW_BACKEND=copilot:<model> $FLOWCTL copilot impl-review "$TASK_ID" --receipt "$RECEIPT_PATH"
 # Cursor folds effort into the model name (no :<effort>):
 FLOW_REVIEW_BACKEND=cursor:<model> $FLOWCTL cursor impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
+# Claude takes model + effort (low|medium|high|xhigh|max); the reviewer reads the diff by path (no shell):
+FLOW_REVIEW_BACKEND=claude:<model>:high $FLOWCTL claude impl-review "$TASK_ID" --base "$DIFF_BASE" --receipt "$RECEIPT_PATH"
 
 # Or pass spec directly (preferred for one-offs, avoids env pollution):
 $FLOWCTL codex impl-review "$TASK_ID" --spec "codex:<model>:xhigh" --receipt "$RECEIPT_PATH"

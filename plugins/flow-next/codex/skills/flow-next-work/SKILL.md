@@ -104,13 +104,14 @@ Parse `WORK_ARGS` for these patterns. If found, use them and skip corresponding 
 - `--review=codex` or "review with codex" or "codex review" or "use codex" → Codex CLI
 - `--review=copilot` or "review with copilot" or "copilot review" → GitHub Copilot CLI
 - `--review=cursor` or "review with cursor" or "cursor review" → Cursor CLI (`cursor-agent`)
+- `--review=claude` or "review with claude" or "claude review" → Claude Code CLI (`claude -p`; same-family on a Claude Code host, recorded in the receipt)
 - `--review=host` or "host review" or "host-native review" → host-native fresh-context reviewer subagent (cross-family pin from the AGENTS.md model-routing section)
 - `--review=rp` or "review with rp" or "rp chat" or "repoprompt review" → RepoPrompt chat (via `flowctl rp chat-send`)
 - `--review=none` or `--no-review` or "no review" or "skip review" → no review
 - `--review=export` or "export review" or "external llm" → REFUSE at parse time, before any dispatch: export is not an impl-review backend — never fall through to the configured backend and never pass it as `REVIEW_MODE`; stop and point at `/flow-next:plan-review --review=export`, where export lives
 
 (All non-`none` review modes route through `/flow-next:impl-review`, which resolves the
-configured/overridden backend — codex, copilot, cursor, rp, or host — itself.)
+configured/overridden backend — codex, copilot, cursor, claude, rp, or host — itself.)
 
 **No-plan (zero-task specs only)**:
 - `--no-plan` or "no plan" or "skip planning" or "work directly without planning" → set `NO_PLAN=1`; it pre-answers Phase 1's zero-task fork so the fork's ask never fires when intent is stated

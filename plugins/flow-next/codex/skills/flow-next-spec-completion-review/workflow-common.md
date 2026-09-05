@@ -51,9 +51,9 @@ BACKEND=$($FLOWCTL review-backend "$SPEC_ID")
 if [[ "$BACKEND" == "ASK" ]]; then
   echo "Error: No review backend configured."
   if [ "$RP_ELIGIBLE" = 1 ]; then
-    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|host|none"
+    echo "Run /flow-next:setup to configure, or pass --review=rp|codex|copilot|cursor|claude|host|none"
   else
-    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|host|none"
+    echo "Run /flow-next:setup to configure, or pass --review=codex|copilot|cursor|claude|host|none"
   fi
   exit 1
 fi
@@ -70,6 +70,8 @@ FLOW_REVIEW_BACKEND=codex:<model>:xhigh $FLOWCTL codex completion-review "$SPEC_
 FLOW_REVIEW_BACKEND=copilot:<model> $FLOWCTL copilot completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Cursor folds effort into the model name (no :<effort>):
 FLOW_REVIEW_BACKEND=cursor:<model> $FLOWCTL cursor completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
+# Claude takes model + effort (low|medium|high|xhigh|max):
+FLOW_REVIEW_BACKEND=claude:<model>:high $FLOWCTL claude completion-review "$SPEC_ID" --receipt "$RECEIPT_PATH"
 # Or pass spec directly:
 $FLOWCTL codex completion-review "$SPEC_ID" --spec "codex:<model>:xhigh" --receipt "$RECEIPT_PATH"
 ```
@@ -87,6 +89,7 @@ Per-spec `default_review` (set via `flowctl spec set-backend`) overrides env.
 | `codex` | [workflow-codex.md](workflow-codex.md) |
 | `copilot` | [workflow-copilot.md](workflow-copilot.md) |
 | `cursor` | [workflow-cursor.md](workflow-cursor.md) |
+| `claude` | [workflow-claude.md](workflow-claude.md) |
 | `host` | [workflow-host.md](workflow-host.md) |
 | `rp` | [workflow-rp.md](workflow-rp.md) |
 
@@ -100,8 +103,8 @@ Only the file for the active backend should enter context. Do not read the other
 
 **The fix loop never pauses for user confirmation.** Every valid finding is fixed and re-reviewed automatically — the goal is complete spec compliance. A loop that stops to ask, or that exits with a valid finding unfixed, has broken this. Never use the plain-text numbered prompt in this loop.
 
-**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
-The codex/copilot/cursor handlers reserve a round before dispatch; the selected
+**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, claude, host):**
+The codex/copilot/cursor/claude handlers reserve a round before dispatch; the selected
 rp/host workflows call the same `review-rounds` reserve/record surface.
 Verdict-bearing attempts consume the reservation; no-verdict transport failures
 are recorded and refunded.
@@ -109,7 +112,7 @@ are recorded and refunded.
 When a delivered `NEEDS_WORK` consumes round
 `${MAX_REVIEW_ITERATIONS:-8}`, it is the terminal capped verdict:
 
-- codex/copilot/cursor already self-wrote `needs_work` while handling that
+- codex/copilot/cursor/claude already self-wrote `needs_work` while handling that
   verdict; do not duplicate it.
 - host/rp continue to SKILL.md's Step 0.5 checkpoint immediately, write
   `needs_work` exactly once, then emit `ESCALATE:` and exit 4. Do not attempt
@@ -148,12 +151,12 @@ If verdict is NEEDS_WORK, loop internally until SHIP or the iteration cap:
 
 ## Record the terminal verdict exactly once
 
-`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor (fn-112). **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for rp and for repairing a missed write:
+`flowctl <backend> completion-review` self-writes `completion_review_status` / `completion_reviewed_at` from the parsed verdict on codex/copilot/cursor/claude (fn-112). **Every gate reads one satisfying set — `{ship, not_required}`. Without a write somewhere, a standalone completion review leaves `completion_review_status: unknown`, which satisfies nothing: `flowctl next --require-completion-review` keeps demanding the review (pilot's gate), make-pr's Open-items / draft heuristic reads stale state, and tracker-sync never reaches a terminal rung. A work 3g policy skip is different — it persists `not_required` (requirement satisfied, no review ran), so those gates pass without a receipt; `ship` stays the only value claiming a review actually happened and the only one that reaches tracker-sync's `verified` label.** The standalone command remains for rp and for repairing a missed write:
 
 For host/rp, execute the SKILL.md Step 0.5 checkpoint again now. The
 just-recorded terminal attempt is newer than the stored status, so that shared
 checkpoint is the sole writer and emits the terminal only after persistence
-succeeds. Codex/copilot/cursor handlers already self-write status; their next
+succeeds. Codex/copilot/cursor/claude handlers already self-write status; their next
 invocation also runs Step 0.5 first, so a handler-side write failure recovers
 without another reviewer dispatch.
 

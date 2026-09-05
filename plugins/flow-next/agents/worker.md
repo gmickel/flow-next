@@ -13,7 +13,7 @@ You implement a single flow-next task. Your prompt contains configuration values
 - `TASK_ID` - the task to implement (e.g., fn-1.2)
 - `SPEC_ID` - parent spec (e.g., fn-1)
 - `FLOWCTL` - path to flowctl CLI
-- `REVIEW_MODE` - none, rp, codex, copilot, cursor, or host-deferred (host review runs at the conductor level after you return - the agent that wrote the code never dispatches or issues its own review verdict. Under host-deferred you skip the Phase 4 review dispatch, claim no review verdict, and defer Phase 5's `flowctl done`: write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself. A host-deferred return that reports the task review-passed or `done` has broken this)
+- `REVIEW_MODE` - none, rp, codex, copilot, cursor, claude, or host-deferred (host review runs at the conductor level after you return - the agent that wrote the code never dispatches or issues its own review verdict. Under host-deferred you skip the Phase 4 review dispatch, claim no review verdict, and defer Phase 5's `flowctl done`: write your summary + evidence files to the handover paths and return with the task still `in_progress`; the conductor gates on the host review verdict and runs `flowctl done` itself. A host-deferred return that reports the task review-passed or `done` has broken this)
 - `RALPH_MODE` - true if running autonomously
 - `PARALLEL_WAVE` - true only when the conductor dispatched this task concurrently in an isolated mutable workspace. In that mode, implement/test/commit, but defer review and every shared lifecycle mutation to the conductor.
 - `WORKSPACE` - the isolated mutable workspace assigned by the conductor (parallel-wave mode only)
@@ -283,7 +283,7 @@ broken this; continue to Phase 5's parallel-wave handover branch.
 
 **Under `REVIEW_MODE: host-deferred` this phase's review dispatch does not run** — the agent that wrote the code never dispatches or issues its own review verdict; the conductor runs the host review after you return. A host-deferred worker that invoked impl-review, reported a verdict, or ran Phase 5's `flowctl done` has broken this — see the Phase 5 host-deferred branch.
 
-**Under any other non-`none` value (`rp`, `codex`, `copilot`, `cursor`), impl-review is invoked and a SHIP verdict received before this phase ends.** Proceeding on anything short of SHIP has broken this.
+**Under any other non-`none` value (`rp`, `codex`, `copilot`, `cursor`, `claude`), impl-review is invoked and a SHIP verdict received before this phase ends.** Proceeding on anything short of SHIP has broken this.
 (The impl-review SHIP gate covers CODE QUALITY only. The Phase 5 Verify block
 still runs in every mode — it is the authoritative gate discipline (classify →
 tier-B or full gates → receipts → GATE_SKIPPED evidence). It is not a duplicate
@@ -307,7 +307,7 @@ otherwise, so passing it propagates the correct explicit-or-per-task precedence 
 re-resolving from config. The skill still handles everything else:
 - Scoped diff (BASE_COMMIT..HEAD, not main..HEAD)
 - Receipt paths (don't pass --receipt yourself)
-- Sending to reviewer (rp, codex, copilot, or cursor backend)
+- Sending to reviewer (rp, codex, copilot, cursor, or claude backend)
 - Parsing verdict (SHIP/NEEDS_WORK/MAJOR_RETHINK)
 - Fix loops until SHIP
 

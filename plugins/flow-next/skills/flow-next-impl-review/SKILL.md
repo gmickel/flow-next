@@ -11,6 +11,7 @@ user-invocable: false
 - `BACKEND=codex` → [workflow-codex.md](workflow-codex.md)
 - `BACKEND=copilot` → [workflow-copilot.md](workflow-copilot.md)
 - `BACKEND=cursor` → [workflow-cursor.md](workflow-cursor.md)
+- `BACKEND=claude` → [workflow-claude.md](workflow-claude.md)
 - `BACKEND=host` → [workflow-host.md](workflow-host.md)
 - `BACKEND=rp` → [workflow-rp.md](workflow-rp.md)
 
@@ -20,8 +21,8 @@ Conduct a John Carmack-level review of implementation changes on the current bra
 
 **Role**: Code Review Coordinator (NOT the reviewer)
 **Backends** (branch on the Phase 0 `RP_ELIGIBLE` probe):
-- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), or host-native (`host`)
-- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), or host-native (`host`) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
+- When `RP_ELIGIBLE=1`: RepoPrompt (rp), Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`)
+- When `RP_ELIGIBLE=0`: Codex CLI (codex), GitHub Copilot CLI (copilot), Cursor CLI (cursor), Claude Code CLI (claude), or host-native (`host`) — rp is macOS-only; never list it in guidance you surface (`--review=rp` stays accepted)
 
 ## Preamble — execute Phase 0 exactly once
 
@@ -29,13 +30,13 @@ Conduct a John Carmack-level review of implementation changes on the current bra
 
 Exception: a `--review=<backend>` argument (see Backend Selection below) wins — when present, set `BACKEND` from the flag and skip Phase 0's `review-backend` call + ASK handling (still run its `$FLOWCTL` / `RP_ELIGIBLE` setup lines).
 
-When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor`, `host` (plus `none`). `export` is not an impl-review mode at all — a manual export review lives in `/flow-next:plan-review --review=export`; never present it here. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
+When `RP_ELIGIBLE=0` (not macOS, no supported RepoPrompt CLI), never *steer* the user toward rp: every backend summary, recommendation, or override hint you surface presents only the runnable configured backends `codex`, `copilot`, `cursor`, `claude`, `host` (plus `none`). `export` is not an impl-review mode at all — a manual export review lives in `/flow-next:plan-review --review=export`; never present it here. Suppression is not a ban: an explicit `--review=rp`, `FLOW_REVIEW_BACKEND=rp`, or `review.backend=rp` still resolves to rp and errors at runtime via `require_rp_cli()`.
 
 ## Backend Selection
 
 **Priority** (first match wins):
-1. `--review=rp|codex|copilot|cursor|host|none` argument
-2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `host`, `none`) OR spec form (`codex:<model>:xhigh`, `copilot:<model>`, `cursor:<model>`); `host` is bare-only (`host:<model>` is rejected)
+1. `--review=rp|codex|copilot|cursor|claude|host|none` argument
+2. `FLOW_REVIEW_BACKEND` env var — bare backend (`rp`, `codex`, `copilot`, `cursor`, `claude`, `host`, `none`) OR spec form (`codex:<model>:xhigh`, `copilot:<model>`, `cursor:<model>`, `claude:<model>:<effort>`); `host` is bare-only (`host:<model>` is rejected)
 3. `.flow/config.json` → `review.backend` (same bare / spec forms)
 4. **Error** - no auto-detection
 
@@ -46,6 +47,7 @@ Check $ARGUMENTS for:
 - `--review=codex` or `--review codex` → use codex
 - `--review=copilot` or `--review copilot` → use copilot
 - `--review=cursor` or `--review cursor` → use cursor
+- `--review=claude` or `--review claude` → use claude
 - `--review=host` or `--review host` → use host
 - `--review=export` or `--review export` → fail closed: report that `export` is not an impl-review backend and stop before any dispatch; the manual path is `/flow-next:plan-review --review=export`
 - `--review=none` or `--review none` → skip review
@@ -62,7 +64,7 @@ The per-backend "at a glance" descriptions, the `backend[:model[:effort]]` spec 
 
 ## Critical Rules
 
-**Per-backend rules** for `rp`, `codex`, `copilot`, and `cursor` live at the top of each `workflow-<backend>.md` — read the active backend's file (routing table above) and follow its Critical Rules section.
+**Per-backend rules** for `rp`, `codex`, `copilot`, `cursor`, and `claude` live at the top of each `workflow-<backend>.md` — read the active backend's file (routing table above) and follow its Critical Rules section.
 
 **For host backend (fn-123 R5 / fn-126):**
 `host` is bare-only. After selection, read [workflow-host.md](workflow-host.md).
@@ -248,7 +250,7 @@ Follow the phases in the per-backend file end-to-end. Each file owns its own Ide
 
 **MAJOR_RETHINK is NOT a fix-loop input.** Every backend can emit `MAJOR_RETHINK` (a valid verdict tag), but it means the *design/approach* is wrong — not something to patch finding-by-finding. Do NOT enter the fix loop on it. Escalate immediately: surface the reviewer's rationale to the caller and stop with a typed **`BLOCKED: DESIGN_CONFLICT`** (Ralph mode: output `<promise>RETRY</promise>`). A re-approach is a human/worker decision, never an ad-hoc patch. Only `NEEDS_WORK` drives the loop below.
 
-**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, host):**
+**MAX ITERATIONS (backend-agnostic — rp, codex, copilot, cursor, claude, host):**
 flowctl reserves a per-task round before every task-scoped dispatch. A delivered
 SHIP / NEEDS_WORK / MAJOR_RETHINK / NEEDS_HUMAN consumes it; a no-verdict transport failure
 is durably recorded and refunded. A first-round three-draw fan-out (codex/host)

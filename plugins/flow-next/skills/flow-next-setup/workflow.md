@@ -294,6 +294,7 @@ if command -v rpce-cli >/dev/null 2>&1 \
 HAVE_CODEX=$(which codex >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_COPILOT=$(which copilot >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_CURSOR=$(which cursor-agent >/dev/null 2>&1 && echo 1 || echo 0)
+HAVE_CLAUDE=$(which claude >/dev/null 2>&1 && echo 1 || echo 0)
 HAVE_GROK=$(which grok >/dev/null 2>&1 && echo 1 || echo 0)
 
 # The HAVE_* values feed the Review question's "(detected)" annotations only.
@@ -380,7 +381,7 @@ Current configuration:
 - Memory: <enabled|disabled> (change with: flowctl config set memory.enabled <true|false>)
 - Plan-Sync: <enabled|disabled> (change with: flowctl config set planSync.enabled <true|false>)
 - Plan-Sync cross-spec: <enabled|disabled> (change with: flowctl config set planSync.crossSpec <true|false>)
-- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|host|none OR spec form like codex:<model>:xhigh or cursor:<model>>)
+- Review backend: <current value, bare or spec form> (change with: flowctl config set review.backend <codex|rp|copilot|cursor|claude|host|none OR spec form like codex:<model>:xhigh, cursor:<model>, or claude:<model>:<effort>>)
 - GitHub scout: <enabled|disabled> (change with: flowctl config set scouts.github <true|false>)
 - HTML artifacts: <enabled|disabled> (change with: flowctl config set artifacts.html.enabled <true|false>)
 - Spec ids: <flow|tracker> (change with: flowctl config set tracker.specIds <flow|tracker>)
@@ -501,6 +502,7 @@ Available questions (include only if corresponding config is unset):
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI (secondary — circular from inside Cursor)", "description": "Runs the external cursor-agent CLI. Circular when already inside Cursor — prefer Host. Still selectable for multi-family reach via the cursor-agent model menu. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
+    {"label": "Claude Code CLI", "description": "Runs claude -p headless, read-only, on a Claude-family reviewer. Cross-platform; needs the claude CLI on PATH. Same-family when Claude Code is the writer - the receipt records it; prefer Codex or Host there when family independence matters. <detected if HAVE_CLAUDE=1, (not detected) if HAVE_CLAUDE=0>"},
     {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
     {"label": "None", "description": "No review gates. Fastest runs; tests/lint still gate and work still audits large or risky diffs in-host, but nothing checks R-ID coverage at spec completion - fits diffs you read yourself. Set later: flowctl config set review.backend <name>, or per-run via --review"}
   ],
@@ -512,12 +514,13 @@ Available questions (include only if corresponding config is unset):
 ```json
 {
   "header": "Review",
-  "question": "Which review backend? Plans and implementations get reviewed before they land. This host reaches only one model family natively — host-native review fails closed unless the writer is from another family; cross-family review comes via bridge backends (codex/cursor/copilot). Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/guides/review-workflow/",
+  "question": "Which review backend? Plans and implementations get reviewed before they land. This host reaches only one model family natively — host-native review fails closed unless the writer is from another family; cross-family review comes via bridge backends (codex/cursor/copilot/claude). Each review round is a serial pass the pipeline waits on - usually the largest wall-clock item in a run. Guide: https://flow-next.dev/guides/review-workflow/",
   "options": [
     {"label": "Host", "description": "Fresh-context host-native subagent; name the model on the `reviewer` tier of the AGENTS.md routing block (setup writes it commented out; you fill in the slug). Fail-closed: this host is single-native-family — native host review refuses same-family self-review (interactive → ask; autonomous → NEEDS_HUMAN) unless the writer is non-Grok. Cross-family via bridges."},
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
+    {"label": "Claude Code CLI", "description": "Runs claude -p headless, read-only, on a Claude-family reviewer. Cross-platform; needs the claude CLI on PATH. Same-family when Claude Code is the writer - the receipt records it; prefer Codex or Host there when family independence matters. <detected if HAVE_CLAUDE=1, (not detected) if HAVE_CLAUDE=0>"},
     {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
     {"label": "None", "description": "No review gates. Fastest runs; tests/lint still gate and work still audits large or risky diffs in-host, but nothing checks R-ID coverage at spec completion - fits diffs you read yourself. Set later: flowctl config set review.backend <name>, or per-run via --review"}
   ],
@@ -534,6 +537,7 @@ Available questions (include only if corresponding config is unset):
     {"label": "Codex CLI", "description": "OpenAI's codex CLI, reviews on its top reasoning tier (GPT family). Cross-platform, simple setup. <detected if HAVE_CODEX=1, (not detected) if HAVE_CODEX=0>"},
     {"label": "Copilot CLI", "description": "Routes to Claude- or GPT-family reviewers via your GitHub Copilot plan. Requires gh copilot auth. <detected if HAVE_COPILOT=1, (not detected) if HAVE_COPILOT=0>"},
     {"label": "Cursor CLI", "description": "Runs cursor-agent with a multi-family model menu (pick the family that did not write the diff). Billed to your Cursor subscription. <detected if HAVE_CURSOR=1, (not detected) if HAVE_CURSOR=0>"},
+    {"label": "Claude Code CLI", "description": "Runs claude -p headless, read-only, on a Claude-family reviewer. Cross-platform; needs the claude CLI on PATH. Same-family when Claude Code is the writer - the receipt records it; prefer Codex or Host there when family independence matters. <detected if HAVE_CLAUDE=1, (not detected) if HAVE_CLAUDE=0>"},
     {"label": "RepoPrompt", "description": "macOS only. Auto-discovers git diffs + context, reviews scoped to actual changes, far fewer tokens than full-repo approaches. <detected if HAVE_RP=1, (not detected) if HAVE_RP=0>"},
     {"label": "Host", "description": "Host-native fresh-context subagent - no second CLI to install. Name a cross-family model on the `reviewer` tier of the routing block (setup writes it commented out; you fill in the slug). Keeps every review gate at the lowest setup cost."},
     {"label": "None", "description": "No review gates. Fastest runs; tests/lint still gate and work still audits large or risky diffs in-host, but nothing checks R-ID coverage at spec completion - fits diffs you read yourself. Set later: flowctl config set review.backend <name>, or per-run via --review"}
@@ -542,9 +546,9 @@ Available questions (include only if corresponding config is unset):
 }
 ```
 
-When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex` AND `PLATFORM` is NOT `cursor`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Grok host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). On `PLATFORM=cursor` do NOT add the Codex Recommended label — `Host (Recommended)` already leads. On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or an `implementer` tier pointing at the same family), so codex review would be SAME-family - prefer a detected non-GPT backend there (copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the user changes it later with `flowctl config set review.backend <name>`, surfaced in 6c's current-config notice.
+When `HAVE_CODEX=1` AND `PLATFORM` is NOT `codex` AND `PLATFORM` is NOT `cursor`, append ` (Recommended - cross-family default)` to the `Codex CLI` label: the recommended multi-model pipeline reviews cross-family FROM THE WRITER, and on a Claude Code / Droid / Grok host codex review is a different family than the session writer - so this question carries the ceremony's `review.backend codex` offer while the key is unset (fn-97). On `PLATFORM=cursor` do NOT add the Codex Recommended label — `Host (Recommended)` already leads. On a Codex host (`PLATFORM=codex`) do NOT add the label: the writer is GPT-family (the session model, or an `implementer` tier pointing at the same family), so codex review would be SAME-family - prefer a detected non-GPT backend there (claude, or copilot / cursor with a Claude-family model) and leave the options unannotated when none is detected. When `review.backend` is ALREADY set to something else, this question is skipped (existing config is never silently overwritten) - the user changes it later with `flowctl config set review.backend <name>`, surfaced in 6c's current-config notice.
 
-Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `cursor` / `rp` / `none`). Power users can also write a full spec like `codex:<model>:high`, `copilot:<model>:xhigh`, or `cursor:<model>` (cursor takes a model only — no `:effort`) via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms. Backend `host` is bare only (no `host:<model>` — the model is named on the `reviewer` tier of the AGENTS.md routing block).
+Stored value is a bare backend name by default (`host` / `codex` / `copilot` / `cursor` / `claude` / `rp` / `none`). Power users can also write a full spec like `codex:<model>:high`, `copilot:<model>:xhigh`, `cursor:<model>` (cursor takes a model only — no `:effort`), or `claude:<model>:<effort>` via `flowctl config set review.backend <spec>` after setup — the review commands accept both forms. Backend `host` is bare only (no `host:<model>` — the model is named on the `reviewer` tier of the AGENTS.md routing block).
 
 **No Model Routing question exists.** Setup never asks which models to route to,
 never probes a CLI for slugs, and never proposes a pin. Step 7 writes one
@@ -665,7 +669,7 @@ Use `AskUserQuestion` with the built questions array (call `ToolSearch` with `se
 
 **Note:** If docs are already current, adjust the Docs question description to mention "(already up to date)" or skip that question entirely.
 
-**Note:** If no supported RepoPrompt CLI, codex, copilot, or cursor-agent is detected, add this note to the Review question: "No review backend detected. Install RepoPrompt CE (`rpce-cli`), codex, copilot, or cursor-agent for review support."
+**Note:** If no supported RepoPrompt CLI, codex, copilot, cursor-agent, or claude is detected, add this note to the Review question: "No review backend detected. Install RepoPrompt CE (`rpce-cli`), codex, copilot, cursor-agent, or claude for review support."
 
 ### Done when
 
@@ -755,6 +759,7 @@ case "$review_answer" in
   "Codex"*) REVIEW_BACKEND="codex" ;;
   "Copilot"*|"copilot"*) REVIEW_BACKEND="copilot" ;;
   "Cursor"*|"cursor"*) REVIEW_BACKEND="cursor" ;;
+  "Claude"*|"claude"*) REVIEW_BACKEND="claude" ;;
   "RepoPrompt"*) REVIEW_BACKEND="rp" ;;
   *) REVIEW_BACKEND="none" ;;
 esac
@@ -890,7 +895,7 @@ Grok host notes:
 - flowctl resolves from the plugin install via the skill's own absolute path (Grok exposes no plugin-root env vars) — nothing is copied into the repo
 - Docs: /flow-next: slash snippet (CLAUDE.md default lifecycle target; Grok also reads AGENTS.md)
 - Routing block: AGENTS.md (where host review reads the `reviewer` tier)
-- Review: host offered (single-native-family fail-closed for Grok writers) + rp/codex/copilot/cursor/none
+- Review: host offered (single-native-family fail-closed for Grok writers) + rp/codex/copilot/cursor/claude/none
 - No .codex/agents copy; Ralph: unsupported on Grok (not offered; not registered)
 - Detection: GROK_AGENT=1 (not ~/.grok or PATH)
 ```
@@ -922,7 +927,7 @@ Configuration (use flowctl config set to change):
 - GitHub scout: <enabled|disabled>
 - HTML artifacts: <enabled|disabled>
 - Spec ids: <flow|tracker|unset>   # only meaningful when a tracker is configured; tracker is the team default
-- Review backend: <host|codex|rp|copilot|cursor|none>
+- Review backend: <host|codex|rp|copilot|cursor|claude|none>
 
 Documentation updated:
 - <files updated or "none">

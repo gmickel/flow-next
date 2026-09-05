@@ -72,7 +72,7 @@ This re-anchor is mandatory before every fix cycle. A user-edited spec is the
 source of truth; never review or restore a stale generated/checkpoint copy
 unless recovering after context compaction.
 
-For Codex/Copilot/Cursor, derive reviewer code anchors from the current spec in
+For Codex/Copilot/Cursor/Claude, derive reviewer code anchors from the current spec in
 the selected backend's single atomic dispatch fence. For host and rp, provide
 the same current spec/task material and review focus.
 
@@ -85,6 +85,7 @@ Read exactly one:
 | `codex` | [workflow-codex.md](workflow-codex.md) |
 | `copilot` | [workflow-copilot.md](workflow-copilot.md) |
 | `cursor` | [workflow-cursor.md](workflow-cursor.md) |
+| `claude` | [workflow-claude.md](workflow-claude.md) |
 | `host` | [workflow-host.md](workflow-host.md) |
 | `rp` | [workflow-rp.md](workflow-rp.md) |
 
