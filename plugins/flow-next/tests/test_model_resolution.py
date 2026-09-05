@@ -551,6 +551,46 @@ class TestClaudeLadder(unittest.TestCase):
                 self.assertEqual(rc, 1)
                 self.assertEqual(len([c for c in calls if "-p" in c]), 1)
 
+    def test_non_result_payloads_are_transport_failures(self) -> None:
+        # fn-221 R2 (fan-out round 1): the claude parser is STRICT - one JSON
+        # object with type "result". A wrong-type object, a type-less object
+        # that still carries result + session_id, and a valid result followed
+        # by corruption must never become a SHIP; cursor's JSON-lines salvage
+        # is not shared.
+        ship = '"result":"<verdict>SHIP</verdict>","session_id":"s1"'
+        for stdout in (
+            '{"type":"assistant",' + ship + "}",
+            "{" + ship + "}",
+            CLAUDE_OK_STREAM + "\ngarbage that is not json",
+            '{"type":"system","subtype":"init"}\n' + CLAUDE_OK_STREAM,
+        ):
+            with self.subTest(stdout=stdout[:48]):
+                calls: list = []
+                with _repo() as root:
+                    out, sid, rc, err = self._run(root, lambda m, _out=stdout: (_out, "", 0), calls=calls)
+                self.assertEqual((out, rc), ("", 1))
+                self.assertIsNone(flowctl.parse_codex_verdict(out))
+                self.assertEqual(len([c for c in calls if "-p" in c]), 1)
+
+    def test_error_envelope_text_never_reaches_reviewer_output(self) -> None:
+        # fn-221 R2 (fan-out round 1): the shared finalizer parses the verdict
+        # before the exit code, so an error envelope's text must travel on
+        # stderr, never in the output slot - a 500 whose text contains a
+        # verdict tag is a transport failure, not a SHIP.
+        envelope = _claude_result(status=500, text="Overloaded <verdict>SHIP</verdict>")
+        with _repo() as root:
+            out, sid, rc, err = self._run(root, lambda m: (envelope, "", 0))
+        self.assertEqual((out, rc), ("", 1))
+        self.assertIn("Overloaded", err)  # diagnostic preserved on stderr
+        self.assertIsNone(flowctl.parse_codex_verdict(out))
+        flowctl._wire_backend_review_hooks()
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            flowctl._finish_backend_exec(
+                backend="claude", reg=BACKEND_REGISTRY["claude"],
+                args=argparse.Namespace(json=False), receipt_path=None,
+                output=out, stderr=err, exit_code=rc,
+            )
+
     def test_max_two_steps_then_floor_omits_model_and_effort(self) -> None:
         calls: list = []
         res: dict = {}

@@ -8838,45 +8838,6 @@ def get_cursor_version() -> Optional[str]:
 CURSOR_ARGV_TRANSPORT_MAX = COPILOT_ARGV_PROMPT_MAX
 
 
-def _headless_result_object(stdout: str) -> Optional[dict]:
-    """Find the single ``{"type":"result",...}`` object in a headless CLI's stdout.
-
-    Shared by the cursor and claude parsers: both CLIs emit one result object
-    under ``--output-format json`` (``{"type":"result","is_error":bool,
-    "result":"<text>","session_id":"<id>"}``); streaming JSON-lines are
-    tolerated by scanning for the LAST result object. None when stdout is
-    empty or holds no such object.
-    """
-    text = (stdout or "").strip()
-    if not text:
-        return None
-
-    def _is_result_obj(d: Any) -> bool:
-        return isinstance(d, dict) and (
-            d.get("type") == "result"
-            or ("result" in d and "session_id" in d)
-        )
-
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        parsed = None
-    if _is_result_obj(parsed):
-        return parsed
-    # Streaming JSON-lines fallback — take the last result object.
-    for line in reversed(text.splitlines()):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            cand = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if _is_result_obj(cand):
-            return cand
-    return None
-
-
 def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
     """Parse cursor-agent ``--output-format json`` stdout.
 
@@ -8887,7 +8848,37 @@ def _parse_cursor_result(stdout: str) -> tuple[str, Optional[str], bool]:
     object. On unparseable / empty output we return ``("", None, True)`` so the
     caller treats it as a backend failure (never a false SHIP).
     """
-    obj = _headless_result_object(stdout)
+    text = (stdout or "").strip()
+    if not text:
+        return "", None, True
+
+    def _is_result_obj(d: Any) -> bool:
+        return isinstance(d, dict) and (
+            d.get("type") == "result"
+            or ("result" in d and "session_id" in d)
+        )
+
+    obj: Optional[dict] = None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+    if _is_result_obj(parsed):
+        obj = parsed
+    else:
+        # Streaming JSON-lines fallback — take the last result object.
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                cand = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if _is_result_obj(cand):
+                obj = cand
+                break
+
     if obj is None:
         return "", None, True
 
@@ -9121,13 +9112,20 @@ def _parse_claude_result(
 ) -> tuple[str, Optional[str], bool, Optional[dict]]:
     """Parse ``claude -p --output-format json`` stdout.
 
-    Returns ``(result_text, session_id, is_error, payload)``. A non-JSON or
-    non-result payload yields ``("", None, True, None)`` - a transport failure,
-    never a verdict. ``payload`` is the parsed result object so the ladder's
-    unavailable predicate can read ``api_error_status`` beside the text.
+    Returns ``(result_text, session_id, is_error, payload)``. STRICT: stdout
+    must be exactly one JSON object with ``type == "result"`` (what the CLI
+    emits under ``--output-format json``). Anything else - non-JSON, a
+    wrong-type or type-less object, a result followed by corruption - yields
+    ``("", None, True, None)``: a transport failure, never a verdict. Cursor's
+    lenient JSON-lines salvage is deliberately NOT shared here. ``payload`` is
+    the parsed object so the ladder's unavailable predicate can read
+    ``api_error_status`` beside the text.
     """
-    obj = _headless_result_object(stdout)
-    if obj is None:
+    try:
+        obj = json.loads((stdout or "").strip() or "null")
+    except json.JSONDecodeError:
+        obj = None
+    if not isinstance(obj, dict) or obj.get("type") != "result":
         return "", None, True, None
     result_text = obj.get("result")
     if not isinstance(result_text, str):
@@ -9212,13 +9210,19 @@ def run_claude_exec(
         if returned_session_id is None:
             returned_session_id = session_id or ""
         exit_code = result.returncode
-        if exit_code == 0 and (
-            is_error or _claude_model_unavailable(payload, result.stderr)
-        ):
-            # Logical error (or the exit-0 unavailable signature) without a
-            # non-zero exit — never let it read as a clean review.
-            exit_code = 1
-        return result_text, returned_session_id, exit_code, result.stderr
+        stderr = result.stderr or ""
+        if is_error or _claude_model_unavailable(payload, stderr):
+            # An error envelope (or the exit-0 unavailable signature) is never
+            # reviewer output: ``_finish_backend_exec`` parses the verdict
+            # BEFORE it looks at the exit code, so the envelope's text must not
+            # travel in the output slot. Diagnostics move to stderr; the
+            # parsed payload stays in ``last`` for the ladder predicate.
+            if result_text:
+                stderr = f"{stderr}\n{result_text}" if stderr else result_text
+            result_text = ""
+            if exit_code == 0:
+                exit_code = 1
+        return result_text, returned_session_id, exit_code, stderr
 
     def _is_unavailable(out: Optional[str], err: Optional[str]) -> bool:
         return _claude_model_unavailable(last.get("payload"), err)
