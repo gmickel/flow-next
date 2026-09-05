@@ -1319,7 +1319,7 @@
     "plan": 0
   },
   "spec_path": ".flow/specs/fn-221-claude-cli-review-backend-claude-p-as-a.md",
-  "status": "open",
+  "status": "done",
   "title": "claude CLI review backend: claude -p as a packaged cross-family reviewer",
   "tracker": {
     "baseHashFlow": null,
@@ -1332,5 +1332,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-05T02:02:15.894618Z"
+  "updated_at": "2026-09-05T03:00:53.422149Z"
 }
