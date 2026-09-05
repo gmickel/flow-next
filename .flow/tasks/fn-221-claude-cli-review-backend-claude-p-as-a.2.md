@@ -62,3 +62,4 @@ stage: impl-review - ran [codex fan-out round 1 NEEDS_WORK (1 merged finding) ->
 - Commits: 4584eea068beab87b3da7dd86fac53c32c72b601, a3a0f44a3322e4b027e2ac717b5a32f6360bf801, a49032424a8e6f0ef871c8d9122bf25023cc9519, b0f974aac7bd044c2560d7d78070fb9e0a81a8e0
 - Tests: cd plugins/flow-next/tests && python3 -m unittest test_claude_review_commands test_cursor_review_commands test_backend_spec test_model_resolution test_flowctl_surface test_review_prompt_constraints test_review_fanout test_flow_config_schema_drift test_flow_config_schema test_tracker_distribution test_ralph_guard test_startup_bootstrap test_install_codex_legacy_cleanup test_install_opencode -q, python3 scripts/gen_flow_config_schema.py && python3 scripts/gen_tracker_manifest.py, python3 scripts/run_tests_parallel.py, uvx ruff@0.16.0 check .
 - PRs:
+stage: plan-sync - skipped(config: planSync.enabled != true)
