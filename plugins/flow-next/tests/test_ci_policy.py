@@ -1,6 +1,8 @@
 """Exercise CI selection, aggregate status and exact-release evidence contracts."""
 import importlib.util
 import json
+import os
+import sys
 from pathlib import Path
 import re
 import subprocess
@@ -75,17 +77,17 @@ class CIPolicy(unittest.TestCase):
         for selected in (True, False):
             needs = {name: {'result': 'success' if selected or name in names[:2] else 'skipped'} for name in names}
             needs['changes']['outputs'] = {'run_smokes': str(selected).lower(), 'run_windows_stub': str(selected).lower()}
-            with mock.patch.dict('os.environ', {'NEEDS_JSON': json.dumps(needs)}):
-                exec(script, {})
+            result = subprocess.run([sys.executable, '-c', script], env=dict(os.environ, NEEDS_JSON=json.dumps(needs)), capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
             for name in names:
                 for bad in ('failure', 'cancelled', 'skipped'):
                     if bad == 'skipped' and not selected and name in names[2:]:
                         continue
                     broken = json.loads(json.dumps(needs))
                     broken[name]['result'] = bad
-                    with self.subTest(name=name, result=bad, selected=selected), mock.patch.dict('os.environ', {'NEEDS_JSON': json.dumps(broken)}):
-                        with self.assertRaises(SystemExit):
-                            exec(script, {})
+                    with self.subTest(name=name, result=bad, selected=selected):
+                        result = subprocess.run([sys.executable, '-c', script], env=dict(os.environ, NEEDS_JSON=json.dumps(broken)), capture_output=True)
+                        self.assertNotEqual(result.returncode, 0)
         self.assertIn('    if: always()\n    needs: [changes, units, smokes, python-intermediate-smoke, windows-python3-stub]', workflow)
         self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", workflow)
         for block in re.split(r'^  [\w-]+:\n', workflow.split('jobs:\n')[1], flags=re.M)[1:]:
