@@ -8,17 +8,32 @@ eval-driven hill-climbing — a baseline, binary evals, one mutation at a time, 
 > is the bridge to it plus our local conventions. Run it ad-hoc when a hot-path prompt is bloated
 > or a judgment skill is flaky.
 
-## Source / tooling (external — not in this repo)
+## Current study authority
+
+For new maintainer studies, read `~/work/agent-evals/METHODOLOGY.md` and reuse
+`lib/evalkit.py` in that private repo. Pre-register the endpoint and decision
+rule, hold model/harness/effort constant across instruction arms, use one scoring
+standard, screen then replicate, and retain negative and inconclusive results.
+Other contributors should use an equivalent documented protocol; the private
+checkout is not a plugin dependency. Keep private study paths/data out of shipped
+artifacts.
+
+The recipes and numerical results below are historical worked examples. Their
+sample sizes, stopping thresholds, model choices and target-size measurements
+are not universal requirements for a new study. Static developer-document
+corrections use appropriate repository checks; they do not claim measured
+behavioral improvement or require starting an experiment.
+
+## Historical source / tooling (external, not in this repo)
 
 - **Methodology + eval guide:** [`olelehmann100kMRR/autoresearch-skill`](https://github.com/olelehmann100kMRR/autoresearch-skill)
   (Karpathy "autoresearch" — autonomous experimentation applied to prompts).
-  Cloned locally at **`~/repos/autoresearch-skill`** — read its `SKILL.md` + `eval-guide.md`.
-- The host agent **follows** that methodology manually; nothing is installed. Re-`git pull` the
-  clone before a run to pick up upstream changes.
+  Historical clone: `~/repos/autoresearch-skill`; consult its `SKILL.md` and `eval-guide.md` only when reproducing that method.
+- The host agent **follows** that methodology manually; nothing is installed. Record the source revision used; do not update the method midway through a study.
 
 ## Where experiments live (local conventions, Gordon's machine)
 
-- **Harness lives in:** `~/work/gmickel-claude-marketplace` (this repo — the `opt/*` branch + `optimization/<target>/`).
+- **Historical harnesses live in:** this repository at `~/work/flow-next`, under `optimization/<target>/`. New maintainer studies live in `~/work/agent-evals/studies/` and reuse its evaluation library.
 - **What the prompt is tested AGAINST — representative repos, NOT flow-next-on-itself.** A repo-context skill (scout / `plan` / code-aware `capture` / review) does its real job in a *user's* app repo, so evaluate it there:
   - **Primary:** `~/work/DocIQ-Sphere` (~442k LOC; TS/TSX + Python + XSD schemas + Docker — a conventional multi-stack app).
   - **+ ≥1 contrasting repo** (different size/stack) for variety — the eval-guide's "varied inputs" rule extends to *repo* variety. flow-next itself can serve as the small/unconventional contrast point.
@@ -50,7 +65,7 @@ eval-driven hill-climbing — a baseline, binary evals, one mutation at a time, 
    (grounded / coverage / correctness / format), not just a token cap — see "Accuracy guard".
    `max_score = evals × runs`.
 4. **Baseline (experiment 0)** — back up the prompt, run the target N times on the frozen inputs
-   **as-is**, score every output, record. **Never mutate before measuring.**
+   **as-is**, score every output, record. **Measure a baseline before changing the experimental arm.**
 5. **Experiment loop** — analyze failures → form ONE hypothesis → make ONE targeted edit →
    run N times → score → **keep if the score rose, else revert** to the baseline backup.
    Log every experiment (kept or discarded) in `results.tsv` + `changelog.md`.
@@ -135,10 +150,12 @@ bundled call, no content judgment involved. The eval question flips from "does i
 
 ## Accuracy guard — why a trim can't quietly lose accuracy
 
-Keep/revert is a **ratchet**: a mutation is kept **only if the score doesn't drop**, and the score
-**includes the accuracy evals**. So accuracy cannot regress **by construction** — *as long as the
-suite actually has accuracy evals.* The failure mode is a token-only suite. **Rule: every suite
-carries ≥2–3 real accuracy evals.** The guarantee is exactly as strong as the evals.
+Keep/revert compares accuracy as well as efficiency. A passing suite means no
+detected regression on those cases under that scoring method; it cannot prove
+that accuracy never regresses on other inputs. Include meaningful correctness,
+coverage, and negative-control cases, replicate promising results, and report
+uncertainty. The historical loops below used small binary suites; new studies
+follow their preregistered design, not a universal minimum case count.
 
 ## Accuracy-critical skills: `spec.md` is USER-AUTHORITATIVE
 
@@ -146,7 +163,7 @@ carries ≥2–3 real accuracy evals.** The guarantee is exactly as strong as th
 can hand-edit `spec.md` at any time — **it is the source of truth, not the skill's output.** Evals
 for these must measure *fidelity + respect-for-override*, never "is the skill's spec correct":
 
-- **Generators (`capture` / `interview`):** all 7 canonical sections present? every acceptance
+- **Generators (`capture` / `interview`):** all sections required by the resolved current spec template present? every acceptance
   criterion source-tagged (`[user]`/`[paraphrase]`/`[inferred]`)? **read-back shown before write?**
   **does it refuse to silently overwrite a user-edited spec** (`--rewrite`-gated, no clobber)?
   conversation evidence preserved? → faithful synthesis + the user stays in control.

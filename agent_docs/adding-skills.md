@@ -52,7 +52,7 @@ When a skill's `workflow.md` carries backend-specific content (RP / Codex / Copi
 
 **Heuristic — split when divergent content ≥ 50 lines.** Smaller divergences stay inline; extracting them costs more in maintenance (extra files, sync-codex rewrites, link drift) than they save in context.
 
-**Canonical 4-file shape** (when split is warranted):
+**Backend-selected shape** (when split is warranted; include only supported backends):
 
 ```
 skills/flow-next-<name>/
@@ -67,7 +67,7 @@ SKILL.md routing block (canonical pattern in `flow-next-impl-review/SKILL.md`): 
 
 **Landed examples** (fn-48):
 - `flow-next-spec-completion-review` (commit `b2f6f0e`) — workflow.md 645 → 4 files; RP-prompt template (~430 lines) isolated to `workflow-rp.md`.
-- `flow-next-impl-review` (commit `06f6e6f`) — workflow.md 1126 → 4 files; `workflow-common.md` 565 LOC (over the ≤500 target, accepted vs duplicating gated phases). Auxiliary `deep-passes.md` / `walkthrough.md` untouched (already cross-backend).
+- `flow-next-impl-review` (commit `06f6e6f`) — workflow.md 1126 → 4 files; `workflow-common.md` 565 LOC (historical measurement, not a size limit). Auxiliary `deep-passes.md` / `walkthrough.md` untouched (already cross-backend).
 - `flow-next-resolve-pr` — **inline-kept**: divergence is one ~22-line Phase 5 (parallel-vs-serial dispatch); below threshold.
 
 **sync-codex.sh impact:** the RP-warning injector (grep `rp_warning` / the workflow-rp preference block in sync-codex.sh - line numbers rot, names don't) auto-prefers `workflow-rp.md` when present, falling back to monolithic `workflow.md`. No sync edits needed unless new tool-name references are introduced (see memory entry `bug/build-errors/sync-codexsh-tool-substitution-needs-2026-05-18`).
@@ -149,36 +149,65 @@ Two measured incidents:
 
 **Failure signature.** A remedy paragraph with no command in it — or one whose command is described ("clear the strike", "re-run the gate", "hand-edit the ledger") rather than written. If the invocation does not exist yet, that is the finding: either build the verb or say plainly that no recovery exists and what to do instead.
 
-## Prose-contract tests — pin content + reachability (heuristic)
+## Prose-contract tests: behavior and reachability
 
-A prose-contract test asserts against skill/command/agent markdown (string pins, executed bash fences, cross-skill parity, verb inventories, mirror parity). It exists to stop a *behavior* from silently regressing — not to freeze the current file layout.
+Follow [standing criterion G2](../.flow/criteria.md). Tests exercise observable
+behavior or the smallest distinctive contract token: verdict grammar, field
+names, headings, inventories, executed fences, and required parity relations.
+Do not assert prose sentences, paragraph order, live-file sizes, or frozen
+hashes of skill prose. Deliberate prompt-change detection belongs only in
+`test_prompt_text_pinned.py`.
 
-**Rule — pin two things, never a third:**
+When moving guidance into a reference, verify that the entry point reaches the
+reference on the correct branch. Preserve tests of executable ordering and
+canonical/mirror parity where those are the actual contract. A link check proves
+reachability; it does not prove that a model will apply relocated text equally
+well. The failed capture trim in [the optimization record](optimizing-skills.md)
+shows that drafting-adjacent taxonomy can matter despite an intact link.
 
-1. **CONTENT** — the substantive string, fence, or inventory, asserted against the file that actually carries it today (its reference home).
-2. **REACHABILITY** — the always-loaded file the agent starts from links or names that home, so the content is still on the agent's path: `self.assertIn("[references/foo.md](references/foo.md)", skill_md)`.
-
-Never pin bare **location** — "this sentence lives in `workflow.md`" — when the contract would survive the sentence moving one level down into a reachable reference. `workflow.md` is where the prose happens to sit this release; that it is *reachable* is the contract.
-
-**Exception — when location IS the contract** (pin it, and say why in the test docstring):
-
-- **Executed fences whose placement is load-bearing** — a gate skeleton must sit in the file that runs it; a `## Preamble` `$FLOWCTL` definition must sit at the top of each canonical file that uses it.
-- **Preamble/ordering rules** — "the gate resolves before the forcing read", "the claim precedes the work". These are position assertions by construction (see `test_setup_reference_routing.test_model_pin_gate_is_resolved_before_forcing_read`).
-- **Mirror-parity paths** — canonical ↔ `codex/` ↔ Cursor twins, and byte-identical dual copies. The path pair IS the invariant.
-- **Cold-path / token-budget negatives** — "this payload must NOT appear in the always-loaded spine". The point of the assertion is that the content is *not* in a particular file.
-- **Reachability assertions themselves** — asserting the link exists is pinning location on purpose.
-
-**Failure signature.** A test that breaks when verbatim content moves to a reachable reference has pinned the wrong thing. That is a test bug, not a prose regression: nothing the agent can reach changed, so nothing the agent does changed. The fix is to retarget the assertion at the new home and add the reachability link pin — not to move the prose back.
-
-The inverse signature is just as useful: a test that keeps passing after the sentence is deleted from every reachable file has pinned nothing at all. Delete it.
-
-**Corollary — one copy, one pin.** When branch-disclosure dedupes a phrase down to a single home, the test follows it there and pins the spine's cross-link instead of a second copy. Byte-exact pins survive only on the side that still owns the wording; the other side gets pinned by its load-bearing clauses.
-
-**Landed examples** (fn-169 retarget round):
-- `test_interview_source_tags.test_skill_md_states_per_pass_user_semantics` — per-pass `[user]` semantics moved into `references/pass-business.md` / `pass-technical.md`; the test now pins each pass's own sentence in its own file, plus SKILL.md's pass-neutral rule and both `references/…` links.
-- `test_interview_source_tags.test_tag_definitions_match_capture` — capture's second tag table was deduped out of `workflow.md`; the definition pins target the surviving `phases.md` copy and `workflow.md` is pinned to still route there (`[phases.md](phases.md) §Source-tag taxonomy`).
-- `test_capture_readiness_contract` — readiness gate skeletons asserted in their reference homes (content), `workflow.md` pinned for the link (reachability), both copies checked canonical + codex mirror (location-is-contract exception).
+For a behavior-changing prompt edit, use the affected conduct checklist and
+appropriate evaluations. Do not replace that evidence with sentence pins or
+relax a behavioral gate merely to make a change pass. Existing sentence-level
+tests are historical debt, not a template for new tests; migrating the shipped
+prompt tests is a separate change.
 
 ## Reference
 
 This checklist captures the lessons from the 0.34.0 → 0.37.0 era when (a) 4 user-facing skills (resolve-pr, prospect, audit, memory-migrate) silently shipped to Codex without UI metadata, and (b) several skills shipped with inline cross-platform tables (`AskUserQuestion` / `request_user_input` / `ask_user`) that polluted the agent's context. Both fixed in 0.37.1. Don't repeat them.
+
+## Cross-platform patterns
+
+Read this checklist when changing skills, agents, commands, hooks, platform
+transforms, or installation. It is shared development guidance; canonical
+Claude tool names below describe the product source, not the current host.
+
+
+**Supported host roster (check affected consumers when building features):**
+
+| Host | Mechanism | Consumes |
+|---|---|---|
+| Claude Code | canonical plugin (`.claude-plugin/`) | canonical files as-is |
+| Codex | pre-built mirror at `plugins/flow-next/codex/`, regenerated by `scripts/sync-codex.sh` | REWRITTEN copies (tool names, ask fallback, dispatch phrases) |
+| Factory Droid | auto-translates the Claude plugin format on install | canonical files as-is (`DROID_PLUGIN_ROOT` alias) |
+| Cursor | RECOMMENDED: team-marketplace repo import (root `.cursor-plugin/marketplace.json`); fallback: `scripts/install-cursor.sh` / `.ps1` (blanket rsync to `~/.cursor/plugins/local/`, excludes codex/ + tests/); manifest at `plugins/flow-next/.cursor-plugin/plugin.json` | canonical files AS-IS - no rewrite pass exists |
+| Grok Build | reads the Claude plugin format directly (compat, verified) | canonical files as-is |
+| OpenCode | installer scatter (`scripts/install-opencode.sh` -> `~/.config/opencode/`; skills as-is, support dirs `scripts/`+`templates/`+`references/`+`docs/` at the config root — plugin-root geometry, so relative docs links resolve; generated agents/commands; setup detects via the ownership manifest) | canonical files + support dirs + generated glue |
+
+**Architectural rule:** canonical skill files use Claude-native tool names; `sync-codex.sh` rewrites them in the Codex mirror. Skill prose stays concrete; cross-platform maintenance lives in one place — the sync script. Cursor/Droid/Grok get NO rewrite pass, so anything Claude-specific in canonical prose must either work there or carry an explicit portable-host clause.
+
+**Checklist when adding/editing skills, agents, or hooks (walk ALL of it):**
+
+1. Run `./scripts/sync-codex.sh` TWICE (idempotency) and commit the mirror diff with the canonical change. Its validation guards must stay green; new Claude-only phrases (tool dispatches, model-name examples) may need a new transform + hard-fail guard (pattern: the fn-100 Explore-dispatch and scout-tier rules).
+2. Claude BUILTIN references (`Explore`, `general-purpose`, `AskUserQuestion`, model names) are invisible to the Cursor/Droid/OpenCode consumers (all three read canonical prose as-is) - every such reference needs a portable-host fallback clause in the canonical prose (generic read-only dispatch with Edit/Write disallowed; plain-text numbered-prompt fallback for asks) or graceful degradation stated inline.
+3. Plugin-root env vars: Cursor and Grok expose NONE - every bash preamble carries the three rungs in order: `${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl`, then the plugin root derived from the skill's own SKILL.md absolute path (two levels up), then the legacy `.flow/bin/flowctl` backstop. Setup copies nothing into a repo; on Claude Code bare `flowctl` also resolves via bin-PATH injection in plain Bash ONLY - never in skill prose.
+4. No plugin-level hooks (`plugins/flow-next/hooks/` is gone): Ralph registration is agent-driven via `/flow-next:ralph-init` (merge fingerprinted entries into project settings per host). Guard matchers stay Claude-schema (`PreToolUse`/`Stop`, `Bash|Execute` shell + file-tool set); works on Claude Code + Droid, NOT Cursor (different hook events) - never assume the guard fires there.
+5. Installers need no enumeration updates for SKILLS (Cursor installers blanket-copy; the codex mirror is a full regen; the OpenCode installer blanket-scatters) - with two exceptions: (a) the codex mirror's `phases.md` 3c is a HARDCODED heredoc in `sync-codex.sh` (`SECTION3C`), so canonical 3c edits must land in the heredoc too or the mirror can drift unless its dispatch-field guards cover the change; (b) a new AGENT (or new agent-frontmatter key) must extend the closed allowlist in `plugins/flow-next/scripts/lib/opencode_generate.py` — it fails loudly (`GenerateError`) at OpenCode install otherwise. `plugins/flow-next/docs/platforms.md` DOES need a note when host behavior differs.
+   **Validate at the CONSUMER's layout, not the producer's** (PR #363 lesson: three review rounds came from checking only the repo tree while the real consumer is the installed `$CODEX_HOME` — shallower, partial, different invocation syntax). `sync-codex.sh` now carries hard-fail guards for the whole class: mirror docs-link resolution, the installed-docs link-universe closure (resolve on disk or absolute URL), and actionable-invocation rewrites (`/flow-next:` → `$flow-next-`). A canonical edit that adds a docs link or a user-copyable command is covered by those guards — **a guard failure is load-bearing; fix the content or extend the transform, never relax the guard.**
+6. `agents/*.md` model fields are family aliases resolved by the host; on non-Claude hosts they map to host defaults - never version-pin, and never assume a specific tier is honored off Claude Code.
+
+- **Variable references** — bash fallback: `FLOWCTL="${DROID_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/scripts/flowctl"`. Droid sets `DROID_PLUGIN_ROOT` and also exposes `CLAUDE_PLUGIN_ROOT` as an alias (per Factory docs, "Alias for `${DROID_PLUGIN_ROOT}` (Claude Code compatibility)"). The fallback order is conservative but correct on both platforms. *(Last verified against Factory docs 2026-05-25 — fn-48.2.)*
+- **Hook matchers** — regex OR: `"matcher": "Bash|Execute"` (Claude `Bash`, Droid `Execute` — Factory hooks-reference 2026-05-25 still lists `Execute` as canonical and `Bash` as not recognized).
+- **Agent permissions** — `disallowedTools` blacklist (not `tools` whitelist). Tool names differ across platforms; blacklist works because both understand `Edit`, `Write`, `Task`. Read-only agents deny all three (shell writes also need the host sandbox and explicit read-only contract) — `Task` because a spawned writing subagent is an escape hatch out of read-only; writing agents deny only the subset they must not use (plan-sync: `Write, Bash`; worker and pr-comment-resolver: none). `Task` is subagent dispatch (renamed Agent in Claude Code v2.1.63), not a planning tool.
+- **Plugin paths** — flow-next is a Claude-first plugin; use `${PLUGIN_ROOT}/.claude-plugin/plugin.json` directly. Droid auto-translates Claude Code plugin format on install (Factory docs: "Droid is compatible with plugins built for Claude Code… the plugin format is interoperable"), so a `.factory-plugin/plugin.json` fallback is **not** needed for Claude-first plugins like flow-next. Native Droid-first plugins (e.g. Factory-AI/factory-plugins marketplace) ship `.factory-plugin/plugin.json`; we don't.
+- **Blocking-question tool** — every interactive skill MUST use the platform's blocking primitive. Canonical writes `AskUserQuestion`; `sync-codex.sh` transforms canonical invocations into a plain-text numbered-prompt instruction (with `N+1. Other — type your own answer` as the final option) for the Codex mirror — the mirror never mentions `request_user_input` (Plan-mode-only per openai/codex#10384/#11536/#12694; closed without resolution as of Feb 2026). Droid (currently) sees the canonical name. Always bare `AskUserQuestion` in canonical files; an optional parenthetical breadcrumb noting the rewrite is fine.
+- **Subagent dispatch** — canonical writes `Task` with `subagent_type: Explore`; sync rewrites to `spawn_agent`. Those tool restrictions do not fence shell writes. Preserve the host sandbox and read-only shell contract as well.

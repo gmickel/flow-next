@@ -4,7 +4,12 @@ Steps to ship a new version of flow-next.
 
 ## When to bump
 
-- **Bump version** when skill / phase / agent / command files change (affects plugin behavior):
+Versioning is a separately authorized, batched release operation. A change that
+affects plugin behavior becomes eligible for the next release; it does not
+trigger a bump during implementation. Stage user-facing changes under
+`## Unreleased` until that release is requested.
+
+- **Include in the next release** when skill / phase / agent / command files change:
   - `plugins/<plugin>/skills/**/*.md`
   - `plugins/<plugin>/agents/**/*.md`
   - `plugins/<plugin>/commands/**/*.md`

@@ -2,16 +2,23 @@
 
 How to develop and test plugins from this repo without conflicting with globally-installed versions.
 
-## Uninstall the marketplace versions first
+## Resolve installed-plugin precedence when testing local loading
 
-Before running tests or developing plugins locally:
+Source inspection and ordinary unit tests do not require uninstalling plugins.
+When an explicitly selected integration/dogfood setup loads a cached marketplace
+copy instead of the local source, inspect the active plugin origin first. If
+uninstalling that conflicting copy is needed, make the intended installation
+change explicit before using:
 
 ```bash
 claude plugins uninstall flow-next
 claude plugins uninstall flow
 ```
 
-Global installs take precedence over `--plugin-dir`, causing tests to use stale cached versions instead of your local changes.
+A conflicting global install can cause a loader test to exercise cached source.
+Verify which copy the test actually loads; use an isolated test installation
+where practical. The commands above are remediation, not a prerequisite for
+every development task.
 
 ## Preferred: local marketplace install
 

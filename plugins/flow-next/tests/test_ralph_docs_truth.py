@@ -3,12 +3,12 @@
 Pins prose contracts on the three public surfaces + flowctl CLI ref:
   * ralph.md: opt-in zero-default, ralphctl control, soft-probe, no plugin hooks.json path
   * platforms.md: zero-default + retained [features] hooks=true note
-  * CLAUDE.md checklist: ralph-init owns registration (no plugin-level hooks)
+  * Developer checklist: ralph-init owns registration (no plugin-level hooks)
   * flowctl.md: no flowctl ralph subcommand; points at ralphctl.py
   * CHANGELOG Unreleased: upgrade re-run-ralph-init note
 
-Pin shape (agent_docs/adding-skills.md, "Prose-contract tests — pin content +
-reachability"): the POSITIVE pins below assert the fact is stated in whichever
+Historical fact-pin shape (agent_docs/adding-skills.md, "Prose-contract tests:
+behavior and reachability"): the POSITIVE pins below assert the fact is stated in whichever
 docs page carries it today AND that the page is reachable from the always-read
 spine (root `CLAUDE.md` / `README.md`, transitively through
 `plugins/flow-next/docs/README.md`). A fact that moves from `ralph.md` to
@@ -35,7 +35,7 @@ CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 
 # Always-read entry points. Everything else has to be routed to from here.
-SPINES = ("CLAUDE.md", "README.md")
+SPINES = ("CLAUDE.md", "AGENTS.md", "README.md")
 
 
 def _read(path: Path) -> str:
@@ -43,9 +43,10 @@ def _read(path: Path) -> str:
 
 
 def _docs_corpus() -> dict[str, str]:
-    """Root-level markdown + the flow-next docs set, keyed repo-relative."""
+    """Root, developer, and product documentation, keyed repo-relative."""
     paths = [
         *sorted(REPO_ROOT.glob("*.md")),
+        *sorted((REPO_ROOT / "agent_docs").rglob("*.md")),
         *sorted((PLUGIN_DIR / "docs").glob("*.md")),
     ]
     return {
@@ -139,9 +140,9 @@ class TestRalphDocsTruth(unittest.TestCase):
             "Codex zero-default is complete; no mirror hooks.json",
         )
 
-    def test_claude_md_checklist_ralph_init_owns_registration(self) -> None:
+    def test_developer_checklist_ralph_init_owns_registration(self) -> None:
         """ralph-init owns hook registration — stated and reachable. The
-        checklist sits in root `CLAUDE.md` today, which is itself a spine."""
+        checklist is routed from both host entry points into developer docs."""
         for needle in ("No plugin-level hooks", "ralph-init", "plugins/flow-next/hooks/"):
             with self.subTest(fact=needle):
                 assert_stated_and_reachable(self, needle)

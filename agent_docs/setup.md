@@ -20,7 +20,7 @@ Repos set up before fn-197 carry those snapshots. They are inert: nothing reads 
 
 ## Invariants (violating any of these is a review blocker)
 
-1. **No silent writes to tracked repo files, ever.** The rejected fn-96 design (silent snapshot refresh) stays dead. Every artifact cleanup or snippet refresh is consented (AskUserQuestion) and marker-bounded. The same rule covers deletion: a leftover copy that disappeared without an explicit `Delete them` answer has broken this.
+1. **Preserve ownership and prior consent.** The rejected fn-96 design (silent snapshot refresh) stays dead. Setup-block may refresh a block proven pristine from its recorded hash; a customized or hash-absent differing block requires the documented Keep / Overwrite / abort decision. Reuse authorization already given for the same action. Changes stay marker-bounded. Deleting leftover artifacts requires explicit authorization; never infer deletion from a setup invocation.
 2. **Setup-block markers are derived, deterministically, from the block id (fn-171).** `flowctl setup-block apply/resolve/check` all take an optional `--id <BLOCK-ID>`; the default id `FLOW-NEXT` derives exactly the historical markers `<!-- BEGIN FLOW-NEXT -->` / `<!-- END FLOW-NEXT -->` (omitting `--id` and passing `--id FLOW-NEXT` are byte-identical - same markers, same state key). A custom id derives its own pair, `<!-- BEGIN <ID> -->` / `<!-- END <ID> -->`, scoped independently of every other id's markers in the same file. Free-form `--begin`/`--end` marker overrides remain forbidden - ids are the only parameterization surface, so the marker↔state-key relationship stays 1:1 and the setup skill's own `FLOW-NEXT` call sites keep their exact strings. The snippet schema version is a separate, unrelated concern: the INTERNAL sentinel line `<!-- flow-next:snippet:vN -->` (first line inside the block). Expected N = `SNIPPET_SCHEMA_VERSION` in flowctl.py; bump it ONLY on a genuine snippet-contract change (it re-arms one consented refresh ask per repo). **A bump is the only thing that makes a user re-run setup** — say so in the changelog's upgrade-actions block.
 3. **Pristine state is keyed per `(path, id)`.** `meta.json`'s `setup.block_hashes` is a nested `{<path>: {<id>: <hash-or-sentinel>}}` map, so several independently-tracked blocks can live in one file without clobbering each other's recorded state. A pre-fn-171 install's flat `{<path>: <hash>}` entries are read transparently as the default id's hash and upgraded to the nested form on first write - no separate migration step, and existing single-block callers see no behavior change.
 4. **Setup writes nothing into `.flow/` except state flowctl owns.** A setup (or `flowctl init`) run that created `.flow/bin/`, `.flow/templates/spec.md`, or `.flow/usage.md` has broken this. There is no mode in which copying is correct.
@@ -36,3 +36,12 @@ Repos set up before fn-197 carry those snapshots. They are inert: nothing reads 
 - Launcher pair: `plugins/flow-next/bin/flowctl` is byte-identical to `scripts/flowctl` except the exec target line (`tests/test_bin_launcher_parity.py`); `scripts/flowctl.cmd` is the cmd.exe / PowerShell sibling.
 - Lifecycle-skill division of responsibility (setup owns snippet integrity and stamping; plan performs no version preflight): `tests/test_precheck_mode_contract.py`.
 - Probe evidence for the resolution chain (skill-path derivation on Cursor + Grok, zero-`.flow/bin` e2e): fn-197 spec Evidence.
+
+## This repository's developer entry points
+
+Root `AGENTS.md` and `CLAUDE.md` are independent ordinary files. Both require
+`agent_docs/project.md`, which owns shared development policy. Their marker
+blocks are customized project content; treat each `(path, FLOW-NEXT)` identity
+independently and preserve customized-state handling. Repo-specific gate,
+receipt, and release rules belong outside the replaceable snippet. This local
+arrangement does not change the templates shipped to other repositories.
