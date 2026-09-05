@@ -1,7 +1,7 @@
 {
   "branch_name": "fn-221-claude-cli-review-backend-claude-p-as-a",
-  "completion_review_status": "unknown",
-  "completion_reviewed_at": null,
+  "completion_review_status": "ship",
+  "completion_reviewed_at": "2026-09-05T02:02:15.887406Z",
   "created_at": "2026-09-04T22:57:21.187442Z",
   "default_impl": null,
   "default_review": null,
@@ -1253,6 +1253,51 @@
       "task": "fn-221-claude-cli-review-backend-claude-p-as-a.4",
       "timestamp": "2026-09-05T01:50:24.050555Z",
       "verdict": "SHIP"
+    },
+    {
+      "artifact_sha256": "00d98c5ecd1fe43e85a610cb0f8775fb7c4331e4b137237c4571dffe6c319e29",
+      "backend": "codex",
+      "base_sha": "35c4a92ef0aa8a68d19f70671f82a22f32c19027",
+      "counter_kind": "plan",
+      "effort": "high",
+      "failure_class": null,
+      "finalized": {
+        "digest": "complete",
+        "receipt": "complete",
+        "status": "complete"
+      },
+      "findings_digest": {
+        "backend": "codex",
+        "digest_truncated": false,
+        "items": [
+          {
+            "chainRoot": "finding-85b7fbf9f4a721db9edb879acea99ee0",
+            "classification": "introduced",
+            "findingId": "finding-85b7fbf9f4a721db9edb879acea99ee0",
+            "firstSeenThisRound": true,
+            "severity": "P2",
+            "status": "open"
+          }
+        ],
+        "reviewKind": "completion"
+      },
+      "forced": false,
+      "hash_epoch": 0,
+      "head_sha": "d5de38a60bc3d57de59202c3630f31ae633c62ee",
+      "head_sha_observed": true,
+      "kind": "completion",
+      "model": "gpt-6-astra",
+      "outcome": "verdict",
+      "output_bytes": 840683,
+      "output_sha256": "6dee4839f7987be63b8a6ca3a1fef355d33da62be3d3b98edc14ee926a76ae40",
+      "reservation_id": "f282dbea3b81494bae6594574a689b08",
+      "round_consumed": true,
+      "scope": "completion",
+      "superseded_by": null,
+      "task": null,
+      "timestamp": "2026-09-05T02:02:15.872338Z",
+      "tool_calls": 29,
+      "verdict": "SHIP"
     }
   ],
   "review_hash_epoch": {
@@ -1261,11 +1306,12 @@
     "impl:fn-221-claude-cli-review-backend-claude-p-as-a.3": 2,
     "impl:fn-221-claude-cli-review-backend-claude-p-as-a.4": 1,
     "plan": 2,
-    "plan#completion": 0
+    "plan#completion": 1
   },
   "review_pending_rounds": {},
   "review_reservations": {},
   "review_transport_failures": {
+    "completion": 0,
     "impl:fn-221-claude-cli-review-backend-claude-p-as-a.1": 0,
     "impl:fn-221-claude-cli-review-backend-claude-p-as-a.2": 0,
     "impl:fn-221-claude-cli-review-backend-claude-p-as-a.3": 0,
@@ -1286,5 +1332,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-05T01:50:24.053185Z"
+  "updated_at": "2026-09-05T02:02:15.894618Z"
 }
