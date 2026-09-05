@@ -68,6 +68,18 @@ waive this repository's unit gate: content and contract tests cover these
 surfaces. Re-run affected checks after fixes; a prior green is not evidence for
 a changed tree.
 
+GitHub runs the stable `CI` aggregate on every PR and main push. Docs and
+Flow task/spec bookkeeping retain Ubuntu unit coverage; code changes retain
+all three OS unit legs and functional smokes. Main uses the pushed before/after
+range, PRs use the merge-base range, and missing or empty ranges run full checks.
+The Windows interpreter stub runs for launcher, installer and runtime changes,
+plus the weekly backstop. Superseded PR runs cancel; main runs do not.
+
+Release tags require the latest successful main push CI for the exact checked-out
+revision, including its successful `CI` aggregate. Diagnostic dispatches do not
+qualify. Wait for main CI before tagging; if a tag run raced CI, retry the failed
+release workflow after CI succeeds. No publication occurs while evidence is absent.
+
 Keep the Ruff pin aligned with `.github/workflows/test-flow-next.yml`. Its
 correctness-only rules are explained in `ruff.toml`. Do not add or remove a
 rule merely to make a diff pass; document evidence for a policy change there.

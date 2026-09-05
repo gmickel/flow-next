@@ -5,14 +5,29 @@ on:
     tags:
       - "flow-next-v*"
 
+concurrency:
+  group: flow-next-release
+  cancel-in-progress: false
+
 jobs:
   release:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Require exact revision CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/require_release_ci.py
 
       - name: Extract version from tag
         id: version

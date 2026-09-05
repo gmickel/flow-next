@@ -55,7 +55,7 @@ def merge(text: str, source: Path, max_threads: int) -> str:
         raise ValueError('CODEX_MAX_THREADS must be a positive integer')
     roles = {}
     for path in sorted(source.glob('*.toml')):
-        roles[path.stem.replace('-', '_')] = (path.stem, tomllib.loads(path.read_text())['description'])
+        roles[path.stem.replace('-', '_')] = (path.stem, tomllib.loads(path.read_text(encoding="utf-8"))['description'])
     if not roles:
         raise ValueError('No generated Codex roles found')
 
@@ -150,20 +150,20 @@ def merge(text: str, source: Path, max_threads: int) -> str:
 
 def update(path: Path, source: Path, max_threads: int, check: bool = False) -> None:
     path = path.resolve()
-    original = path.read_text() if path.exists() else ''
+    original = path.read_text(encoding="utf-8") if path.exists() else ''
     result = merge(original, source, max_threads)
     if check or result == original:
         return
     fd, temp = tempfile.mkstemp(prefix='.flow-next-config-', dir=path.parent)
     try:
-        with os.fdopen(fd, 'w') as stream:
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
             stream.write(result)
         if path.exists():
             os.chmod(temp, path.stat().st_mode & 0o777)
             backup_fd, backup = tempfile.mkstemp(prefix='config.toml.pre-flow-next-', dir=path.parent)
             os.close(backup_fd)
             shutil.copyfile(path, backup)
-        if (path.read_text() if path.exists() else '') != original:
+        if (path.read_text(encoding="utf-8") if path.exists() else '') != original:
             raise ValueError('Config changed concurrently; retry without overwriting it')
         os.replace(temp, path)
     finally:

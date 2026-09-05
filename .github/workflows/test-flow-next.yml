@@ -3,74 +3,8 @@ name: flow-next
 on:
   push:
     branches: [main]
-    paths:
-      - "plugins/flow-next/**"
-      - ".github/workflows/test-flow-next.yml"
-      # Cursor + Codex + OpenCode local-installers live at repo-root scripts/ — outside
-      # plugins/flow-next/**, so trigger explicitly to run the install smokes.
-      - "scripts/install-cursor.sh"
-      - "scripts/install-cursor.ps1"
-      - "scripts/install-codex.sh"
-      - "scripts/install-opencode.sh"
-      - "scripts/ci/verify_cursor_install.py"
-      # Root Cursor team-marketplace manifest (fn-123) — outside plugins/**
-      - ".cursor-plugin/**"
-      # fn-119 parallel unit-suite entrypoint
-      - "scripts/run_tests_parallel.py"
-      # Ruff gate: config, plus every path `ruff check .` actually lints.
-      # These must stay in step - a filter narrower than the lint scope
-      # lets a violation land without the gate ever running (#244 review).
-      - "ruff.toml"
-      - "scripts/**.py"
-      - "agent_docs/**.py"
-      # Same #244 rule applied to the UNIT SUITE's read surface: the suite
-      # pins content in these trees (prose contracts, mirror parity, eval
-      # harnesses), so a filter narrower than what the tests read
-      # lets a pin break with the gate never running. Verified by
-      # test_ci_trigger_coverage.py. Deliberately excluded: .flow/specs/** and
-      # .flow/tasks/** (bookkeeping churn on every chore(flow) commit, no test
-      # pins their content).
-      - "agent_docs/**"
-      - "optimization/**"
-      - "scripts/**"
-      - "CLAUDE.md"
-      - "AGENTS.md"
-      - "README.md"
-      - "GLOSSARY.md"
-      - "CHANGELOG.md"
-      - ".claude-plugin/**"
-      - ".agents/plugins/**"
-      - ".flow/assets/**"
   pull_request:
     branches: [main]
-    paths:
-      - "plugins/flow-next/**"
-      - ".github/workflows/test-flow-next.yml"
-      - "scripts/install-cursor.sh"
-      - "scripts/install-cursor.ps1"
-      - "scripts/install-codex.sh"
-      - "scripts/install-opencode.sh"
-      - "scripts/ci/verify_cursor_install.py"
-      - ".cursor-plugin/**"
-      - "scripts/run_tests_parallel.py"
-      # Ruff gate: config, plus every path `ruff check .` actually lints.
-      # These must stay in step - a filter narrower than the lint scope
-      # lets a violation land without the gate ever running (#244 review).
-      - "ruff.toml"
-      - "scripts/**.py"
-      - "agent_docs/**.py"
-      # Unit-suite read surface - see the push filter above for the rule.
-      - "agent_docs/**"
-      - "optimization/**"
-      - "scripts/**"
-      - "CLAUDE.md"
-      - "AGENTS.md"
-      - "README.md"
-      - "GLOSSARY.md"
-      - "CHANGELOG.md"
-      - ".claude-plugin/**"
-      - ".agents/plugins/**"
-      - ".flow/assets/**"
   # Weekly drift backstop: full ubuntu / python 3.x run (units + smokes).
   # The 3.x row was demoted from the per-PR matrix (it duplicated ubuntu-3.11
   # almost entirely); day-to-day 3.x coverage rides python-intermediate-smoke,
@@ -109,74 +43,41 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  # ──────────── Change classification (docs-only prune) ────────────
-  # Classifies the change and emits the matrices the downstream jobs run on.
-  #   - schedule        → ubuntu / 3.x only (weekly full drift backstop)
-  #   - pull_request    → docs-only changes (**/*.md outside tests/, docs/**,
-  #                       agent_docs/**) run ONLY ubuntu-3.11 units (the
-  #                       prompt-pin / parity tests live there) and skip
-  #                       macos/windows plus all smoke jobs
-  #   - push / dispatch → always the full matrix (backstop; gate PRs only)
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       units_matrix: ${{ steps.classify.outputs.units_matrix }}
       smokes_matrix: ${{ steps.classify.outputs.smokes_matrix }}
       run_smokes: ${{ steps.classify.outputs.run_smokes }}
+      run_windows_stub: ${{ steps.classify.outputs.run_windows_stub }}
     steps:
       - uses: actions/checkout@v4
-        if: github.event_name == 'pull_request'
         with:
           fetch-depth: 0
-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - name: Classify change and emit job matrices
         id: classify
-        shell: bash
-        run: |
-          set -euo pipefail
-          FULL_UNITS='[{"os":"ubuntu-latest","python-version":"3.11"},{"os":"macos-latest","python-version":"3.11"},{"os":"windows-latest","python-version":"3.11"}]'
-          DOCS_UNITS='[{"os":"ubuntu-latest","python-version":"3.11"}]'
-          WEEKLY_3X='[{"os":"ubuntu-latest","python-version":"3.x"}]'
-          units="$FULL_UNITS"
-          smokes="$FULL_UNITS"
-          run_smokes=true
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            units="$WEEKLY_3X"
-            smokes="$WEEKLY_3X"
-          elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-            git diff --name-only "${BASE_SHA}...HEAD" > "$RUNNER_TEMP/changed.txt"
-            echo "Changed files vs merge base:"
-            cat "$RUNNER_TEMP/changed.txt"
-            docs_only=true
-            # Empty diff (unexpected) → fail safe: run the full matrix.
-            [ -s "$RUNNER_TEMP/changed.txt" ] || docs_only=false
-            while IFS= read -r f; do
-              case "$f" in
-                docs/*|agent_docs/*) : ;;              # docs trees: docs-only
-                tests/*|*/tests/*) docs_only=false ;;  # anything under tests/ is code (even .md fixtures)
-                *.md) : ;;                             # markdown outside tests/
-                *) docs_only=false ;;                  # everything else is code
-              esac
-              [ "$docs_only" = "true" ] || break
-            done < "$RUNNER_TEMP/changed.txt"
-            if [ "$docs_only" = "true" ]; then
-              echo "Docs-only change: running ubuntu-3.11 units only (prompt-pin/parity coverage)."
-              units="$DOCS_UNITS"
-              run_smokes=false
-            fi
-          fi
-          {
-            echo "units_matrix=$units"
-            echo "smokes_matrix=$smokes"
-            echo "run_smokes=$run_smokes"
-          } >> "$GITHUB_OUTPUT"
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: python scripts/ci/classify_changes.py
 
   # ──────────── Units (static checks + parallel unit suite) ────────────
   # Split from the smokes so the two ~6-9m halves run side by side per OS
   # instead of back to back. Neither job depends on the other.
   units:
+    timeout-minutes: 35
     needs: changes
     strategy:
       fail-fast: false
@@ -300,8 +201,9 @@ jobs:
 
   # ──────────── Smokes (cursor install + functional bash smokes) ────────────
   # Runs in parallel with the units job on each OS; skipped entirely on
-  # docs-only pull requests (push to main always runs the full set).
+  # docs-only PR and main push ranges.
   smokes:
+    timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.run_smokes == 'true'
     strategy:
@@ -442,6 +344,7 @@ jobs:
       #   - plan_review_prompt_smoke.sh — needs rp-cli
 
   python-intermediate-smoke:
+    timeout-minutes: 10
     name: Python ${{ matrix.python-version }} compatibility smoke
     needs: changes
     if: needs.changes.outputs.run_smokes == 'true'
@@ -484,6 +387,9 @@ jobs:
   # Desktop / native Codex / Cursor invoke flowctl on Windows.
   # ─────────────────────────────────────────────────────────────────────────────
   windows-python3-stub:
+    needs: changes
+    if: needs.changes.outputs.run_windows_stub == 'true'
+    timeout-minutes: 10
     runs-on: windows-latest
     steps:
       - name: Disable git autocrlf so the LF-pinned bash launcher stays LF
@@ -597,3 +503,29 @@ jobs:
           if ($out -notmatch '"success": true') { Write-Error "flowctl.cmd init did not succeed"; exit 1 }
           if ($out -match "Python was not found") { Write-Error "stub message leaked — flowctl.cmd did not bypass the stub"; exit 1 }
           Write-Host "PASS: flowctl.cmd bypassed the 9009 python3 stub"
+
+  ci:
+    name: CI
+    if: always()
+    needs: [changes, units, smokes, python-intermediate-smoke, windows-python3-stub]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every selected job
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          needs = json.loads(os.environ['NEEDS_JSON'])
+          required = {'changes', 'units'}
+          outputs = needs['changes'].get('outputs', {})
+          if outputs.get('run_smokes') == 'true':
+              required.update(('smokes', 'python-intermediate-smoke'))
+          if outputs.get('run_windows_stub') == 'true':
+              required.add('windows-python3-stub')
+          for name, job in needs.items():
+              allowed = {'success'} if name in required else {'success', 'skipped'}
+              if job['result'] not in allowed:
+                  raise SystemExit(f"{name}: {job['result']}")
+          PYTHON
