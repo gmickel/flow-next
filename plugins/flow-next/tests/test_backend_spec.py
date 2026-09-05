@@ -1935,7 +1935,7 @@ class TestBackendReviewDriverHooks(unittest.TestCase):
             "extract_review",
             "has_sandbox",
         }
-        for backend in ("codex", "copilot", "cursor"):
+        for backend in ("codex", "copilot", "cursor", "claude"):
             with self.subTest(backend=backend):
                 reg = BACKEND_REGISTRY[backend]
                 for key in required:

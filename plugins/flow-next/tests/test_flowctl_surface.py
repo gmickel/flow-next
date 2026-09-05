@@ -83,6 +83,11 @@ chart show
 chart wire-decision
 checkpoint restore
 checkpoint save
+claude completion-review
+claude deep-pass
+claude impl-review
+claude plan-review
+claude validate
 codex completion-review
 codex deep-pass
 codex impl-review

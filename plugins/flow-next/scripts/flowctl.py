@@ -38454,6 +38454,17 @@ def cmd_cursor_validate(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_claude_validate(args: argparse.Namespace) -> None:
+    """Dispatch a claude validator pass over findings from a prior review."""
+    _run_validator_pass(
+        backend="claude",
+        findings_file=getattr(args, "findings_file", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
 # --- Deep-pass (fn-32.2 --deep) ---
 #
 # Additional specialized passes (adversarial / security / performance) that
@@ -39302,6 +39313,18 @@ def cmd_cursor_deep_pass(args: argparse.Namespace) -> None:
     """Dispatch one cursor deep-pass (adversarial|security|performance)."""
     _run_deep_pass(
         backend="cursor",
+        pass_name=args.pass_name,
+        primary_findings_file=getattr(args, "primary_findings", None),
+        receipt_path=args.receipt,
+        spec_arg=getattr(args, "spec", None),
+        use_json=args.json,
+    )
+
+
+def cmd_claude_deep_pass(args: argparse.Namespace) -> None:
+    """Dispatch one claude deep-pass (adversarial|security|performance)."""
+    _run_deep_pass(
+        backend="claude",
         pass_name=args.pass_name,
         primary_findings_file=getattr(args, "primary_findings", None),
         receipt_path=args.receipt,
@@ -47183,6 +47206,21 @@ def cmd_cursor_completion_review(args: argparse.Namespace) -> None:
     cmd_backend_review(args, backend="cursor", kind="completion")
 
 
+def cmd_claude_impl_review(args: argparse.Namespace) -> None:
+    """Run implementation review via claude -p (resume-only, mode:claude)."""
+    cmd_backend_review(args, backend="claude", kind="impl")
+
+
+def cmd_claude_plan_review(args: argparse.Namespace) -> None:
+    """Run plan review via claude -p (resume-only, mode:claude)."""
+    cmd_backend_review(args, backend="claude", kind="plan")
+
+
+def cmd_claude_completion_review(args: argparse.Namespace) -> None:
+    """Run spec completion review via claude -p (resume-only, mode:claude)."""
+    cmd_backend_review(args, backend="claude", kind="completion")
+
+
 
 # --- Trivial-diff triage (fn-29.6) ---
 #
@@ -52187,12 +52225,19 @@ def _add_impl_review_parser(sub, backend: str):
             "Backend spec override (e.g. 'copilot:claude-opus-4.5:xhigh'). "
             "Overrides task/epic/env/config resolution. Strict parse."
         )
-    else:  # cursor
+    elif backend == "cursor":
         spec_help = (
             "Backend spec override (e.g. 'cursor:gpt-5.5-high'). "
             "Overrides task/epic/env/config resolution. Strict parse. "
             "Cursor folds effort into the model name (no ':<effort>')."
         )
+    elif backend == "claude":
+        spec_help = (
+            "Backend spec override (e.g. 'claude:claude-opus-5:high'). "
+            "Overrides task/epic/env/config resolution. Strict parse."
+        )
+    else:
+        raise ValueError(f"unknown review backend parser: {backend}")
     p.add_argument("--spec", help=spec_help)
     # Thin wrapper keeps the historical cmd_* name for tests / direct callers;
     # argparse also stamps review_backend/kind for the generic driver.
@@ -52200,6 +52245,7 @@ def _add_impl_review_parser(sub, backend: str):
         "codex": cmd_codex_impl_review,
         "copilot": cmd_copilot_impl_review,
         "cursor": cmd_cursor_impl_review,
+        "claude": cmd_claude_impl_review,
     }[backend]
     p.set_defaults(func=func, review_backend=backend, review_kind="impl")
     return p
@@ -52342,6 +52388,7 @@ def _backend_spec_help(backend: str, *, for_pass: bool = False) -> str:
         "codex": "codex:gpt-5.4:xhigh" if for_pass else "codex:gpt-5.2:medium",
         "copilot": "copilot:claude-opus-4.5:xhigh",
         "cursor": "cursor:gpt-5.5-high",
+        "claude": "claude:claude-opus-5:high",
     }
     example = examples[backend]
     if for_pass:
@@ -52388,6 +52435,7 @@ def _add_plan_review_parser(sub, backend: str):
             "codex": cmd_codex_plan_review,
             "copilot": cmd_copilot_plan_review,
             "cursor": cmd_cursor_plan_review,
+            "claude": cmd_claude_plan_review,
         }[backend],
         review_backend=backend,
         review_kind="plan",
@@ -52415,6 +52463,7 @@ def _add_completion_review_parser(sub, backend: str):
             "codex": cmd_codex_completion_review,
             "copilot": cmd_copilot_completion_review,
             "cursor": cmd_cursor_completion_review,
+            "claude": cmd_claude_completion_review,
         }[backend],
         review_backend=backend,
         review_kind="completion",
@@ -52443,6 +52492,7 @@ def _add_validate_parser(sub, backend: str):
         "codex": cmd_codex_validate,
         "copilot": cmd_copilot_validate,
         "cursor": cmd_cursor_validate,
+        "claude": cmd_claude_validate,
     }[backend])
     return p
 
@@ -52472,6 +52522,7 @@ def _add_deep_pass_parser(sub, backend: str):
         "codex": cmd_codex_deep_pass,
         "copilot": cmd_copilot_deep_pass,
         "cursor": cmd_cursor_deep_pass,
+        "claude": cmd_claude_deep_pass,
     }[backend])
     return p
 
@@ -55333,6 +55384,18 @@ def main() -> None:
     _add_completion_review_parser(cursor_sub, "cursor")
     _add_validate_parser(cursor_sub, "cursor")
     _add_deep_pass_parser(cursor_sub, "cursor")
+
+    # claude (Claude Code CLI helpers - fn-221). Same five-subcommand surface
+    # as copilot/cursor; the fan-out subcommands stay codex-only (fn-215 R15).
+    p_claude = subparsers.add_parser("claude", help="Claude Code (claude CLI) helpers")
+    claude_sub = p_claude.add_subparsers(dest="claude_cmd", required=True)
+
+    _add_impl_review_parser(claude_sub, "claude")
+
+    _add_plan_review_parser(claude_sub, "claude")
+    _add_completion_review_parser(claude_sub, "claude")
+    _add_validate_parser(claude_sub, "claude")
+    _add_deep_pass_parser(claude_sub, "claude")
 
     # Review auto-enable heuristic (fn-32.2 --deep). Skill layer calls this
     # to determine which deep passes auto-enable for a given changed-file
