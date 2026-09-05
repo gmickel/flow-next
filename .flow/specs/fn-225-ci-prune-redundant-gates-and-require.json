@@ -114,7 +114,7 @@
     "impl:fn-225-prune-ci-events-while-preserving.1": 0
   },
   "spec_path": ".flow/specs/fn-225-ci-prune-redundant-gates-and-require.md",
-  "status": "open",
+  "status": "done",
   "title": "ci: prune redundant gates and require tested release revisions",
   "tracker": {
     "baseHashFlow": null,
@@ -127,5 +127,5 @@
     "mergeBaseTracker": null,
     "url": null
   },
-  "updated_at": "2026-09-05T16:12:17.478340Z"
+  "updated_at": "2026-09-05T17:01:45.729219Z"
 }
