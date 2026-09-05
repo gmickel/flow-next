@@ -64,4 +64,5 @@ When the same fact lives on two surfaces, one of them is canonical and the other
 - `python3 scripts/check_doc_anchors.py`
 - `./scripts/sync-codex.sh` twice, and commit the mirror diff with the canonical change
 - `python3 scripts/run_tests_parallel.py` (docs content is pinned by several tests)
-- On the site: `pnpm build` and `pnpm check:links`
+- On the site: `pnpm build && pnpm test && pnpm check:links && pnpm check:seo`. The build regenerates Markdown exports, `llms.txt`, `llms-full.txt`, sitemap, and search. Export or routing changes also need `pnpm check:http` against the built preview and, after authorized deployment, the live site.
+- Follow the site's [generated-content and deployment guide](https://github.com/gmickel/flow-next.dev/blob/main/CLAUDE.md#generated-content-and-deployment) for source ownership, Vercel configuration, exact-commit deployment confirmation, and live checks. Keep those mechanics in the site repo.
